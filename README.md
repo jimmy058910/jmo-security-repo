@@ -314,5 +314,5 @@ This project is part of the IOD Capstone program.
 
 ---
 
-**Last Updated**: 2024
-**Author**: IOD Capstone Team
+**Last Updated**: October 9th, 2025
+**Author**: James Moceri
