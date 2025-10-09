@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Backup files
+*.bak
+*.old
+*_old.*
+*_backup.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test results and temporary files
+/tmp/
+*.log
+
+# Security scan results (don't commit actual scan results)
+security-results-*/
