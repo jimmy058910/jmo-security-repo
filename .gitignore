@@ -29,3 +29,4 @@ Thumbs.db
 
 # Security scan results (don't commit actual scan results)
 security-results-*/
+results/

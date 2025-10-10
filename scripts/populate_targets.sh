@@ -42,6 +42,7 @@ usage() {
     echo "  --dest <dir>           Destination directory for cloned repos (default: ~/security-testing)"
     echo "  --shallow              Use shallow clones (depth=1) for faster cloning (default)"
     echo "  --full                 Use full clones (includes complete git history)"
+    echo "  --mode <shallow|full>  Clone mode (alternative to --shallow/--full)"
     echo "  --parallel <N>         Number of parallel clone operations (default: 4)"
     echo "  --unshallow            Unshallow existing repos (useful for secret scanners)"
     echo "  -h, --help             Display this help message"
@@ -50,12 +51,14 @@ usage() {
     echo "  $0                                           # Use defaults"
     echo "  $0 --list repos.txt --dest ~/test-repos     # Custom list and destination"
     echo "  $0 --full --parallel 8                      # Full clones with 8 parallel jobs"
+    echo "  $0 --mode full --parallel 8                 # Same as above (alternative syntax)"
     echo "  $0 --unshallow                              # Unshallow all repos in destination"
     echo ""
     echo "Performance Tips:"
     echo "  - Use --shallow for faster initial cloning (recommended for WSL)"
     echo "  - Adjust --parallel based on network speed and CPU cores"
     echo "  - Use --unshallow after shallow clone if secret scanners need full history"
+    echo "  - Avoid cloning to /mnt/c (Windows filesystem) - use ext4 for better performance"
     echo ""
     exit 0
 }
@@ -96,6 +99,17 @@ while [[ $# -gt 0 ]]; do
             SHALLOW=0
             shift
             ;;
+        --mode)
+            if [ "$2" = "shallow" ]; then
+                SHALLOW=1
+            elif [ "$2" = "full" ]; then
+                SHALLOW=0
+            else
+                log_error "Invalid mode: $2 (must be 'shallow' or 'full')"
+                exit 1
+            fi
+            shift 2
+            ;;
         --parallel)
             PARALLEL="$2"
             shift 2
@@ -124,6 +138,13 @@ fi
 # Create destination directory
 mkdir -p "$DEST_DIR"
 log_success "Destination directory: $DEST_DIR"
+
+# Warn if destination is on Windows filesystem (WSL)
+if [[ "$DEST_DIR" == /mnt/c/* ]] || [[ "$DEST_DIR" == /mnt/d/* ]]; then
+    log_warning "Destination is on Windows filesystem (/mnt/c or /mnt/d)"
+    log_warning "For better performance, consider using ext4 filesystem (e.g., ~/security-testing)"
+    echo ""
+fi
 
 # Function to clone a single repository
 clone_repo() {
@@ -224,9 +245,9 @@ if [ "$UNSHALLOW" -eq 1 ]; then
     exit 0
 fi
 
-# Read repository list and filter comments/empty lines
+# Read repository list and filter comments/empty lines (CRLF-safe)
 log_info "Reading repository list from: $REPO_LIST"
-mapfile -t repos < <(grep -v '^#' "$REPO_LIST" | grep -v '^[[:space:]]*$' || true)
+mapfile -t repos < <(sed 's/\r$//' "$REPO_LIST" | grep -v '^#' | grep -v '^[[:space:]]*$' || true)
 
 if [ ${#repos[@]} -eq 0 ]; then
     log_error "No repositories found in list file"
@@ -253,9 +274,9 @@ if command -v parallel &> /dev/null; then
     printf '%s\n' "${repos[@]}" | parallel -j "$PARALLEL" --bar \
         "clone_repo {} '$DEST_DIR' $SHALLOW" 2>/dev/null || true
 else
-    # Fallback to xargs (more widely available)
+    # Fallback to xargs (more widely available) with compatible options
     log_info "Using xargs for parallel cloning..."
-    printf '%s\n' "${repos[@]}" | xargs -n 1 -P "$PARALLEL" -I {} \
+    printf '%s\n' "${repos[@]}" | xargs -I {} -P "$PARALLEL" \
         bash -c "clone_repo '{}' '$DEST_DIR' $SHALLOW" || true
 fi
 
