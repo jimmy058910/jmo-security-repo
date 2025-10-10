@@ -1,0 +1,12 @@
+# Sample repository list for security testing
+# Format: One GitHub repo URL per line
+# Lines starting with # are comments and will be ignored
+
+# Example vulnerable test repositories
+https://github.com/0c34/govwa.git
+https://github.com/OWASP/NodeGoat.git
+https://github.com/WebGoat/WebGoat.git
+
+# Add your repositories here
+# https://github.com/username/repo1.git
+# https://github.com/username/repo2.git

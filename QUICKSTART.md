@@ -14,7 +14,30 @@ If any tools are missing, install them following the instructions in the main RE
 
 ## Step 2: Prepare Your Repositories
 
-Create a directory and clone repositories you want to scan:
+### Option A: Use Helper Script (Recommended - Fast & Easy)
+
+Use the automated helper script to clone multiple repositories quickly:
+
+```bash
+# Quick setup - clone sample vulnerable repos
+./scripts/populate_targets.sh
+
+# Or customize the destination
+./scripts/populate_targets.sh --dest ~/my-test-repos
+
+# For faster cloning on WSL, use shallow clones (default)
+./scripts/populate_targets.sh --parallel 8 --dest ~/security-testing
+```
+
+The helper script will:
+- ✅ Clone repositories in parallel for speed
+- ✅ Use shallow clones (depth=1) for 10x faster cloning
+- ✅ Automatically create the destination directory
+- ✅ Skip already cloned repositories
+
+### Option B: Manual Clone (Traditional Method)
+
+Create a directory and clone repositories manually:
 
 ```bash
 # Create testing directory
@@ -25,6 +48,15 @@ cd ~/security-testing
 git clone https://github.com/username/repo1.git
 git clone https://github.com/username/repo2.git
 # ... add more repos
+```
+
+### Need Full Git History?
+
+Some secret scanners work better with full git history. If you used shallow clones:
+
+```bash
+# Unshallow all repositories
+./scripts/populate_targets.sh --dest ~/security-testing --unshallow
 ```
 
 ## Step 3: Run the Security Audit
@@ -99,7 +131,27 @@ git clone https://github.com/username/test-repo.git
 cat ~/security-results-*/SUMMARY_REPORT.md
 ```
 
-### Workflow 2: Comprehensive Multi-Repo Audit
+### Workflow 2: Comprehensive Multi-Repo Audit (Using Helper Script)
+
+```bash
+# Create a custom repository list
+cat > my-repos.txt << 'EOF'
+https://github.com/org/repo1.git
+https://github.com/org/repo2.git
+https://github.com/org/repo3.git
+EOF
+
+# Clone all repos in parallel (fast shallow clones)
+./scripts/populate_targets.sh --list my-repos.txt --dest ~/comprehensive-audit --parallel 6
+
+# Run comprehensive scan
+./security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
+
+# Open dashboard in browser
+open ~/audit-results-*/dashboard.html
+```
+
+### Workflow 2b: Comprehensive Multi-Repo Audit (Manual Method)
 
 ```bash
 # Prepare multiple repositories

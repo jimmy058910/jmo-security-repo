@@ -47,12 +47,32 @@ cd iod-capstone
 
 2. Make scripts executable:
 ```bash
-chmod +x *.sh
+chmod +x *.sh scripts/*.sh
 ```
 
 3. Install required tools (see Tool Installation section below)
 
 ### Basic Usage
+
+#### Quick Setup with Helper Script
+
+Use the `populate_targets.sh` helper script to clone multiple repositories for testing (optimized for WSL):
+
+```bash
+# Clone sample vulnerable repos (fast shallow clones)
+./scripts/populate_targets.sh
+
+# Clone from custom list with full history
+./scripts/populate_targets.sh --list my-repos.txt --full
+
+# Clone with 8 parallel jobs for faster performance
+./scripts/populate_targets.sh --parallel 8
+
+# Unshallow repos if secret scanners need full git history
+./scripts/populate_targets.sh --unshallow
+```
+
+#### Running Security Scans
 
 1. **Simple Scan** - Scan repositories in default directory:
 ```bash
@@ -67,6 +87,20 @@ chmod +x *.sh
 3. **Check Tools** - Verify tool installation:
 ```bash
 ./security_audit.sh --check
+```
+
+#### End-to-End Workflow
+
+```bash
+# 1. Clone test repositories (shallow for speed)
+./scripts/populate_targets.sh --dest ~/test-repos --parallel 4
+
+# 2. Run security audit
+./security_audit.sh -d ~/test-repos
+
+# 3. View results
+cat ~/security-results-*/SUMMARY_REPORT.md
+open ~/security-results-*/dashboard.html
 ```
 
 ## 📚 Documentation
@@ -171,6 +205,51 @@ curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scr
 ```
 
 ## 📋 Advanced Usage
+
+### Helper Scripts for Multi-Repo Scanning
+
+#### `scripts/populate_targets.sh` - Automated Repository Cloning
+
+This helper script streamlines the process of cloning multiple repositories for security scanning, with performance optimizations for WSL environments.
+
+**Features:**
+- 🚀 Shallow clones (depth=1) for faster cloning
+- ⚡ Parallel cloning for improved performance
+- 🔄 Unshallow option for secret scanners requiring full history
+- 📝 Reads from repository list file
+
+**Usage Examples:**
+
+```bash
+# Basic usage with defaults (samples/repos.txt → ~/security-testing)
+./scripts/populate_targets.sh
+
+# Custom repository list and destination
+./scripts/populate_targets.sh --list custom-repos.txt --dest ~/my-test-repos
+
+# Full clones with 8 parallel jobs
+./scripts/populate_targets.sh --full --parallel 8
+
+# Unshallow existing shallow clones
+./scripts/populate_targets.sh --dest ~/security-testing --unshallow
+
+# Show all options
+./scripts/populate_targets.sh --help
+```
+
+**Repository List Format (`samples/repos.txt`):**
+```
+# One GitHub repository URL per line
+# Lines starting with # are comments
+https://github.com/user/repo1.git
+https://github.com/user/repo2.git
+```
+
+**Performance Tips for WSL:**
+1. Use shallow clones initially for 10x faster cloning
+2. Adjust `--parallel` based on network speed (default: 4)
+3. Use `--unshallow` only if secret scanners need full git history
+4. Clone to WSL filesystem (not Windows mount) for better performance
 
 ### Running Individual Scripts
 
