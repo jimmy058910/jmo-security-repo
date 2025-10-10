@@ -11,6 +11,18 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Paths to helper scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TOOL_BOOTSTRAP="$SCRIPT_DIR/scripts/check_and_install_tools.sh"
+
+run_tool_check() {
+    if [ -x "$TOOL_BOOTSTRAP" ]; then
+        bash "$TOOL_BOOTSTRAP" --check "$@"
+    else
+        bash "$SCRIPT_DIR/check_tools.sh" "$@"
+    fi
+}
+
 # Banner
 echo -e "${CYAN}"
 cat << "EOF"
@@ -68,12 +80,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # Check tools
 if [ $CHECK_ONLY -eq 1 ]; then
-    bash "$SCRIPT_DIR/check_tools.sh"
+    run_tool_check
     exit $?
 fi
 
@@ -91,10 +100,10 @@ fi
 
 # Run tool check first
 echo -e "${BLUE}Checking required tools...${NC}"
-if ! bash "$SCRIPT_DIR/check_tools.sh" > /dev/null 2>&1; then
+if ! run_tool_check > /dev/null 2>&1; then
     echo -e "${YELLOW}Some tools are missing. Running full check:${NC}"
     echo ""
-    bash "$SCRIPT_DIR/check_tools.sh"
+    run_tool_check
     echo ""
     echo -e "${YELLOW}Install missing tools before continuing.${NC}"
     exit 1
@@ -137,7 +146,8 @@ if [ -n "$RESULTS_DIR" ] && [ -d "$RESULTS_DIR" ]; then
     echo ""
     echo -e "${CYAN}Quick Commands:${NC}"
     echo -e "  View summary:        ${YELLOW}cat $RESULTS_DIR/SUMMARY_REPORT.md${NC}"
-    echo -e "  Open dashboard:      ${YELLOW}open $RESULTS_DIR/dashboard.html${NC}"
+    echo -e "  Open dashboard (mac):${YELLOW} open $RESULTS_DIR/dashboard.html${NC}"
+    echo -e "  Open dashboard (linux):${YELLOW} xdg-open $RESULTS_DIR/dashboard.html${NC}"
     echo -e "  List all reports:    ${YELLOW}ls -la $RESULTS_DIR/individual-repos/*/README.md${NC}"
     echo ""
 fi

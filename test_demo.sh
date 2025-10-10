@@ -27,14 +27,20 @@ mkdir -p "$DEMO_DIR/raw-outputs"
 
 # Copy sample data
 echo "📋 Copying sample data..."
-for json_file in "$SCRIPT_DIR"/gitleaks-*.json; do
-    if [ -f "$json_file" ]; then
-        repo_name=$(basename "$json_file" .json | sed 's/gitleaks-//')
-        mkdir -p "$DEMO_DIR/individual-repos/$repo_name"
-        cp "$json_file" "$DEMO_DIR/individual-repos/$repo_name/gitleaks.json"
-        echo "  ✓ Added $repo_name"
-    fi
-done
+SAMPLE_GITLEAKS_DIR="$SCRIPT_DIR/samples/gitleaks"
+
+if [ ! -d "$SAMPLE_GITLEAKS_DIR" ]; then
+    echo "  ⚠️  Sample Gitleaks directory not found: $SAMPLE_GITLEAKS_DIR"
+else
+    for json_file in "$SAMPLE_GITLEAKS_DIR"/gitleaks-*.json; do
+        if [ -f "$json_file" ]; then
+            repo_name=$(basename "$json_file" .json | sed 's/gitleaks-//')
+            mkdir -p "$DEMO_DIR/individual-repos/$repo_name"
+            cp "$json_file" "$DEMO_DIR/individual-repos/$repo_name/gitleaks.json"
+            echo "  ✓ Added $repo_name"
+        fi
+    done
+fi
 
 # Create sample metrics CSV
 echo "📊 Generating sample metrics..."

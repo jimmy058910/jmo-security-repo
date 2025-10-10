@@ -100,7 +100,8 @@ Use the `populate_targets.sh` helper script to clone multiple repositories for t
 
 # 3. View results
 cat ~/security-results-*/SUMMARY_REPORT.md
-open ~/security-results-*/dashboard.html
+# macOS: open ~/security-results-*/dashboard.html
+# Linux: xdg-open ~/security-results-*/dashboard.html
 ```
 
 ## 📚 Documentation
@@ -129,11 +130,12 @@ security-results-YYYYMMDD-HHMMSS/
 │       ├── semgrep.json           # Semgrep raw output
 │       ├── noseyparker.json       # Nosey Parker raw output
 │       └── *.log                  # Tool execution logs
+├── raw-outputs/                   # Compressed per-repo raw artifacts
 ├── tool-comparisons/
 │   └── comparison.md              # Tool performance comparison
 ├── summaries/
 │   └── metrics.csv                # Aggregated metrics
-└── raw-outputs/                   # Additional raw data
+└── presentation_notes.md          # Slide-ready narrative
 ```
 
 ### Report Types
@@ -161,6 +163,11 @@ security-results-YYYYMMDD-HHMMSS/
    - Tool capabilities matrix
    - Implementation strategy guide
    - Tool selection recommendations
+
+5. **Presentation Narrative** (`presentation_notes.md`)
+   - Slide-ready talking points
+   - Key metrics for executive updates
+   - Highlights of tool impact and next steps
 
 ## 🛠️ Tool Installation
 
@@ -341,15 +348,16 @@ The HTML dashboard provides:
 ## Aggregate Results
 
 ### Overall Statistics
-- Total Issues Found: 156
-- Critical Issues: 12
-- High Severity Issues: 45
-- Medium Severity Issues: 99
+- Total Issues Found: 1562
+- Critical Issues: 5
+- High Severity Issues: 579
+- Medium Severity Issues: 61
+- Verified Secrets: 5
 
 ### Recommendations
-- Review all 12 critical issues immediately
-- Verified secrets should be rotated/revoked urgently
-- Address 45 high severity issues in next sprint
+- Rotate all 5 verified secrets immediately
+- Prioritize remediation of 584 critical and high severity issues
+- Schedule follow-up review for the remaining medium findings
 ```
 
 ## 🤝 Contributing
@@ -393,5 +401,5 @@ This project is part of the IOD Capstone program.
 
 ---
 
-**Last Updated**: October 9th, 2025
+**Last Updated**: October 10th, 2025
 **Author**: James Moceri

@@ -3,7 +3,6 @@
 # Lines starting with # are comments and will be ignored
 
 # Example vulnerable test repositories
-https://github.com/0c34/govwa.git
 https://github.com/OWASP/NodeGoat.git
 https://github.com/WebGoat/WebGoat.git
 

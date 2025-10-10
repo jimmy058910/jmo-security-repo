@@ -79,16 +79,18 @@ The script will:
 After the scan completes, you'll see output like:
 
 ```
-📁 Results Directory: /home/user/security-results-20241009-223000
+📁 Results Directory: /home/user/security-results-20251010-111033
 
 📊 Generated Reports:
-  • Summary Report:    /home/user/security-results-20241009-223000/SUMMARY_REPORT.md
-  • HTML Dashboard:    /home/user/security-results-20241009-223000/dashboard.html
-  • Tool Comparison:   /home/user/security-results-20241009-223000/tool-comparisons/comparison.md
+  • Summary Report:    /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
+  • HTML Dashboard:    /home/user/security-results-20251010-111033/dashboard.html
+  • Tool Comparison:   /home/user/security-results-20251010-111033/tool-comparisons/comparison.md
+  • Presentation Notes:/home/user/security-results-20251010-111033/presentation_notes.md
 
 Quick Commands:
-  View summary:        cat /home/user/security-results-20241009-223000/SUMMARY_REPORT.md
-  Open dashboard:      open /home/user/security-results-20241009-223000/dashboard.html
+  View summary:        cat /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
+  Open dashboard (mac):open /home/user/security-results-20251010-111033/dashboard.html
+  Open dashboard (linux):xdg-open /home/user/security-results-20251010-111033/dashboard.html
 ```
 
 ### Review Priority:
