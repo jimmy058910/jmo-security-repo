@@ -272,8 +272,18 @@ https://github.com/user/repo2.git
 
 3. **Generate Dashboard Only**:
 ```bash
+# Generate dashboard with default output (results_dir/dashboard.html)
 python3 generate_dashboard.py /path/to/results
+
+# Generate dashboard with custom output path
+python3 generate_dashboard.py /path/to/results /custom/path/dashboard.html
 ```
+
+The dashboard generator supports:
+- Multiple TruffleHog output formats (JSON arrays, NDJSON, single objects, empty files)
+- Automatic parent directory creation for custom output paths
+- Graceful handling of missing or empty scan results
+- UTF-8 safe file I/O for international characters
 
 4. **Generate Comparison Report**:
 ```bash
@@ -398,6 +408,38 @@ This project is part of the IOD Capstone program.
 
 **Problem**: Out of memory
 - **Solution**: Scan repositories in smaller batches
+
+**Problem**: Path errors (e.g., "//run_security_audit.sh not found")
+- **Solution**: This issue has been fixed in the latest version. Update to the latest main branch.
+- The wrapper scripts now use absolute paths computed from the script's real path location.
+
+**Problem**: AttributeError when generating dashboard with TruffleHog results
+- **Solution**: This has been fixed. The dashboard generator now handles all TruffleHog output formats:
+  - JSON arrays: `[{...}, {...}]`
+  - Single objects: `{...}`
+  - NDJSON (one object per line)
+  - Empty files or missing files
+  - Nested arrays
+
+### Rebuilding Reports Without Re-Scanning
+
+You can regenerate the dashboard or reports from existing scan results without re-running the security tools:
+
+```bash
+# Generate dashboard with default output location
+python3 generate_dashboard.py /path/to/results
+
+# Generate dashboard with custom output path (creates parent directories automatically)
+python3 generate_dashboard.py /path/to/results /custom/path/dashboard.html
+
+# Example: Generate dashboard in a reports directory
+python3 generate_dashboard.py ~/security-results-20251010-120000 ~/reports/security-dashboard.html
+```
+
+This is useful when you want to:
+- Update the dashboard after manually editing JSON files
+- Generate multiple dashboards with different configurations
+- Share results by exporting to a specific location
 
 ---
 

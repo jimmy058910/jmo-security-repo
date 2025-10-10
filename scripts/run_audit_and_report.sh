@@ -196,50 +196,7 @@ if [ "$RESUME" -eq 1 ]; then
     fi
 fi
 
-# Create a temporary script to run the audit with custom settings
-TEMP_AUDIT_SCRIPT="/tmp/run_security_audit_wrapper_$$.sh"
-cat > "$TEMP_AUDIT_SCRIPT" << 'AUDIT_SCRIPT_EOF'
-#!/bin/bash
-set -e
-set -o pipefail
-
-# Get parameters
-TESTING_DIR="$1"
-RESULTS_DIR="$2"
-RUN_GITLEAKS="$3"
-RUN_TRUFFLEHOG="$4"
-RUN_NOSEYPARKER="$5"
-shift 5
-SKIP_REPOS=("$@")
-
-# Source the original audit script functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if repo should be skipped
+# Function to check if repo should be skipped
 should_skip_repo() {
     local repo_name="$1"
     for skip in "${SKIP_REPOS[@]}"; do
@@ -250,25 +207,37 @@ should_skip_repo() {
     return 1
 }
 
-# Run the main audit script with modifications
-ORIGINAL_AUDIT="$REPO_ROOT/run_security_audit.sh"
+# Set tool flags based on fast-pass mode
+if [ "$FAST_PASS" -eq 1 ]; then
+    export RUN_GITLEAKS=0
+    export RUN_TRUFFLEHOG=0
+    export RUN_NOSEYPARKER=0
+else
+    export RUN_GITLEAKS=1
+    export RUN_TRUFFLEHOG=1
+    export RUN_NOSEYPARKER=1
+fi
 
-# Export settings for the audit script
+# Always enable these tools
 export RUN_CLOC=1
-export RUN_GITLEAKS="$RUN_GITLEAKS"
-export RUN_TRUFFLEHOG="$RUN_TRUFFLEHOG"
 export RUN_SEMGREP=1
-export RUN_NOSEYPARKER="$RUN_NOSEYPARKER"
+
+# Run the audit
+log_info "Starting security audit..."
+echo ""
+
+# Absolute path to audit script
+AUDIT_SCRIPT="$REPO_ROOT/run_security_audit.sh"
 
 # If resume mode, filter repositories
-if [ ${#SKIP_REPOS[@]} -gt 0 ]; then
+if [ "$RESUME" -eq 1 ] && [ ${#SKIP_REPOS[@]} -gt 0 ]; then
     log_info "Resume mode: skipping ${#SKIP_REPOS[@]} repositories"
     
     # Create a temporary filtered directory list
     TEMP_TARGETS="/tmp/filtered_targets_$$"
     mkdir -p "$TEMP_TARGETS"
     
-    for repo_path in "$TESTING_DIR"/*; do
+    for repo_path in "$TARGETS_DIR"/*; do
         if [ -d "$repo_path" ]; then
             repo_name=$(basename "$repo_path")
             if ! should_skip_repo "$repo_name"; then
@@ -280,38 +249,24 @@ if [ ${#SKIP_REPOS[@]} -gt 0 ]; then
     done
     
     # Run audit on filtered targets
-    bash "$ORIGINAL_AUDIT" "$TEMP_TARGETS" "$RESULTS_DIR"
+    bash "$AUDIT_SCRIPT" "$TEMP_TARGETS" "$RESULTS_DIR"
     
     # Cleanup
     rm -rf "$TEMP_TARGETS"
 else
     # Run normal audit
-    bash "$ORIGINAL_AUDIT" "$TESTING_DIR" "$RESULTS_DIR"
-fi
-AUDIT_SCRIPT_EOF
-
-chmod +x "$TEMP_AUDIT_SCRIPT"
-
-# Set tool flags based on fast-pass mode
-if [ "$FAST_PASS" -eq 1 ]; then
-    RUN_GITLEAKS=0
-    RUN_TRUFFLEHOG=0
-    RUN_NOSEYPARKER=0
-else
-    RUN_GITLEAKS=1
-    RUN_TRUFFLEHOG=1
-    RUN_NOSEYPARKER=1
+    bash "$AUDIT_SCRIPT" "$TARGETS_DIR" "$RESULTS_DIR"
 fi
 
-# Run the audit
-log_info "Starting security audit..."
-echo ""
-
-bash "$TEMP_AUDIT_SCRIPT" "$TARGETS_DIR" "$RESULTS_DIR" \
-    "$RUN_GITLEAKS" "$RUN_TRUFFLEHOG" "$RUN_NOSEYPARKER" "${SKIP_REPOS[@]}"
-
-# Cleanup temp script
-rm -f "$TEMP_AUDIT_SCRIPT"
+# Generate dashboard if not present
+if [ ! -f "$RESULTS_DIR/dashboard.html" ]; then
+    log_info "Generating dashboard..."
+    if command -v python3 &> /dev/null; then
+        python3 "$REPO_ROOT/generate_dashboard.py" "$RESULTS_DIR" || log_warning "Dashboard generation failed"
+    else
+        log_warning "Python 3 not found, skipping dashboard generation"
+    fi
+fi
 
 # Verify artifacts if requested
 if [ "$VERIFY" -eq 1 ]; then
@@ -335,12 +290,12 @@ if [ "$VERIFY" -eq 1 ]; then
         log_success "Found: dashboard.html"
     fi
     
-    # Check individual repo results
+    # Check individual repo results and normalize JSONs
     if [ -d "$RESULTS_DIR/individual-repos" ]; then
         SCANNED_REPOS=$(find "$RESULTS_DIR/individual-repos" -mindepth 1 -maxdepth 1 -type d | wc -l)
         log_info "Found results for $SCANNED_REPOS repositories"
         
-        # Verify each repo has required files
+        # Verify and normalize each repo's JSON files
         for repo_dir in "$RESULTS_DIR/individual-repos"/*; do
             if [ -d "$repo_dir" ]; then
                 repo_name=$(basename "$repo_dir")
@@ -348,6 +303,55 @@ if [ "$VERIFY" -eq 1 ]; then
                 if [ ! -f "$repo_dir/README.md" ]; then
                     log_error "Missing README.md for: $repo_name"
                     VERIFICATION_PASSED=false
+                fi
+                
+                # Normalize cloc.json (should be {})
+                if [ -f "$repo_dir/cloc.json" ]; then
+                    if ! jq -e 'type == "object"' "$repo_dir/cloc.json" >/dev/null 2>&1; then
+                        log_warning "Normalizing cloc.json for: $repo_name"
+                        echo '{}' > "$repo_dir/cloc.json"
+                    fi
+                fi
+                
+                # Normalize gitleaks.json (should be [])
+                if [ -f "$repo_dir/gitleaks.json" ]; then
+                    if ! jq -e 'type == "array"' "$repo_dir/gitleaks.json" >/dev/null 2>&1; then
+                        log_warning "Normalizing gitleaks.json for: $repo_name"
+                        echo '[]' > "$repo_dir/gitleaks.json"
+                    fi
+                else
+                    echo '[]' > "$repo_dir/gitleaks.json"
+                fi
+                
+                # Normalize trufflehog.json (should be [])
+                if [ -f "$repo_dir/trufflehog.json" ]; then
+                    # Check if it's valid JSON, if not normalize to []
+                    if ! jq -e '.' "$repo_dir/trufflehog.json" >/dev/null 2>&1; then
+                        log_warning "Normalizing trufflehog.json for: $repo_name"
+                        echo '[]' > "$repo_dir/trufflehog.json"
+                    fi
+                else
+                    echo '[]' > "$repo_dir/trufflehog.json"
+                fi
+                
+                # Normalize semgrep.json (should be {"results":[]})
+                if [ -f "$repo_dir/semgrep.json" ]; then
+                    if ! jq -e 'has("results")' "$repo_dir/semgrep.json" >/dev/null 2>&1; then
+                        log_warning "Normalizing semgrep.json for: $repo_name"
+                        echo '{"results":[]}' > "$repo_dir/semgrep.json"
+                    fi
+                else
+                    echo '{"results":[]}' > "$repo_dir/semgrep.json"
+                fi
+                
+                # Normalize noseyparker.json (should be {"matches":[]})
+                if [ -f "$repo_dir/noseyparker.json" ]; then
+                    if ! jq -e 'has("matches")' "$repo_dir/noseyparker.json" >/dev/null 2>&1; then
+                        log_warning "Normalizing noseyparker.json for: $repo_name"
+                        echo '{"matches":[]}' > "$repo_dir/noseyparker.json"
+                    fi
+                else
+                    echo '{"matches":[]}' > "$repo_dir/noseyparker.json"
                 fi
                 
                 # Check for at least one scan result

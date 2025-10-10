@@ -12,7 +12,7 @@ from collections import defaultdict
 def parse_json_safe(filepath):
     """Safely parse JSON file with error handling"""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data
     except (json.JSONDecodeError, FileNotFoundError) as e:
@@ -39,7 +39,7 @@ def parse_gitleaks(filepath):
     return findings
 
 def parse_trufflehog(filepath):
-    """Parse trufflehog JSON output supporting both NDJSON and JSON array formats"""
+    """Parse trufflehog JSON output supporting arrays, objects, nested lists, and NDJSON"""
 
     def _extract_file_path(metadata):
         data = metadata.get('Data', {}) if isinstance(metadata, dict) else {}
@@ -74,13 +74,20 @@ def parse_trufflehog(filepath):
     if not raw_content:
         return findings
 
-    items = []
+    def _flatten(items):
+        for entry in items:
+            if isinstance(entry, dict):
+                yield entry
+            elif isinstance(entry, list):
+                yield from _flatten(entry)
+
+    parsed_items = []
     try:
         parsed = json.loads(raw_content)
         if isinstance(parsed, list):
-            items.extend(parsed)
+            parsed_items.extend(_flatten(parsed))
         elif isinstance(parsed, dict):
-            items.append(parsed)
+            parsed_items.append(parsed)
     except json.JSONDecodeError:
         for line in raw_content.splitlines():
             if not line.strip():
@@ -90,11 +97,11 @@ def parse_trufflehog(filepath):
             except json.JSONDecodeError:
                 continue
             if isinstance(parsed_line, list):
-                items.extend(parsed_line)
+                parsed_items.extend(_flatten(parsed_line))
             elif isinstance(parsed_line, dict):
-                items.append(parsed_line)
+                parsed_items.append(parsed_line)
 
-    for item in items:
+    for item in parsed_items:
         finding = _collect(item)
         if finding:
             findings.append(finding)
@@ -216,8 +223,8 @@ def calculate_metrics(results_dir):
     all_findings = []
     repo_stats = []
     tool_stats = defaultdict(lambda: {'count': 0, 'repos': set()})
-
-    if not repos_dir.exists():
+    
+    if not repos_dir.exists() or not repos_dir.is_dir():
         print(f"Warning: Results directory '{repos_dir}' not found. Returning empty dashboard metrics.")
         return {
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -228,11 +235,10 @@ def calculate_metrics(results_dir):
             'high_count': 0,
             'medium_count': 0,
             'low_count': 0,
-            'repo_stats': repo_stats,
+            'repo_stats': [],
             'tool_stats': {},
-            'all_findings': all_findings
+            'all_findings': []
         }
-
     # Parse all repository results
     for repo_dir in repos_dir.iterdir():
         if not repo_dir.is_dir():
@@ -337,6 +343,7 @@ def calculate_metrics(results_dir):
         'all_findings': all_findings
     }
 
+
 def generate_dashboard(results_dir, output_path=None):
     """Generate an HTML dashboard with all metrics"""
 
@@ -345,8 +352,9 @@ def generate_dashboard(results_dir, output_path=None):
     
     # Build repository rows HTML
     repo_rows = ""
-    for repo in metrics['repo_stats']:
-        repo_rows += f"""
+    if metrics['repo_stats']:
+        for repo in metrics['repo_stats']:
+            repo_rows += f"""
             <tr>
                 <td>{repo['name']}</td>
                 <td>{repo['gitleaks']}</td>
@@ -359,16 +367,17 @@ def generate_dashboard(results_dir, output_path=None):
     if not repo_rows:
         repo_rows = """
             <tr>
-                <td colspan=\"6\">No repositories processed.</td>
+                <td colspan=\"6\" style=\"text-align: center; color: #999;\">No repositories scanned yet</td>
             </tr>
         """
     
     # Build tool rows HTML
     tool_rows = ""
-    for tool_name, stats in metrics['tool_stats'].items():
-        repos_count = len(stats['repos'])
-        avg_findings = stats['count'] / repos_count if repos_count > 0 else 0
-        tool_rows += f"""
+    if metrics['tool_stats']:
+        for tool_name, stats in metrics['tool_stats'].items():
+            repos_count = len(stats['repos'])
+            avg_findings = stats['count'] / repos_count if repos_count > 0 else 0
+            tool_rows += f"""
             <tr>
                 <td>{tool_name}</td>
                 <td>{stats['count']}</td>
@@ -379,7 +388,7 @@ def generate_dashboard(results_dir, output_path=None):
     if not tool_rows:
         tool_rows = """
             <tr>
-                <td colspan=\"4\">No tool findings available.</td>
+                <td colspan=\"4\" style=\"text-align: center; color: #999;\">No scan results available</td>
             </tr>
         """
     
@@ -582,12 +591,12 @@ def generate_dashboard(results_dir, output_path=None):
     
     if output_path:
         output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
     else:
         output_file = Path(results_dir) / "dashboard.html"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding='utf-8') as f:
         f.write(dashboard_html)
     
     print(f"✅ Dashboard generated: {output_file}")
@@ -596,10 +605,10 @@ def generate_dashboard(results_dir, output_path=None):
     print(f"🔍 Verified secrets: {metrics['verified_secrets']}")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        results_directory = sys.argv[1]
-        output_destination = sys.argv[2] if len(sys.argv) > 2 else None
-        generate_dashboard(results_directory, output_destination)
-    else:
+    if len(sys.argv) < 2:
         print("Usage: python3 generate_dashboard.py <results_directory> [output_file]")
         sys.exit(1)
+
+    results_dir = sys.argv[1]
+    output_arg = sys.argv[2] if len(sys.argv) > 2 else None
+    generate_dashboard(results_dir, output_arg)
