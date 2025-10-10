@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-RESULTS_DIR=$1
+RESULTS_DIR="${1:-}"
 
 if [ -z "$RESULTS_DIR" ] || [ ! -d "$RESULTS_DIR" ]; then
     echo "Error: Invalid results directory"
