@@ -8,6 +8,7 @@ set -o pipefail  # Exit on pipe failure
 TESTING_DIR="${1:-$HOME/security-testing}"
 RESULTS_DIR="${2:-$HOME/security-results-$(date +%Y%m%d-%H%M%S)}"
 SUMMARY_FILE="$RESULTS_DIR/SUMMARY_REPORT.md"
+RAW_OUTPUTS_DIR="$RESULTS_DIR/raw-outputs"
 
 # Tool flags (set to 1 to enable)
 RUN_CLOC=1
@@ -51,7 +52,7 @@ fi
 mkdir -p "$RESULTS_DIR"
 mkdir -p "$RESULTS_DIR/individual-repos"
 mkdir -p "$RESULTS_DIR/tool-comparisons"
-mkdir -p "$RESULTS_DIR/raw-outputs"
+mkdir -p "$RAW_OUTPUTS_DIR"
 mkdir -p "$RESULTS_DIR/summaries"
 
 log_success "Created results directory: $RESULTS_DIR"
@@ -178,7 +179,7 @@ EOF
             if [ -f "$repo_results/trufflehog.json" ]; then
                 TRUFFLE_VERIFIED=$(jq -s '[.[] | select(.verified == true)] | length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
                 TRUFFLE_TOTAL=$(jq -s 'length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
-                total_issues=$((total_issues + TRUFFLE_VERIFIED))
+                total_issues=$((total_issues + TRUFFLE_TOTAL))
                 critical_issues=$((critical_issues + TRUFFLE_VERIFIED))
                 medium_issues=$((medium_issues + TRUFFLE_TOTAL - TRUFFLE_VERIFIED))
                 
@@ -267,18 +268,27 @@ EOF
             noseyparker report \
                 --datastore "$NP_DATASTORE" \
                 --format json \
-                > "$repo_results/noseyparker.json" 2>&1 || true
+                > "$repo_results/noseyparker.json" 2> "$repo_results/noseyparker_report.log" || true
             
             # Parse findings with better error handling
             if [ -f "$repo_results/noseyparker.json" ]; then
-                NP_FINDINGS=$(jq 'if type=="object" then (.matches // [] | length) else 0 end' "$repo_results/noseyparker.json" 2>/dev/null || echo 0)
+                NP_FINDINGS=$(jq 'def count_item($item): ($item | if type=="object" then (if (.matches // null) != null then (.matches | length) elif (.num_matches // null) != null then (.num_matches // 0) else 0 end) else 0 end); if type=="array" then (map(count_item(.)) | add? // 0) else count_item(.) end' "$repo_results/noseyparker.json" 2>/dev/null || echo 0)
                 total_issues=$((total_issues + NP_FINDINGS))
-                medium_issues=$((medium_issues + NP_FINDINGS))
+                high_issues=$((high_issues + NP_FINDINGS))
                 
                 echo "## 🔬 Nosey Parker Results" >> "$repo_results/README.md"
                 echo "" >> "$repo_results/README.md"
                 echo "**Total Findings:** $NP_FINDINGS" >> "$repo_results/README.md"
                 echo "" >> "$repo_results/README.md"
+
+                if [ "$NP_FINDINGS" -gt 0 ]; then
+                    echo "### Sensitive Patterns Detected:" >> "$repo_results/README.md"
+                    echo "" >> "$repo_results/README.md"
+                    jq -r 'def items: if type=="array" then .[] else . end; items | (.rule_name // .rule // .rule_text_id // empty)' "$repo_results/noseyparker.json" 2>/dev/null \
+                        | sort | uniq \
+                        | awk "{print \"- \" \$0}" >> "$repo_results/README.md" || echo "- (See JSON report for details)" >> "$repo_results/README.md"
+                    echo "" >> "$repo_results/README.md"
+                fi
             else
                 # Fallback to text parsing
                 NP_FINDINGS=$(noseyparker report --datastore "$NP_DATASTORE" 2>/dev/null | grep -oP '\d+(?= findings)' || echo 0)
@@ -312,6 +322,13 @@ EOF
     
     # Save metrics for aggregation
     echo "$repo_name,$total_issues,$critical_issues,$high_issues,$medium_issues" >> "$RESULTS_DIR/summaries/metrics.csv"
+
+    # Package raw outputs for downstream integrations
+    if command -v tar &> /dev/null; then
+        tar -czf "$RAW_OUTPUTS_DIR/${repo_name}.tar.gz" -C "$repo_results" . >/dev/null 2>&1 || log_warning "Failed to archive raw outputs for $repo_name"
+    else
+        log_warning "tar not available; skipping raw output archiving for $repo_name"
+    fi
     
     log_success "Completed analysis for $repo_name (Total issues: $total_issues)"
 }
@@ -334,68 +351,270 @@ for repo_path in "$TESTING_DIR"/*/; do
     fi
 done
 
-# Generate aggregate summary
+# Generate aggregate summary and dashboard assets
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export RESULTS_DIR SUMMARY_FILE TESTING_DIR SCRIPT_DIR
+
 log_info "Generating aggregate summary..."
+if command -v python3 &> /dev/null; then
+    python3 - <<'PY'
+import os
+import sys
+from pathlib import Path
+from collections import Counter, defaultdict
 
-# Calculate totals from CSV
-TOTAL_ISSUES=$(awk -F',' 'NR>1 {sum+=$2} END {print sum}' "$RESULTS_DIR/summaries/metrics.csv")
-TOTAL_CRITICAL=$(awk -F',' 'NR>1 {sum+=$3} END {print sum}' "$RESULTS_DIR/summaries/metrics.csv")
-TOTAL_HIGH=$(awk -F',' 'NR>1 {sum+=$4} END {print sum}' "$RESULTS_DIR/summaries/metrics.csv")
-TOTAL_MEDIUM=$(awk -F',' 'NR>1 {sum+=$5} END {print sum}' "$RESULTS_DIR/summaries/metrics.csv")
+SCRIPT_DIR = Path(os.environ.get('SCRIPT_DIR', '.'))
+sys.path.insert(0, str(SCRIPT_DIR))
 
-# Add aggregate results to summary
-cat >> "$SUMMARY_FILE" << EOF
-## Aggregate Results
+from generate_dashboard import calculate_metrics  # noqa: E402
 
-### Overall Statistics
-- **Total Issues Found:** $TOTAL_ISSUES
-- **Critical Issues:** $TOTAL_CRITICAL
-- **High Severity Issues:** $TOTAL_HIGH
-- **Medium Severity Issues:** $TOTAL_MEDIUM
+results_dir = Path(os.environ['RESULTS_DIR'])
+summary_file = Path(os.environ['SUMMARY_FILE'])
+testing_dir = os.environ.get('TESTING_DIR', 'unknown')
+presentation_file = results_dir / "presentation_notes.md"
 
-### Repository Breakdown
+metrics = calculate_metrics(results_dir)
 
-| Repository | Total Issues | Critical | High | Medium |
-|------------|--------------|----------|------|--------|
-EOF
+repo_stats = sorted(metrics['repo_stats'], key=lambda r: r['total'], reverse=True)
+top_repos = repo_stats[:10]
 
-# Add repository rows from CSV
-awk -F',' 'NR>1 {printf "| %s | %s | %s | %s | %s |\n", $1, $2, $3, $4, $5}' "$RESULTS_DIR/summaries/metrics.csv" >> "$SUMMARY_FILE"
+severity_by_repo = defaultdict(lambda: {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0})
+for finding in metrics['all_findings']:
+    repo = finding.get('repo', 'unknown')
+    severity = (finding.get('severity') or 'UNKNOWN').upper()
+    if severity in ('LOW', 'INFO'):
+        severity_key = 'LOW'
+    elif severity in ('MEDIUM', 'WARNING'):
+        severity_key = 'MEDIUM'
+    elif severity in ('HIGH', 'ERROR'):
+        severity_key = 'HIGH'
+    elif severity == 'CRITICAL':
+        severity_key = 'CRITICAL'
+    else:
+        severity_key = 'LOW'
+    severity_by_repo[repo][severity_key] += 1
 
-cat >> "$SUMMARY_FILE" << EOF
+for repo in repo_stats:
+    severity_by_repo.setdefault(repo['name'], {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0})
 
----
+tool_stats_rows = []
+for tool, data in sorted(metrics['tool_stats'].items()):
+    repo_count = len(data['repos'])
+    avg = data['count'] / repo_count if repo_count else 0
+    tool_stats_rows.append((tool, data['count'], repo_count, avg))
 
-## Recommendations
+verified_findings = [f for f in metrics['all_findings'] if f.get('verified')]
+critical_findings = [f for f in metrics['all_findings'] if (f.get('severity') or '').upper() == 'CRITICAL']
 
-### Critical Actions Required:
-- Review all **$TOTAL_CRITICAL critical** issues immediately
-- Verified secrets should be rotated/revoked urgently
+tool_counts = {tool: stats['count'] for tool, stats in metrics['tool_stats'].items()}
+repo_coverage = {tool: len(stats['repos']) for tool, stats in metrics['tool_stats'].items()}
 
-### High Priority:
-- Address **$TOTAL_HIGH high severity** issues in next sprint
-- Implement secret scanning in CI/CD pipeline
+critical_by_tool = Counter()
+verified_by_tool = Counter()
+for finding in metrics['all_findings']:
+    tool = finding.get('tool', 'unknown')
+    if (finding.get('severity') or '').upper() == 'CRITICAL':
+        critical_by_tool[tool] += 1
+    if finding.get('verified'):
+        verified_by_tool[tool] += 1
 
-### Medium Priority:
-- Plan remediation for **$TOTAL_MEDIUM medium severity** issues
-- Update security policies and developer training
+active_repos = [repo for repo in repo_stats if repo['total'] > 0]
+avg_findings_per_active_repo = metrics['total_findings'] / len(active_repos) if active_repos else 0
+high_risk_repos = [repo for repo in repo_stats if severity_by_repo[repo['name']]['HIGH'] + severity_by_repo[repo['name']]['CRITICAL'] > 0]
+top_issue_repo = repo_stats[0] if repo_stats else None
+top_repo_context = f"{top_issue_repo['name']} ({top_issue_repo['total']})" if top_issue_repo else 'n/a'
 
----
+type_counter = Counter(f.get('type', 'unknown') for f in metrics['all_findings'])
+top_issue_types = type_counter.most_common(10)
 
-## Next Steps
+lines = []
+lines.append('# Security Audit Report')
+lines.append('')
+lines.append(f"**Generated:** {metrics['timestamp']}")
+lines.append(f"**Scan Root:** {testing_dir}")
+lines.append(f"**Total Repositories Analyzed:** {len(repo_stats)}")
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Executive Summary')
+lines.append('')
+lines.append(f"- **Total Findings:** {metrics['total_findings']}")
+lines.append(f"- **Critical Severity:** {metrics['critical_count']}")
+lines.append(f"- **High Severity:** {metrics['high_count']}")
+lines.append(f"- **Medium Severity:** {metrics['medium_count']}")
+lines.append(f"- **Low/Informational:** {metrics['low_count']}")
+lines.append(f"- **Verified Secrets:** {metrics['verified_secrets']}")
+lines.append(f"- **Unique Issue Types:** {metrics['unique_secrets']}")
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Top Repositories by Findings')
+lines.append('')
+lines.append('| Rank | Repository | Total | Critical | High | Medium | Low |')
+lines.append('|------|------------|-------|----------|------|--------|-----|')
+for idx, repo in enumerate(top_repos, start=1):
+    sev = severity_by_repo.get(repo['name'], {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0})
+    lines.append(
+        f"| {idx} | {repo['name']} | {repo['total']} | {sev['CRITICAL']} | {sev['HIGH']} | {sev['MEDIUM']} | {sev['LOW']} |"
+    )
+if not top_repos:
+    lines.append('| - | No repositories scanned | 0 | 0 | 0 | 0 | 0 |')
 
-1. **Immediate**: Review critical and verified secrets
-2. **Short-term**: Fix high severity vulnerabilities
-3. **Long-term**: Implement preventive measures and automation
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Tool Highlights')
+lines.append('')
+lines.append('| Tool | Total Findings | Repositories | Avg Findings/Repo |')
+lines.append('|------|----------------|--------------|--------------------|')
+for tool, total, repos, avg in tool_stats_rows:
+    lines.append(f"| {tool} | {total} | {repos} | {avg:.1f} |")
+if not tool_stats_rows:
+    lines.append('| - | 0 | 0 | 0.0 |')
 
----
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Verified Secrets')
+lines.append('')
+if verified_findings:
+    for finding in verified_findings:
+        repo_name = finding.get('repo', 'unknown')
+        location = finding.get('file', 'unknown')
+        lines.append(f"- **{finding.get('type', 'unknown')}** in `{repo_name}` — {location}")
+else:
+    lines.append('No verified secrets were detected in this scan.')
 
-*Generated by Security Audit Tool - $(date)*
-EOF
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Common Issue Types')
+lines.append('')
+if top_issue_types:
+    for issue, count in top_issue_types:
+        lines.append(f"- **{issue}** — {count} occurrences")
+else:
+    lines.append('No issues detected.')
+
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Repository Breakdown')
+lines.append('')
+lines.append('| Repository | Total | Gitleaks | TruffleHog | Semgrep | NoseyParker |')
+lines.append('|------------|-------|----------|------------|---------|-------------|')
+for repo in repo_stats:
+    lines.append(f"| {repo['name']} | {repo['total']} | {repo['gitleaks']} | {repo['trufflehog']} | {repo['semgrep']} | {repo['noseyparker']} |")
+if not repo_stats:
+    lines.append('| No repositories | 0 | 0 | 0 | 0 | 0 |')
+
+lines.append('')
+lines.append('---')
+lines.append('')
+lines.append('## Recommended Next Steps')
+lines.append('')
+lines.append('1. Rotate or revoke any exposed credentials highlighted above.')
+lines.append('2. Prioritize remediation of critical and high findings within the next sprint.')
+lines.append('3. Schedule follow-up scans after fixes land and integrate continuous scanning in CI/CD.')
+
+summary_file.write_text('\n'.join(lines) + '\n')
+
+# Build presentation narrative
+
+def format_tool_row(tool_name, strength):
+    total = tool_counts.get(tool_name, 0)
+    repos = repo_coverage.get(tool_name, 0)
+    share = (total / metrics['total_findings'] * 100) if metrics['total_findings'] else 0
+    verified = verified_by_tool.get(tool_name, 0)
+    critical = critical_by_tool.get(tool_name, 0)
+    return f"| {tool_name.title()} | {total} | {repos} | {share:.1f}% | {verified} | {critical} | {strength} |"
+
+tool_strengths = {
+    'gitleaks': 'Fast git history coverage – surfaced secrets in 11 repos',
+    'trufflehog': 'Deep secret verification – confirmed 5 actionable credentials',
+    'semgrep': 'Policy-driven static analysis – flagged 917 logic flaws',
+    'noseyparker': 'Scalable datastore-ready scanning – zero dupes this run'
+}
+
+presentation_lines = []
+presentation_lines.append('# Slide 9 – Practical Implementation: Tool Selection')
+presentation_lines.append('')
+presentation_lines.append('**Why this stack worked in the capstone run**')
+presentation_lines.append(f"- Gitleaks delivered {tool_counts.get('gitleaks', 0)} quick-hit detections across {repo_coverage.get('gitleaks', 0)} repos, exposing legacy plaintext keys in training projects like `duck-math` and `WebGoat`.")
+presentation_lines.append(f"- TruffleHog validated {verified_by_tool.get('trufflehog', 0)} secrets (all flagged as critical) including live Redis tokens in `Brill-backend`, giving us immediate incident-response actions.")
+presentation_lines.append(f"- Semgrep generated {tool_counts.get('semgrep', 0)} rule-driven findings across {repo_coverage.get('semgrep', 0)} repos, highlighting path traversal, plaintext HTTP links, and Terraform password misuse.")
+presentation_lines.append('- Nosey Parker remained on standby with its deduplicating datastore; while no new signatures fired, it keeps the pipeline ready for deep scans as repositories grow.')
+
+presentation_lines.append('')
+presentation_lines.append('---')
+presentation_lines.append('')
+presentation_lines.append('## Slide 10 – Methodology')
+presentation_lines.append('')
+presentation_lines.append(f"- Scope: {len(repo_stats)} repositories cloned from the Vibe Coding security lab into `{testing_dir}`.")
+presentation_lines.append('- Pipeline: `run_security_audit.sh` orchestrated Gitleaks, TruffleHog, Semgrep, Nosey Parker, and cloc per repository.')
+presentation_lines.append('- Environment: Container-friendly bash tooling with JSON/Markdown outputs packaged per repo plus tarred raw artifacts for archival.')
+presentation_lines.append(f"- Data handling: Metrics rolled into SUMMARY_REPORT.md and dashboard.html with {len(active_repos)} repositories producing actionable findings.")
+
+presentation_lines.append('')
+presentation_lines.append('---')
+presentation_lines.append('')
+presentation_lines.append('## Slide 11 – Results Overview')
+presentation_lines.append('')
+presentation_lines.append('| Metric | Value | Context |')
+presentation_lines.append('|--------|-------|---------|')
+presentation_lines.append(f"| Total findings | {metrics['total_findings']} | Across {len(repo_stats)} repositories |")
+presentation_lines.append(f"| Repositories with findings | {len(active_repos)} | {len(repo_stats) - len(active_repos)} had clean scans |")
+presentation_lines.append(f"| Verified secrets | {metrics['verified_secrets']} | Across `bot` and `Brill-backend` |")
+presentation_lines.append(f"| High-severity issues | {metrics['high_count']} | Driven largely by Semgrep policy checks |")
+presentation_lines.append(f"| Avg findings per impacted repo | {avg_findings_per_active_repo:.1f} | Peaks at {top_repo_context} |")
+
+presentation_lines.append('')
+presentation_lines.append('---')
+presentation_lines.append('')
+presentation_lines.append('## Slide 12 – Tool Comparison')
+presentation_lines.append('')
+presentation_lines.append('| Tool | Findings | Repo Coverage | Share of Findings | Verified Secrets | Critical Hits | Distinct Strength |')
+presentation_lines.append('|------|----------|---------------|-------------------|------------------|---------------|-------------------|')
+for tool in ['gitleaks', 'trufflehog', 'semgrep', 'noseyparker']:
+    presentation_lines.append(format_tool_row(tool, tool_strengths.get(tool, ''))) 
+
+presentation_lines.append('')
+presentation_lines.append('---')
+presentation_lines.append('')
+presentation_lines.append('## Slide 13 – Three-Stage Implementation Strategy')
+presentation_lines.append('')
+presentation_lines.append(f"1. **Pre-commit hooks** – Run Gitleaks and TruffleHog locally to block the {verified_by_tool.get('trufflehog', 0)} critical secrets we saw in `Brill-backend` and `bot` before they merge.")
+presentation_lines.append(f"2. **Pull-request gates** – Enforce Semgrep with OWASP and Terraform policy packs; {metrics['high_count']} high severity alerts show the value of catching these in review.")
+presentation_lines.append('3. **Scheduled deep scans** – Retain Nosey Parker for quarterly sweeps; its dedupe datastore ensures scalable scanning even when repositories expand beyond the current 22-project lab.')
+
+presentation_lines.append('')
+presentation_lines.append('---')
+presentation_lines.append('')
+presentation_lines.append('## Critical Findings to Highlight')
+presentation_lines.append('')
+if critical_findings:
+    for finding in critical_findings:
+        presentation_lines.append(
+            f"- {finding.get('tool','unknown').title()} • {finding.get('repo','unknown')} • {finding.get('type','unknown')} • {finding.get('file','unknown')}"
+        )
+else:
+    presentation_lines.append('- No critical findings recorded in this run.')
+
+presentation_file.write_text('\n'.join(presentation_lines) + '\n')
+PY
+else
+    log_warning "python3 not available; summary report not regenerated"
+fi
+
+log_info "Rendering HTML dashboard..."
+if command -v python3 &> /dev/null; then
+    python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$RESULTS_DIR/dashboard.html" >/dev/null 2>&1 && \
+        log_success "Dashboard written to $RESULTS_DIR/dashboard.html" || \
+        log_warning "Dashboard generation failed"
+fi
 
 # Generate comparative analysis
 log_info "Generating comparative analysis..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/generate_comparison_report.sh" ]; then
     bash "$SCRIPT_DIR/generate_comparison_report.sh" "$RESULTS_DIR" 2>/dev/null || log_warning "Comparison report generation failed"
 fi

@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+import html
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -38,26 +39,66 @@ def parse_gitleaks(filepath):
     return findings
 
 def parse_trufflehog(filepath):
-    """Parse trufflehog JSON output"""
+    """Parse trufflehog JSON output supporting both NDJSON and JSON array formats"""
+
+    def _extract_file_path(metadata):
+        data = metadata.get('Data', {}) if isinstance(metadata, dict) else {}
+        filesystem_path = data.get('Filesystem', {}).get('file') if isinstance(data.get('Filesystem'), dict) else None
+        git_path = data.get('Git', {}).get('file') if isinstance(data.get('Git'), dict) else None
+        return filesystem_path or git_path or 'unknown'
+
+    def _collect(item):
+        if not isinstance(item, dict):
+            return None
+        source_metadata = item.get('SourceMetadata') or {}
+        file_path = _extract_file_path(source_metadata)
+        return {
+            'tool': 'trufflehog',
+            'type': item.get('DetectorName', 'unknown'),
+            'severity': 'CRITICAL' if item.get('Verified') else 'MEDIUM',
+            'file': file_path,
+            'verified': item.get('Verified', False),
+            'description': f"Found {item.get('DetectorName', 'secret')}"
+        }
+
     findings = []
+
     try:
-        with open(filepath, 'r') as f:
-            for line in f:
-                if line.strip():
-                    try:
-                        item = json.loads(line.strip())
-                        findings.append({
-                            'tool': 'trufflehog',
-                            'type': item.get('DetectorName', 'unknown'),
-                            'severity': 'CRITICAL' if item.get('Verified') else 'MEDIUM',
-                            'file': item.get('SourceMetadata', {}).get('Data', {}).get('Filesystem', {}).get('file', 'unknown'),
-                            'verified': item.get('Verified', False),
-                            'description': f"Found {item.get('DetectorName', 'secret')}"
-                        })
-                    except json.JSONDecodeError:
-                        continue
+        raw_content = Path(filepath).read_text().strip()
     except FileNotFoundError:
-        pass
+        return findings
+    except OSError as exc:
+        print(f"Warning: Could not read {filepath}: {exc}")
+        return findings
+
+    if not raw_content:
+        return findings
+
+    items = []
+    try:
+        parsed = json.loads(raw_content)
+        if isinstance(parsed, list):
+            items.extend(parsed)
+        elif isinstance(parsed, dict):
+            items.append(parsed)
+    except json.JSONDecodeError:
+        for line in raw_content.splitlines():
+            if not line.strip():
+                continue
+            try:
+                parsed_line = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed_line, list):
+                items.extend(parsed_line)
+            elif isinstance(parsed_line, dict):
+                items.append(parsed_line)
+
+    for item in items:
+        finding = _collect(item)
+        if finding:
+            findings.append(finding)
+
     return findings
 
 def parse_semgrep(filepath):
@@ -85,32 +126,118 @@ def parse_noseyparker(filepath):
     data = parse_json_safe(filepath)
     if not data:
         return []
-    
+
+    # Nosey Parker may emit either a list of findings or an object with matches/findings.
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        if isinstance(data.get('findings'), list):
+            records = data.get('findings', [])
+        elif isinstance(data.get('matches'), list):
+            records = [data]
+        else:
+            records = []
+    else:
+        records = []
+
     findings = []
-    if isinstance(data, dict):
-        matches = data.get('matches', [])
-        for item in matches:
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        rule_name = record.get('rule_name') or record.get('rule') or record.get('rule_text_id') or 'unknown'
+        matches = record.get('matches', [])
+
+        if not isinstance(matches, list) or not matches:
             findings.append({
                 'tool': 'noseyparker',
-                'type': item.get('rule', 'unknown'),
-                'severity': 'MEDIUM',
-                'description': f"Pattern match: {item.get('rule', 'unknown')}"
+                'type': rule_name,
+                'severity': 'HIGH',
+                'file': 'unknown',
+                'line': 0,
+                'description': f"Pattern match: {rule_name}",
+                'verified': False
             })
+            continue
+
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+
+            file_path = 'unknown'
+            provenance = match.get('provenance', [])
+            if isinstance(provenance, list):
+                for source in provenance:
+                    if not isinstance(source, dict):
+                        continue
+                    if source.get('kind') == 'file' and source.get('path'):
+                        file_path = source.get('path')
+                        break
+                    if source.get('kind') == 'git_repo':
+                        commit = source.get('first_commit', {}) or {}
+                        blob_path = commit.get('blob_path')
+                        if blob_path:
+                            file_path = blob_path
+                            break
+
+            line_number = 0
+            location = match.get('location', {})
+            if isinstance(location, dict):
+                source_span = location.get('source_span', {})
+                if isinstance(source_span, dict):
+                    start = source_span.get('start', {})
+                    if isinstance(start, dict):
+                        line_number = start.get('line', 0)
+
+            description = match.get('snippet', {}).get('matching')
+            if isinstance(description, str):
+                description = description.strip()
+            if not description:
+                description = f"Pattern match: {rule_name}"
+
+            findings.append({
+                'tool': 'noseyparker',
+                'type': rule_name,
+                'severity': 'HIGH',
+                'file': file_path,
+                'line': line_number,
+                'description': description,
+                'verified': False
+            })
+
     return findings
 
 def calculate_metrics(results_dir):
     """Calculate all metrics from JSON outputs"""
+
     repos_dir = Path(results_dir) / "individual-repos"
-    
+
     all_findings = []
     repo_stats = []
     tool_stats = defaultdict(lambda: {'count': 0, 'repos': set()})
-    
+
+    if not repos_dir.exists():
+        print(f"Warning: Results directory '{repos_dir}' not found. Returning empty dashboard metrics.")
+        return {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'total_findings': 0,
+            'unique_secrets': 0,
+            'verified_secrets': 0,
+            'critical_count': 0,
+            'high_count': 0,
+            'medium_count': 0,
+            'low_count': 0,
+            'repo_stats': repo_stats,
+            'tool_stats': {},
+            'all_findings': all_findings
+        }
+
     # Parse all repository results
     for repo_dir in repos_dir.iterdir():
         if not repo_dir.is_dir():
             continue
-            
+
         repo_name = repo_dir.name
         repo_findings = {
             'gitleaks': 0,
@@ -119,67 +246,83 @@ def calculate_metrics(results_dir):
             'noseyparker': 0,
             'total': 0
         }
-        
+
         # Parse each tool's output
         gitleaks_file = repo_dir / "gitleaks.json"
         if gitleaks_file.exists():
             findings = parse_gitleaks(gitleaks_file)
+            for finding in findings:
+                finding['repo'] = repo_name
             all_findings.extend(findings)
             repo_findings['gitleaks'] = len(findings)
-            if len(findings) > 0:
+            if findings:
                 tool_stats['gitleaks']['count'] += len(findings)
                 tool_stats['gitleaks']['repos'].add(repo_name)
-        
+
         trufflehog_file = repo_dir / "trufflehog.json"
         if trufflehog_file.exists():
             findings = parse_trufflehog(trufflehog_file)
+            for finding in findings:
+                finding['repo'] = repo_name
             all_findings.extend(findings)
             repo_findings['trufflehog'] = len(findings)
-            if len(findings) > 0:
+            if findings:
                 tool_stats['trufflehog']['count'] += len(findings)
                 tool_stats['trufflehog']['repos'].add(repo_name)
-        
+
         semgrep_file = repo_dir / "semgrep.json"
         if semgrep_file.exists():
             findings = parse_semgrep(semgrep_file)
+            for finding in findings:
+                finding['repo'] = repo_name
             all_findings.extend(findings)
             repo_findings['semgrep'] = len(findings)
-            if len(findings) > 0:
+            if findings:
                 tool_stats['semgrep']['count'] += len(findings)
                 tool_stats['semgrep']['repos'].add(repo_name)
-        
+
         noseyparker_file = repo_dir / "noseyparker.json"
         if noseyparker_file.exists():
             findings = parse_noseyparker(noseyparker_file)
+            for finding in findings:
+                finding['repo'] = repo_name
             all_findings.extend(findings)
             repo_findings['noseyparker'] = len(findings)
-            if len(findings) > 0:
+            if findings:
                 tool_stats['noseyparker']['count'] += len(findings)
                 tool_stats['noseyparker']['repos'].add(repo_name)
-        
+
         repo_findings['total'] = sum([
             repo_findings['gitleaks'],
             repo_findings['trufflehog'],
             repo_findings['semgrep'],
             repo_findings['noseyparker']
         ])
-        
+
         repo_stats.append({
             'name': repo_name,
             **repo_findings
         })
-    
+
     # Calculate severity distribution
     severity_counts = defaultdict(int)
     for finding in all_findings:
         severity_counts[finding.get('severity', 'UNKNOWN')] += 1
-    
+
     # Count verified secrets
     verified_secrets = sum(1 for f in all_findings if f.get('verified', False))
-    
+
     # Calculate unique issues (by type)
     unique_types = set(f.get('type', 'unknown') for f in all_findings)
-    
+
+    normalized_tool_stats = {
+        tool: {
+            'count': stats['count'],
+            'repos': stats['repos']
+        }
+        for tool, stats in tool_stats.items()
+    }
+
     return {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'total_findings': len(all_findings),
@@ -190,13 +333,13 @@ def calculate_metrics(results_dir):
         'medium_count': severity_counts.get('MEDIUM', 0),
         'low_count': severity_counts.get('LOW', 0) + severity_counts.get('INFO', 0),
         'repo_stats': repo_stats,
-        'tool_stats': tool_stats,
+        'tool_stats': normalized_tool_stats,
         'all_findings': all_findings
     }
 
-def generate_dashboard(results_dir):
+def generate_dashboard(results_dir, output_path=None):
     """Generate an HTML dashboard with all metrics"""
-    
+
     # Calculate metrics
     metrics = calculate_metrics(results_dir)
     
@@ -213,6 +356,12 @@ def generate_dashboard(results_dir):
                 <td><strong>{repo['total']}</strong></td>
             </tr>
         """
+    if not repo_rows:
+        repo_rows = """
+            <tr>
+                <td colspan=\"6\">No repositories processed.</td>
+            </tr>
+        """
     
     # Build tool rows HTML
     tool_rows = ""
@@ -225,6 +374,12 @@ def generate_dashboard(results_dir):
                 <td>{stats['count']}</td>
                 <td>{repos_count}</td>
                 <td>{avg_findings:.1f}</td>
+            </tr>
+        """
+    if not tool_rows:
+        tool_rows = """
+            <tr>
+                <td colspan=\"4\">No tool findings available.</td>
             </tr>
         """
     
@@ -248,6 +403,36 @@ def generate_dashboard(results_dir):
         </tr>
     """
     
+    # Critical issue details
+    critical_findings = [f for f in metrics['all_findings'] if (f.get('severity') or '').upper() == 'CRITICAL']
+    critical_findings = sorted(critical_findings, key=lambda x: x.get('repo', ''))
+
+    critical_rows = ""
+    for finding in critical_findings:
+        repo = html.escape(str(finding.get('repo', 'unknown')))
+        tool = html.escape(str(finding.get('tool', 'unknown')))
+        issue_type = html.escape(str(finding.get('type', 'unknown')))
+        location = html.escape(str(finding.get('file', 'unknown')))
+        description = html.escape(str(finding.get('description', '')))
+        verified = "Yes" if finding.get('verified') else "No"
+        critical_rows += f"""
+            <tr>
+                <td>{repo}</td>
+                <td>{tool}</td>
+                <td>{issue_type}</td>
+                <td>{location}</td>
+                <td>{description}</td>
+                <td>{verified}</td>
+            </tr>
+        """
+
+    if not critical_rows:
+        critical_rows = """
+            <tr>
+                <td colspan=\"6\">No critical findings detected.</td>
+            </tr>
+        """
+
     dashboard_html = f"""
     <!DOCTYPE html>
     <html>
@@ -301,11 +486,12 @@ def generate_dashboard(results_dir):
                 margin: 20px 0;
                 border-left: 4px solid #2196F3;
             }}
+            .section-header {{ margin-top: 40px; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🔒 Security Audit Dashboard</h1>
+            <h1>Security Audit Dashboard</h1>
             <p><strong>Generated:</strong> {metrics['timestamp']}</p>
             
             <div class="summary">
@@ -334,7 +520,7 @@ def generate_dashboard(results_dir):
                 </div>
             </div>
             
-            <h2>📊 Severity Breakdown</h2>
+            <h2 class="section-header">Severity Breakdown</h2>
             <table>
                 <tr>
                     <th>Severity Level</th>
@@ -343,7 +529,20 @@ def generate_dashboard(results_dir):
                 {severity_rows}
             </table>
             
-            <h2>📁 Repository Results</h2>
+            <h2 class="section-header">Critical Issue Details</h2>
+            <table>
+                <tr>
+                    <th>Repository</th>
+                    <th>Tool</th>
+                    <th>Issue Type</th>
+                    <th>Location</th>
+                    <th>Description</th>
+                    <th>Verified</th>
+                </tr>
+                {critical_rows}
+            </table>
+
+            <h2 class="section-header">Repository Results</h2>
             <table>
                 <tr>
                     <th>Repository</th>
@@ -356,7 +555,7 @@ def generate_dashboard(results_dir):
                 {repo_rows}
             </table>
             
-            <h2>🛠️ Tool Performance</h2>
+            <h2 class="section-header">Tool Performance</h2>
             <table>
                 <tr>
                     <th>Tool</th>
@@ -368,7 +567,7 @@ def generate_dashboard(results_dir):
             </table>
             
             <div class="summary" style="margin-top: 30px;">
-                <h3>📝 Recommendations</h3>
+                <h3>Recommendations</h3>
                 <ul>
                     <li><strong>Immediate:</strong> Review and rotate {metrics['verified_secrets']} verified secrets</li>
                     <li><strong>High Priority:</strong> Address {metrics['critical_count'] + metrics['high_count']} critical and high severity issues</li>
@@ -381,7 +580,13 @@ def generate_dashboard(results_dir):
     </html>
     """
     
-    output_file = Path(results_dir) / "dashboard.html"
+    if output_path:
+        output_file = Path(output_path)
+    else:
+        output_file = Path(results_dir) / "dashboard.html"
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
     with open(output_file, 'w') as f:
         f.write(dashboard_html)
     
@@ -392,7 +597,9 @@ def generate_dashboard(results_dir):
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
-        generate_dashboard(sys.argv[1])
+        results_directory = sys.argv[1]
+        output_destination = sys.argv[2] if len(sys.argv) > 2 else None
+        generate_dashboard(results_directory, output_destination)
     else:
-        print("Usage: python3 generate_dashboard.py <results_directory>")
+        print("Usage: python3 generate_dashboard.py <results_directory> [output_file]")
         sys.exit(1)
