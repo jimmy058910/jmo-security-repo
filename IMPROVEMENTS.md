@@ -204,17 +204,21 @@ jq 'if type=="array" then length else 0 end' "$file" 2>/dev/null || echo 0
 
 ```
 iod-capstone/
-├── security_audit.sh              # Main wrapper script (NEW)
-├── run_security_audit.sh          # Core audit orchestrator (IMPROVED)
-├── check_tools.sh                 # Tool verification (ENHANCED)
-├── generate_dashboard.py          # HTML dashboard (REWRITTEN)
-├── generate_comparison_report.sh  # Tool comparison (IMPROVED)
-├── test_demo.sh                   # Demo script (NEW)
-├── README.md                      # Full documentation (NEW)
-├── QUICKSTART.md                  # Quick start guide (NEW)
-├── SAMPLE_OUTPUTS.md              # Output examples (NEW)
-├── IMPROVEMENTS.md                # This file (NEW)
-└── .gitignore                     # Git exclusions (NEW)
+├── security_audit.sh              # Main wrapper script
+├── run_security_audit.sh          # Core audit orchestrator
+├── check_tools.sh                 # Tool verification
+├── generate_dashboard.py          # HTML dashboard
+├── generate_comparison_report.sh  # Tool comparison
+├── test_demo.sh                   # Demo script
+├── scripts/
+│   └── populate_targets.sh        # Multi-repo cloning helper (NEW)
+├── samples/
+│   └── repos.txt                  # Sample repository list (NEW)
+├── README.md                      # Full documentation
+├── QUICKSTART.md                  # Quick start guide
+├── SAMPLE_OUTPUTS.md              # Output examples
+├── IMPROVEMENTS.md                # This file
+└── .gitignore                     # Git exclusions
 ```
 
 ## Usage Examples
@@ -268,6 +272,37 @@ Potential future improvements:
 4. Create email notification system
 5. Add GitHub Actions integration examples
 6. Implement rate limiting for API-based tools
+
+## Recent Additions (October 2025)
+
+### Helper Scripts for Multi-Repo Scanning
+
+Added `scripts/populate_targets.sh` to streamline repository preparation:
+
+**Features:**
+- ✅ Parallel cloning for improved performance
+- ✅ Shallow clone support (depth=1) for 10x faster cloning on WSL
+- ✅ Full clone option when complete git history needed
+- ✅ Unshallow capability for secret scanners requiring full history
+- ✅ Customizable repository lists
+- ✅ Robust error handling and logging
+
+**Performance Benefits:**
+- Reduces setup time from minutes to seconds for multi-repo scanning
+- Optimized for WSL environments with parallel processing
+- Supports both GNU parallel and xargs for compatibility
+
+**Example Usage:**
+```bash
+# Quick setup with sample repos
+./scripts/populate_targets.sh
+
+# Custom repo list with 8 parallel jobs
+./scripts/populate_targets.sh --list my-repos.txt --parallel 8
+
+# Unshallow for secret scanners
+./scripts/populate_targets.sh --unshallow
+```
 
 ## Conclusion
 
