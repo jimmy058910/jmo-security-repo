@@ -11,7 +11,7 @@ from collections import defaultdict
 def parse_json_safe(filepath):
     """Safely parse JSON file with error handling"""
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data
     except (json.JSONDecodeError, FileNotFoundError) as e:
@@ -38,26 +38,62 @@ def parse_gitleaks(filepath):
     return findings
 
 def parse_trufflehog(filepath):
-    """Parse trufflehog JSON output"""
+    """Parse trufflehog JSON output - supports arrays, objects, NDJSON, or empty files"""
     findings = []
+    
+    # Handle missing file
+    if not os.path.exists(filepath):
+        return findings
+    
+    # Try to read file content
     try:
-        with open(filepath, 'r') as f:
-            for line in f:
-                if line.strip():
-                    try:
-                        item = json.loads(line.strip())
-                        findings.append({
-                            'tool': 'trufflehog',
-                            'type': item.get('DetectorName', 'unknown'),
-                            'severity': 'CRITICAL' if item.get('Verified') else 'MEDIUM',
-                            'file': item.get('SourceMetadata', {}).get('Data', {}).get('Filesystem', {}).get('file', 'unknown'),
-                            'verified': item.get('Verified', False),
-                            'description': f"Found {item.get('DetectorName', 'secret')}"
-                        })
-                    except json.JSONDecodeError:
-                        continue
-    except FileNotFoundError:
-        pass
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+    except Exception:
+        return findings
+    
+    # Handle empty file
+    if not content:
+        return findings
+    
+    # Try full-file JSON parse first
+    items_to_process = []
+    try:
+        data = json.loads(content)
+        if isinstance(data, list):
+            # Flatten one level and keep only dicts
+            for item in data:
+                if isinstance(item, dict):
+                    items_to_process.append(item)
+                elif isinstance(item, list):
+                    # Nested array - flatten one level
+                    for subitem in item:
+                        if isinstance(subitem, dict):
+                            items_to_process.append(subitem)
+        elif isinstance(data, dict):
+            items_to_process.append(data)
+    except json.JSONDecodeError:
+        # Fallback to NDJSON per-line parsing
+        for line in content.split('\n'):
+            if line.strip():
+                try:
+                    item = json.loads(line.strip())
+                    if isinstance(item, dict):
+                        items_to_process.append(item)
+                except json.JSONDecodeError:
+                    continue
+    
+    # Process all valid dict items
+    for item in items_to_process:
+        findings.append({
+            'tool': 'trufflehog',
+            'type': item.get('DetectorName', 'unknown'),
+            'severity': 'CRITICAL' if item.get('Verified') else 'MEDIUM',
+            'file': item.get('SourceMetadata', {}).get('Data', {}).get('Filesystem', {}).get('file', 'unknown'),
+            'verified': item.get('Verified', False),
+            'description': f"Found {item.get('DetectorName', 'secret')}"
+        })
+    
     return findings
 
 def parse_semgrep(filepath):
@@ -105,6 +141,22 @@ def calculate_metrics(results_dir):
     all_findings = []
     repo_stats = []
     tool_stats = defaultdict(lambda: {'count': 0, 'repos': set()})
+    
+    # Handle missing or empty individual-repos directory
+    if not repos_dir.exists() or not repos_dir.is_dir():
+        return {
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'total_findings': 0,
+            'unique_secrets': 0,
+            'verified_secrets': 0,
+            'critical_count': 0,
+            'high_count': 0,
+            'medium_count': 0,
+            'low_count': 0,
+            'repo_stats': [],
+            'tool_stats': {},
+            'all_findings': []
+        }
     
     # Parse all repository results
     for repo_dir in repos_dir.iterdir():
@@ -194,7 +246,7 @@ def calculate_metrics(results_dir):
         'all_findings': all_findings
     }
 
-def generate_dashboard(results_dir):
+def generate_dashboard(results_dir, output_html=None):
     """Generate an HTML dashboard with all metrics"""
     
     # Calculate metrics
@@ -202,8 +254,9 @@ def generate_dashboard(results_dir):
     
     # Build repository rows HTML
     repo_rows = ""
-    for repo in metrics['repo_stats']:
-        repo_rows += f"""
+    if metrics['repo_stats']:
+        for repo in metrics['repo_stats']:
+            repo_rows += f"""
             <tr>
                 <td>{repo['name']}</td>
                 <td>{repo['gitleaks']}</td>
@@ -213,18 +266,31 @@ def generate_dashboard(results_dir):
                 <td><strong>{repo['total']}</strong></td>
             </tr>
         """
+    else:
+        repo_rows = """
+            <tr>
+                <td colspan="6" style="text-align: center; color: #999;">No repositories scanned yet</td>
+            </tr>
+        """
     
     # Build tool rows HTML
     tool_rows = ""
-    for tool_name, stats in metrics['tool_stats'].items():
-        repos_count = len(stats['repos'])
-        avg_findings = stats['count'] / repos_count if repos_count > 0 else 0
-        tool_rows += f"""
+    if metrics['tool_stats']:
+        for tool_name, stats in metrics['tool_stats'].items():
+            repos_count = len(stats['repos'])
+            avg_findings = stats['count'] / repos_count if repos_count > 0 else 0
+            tool_rows += f"""
             <tr>
                 <td>{tool_name}</td>
                 <td>{stats['count']}</td>
                 <td>{repos_count}</td>
                 <td>{avg_findings:.1f}</td>
+            </tr>
+        """
+    else:
+        tool_rows = """
+            <tr>
+                <td colspan="4" style="text-align: center; color: #999;">No scan results available</td>
             </tr>
         """
     
@@ -381,8 +447,16 @@ def generate_dashboard(results_dir):
     </html>
     """
     
-    output_file = Path(results_dir) / "dashboard.html"
-    with open(output_file, 'w') as f:
+    # Determine output file path
+    if output_html:
+        output_file = Path(output_html)
+        # Create parent directories if they don't exist
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        output_file = Path(results_dir) / "dashboard.html"
+    
+    # Write dashboard with UTF-8 encoding
+    with open(output_file, 'w', encoding='utf-8') as f:
         f.write(dashboard_html)
     
     print(f"✅ Dashboard generated: {output_file}")
@@ -391,8 +465,10 @@ def generate_dashboard(results_dir):
     print(f"🔍 Verified secrets: {metrics['verified_secrets']}")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        generate_dashboard(sys.argv[1])
-    else:
-        print("Usage: python3 generate_dashboard.py <results_directory>")
+    if len(sys.argv) < 2:
+        print("Usage: python3 generate_dashboard.py <results_directory> [output_html]")
         sys.exit(1)
+    
+    results_dir = sys.argv[1]
+    output_html = sys.argv[2] if len(sys.argv) > 2 else None
+    generate_dashboard(results_dir, output_html)
