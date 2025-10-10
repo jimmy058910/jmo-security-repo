@@ -1,6 +1,8 @@
 #!/bin/bash
 # generate_comparison_report.sh - Generate tool comparison metrics
 
+set -euo pipefail
+
 RESULTS_DIR=$1
 
 if [ -z "$RESULTS_DIR" ] || [ ! -d "$RESULTS_DIR" ]; then
@@ -10,6 +12,9 @@ if [ -z "$RESULTS_DIR" ] || [ ! -d "$RESULTS_DIR" ]; then
 fi
 
 COMPARISON_FILE="$RESULTS_DIR/tool-comparisons/comparison.md"
+
+# Create directory if it doesn't exist
+mkdir -p "$RESULTS_DIR/tool-comparisons"
 
 cat > "$COMPARISON_FILE" << 'EOF'
 # Tool Performance Comparison
@@ -27,21 +32,29 @@ for tool in gitleaks trufflehog semgrep noseyparker; do
     
     for repo_result in "$RESULTS_DIR"/individual-repos/*/; do
         if [ -f "$repo_result/${tool}.json" ]; then
-            # Count findings based on tool
+            # Count findings based on tool with proper error handling
             case $tool in
                 gitleaks)
                     FINDINGS=$(jq 'if type=="array" then length else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
                     ;;
                 trufflehog)
+                    # TruffleHog outputs newline-delimited JSON (NDJSON)
                     FINDINGS=$(jq -s 'length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
                     ;;
                 semgrep)
-                    FINDINGS=$(jq '.results[]? | length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
+                    # Correctly count total results, not length of each result object
+                    FINDINGS=$(jq '.results | length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
                     ;;
                 noseyparker)
                     FINDINGS=$(jq 'if type=="object" then (.matches // [] | length) else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
                     ;;
             esac
+            
+            # Ensure FINDINGS is a valid number
+            if ! [[ "$FINDINGS" =~ ^[0-9]+$ ]]; then
+                FINDINGS=0
+            fi
+            
             TOTAL=$((TOTAL + FINDINGS))
             REPOS=$((REPOS + 1))
         fi
