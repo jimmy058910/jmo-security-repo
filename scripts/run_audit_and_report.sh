@@ -258,6 +258,16 @@ else
     bash "$AUDIT_SCRIPT" "$TARGETS_DIR" "$RESULTS_DIR"
 fi
 
+# Generate dashboard if not present
+if [ ! -f "$RESULTS_DIR/dashboard.html" ]; then
+    log_info "Generating dashboard..."
+    if command -v python3 &> /dev/null; then
+        python3 "$REPO_ROOT/generate_dashboard.py" "$RESULTS_DIR" || log_warning "Dashboard generation failed"
+    else
+        log_warning "Python 3 not found, skipping dashboard generation"
+    fi
+fi
+
 # Verify artifacts if requested
 if [ "$VERIFY" -eq 1 ]; then
     echo ""
