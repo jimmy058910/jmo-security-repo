@@ -23,10 +23,10 @@ Install the required security tools:
 
 ```bash
 # Check if tools are installed
-./security_audit.sh --check
+./scripts/cli/security_audit.sh --check
 
 # Or manually check
-./check_tools.sh
+./scripts/core/check_tools.sh
 ```
 
 Required tools:
@@ -47,7 +47,7 @@ cd iod-capstone
 
 2. Make scripts executable:
 ```bash
-chmod +x *.sh scripts/*.sh
+find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
 
 3. Install required tools (see Tool Installation section below)
@@ -60,43 +60,43 @@ Use the `populate_targets.sh` helper script to clone multiple repositories for t
 
 ```bash
 # Clone sample vulnerable repos (fast shallow clones)
-./scripts/populate_targets.sh
+./scripts/core/populate_targets.sh
 
 # Clone from custom list with full history
-./scripts/populate_targets.sh --list my-repos.txt --full
+./scripts/core/populate_targets.sh --list my-repos.txt --full
 
 # Clone with 8 parallel jobs for faster performance
-./scripts/populate_targets.sh --parallel 8
+./scripts/core/populate_targets.sh --parallel 8
 
 # Unshallow repos if secret scanners need full git history
-./scripts/populate_targets.sh --unshallow
+./scripts/core/populate_targets.sh --unshallow
 ```
 
 #### Running Security Scans
 
 1. **Simple Scan** - Scan repositories in default directory:
 ```bash
-./security_audit.sh -d ~/security-testing
+./scripts/cli/security_audit.sh -d ~/security-testing
 ```
 
 2. **Custom Output** - Specify custom output directory:
 ```bash
-./security_audit.sh -d ~/my-repos -o ~/scan-results
+./scripts/cli/security_audit.sh -d ~/my-repos -o ~/scan-results
 ```
 
 3. **Check Tools** - Verify tool installation:
 ```bash
-./security_audit.sh --check
+./scripts/cli/security_audit.sh --check
 ```
 
 #### End-to-End Workflow
 
 ```bash
 # 1. Clone test repositories (shallow for speed)
-./scripts/populate_targets.sh --dest ~/test-repos --parallel 4
+./scripts/core/populate_targets.sh --dest ~/test-repos --parallel 4
 
 # 2. Run security audit
-./security_audit.sh -d ~/test-repos
+./scripts/cli/security_audit.sh -d ~/test-repos
 
 # 3. View results
 cat ~/security-results-*/SUMMARY_REPORT.md
@@ -135,7 +135,7 @@ security-results-YYYYMMDD-HHMMSS/
 │   └── comparison.md              # Tool performance comparison
 ├── summaries/
 │   └── metrics.csv                # Aggregated metrics
-└── presentation_notes.md          # Slide-ready narrative
+
 ```
 
 ### Report Types
@@ -164,10 +164,7 @@ security-results-YYYYMMDD-HHMMSS/
    - Implementation strategy guide
    - Tool selection recommendations
 
-5. **Presentation Narrative** (`presentation_notes.md`)
-   - Slide-ready talking points
-   - Key metrics for executive updates
-   - Highlights of tool impact and next steps
+
 
 ## 🛠️ Tool Installation
 
@@ -229,19 +226,19 @@ This helper script streamlines the process of cloning multiple repositories for 
 
 ```bash
 # Basic usage with defaults (samples/repos.txt → ~/security-testing)
-./scripts/populate_targets.sh
+./scripts/core/populate_targets.sh
 
 # Custom repository list and destination
-./scripts/populate_targets.sh --list custom-repos.txt --dest ~/my-test-repos
+./scripts/core/populate_targets.sh --list custom-repos.txt --dest ~/my-test-repos
 
 # Full clones with 8 parallel jobs
-./scripts/populate_targets.sh --full --parallel 8
+./scripts/core/populate_targets.sh --full --parallel 8
 
 # Unshallow existing shallow clones
-./scripts/populate_targets.sh --dest ~/security-testing --unshallow
+./scripts/core/populate_targets.sh --dest ~/security-testing --unshallow
 
 # Show all options
-./scripts/populate_targets.sh --help
+./scripts/core/populate_targets.sh --help
 ```
 
 **Repository List Format (`samples/repos.txt`):**
@@ -262,21 +259,21 @@ https://github.com/user/repo2.git
 
 1. **Tool Check Only**:
 ```bash
-./check_tools.sh
+./scripts/core/check_tools.sh
 ```
 
 2. **Main Audit Script**:
 ```bash
-./run_security_audit.sh [testing_directory] [output_directory]
+./scripts/core/run_security_audit.sh [testing_directory] [output_directory]
 ```
 
 3. **Generate Dashboard Only**:
 ```bash
 # Generate dashboard with default output (results_dir/dashboard.html)
-python3 generate_dashboard.py /path/to/results
+python3 scripts/core/generate_dashboard.py /path/to/results
 
 # Generate dashboard with custom output path
-python3 generate_dashboard.py /path/to/results /custom/path/dashboard.html
+python3 scripts/core/generate_dashboard.py /path/to/results /custom/path/dashboard.html
 ```
 
 The dashboard generator supports:
@@ -287,12 +284,12 @@ The dashboard generator supports:
 
 4. **Generate Comparison Report**:
 ```bash
-./generate_comparison_report.sh /path/to/results
+./scripts/core/generate_comparison_report.sh /path/to/results
 ```
 
 ### Customizing Tool Execution
 
-Edit `run_security_audit.sh` to enable/disable tools:
+Edit `scripts/core/run_security_audit.sh` to enable/disable tools:
 
 ```bash
 # Tool flags (set to 1 to enable, 0 to disable)
@@ -398,7 +395,7 @@ This project is part of the IOD Capstone program.
 ### Common Issues
 
 **Problem**: Tools not found
-- **Solution**: Run `./security_audit.sh --check` to verify installation
+- **Solution**: Run `./scripts/cli/security_audit.sh --check` to verify installation
 
 **Problem**: JSON parsing errors
 - **Solution**: Ensure jq is installed and tools are outputting valid JSON
@@ -427,13 +424,13 @@ You can regenerate the dashboard or reports from existing scan results without r
 
 ```bash
 # Generate dashboard with default output location
-python3 generate_dashboard.py /path/to/results
+python3 scripts/core/generate_dashboard.py /path/to/results
 
 # Generate dashboard with custom output path (creates parent directories automatically)
-python3 generate_dashboard.py /path/to/results /custom/path/dashboard.html
+python3 scripts/core/generate_dashboard.py /path/to/results /custom/path/dashboard.html
 
 # Example: Generate dashboard in a reports directory
-python3 generate_dashboard.py ~/security-results-20251010-120000 ~/reports/security-dashboard.html
+python3 scripts/core/generate_dashboard.py ~/security-results-20251010-120000 ~/reports/security-dashboard.html
 ```
 
 This is useful when you want to:

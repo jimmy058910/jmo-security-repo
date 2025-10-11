@@ -15,7 +15,8 @@ NC='\033[0m' # No Color
 
 # Get script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CORE_DIR="$REPO_ROOT/scripts/core"
 
 # Default values
 TARGETS_DIR="$HOME/security-testing"
@@ -129,7 +130,7 @@ if [ "$WSL_HINTS" -eq 1 ]; then
     echo "   ✗ Slow: /mnt/c/Users/.../repos (NTFS)"
     echo ""
     echo "2. Clone with shallow mode first:"
-    echo "   ./scripts/populate_targets.sh --shallow --parallel 8"
+    echo "   ./scripts/core/populate_targets.sh --shallow --parallel 8"
     echo ""
     echo "3. Use --fast-pass to skip slow scanners:"
     echo "   $0 --fast-pass"
@@ -164,7 +165,7 @@ TOTAL_REPOS=$(find "$TARGETS_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)
 
 if [ "$TOTAL_REPOS" -eq 0 ]; then
     log_error "No repositories found in: $TARGETS_DIR"
-    log_info "Clone repositories first using: ./scripts/populate_targets.sh"
+    log_info "Clone repositories first using: ./scripts/core/populate_targets.sh"
     exit 1
 fi
 
@@ -227,7 +228,7 @@ log_info "Starting security audit..."
 echo ""
 
 # Absolute path to audit script
-AUDIT_SCRIPT="$REPO_ROOT/run_security_audit.sh"
+AUDIT_SCRIPT="$CORE_DIR/run_security_audit.sh"
 
 # If resume mode, filter repositories
 if [ "$RESUME" -eq 1 ] && [ ${#SKIP_REPOS[@]} -gt 0 ]; then
@@ -261,8 +262,8 @@ fi
 # Generate dashboard if not present
 if [ ! -f "$RESULTS_DIR/dashboard.html" ]; then
     log_info "Generating dashboard..."
-    if command -v python3 &> /dev/null; then
-        python3 "$REPO_ROOT/generate_dashboard.py" "$RESULTS_DIR" || log_warning "Dashboard generation failed"
+        if command -v python3 &> /dev/null; then
+            python3 "$CORE_DIR/generate_dashboard.py" "$RESULTS_DIR" || log_warning "Dashboard generation failed"
     else
         log_warning "Python 3 not found, skipping dashboard generation"
     fi
@@ -392,7 +393,7 @@ if [ "$OPEN_DASHBOARD" -eq 1 ]; then
         fi
     else
         log_warning "Dashboard not found: $RESULTS_DIR/dashboard.html"
-        log_info "Generate it with: python3 generate_dashboard.py '$RESULTS_DIR'"
+    log_info "Generate it with: python3 scripts/core/generate_dashboard.py '$RESULTS_DIR'"
     fi
 fi
 

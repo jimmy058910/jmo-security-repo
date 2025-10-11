@@ -7,7 +7,7 @@ This guide will help you get started with the security audit tools in under 5 mi
 Run the tool check to see what's installed:
 
 ```bash
-./security_audit.sh --check
+./scripts/cli/security_audit.sh --check
 ```
 
 If any tools are missing, install them following the instructions in the main README.md.
@@ -20,13 +20,13 @@ Use the automated helper script to clone multiple repositories quickly:
 
 ```bash
 # Quick setup - clone sample vulnerable repos
-./scripts/populate_targets.sh
+./scripts/core/populate_targets.sh
 
 # Or customize the destination
-./scripts/populate_targets.sh --dest ~/my-test-repos
+./scripts/core/populate_targets.sh --dest ~/my-test-repos
 
 # For faster cloning on WSL, use shallow clones (default)
-./scripts/populate_targets.sh --parallel 8 --dest ~/security-testing
+./scripts/core/populate_targets.sh --parallel 8 --dest ~/security-testing
 ```
 
 The helper script will:
@@ -56,7 +56,7 @@ Some secret scanners work better with full git history. If you used shallow clon
 
 ```bash
 # Unshallow all repositories
-./scripts/populate_targets.sh --dest ~/security-testing --unshallow
+./scripts/core/populate_targets.sh --dest ~/security-testing --unshallow
 ```
 
 ## Step 3: Run the Security Audit
@@ -65,7 +65,7 @@ Execute the comprehensive security scan:
 
 ```bash
 cd /path/to/iod-capstone
-./security_audit.sh -d ~/security-testing
+./scripts/cli/security_audit.sh -d ~/security-testing
 ```
 
 The script will:
@@ -85,7 +85,6 @@ After the scan completes, you'll see output like:
   • Summary Report:    /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
   • HTML Dashboard:    /home/user/security-results-20251010-111033/dashboard.html
   • Tool Comparison:   /home/user/security-results-20251010-111033/tool-comparisons/comparison.md
-  • Presentation Notes:/home/user/security-results-20251010-111033/presentation_notes.md
 
 Quick Commands:
   View summary:        cat /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
@@ -127,7 +126,7 @@ cd ~/quick-scan
 git clone https://github.com/username/test-repo.git
 
 # Run scan
-./security_audit.sh -d ~/quick-scan
+./scripts/cli/security_audit.sh -d ~/quick-scan
 
 # View results
 cat ~/security-results-*/SUMMARY_REPORT.md
@@ -144,10 +143,10 @@ https://github.com/org/repo3.git
 EOF
 
 # Clone all repos in parallel (fast shallow clones)
-./scripts/populate_targets.sh --list my-repos.txt --dest ~/comprehensive-audit --parallel 6
+./scripts/core/populate_targets.sh --list my-repos.txt --dest ~/comprehensive-audit --parallel 6
 
 # Run comprehensive scan
-./security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
+./scripts/cli/security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
 
 # Open dashboard in browser
 open ~/audit-results-*/dashboard.html
@@ -166,7 +165,7 @@ for repo in repo1 repo2 repo3; do
 done
 
 # Run comprehensive scan
-./security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
+./scripts/cli/security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
 
 # Open dashboard in browser
 open ~/audit-results-*/dashboard.html
@@ -178,13 +177,13 @@ Create a cron job or scheduled task:
 
 ```bash
 # Add to crontab (runs every Monday at 9 AM)
-0 9 * * 1 /path/to/iod-capstone/security_audit.sh -d ~/repos-to-monitor
+0 9 * * 1 /path/to/iod-capstone/scripts/cli/security_audit.sh -d ~/repos-to-monitor
 
 # Or use a shell script
 cat > ~/weekly-audit.sh << 'EOF'
 #!/bin/bash
 AUDIT_DIR=~/weekly-security-audit-$(date +%Y%m%d)
-/path/to/iod-capstone/security_audit.sh -d ~/production-repos -o $AUDIT_DIR
+/path/to/iod-capstone/scripts/cli/security_audit.sh -d ~/production-repos -o $AUDIT_DIR
 # Email results or upload to dashboard
 EOF
 chmod +x ~/weekly-audit.sh
@@ -215,7 +214,7 @@ jobs:
           
       - name: Run Security Audit
         run: |
-          ./security_audit.sh -d .
+          ./scripts/cli/security_audit.sh -d .
           
       - name: Upload Results
         uses: actions/upload-artifact@v2
@@ -231,7 +230,7 @@ jobs:
 **Solution**: Install missing tools
 ```bash
 # Check which tools are missing
-./security_audit.sh --check
+./scripts/cli/security_audit.sh --check
 
 # Install individually or follow README.md
 ```
@@ -240,7 +239,7 @@ jobs:
 
 **Solution**: Make scripts executable
 ```bash
-chmod +x *.sh
+find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
 
 ### Issue: "No repositories found"
@@ -258,8 +257,8 @@ ls -la ~/security-testing/
 **Solution**: Scan repos in smaller batches
 ```bash
 # Instead of scanning all at once, batch them
-./security_audit.sh -d ~/batch1
-./security_audit.sh -d ~/batch2
+./scripts/cli/security_audit.sh -d ~/batch1
+./scripts/cli/security_audit.sh -d ~/batch2
 ```
 
 ## Next Steps

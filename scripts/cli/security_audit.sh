@@ -13,13 +13,18 @@ NC='\033[0m' # No Color
 
 # Paths to helper scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOL_BOOTSTRAP="$SCRIPT_DIR/scripts/check_and_install_tools.sh"
+CORE_DIR="$(cd "$SCRIPT_DIR/../core" && pwd)"
+TOOL_BOOTSTRAP="$CORE_DIR/check_and_install_tools.sh"
+TOOL_CHECK_FALLBACK="$CORE_DIR/check_tools.sh"
 
 run_tool_check() {
-    if [ -x "$TOOL_BOOTSTRAP" ]; then
+    if [ -f "$TOOL_BOOTSTRAP" ]; then
         bash "$TOOL_BOOTSTRAP" --check "$@"
+    elif [ -f "$TOOL_CHECK_FALLBACK" ]; then
+        bash "$TOOL_CHECK_FALLBACK" "$@"
     else
-        bash "$SCRIPT_DIR/check_tools.sh" "$@"
+        echo -e "${RED}Unable to locate tool check scripts in $CORE_DIR${NC}" >&2
+        return 1
     fi
 }
 
@@ -116,9 +121,9 @@ echo -e "${BLUE}Starting security audit...${NC}"
 echo ""
 
 if [ -n "$OUTPUT_DIR" ]; then
-    bash "$SCRIPT_DIR/run_security_audit.sh" "$TESTING_DIR" "$OUTPUT_DIR"
+    bash "$CORE_DIR/run_security_audit.sh" "$TESTING_DIR" "$OUTPUT_DIR"
 else
-    bash "$SCRIPT_DIR/run_security_audit.sh" "$TESTING_DIR"
+    bash "$CORE_DIR/run_security_audit.sh" "$TESTING_DIR"
 fi
 
 # Get the results directory (from the audit script output or use last created)
@@ -127,7 +132,7 @@ RESULTS_DIR=$(ls -td $HOME/security-results-* 2>/dev/null | head -1)
 if [ -n "$RESULTS_DIR" ] && [ -d "$RESULTS_DIR" ]; then
     echo ""
     echo -e "${BLUE}Generating HTML dashboard...${NC}"
-    python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR"
+    python3 "$CORE_DIR/generate_dashboard.py" "$RESULTS_DIR"
     
     echo ""
     echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
