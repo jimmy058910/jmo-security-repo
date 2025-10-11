@@ -1,5 +1,9 @@
 # JMo's Security Audit Tool Suite
 
+<p align="center">
+   <img src="assets/jmo-logo.png" alt="JMo Security Audit Tool Suite" width="220" />
+</p>
+
 A comprehensive security audit toolkit for analyzing repositories using multiple security scanning tools including Gitleaks, TruffleHog, Semgrep, and Nosey Parker.
 
 ## 🎯 Overview
