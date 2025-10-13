@@ -15,6 +15,17 @@ FORBIDDEN_PATTERNS=(
   "^htmlcov/"
   "^coverage\.xml$"
   "^\.coverage(\..*)?$"
+  # Common caches and virtualenv managers
+  "^\.pytest_cache/"
+  "^\.mypy_cache/"
+  "^\.ruff_cache/"
+  "^\.tox/"
+  "^\.nox/"
+  "^\.cache/"
+  # Anywhere in the tree
+  "(^|/)__pycache__/"
+  "(^|/)\.DS_Store$"
+  "(^|/)Thumbs\.db$"
 )
 
 # Collect tracked files and check against patterns
