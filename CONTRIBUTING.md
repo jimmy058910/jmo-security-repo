@@ -75,14 +75,21 @@ make pre-commit-run
 
 The repository includes a `.pre-commit-config.yaml` file that configures the following checks:
 
+- **pre-commit-hooks**: housekeeping checks
+  - trailing-whitespace, end-of-file-fixer, mixed-line-ending
+  - check-yaml, check-json, check-toml
+  - detect-private-key
+  - check-added-large-files (10 MB limit)
 - **Ruff**: Python linting and formatting
 - **Black**: Python code formatting
 - **shfmt**: Shell script formatting
 - **shellcheck**: Shell script static analysis
 - **yamllint**: YAML linting
 - **actionlint**: GitHub Actions workflow validation
+- **markdownlint**: Markdown style checks
+- **Bandit**: Python security scanning (scoped to `scripts/`; this hook is skipped in CI but covered by `make lint` locally)
 
-These checks run automatically on commit and are also enforced in CI.
+These checks run automatically on commit and are also enforced in CI (note: the Bandit hook is skipped in CI’s pre-commit stage; see `.github/workflows/tests.yml`).
 
 #### Tips
 
