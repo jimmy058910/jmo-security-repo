@@ -3,6 +3,7 @@
 Hadolint adapter: normalize hadolint JSON output to CommonFinding
 Expected input: array of issues with fields like: {"code":"DL3008","file":"Dockerfile","line":12,"level":"error","message":"..."}
 """
+
 from __future__ import annotations
 
 import json

@@ -44,8 +44,10 @@ def test_threads_exception_path(tmp_path: Path, monkeypatch):
     _write(repo / "gitleaks.json", "[]")
     monkeypatch.delenv("JMO_THREADS", raising=False)
     monkeypatch.setenv("JMO_PROFILE", "1")
+
     def boom():
         raise RuntimeError("cpu fail")
+
     monkeypatch.setattr(nr.os, "cpu_count", boom)
     nr.PROFILE_TIMINGS["jobs"].clear()
     nr.PROFILE_TIMINGS["meta"].clear()
@@ -62,11 +64,13 @@ def test_as_completed_exception_is_caught(tmp_path: Path, monkeypatch):
     _write(repo / "gitleaks.json", "[]")
 
     calls = {"n": 0}
+
     def flaky(loader, path, profiling=False):  # noqa: ARG001
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("boom")
         return []
+
     monkeypatch.setattr(nr, "_safe_load", flaky)
     out = nr.gather_results(root)
     assert isinstance(out, list)
@@ -107,12 +111,14 @@ def test_safe_load_exception_paths(monkeypatch):
     # loader that raises
     def raiser(_):
         raise ValueError("nope")
+
     # profiling False path
     assert nr._safe_load(raiser, Path("/dev/null"), profiling=False) == []
 
     # profiling True path with append failure
     def empty_ok(_):
         return []
+
     # make jobs non-appendable
     orig_jobs = nr.PROFILE_TIMINGS["jobs"]
     nr.PROFILE_TIMINGS["jobs"] = tuple()
@@ -138,6 +144,7 @@ def test_enrich_no_syft_noop():
     after = json.dumps(items[0], sort_keys=True)
     assert before == after
 
+
 def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r"
@@ -150,6 +157,7 @@ def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
             {"id": "DUP", "schemaVersion": "1.0.0"},
             {"id": "DUP", "schemaVersion": "1.0.0"},
         ]
+
     monkeypatch.setattr(nr, "_safe_load", dup)
     out = nr.gather_results(root)
     # Deduped to a single element
@@ -197,7 +205,10 @@ def test_enrich_trivy_with_syft_paths():
     assert items[1].get("context", {}).get("sbom", {}).get("name") == "Flask"
     assert "pkg:Flask@2.0" in items[1].get("tags", [])
     # pkg path match
-    assert items[2].get("context", {}).get("sbom", {}).get("path") == "/app/requirements.txt"
+    assert (
+        items[2].get("context", {}).get("sbom", {}).get("path")
+        == "/app/requirements.txt"
+    )
     # name match (case-insensitive) but tag not duplicated
     assert items[3].get("context", {}).get("sbom", {}).get("name") == "Flask"
     assert items[3]["tags"].count("pkg:Flask@2.0") == 1
@@ -207,11 +218,14 @@ def test_normalize_and_report_main_cli(tmp_path: Path, monkeypatch):
     # Build a small result dir with one tool output
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r"
-    _write(repo / "gitleaks.json", json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]))
+    _write(
+        repo / "gitleaks.json",
+        json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]),
+    )
 
     # Simulate argv and run main (writes JSON/MD)
     monkeypatch.setenv("PYTHONIOENCODING", "utf-8")
-    argv = ["normalize_and_report.py", str(root), "--out", str(root / "summaries")] 
+    argv = ["normalize_and_report.py", str(root), "--out", str(root / "summaries")]
     monkeypatch.setattr(sys, "argv", argv)
     # Call main directly; it should write outputs under --out
     nr.main()

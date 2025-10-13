@@ -5,6 +5,7 @@ Supports:
 - Typical array of findings
 - Object with 'findings' array (if present)
 """
+
 from __future__ import annotations
 
 import json
@@ -45,7 +46,13 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
 
     out: List[Dict[str, Any]] = []
     for f in _iter_findings(data):
-        rule_id = str(f.get("RuleID") or f.get("ruleID") or f.get("rule_id") or f.get("Description") or "GITLEAKS")
+        rule_id = str(
+            f.get("RuleID")
+            or f.get("ruleID")
+            or f.get("rule_id")
+            or f.get("Description")
+            or "GITLEAKS"
+        )
         file_path = (
             f.get("File")
             or f.get("FilePath")
@@ -58,7 +65,12 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
             start_line = f["StartLine"]
         elif isinstance(f.get("Line"), int):
             start_line = f["Line"]
-        msg = f.get("Description") or f.get("Rule") or f.get("Match") or "Possible secret detected"
+        msg = (
+            f.get("Description")
+            or f.get("Rule")
+            or f.get("Match")
+            or "Possible secret detected"
+        )
         severity = normalize_severity(str(f.get("Severity") or "HIGH"))
         fid = fingerprint("gitleaks", rule_id, file_path, start_line, msg)
         out.append(
@@ -70,7 +82,10 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
                 "message": msg,
                 "description": f.get("Description") or msg,
                 "severity": severity,
-                "tool": {"name": "gitleaks", "version": str(f.get("Version") or "unknown")},
+                "tool": {
+                    "name": "gitleaks",
+                    "version": str(f.get("Version") or "unknown"),
+                },
                 "location": {"path": file_path, "startLine": start_line or 0},
                 "remediation": "Rotate credentials and remove secrets from history.",
                 "tags": ["secrets"],

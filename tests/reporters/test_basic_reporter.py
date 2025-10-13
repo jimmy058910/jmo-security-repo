@@ -19,7 +19,17 @@ def test_markdown_summary_counts(tmp_path: Path):
 
 
 def test_write_json_roundtrip(tmp_path: Path):
-    sample = [{"schemaVersion": "1.0.0", "severity": "HIGH", "ruleId": "x", "id": "1", "tool": {"name": "t", "version": "v"}, "location": {"path": "a", "startLine": 1}, "message": "m"}]
+    sample = [
+        {
+            "schemaVersion": "1.0.0",
+            "severity": "HIGH",
+            "ruleId": "x",
+            "id": "1",
+            "tool": {"name": "t", "version": "v"},
+            "location": {"path": "a", "startLine": 1},
+            "message": "m",
+        }
+    ]
     out = tmp_path / "out.json"
     write_json(sample, out)
     s = out.read_text(encoding="utf-8")

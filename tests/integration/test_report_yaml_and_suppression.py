@@ -10,11 +10,16 @@ def test_cmd_report_yaml_missing_debug_path(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8")
+    (indiv / "gitleaks.json").write_text(
+        json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
+    )
 
     # Ensure config requests yaml output; simulate PyYAML missing in reporter
-    (tmp_path / "jmo.yml").write_text("outputs: [json, md, yaml, html]\n", encoding="utf-8")
+    (tmp_path / "jmo.yml").write_text(
+        "outputs: [json, md, yaml, html]\n", encoding="utf-8"
+    )
     import scripts.core.reporters.yaml_reporter as ymod
+
     monkeypatch.setattr(ymod, "yaml", None, raising=False)
 
     args = types.SimpleNamespace(
@@ -46,7 +51,9 @@ def test_cmd_report_suppression_report(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8")
+    (indiv / "gitleaks.json").write_text(
+        json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
+    )
 
     # Find the generated finding id by running a quick report without suppressions first
     args0 = types.SimpleNamespace(
@@ -67,6 +74,7 @@ def test_cmd_report_suppression_report(tmp_path: Path, monkeypatch):
     out_dir = results / "summaries"
     data = (out_dir / "findings.json").read_text(encoding="utf-8")
     import json as _json
+
     fid = _json.loads(data)[0]["id"]
 
     # Write suppressions file and re-run

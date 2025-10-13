@@ -1,7 +1,7 @@
 #!/bin/bash
 # run_security_audit.sh - Master security testing orchestrator
 
-set -Eeuo pipefail  # Exit on error, unset, and pipefail
+set -Eeuo pipefail # Exit on error, unset, and pipefail
 
 # Configuration
 TESTING_DIR="${1:-$HOME/security-testing}"
@@ -25,26 +25,26 @@ NC='\033[0m' # No Color
 
 # Logging functions
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+  echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+  echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+  echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # Validate testing directory exists
 if [ ! -d "$TESTING_DIR" ]; then
-    log_error "Testing directory does not exist: $TESTING_DIR"
-    log_info "Usage: $0 [testing_directory] [results_directory]"
-    exit 1
+  log_error "Testing directory does not exist: $TESTING_DIR"
+  log_info "Usage: $0 [testing_directory] [results_directory]"
+  exit 1
 fi
 
 # Create results directory structure
@@ -60,7 +60,7 @@ log_success "Created results directory: $RESULTS_DIR"
 TOTAL_REPOS=$(find "$TESTING_DIR" -mindepth 1 -maxdepth 1 -type d | wc -l)
 
 # Initialize summary report
-cat > "$SUMMARY_FILE" << EOF
+cat >"$SUMMARY_FILE" <<EOF
 # Security Audit Report
 
 **Date:** $(date)
@@ -86,18 +86,18 @@ EOF
 
 # Function to test individual repository
 test_repository() {
-    local repo_path=$1
-    local repo_name
-    repo_name=$(basename "$repo_path")
-    local repo_results="$RESULTS_DIR/individual-repos/$repo_name"
-    
-    mkdir -p "$repo_results"
-    
-    log_info "Testing repository: $repo_name"
-    echo "================================="
-    
-    # Create repo-specific summary
-    cat > "$repo_results/README.md" << EOF
+  local repo_path=$1
+  local repo_name
+  repo_name=$(basename "$repo_path")
+  local repo_results="$RESULTS_DIR/individual-repos/$repo_name"
+
+  mkdir -p "$repo_results"
+
+  log_info "Testing repository: $repo_name"
+  echo "================================="
+
+  # Create repo-specific summary
+  cat >"$repo_results/README.md" <<EOF
 # Security Analysis: $repo_name
 
 **Path:** $repo_path
@@ -108,247 +108,247 @@ test_repository() {
 ## Repository Metrics
 
 EOF
-    
-    # Initialize counters for aggregation
-    local total_issues=0
-    local critical_issues=0
-    local high_issues=0
-    local medium_issues=0
-    
-    # 1. Code metrics with cloc
-    if [ $RUN_CLOC -eq 1 ]; then
-        log_info "Running cloc..."
-        if command -v cloc &> /dev/null; then
-            cloc "$repo_path" --json > "$repo_results/cloc.json" 2>/dev/null || log_warning "cloc failed for $repo_name"
-            cloc "$repo_path" --quiet >> "$repo_results/README.md" 2>/dev/null || echo "cloc output not available" >> "$repo_results/README.md"
-            echo "" >> "$repo_results/README.md"
-        else
-            log_warning "cloc not installed, skipping"
-        fi
-    fi
-    
-    # 2. Gitleaks - Fast git history scanning
-    if [ $RUN_GITLEAKS -eq 1 ]; then
-        log_info "Running Gitleaks..."
-        if command -v gitleaks &> /dev/null; then
-            gitleaks detect \
-                --source "$repo_path" \
-                --report-format json \
-                --report-path "$repo_results/gitleaks.json" \
-                --verbose > "$repo_results/gitleaks.log" 2>&1 || true
-            
-            # Parse results with better error handling
-            if [ -f "$repo_results/gitleaks.json" ]; then
-                GITLEAKS_COUNT=$(jq 'if type=="array" then length else 0 end' "$repo_results/gitleaks.json" 2>/dev/null || echo 0)
-                total_issues=$((total_issues + GITLEAKS_COUNT))
-                high_issues=$((high_issues + GITLEAKS_COUNT))
-                
-                                {
-                                    echo "## 🔍 Gitleaks Results"
-                                    echo ""
-                                    echo "**Secrets Found:** $GITLEAKS_COUNT"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-                
-                if [ "$GITLEAKS_COUNT" -gt 0 ]; then
-                    echo "### Findings Details:" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                    jq -r '.[] | "- **\(.RuleID)**: \(.Description) (File: \(.File), Line: \(.StartLine))"' "$repo_results/gitleaks.json" 2>/dev/null >> "$repo_results/README.md" || echo "Error parsing findings" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                fi
-            else
-                log_warning "Gitleaks JSON output not found for $repo_name"
-                                {
-                                    echo "## 🔍 Gitleaks Results"
-                                    echo ""
-                                    echo "**Status:** No findings or scan failed"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-            fi
-        else
-            log_warning "Gitleaks not installed, skipping"
-        fi
-    fi
-    
-    # 3. TruffleHog - Deep scanning with verification
-    if [ $RUN_TRUFFLEHOG -eq 1 ]; then
-        log_info "Running TruffleHog..."
-        if command -v trufflehog &> /dev/null; then
-            trufflehog git file://"$repo_path" \
-                --json \
-                --no-update \
-                > "$repo_results/trufflehog.json" 2> "$repo_results/trufflehog.log" || true
-            
-            # Count verified vs unverified with better parsing
-            if [ -f "$repo_results/trufflehog.json" ]; then
-                TRUFFLE_VERIFIED=$(jq -s '[.[] | select(.verified == true)] | length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
-                TRUFFLE_TOTAL=$(jq -s 'length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
-                total_issues=$((total_issues + TRUFFLE_TOTAL))
-                critical_issues=$((critical_issues + TRUFFLE_VERIFIED))
-                medium_issues=$((medium_issues + TRUFFLE_TOTAL - TRUFFLE_VERIFIED))
-                
-                                {
-                                    echo "## 🔎 TruffleHog Results"
-                                    echo ""
-                                    echo "**Total Findings:** $TRUFFLE_TOTAL"
-                                    echo "**Verified Secrets:** $TRUFFLE_VERIFIED"
-                                    echo "**Unverified:** $((TRUFFLE_TOTAL - TRUFFLE_VERIFIED))"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-                
-                if [ "$TRUFFLE_VERIFIED" -gt 0 ]; then
-                    echo "### ⚠️ Verified Secrets (CRITICAL):" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                    jq -r 'select(.verified == true) | "- **\(.DetectorName // "Unknown")**: Found in \(.SourceMetadata.Data.Filesystem.file // "unknown file")"' "$repo_results/trufflehog.json" 2>/dev/null >> "$repo_results/README.md" || echo "Error parsing findings" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                fi
-            else
-                                {
-                                    echo "## 🔎 TruffleHog Results"
-                                    echo ""
-                                    echo "**Status:** No findings or scan failed"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-            fi
-        else
-            log_warning "TruffleHog not installed, skipping"
-        fi
-    fi
-    
-    # 4. Semgrep - Pattern-based analysis
-    if [ $RUN_SEMGREP -eq 1 ]; then
-        log_info "Running Semgrep..."
-        if command -v semgrep &> /dev/null; then
-            semgrep \
-                --config=auto \
-                --json \
-                --output="$repo_results/semgrep.json" \
-                "$repo_path" > "$repo_results/semgrep.log" 2>&1 || true
-            
-            # Parse severity levels with better error handling
-            if [ -f "$repo_results/semgrep.json" ]; then
-                SEMGREP_HIGH=$(jq '[.results[]? | select(.extra.severity == "ERROR")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
-                SEMGREP_MEDIUM=$(jq '[.results[]? | select(.extra.severity == "WARNING")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
-                SEMGREP_LOW=$(jq '[.results[]? | select(.extra.severity == "INFO")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
-                SEMGREP_TOTAL=$((SEMGREP_HIGH + SEMGREP_MEDIUM + SEMGREP_LOW))
-                
-                total_issues=$((total_issues + SEMGREP_TOTAL))
-                high_issues=$((high_issues + SEMGREP_HIGH))
-                medium_issues=$((medium_issues + SEMGREP_MEDIUM))
-                
-                                {
-                                    echo "## 🛡️ Semgrep Results"
-                                    echo ""
-                                    echo "**Total Findings:** $SEMGREP_TOTAL"
-                                    echo "- **High Severity (ERROR):** $SEMGREP_HIGH"
-                                    echo "- **Medium Severity (WARNING):** $SEMGREP_MEDIUM"
-                                    echo "- **Low Severity (INFO):** $SEMGREP_LOW"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-                
-                if [ "$SEMGREP_HIGH" -gt 0 ]; then
-                    echo "### High Severity Issues:" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                    jq -r '.results[]? | select(.extra.severity == "ERROR") | "- **\(.check_id)**: \(.extra.message) (File: \(.path), Line: \(.start.line))"' "$repo_results/semgrep.json" 2>/dev/null >> "$repo_results/README.md" || echo "Error parsing findings" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                fi
-            else
-                                {
-                                    echo "## 🛡️ Semgrep Results"
-                                    echo ""
-                                    echo "**Status:** No findings or scan failed"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-            fi
-        else
-            log_warning "Semgrep not installed, skipping"
-        fi
-    fi
-    
-    # 5. Nosey Parker - Deep pattern matching
-    if [ $RUN_NOSEYPARKER -eq 1 ]; then
-        log_info "Running Nosey Parker..."
-        if command -v noseyparker &> /dev/null; then
-            NP_DATASTORE="/tmp/np-$repo_name-$$"
-            
-            # Scan
-            noseyparker scan \
-                --datastore "$NP_DATASTORE" \
-                "$repo_path" > "$repo_results/noseyparker_scan.log" 2>&1 || true
-            
-            # Generate report
-            noseyparker report \
-                --datastore "$NP_DATASTORE" \
-                --format json \
-                > "$repo_results/noseyparker.json" 2> "$repo_results/noseyparker_report.log" || true
-            
-            # Parse findings with better error handling
-            if [ -f "$repo_results/noseyparker.json" ]; then
-                NP_FINDINGS=$(jq 'def count_item($item): ($item | if type=="object" then (if (.matches // null) != null then (.matches | length) elif (.num_matches // null) != null then (.num_matches // 0) else 0 end) else 0 end); if type=="array" then (map(count_item(.)) | add? // 0) else count_item(.) end' "$repo_results/noseyparker.json" 2>/dev/null || echo 0)
-                total_issues=$((total_issues + NP_FINDINGS))
-                high_issues=$((high_issues + NP_FINDINGS))
-                
-                                {
-                                    echo "## 🔬 Nosey Parker Results"
-                                    echo ""
-                                    echo "**Total Findings:** $NP_FINDINGS"
-                                    echo ""
-                                } >> "$repo_results/README.md"
 
-                if [ "$NP_FINDINGS" -gt 0 ]; then
-                    echo "### Sensitive Patterns Detected:" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                    jq -r 'def items: if type=="array" then .[] else . end; items | (.rule_name // .rule // .rule_text_id // empty)' "$repo_results/noseyparker.json" 2>/dev/null \
-                        | sort | uniq \
-                        | awk "{print \"- \" \$0}" >> "$repo_results/README.md" || echo "- (See JSON report for details)" >> "$repo_results/README.md"
-                    echo "" >> "$repo_results/README.md"
-                fi
-            else
-                # Fallback to text parsing
-                NP_FINDINGS=$(noseyparker report --datastore "$NP_DATASTORE" 2>/dev/null | grep -oP '\d+(?= findings)' || echo 0)
-                
-                                {
-                                    echo "## 🔬 Nosey Parker Results"
-                                    echo ""
-                                    echo "**Total Findings:** $NP_FINDINGS"
-                                    echo ""
-                                } >> "$repo_results/README.md"
-            fi
-            
-            # Cleanup
-            rm -rf "$NP_DATASTORE"
-        else
-            log_warning "Nosey Parker not installed, skipping"
-        fi
-    fi
-    
-    # Add summary section to repo report
-    {
-        echo "---"
-        echo ""
-        echo "## 📊 Summary"
-        echo ""
-        echo "**Total Issues Found:** $total_issues"
-        echo "- **Critical:** $critical_issues"
-        echo "- **High:** $high_issues"
-        echo "- **Medium:** $medium_issues"
-        echo ""
-        echo "---"
-        echo ""
-        echo "*📁 Full logs and JSON outputs available in this directory*"
-    } >> "$repo_results/README.md"
-    
-    # Save metrics for aggregation
-    echo "$repo_name,$total_issues,$critical_issues,$high_issues,$medium_issues" >> "$RESULTS_DIR/summaries/metrics.csv"
+  # Initialize counters for aggregation
+  local total_issues=0
+  local critical_issues=0
+  local high_issues=0
+  local medium_issues=0
 
-    # Package raw outputs for downstream integrations
-    if command -v tar &> /dev/null; then
-        tar -czf "$RAW_OUTPUTS_DIR/${repo_name}.tar.gz" -C "$repo_results" . >/dev/null 2>&1 || log_warning "Failed to archive raw outputs for $repo_name"
+  # 1. Code metrics with cloc
+  if [ $RUN_CLOC -eq 1 ]; then
+    log_info "Running cloc..."
+    if command -v cloc &>/dev/null; then
+      cloc "$repo_path" --json >"$repo_results/cloc.json" 2>/dev/null || log_warning "cloc failed for $repo_name"
+      cloc "$repo_path" --quiet >>"$repo_results/README.md" 2>/dev/null || echo "cloc output not available" >>"$repo_results/README.md"
+      echo "" >>"$repo_results/README.md"
     else
-        log_warning "tar not available; skipping raw output archiving for $repo_name"
+      log_warning "cloc not installed, skipping"
     fi
-    
-    log_success "Completed analysis for $repo_name (Total issues: $total_issues)"
+  fi
+
+  # 2. Gitleaks - Fast git history scanning
+  if [ $RUN_GITLEAKS -eq 1 ]; then
+    log_info "Running Gitleaks..."
+    if command -v gitleaks &>/dev/null; then
+      gitleaks detect \
+        --source "$repo_path" \
+        --report-format json \
+        --report-path "$repo_results/gitleaks.json" \
+        --verbose >"$repo_results/gitleaks.log" 2>&1 || true
+
+      # Parse results with better error handling
+      if [ -f "$repo_results/gitleaks.json" ]; then
+        GITLEAKS_COUNT=$(jq 'if type=="array" then length else 0 end' "$repo_results/gitleaks.json" 2>/dev/null || echo 0)
+        total_issues=$((total_issues + GITLEAKS_COUNT))
+        high_issues=$((high_issues + GITLEAKS_COUNT))
+
+        {
+          echo "## 🔍 Gitleaks Results"
+          echo ""
+          echo "**Secrets Found:** $GITLEAKS_COUNT"
+          echo ""
+        } >>"$repo_results/README.md"
+
+        if [ "$GITLEAKS_COUNT" -gt 0 ]; then
+          echo "### Findings Details:" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+          jq -r '.[] | "- **\(.RuleID)**: \(.Description) (File: \(.File), Line: \(.StartLine))"' "$repo_results/gitleaks.json" 2>/dev/null >>"$repo_results/README.md" || echo "Error parsing findings" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+        fi
+      else
+        log_warning "Gitleaks JSON output not found for $repo_name"
+        {
+          echo "## 🔍 Gitleaks Results"
+          echo ""
+          echo "**Status:** No findings or scan failed"
+          echo ""
+        } >>"$repo_results/README.md"
+      fi
+    else
+      log_warning "Gitleaks not installed, skipping"
+    fi
+  fi
+
+  # 3. TruffleHog - Deep scanning with verification
+  if [ $RUN_TRUFFLEHOG -eq 1 ]; then
+    log_info "Running TruffleHog..."
+    if command -v trufflehog &>/dev/null; then
+      trufflehog git file://"$repo_path" \
+        --json \
+        --no-update \
+        >"$repo_results/trufflehog.json" 2>"$repo_results/trufflehog.log" || true
+
+      # Count verified vs unverified with better parsing
+      if [ -f "$repo_results/trufflehog.json" ]; then
+        TRUFFLE_VERIFIED=$(jq -s '[.[] | select(.verified == true)] | length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
+        TRUFFLE_TOTAL=$(jq -s 'length' "$repo_results/trufflehog.json" 2>/dev/null || echo 0)
+        total_issues=$((total_issues + TRUFFLE_TOTAL))
+        critical_issues=$((critical_issues + TRUFFLE_VERIFIED))
+        medium_issues=$((medium_issues + TRUFFLE_TOTAL - TRUFFLE_VERIFIED))
+
+        {
+          echo "## 🔎 TruffleHog Results"
+          echo ""
+          echo "**Total Findings:** $TRUFFLE_TOTAL"
+          echo "**Verified Secrets:** $TRUFFLE_VERIFIED"
+          echo "**Unverified:** $((TRUFFLE_TOTAL - TRUFFLE_VERIFIED))"
+          echo ""
+        } >>"$repo_results/README.md"
+
+        if [ "$TRUFFLE_VERIFIED" -gt 0 ]; then
+          echo "### ⚠️ Verified Secrets (CRITICAL):" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+          jq -r 'select(.verified == true) | "- **\(.DetectorName // "Unknown")**: Found in \(.SourceMetadata.Data.Filesystem.file // "unknown file")"' "$repo_results/trufflehog.json" 2>/dev/null >>"$repo_results/README.md" || echo "Error parsing findings" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+        fi
+      else
+        {
+          echo "## 🔎 TruffleHog Results"
+          echo ""
+          echo "**Status:** No findings or scan failed"
+          echo ""
+        } >>"$repo_results/README.md"
+      fi
+    else
+      log_warning "TruffleHog not installed, skipping"
+    fi
+  fi
+
+  # 4. Semgrep - Pattern-based analysis
+  if [ $RUN_SEMGREP -eq 1 ]; then
+    log_info "Running Semgrep..."
+    if command -v semgrep &>/dev/null; then
+      semgrep \
+        --config=auto \
+        --json \
+        --output="$repo_results/semgrep.json" \
+        "$repo_path" >"$repo_results/semgrep.log" 2>&1 || true
+
+      # Parse severity levels with better error handling
+      if [ -f "$repo_results/semgrep.json" ]; then
+        SEMGREP_HIGH=$(jq '[.results[]? | select(.extra.severity == "ERROR")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
+        SEMGREP_MEDIUM=$(jq '[.results[]? | select(.extra.severity == "WARNING")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
+        SEMGREP_LOW=$(jq '[.results[]? | select(.extra.severity == "INFO")] | length' "$repo_results/semgrep.json" 2>/dev/null || echo 0)
+        SEMGREP_TOTAL=$((SEMGREP_HIGH + SEMGREP_MEDIUM + SEMGREP_LOW))
+
+        total_issues=$((total_issues + SEMGREP_TOTAL))
+        high_issues=$((high_issues + SEMGREP_HIGH))
+        medium_issues=$((medium_issues + SEMGREP_MEDIUM))
+
+        {
+          echo "## 🛡️ Semgrep Results"
+          echo ""
+          echo "**Total Findings:** $SEMGREP_TOTAL"
+          echo "- **High Severity (ERROR):** $SEMGREP_HIGH"
+          echo "- **Medium Severity (WARNING):** $SEMGREP_MEDIUM"
+          echo "- **Low Severity (INFO):** $SEMGREP_LOW"
+          echo ""
+        } >>"$repo_results/README.md"
+
+        if [ "$SEMGREP_HIGH" -gt 0 ]; then
+          echo "### High Severity Issues:" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+          jq -r '.results[]? | select(.extra.severity == "ERROR") | "- **\(.check_id)**: \(.extra.message) (File: \(.path), Line: \(.start.line))"' "$repo_results/semgrep.json" 2>/dev/null >>"$repo_results/README.md" || echo "Error parsing findings" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+        fi
+      else
+        {
+          echo "## 🛡️ Semgrep Results"
+          echo ""
+          echo "**Status:** No findings or scan failed"
+          echo ""
+        } >>"$repo_results/README.md"
+      fi
+    else
+      log_warning "Semgrep not installed, skipping"
+    fi
+  fi
+
+  # 5. Nosey Parker - Deep pattern matching
+  if [ $RUN_NOSEYPARKER -eq 1 ]; then
+    log_info "Running Nosey Parker..."
+    if command -v noseyparker &>/dev/null; then
+      NP_DATASTORE="/tmp/np-$repo_name-$$"
+
+      # Scan
+      noseyparker scan \
+        --datastore "$NP_DATASTORE" \
+        "$repo_path" >"$repo_results/noseyparker_scan.log" 2>&1 || true
+
+      # Generate report
+      noseyparker report \
+        --datastore "$NP_DATASTORE" \
+        --format json \
+        >"$repo_results/noseyparker.json" 2>"$repo_results/noseyparker_report.log" || true
+
+      # Parse findings with better error handling
+      if [ -f "$repo_results/noseyparker.json" ]; then
+        NP_FINDINGS=$(jq 'def count_item($item): ($item | if type=="object" then (if (.matches // null) != null then (.matches | length) elif (.num_matches // null) != null then (.num_matches // 0) else 0 end) else 0 end); if type=="array" then (map(count_item(.)) | add? // 0) else count_item(.) end' "$repo_results/noseyparker.json" 2>/dev/null || echo 0)
+        total_issues=$((total_issues + NP_FINDINGS))
+        high_issues=$((high_issues + NP_FINDINGS))
+
+        {
+          echo "## 🔬 Nosey Parker Results"
+          echo ""
+          echo "**Total Findings:** $NP_FINDINGS"
+          echo ""
+        } >>"$repo_results/README.md"
+
+        if [ "$NP_FINDINGS" -gt 0 ]; then
+          echo "### Sensitive Patterns Detected:" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+          jq -r 'def items: if type=="array" then .[] else . end; items | (.rule_name // .rule // .rule_text_id // empty)' "$repo_results/noseyparker.json" 2>/dev/null |
+            sort | uniq |
+            awk '{print "- " $0}' >>"$repo_results/README.md" || echo "- (See JSON report for details)" >>"$repo_results/README.md"
+          echo "" >>"$repo_results/README.md"
+        fi
+      else
+        # Fallback to text parsing
+        NP_FINDINGS=$(noseyparker report --datastore "$NP_DATASTORE" 2>/dev/null | grep -oP '\d+(?= findings)' || echo 0)
+
+        {
+          echo "## 🔬 Nosey Parker Results"
+          echo ""
+          echo "**Total Findings:** $NP_FINDINGS"
+          echo ""
+        } >>"$repo_results/README.md"
+      fi
+
+      # Cleanup
+      rm -rf "$NP_DATASTORE"
+    else
+      log_warning "Nosey Parker not installed, skipping"
+    fi
+  fi
+
+  # Add summary section to repo report
+  {
+    echo "---"
+    echo ""
+    echo "## 📊 Summary"
+    echo ""
+    echo "**Total Issues Found:** $total_issues"
+    echo "- **Critical:** $critical_issues"
+    echo "- **High:** $high_issues"
+    echo "- **Medium:** $medium_issues"
+    echo ""
+    echo "---"
+    echo ""
+    echo "*📁 Full logs and JSON outputs available in this directory*"
+  } >>"$repo_results/README.md"
+
+  # Save metrics for aggregation
+  echo "$repo_name,$total_issues,$critical_issues,$high_issues,$medium_issues" >>"$RESULTS_DIR/summaries/metrics.csv"
+
+  # Package raw outputs for downstream integrations
+  if command -v tar &>/dev/null; then
+    tar -czf "$RAW_OUTPUTS_DIR/${repo_name}.tar.gz" -C "$repo_results" . >/dev/null 2>&1 || log_warning "Failed to archive raw outputs for $repo_name"
+  else
+    log_warning "tar not available; skipping raw output archiving for $repo_name"
+  fi
+
+  log_success "Completed analysis for $repo_name (Total issues: $total_issues)"
 }
 
 # Main execution loop
@@ -357,16 +357,16 @@ log_info "Results will be saved to: $RESULTS_DIR"
 echo ""
 
 # Initialize metrics CSV
-echo "repository,total_issues,critical,high,medium" > "$RESULTS_DIR/summaries/metrics.csv"
+echo "repository,total_issues,critical,high,medium" >"$RESULTS_DIR/summaries/metrics.csv"
 
 REPO_COUNT=0
 for repo_path in "$TESTING_DIR"/*/; do
-    if [ -d "$repo_path" ]; then
-        REPO_COUNT=$((REPO_COUNT + 1))
-        echo ""
-        log_info "[$REPO_COUNT/$TOTAL_REPOS] Processing: $(basename "$repo_path")"
-        test_repository "$repo_path"
-    fi
+  if [ -d "$repo_path" ]; then
+    REPO_COUNT=$((REPO_COUNT + 1))
+    echo ""
+    log_info "[$REPO_COUNT/$TOTAL_REPOS] Processing: $(basename "$repo_path")"
+    test_repository "$repo_path"
+  fi
 done
 
 # Generate aggregate summary and dashboard assets
@@ -374,8 +374,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export RESULTS_DIR SUMMARY_FILE TESTING_DIR SCRIPT_DIR
 
 log_info "Generating aggregate summary..."
-if command -v python3 &> /dev/null; then
-    python3 - <<'PY'
+if command -v python3 &>/dev/null; then
+  python3 - <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -594,7 +594,7 @@ presentation_lines.append('')
 presentation_lines.append('| Tool | Findings | Repo Coverage | Share of Findings | Verified Secrets | Critical Hits | Distinct Strength |')
 presentation_lines.append('|------|----------|---------------|-------------------|------------------|---------------|-------------------|')
 for tool in ['gitleaks', 'trufflehog', 'semgrep', 'noseyparker']:
-    presentation_lines.append(format_tool_row(tool, tool_strengths.get(tool, ''))) 
+    presentation_lines.append(format_tool_row(tool, tool_strengths.get(tool, '')))
 
 presentation_lines.append('')
 presentation_lines.append('---')
@@ -621,22 +621,22 @@ else:
 presentation_file.write_text('\n'.join(presentation_lines) + '\n')
 PY
 else
-    log_warning "python3 not available; summary report not regenerated"
+  log_warning "python3 not available; summary report not regenerated"
 fi
 
 log_info "Rendering HTML dashboard..."
-if command -v python3 &> /dev/null; then
-    if python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$RESULTS_DIR/dashboard.html" >/dev/null 2>&1; then
-        log_success "Dashboard written to $RESULTS_DIR/dashboard.html"
-    else
-        log_warning "Dashboard generation failed"
-    fi
+if command -v python3 &>/dev/null; then
+  if python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$RESULTS_DIR/dashboard.html" >/dev/null 2>&1; then
+    log_success "Dashboard written to $RESULTS_DIR/dashboard.html"
+  else
+    log_warning "Dashboard generation failed"
+  fi
 fi
 
 # Generate comparative analysis
 log_info "Generating comparative analysis..."
 if [ -f "$SCRIPT_DIR/generate_comparison_report.sh" ]; then
-    bash "$SCRIPT_DIR/generate_comparison_report.sh" "$RESULTS_DIR" 2>/dev/null || log_warning "Comparison report generation failed"
+  bash "$SCRIPT_DIR/generate_comparison_report.sh" "$RESULTS_DIR" 2>/dev/null || log_warning "Comparison report generation failed"
 fi
 
 echo ""

@@ -17,10 +17,18 @@ def test_trivy_vuln_and_secret(tmp_path: Path):
             {
                 "Target": "app/Dockerfile",
                 "Vulnerabilities": [
-                    {"VulnerabilityID": "CVE-123", "Title": "Something", "Severity": "CRITICAL"}
+                    {
+                        "VulnerabilityID": "CVE-123",
+                        "Title": "Something",
+                        "Severity": "CRITICAL",
+                    }
                 ],
                 "Secrets": [
-                    {"Title": "Hardcoded token", "Severity": "HIGH", "Target": "app/.env"}
+                    {
+                        "Title": "Hardcoded token",
+                        "Severity": "HIGH",
+                        "Target": "app/.env",
+                    }
                 ],
             }
         ],

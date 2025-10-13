@@ -14,6 +14,7 @@ Steps performed:
   4) Run jmo ci with appropriate profile
   5) Open dashboard and summary when done
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,25 +52,35 @@ def _run(cmd: List[str], cwd: Optional[Path] = None, ok_rcs=(0,)) -> int:
         stderr=subprocess.PIPE,
     )
     if cp.returncode not in ok_rcs:
-        sys.stderr.write(f"\x1b[33m[WARN]\x1b[0m Command failed ({cp.returncode}): {' '.join(cmd)}\n")
+        sys.stderr.write(
+            f"\x1b[33m[WARN]\x1b[0m Command failed ({cp.returncode}): {' '.join(cmd)}\n"
+        )
         if cp.stderr:
             sys.stderr.write(cp.stderr + "\n")
     return cp.returncode
 
 
 def _check_tools(allow_missing: bool) -> None:
-    script = Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+    script = (
+        Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+    )
     if not script.exists():
-        sys.stderr.write("\x1b[33m[WARN]\x1b[0m Tool checker script not found; skipping verification.\n")
+        sys.stderr.write(
+            "\x1b[33m[WARN]\x1b[0m Tool checker script not found; skipping verification.\n"
+        )
         return
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Verifying tools…\n")
     rc = _run(["bash", str(script), "--check"])  # prints a friendly table
     if rc != 0 and not allow_missing:
-        sys.stderr.write("\x1b[31m[ERROR]\x1b[0m Missing tools detected. Re-run with '--allow-missing-tools' to proceed with stubs, or install required tools.\n")
+        sys.stderr.write(
+            "\x1b[31m[ERROR]\x1b[0m Missing tools detected. Re-run with '--allow-missing-tools' to proceed with stubs, or install required tools.\n"
+        )
         raise SystemExit(1)
 
 
-def _maybe_clone_from_tsv(tsv: Optional[str], dest: str, targets_out: str) -> Optional[Path]:
+def _maybe_clone_from_tsv(
+    tsv: Optional[str], dest: str, targets_out: str
+) -> Optional[Path]:
     if not tsv:
         return None
     clone_script = Path(__file__).resolve().parent / "clone_from_tsv.py"
@@ -77,17 +88,19 @@ def _maybe_clone_from_tsv(tsv: Optional[str], dest: str, targets_out: str) -> Op
         sys.stderr.write(f"\x1b[31m[ERROR]\x1b[0m TSV not found: {tsv}\n")
         raise SystemExit(2)
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Cloning repositories from TSV…\n")
-    rc = _run([
-        sys.executable,
-        str(clone_script),
-        "--tsv",
-        str(Path(tsv).expanduser()),
-        "--dest",
-        dest,
-        "--targets-out",
-        targets_out,
-        "--human-logs",
-    ])
+    rc = _run(
+        [
+            sys.executable,
+            str(clone_script),
+            "--tsv",
+            str(Path(tsv).expanduser()),
+            "--dest",
+            dest,
+            "--targets-out",
+            targets_out,
+            "--human-logs",
+        ]
+    )
     if rc != 0:
         raise SystemExit(rc)
     return Path(targets_out)
@@ -106,7 +119,9 @@ def _open_outputs(out_dir: Path) -> None:
         opener = "start"
     paths = [p for p in [html, md, yaml] if p.exists()]
     if not paths:
-        sys.stderr.write(f"\x1b[33m[WARN]\x1b[0m No output files found yet in {out_dir}\n")
+        sys.stderr.write(
+            f"\x1b[33m[WARN]\x1b[0m No output files found yet in {out_dir}\n"
+        )
         return
     if opener:
         for p in paths:
@@ -114,7 +129,11 @@ def _open_outputs(out_dir: Path) -> None:
                 if opener == "start":
                     os.startfile(str(p))  # type: ignore[attr-defined]
                 else:
-                    subprocess.Popen([opener, str(p)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.Popen(
+                        [opener, str(p)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
             except Exception:
                 pass
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Results:\n")
@@ -133,36 +152,87 @@ def _profile_for(cmd_name: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="jmotools", description="Beginner-friendly wrapper for jmo security scans")
+    ap = argparse.ArgumentParser(
+        prog="jmotools", description="Beginner-friendly wrapper for jmo security scans"
+    )
     sub = ap.add_subparsers(dest="mode", required=True)
 
     def _add_common(sp: argparse.ArgumentParser) -> None:
         g = sp.add_mutually_exclusive_group(required=False)
         g.add_argument("--repo", help="Path to a single repository to scan")
-        g.add_argument("--repos-dir", help="Directory whose immediate subfolders are repos to scan")
+        g.add_argument(
+            "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
+        )
         g.add_argument("--targets", help="File listing repo paths (one per line)")
-        sp.add_argument("--tsv", help="Optional TSV to clone from (with url or full_name headers)")
-        sp.add_argument("--dest", default="repos-tsv", help="Where to clone TSV repos (default: repos-tsv)")
-        sp.add_argument("--results-dir", default=DEFAULT_RESULTS, help="Results directory (default: results)")
+        sp.add_argument(
+            "--tsv", help="Optional TSV to clone from (with url or full_name headers)"
+        )
+        sp.add_argument(
+            "--dest",
+            default="repos-tsv",
+            help="Where to clone TSV repos (default: repos-tsv)",
+        )
+        sp.add_argument(
+            "--results-dir",
+            default=DEFAULT_RESULTS,
+            help="Results directory (default: results)",
+        )
         sp.add_argument("--threads", type=int, default=None, help="Override threads")
-        sp.add_argument("--timeout", type=int, default=None, help="Override per-tool timeout seconds")
-        sp.add_argument("--fail-on", default=None, help="Optional severity threshold to fail the run")
-        sp.add_argument("--no-open", action="store_true", help="Do not open results after run")
-        sp.add_argument("--strict", action="store_true", help="Fail if tools are missing (disable stubs)")
+        sp.add_argument(
+            "--timeout",
+            type=int,
+            default=None,
+            help="Override per-tool timeout seconds",
+        )
+        sp.add_argument(
+            "--fail-on",
+            default=None,
+            help="Optional severity threshold to fail the run",
+        )
+        sp.add_argument(
+            "--no-open", action="store_true", help="Do not open results after run"
+        )
+        sp.add_argument(
+            "--strict",
+            action="store_true",
+            help="Fail if tools are missing (disable stubs)",
+        )
         sp.add_argument("--human-logs", action="store_true", help="Human-friendly logs")
-        sp.add_argument("--config", default="jmo.yml", help="Config file (default: jmo.yml)")
+        sp.add_argument(
+            "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+        )
 
     for name in ("fast", "balanced", "full", "deep"):
         sp = sub.add_parser(name, help=f"Run the {name} profile")
         _add_common(sp)
 
     # Setup subcommand: bootstrap tools
-    sp_setup = sub.add_parser("setup", help="Verify and optionally auto-install security tools")
-    sp_setup.add_argument("--auto-install", action="store_true", help="Attempt to auto-install missing tools")
-    sp_setup.add_argument("--print-commands", action="store_true", help="Print installation commands without executing")
-    sp_setup.add_argument("--force-reinstall", action="store_true", help="Force reinstallation of all tools")
-    sp_setup.add_argument("--human-logs", action="store_true", help="Human-friendly logs")
-    sp_setup.add_argument("--strict", action="store_true", help="Exit non-zero if tools are missing and not auto-installed")
+    sp_setup = sub.add_parser(
+        "setup", help="Verify and optionally auto-install security tools"
+    )
+    sp_setup.add_argument(
+        "--auto-install",
+        action="store_true",
+        help="Attempt to auto-install missing tools",
+    )
+    sp_setup.add_argument(
+        "--print-commands",
+        action="store_true",
+        help="Print installation commands without executing",
+    )
+    sp_setup.add_argument(
+        "--force-reinstall",
+        action="store_true",
+        help="Force reinstallation of all tools",
+    )
+    sp_setup.add_argument(
+        "--human-logs", action="store_true", help="Human-friendly logs"
+    )
+    sp_setup.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if tools are missing and not auto-installed",
+    )
 
     return ap
 
@@ -175,9 +245,15 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Handle setup early
     if args.mode == "setup":
-        script = Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+        script = (
+            Path(__file__).resolve().parent.parent
+            / "core"
+            / "check_and_install_tools.sh"
+        )
         if not script.exists():
-            sys.stderr.write("\x1b[31m[ERROR]\x1b[0m Tool bootstrap script not found.\n")
+            sys.stderr.write(
+                "\x1b[31m[ERROR]\x1b[0m Tool bootstrap script not found.\n"
+            )
             return 2
         cmd = ["bash", str(script)]
         if args.force_reinstall:
@@ -202,7 +278,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     targets_file: Optional[Path] = None
     if getattr(args, "tsv", None):
-        targets_file = _maybe_clone_from_tsv(args.tsv, args.dest, str(results_dir / "targets.tsv.txt"))
+        targets_file = _maybe_clone_from_tsv(
+            args.tsv, args.dest, str(results_dir / "targets.tsv.txt")
+        )
 
     # Prefer command-line selection order: explicit targets/repo(s) override TSV
     ci_args: List[str] = [
@@ -240,7 +318,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Running security scan…\n")
     rc = _run(ci_args)
     if rc != 0:
-        sys.stderr.write(f"\x1b[33m[WARN]\x1b[0m Scan completed with non-zero exit: {rc}\n")
+        sys.stderr.write(
+            f"\x1b[33m[WARN]\x1b[0m Scan completed with non-zero exit: {rc}\n"
+        )
 
     if not args.no_open:
         _open_outputs(out_dir)

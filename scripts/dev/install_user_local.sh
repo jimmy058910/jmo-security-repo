@@ -10,7 +10,7 @@
 #   bash scripts/dev/install_user_local.sh trivy noseyparker
 #   bash scripts/dev/install_user_local.sh all
 
-set -u  # (no -e; we don't want to abort on first error)
+set -u # (no -e; we don't want to abort on first error)
 IFS=$'\n\t'
 
 BLUE='\033[0;34m'
@@ -19,22 +19,34 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-log()  { echo -e "${BLUE}[install]${NC} $*"; }
-ok()   { echo -e "${GREEN}[ok]${NC} $*"; }
+log() { echo -e "${BLUE}[install]${NC} $*"; }
+ok() { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
-err()  { echo -e "${RED}[err]${NC} $*"; }
+err() { echo -e "${RED}[err]${NC} $*"; }
 
 mkdir -p "$HOME/.local/bin" 2>/dev/null || true
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*) : ;;
-  *) export PATH="$HOME/.local/bin:$PATH"; warn "Added ~/.local/bin to PATH for this session" ;;
+*":$HOME/.local/bin:"*) : ;;
+*)
+  export PATH="$HOME/.local/bin:$PATH"
+  warn "Added ~/.local/bin to PATH for this session"
+  ;;
 esac
 
 ARCH_RAW=$(uname -m || echo x86_64)
 case "$ARCH_RAW" in
-  x86_64|amd64)  ARCH_GH=x86_64; ARCH_GL=x86_64 ;;
-  aarch64|arm64) ARCH_GH=arm64;   ARCH_GL=arm64 ;;
-  *)             ARCH_GH=x86_64; ARCH_GL=x86_64 ;;
+x86_64 | amd64)
+  ARCH_GH=x86_64
+  ARCH_GL=x86_64
+  ;;
+aarch64 | arm64)
+  ARCH_GH=arm64
+  ARCH_GL=arm64
+  ;;
+*)
+  ARCH_GH=x86_64
+  ARCH_GL=x86_64
+  ;;
 esac
 
 download() {
@@ -84,7 +96,7 @@ install_trivy() {
   local script="/tmp/install-trivy.sh"
   if download "https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh" "$script"; then
     # Run installer in a subshell to isolate environment; ignore failure
-    ( sh "$script" -b "$HOME/.local/bin" >/tmp/trivy-install.log 2>&1 ) || warn "trivy installer returned non-zero (see /tmp/trivy-install.log)"
+    (sh "$script" -b "$HOME/.local/bin" >/tmp/trivy-install.log 2>&1) || warn "trivy installer returned non-zero (see /tmp/trivy-install.log)"
   else
     warn "Failed to download trivy installer"
   fi
@@ -125,7 +137,7 @@ install_noseyparker() {
   else
     warn "Prebuilt noseyparker download failed; trying cargo fallback if available"
     if command -v cargo >/dev/null 2>&1; then
-      ( cargo install noseyparker >/tmp/noseyparker-cargo.log 2>&1 && cp "$HOME/.cargo/bin/noseyparker" "$HOME/.local/bin/noseyparker" ) || warn "cargo build/install failed (see /tmp/noseyparker-cargo.log)"
+      (cargo install noseyparker >/tmp/noseyparker-cargo.log 2>&1 && cp "$HOME/.cargo/bin/noseyparker" "$HOME/.local/bin/noseyparker") || warn "cargo build/install failed (see /tmp/noseyparker-cargo.log)"
     else
       warn "Rust toolchain (cargo) not found; install rustup/cargo to build noseyparker from source"
     fi
@@ -160,10 +172,10 @@ main() {
   fi
   for tool in "$@"; do
     case "$tool" in
-      gitleaks)      install_gitleaks ;;
-      trivy)         install_trivy ;;
-      noseyparker)   install_noseyparker ;;
-      *) warn "Unknown tool: $tool" ;;
+    gitleaks) install_gitleaks ;;
+    trivy) install_trivy ;;
+    noseyparker) install_noseyparker ;;
+    *) warn "Unknown tool: $tool" ;;
     esac
   done
   verify

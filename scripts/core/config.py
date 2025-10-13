@@ -13,7 +13,9 @@ except Exception:
 
 @dataclass
 class Config:
-    tools: List[str] = field(default_factory=lambda: ["gitleaks", "trufflehog", "semgrep", "noseyparker"])
+    tools: List[str] = field(
+        default_factory=lambda: ["gitleaks", "trufflehog", "semgrep", "noseyparker"]
+    )
     outputs: List[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
     fail_on: str = ""
     threads: Optional[int] = None
@@ -60,7 +62,7 @@ def load_config(path: Optional[str]) -> Config:
     # log_level
     if isinstance(data.get("log_level"), str):
         lvl = str(data["log_level"]).upper()
-        if lvl in ("DEBUG","INFO","WARN","ERROR"):
+        if lvl in ("DEBUG", "INFO", "WARN", "ERROR"):
             cfg.log_level = lvl
     # default_profile
     if isinstance(data.get("default_profile"), str):

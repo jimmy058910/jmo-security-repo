@@ -19,6 +19,7 @@ Be respectful and constructive. We expect contributors to follow a standard code
 
 ```bash
 make dev-deps     # install Python dev dependencies
+make pre-commit-install  # install git hooks (YAML + Actions validation, etc.)
 make verify-env   # check OS/WSL/macOS & external tool availability
 make test         # run unit tests and coverage
 make fmt && make lint
@@ -43,12 +44,14 @@ make screenshots-demo
 - Keep diffs small and focused.
 - Write/update tests when changing behavior.
 - Run `make fmt && make lint && make test` before pushing.
+- Run `make pre-commit-run` to apply YAML linting and validate GitHub Actions workflows via actionlint.
 - Open a PR and fill out the template (if present). Link related issues.
 
 ## Coding standards
 
 - Python: Ruff for linting (`ruff check`) and `ruff format`/`black` for formatting.
 - Shell: `shellcheck` and `shfmt -i 2 -ci -bn`.
+- YAML: `yamllint` via pre-commit; GitHub Actions validated by `actionlint` (also enforced in CI).
 - Keep public CLI flags and outputs stable; update docs/tests when behavior changes.
 
 ## Tests

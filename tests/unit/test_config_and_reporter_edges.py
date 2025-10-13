@@ -17,6 +17,7 @@ def test_load_config_missing_file(tmp_path: Path):
 def test_load_config_without_yaml(monkeypatch, tmp_path: Path):
     # Simulate PyYAML not installed inside config module
     import scripts.core.config as cfgmod
+
     monkeypatch.setattr(cfgmod, "yaml", None, raising=False)
     cfg = load_config(str(tmp_path / "jmo.yml"))
     assert cfg.tools and isinstance(cfg.tools, list)
@@ -25,6 +26,7 @@ def test_load_config_without_yaml(monkeypatch, tmp_path: Path):
 def test_yaml_reporter_raises_without_pyyaml(monkeypatch, tmp_path: Path):
     # Simulate PyYAML not installed inside yaml_reporter module
     import scripts.core.reporters.yaml_reporter as ymod
+
     monkeypatch.setattr(ymod, "yaml", None, raising=False)
     with pytest.raises(RuntimeError):
         write_yaml([], tmp_path / "x.yaml")

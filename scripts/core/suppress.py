@@ -41,11 +41,15 @@ def load_suppressions(path: Optional[str]) -> Dict[str, Suppression]:
         sid = str(ent.get("id") or "").strip()
         if not sid:
             continue
-        items[sid] = Suppression(id=sid, reason=str(ent.get("reason") or ""), expires=ent.get("expires"))
+        items[sid] = Suppression(
+            id=sid, reason=str(ent.get("reason") or ""), expires=ent.get("expires")
+        )
     return items
 
 
-def filter_suppressed(findings: List[dict], suppressions: Dict[str, Suppression]) -> List[dict]:
+def filter_suppressed(
+    findings: List[dict], suppressions: Dict[str, Suppression]
+) -> List[dict]:
     out = []
     for f in findings:
         sid = f.get("id")

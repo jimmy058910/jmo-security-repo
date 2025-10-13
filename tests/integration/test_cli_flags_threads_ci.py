@@ -18,12 +18,16 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
             "include": [],
             "exclude": [],
             "retries": 0,
-            "per_tool": {"semgrep": {"flags": ["--severity", "ERROR", "--timeout", "5"]}},
+            "per_tool": {
+                "semgrep": {"flags": ["--severity", "ERROR", "--timeout", "5"]}
+            },
         }
 
     seen = {"cmd": None}
 
-    def run_cmd(cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None):  # noqa: ARG001
+    def run_cmd(
+        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
+    ):  # noqa: ARG001
         seen["cmd"] = cmd
         # semgrep writes to --output path
         p = Path(cmd[cmd.index("--output") + 1])
@@ -66,7 +70,15 @@ def test_threads_env_then_config(tmp_path: Path, monkeypatch):
 
     # Force no threads in eff to defer to env, else to config
     def eff(_):
-        return {"tools": ["gitleaks"], "threads": None, "timeout": 10, "include": [], "exclude": [], "retries": 0, "per_tool": {}}
+        return {
+            "tools": ["gitleaks"],
+            "threads": None,
+            "timeout": 10,
+            "include": [],
+            "exclude": [],
+            "retries": 0,
+            "per_tool": {},
+        }
 
     # pretend config.threads = 3 by monkeypatching load_config return object
     class Cfg:
@@ -124,7 +136,9 @@ def test_cmd_ci_wiring_and_threshold(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8")
+    (indiv / "gitleaks.json").write_text(
+        json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
+    )
 
     # Make cmd_scan a no-op (we pre-created outputs)
     monkeypatch.setattr(jmo, "cmd_scan", lambda a: 0)

@@ -14,7 +14,15 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
 
     # Configure single tool and thread; tool missing with allow_missing so job returns quickly
     def fake_eff(_):
-        return {"tools": ["gitleaks"], "threads": 1, "timeout": 5, "include": [], "exclude": [], "retries": 0, "per_tool": {}}
+        return {
+            "tools": ["gitleaks"],
+            "threads": 1,
+            "timeout": 5,
+            "include": [],
+            "exclude": [],
+            "retries": 0,
+            "per_tool": {},
+        }
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", fake_eff)
     monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
@@ -34,7 +42,11 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         return None
 
     # Ensure that the import inside cmd_scan picks up our fake module
-    monkeypatch.setitem(sys.modules, "signal", types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15))
+    monkeypatch.setitem(
+        sys.modules,
+        "signal",
+        types.SimpleNamespace(signal=fake_signal, SIGINT=2, SIGTERM=15),
+    )
 
     args = types.SimpleNamespace(
         cmd="scan",

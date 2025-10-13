@@ -3,6 +3,7 @@
 tfsec adapter: normalize tfsec JSON output to CommonFinding
 Expected input includes a top-level "results" list
 """
+
 from __future__ import annotations
 
 import json
@@ -32,8 +33,12 @@ def load_tfsec(path: str | Path) -> List[Dict[str, Any]]:
         if not isinstance(it, dict):
             continue
         rid = str(it.get("rule_id") or it.get("id") or "TFSEC")
-        file_path = str((it.get("location") or {}).get("filename") or it.get("filename") or "")
-        line = int((it.get("location") or {}).get("start_line") or it.get("start_line") or 0)
+        file_path = str(
+            (it.get("location") or {}).get("filename") or it.get("filename") or ""
+        )
+        line = int(
+            (it.get("location") or {}).get("start_line") or it.get("start_line") or 0
+        )
         msg = str(it.get("description") or it.get("impact") or rid)
         sev = normalize_severity(it.get("severity") or "MEDIUM")
         fid = fingerprint("tfsec", rid, file_path, line, msg)
@@ -46,9 +51,14 @@ def load_tfsec(path: str | Path) -> List[Dict[str, Any]]:
                 "message": msg,
                 "description": str(it.get("resolution") or msg),
                 "severity": sev,
-                "tool": {"name": "tfsec", "version": str(data.get("version") or "unknown")},
+                "tool": {
+                    "name": "tfsec",
+                    "version": str(data.get("version") or "unknown"),
+                },
                 "location": {"path": file_path, "startLine": line},
-                "remediation": str(it.get("resolution") or "Review resolution guidance"),
+                "remediation": str(
+                    it.get("resolution") or "Review resolution guidance"
+                ),
                 "tags": ["iac", "terraform"],
                 "raw": it,
             }

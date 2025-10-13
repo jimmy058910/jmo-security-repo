@@ -110,6 +110,17 @@ Optional: install the package locally to get `jmo` and `jmotools` commands on yo
 pip install -e .
 ```
 
+#### Pre-commit hooks (YAML & Actions validation)
+
+We ship pre-commit hooks for YAML linting and GitHub Actions validation (among other basic checks):
+
+```bash
+make pre-commit-install   # installs the git hooks
+make pre-commit-run       # run checks on all files
+```
+
+These run locally via pre-commit and are also enforced in CI.
+
 ### Quick Start (Unified CLI)
 
 1) Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:

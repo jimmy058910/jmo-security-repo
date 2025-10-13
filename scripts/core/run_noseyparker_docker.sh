@@ -19,10 +19,10 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-log()  { echo -e "${BLUE}[np-docker]${NC} $*"; }
-ok()   { echo -e "${GREEN}[ok]${NC} $*"; }
+log() { echo -e "${BLUE}[np-docker]${NC} $*"; }
+ok() { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
-err()  { echo -e "${RED}[err]${NC} $*"; }
+err() { echo -e "${RED}[err]${NC} $*"; }
 
 IMAGE="ghcr.io/praetorian-inc/noseyparker:latest"
 
@@ -31,17 +31,31 @@ OUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo) REPO_DIR="$2"; shift 2;;
-    --out)  OUT_FILE="$2"; shift 2;;
-    -h|--help)
-      sed -n '1,60p' "$0" | sed -n '1,30p'
-      exit 0
-      ;;
-    *)
-      if [ -z "$REPO_DIR" ]; then REPO_DIR="$1"; shift; continue; fi
-      if [ -z "$OUT_FILE" ]; then OUT_FILE="$1"; shift; continue; fi
+  --repo)
+    REPO_DIR="$2"
+    shift 2
+    ;;
+  --out)
+    OUT_FILE="$2"
+    shift 2
+    ;;
+  -h | --help)
+    sed -n '1,60p' "$0" | sed -n '1,30p'
+    exit 0
+    ;;
+  *)
+    if [ -z "$REPO_DIR" ]; then
+      REPO_DIR="$1"
       shift
-      ;;
+      continue
+    fi
+    if [ -z "$OUT_FILE" ]; then
+      OUT_FILE="$1"
+      shift
+      continue
+    fi
+    shift
+    ;;
   esac
 done
 
@@ -104,7 +118,7 @@ docker run --rm \
   -u 0:0 \
   -v "$VOL_NAME:/npdata:ro" \
   "$IMAGE" \
-  report --format json --datastore "$DS_PATH" > "$OUT_FILE"
+  report --format json --datastore "$DS_PATH" >"$OUT_FILE"
 REPORT_RC=$?
 if [ "$REPORT_RC" -ne 0 ]; then
   err "Nosey Parker report failed (rc=$REPORT_RC)."

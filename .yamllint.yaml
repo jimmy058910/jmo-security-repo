@@ -1,0 +1,30 @@
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    allow-non-breakable-words: true
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+  document-start: disable
+  comments-indentation: disable
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    allow-non-breakable-words: true
+  truthy:
+    level: warning
+  document-start:
+    present: false
+  indentation:
+    indent-sequences: consistent
+  comments:
+    min-spaces-from-content: 1
+
+ignore: |
+  build/
+  dist/
+  .venv/
+  results/

@@ -250,15 +250,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Install tools
         run: |
           # Install Gitleaks, TruffleHog, Semgrep
-          
+
       - name: Run Security Audit (scan + report)
         run: |
           python3 scripts/cli/jmo.py ci --repos-dir . --profile-name balanced --fail-on HIGH --profile
-          
+
       - name: Upload Results
         uses: actions/upload-artifact@v2
         with:

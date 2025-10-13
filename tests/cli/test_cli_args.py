@@ -13,9 +13,7 @@ def test_report_optional_results_dir_mapping(monkeypatch, tmp_path):
     # --results-dir should populate results_dir_opt
     p = tmp_path / "opt-results"
     # The value is a string path, not created, that's fine for argparse mapping
-    monkeypatch.setattr(sys, "argv", [
-        "jmo", "report", "--results-dir", str(p)
-    ])
+    monkeypatch.setattr(sys, "argv", ["jmo", "report", "--results-dir", str(p)])
     ns = parse_args()
     assert getattr(ns, "cmd", None) == "report"
     assert getattr(ns, "results_dir_opt", None) == str(p)
@@ -26,9 +24,7 @@ def test_report_optional_results_dir_mapping(monkeypatch, tmp_path):
 def test_report_positional_results_dir_mapping(monkeypatch, tmp_path):
     # Positional results_dir should populate results_dir_pos
     p = tmp_path / "pos-results"
-    monkeypatch.setattr(sys, "argv", [
-        "jmo", "report", str(p)
-    ])
+    monkeypatch.setattr(sys, "argv", ["jmo", "report", str(p)])
     ns = parse_args()
     assert getattr(ns, "cmd", None) == "report"
     assert getattr(ns, "results_dir_pos", None) == str(p)

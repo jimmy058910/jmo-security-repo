@@ -3,13 +3,21 @@ import sys
 
 
 def run(args):
-    return subprocess.run([sys.executable, "-m", "scripts.cli.jmotools", *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return subprocess.run(
+        [sys.executable, "-m", "scripts.cli.jmotools", *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def test_help_top_level():
     cp = run(["--help"])  # argparse shows usage and exits 0
     assert cp.returncode == 0
-    assert "Beginner-friendly wrapper" in cp.stdout or "Beginner-friendly wrapper" in cp.stderr
+    assert (
+        "Beginner-friendly wrapper" in cp.stdout
+        or "Beginner-friendly wrapper" in cp.stderr
+    )
 
 
 def test_help_fast():

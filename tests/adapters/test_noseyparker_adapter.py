@@ -14,7 +14,12 @@ def test_noseyparker_basic(tmp_path: Path):
     sample = {
         "version": "0.16.0",
         "matches": [
-            {"signature": "AWS", "path": "a/b.txt", "line_number": 5, "match": "AKIA..."}
+            {
+                "signature": "AWS",
+                "path": "a/b.txt",
+                "line_number": 5,
+                "match": "AKIA...",
+            }
         ],
     }
     path = write_tmp(tmp_path, "np.json", json.dumps(sample))

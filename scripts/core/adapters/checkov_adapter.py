@@ -3,6 +3,7 @@
 Checkov adapter: normalize Checkov JSON output (SAST for IaC) to CommonFinding.
 Expected input may include a top-level results dictionary with "failed_checks" entries.
 """
+
 from __future__ import annotations
 
 import json
@@ -58,7 +59,10 @@ def load_checkov(path: str | Path) -> List[Dict[str, Any]]:
                     "message": msg,
                     "description": str(it.get("guideline") or msg),
                     "severity": sev,
-                    "tool": {"name": "checkov", "version": str(data.get("checkov_version") or "unknown")},
+                    "tool": {
+                        "name": "checkov",
+                        "version": str(data.get("checkov_version") or "unknown"),
+                    },
                     "location": {"path": file_path, "startLine": line},
                     "remediation": str(it.get("guideline") or "Review policy guidance"),
                     "tags": ["iac", "policy"],

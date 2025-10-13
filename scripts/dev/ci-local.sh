@@ -12,13 +12,16 @@ NC='\033[0m'
 
 log() { echo -e "${BLUE}[verify]${NC} $*"; }
 ok() { echo -e "${GREEN}[ok]${NC} $*"; }
-fail() { echo -e "${RED}[fail]${NC} $*"; exit 2; }
+fail() {
+  echo -e "${RED}[fail]${NC} $*"
+  exit 2
+}
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Ensure local package imports resolve when running under system Python
-if [ -z "${PYTHONPATH:-}" ]; then
+if [ -z "${PYTHONPATH-}" ]; then
   export PYTHONPATH="$PROJECT_ROOT"
 else
   export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"

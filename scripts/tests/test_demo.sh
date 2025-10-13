@@ -30,18 +30,18 @@ echo "📋 Creating synthetic per-repo stubs..."
 for repo_name in demo-a demo-b; do
   mkdir -p "$DEMO_DIR/individual-repos/$repo_name"
   # Create empty results for supported tools (all zero findings)
-  echo '{"results": []}' > "$DEMO_DIR/individual-repos/$repo_name/semgrep.json"
-  echo '{"Results": []}' > "$DEMO_DIR/individual-repos/$repo_name/trivy.json"
-  echo '{"results": {"failed_checks": []}}' > "$DEMO_DIR/individual-repos/$repo_name/checkov.json"
-  echo '{"results": []}' > "$DEMO_DIR/individual-repos/$repo_name/tfsec.json"
-  echo '[]' > "$DEMO_DIR/individual-repos/$repo_name/noseyparker.json"
-  echo '[]' > "$DEMO_DIR/individual-repos/$repo_name/trufflehog.json"
+  echo '{"results": []}' >"$DEMO_DIR/individual-repos/$repo_name/semgrep.json"
+  echo '{"Results": []}' >"$DEMO_DIR/individual-repos/$repo_name/trivy.json"
+  echo '{"results": {"failed_checks": []}}' >"$DEMO_DIR/individual-repos/$repo_name/checkov.json"
+  echo '{"results": []}' >"$DEMO_DIR/individual-repos/$repo_name/tfsec.json"
+  echo '[]' >"$DEMO_DIR/individual-repos/$repo_name/noseyparker.json"
+  echo '[]' >"$DEMO_DIR/individual-repos/$repo_name/trufflehog.json"
   echo "  ✓ Added $repo_name (synthetic)"
 done
 
 # Create sample metrics CSV
 echo "📊 Generating sample metrics..."
-cat > "$DEMO_DIR/summaries/metrics.csv" << EOF
+cat >"$DEMO_DIR/summaries/metrics.csv" <<EOF
 repository,total_issues,critical,high,medium
 demo-a,0,0,0,0
 demo-b,0,0,0,0
@@ -56,7 +56,7 @@ echo "📈 Generating comparison report..."
 bash "$SCRIPT_DIR/generate_comparison_report.sh" "$DEMO_DIR"
 
 # Create a summary report
-cat > "$DEMO_DIR/SUMMARY_REPORT.md" << EOF
+cat >"$DEMO_DIR/SUMMARY_REPORT.md" <<EOF
 # Security Audit Report - Demo
 
 **Date:** $(date)

@@ -4,19 +4,35 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+      - name: Pre-commit (YAML & misc checks)
+        uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files
       - name: Validate GitHub workflows (actionlint)
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v1.7.1
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: |
           bash scripts/dev/guardrails_check.sh
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
           # Speed up dependency installs by caching pip based on requirements file hash
           cache: 'pip'
           cache-dependency-path: 'requirements-dev.txt'

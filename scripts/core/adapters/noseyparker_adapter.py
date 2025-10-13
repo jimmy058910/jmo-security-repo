@@ -4,6 +4,7 @@ Nosey Parker adapter: normalize Nosey Parker JSON to CommonFinding
 Expected input: {"matches": [ {"signature": ..., "path": ..., "line_number": ...}, ... ]}
 This is tolerant to minor format variation.
 """
+
 from __future__ import annotations
 
 import json
@@ -52,7 +53,10 @@ def load_noseyparker(path: str | Path) -> List[Dict[str, Any]]:
                 "message": msg if isinstance(msg, str) else str(msg),
                 "description": "Potential secret detected by Nosey Parker",
                 "severity": sev,
-                "tool": {"name": "noseyparker", "version": str(data.get("version") or "unknown")},
+                "tool": {
+                    "name": "noseyparker",
+                    "version": str(data.get("version") or "unknown"),
+                },
                 "location": {"path": path_str, "startLine": line_no},
                 "remediation": "Rotate credentials and purge from history.",
                 "tags": ["secrets"],

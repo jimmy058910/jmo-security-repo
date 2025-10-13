@@ -17,7 +17,9 @@ class _CP:
 def test_run_cmd_ok_rcs_and_retries(monkeypatch):
     calls = {"n": 0}
 
-    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: ARG001
+    def fake_run(
+        cmd, stdout=None, stderr=None, text=None, timeout=None
+    ):  # noqa: ARG001
         calls["n"] += 1
         # First attempt: returncode 2 (not ok); then 1 (ok because in ok_rcs)
         if calls["n"] == 1:
@@ -25,20 +27,26 @@ def test_run_cmd_ok_rcs_and_retries(monkeypatch):
         return _CP(1, "out", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    rc, out, err, used = jmo._run_cmd(["tool"], timeout=1, retries=1, capture_stdout=True, ok_rcs=(0, 1))
+    rc, out, err, used = jmo._run_cmd(
+        ["tool"], timeout=1, retries=1, capture_stdout=True, ok_rcs=(0, 1)
+    )
     assert rc == 1 and out == "out" and used == 2
 
 
 def test_run_cmd_timeout_then_fail(monkeypatch):
     calls = {"n": 0}
 
-    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: ARG001
+    def fake_run(
+        cmd, stdout=None, stderr=None, text=None, timeout=None
+    ):  # noqa: ARG001
         calls["n"] += 1
         # Always timeout
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout or 0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    rc, out, err, used = jmo._run_cmd(["tool"], timeout=1, retries=1, capture_stdout=True)
+    rc, out, err, used = jmo._run_cmd(
+        ["tool"], timeout=1, retries=1, capture_stdout=True
+    )
     assert rc == 124 and used >= 1
 
 

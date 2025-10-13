@@ -18,6 +18,7 @@ Expected Bandit JSON shape (bandit -q -r <path> -f json):
   ...
 }
 """
+
 from __future__ import annotations
 
 import json
@@ -51,13 +52,24 @@ def load_bandit(path: str | Path) -> List[Dict[str, Any]]:
     for r in arr:
         if not isinstance(r, dict):
             continue
-        rule_id = str(r.get("test_id") or r.get("testId") or r.get("test-id") or r.get("test_name") or "BANDIT")
+        rule_id = str(
+            r.get("test_id")
+            or r.get("testId")
+            or r.get("test-id")
+            or r.get("test_name")
+            or "BANDIT"
+        )
         file_path = str(r.get("filename") or r.get("file_name") or "")
         start_line = None
         ln = r.get("line_number") or r.get("line")
         if isinstance(ln, int):
             start_line = ln
-        msg = str(r.get("issue_text") or r.get("message") or r.get("test_name") or "Potential security issue")
+        msg = str(
+            r.get("issue_text")
+            or r.get("message")
+            or r.get("test_name")
+            or "Potential security issue"
+        )
         sev_src = str(r.get("issue_severity") or "MEDIUM").upper()
         severity = normalize_severity(sev_src)
         fid = fingerprint("bandit", rule_id, file_path, start_line, msg)

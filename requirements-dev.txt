@@ -6,3 +6,4 @@ bandit
 black
 pyyaml
 jsonschema
+pre-commit

@@ -17,7 +17,17 @@ def test_scan_writes_stubs_when_missing_tools(tmp_path: Path, monkeypatch):
         targets = None
         results_dir = str(tmp_path / "results")
         config = str(tmp_path / "no.yml")
-        tools = ["gitleaks", "trufflehog", "semgrep", "noseyparker", "syft", "trivy", "hadolint", "checkov", "tfsec"]
+        tools = [
+            "gitleaks",
+            "trufflehog",
+            "semgrep",
+            "noseyparker",
+            "syft",
+            "trivy",
+            "hadolint",
+            "checkov",
+            "tfsec",
+        ]
         timeout = 5
         threads = 2
         allow_missing_tools = True

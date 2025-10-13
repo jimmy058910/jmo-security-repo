@@ -15,8 +15,11 @@ def write_html(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     sev_counts = Counter(f.get("severity", "INFO") for f in findings)
     # Self-contained HTML (no external CDN) with client-side filtering, sorting, and export
     data_json = json.dumps(findings)
-    sev_badges = ''.join(f'<span class="badge sev-{s}">{s}: {sev_counts.get(s, 0)}</span>' for s in SEV_ORDER)
-    sev_options = ''.join(f'<option value="{s}">{s}</option>' for s in SEV_ORDER)
+    sev_badges = "".join(
+        f'<span class="badge sev-{s}">{s}: {sev_counts.get(s, 0)}</span>'
+        for s in SEV_ORDER
+    )
+    sev_options = "".join(f'<option value="{s}">{s}</option>' for s in SEV_ORDER)
     template = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -257,8 +260,7 @@ render();
 </html>
 """
     doc = (
-        template
-        .replace("__TOTAL__", str(total))
+        template.replace("__TOTAL__", str(total))
         .replace("__SEV_BADGES__", sev_badges)
         .replace("__SEV_OPTIONS__", sev_options)
         .replace("__DATA_JSON__", data_json)

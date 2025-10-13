@@ -7,6 +7,7 @@ Inputs supported:
 - Single JSON object
 - Nested arrays [[{...}]]
 """
+
 from __future__ import annotations
 
 import json
@@ -93,7 +94,10 @@ def load_trufflehog(path: str | Path) -> List[Dict[str, Any]]:
                 "message": msg if isinstance(msg, str) else str(msg),
                 "description": "Potential secret detected by TruffleHog",
                 "severity": severity,
-                "tool": {"name": "trufflehog", "version": str(f.get("Version") or "unknown")},
+                "tool": {
+                    "name": "trufflehog",
+                    "version": str(f.get("Version") or "unknown"),
+                },
                 "location": {"path": file_path, "startLine": start_line or 0},
                 "remediation": "Rotate credentials and purge from history.",
                 "tags": ["secrets", "verified" if verified else "unverified"],

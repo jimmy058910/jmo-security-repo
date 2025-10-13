@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup
+.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -19,6 +19,8 @@ help:
 	@echo "  profile  - Same as report, but records timings.json (JMO_PROFILE=1)"
 	@echo "  verify-env - Check OS/WSL/macOS and required tools"
 	@echo "  dev-deps  - Install Python dev dependencies"
+	@echo "  pre-commit-install - Install git hooks (pre-commit)"
+	@echo "  pre-commit-run     - Run pre-commit on all files"
 	@echo "  smoke-ai   - Run AI repo finder smoke test (creates TSV/CSV/JSONL in ai-search/smoke)"
 	@echo "  capture-screenshot - Render dashboard.html from RESULTS_DIR and save PNG via headless Chromium"
 	@echo "  screenshots-demo  - Produce demo results from samples/fixtures/infra-demo (stubs allowed), render dashboard, capture PNG"
@@ -59,6 +61,7 @@ lint:
 			bandit -r tests -s B101,B404 || true ; \
 		fi ; \
 	else echo 'bandit not found'; fi
+	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files || true; else echo 'pre-commit not found'; fi
 
 TEST_FLAGS ?= -q --maxfail=1 --disable-warnings
 
@@ -69,12 +72,20 @@ test:
 
 verify:
 	bash $(VERIFY_SCRIPT)
+	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files || true; else true; fi
 
 verify-env:
 	bash scripts/dev/verify-env.sh
 
 dev-deps:
 	$(PY) -m pip install -r requirements-dev.txt || true
+	@if ! command -v pre-commit >/dev/null 2>&1; then $(PY) -m pip install pre-commit || true; fi
+
+pre-commit-install:
+	@if command -v pre-commit >/dev/null 2>&1; then pre-commit install; else echo 'pre-commit not found. Run: make dev-deps'; fi
+
+pre-commit-run:
+	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files; else echo 'pre-commit not found. Run: make dev-deps'; fi
 
 # Convenience target: install dev deps and the package in editable mode so
 # `from scripts...` imports work without tweaking PYTHONPATH.

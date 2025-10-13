@@ -16,6 +16,7 @@ Behavior
 - Prefer the 'url' column when present; otherwise construct https://github.com/<full_name>.git
 - Limits cloning to --max (default: all)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,17 +30,29 @@ from typing import List, Optional, Tuple
 def log(msg: str, level: str = "INFO", human: bool = True) -> None:
     level = level.upper()
     if human:
-        color = {"DEBUG": "\x1b[36m", "INFO": "\x1b[32m", "WARN": "\x1b[33m", "ERROR": "\x1b[31m"}.get(level, "")
+        color = {
+            "DEBUG": "\x1b[36m",
+            "INFO": "\x1b[32m",
+            "WARN": "\x1b[33m",
+            "ERROR": "\x1b[31m",
+        }.get(level, "")
         reset = "\x1b[0m"
         sys.stderr.write(f"{color}{level:5}{reset} {msg}\n")
     else:
         import json
         import datetime
-        rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "level": level, "msg": msg}
+
+        rec = {
+            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "level": level,
+            "msg": msg,
+        }
         sys.stderr.write(json.dumps(rec) + "\n")
 
 
-def run(cmd: List[str], cwd: Optional[Path] = None, ok_rcs: Tuple[int, ...] = (0,)) -> Tuple[int, str, str]:
+def run(
+    cmd: List[str], cwd: Optional[Path] = None, ok_rcs: Tuple[int, ...] = (0,)
+) -> Tuple[int, str, str]:
     try:
         cp = subprocess.run(
             cmd,
@@ -63,7 +76,7 @@ def ensure_unshallowed(repo_dir: Path) -> None:
     if rc != 0:
         log(f"git rev-parse failed for {repo_dir.name}: {err.strip()}", "WARN")
         return
-    shallow = (out.strip().lower() == "true")
+    shallow = out.strip().lower() == "true"
     if shallow:
         # Attempt to unshallow
         rc, _, err = run(["git", "fetch", "--unshallow"], cwd=repo_dir)
@@ -71,7 +84,10 @@ def ensure_unshallowed(repo_dir: Path) -> None:
             # Some setups require specifying the remote; try origin
             rc2, _, err2 = run(["git", "fetch", "origin", "--unshallow"], cwd=repo_dir)
             if rc2 != 0:
-                log(f"Failed to unshallow {repo_dir.name}: {err.strip() or err2.strip()}", "WARN")
+                log(
+                    f"Failed to unshallow {repo_dir.name}: {err.strip() or err2.strip()}",
+                    "WARN",
+                )
         # Also fetch tags/prune to be thorough
     run(["git", "fetch", "--all", "--tags", "--prune"], cwd=repo_dir)
 
@@ -114,7 +130,9 @@ def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
         # Sniff delimiter; default to tab
         sample = f.read(4096)
         f.seek(0)
-        dialect = csv.Sniffer().sniff(sample, delimiters="\t,;") if sample else csv.excel_tab
+        dialect = (
+            csv.Sniffer().sniff(sample, delimiters="\t,;") if sample else csv.excel_tab
+        )
         reader = csv.DictReader(f, dialect=dialect)
         cols = [c.strip().lower() for c in (reader.fieldnames or [])]
         if not cols:
@@ -137,11 +155,27 @@ def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Clone repos listed in a TSV and emit a jmo targets file")
-    ap.add_argument("--tsv", required=True, help="Path to candidates.tsv with 'url' or 'full_name' header")
-    ap.add_argument("--dest", default="repos-tsv", help="Destination directory to clone into (default: repos-tsv)")
-    ap.add_argument("--targets-out", default=str(Path("results") / "targets.tsv.txt"), help="Path to write newline-delimited repo paths (default: results/targets.tsv.txt)")
-    ap.add_argument("--max", type=int, default=None, help="Optional max number of repos to process")
+    ap = argparse.ArgumentParser(
+        description="Clone repos listed in a TSV and emit a jmo targets file"
+    )
+    ap.add_argument(
+        "--tsv",
+        required=True,
+        help="Path to candidates.tsv with 'url' or 'full_name' header",
+    )
+    ap.add_argument(
+        "--dest",
+        default="repos-tsv",
+        help="Destination directory to clone into (default: repos-tsv)",
+    )
+    ap.add_argument(
+        "--targets-out",
+        default=str(Path("results") / "targets.tsv.txt"),
+        help="Path to write newline-delimited repo paths (default: results/targets.tsv.txt)",
+    )
+    ap.add_argument(
+        "--max", type=int, default=None, help="Optional max number of repos to process"
+    )
     ap.add_argument("--human-logs", action="store_true", help="Use human-friendly logs")
     args = ap.parse_args(argv)
 

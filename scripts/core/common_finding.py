@@ -2,6 +2,7 @@
 """
 CommonFinding helpers: severity mapping and fingerprinting.
 """
+
 from __future__ import annotations
 
 import hashlib

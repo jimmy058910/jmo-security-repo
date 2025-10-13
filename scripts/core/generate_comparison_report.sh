@@ -3,12 +3,12 @@
 
 set -euo pipefail
 
-RESULTS_DIR="${1:-}"
+RESULTS_DIR="${1-}"
 
 if [ -z "$RESULTS_DIR" ] || [ ! -d "$RESULTS_DIR" ]; then
-    echo "Error: Invalid results directory"
-    echo "Usage: $0 <results_directory>"
-    exit 1
+  echo "Error: Invalid results directory"
+  echo "Usage: $0 <results_directory>"
+  exit 1
 fi
 
 COMPARISON_FILE="$RESULTS_DIR/tool-comparisons/comparison.md"
@@ -16,7 +16,7 @@ COMPARISON_FILE="$RESULTS_DIR/tool-comparisons/comparison.md"
 # Create directory if it doesn't exist
 mkdir -p "$RESULTS_DIR/tool-comparisons"
 
-cat > "$COMPARISON_FILE" << 'EOF'
+cat >"$COMPARISON_FILE" <<'EOF'
 # Tool Performance Comparison
 
 ## Detection Metrics
@@ -27,65 +27,65 @@ EOF
 
 # Parse each tool's results across all repos
 for tool in gitleaks trufflehog semgrep noseyparker; do
-    TOTAL=0
-    REPOS=0
-    
-    for repo_result in "$RESULTS_DIR"/individual-repos/*/; do
-        if [ -f "$repo_result/${tool}.json" ]; then
-            # Count findings based on tool with proper error handling
-            case $tool in
-                gitleaks)
-                    FINDINGS=$(jq 'if type=="array" then length else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
-                    ;;
-                trufflehog)
-                    # TruffleHog outputs newline-delimited JSON (NDJSON)
-                    FINDINGS=$(jq -s 'length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
-                    ;;
-                semgrep)
-                    # Correctly count total results, not length of each result object
-                    FINDINGS=$(jq '.results | length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
-                    ;;
-                noseyparker)
-                    FINDINGS=$(jq 'if type=="object" then (.matches // [] | length) else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
-                    ;;
-            esac
-            
-            # Ensure FINDINGS is a valid number
-            if ! [[ "$FINDINGS" =~ ^[0-9]+$ ]]; then
-                FINDINGS=0
-            fi
-            
-            TOTAL=$((TOTAL + FINDINGS))
-            REPOS=$((REPOS + 1))
-        fi
-    done
-    
-    if [ $REPOS -gt 0 ]; then
-        AVG=$((TOTAL / REPOS))
-    else
-        AVG=0
+  TOTAL=0
+  REPOS=0
+
+  for repo_result in "$RESULTS_DIR"/individual-repos/*/; do
+    if [ -f "$repo_result/${tool}.json" ]; then
+      # Count findings based on tool with proper error handling
+      case $tool in
+      gitleaks)
+        FINDINGS=$(jq 'if type=="array" then length else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
+        ;;
+      trufflehog)
+        # TruffleHog outputs newline-delimited JSON (NDJSON)
+        FINDINGS=$(jq -s 'length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
+        ;;
+      semgrep)
+        # Correctly count total results, not length of each result object
+        FINDINGS=$(jq '.results | length' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
+        ;;
+      noseyparker)
+        FINDINGS=$(jq 'if type=="object" then (.matches // [] | length) else 0 end' "$repo_result/${tool}.json" 2>/dev/null || echo 0)
+        ;;
+      esac
+
+      # Ensure FINDINGS is a valid number
+      if ! [[ $FINDINGS =~ ^[0-9]+$ ]]; then
+        FINDINGS=0
+      fi
+
+      TOTAL=$((TOTAL + FINDINGS))
+      REPOS=$((REPOS + 1))
     fi
-    
-    # Tool descriptions
-    case $tool in
-        gitleaks)
-            STRENGTH="Fast git history scanning"
-            ;;
-        trufflehog)
-            STRENGTH="Secret verification"
-            ;;
-        semgrep)
-            STRENGTH="Pattern-based code analysis"
-            ;;
-        noseyparker)
-            STRENGTH="Deep pattern matching"
-            ;;
-    esac
-    
-    echo "| $tool | $TOTAL | $REPOS | $AVG | $STRENGTH |" >> "$COMPARISON_FILE"
+  done
+
+  if [ $REPOS -gt 0 ]; then
+    AVG=$((TOTAL / REPOS))
+  else
+    AVG=0
+  fi
+
+  # Tool descriptions
+  case $tool in
+  gitleaks)
+    STRENGTH="Fast git history scanning"
+    ;;
+  trufflehog)
+    STRENGTH="Secret verification"
+    ;;
+  semgrep)
+    STRENGTH="Pattern-based code analysis"
+    ;;
+  noseyparker)
+    STRENGTH="Deep pattern matching"
+    ;;
+  esac
+
+  echo "| $tool | $TOTAL | $REPOS | $AVG | $STRENGTH |" >>"$COMPARISON_FILE"
 done
 
-cat >> "$COMPARISON_FILE" << 'EOF'
+cat >>"$COMPARISON_FILE" <<'EOF'
 
 ---
 
@@ -141,7 +141,7 @@ gitleaks protect --staged
 - Secret verification (TruffleHog)
 - Multi-tool cross-validation
 
-**Frequency**: 
+**Frequency**:
 - Weekly for active development
 - Monthly for maintenance mode
 

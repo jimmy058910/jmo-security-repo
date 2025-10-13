@@ -4,6 +4,7 @@ OSV-Scanner adapter: normalize OSV JSON to CommonFinding
 Expected input: JSON from `osv-scanner --json ...` containing a top-level 'results' array with vulnerabilities.
 This adapter focuses on essential fields: package, id, severity (via CVSS), affected file, and details.
 """
+
 from __future__ import annotations
 import json
 from pathlib import Path
@@ -54,15 +55,21 @@ def load_osv(path: str | Path) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for res in results:
         vulns = res.get("vulnerabilities") if isinstance(res, dict) else None
-        pkg = (res.get("packages") or [{}])[0].get("name") if isinstance(res, dict) else None
-        source = (res.get("source") or {}).get("path") if isinstance(res, dict) else None
+        pkg = (
+            (res.get("packages") or [{}])[0].get("name")
+            if isinstance(res, dict)
+            else None
+        )
+        source = (
+            (res.get("source") or {}).get("path") if isinstance(res, dict) else None
+        )
         if not isinstance(vulns, list):
             continue
         for v in vulns:
             vid = v.get("id") or v.get("aliases", ["OSV"])[0]
             summary = v.get("summary") or v.get("details") or vid
             score = None
-            for s in (v.get("severity") or []):
+            for s in v.get("severity") or []:
                 try:
                     score = float(s.get("score"))
                     break
@@ -81,7 +88,10 @@ def load_osv(path: str | Path) -> List[Dict[str, Any]]:
                     "message": msg,
                     "description": summary,
                     "severity": sev,
-                    "tool": {"name": "osv-scanner", "version": str(data.get("version") or "unknown")},
+                    "tool": {
+                        "name": "osv-scanner",
+                        "version": str(data.get("version") or "unknown"),
+                    },
                     "location": {"path": path_str, "startLine": 0},
                     "remediation": "Update to a non-vulnerable version per advisory.",
                     "tags": ["dependency", "vulnerability"],

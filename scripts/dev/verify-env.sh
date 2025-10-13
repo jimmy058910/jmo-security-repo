@@ -13,7 +13,10 @@ NC='\033[0m'
 log() { echo -e "${BLUE}[env]${NC} $*"; }
 ok() { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
-fail() { echo -e "${RED}[fail]${NC} $*"; exit 1; }
+fail() {
+  echo -e "${RED}[fail]${NC} $*"
+  exit 1
+}
 
 OS=$(uname -s)
 WSL=false
@@ -53,31 +56,31 @@ fi
 hint_install() {
   local tool="$1"
   case "$OS" in
-    Darwin)
-      case "$tool" in
-        gitleaks|semgrep|hadolint|checkov|trivy|syft|tfsec) echo "brew install $tool";;
-        trufflehog) echo "brew install trufflesecurity/trufflehog/trufflehog";;
-        noseyparker) echo "brew install noseyparker (or see upstream)";;
-        osv-scanner) echo "brew install osv-scanner";;
-        *) echo "brew install $tool";;
-      esac
-      ;;
-    Linux)
-      case "$tool" in
-        semgrep) echo "pipx install semgrep || pip3 install --user semgrep";;
-        gitleaks) echo "curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o /usr/local/bin/gitleaks && chmod +x /usr/local/bin/gitleaks";;
-        trufflehog) echo "pipx install trufflehog || pip3 install --user truffleHog";;
-        noseyparker) echo "Prefer container: docker run ghcr.io/praetorian-inc/noseyparker:latest ... (local binary may require newer glibc)";;
-        syft) echo "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin";;
-        trivy) echo "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh | sh -s -- -b /usr/local/bin";;
-        checkov) echo "pipx install checkov || pip3 install --user checkov";;
-        hadolint) echo "curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m) -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint";;
-        tfsec) echo "curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o /usr/local/bin/tfsec && chmod +x /usr/local/bin/tfsec";;
-        osv-scanner) echo "curl -sSL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner && chmod +x /usr/local/bin/osv-scanner";;
-        *) echo "sudo apt-get install -y $tool";;
-      esac
-      ;;
-    *) echo "Install $tool from your platform package manager";;
+  Darwin)
+    case "$tool" in
+    gitleaks | semgrep | hadolint | checkov | trivy | syft | tfsec) echo "brew install $tool" ;;
+    trufflehog) echo "brew install trufflesecurity/trufflehog/trufflehog" ;;
+    noseyparker) echo "brew install noseyparker (or see upstream)" ;;
+    osv-scanner) echo "brew install osv-scanner" ;;
+    *) echo "brew install $tool" ;;
+    esac
+    ;;
+  Linux)
+    case "$tool" in
+    semgrep) echo "pipx install semgrep || pip3 install --user semgrep" ;;
+    gitleaks) echo "curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o /usr/local/bin/gitleaks && chmod +x /usr/local/bin/gitleaks" ;;
+    trufflehog) echo "pipx install trufflehog || pip3 install --user truffleHog" ;;
+    noseyparker) echo "Prefer container: docker run ghcr.io/praetorian-inc/noseyparker:latest ... (local binary may require newer glibc)" ;;
+    syft) echo "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin" ;;
+    trivy) echo "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/install.sh | sh -s -- -b /usr/local/bin" ;;
+    checkov) echo "pipx install checkov || pip3 install --user checkov" ;;
+    hadolint) echo "curl -sSL https://github.com/hadolint/hadolint/releases/latest/download/hadolint-$(uname -s)-$(uname -m) -o /usr/local/bin/hadolint && chmod +x /usr/local/bin/hadolint" ;;
+    tfsec) echo "curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o /usr/local/bin/tfsec && chmod +x /usr/local/bin/tfsec" ;;
+    osv-scanner) echo "curl -sSL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner && chmod +x /usr/local/bin/osv-scanner" ;;
+    *) echo "sudo apt-get install -y $tool" ;;
+    esac
+    ;;
+  *) echo "Install $tool from your platform package manager" ;;
   esac
 }
 
@@ -96,19 +99,19 @@ if [ ${#missing_opt[@]} -gt 0 ]; then
 fi
 
 case "$OS" in
-  Darwin)
-    ok "macOS detected. Prefer Homebrew for installs (brew install <tool>)."
-    ;;
-  Linux)
-    if [ "$WSL" = true ]; then
-      ok "WSL detected. Use apt on the Linux side; ensure Windows antivirus exclusions for better performance."
-    else
-      ok "Linux detected. Use apt/yum/pacman as appropriate. install_tools.sh supports apt."
-    fi
-    ;;
-  *)
-    warn "Unsupported OS for auto-detection."
-    ;;
- esac
+Darwin)
+  ok "macOS detected. Prefer Homebrew for installs (brew install <tool>)."
+  ;;
+Linux)
+  if [ "$WSL" = true ]; then
+    ok "WSL detected. Use apt on the Linux side; ensure Windows antivirus exclusions for better performance."
+  else
+    ok "Linux detected. Use apt/yum/pacman as appropriate. install_tools.sh supports apt."
+  fi
+  ;;
+*)
+  warn "Unsupported OS for auto-detection."
+  ;;
+esac
 
 ok "Environment looks good."

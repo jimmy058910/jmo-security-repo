@@ -8,6 +8,7 @@ Supported inputs:
 
 Note: This provides cross-linkable context for other adapters (e.g., Trivy) by exposing package->location mapping in tags/raw.
 """
+
 from __future__ import annotations
 
 import json
@@ -53,7 +54,10 @@ def load_syft(path: str | Path) -> List[Dict[str, Any]]:
                     "message": msg,
                     "description": msg,
                     "severity": "INFO",
-                    "tool": {"name": "syft", "version": str(data.get("artifactRelationships") and "unknown")},
+                    "tool": {
+                        "name": "syft",
+                        "version": str(data.get("artifactRelationships") and "unknown"),
+                    },
                     "location": {"path": location, "startLine": 0},
                     "remediation": "Track and scan dependencies.",
                     "tags": ["sbom", "package"],
@@ -91,7 +95,10 @@ def load_syft(path: str | Path) -> List[Dict[str, Any]]:
                     "message": msg,
                     "description": msg,
                     "severity": sev,
-                    "tool": {"name": "syft", "version": str(data.get("artifactRelationships") and "unknown")},
+                    "tool": {
+                        "name": "syft",
+                        "version": str(data.get("artifactRelationships") and "unknown"),
+                    },
                     "location": {"path": location, "startLine": 0},
                     "remediation": str(v.get("url") or "See advisory"),
                     "tags": ["sbom", "vulnerability"],

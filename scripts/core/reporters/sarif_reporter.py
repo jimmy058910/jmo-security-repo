@@ -13,12 +13,15 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     results = []
     for f in findings:
         rule_id = f.get("ruleId", "rule")
-        rules.setdefault(rule_id, {
-            "id": rule_id,
-            "name": f.get("title") or rule_id,
-            "shortDescription": {"text": f.get("message", "")},
-            "fullDescription": {"text": f.get("description", "")},
-        })
+        rules.setdefault(
+            rule_id,
+            {
+                "id": rule_id,
+                "name": f.get("title") or rule_id,
+                "shortDescription": {"text": f.get("message", "")},
+                "fullDescription": {"text": f.get("description", "")},
+            },
+        )
         result = {
             "ruleId": rule_id,
             "message": {"text": f.get("message", "")},
@@ -26,7 +29,9 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
             "locations": [
                 {
                     "physicalLocation": {
-                        "artifactLocation": {"uri": f.get("location", {}).get("path", "")},
+                        "artifactLocation": {
+                            "uri": f.get("location", {}).get("path", "")
+                        },
                         "region": {
                             "startLine": f.get("location", {}).get("startLine", 0),
                         },

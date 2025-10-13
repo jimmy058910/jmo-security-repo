@@ -9,6 +9,7 @@ from scripts.cli import jmo
 
 def _write_yaml(p: Path, data: dict) -> None:
     import yaml  # type: ignore
+
     p.write_text(yaml.safe_dump(data), encoding="utf-8")
 
 
@@ -74,9 +75,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
         "profiles": {
             "fast": {
                 "tools": ["semgrep"],
-                "per_tool": {
-                    "semgrep": {"flags": ["--exclude", "node_modules"]}
-                },
+                "per_tool": {"semgrep": {"flags": ["--exclude", "node_modules"]}},
             }
         },
     }
@@ -86,6 +85,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # Pretend semgrep exists, others do not
     def fake_which(tool: str) -> bool:
         return tool == "semgrep"
+
     monkeypatch.setattr(jmo, "_tool_exists", fake_which)
 
     calls = []
@@ -101,6 +101,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
         return FakeCP(0, "", "")
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     args = types.SimpleNamespace(
@@ -168,6 +169,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
         return FakeCP(0, "", "ok")
 
     import subprocess
+
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     args = types.SimpleNamespace(

@@ -25,6 +25,9 @@ def test_schema_validation_with_samples(tmp_path: Path):
     assert validate_findings(findings) is True
 
 
-@pytest.mark.skipif(__import__('importlib').util.find_spec('jsonschema') is None, reason="jsonschema not installed")
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("jsonschema") is None,
+    reason="jsonschema not installed",
+)
 def test_schema_validation_empty_ok():
     assert validate_findings([]) is True

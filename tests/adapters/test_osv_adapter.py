@@ -18,7 +18,11 @@ def test_osv_basic(tmp_path: Path):
                 "source": {"path": "requirements.txt"},
                 "packages": [{"name": "flask"}],
                 "vulnerabilities": [
-                    {"id": "OSV-1", "summary": "test vuln", "severity": [{"score": "7.5"}]}
+                    {
+                        "id": "OSV-1",
+                        "summary": "test vuln",
+                        "severity": [{"score": "7.5"}],
+                    }
                 ],
             }
         ],
@@ -50,7 +54,11 @@ def test_osv_missing_fields_and_cvss(tmp_path: Path):
                 "source": {"path": "go.mod"},
                 "packages": [{"name": "gin"}],
                 "vulnerabilities": [
-                    {"id": "OSV-2", "summary": "v", "severity": [{"score": "not-a-number"}]}
+                    {
+                        "id": "OSV-2",
+                        "summary": "v",
+                        "severity": [{"score": "not-a-number"}],
+                    }
                 ],
             }
         ],

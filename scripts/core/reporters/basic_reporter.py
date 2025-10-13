@@ -2,6 +2,7 @@
 """
 Basic reporters for CommonFindings: JSON dump and Markdown summary
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,9 @@ SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 def write_json(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(findings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    p.write_text(
+        json.dumps(findings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:

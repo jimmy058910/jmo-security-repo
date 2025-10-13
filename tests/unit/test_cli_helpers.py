@@ -58,7 +58,9 @@ default_profile: fast
         """,
         encoding="utf-8",
     )
-    args = types.SimpleNamespace(config=str(cfg), profile_name=None, tools=None, threads=None, timeout=None)
+    args = types.SimpleNamespace(
+        config=str(cfg), profile_name=None, tools=None, threads=None, timeout=None
+    )
     eff = jmo._effective_scan_settings(args)
     # From default_profile 'fast'
     assert eff["tools"] == ["semgrep"]

@@ -14,6 +14,7 @@ results_dir/
 Usage:
   python3 scripts/core/normalize_and_report.py <results_dir> [--out <out_dir>]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -168,9 +169,13 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
             loc = f.get("location") or {}
             path = str(loc.get("path") if isinstance(loc, dict) else "" or "")
             if path:
-                by_path.setdefault(path, []).append({"name": name, "version": version, "path": path})
+                by_path.setdefault(path, []).append(
+                    {"name": name, "version": version, "path": path}
+                )
             if name:
-                by_name.setdefault(name.lower(), []).append({"name": name, "version": version, "path": path})
+                by_name.setdefault(name.lower(), []).append(
+                    {"name": name, "version": version, "path": path}
+                )
 
     # Enrich Trivy findings
     for f in findings:
@@ -209,15 +214,25 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
         ctx = f.setdefault("context", {})
         ctx["sbom"] = {k: v for k, v in match.items() if v}
         tags = f.setdefault("tags", [])
-        tag_val = "pkg:" + match["name"] + ("@" + match["version"] if match.get("version") else "")
+        tag_val = (
+            "pkg:"
+            + match["name"]
+            + ("@" + match["version"] if match.get("version") else "")
+        )
         if tag_val not in tags:
             tags.append(tag_val)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("results_dir", help="Directory with tool outputs (individual-repos/*)")
-    ap.add_argument("--out", default=None, help="Output directory (default: <results_dir>/summaries)")
+    ap.add_argument(
+        "results_dir", help="Directory with tool outputs (individual-repos/*)"
+    )
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="Output directory (default: <results_dir>/summaries)",
+    )
     args = ap.parse_args()
 
     results_dir = Path(args.results_dir).resolve()

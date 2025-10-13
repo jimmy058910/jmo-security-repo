@@ -29,13 +29,18 @@ def test_trufflehog_array(tmp_path: Path):
 
 
 def test_trufflehog_ndjson_and_nested(tmp_path: Path):
-    ndjson = "\n".join([
-        json.dumps({
-            "DetectorName": "Slack", "Verified": True,
-            "SourceMetadata": {"Data": {"Filesystem": {"file": "webhooks.js"}}}
-        }),
-        json.dumps([[{"DetectorName": "Nested", "Verified": False}]])
-    ])
+    ndjson = "\n".join(
+        [
+            json.dumps(
+                {
+                    "DetectorName": "Slack",
+                    "Verified": True,
+                    "SourceMetadata": {"Data": {"Filesystem": {"file": "webhooks.js"}}},
+                }
+            ),
+            json.dumps([[{"DetectorName": "Nested", "Verified": False}]]),
+        ]
+    )
     path = write_tmp(tmp_path, "th.ndjson", ndjson)
     out = load_trufflehog(path)
     # Should parse 2 findings

@@ -33,7 +33,16 @@ def test_hadolint_missing_fields_and_levels(tmp_path: Path):
 
 def test_hadolint_reference_and_non_list_payload(tmp_path: Path):
     # reference field becomes remediation; non-list payload returns []
-    with_ref = [{"code": "DL4", "file": "Dockerfile", "line": 1, "message": "m", "level": "warning", "reference": "https://doc"}]
+    with_ref = [
+        {
+            "code": "DL4",
+            "file": "Dockerfile",
+            "line": 1,
+            "message": "m",
+            "level": "warning",
+            "reference": "https://doc",
+        }
+    ]
     f1 = tmp_path / "hadolint1.json"
     _write(f1, with_ref)
     out1 = load_hadolint(f1)
@@ -70,12 +79,26 @@ def test_noseyparker_alt_keys(tmp_path: Path):
     f = tmp_path / "np.json"
     _write(f, data)
     out = load_noseyparker(f)
-    assert out and out[0]["ruleId"] == "Slack Token" and out[0]["location"]["startLine"] == 42
+    assert (
+        out
+        and out[0]["ruleId"] == "Slack Token"
+        and out[0]["location"]["startLine"] == 42
+    )
 
 
 def test_tfsec_alt_keys(tmp_path: Path):
     # Use top-level id/filename/start_line instead of location.*
-    data = {"results": [{"id": "AWS002", "filename": "main.tf", "start_line": 9, "description": "desc", "severity": "LOW"}]}
+    data = {
+        "results": [
+            {
+                "id": "AWS002",
+                "filename": "main.tf",
+                "start_line": 9,
+                "description": "desc",
+                "severity": "LOW",
+            }
+        ]
+    }
     f = tmp_path / "tfsec.json"
     _write(f, data)
     out = load_tfsec(f)
@@ -84,15 +107,35 @@ def test_tfsec_alt_keys(tmp_path: Path):
 
 def test_tfsec_resolution_and_missing_location(tmp_path: Path):
     # has resolution and location missing -> startLine defaults to 0
-    data = {"results": [{"rule_id": "AWS003", "description": "d", "resolution": "fix", "severity": "HIGH"}]}
+    data = {
+        "results": [
+            {
+                "rule_id": "AWS003",
+                "description": "d",
+                "resolution": "fix",
+                "severity": "HIGH",
+            }
+        ]
+    }
     f = tmp_path / "tfsec2.json"
     _write(f, data)
     out = load_tfsec(f)
-    assert out and out[0]["remediation"] == "fix" and out[0]["location"]["startLine"] == 0
+    assert (
+        out and out[0]["remediation"] == "fix" and out[0]["location"]["startLine"] == 0
+    )
 
 
 def test_tfsec_description_over_impact(tmp_path: Path):
-    data = {"results": [{"rule_id": "AWS004", "description": "desc-priority", "impact": "impact-fallback", "severity": "MEDIUM"}]}
+    data = {
+        "results": [
+            {
+                "rule_id": "AWS004",
+                "description": "desc-priority",
+                "impact": "impact-fallback",
+                "severity": "MEDIUM",
+            }
+        ]
+    }
     f = tmp_path / "tfsec3.json"
     _write(f, data)
     out = load_tfsec(f)
@@ -104,14 +147,22 @@ def test_checkov_alt_keys(tmp_path: Path):
     data = {
         "results": {
             "failed_checks": [
-                {"check_id": "CKV_K8S_1", "repo_file_path": "deploy.yml", "check_name": "desc", "severity": "LOW", "guideline": "g"}
+                {
+                    "check_id": "CKV_K8S_1",
+                    "repo_file_path": "deploy.yml",
+                    "check_name": "desc",
+                    "severity": "LOW",
+                    "guideline": "g",
+                }
             ]
         }
     }
     f = tmp_path / "checkov.json"
     _write(f, data)
     out = load_checkov(f)
-    assert out and out[0]["ruleId"] == "CKV_K8S_1" and out[0]["location"]["startLine"] == 0
+    assert (
+        out and out[0]["ruleId"] == "CKV_K8S_1" and out[0]["location"]["startLine"] == 0
+    )
 
 
 def test_checkov_scalar_line_range_and_version(tmp_path: Path):
@@ -119,25 +170,41 @@ def test_checkov_scalar_line_range_and_version(tmp_path: Path):
         "checkov_version": "3.0.0",
         "results": {
             "failed_checks": [
-                {"check_id": "CKV_SCALAR", "file_path": "main.tf", "file_line_range": 10, "severity": "MEDIUM"}
+                {
+                    "check_id": "CKV_SCALAR",
+                    "file_path": "main.tf",
+                    "file_line_range": 10,
+                    "severity": "MEDIUM",
+                }
             ]
         },
     }
     f = tmp_path / "checkov2.json"
     _write(f, data)
     out = load_checkov(f)
-    assert out and out[0]["tool"]["version"] == "3.0.0" and out[0]["location"]["startLine"] == 10
+    assert (
+        out
+        and out[0]["tool"]["version"] == "3.0.0"
+        and out[0]["location"]["startLine"] == 10
+    )
 
 
 def test_checkov_check_name_only_and_invalid_line_range(tmp_path: Path):
     data = {
         "results": {
             "failed_checks": [
-                {"check_name": "OnlyName", "repo_file_path": "x.tf", "file_line_range": ["x"], "severity": "LOW"}
+                {
+                    "check_name": "OnlyName",
+                    "repo_file_path": "x.tf",
+                    "file_line_range": ["x"],
+                    "severity": "LOW",
+                }
             ]
         }
     }
     f = tmp_path / "checkov3.json"
     _write(f, data)
     out = load_checkov(f)
-    assert out and out[0]["ruleId"] == "OnlyName" and out[0]["location"]["startLine"] == 0
+    assert (
+        out and out[0]["ruleId"] == "OnlyName" and out[0]["location"]["startLine"] == 0
+    )

@@ -24,7 +24,9 @@ def validate_findings(findings: List[dict]) -> bool:
     schema = load_schema()
     # Try validating as-is; fall back to draft-07 if meta-scheme causes issues
     try:
-        jsonschema.validate(instance=findings[0] if findings else {}, schema=schema)  # validate one sample
+        jsonschema.validate(
+            instance=findings[0] if findings else {}, schema=schema
+        )  # validate one sample
         for f in findings:
             jsonschema.validate(instance=f, schema=schema)
         return True
