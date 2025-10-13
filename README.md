@@ -52,6 +52,8 @@ For scanning a list of repos from a TSV end-to-end (clone + unshallow + full too
 
 See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for details.
 
+Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
+
 ## 🧪 New: Simple wrapper commands
 
 If you're just getting started, use the beginner-friendly wrapper:

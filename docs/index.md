@@ -13,6 +13,7 @@ Welcome! This is the one-stop index for docs. Start with the User Guide, or jump
 - Roadmap: [../ROADMAP.md](../ROADMAP.md)
  - HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
  - Support the project: https://ko-fi.com/jmogaming
+	- CI Troubleshooting: [User Guide — Interpreting CI failures](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
 
 ## What’s in this toolkit
 
