@@ -279,6 +279,38 @@ You do not need to call this manually during normal `jmo scan/ci`; it’s used a
 jmo ci --repos-dir ~/repos --profile-name balanced --fail-on HIGH --profile
 ```
 
+### Interpreting CI failures (deeper guide)
+
+Common failure modes in `.github/workflows/tests.yml` and how to fix them:
+
+- Workflow validation (actionlint)
+  - Symptom: step “Validate GitHub workflows (actionlint)” fails early.
+  - Why: Invalid `uses:` reference, missing version tag, or schema errors.
+  - Fix locally: run `pre-commit run actionlint --all-files`. See the action: https://github.com/rhysd/actionlint and our workflow at `.github/workflows/tests.yml`.
+
+- Pre-commit hooks (YAML/format/lint)
+  - Symptom: pre-commit step fails on YAML (`yamllint`), markdownlint, ruff/black, or shell checks.
+  - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: https://pre-commit.com/
+
+- Test coverage threshold not met
+  - Symptom: Tests pass, but `--cov-fail-under=85` fails the job.
+  - Fix locally: run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` to identify gaps, then add tests. High‑leverage areas include adapters’ malformed/empty JSON handling and reporters’ edge cases. Pytest‑cov docs: https://pytest-cov.readthedocs.io/
+
+- Codecov upload warnings (tokenless OIDC)
+  - Symptom: Codecov step asks for a token or indicates OIDC not enabled.
+  - Context: Public repos usually don’t require `CODECOV_TOKEN`. This repo uses tokenless OIDC with `codecov/codecov-action@v5` and minimal permissions (`contents: read`).
+  - Fix: Ensure `coverage.xml` exists (the tests step emits it) and confirm OIDC is enabled in your Codecov org/repo. Action docs: https://github.com/codecov/codecov-action and OIDC docs: https://docs.codecov.com/docs/tokenless-uploads 
+
+- Canceled runs (concurrency)
+  - Symptom: A run is marked “canceled.”
+  - Why: Concurrency is enabled to cancel in‑progress runs on rapid pushes. Re‑run or push again once ready.
+
+- Matrix differences (Ubuntu vs macOS)
+  - Symptom: Step passes on one OS but fails on another.
+  - Tips: Confirm tool availability/paths on macOS (Homebrew), line endings, and case‑sensitive paths. Use conditional install steps if needed.
+
+If the failure isn’t listed, expand the step logs in GitHub Actions for detailed stderr/stdout. When opening an issue, include the exact failing step and error snippet.
+
 ## Troubleshooting
 
 Tools not found
