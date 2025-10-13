@@ -42,6 +42,8 @@ jobs:
           pip install -r requirements-dev.txt
           # Install the project in editable mode so 'scripts' package is importable
           pip install -e .
+      - name: Lint
+        run: make lint || true
       - name: Run tests with coverage
         run: |
           python -m pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=85
