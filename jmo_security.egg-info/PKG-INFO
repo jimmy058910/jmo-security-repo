@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: jmo-security
 Version: 0.3.1
 Summary: JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)
@@ -13,6 +13,7 @@ License-File: LICENSE
 Provides-Extra: reporting
 Requires-Dist: PyYAML>=6.0; extra == "reporting"
 Requires-Dist: jsonschema>=4.0; extra == "reporting"
+Dynamic: license-file
 
 # JMo's Security Audit Tool Suite
 
@@ -49,6 +50,10 @@ Project homepage: [jmotools.com](https://jmotools.com)
 
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and release steps.
 
+Roadmap & history:
+- Completed steps (summary): see [RELEASE_NOTES.md](RELEASE_NOTES.md) → “Roadmap Summary (Steps 1–13)”
+- Active/planned work: see [ROADMAP.md](ROADMAP.md)
+
 For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
 
 ## 🧪 New: Simple wrapper commands
@@ -70,6 +75,23 @@ jmotools full --repos-dir ./repos-tsv --allow-missing-tools
 ```
 
 Under the hood, these commands verify your OS/tools, optionally clone from a TSV, run `jmo ci` with the appropriate profile, and open `dashboard.html` and `SUMMARY.md` on completion.
+
+Setup tools quickly:
+
+```bash
+# Check tools or auto-install on Linux/WSL (where supported)
+jmotools setup --check
+jmotools setup --auto-install         # or --print-commands, --force-reinstall
+```
+
+Makefile shortcuts:
+
+```bash
+make setup             # jmotools setup --check (installs package if needed)
+make fast DIR=~/repos  # jmotools fast --repos-dir ~/repos
+make balanced DIR=~/repos
+make full DIR=~/repos
+```
 
 ## 🎯 Overview
 

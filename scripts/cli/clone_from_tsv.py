@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -34,7 +33,8 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
         reset = "\x1b[0m"
         sys.stderr.write(f"{color}{level:5}{reset} {msg}\n")
     else:
-        import json, datetime
+        import json
+        import datetime
         rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "level": level, "msg": msg}
         sys.stderr.write(json.dumps(rec) + "\n")
 

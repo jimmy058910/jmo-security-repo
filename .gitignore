@@ -1,3 +1,20 @@
+# Local virtual environments
+.venv/
+.tmp-venv-pypi/
+
+# Coverage artifacts
+.coverage*
+coverage.xml
+
+# VS Code and editor junk
+.vscode/
+*.swp
+*.swo
+
+# Python caches
+__pycache__/
+.pytest_cache/
+.ruff_cache/
 # Review tracking artifacts
 REVIEW.md
 # Python
