@@ -28,11 +28,42 @@ FORBIDDEN_PATTERNS=(
   "(^|/)Thumbs\.db$"
 )
 
+# Allowlist: paths or regexes to exempt from checks. Two mechanisms:
+# - Environment variable GUARDRAILS_ALLOW_REGEX: a single regex applied to paths
+# - File .guardrails-allowlist at repo root: one regex glob/regex per non-comment line
+
+ALLOWLIST_REGEX="${GUARDRAILS_ALLOW_REGEX:-}"
+if [ -f .guardrails-allowlist ]; then
+  # Build a combined regex from lines (ignore comments and blanks)
+  mapfile -t allow_lines < <(grep -vE '^(#|\s*$)' .guardrails-allowlist || true)
+  if ((${#allow_lines[@]} > 0)); then
+    joined=$(printf "|%s" "${allow_lines[@]}")
+    joined=${joined:1}
+    if [ -n "$ALLOWLIST_REGEX" ]; then
+      ALLOWLIST_REGEX="(${ALLOWLIST_REGEX})|(${joined})"
+    else
+      ALLOWLIST_REGEX="(${joined})"
+    fi
+  fi
+fi
+
+matches_allowlist() {
+  local path="$1"
+  if [ -n "$ALLOWLIST_REGEX" ] && [[ $path =~ $ALLOWLIST_REGEX ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # Collect tracked files and check against patterns
 tracked=$(git ls-files)
 violations=()
 
 while IFS= read -r file; do
+  # Skip allowlisted paths entirely
+  if matches_allowlist "$file"; then
+    continue
+  fi
   for pat in "${FORBIDDEN_PATTERNS[@]}"; do
     if [[ $file =~ $pat ]]; then
       violations+=("$file")
@@ -57,14 +88,17 @@ echo "[guardrails] OK: no forbidden tracked files detected."
 MAX_MB=${GUARDRAILS_MAX_MB:-10}
 MAX_BYTES=$((MAX_MB * 1024 * 1024))
 
-# Exclusions: allow large artifacts under well-known paths if ever present in the tree
+# Exclusions: allow large artifacts under well-known paths if ever present in the tree,
+# and anything allowlisted above
 EXCLUDE_REGEX='^(results/|build/|dist/|\.git/|\.venv/|\.mypy_cache/|\.ruff_cache/|\.pytest_cache/|__pycache__/|docs/screenshots/)'
 
 large_violations=()
 
 # Iterate through tracked files; skip exclusions; check size and basic binary heuristic
 while IFS= read -r file; do
-  [[ $file =~ $EXCLUDE_REGEX ]] && continue
+  if [[ $file =~ $EXCLUDE_REGEX ]] || matches_allowlist "$file"; then
+    continue
+  fi
   # Skip symlinks
   if [ -L "$file" ]; then
     continue
