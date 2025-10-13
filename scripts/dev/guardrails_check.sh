@@ -32,7 +32,7 @@ FORBIDDEN_PATTERNS=(
 # - Environment variable GUARDRAILS_ALLOW_REGEX: a single regex applied to paths
 # - File .guardrails-allowlist at repo root: one regex glob/regex per non-comment line
 
-ALLOWLIST_REGEX="${GUARDRAILS_ALLOW_REGEX:-}"
+ALLOWLIST_REGEX="${GUARDRAILS_ALLOW_REGEX-}"
 if [ -f .guardrails-allowlist ]; then
   # Build a combined regex from lines (ignore comments and blanks)
   mapfile -t allow_lines < <(grep -vE '^(#|\s*$)' .guardrails-allowlist || true)
