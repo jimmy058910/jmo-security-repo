@@ -264,6 +264,17 @@ jobs:
         with:
           name: security-results
           path: ~/security-results-*
+
+## CI at a glance
+
+- Tests run on a matrix of operating systems and Python versions:
+  - OS: ubuntu-latest, macos-latest
+  - Python: 3.10, 3.11, 3.12
+- Concurrency cancels redundant runs on rapid pushes; each job has a 20-minute timeout.
+- Coverage is uploaded to Codecov using tokenless OIDC (no secret needed on public repos).
+- PyPI releases use Trusted Publishers (OIDC) — no API token required once authorized in PyPI.
+
+See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for the exact configuration.
 ```
 
 ## Troubleshooting

@@ -1,5 +1,8 @@
 # JMO Security Suite — Documentation
 
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
+
 Welcome! This is the one-stop index for docs. Start with the User Guide, or jump to examples, screenshots, or schemas.
 
 - User Guide: [USER_GUIDE.md](USER_GUIDE.md)
@@ -32,6 +35,8 @@ jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-
 
 3) Open the dashboard (results/summaries/dashboard.html)
 	- Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+
+Note: CI runs on ubuntu-latest and macos-latest across Python 3.10, 3.11, and 3.12, with concurrency and job timeouts to keep runs fast and reliable.
 
 ## WSL quick install checklist
 
