@@ -84,6 +84,20 @@ The repository includes a `.pre-commit-config.yaml` file that configures the fol
 
 These checks run automatically on commit and are also enforced in CI.
 
+#### Tips
+
+- If you see "pre-commit: command not found", run `make dev-deps` (installs Python dev deps including pre-commit), or install via pip/pipx as above.
+- Update hooks to the latest versions from `.pre-commit-config.yaml`:
+  
+  ```bash
+  pre-commit autoupdate
+  ```
+- Run a single hook across the repo (example for Ruff):
+  
+  ```bash
+  pre-commit run ruff --all-files
+  ```
+
 ## Running the tool locally
 
 - Basic workflow:
