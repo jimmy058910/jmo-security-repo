@@ -8,7 +8,7 @@ version = "0.3.2"
 description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "James Moceri", email = "general@jmogaming.com" }]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -26,6 +26,9 @@ jmotools = "scripts.cli.jmotools:main"
 
 [tool.setuptools]
 include-package-data = true
+
+# Ensure LICENSE file is included in the sdist/wheel
+license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 include = ["scripts*"]

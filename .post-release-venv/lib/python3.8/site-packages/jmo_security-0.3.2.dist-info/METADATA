@@ -1,0 +1,715 @@
+Metadata-Version: 2.4
+Name: jmo-security
+Version: 0.3.2
+Summary: JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)
+Author-email: James Moceri <general@jmogaming.com>
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Provides-Extra: reporting
+Requires-Dist: PyYAML>=6.0; extra == "reporting"
+Requires-Dist: jsonschema>=4.0; extra == "reporting"
+Dynamic: license-file
+
+# JMo's Security Audit Tool Suite
+
+<p align="center">
+   <img src="assets/jmo-logo.png" alt="JMo Security Audit Tool Suite" width="220" />
+</p>
+
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml?query=branch%3Amain)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fjmotools.com)](https://jmotools.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](#)
+[![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
+[![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](https://ko-fi.com/jmogaming)
+
+<!-- CI/coverage/package badges (enable once configured)
+[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
+<!-- If/when a workflow exists, switch to:
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml)
+-->
+<!-- Codecov (enable after uploading coverage):
+[![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://codecov.io/gh/jimmy058910/jmo-security-repo)
+-->
+<!-- PyPI (enable after first release):
+[![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)
+-->
+
+A terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners (secrets, SAST, SBOM, IaC, Dockerfile) with a unified Python CLI, normalized outputs, and an HTML dashboard.
+
+👉 New here? Read the comprehensive User Guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+Docs hub: [docs/index.md](docs/index.md)
+Project homepage: [jmotools.com](https://jmotools.com)
+
+> Origin story: This started as part of a Cybersecurity Capstone Project. It has since grown into a general-purpose toolkit. I’d love for folks with deeper expertise to jump in—issues and PRs are welcome!
+
+Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and release steps.
+
+Roadmap & history:
+- Completed steps (summary): see [RELEASE_NOTES.md](RELEASE_NOTES.md) → “Roadmap Summary (Steps 1–13)”
+- Active/planned work: see [ROADMAP.md](ROADMAP.md)
+
+For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
+
+## 🧪 New: Simple wrapper commands
+
+If you're just getting started, use the beginner-friendly wrapper:
+
+- `jmotools fast` — quick scan (fast profile)
+- `jmotools balanced` — default balanced scan
+- `jmotools full` — deep scan with more tools
+
+Examples:
+
+```bash
+# Fast profile over repos listed in a TSV (auto-clone) and open dashboard when done
+jmotools fast --tsv ai-search/candidates.tsv --dest ./repos-tsv
+
+# Full (deep) profile targeting an existing directory of repos
+jmotools full --repos-dir ./repos-tsv --allow-missing-tools
+```
+
+Under the hood, these commands verify your OS/tools, optionally clone from a TSV, run `jmo ci` with the appropriate profile, and open `dashboard.html` and `SUMMARY.md` on completion.
+
+Setup tools quickly:
+
+```bash
+# Check tools or auto-install on Linux/WSL (where supported)
+jmotools setup --check
+jmotools setup --auto-install         # or --print-commands, --force-reinstall
+```
+
+Makefile shortcuts:
+
+```bash
+make setup             # jmotools setup --check (installs package if needed)
+make fast DIR=~/repos  # jmotools fast --repos-dir ~/repos
+make balanced DIR=~/repos
+make full DIR=~/repos
+```
+
+## 🎯 Overview
+
+This project provides an automated framework for conducting thorough security audits on code repositories. It orchestrates multiple industry-standard security tools to detect secrets, vulnerabilities, and security issues.
+
+### Key Features
+
+- ✅ **Multi-Tool Scanning**: Curated set covering secrets (gitleaks, noseyparker), SAST (semgrep, bandit), SBOM+vuln/misconfig (syft+trivy), IaC (checkov, tfsec), Dockerfile (hadolint)
+- 📊 **Comprehensive Reporting**: Unified findings (JSON/YAML), SARIF, Markdown summary, and an interactive HTML dashboard
+- 🎨 **Easy-to-Read Outputs**: Well-formatted reports with severity categorization
+- 🔄 **Automated Workflows**: One CLI to scan, aggregate, and gate on severity (scan/report/ci)
+- 🧭 **Profiles and Overrides**: Named profiles, per-tool flags/timeouts, include/exclude patterns
+- 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
+
+## 🚀 Quick Start
+
+### Install or Update (curated tools)
+
+These targets detect Linux/WSL/macOS and install or upgrade the curated CLI tools used by this suite. They also surface helpful hints if a platform step needs manual action.
+
+```bash
+make tools           # one-time install of curated tools
+make tools-upgrade   # refresh/upgrade curated tools
+make verify-env      # check OS/WSL/macOS and tool availability
+make dev-deps        # install Python dev dependencies
+```
+
+Optional: install the package locally to get `jmo` and `jmotools` commands on your PATH:
+
+```bash
+pip install -e .
+```
+
+### Quick Start (Unified CLI)
+
+1) Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:
+
+```bash
+make verify-env
+```
+
+2) Install Python dev dependencies (for running tests and reporters):
+
+```bash
+make dev-deps
+```
+
+3) Scan repositories using a profile, then aggregate reports:
+
+```bash
+# Scan immediate subfolders under ~/repos with the 'balanced' profile (default)
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --human-logs
+
+# Aggregate and write unified outputs to results/summaries
+# (positional or --results-dir are both accepted)
+python3 scripts/cli/jmo.py report ./results --profile --human-logs
+# or
+python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
+
+# Or do both in one step for CI with a failure threshold
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
+```
+
+Outputs include: summaries/findings.json, SUMMARY.md, findings.yaml, findings.sarif (enabled by default), dashboard.html, and timings.json (when profiling).
+
+### Basic Usage
+
+#### Optional: Quick Setup with Helper Script
+
+Use the `populate_targets.sh` helper script to clone multiple repositories for testing (optimized for WSL):
+
+```bash
+# Clone sample vulnerable repos (fast shallow clones)
+./scripts/core/populate_targets.sh
+
+# Clone from custom list with full history
+./scripts/core/populate_targets.sh --list my-repos.txt --full
+
+# Clone with 8 parallel jobs for faster performance
+./scripts/core/populate_targets.sh --parallel 8
+
+# Unshallow repos if secret scanners need full git history
+./scripts/core/populate_targets.sh --unshallow
+```
+
+#### Running Security Scans (legacy shell script)
+
+Prefer the Python CLI above. For legacy flows, you can still use the shell wrapper:
+
+```bash
+./scripts/cli/security_audit.sh -d ~/security-testing    # scan
+./scripts/cli/security_audit.sh --check                  # verify tools
+```
+
+#### End-to-End Workflow
+
+```bash
+# 1. Clone test repositories (shallow for speed)
+./scripts/core/populate_targets.sh --dest ~/test-repos --parallel 4
+
+# 2. Run security audit (preferred)
+python3 scripts/cli/jmo.py ci --repos-dir ~/test-repos --fail-on HIGH --profile --human-logs
+
+# 3. View results
+cat ~/security-results-*/SUMMARY_REPORT.md
+# macOS: open ~/security-results-*/dashboard.html
+# Linux: xdg-open ~/security-results-*/dashboard.html
+```
+
+Looking for screenshots and how to capture them? See: [docs/screenshots/README.md](docs/screenshots/README.md)
+
+## 📚 Documentation
+
+### Workflow (at a glance)
+
+The security audit follows this workflow:
+
+1. **Tool Verification**: Checks all required tools are installed
+2. **Repository Scanning**: jmo scan orchestrates tools per jmo.yml (profiles, overrides, retries)
+3. **Results Aggregation**: jmo report normalizes tool outputs to a CommonFinding shape
+4. **Report Generation**: JSON/MD/YAML/HTML/SARIF and suppression summary
+5. **Dashboard Creation**: Self-contained HTML dashboard with an optional profiling panel
+
+### Output Structure
+
+```
+security-results-YYYYMMDD-HHMMSS/
+├── SUMMARY_REPORT.md              # Executive summary
+├── dashboard.html                  # Interactive HTML dashboard
+├── individual-repos/               # Per-repository results
+│   └── [repo-name]/
+│       ├── README.md              # Formatted findings report
+│       ├── gitleaks.json          # Gitleaks raw output
+│       ├── trufflehog.json        # TruffleHog raw output
+│       ├── semgrep.json           # Semgrep raw output
+│       ├── noseyparker.json       # Nosey Parker raw output
+│       └── *.log                  # Tool execution logs
+├── raw-outputs/                   # Compressed per-repo raw artifacts
+├── tool-comparisons/
+│   └── comparison.md              # Tool performance comparison
+├── summaries/
+│   └── metrics.csv                # Aggregated metrics
+
+```
+
+### Report Types
+
+1. **Summary Report** (`SUMMARY_REPORT.md`)
+   - Executive summary
+   - Aggregate statistics
+   - Repository breakdown table
+   - Prioritized recommendations
+
+2. **HTML Dashboard** (`dashboard.html`)
+   - Visual metrics cards
+   - Severity breakdown
+   - Repository comparison table
+   - Tool performance analysis
+
+3. **Individual Reports** (`individual-repos/*/README.md`)
+   - Repository-specific findings
+   - Tool-by-tool breakdown
+   - Detailed issue listings
+   - Severity classifications
+
+4. **Tool Comparison** (`tool-comparisons/comparison.md`)
+   - Detection metrics
+   - Tool capabilities matrix
+   - Implementation strategy guide
+   - Tool selection recommendations
+
+### How we normalize findings
+
+All tool outputs are converted into a single CommonFinding schema during aggregation. This enables a unified view (JSON/YAML/HTML/SARIF) and consistent gating.
+
+- Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
+- Required fields include: schemaVersion (1.0.0), id, ruleId, severity, tool (name/version), location (path/lines), and message. Optional fields include title, description, remediation, references, tags, cvss, and raw (original tool payload).
+- Fingerprint (id): deterministically derived from a stable subset of attributes (tool | ruleId | path | startLine | message snippet) to support cross-tool dedupe. The aggregation step deduplicates by this id.
+
+
+
+## 🛠️ Tool Installation
+
+### macOS (Homebrew)
+
+```bash
+# Core tools
+brew install cloc jq
+
+# Gitleaks
+brew install gitleaks
+
+# Semgrep
+brew install semgrep
+
+# TruffleHog
+brew install trufflesecurity/trufflehog/trufflehog
+
+# Nosey Parker
+# Download from: https://github.com/praetorian-inc/noseyparker/releases
+```
+
+### Linux (Ubuntu/Debian)
+
+```bash
+# Core tools
+sudo apt-get install cloc jq
+
+# Gitleaks
+wget https://github.com/zricethezav/gitleaks/releases/latest/download/gitleaks-linux-amd64
+chmod +x gitleaks-linux-amd64
+sudo mv gitleaks-linux-amd64 /usr/local/bin/gitleaks
+
+# Semgrep
+pip install semgrep
+
+# TruffleHog
+curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+# Nosey Parker
+# Download from: https://github.com/praetorian-inc/noseyparker/releases
+```
+
+### Nosey Parker (manual install)
+
+Nosey Parker doesn’t ship via apt/brew universally. Install the release binary and put it on your PATH:
+
+1) Download the latest release for your OS/arch from:
+   https://github.com/praetorian-inc/noseyparker/releases
+
+2) Unpack and move the binary onto PATH (example for Linux x86_64):
+
+```bash
+tar -xzf noseyparker-*.tar.gz
+chmod +x noseyparker
+sudo mv noseyparker /usr/local/bin/
+noseyparker --version
+```
+
+Tip: run `make verify-env` to confirm the tool is detected.
+
+### Nosey Parker on WSL (native recommended) + Docker fallback
+
+On WSL Ubuntu, installing Nosey Parker natively is the most reliable path (prebuilt binaries can hit glibc issues). See “User Guide — Nosey Parker on WSL” for a short build-from-source flow using Rust and Boost. When the local binary is not available or fails to run, the CLI automatically falls back to a Docker-based runner.
+
+The CLI automatically falls back to a Docker-based Nosey Parker runner when the local binary is missing or not runnable (common on older WSL/glibc). When enabled via profiles, scans will transparently produce the expected JSON here:
+
+```
+results/individual-repos/<repo-name>/noseyparker.json
+```
+
+Requirements for the fallback:
+- Docker installed and running
+- Ability to pull or use `ghcr.io/praetorian-inc/noseyparker:latest`
+
+Manual usage (optional):
+
+```bash
+bash scripts/core/run_noseyparker_docker.sh \
+   --repo /path/to/repo \
+   --out results/individual-repos/<repo-name>/noseyparker.json
+```
+
+This mounts your repository read-only into the container, scans it, and writes a JSON report to the `--out` path. The CLI uses this same script automatically when needed.
+
+### Semgrep (latest via official script, optional)
+
+If you prefer the bleeding-edge standalone installer maintained by Semgrep:
+
+```bash
+curl -sL https://semgrep.dev/install.sh | sh
+
+# Ensure ~/.local/bin is on PATH (the installer places semgrep there by default)
+export PATH="$HOME/.local/bin:$PATH"
+semgrep --version
+```
+
+Note: we recommend isolating CLI tools via pipx or OS packages for stability. The official installer is a convenient alternative when you need the newest release.
+
+## 📋 Advanced Usage
+
+### Helper Scripts for Multi-Repo Scanning
+
+#### `scripts/populate_targets.sh` - Automated Repository Cloning
+
+This helper script streamlines the process of cloning multiple repositories for security scanning, with performance optimizations for WSL environments.
+
+**Features:**
+- 🚀 Shallow clones (depth=1) for faster cloning
+- ⚡ Parallel cloning for improved performance
+- 🔄 Unshallow option for secret scanners requiring full history
+- 📝 Reads from repository list file
+
+**Usage Examples:**
+
+```bash
+# Basic usage with defaults (samples/repos.txt → ~/security-testing)
+./scripts/core/populate_targets.sh
+
+# Custom repository list and destination
+./scripts/core/populate_targets.sh --list custom-repos.txt --dest ~/my-test-repos
+
+# Full clones with 8 parallel jobs
+./scripts/core/populate_targets.sh --full --parallel 8
+
+# Unshallow existing shallow clones
+./scripts/core/populate_targets.sh --dest ~/security-testing --unshallow
+
+# Show all options
+./scripts/core/populate_targets.sh --help
+```
+
+**Repository List Format (`samples/repos.txt`):**
+```
+# One GitHub repository URL per line
+# Lines starting with # are comments
+https://github.com/user/repo1.git
+https://github.com/user/repo2.git
+```
+
+**Performance Tips for WSL:**
+1. Use shallow clones initially for 10x faster cloning
+2. Adjust `--parallel` based on network speed (default: 4)
+3. Use `--unshallow` only if secret scanners need full git history
+4. Clone to WSL filesystem (not Windows mount) for better performance
+
+### Running Individual Scripts
+
+1. **Tool Check Only**:
+```bash
+./scripts/core/check_tools.sh
+```
+
+2. **Main Audit Script**:
+```bash
+./scripts/core/run_security_audit.sh [testing_directory] [output_directory]
+```
+
+3. **Generate Dashboard Only**:
+```bash
+# Generate dashboard with default output (results_dir/dashboard.html)
+python3 scripts/core/generate_dashboard.py /path/to/results
+
+# Generate dashboard with custom output path
+python3 scripts/core/generate_dashboard.py /path/to/results /custom/path/dashboard.html
+```
+
+The dashboard generator supports:
+- Multiple TruffleHog output formats (JSON arrays, NDJSON, single objects, empty files)
+- Automatic parent directory creation for custom output paths
+- Graceful handling of missing or empty scan results
+- UTF-8 safe file I/O for international characters
+
+### Unified CLI: report-only
+
+After scans complete, you can generate unified, normalized reports via the Python CLI:
+
+```bash
+# Default reports (formats controlled by jmo.yml)
+python3 scripts/cli/jmo.py report /path/to/security-results
+
+# Set thread workers explicitly for aggregation
+python3 scripts/cli/jmo.py report /path/to/security-results --threads 6
+
+# Record profiling timings (writes summaries/timings.json)
+python3 scripts/cli/jmo.py report /path/to/security-results --profile
+
+# Human-friendly colored logs (stderr)
+python3 scripts/cli/jmo.py report /path/to/security-results --human-logs
+```
+
+Or using Make:
+
+```bash
+make report RESULTS_DIR=/path/to/security-results THREADS=6
+make profile RESULTS_DIR=/path/to/security-results THREADS=6
+```
+
+When profiling is enabled, `timings.json` will include aggregate time, a recommended thread count, and per-job timings.
+
+### Unified CLI: scan/ci
+
+```bash
+# Scan a single repo with a custom tool subset and timeouts
+python3 scripts/cli/jmo.py scan --repo /path/to/repo --tools gitleaks semgrep --timeout 300 --human-logs
+
+# CI convenience – scan then report with gating on severity
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name balanced --fail-on HIGH --profile
+```
+
+### Output Structure (Summaries)
+
+The `summaries/` folder also contains unified outputs:
+
+```
+summaries/
+├── findings.json     # Unified normalized findings (machine-readable)
+├── SUMMARY.md        # Human-readable summary
+├── findings.yaml     # Optional YAML (requires PyYAML)
+├── dashboard.html    # Self-contained HTML view
+├── findings.sarif    # SARIF 2.1.0 for code scanning
+├── SUPPRESSIONS.md   # Suppression summary
+└── timings.json      # Profiling (when --profile used)
+```
+
+### Profiles, per-tool overrides, retries
+
+You can define named profiles in `jmo.yml` to control which tools run, include/exclude repo patterns, timeouts, and threads. You can also provide per-tool flags and timeouts, and a global retry count for flaky tools.
+
+Example `jmo.yml` snippet:
+
+```
+default_profile: fast
+retries: 1
+profiles:
+   fast:
+      tools: [gitleaks, semgrep]
+      include: ["*"]
+      exclude: ["big-monorepo*"]
+      timeout: 300
+      threads: 8
+      per_tool:
+         semgrep:
+            flags: ["--exclude", "node_modules", "--exclude", "dist"]
+            timeout: 180
+   deep:
+      tools: [gitleaks, semgrep, syft, trivy, hadolint, checkov, tfsec, noseyparker]
+      timeout: 1200
+      threads: 4
+
+per_tool:
+   trivy:
+      flags: ["--ignore-unfixed"]
+      timeout: 1200
+```
+
+Using a profile from CLI:
+
+```
+# Scan using profile 'fast' with human-friendly logs
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name fast --human-logs
+
+# CI convenience: scan then report, failing on HIGH or worse, record timings, use 'deep' profile
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name deep --fail-on HIGH --profile
+```
+
+Retries behavior:
+- Global `retries` (or per-profile) retries failed tool commands a limited number of times
+- Some tools use non-zero exit to indicate “findings”; we treat those as success codes to avoid useless retries
+
+Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
+
+4. **Generate Comparison Report**:
+```bash
+./scripts/core/generate_comparison_report.sh /path/to/results
+```
+
+### Customizing Tool Execution
+
+Prefer jmo.yml profiles and per_tool overrides. For one-off local tweaks, use:
+
+```bash
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --tools gitleaks semgrep --timeout 300
+```
+
+## 📚 Examples, Screenshots, and Testing
+
+- Examples: see `docs/examples/README.md` for common CLI patterns and CI gating.
+- Screenshots: `docs/screenshots/README.md` and `docs/screenshots/capture.sh` to generate dashboard visuals.
+- Testing: see `TEST.md` for running lint, tests, and coverage locally (CI gate ≥85%).
+
+## 🔍 Understanding Results
+
+### Severity Levels
+
+- **CRITICAL**: Verified secrets requiring immediate action
+- **HIGH**: Likely secrets or serious vulnerabilities
+- **MEDIUM**: Potential issues requiring review
+- **LOW/INFO**: Informational findings
+
+### Key Metrics
+
+- **Total Findings**: All security issues detected
+- **Verified Secrets**: Confirmed active credentials (TruffleHog)
+- **Unique Issues**: Distinct types of security problems
+- **Tool Coverage**: Number of tools that found issues
+
+### Recommendations Priority
+
+1. **Immediate**: Rotate/revoke verified secrets
+2. **High Priority**: Fix critical and high severity issues
+3. **Medium Priority**: Address medium severity findings
+4. **Long-term**: Implement preventive measures
+
+## 🎯 Three-Stage Implementation Strategy
+
+### Stage 1: Pre-commit Hooks
+- **Tool**: Gitleaks
+- **Purpose**: Prevent secrets before commit
+- **Speed**: Fast (suitable for developer workflow)
+
+### Stage 2: CI/CD Pipeline
+- **Tools**: Gitleaks + Semgrep
+- **Purpose**: Automated PR/commit scanning
+- **Coverage**: Secrets + vulnerabilities
+
+### Stage 3: Deep Periodic Audits
+- **Tools**: All tools
+- **Purpose**: Comprehensive security assessment
+- **Frequency**: Weekly/monthly
+
+## 📊 Sample Output
+
+### Dashboard Preview
+The HTML dashboard provides:
+- Visual metric cards with key statistics
+- Severity breakdown tables
+- Repository-by-repository comparison
+- Tool performance analysis
+- Actionable recommendations
+
+### Sample Summary Report
+```markdown
+## Aggregate Results
+
+### Overall Statistics
+- Total Issues Found: 1562
+- Critical Issues: 5
+- High Severity Issues: 579
+- Medium Severity Issues: 61
+- Verified Secrets: 5
+
+### Recommendations
+- Rotate all 5 verified secrets immediately
+- Prioritize remediation of 584 critical and high severity issues
+- Schedule follow-up review for the remaining medium findings
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+
+## ❤️ Support
+
+If this toolkit saves you time, consider fueling development with an energy drink.
+
+- Prefer one-time tips? Ko‑fi: https://ko-fi.com/jmogaming
+- When you’re ready, replace the badge target with your preferred platform: GitHub Sponsors (industry standard), Open Collective, Ko-fi, or Stripe Checkout.
+- GitHub Sponsors integrates directly with your GitHub profile and repository sidebar once enabled.
+
+## 📝 License
+
+MIT License. See LICENSE.
+
+## 🔗 Related Resources
+
+- [Gitleaks Documentation](https://github.com/zricethezav/gitleaks)
+- [TruffleHog Documentation](https://github.com/trufflesecurity/trufflehog)
+- [Semgrep Documentation](https://semgrep.dev)
+- [Nosey Parker Documentation](https://github.com/praetorian-inc/noseyparker)
+
+## 💡 Tips
+
+1. **Start Small**: Test on a single repository first
+2. **Review Regularly**: Schedule periodic audits
+3. **Act Quickly**: Rotate verified secrets immediately
+4. **Prevent Issues**: Implement pre-commit hooks
+5. **Monitor Trends**: Track metrics over time
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+**Problem**: Tools not found
+- **Solution**: Run `./scripts/cli/security_audit.sh --check` to verify installation
+
+**Problem**: JSON parsing errors
+- **Solution**: Ensure jq is installed and tools are outputting valid JSON
+
+**Problem**: Permission denied
+- **Solution**: Run `chmod +x *.sh` to make scripts executable
+
+**Problem**: Out of memory
+- **Solution**: Scan repositories in smaller batches
+
+**Problem**: Path errors (e.g., "//run_security_audit.sh not found")
+- **Solution**: This issue has been fixed in the latest version. Update to the latest main branch.
+- The wrapper scripts now use absolute paths computed from the script's real path location.
+
+**Problem**: AttributeError when generating dashboard with TruffleHog results
+- **Solution**: This has been fixed. The dashboard generator now handles all TruffleHog output formats:
+  - JSON arrays: `[{...}, {...}]`
+  - Single objects: `{...}`
+  - NDJSON (one object per line)
+  - Empty files or missing files
+  - Nested arrays
+
+### Rebuilding Reports Without Re-Scanning
+
+You can regenerate the dashboard or reports from existing scan results without re-running the security tools:
+
+```bash
+# Generate dashboard with default output location
+python3 scripts/core/generate_dashboard.py /path/to/results
+
+# Generate dashboard with custom output path (creates parent directories automatically)
+python3 scripts/core/generate_dashboard.py /path/to/results /custom/path/dashboard.html
+
+# Example: Generate dashboard in a reports directory
+python3 scripts/core/generate_dashboard.py ~/security-results-20251010-120000 ~/reports/security-dashboard.html
+```
+
+This is useful when you want to:
+- Update the dashboard after manually editing JSON files
+- Generate multiple dashboards with different configurations
+- Share results by exporting to a specific location
+
+---
+
+**Last Updated**: October 10th, 2025
+**Author**: James Moceri
