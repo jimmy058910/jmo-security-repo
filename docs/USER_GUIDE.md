@@ -299,7 +299,7 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
 - Codecov upload warnings (tokenless OIDC)
   - Symptom: Codecov step asks for a token or indicates OIDC not enabled.
   - Context: Public repos usually don’t require `CODECOV_TOKEN`. This repo uses tokenless OIDC with `codecov/codecov-action@v5` and minimal permissions (`contents: read`).
-  - Fix: Ensure `coverage.xml` exists (the tests step emits it) and confirm OIDC is enabled in your Codecov org/repo. Action docs: https://github.com/codecov/codecov-action and OIDC docs: https://docs.codecov.com/docs/tokenless-uploads 
+  - Fix: Ensure `coverage.xml` exists (the tests step emits it) and confirm OIDC is enabled in your Codecov org/repo. Action docs: https://github.com/codecov/codecov-action and OIDC docs: https://docs.codecov.com/docs/tokenless-uploads
 
 - Canceled runs (concurrency)
   - Symptom: A run is marked “canceled.”

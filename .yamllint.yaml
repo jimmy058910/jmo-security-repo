@@ -2,19 +2,10 @@ extends: default
 
 rules:
   line-length:
-    max: 200
-    allow-non-breakable-words: true
-  truthy:
-    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
-  document-start: disable
-  comments-indentation: disable
-extends: default
-
-rules:
-  line-length:
     max: 140
     allow-non-breakable-words: true
   truthy:
+    allowed-values: ["true", "false", "yes", "no", "on", "off"]
     level: warning
   document-start:
     present: false
@@ -22,6 +13,7 @@ rules:
     indent-sequences: consistent
   comments:
     min-spaces-from-content: 1
+  comments-indentation: disable
 
 ignore: |
   build/

@@ -1,6 +1,7 @@
 pytest
 pytest-cov
 hypothesis
+pytest-rerunfailures
 ruff
 bandit
 black

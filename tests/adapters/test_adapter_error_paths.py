@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
 
 from scripts.core.adapters.bandit_adapter import load_bandit
 from scripts.core.adapters.semgrep_adapter import load_semgrep
@@ -41,8 +40,18 @@ def test_severity_translation_paths(tmp_path: Path):
     # Semgrep severity mapping
     sem = {
         "results": [
-            {"check_id": "a.b.c", "path": "x", "start": {"line": 1}, "extra": {"message": "m", "severity": "WARNING"}},
-            {"check_id": "a.b.c", "path": "x", "start": {"line": 2}, "extra": {"message": "m", "severity": "INFO"}},
+            {
+                "check_id": "a.b.c",
+                "path": "x",
+                "start": {"line": 1},
+                "extra": {"message": "m", "severity": "WARNING"},
+            },
+            {
+                "check_id": "a.b.c",
+                "path": "x",
+                "start": {"line": 2},
+                "extra": {"message": "m", "severity": "INFO"},
+            },
         ],
         "version": "1",
     }
@@ -52,7 +61,10 @@ def test_severity_translation_paths(tmp_path: Path):
     assert [i["severity"] for i in out] == ["MEDIUM", "LOW"]
 
     # Hadolint level mapping
-    h = [{"code": "DL", "file": "D", "line": 1, "level": "error"}, {"code": "DL", "file": "D", "line": 2, "level": "warning"}]
+    h = [
+        {"code": "DL", "file": "D", "line": 1, "level": "error"},
+        {"code": "DL", "file": "D", "line": 2, "level": "warning"},
+    ]
     p = tmp_path / "hadolint.json"
     _write(p, h)
     out = load_hadolint(p)
