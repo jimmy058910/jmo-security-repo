@@ -25,6 +25,80 @@ make test         # run unit tests and coverage
 make fmt && make lint
 ```
 
+## Pre-commit Hooks
+
+We use [pre-commit](https://pre-commit.com/) to automatically run formatting and linting checks before each commit. This ensures code quality and consistency.
+
+### Installation
+
+Install pre-commit using pip or pipx:
+
+```bash
+# Using pip
+pip install pre-commit
+
+# OR using pipx (isolated environment)
+pipx install pre-commit
+```
+
+Alternatively, use the project's Makefile:
+
+```bash
+make pre-commit-install
+```
+
+### Enable hooks
+
+After installing pre-commit, enable it in your local repository:
+
+```bash
+pre-commit install
+```
+
+This will configure git to run the hooks automatically before each commit.
+
+### Manual execution
+
+To run pre-commit checks on all files manually:
+
+```bash
+pre-commit run --all-files
+```
+
+Or use the Makefile shortcut:
+
+```bash
+make pre-commit-run
+```
+
+### What's included
+
+The repository includes a `.pre-commit-config.yaml` file that configures the following checks:
+
+- **Ruff**: Python linting and formatting
+- **Black**: Python code formatting
+- **shfmt**: Shell script formatting
+- **shellcheck**: Shell script static analysis
+- **yamllint**: YAML linting
+- **actionlint**: GitHub Actions workflow validation
+
+These checks run automatically on commit and are also enforced in CI.
+
+#### Tips
+
+- If you see "pre-commit: command not found", run `make dev-deps` (installs Python dev deps including pre-commit), or install via pip/pipx as above.
+- Update hooks to the latest versions from `.pre-commit-config.yaml`:
+
+  ```bash
+  pre-commit autoupdate
+  ```
+
+- Run a single hook across the repo (example for Ruff):
+
+  ```bash
+  pre-commit run ruff --all-files
+  ```
+
 ## Running the tool locally
 
 - Basic workflow:
