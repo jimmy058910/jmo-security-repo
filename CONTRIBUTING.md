@@ -57,6 +57,14 @@ make screenshots-demo
 - Use temporary paths and fabricated JSON for adapters per existing patterns.
 - CI enforces coverage (see `.github/workflows/tests.yml`).
 
+### Coverage reporting (Codecov)
+
+We use Codecov via GitHub Actions. For maintainers, the quickest path is:
+1. Sign in to https://codecov.io with your GitHub account.
+2. Ensure a `main` branch test run completes (uploads `coverage.xml`).
+3. The `codecov.yml` in the repo sets statuses to informational.
+4. Optional: add `CODECOV_TOKEN` to repo secrets if Codecov recommends it (public repos usually don’t need it).
+
 ## Documentation
 
 - User docs are in `docs/`.

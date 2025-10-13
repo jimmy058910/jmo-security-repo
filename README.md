@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](#)
 [![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
-[![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](#support)
+[![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](https://ko-fi.com/jmogaming)
 
 <!-- CI/coverage/package badges (enable once configured)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
@@ -572,7 +572,7 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 If this toolkit saves you time, consider fueling development with an energy drink.
 
-- Badge link above jumps here: [Buy me an energy drink](#support)
+- Prefer one-time tips? Ko‑fi: https://ko-fi.com/jmogaming
 - When you’re ready, replace the badge target with your preferred platform: GitHub Sponsors (industry standard), Open Collective, Ko-fi, or Stripe Checkout.
 - GitHub Sponsors integrates directly with your GitHub profile and repository sidebar once enabled.
 

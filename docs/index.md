@@ -9,6 +9,7 @@ Welcome! This is the one-stop index for docs. Start with the User Guide, or jump
 - CommonFinding Schema: [schemas/common_finding.v1.json](schemas/common_finding.v1.json)
 - Roadmap: [../ROADMAP.md](../ROADMAP.md)
  - HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+ - Support the project: https://ko-fi.com/jmogaming
 
 ## What’s in this toolkit
 
