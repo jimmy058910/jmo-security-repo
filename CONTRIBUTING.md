@@ -92,6 +92,7 @@ These checks run automatically on commit and are also enforced in CI.
   ```bash
   pre-commit autoupdate
   ```
+
 - Run a single hook across the repo (example for Ruff):
 
   ```bash
