@@ -1,6 +1,7 @@
 # Local virtual environments
 .venv/
 .tmp-venv-pypi/
+.post-release-venv/
 
 # Coverage artifacts
 .coverage*
