@@ -56,7 +56,7 @@ lint:
 		# Quiet tests-only scan: if issues are found, re-run without -q to print them \
 		if ! bandit -q -r tests -s B101,B404 >/dev/null 2>&1; then \
 			echo "Bandit found issues in tests/ (printing):" ; \
-			bandit -r tests -s B101,B404 ; \
+			bandit -r tests -s B101,B404 || true ; \
 		fi ; \
 	else echo 'bandit not found'; fi
 

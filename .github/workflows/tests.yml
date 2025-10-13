@@ -9,6 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: "Guardrails: forbid tracked venv/artifacts"
+        run: |
+          bash scripts/dev/guardrails_check.sh
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
