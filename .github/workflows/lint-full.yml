@@ -1,0 +1,28 @@
+name: Lint (full, nightly)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  lint-full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Run pre-commit (full, check-only)
+        env:
+          PRE_COMMIT_HOME: ~/.cache/pre-commit
+        run: |
+          export SKIP=bandit
+          pre-commit run -a --hook-stage manual || true

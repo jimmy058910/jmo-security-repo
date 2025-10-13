@@ -10,8 +10,10 @@
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fjmotools.com)](https://jmotools.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](#)
+```bash
 [![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
 [![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](https://ko-fi.com/jmogaming)
+```
 
 <!-- CI/coverage/package badges (enable once configured)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
@@ -161,18 +163,24 @@ python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --hu
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 # or
 python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
+```bash
 
 # Or do both in one step for CI with a failure threshold
 python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
+```
 
 Outputs include: summaries/findings.json, SUMMARY.md, findings.yaml, findings.sarif (enabled by default), dashboard.html, and timings.json (when profiling).
+```bash
 
 ### Basic Usage
+```
 
 #### Optional: Quick Setup with Helper Script
+```bash
 
 Use the `populate_targets.sh` helper script to clone multiple repositories for testing (optimized for WSL):
+```
 
 ```bash
 # Clone sample vulnerable repos (fast shallow clones)
