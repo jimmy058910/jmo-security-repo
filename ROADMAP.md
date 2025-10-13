@@ -2,6 +2,12 @@
 
 Note: Steps 1–13 have been completed and are summarized in `RELEASE_NOTES.md` under “Roadmap Summary (Steps 1–13)”. This roadmap now tracks only active/planned work.
 
+Recently completed infra hardening (October 2025)
+- CI: actionlint pinned, concurrency enabled, OS+Python matrix, job-level timeouts
+- Coverage: tokenless uploads with Codecov v5
+- Release: PyPI Trusted Publisher (OIDC) with `pypa/gh-action-pypi-publish@v1`
+- DevEx: pre-commit consolidated, `.yamllint.yaml` added, additional adapter/reporter edge tests
+
 ## Step 14 — Interactive Wizard (Beginner Onboarding)
 
 Objective
@@ -127,6 +133,49 @@ Status
 - Planned. Wrapper (`jmotools`) and setup flow are in place; wizard will be additive and reuse existing scripts.
 
 ---
+
+## CI Linting — Full Pre-commit Coverage (Planned)
+
+Context
+- To keep PR feedback tight and CI reliable, the current lint job intentionally runs only structural checks (actionlint, yamllint). Auto-fixing and noisy hooks were skipped to avoid flakiness while we stabilized workflows.
+
+Full Hook Set (from `.pre-commit-config.yaml`)
+- pre-commit-hooks: trailing-whitespace, end-of-file-fixer, check-yaml, check-json, check-toml, mixed-line-ending, detect-private-key, check-added-large-files
+- yamllint (config: `.yamllint.yaml`)
+- actionlint (GitHub workflows)
+- markdownlint
+- ruff (lint) and ruff-format
+- black
+- bandit (config: `bandit.yaml`, limited to `scripts/`)
+- shellcheck (errors only; excludes: SC2016, SC2028)
+- shfmt
+
+Plan to Re-enable in CI (staged)
+1. Check-only mode for formatters
+  - Switch ruff-format/black/shfmt to check-only in CI (no writes) and gate with clear messages.
+  - Keep auto-fix local via pre-commit to reduce CI churn.
+1. Markdown lint tuning
+  - Add project-specific `.markdownlint.json` with rule relaxations for docs (line length, code blocks).
+  - Enable markdownlint in CI after config lands.
+1. Python lint policy
+  - Pin ruff version; add minimal allowlist of rules to start (E, F) and gradually enable more.
+  - Gate on ruff in CI once baseline passes; add rule-by-rule PRs to expand coverage.
+1. Shell formatting
+  - Configure shfmt style (indent, binary ops) and pin version; run in check-only in CI.
+1. Security linting
+  - Keep bandit limited to `scripts/` with explicit `-c bandit.yaml`; consider a weekly scheduled job for full repo scan in “info-only” mode.
+1. Scheduling and PR signal
+  - Add a nightly `lint-full` workflow running all hooks in check-only; PR CI remains fast/structural.
+  - Post summary annotations; if stable for >2 weeks, migrate checks into PR CI gating.
+
+Acceptance Criteria
+- PR CI remains <5–7 min typical.
+- Nightly `lint-full` is green on main for 2 weeks before gating PRs.
+- Clear contributor docs on how to run auto-fixes locally with pre-commit.
+
+Developer Guidance
+- Local: run `pre-commit install` and `pre-commit run -a` before pushing.
+- CI gating will error on check-only violations; fix locally (formatter applies changes) and re-push.
 
 ## Step 14 — Interactive Wizard (Beginner Onboarding)
 

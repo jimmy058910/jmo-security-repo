@@ -4,10 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read
       id-token: write
@@ -16,13 +20,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
       - name: Install build backend
         run: |
           python -m pip install --upgrade pip
           pip install build twine
+      - name: Verify tag matches version
+        run: |
+          VERSION=$(python -c 'import tomllib,sys;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          TAG=${GITHUB_REF##*/}
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "Tag $TAG does not match project version v$VERSION" >&2
+            exit 1
+          fi
       - name: Build sdist/wheel
         run: |
           python -m build
+      - name: Check package metadata
+        run: |
+          python -m twine check dist/*
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist/*
       - name: Publish to PyPI
         if: startsWith(github.ref, 'refs/tags/v')
         uses: pypa/gh-action-pypi-publish@v1.12.4

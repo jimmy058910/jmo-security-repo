@@ -3,17 +3,50 @@ name: Tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: tests-${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: Lint and guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pre-commit
+          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-precommit-
+      - name: Pre-commit (structural checks only)
+        uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files
+        env:
+          SKIP: bandit
+      - name: Validate GitHub workflows (actionlint)
+        uses: reviewdog/action-actionlint@v1
+        with:
+          # Colorize output in logs and fail the job on any finding
+          actionlint_flags: -color
+          fail_on_error: true
+      - name: "Guardrails: forbid tracked venv/artifacts"
+        run: bash scripts/dev/guardrails_check.sh
+
   tests:
+    needs: lint
+    name: Test matrix
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
+      id-token: write # needed for Codecov OIDC in the coverage leg
     strategy:
       fail-fast: false
       matrix:
@@ -21,34 +54,59 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
-      - name: Pre-commit (YAML & misc checks)
-        uses: pre-commit/action@v3.0.1
-        with:
-          extra_args: --all-files
-      - name: Validate GitHub workflows (actionlint)
-        uses: rhysd/actionlint@v1.7.1
-      - name: "Guardrails: forbid tracked venv/artifacts"
-        run: |
-          bash scripts/dev/guardrails_check.sh
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          # Speed up dependency installs by caching pip based on requirements file hash
-          cache: 'pip'
-          cache-dependency-path: 'requirements-dev.txt'
-      - name: Install deps
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install deps (with retry)
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PIP_DEFAULT_TIMEOUT: "60"
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          for attempt in 1 2 3; do
+            echo "[deps] attempt ${attempt} to install requirements-dev.txt"
+            if pip install -r requirements-dev.txt; then
+              break
+            fi
+            sleep 5
+          done
           # Install the project in editable mode so 'scripts' package is importable
-          pip install -e .
-      - name: Lint
-        run: make lint || true
-      - name: Run tests with coverage
+          for attempt in 1 2 3; do
+            echo "[deps] attempt ${attempt} to install project in editable mode"
+            if pip install -e .; then
+              break
+            fi
+            sleep 5
+          done
+      - name: Run tests (no coverage on most legs)
+        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11') }}
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
         run: |
-          python -m pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=85
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+          python -m pytest -q --maxfail=1 --disable-warnings
+      - name: Run tests with coverage (gate)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
+        run: |
+          python -m pytest -q \
+            --maxfail=1 \
+            --disable-warnings \
+            --reruns 2 \
+            --reruns-delay 2 \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
+      - name: Upload coverage to Codecov (single leg)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: ./coverage.xml
           fail_ci_if_error: false

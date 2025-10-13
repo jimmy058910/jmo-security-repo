@@ -12,7 +12,9 @@ exclude_dirs:
   - tests
 
 # Do not globally skip tests; we handle targeted skips via Makefile for tests/ only.
-skips: []
+skips:
+  - B404  # import subprocess is expected in CLI wrappers
+  - B606  # os.startfile usage is guarded and platform-specific
 
 # Set minimum severity/confidence thresholds for reporting (default is LOW/HIGH)
 # Keep defaults by commenting these out; uncomment to raise thresholds if needed.

@@ -264,6 +264,17 @@ jobs:
         with:
           name: security-results
           path: ~/security-results-*
+
+## CI at a glance
+
+- Tests run on a matrix of operating systems and Python versions:
+  - OS: ubuntu-latest, macos-latest
+  - Python: 3.10, 3.11, 3.12
+- Concurrency cancels redundant runs on rapid pushes; each job has a 20-minute timeout.
+- Coverage is uploaded to Codecov using tokenless OIDC (no secret needed on public repos).
+- PyPI releases use Trusted Publishers (OIDC) — no API token required once authorized in PyPI.
+
+See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for the exact configuration.
 ```
 
 ## Troubleshooting
@@ -271,6 +282,7 @@ jobs:
 ### Issue: "Tools not found"
 
 **Solution**: Install missing tools
+
 ```bash
 # Check which tools are missing
 ./scripts/cli/security_audit.sh --check
@@ -281,6 +293,7 @@ jobs:
 ### Issue: "Permission denied"
 
 **Solution**: Make scripts executable
+
 ```bash
 find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
@@ -288,6 +301,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 ### Issue: "No repositories found"
 
 **Solution**: Ensure directory has git repositories
+
 ```bash
 # Check directory structure
 ls -la ~/security-testing/
@@ -300,11 +314,33 @@ ls -la ~/security-testing/
 Note for WSL users: For the best Nosey Parker experience on WSL, prefer a native install; see the User Guide section “Nosey Parker on WSL (native recommended) and auto-fallback (Docker)”.
 
 **Solution**: Scan repos in smaller batches
+
 ```bash
 # Instead of scanning all at once, batch them
 ./scripts/cli/security_audit.sh -d ~/batch1
 ./scripts/cli/security_audit.sh -d ~/batch2
 ```
+
+## Interpreting CI failures (quick reference)
+
+- Workflow syntax or logic (actionlint)
+  - Symptom: step "Validate GitHub workflows (actionlint)" fails early.
+  - Fix: run locally: `pre-commit run actionlint --all-files` or inspect `.github/workflows/*.yml` for typos and invalid `uses:` references. Ensure actions are pinned to valid tags.
+
+- Pre-commit checks (YAML, formatting, lint)
+  - Symptom: pre-commit step fails on YAML, markdownlint, ruff/black, etc.
+  - Fix: run `make pre-commit-run` locally; address reported files. We ship `.yamllint.yaml` and validate Actions via actionlint.
+
+- Coverage threshold not met
+  - Symptom: pytest completes but `--cov-fail-under=85` causes job failure.
+  - Fix: add tests for unexercised branches (see adapters’ error paths and reporters). Run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` locally to identify gaps.
+
+- Codecov upload warnings
+  - Symptom: Codecov step logs request a token or OIDC; or upload skipped.
+  - Context: Public repos typically don’t need `CODECOV_TOKEN`. We use tokenless OIDC on CI. If logs insist, either enable OIDC in Codecov org/repo or add `CODECOV_TOKEN` (optional).
+  - Check: confirm `coverage.xml` exists; CI task runs tests before upload.
+
+If a failure isn’t listed here, click into the failed step logs in GitHub Actions for the exact stderr. Open an issue with the error snippet for help.
 
 ## Next Steps
 

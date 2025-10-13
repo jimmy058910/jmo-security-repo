@@ -1,5 +1,8 @@
 # JMO Security Suite — Documentation
 
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
+
 Welcome! This is the one-stop index for docs. Start with the User Guide, or jump to examples, screenshots, or schemas.
 
 - User Guide: [USER_GUIDE.md](USER_GUIDE.md)
@@ -8,8 +11,9 @@ Welcome! This is the one-stop index for docs. Start with the User Guide, or jump
 - Screenshots: [screenshots/README.md](screenshots/README.md)
 - CommonFinding Schema: [schemas/common_finding.v1.json](schemas/common_finding.v1.json)
 - Roadmap: [../ROADMAP.md](../ROADMAP.md)
- - HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
- - Support the project: https://ko-fi.com/jmogaming
+	- HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+	- Support the project: https://ko-fi.com/jmogaming
+	- CI Troubleshooting: [User Guide — Interpreting CI failures](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
 
 ## What’s in this toolkit
 
@@ -20,18 +24,23 @@ Welcome! This is the one-stop index for docs. Start with the User Guide, or jump
 
 ## Start here
 
-1) Verify environment
+1. Verify environment
+
 ```bash
 make verify-env
 ```
 
-2) Run a quick scan
+1. Run a quick scan
+
 ```bash
 jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
 
-3) Open the dashboard (results/summaries/dashboard.html)
+
+1. Open the dashboard (results/summaries/dashboard.html)
 	- Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+
+Note: CI runs on ubuntu-latest and macos-latest across Python 3.10, 3.11, and 3.12, with concurrency and job timeouts to keep runs fast and reliable.
 
 ## WSL quick install checklist
 

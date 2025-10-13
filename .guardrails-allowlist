@@ -1,0 +1,6 @@
+# Paths intentionally tracked that would otherwise be flagged by guardrails
+# Use regex fragments; they are combined with alternation (|)
+^build/
+^dist/
+^[^/]+\.egg-info/
+^coverage\.xml$

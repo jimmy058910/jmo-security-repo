@@ -38,6 +38,7 @@ def test_yaml_reporter_preserves_fields(tmp_path: Path):
 
 def test_yaml_reporter_raises_without_pyyaml(monkeypatch, tmp_path: Path):
     import scripts.core.reporters.yaml_reporter as ymod
+
     monkeypatch.setattr(ymod, "yaml", None, raising=False)
     with pytest.raises(RuntimeError):
         ymod.write_yaml([], tmp_path / "x.yaml")

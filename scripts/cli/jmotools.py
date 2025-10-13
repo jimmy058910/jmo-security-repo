@@ -21,7 +21,7 @@ import argparse
 import os
 import platform
 import shutil
-import subprocess
+import subprocess  # nosec B404 - CLI needs subprocess to orchestrate external tools
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -39,12 +39,13 @@ def _print_os_info() -> None:
                 v = f.read().strip()
             if "microsoft" in v.lower() or "wsl" in v.lower():
                 sys.stderr.write("  Detected: WSL\n")
-        except Exception:
-            pass
+        except Exception as e:
+            # Non-fatal, informational only
+            sys.stderr.write(f"\x1b[36m[DEBUG]\x1b[0m WSL detection failed: {e}\n")
 
 
 def _run(cmd: List[str], cwd: Optional[Path] = None, ok_rcs=(0,)) -> int:
-    cp = subprocess.run(
+    cp = subprocess.run(  # nosec B603 - cmd is a list built by this tool; shell is not used
         cmd,
         cwd=str(cwd) if cwd else None,
         text=True,
@@ -123,19 +124,29 @@ def _open_outputs(out_dir: Path) -> None:
             f"\x1b[33m[WARN]\x1b[0m No output files found yet in {out_dir}\n"
         )
         return
+    # Constrain opener to an allowlist for safety
+    allowed_openers = {"xdg-open", "open", "start"}
+    opener_name = None
     if opener:
+        opener_name = os.path.basename(opener) if os.path.isabs(opener) else opener
+
+    if opener and opener_name in allowed_openers:
         for p in paths:
             try:
                 if opener == "start":
-                    os.startfile(str(p))  # type: ignore[attr-defined]
+                    os.startfile(str(p))  # type: ignore[attr-defined]  # nosec B606 - expected on Windows; guarded by allowlist
                 else:
-                    subprocess.Popen(
+                    subprocess.Popen(  # nosec B603 - opener is from allowlist; shell=False; args are fixed
                         [opener, str(p)],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                sys.stderr.write(f"\x1b[36m[DEBUG]\x1b[0m Failed to open {p}: {e}\n")
+    elif opener:
+        sys.stderr.write(
+            f"\x1b[33m[WARN]\x1b[0m Opener '{opener}' is not in allowlist; not launching files.\n"
+        )
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Results:\n")
     for p in paths:
         sys.stderr.write(f"  {p}\n")

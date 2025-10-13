@@ -2,7 +2,7 @@
 
 Copy/paste into README once CI is finalized.
 
-```
+```markdown
 [![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg?token=)](https://codecov.io/gh/jimmy058910/jmo-security-repo)
 [![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)

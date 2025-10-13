@@ -103,9 +103,11 @@ xdg-open results/summaries/dashboard.html 2>/dev/null || open results/summaries/
 
 - Customize per-tool flags via `jmo.yml` under `profiles.deep.per_tool` (e.g., add `--no-progress` to Trivy or excludes to Semgrep).
 - To rerun only reporting (faster iteration):
+
   ```bash
   python3 scripts/cli/jmo.py report --results-dir results --profile --human-logs
   ```
+
 - Suppress known findings using a `jmo.suppress.yml` in the results directory; a `SUPPRESSIONS.md` will be created.
 
 ### Troubleshooting

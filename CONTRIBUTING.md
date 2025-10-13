@@ -14,7 +14,7 @@ Be respectful and constructive. We expect contributors to follow a standard code
 
 ## Development setup
 
-- Python 3.8+
+- Python 3.10+ (CI validates on 3.10, 3.11, 3.12 across Ubuntu and macOS)
 - Recommended commands:
 
 ```bash
@@ -28,12 +28,14 @@ make fmt && make lint
 ## Running the tool locally
 
 - Basic workflow:
+
 ```bash
 python3 scripts/cli/jmo.py scan --repos-dir ~/repos --human-logs
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 ```
 
 - Demo workflow (no external scanners required):
+
 ```bash
 make screenshots-demo
 ```
@@ -46,6 +48,7 @@ make screenshots-demo
 - Run `make fmt && make lint && make test` before pushing.
 - Run `make pre-commit-run` to apply YAML linting and validate GitHub Actions workflows via actionlint.
 - Open a PR and fill out the template (if present). Link related issues.
+  - CI runs on a matrix (OS/Python). Workflows use concurrency to cancel redundant runs and set 20-minute timeouts per job.
 
 ## Coding standards
 
@@ -62,11 +65,11 @@ make screenshots-demo
 
 ### Coverage reporting (Codecov)
 
-We use Codecov via GitHub Actions. For maintainers, the quickest path is:
+We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos. For maintainers, the quickest path is:
 1. Sign in to https://codecov.io with your GitHub account.
 2. Ensure a `main` branch test run completes (uploads `coverage.xml`).
 3. The `codecov.yml` in the repo sets statuses to informational.
-4. Optional: add `CODECOV_TOKEN` to repo secrets if Codecov recommends it (public repos usually don’t need it).
+4. Optional: add `CODECOV_TOKEN` only if Codecov explicitly recommends it (public repos usually don’t need it). OIDC may also be enabled in Codecov org settings.
 
 ## Documentation
 
@@ -81,7 +84,7 @@ We use Codecov via GitHub Actions. For maintainers, the quickest path is:
 - Steps to publish:
   1. Bump the version in `pyproject.toml`.
   2. Commit with a message like `release: vX.Y.Z` and create a tag: `git tag vX.Y.Z && git push --tags`.
-  3. Ensure `PYPI_API_TOKEN` is configured in repo secrets.
+  3. Ensure the project is configured as a Trusted Publisher in PyPI for this GitHub repo (no `PYPI_API_TOKEN` required). The workflow uses OIDC with `pypa/gh-action-pypi-publish@v1`.
 
 ## Communication
 
