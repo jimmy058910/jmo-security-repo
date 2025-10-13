@@ -9,7 +9,9 @@ jmo_security.egg-info/requires.txt
 jmo_security.egg-info/top_level.txt
 scripts/__init__.py
 scripts/cli/__init__.py
+scripts/cli/clone_from_tsv.py
 scripts/cli/jmo.py
+scripts/cli/jmotools.py
 scripts/core/__init__.py
 scripts/core/common_finding.py
 scripts/core/config.py

@@ -22,6 +22,10 @@ help:
 	@echo "  smoke-ai   - Run AI repo finder smoke test (creates TSV/CSV/JSONL in ai-search/smoke)"
 	@echo "  capture-screenshot - Render dashboard.html from RESULTS_DIR and save PNG via headless Chromium"
 	@echo "  screenshots-demo  - Produce demo results from samples/fixtures/infra-demo (stubs allowed), render dashboard, capture PNG"
+	@echo "  setup     - Bootstrap security tools (jmotools setup)"
+	@echo "  fast      - Fast profile scan via jmotools"
+	@echo "  balanced  - Balanced profile scan via jmotools"
+	@echo "  full      - Deep profile scan via jmotools"
 
 TOOLS_SCRIPT := scripts/dev/install_tools.sh
 VERIFY_SCRIPT := scripts/dev/ci-local.sh
@@ -127,3 +131,27 @@ smoke-ai:
 	@ls -1 ai-search/smoke | grep -E '^ai-repos-.*\.(tsv|csv|jsonl)$$' >/dev/null || (echo "[smoke-ai] Expected outputs not found in ai-search/smoke" && exit 1)
 	@echo "[smoke-ai] OK - Found outputs:"
 	@ls -1 ai-search/smoke | grep -E '^ai-repos-.*\.(tsv|csv|jsonl)$$' | sed 's/^/  - /'
+
+.PHONY: setup fast balanced full
+setup:
+	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
+	jmotools setup --check || true
+
+# Usage: make fast [DIR=~/repos] [TARGETS=results/targets.tsv.txt] [RESULTS=results]
+fast:
+	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmotools fast --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmotools fast --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
+
+balanced:
+	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmotools balanced --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmotools balanced --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
+
+full:
+	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmotools full --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmotools full --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi

@@ -22,6 +22,7 @@ reporting = ["PyYAML>=6.0", "jsonschema>=4.0"]
 
 [project.scripts]
 jmo = "scripts.cli.jmo:main"
+jmotools = "scripts.cli.jmotools:main"
 
 [tool.setuptools]
 include-package-data = true

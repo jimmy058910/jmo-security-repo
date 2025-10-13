@@ -2,6 +2,43 @@
 
 Get up and running in under 5 minutes using the unified Python CLI (scan/report/ci).
 
+## Beginner mode: jmotools wrapper
+
+Prefer simple, memorable commands? Use the wrapper:
+
+```bash
+# Quick fast scan (auto-opens results)
+jmotools fast --repos-dir ~/security-testing
+
+# Deep/full scan using the curated 'deep' profile
+jmotools full --repos-dir ~/security-testing --allow-missing-tools
+
+# Clone from TSV first, then scan
+jmotools balanced --tsv ai-search/candidates.tsv --dest ./repos-tsv
+```
+
+What it does for you:
+- Detects OS/WSL and verifies tools
+- Optionally clones from a TSV and writes `results/targets.tsv.txt`
+- Runs `jmo ci` with the selected profile
+- Opens `results/summaries/dashboard.html` and `SUMMARY.md` at the end
+
+### Bootstrap tools
+
+```bash
+jmotools setup --check
+jmotools setup --auto-install       # optional, Linux/WSL
+```
+
+### Makefile shortcuts
+
+```bash
+make setup                   # verify tools (installs package if needed)
+make fast DIR=~/repos        # run fast profile
+make balanced DIR=~/repos    # run balanced profile
+make full DIR=~/repos        # run deep profile
+```
+
 ## Step 1: Verify environment
 
 ```bash

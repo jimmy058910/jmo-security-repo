@@ -47,3 +47,24 @@ Planned (future ideas):
 - Initial CLI and adapters (Gitleaks, TruffleHog, Semgrep, Nosey Parker, OSV, Trivy)
 - Unified reporters (JSON, Markdown, YAML, HTML, SARIF) and suppression report
 - Config file, aggregation, and basic performance optimizations
+
+---
+
+## Roadmap Summary (Steps 1–13)
+
+- Step 1 — Repo hygiene & DX: Pre-commit, Black/Ruff/Bandit/ShellCheck/shfmt/markdownlint; Makefile targets; strict shell conventions.
+- Step 2 — Local verification: `ci-local.sh`, `install_tools.sh`, and `make verify` for terminal-first validation without remote CI.
+- Step 3 — CommonFinding schema: v1.0.0 schema established for normalized finding outputs.
+- Step 4 — Adapters: Secrets (gitleaks, trufflehog, noseyparker), SAST (semgrep, bandit), SBOM/vuln (syft, trivy), IaC (checkov, tfsec), Dockerfile (hadolint), OSV.
+- Step 5 — Config-driven runs: profiles, per-tool overrides, include/exclude, threads, timeouts, retries, log levels; CLI precedence wired.
+- Step 6 — Reporters & outputs: JSON/MD/YAML/HTML/SARIF; suppression report; profiling metadata (timings.json) consumed by HTML.
+- Step 7 — CLI consolidation: `jmo scan|report|ci` with clear exit codes; human logs option; robust help.
+- Step 8 — Reliability & DX polish: retries with tool-specific success codes, graceful cancel, per-tool timeouts, concurrency, Syft→Trivy enrichment.
+- Step 9 — Testing: Unit, integration, snapshot tests across adapters/reporters/CLI; coverage gate (~85%).
+- Step 10 — Supply chain & optional CI: SBOM (Syft), Trivy scan, optional SARIF-ready outputs for code scanning; remote CI optional.
+- Step 11 — Tooling expansion: additional adapters and normalization; severity harmonization and dedupe.
+- Step 12 — Distribution & dev envs: packaging via `pyproject.toml`, devcontainer, curated tools in dev env.
+- Step 13 — Docs & examples: polished README/QUICKSTART/USER_GUIDE; examples and screenshots; suppression docs.
+
+Notes
+- These steps are broadly complete; ongoing incremental polish may land across releases.

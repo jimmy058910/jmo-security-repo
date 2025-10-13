@@ -33,6 +33,49 @@ Project homepage: [jmotools.com](https://jmotools.com)
 
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and release steps.
 
+Roadmap & history:
+- Completed steps (summary): see [RELEASE_NOTES.md](RELEASE_NOTES.md) → “Roadmap Summary (Steps 1–13)”
+- Active/planned work: see [ROADMAP.md](ROADMAP.md)
+
+For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
+
+## 🧪 New: Simple wrapper commands
+
+If you're just getting started, use the beginner-friendly wrapper:
+
+- `jmotools fast` — quick scan (fast profile)
+- `jmotools balanced` — default balanced scan
+- `jmotools full` — deep scan with more tools
+
+Examples:
+
+```bash
+# Fast profile over repos listed in a TSV (auto-clone) and open dashboard when done
+jmotools fast --tsv ai-search/candidates.tsv --dest ./repos-tsv
+
+# Full (deep) profile targeting an existing directory of repos
+jmotools full --repos-dir ./repos-tsv --allow-missing-tools
+```
+
+Under the hood, these commands verify your OS/tools, optionally clone from a TSV, run `jmo ci` with the appropriate profile, and open `dashboard.html` and `SUMMARY.md` on completion.
+
+Setup tools quickly:
+
+```bash
+# Check tools or auto-install on Linux/WSL (where supported)
+jmotools setup --check
+jmotools setup --auto-install         # or --print-commands, --force-reinstall
+```
+
+Makefile shortcuts:
+
+```bash
+make setup             # jmotools setup --check (installs package if needed)
+make fast DIR=~/repos  # jmotools fast --repos-dir ~/repos
+make balanced DIR=~/repos
+make full DIR=~/repos
+```
+
 ## 🎯 Overview
 
 This project provides an automated framework for conducting thorough security audits on code repositories. It orchestrates multiple industry-standard security tools to detect secrets, vulnerabilities, and security issues.
@@ -57,6 +100,12 @@ make tools           # one-time install of curated tools
 make tools-upgrade   # refresh/upgrade curated tools
 make verify-env      # check OS/WSL/macOS and tool availability
 make dev-deps        # install Python dev dependencies
+```
+
+Optional: install the package locally to get `jmo` and `jmotools` commands on your PATH:
+
+```bash
+pip install -e .
 ```
 
 ### Quick Start (Unified CLI)

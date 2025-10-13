@@ -1,4 +1,4 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.1
 Name: jmo-security
 Version: 0.3.1
 Summary: JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)
@@ -13,7 +13,6 @@ License-File: LICENSE
 Provides-Extra: reporting
 Requires-Dist: PyYAML>=6.0; extra == "reporting"
 Requires-Dist: jsonschema>=4.0; extra == "reporting"
-Dynamic: license-file
 
 # JMo's Security Audit Tool Suite
 
@@ -50,6 +49,28 @@ Project homepage: [jmotools.com](https://jmotools.com)
 
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and release steps.
 
+For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
+
+## 🧪 New: Simple wrapper commands
+
+If you're just getting started, use the beginner-friendly wrapper:
+
+- `jmotools fast` — quick scan (fast profile)
+- `jmotools balanced` — default balanced scan
+- `jmotools full` — deep scan with more tools
+
+Examples:
+
+```bash
+# Fast profile over repos listed in a TSV (auto-clone) and open dashboard when done
+jmotools fast --tsv ai-search/candidates.tsv --dest ./repos-tsv
+
+# Full (deep) profile targeting an existing directory of repos
+jmotools full --repos-dir ./repos-tsv --allow-missing-tools
+```
+
+Under the hood, these commands verify your OS/tools, optionally clone from a TSV, run `jmo ci` with the appropriate profile, and open `dashboard.html` and `SUMMARY.md` on completion.
+
 ## 🎯 Overview
 
 This project provides an automated framework for conducting thorough security audits on code repositories. It orchestrates multiple industry-standard security tools to detect secrets, vulnerabilities, and security issues.
@@ -74,6 +95,12 @@ make tools           # one-time install of curated tools
 make tools-upgrade   # refresh/upgrade curated tools
 make verify-env      # check OS/WSL/macOS and tool availability
 make dev-deps        # install Python dev dependencies
+```
+
+Optional: install the package locally to get `jmo` and `jmotools` commands on your PATH:
+
+```bash
+pip install -e .
 ```
 
 ### Quick Start (Unified CLI)
