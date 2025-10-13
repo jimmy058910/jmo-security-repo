@@ -41,6 +41,17 @@ Roadmap & history:
 
 For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
 
+## ✅ CI and release at a glance
+
+- Tests run on a matrix of operating systems and Python versions:
+   - OS: ubuntu-latest, macos-latest
+   - Python: 3.10, 3.11, 3.12
+- CI uses concurrency to cancel redundant runs on rapid pushes and sets a 20-minute job timeout.
+- Coverage is uploaded to Codecov without a token (OIDC/tokenless on public repos) using `codecov/codecov-action@v5`.
+- Releases to PyPI use Trusted Publishers (OIDC) via `pypa/gh-action-pypi-publish@v1`; no PyPI API token is required once the repo is authorized in PyPI.
+
+See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for details.
+
 ## 🧪 New: Simple wrapper commands
 
 If you're just getting started, use the beginner-friendly wrapper:
@@ -120,6 +131,8 @@ make pre-commit-run       # run checks on all files
 ```
 
 These run locally via pre-commit and are also enforced in CI.
+
+We ship a `.yamllint.yaml` and validate GitHub Actions workflows via `actionlint`. The same checks are executed in CI.
 
 ### Quick Start (Unified CLI)
 

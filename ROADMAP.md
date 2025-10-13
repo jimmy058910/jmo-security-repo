@@ -2,6 +2,12 @@
 
 Note: Steps 1–13 have been completed and are summarized in `RELEASE_NOTES.md` under “Roadmap Summary (Steps 1–13)”. This roadmap now tracks only active/planned work.
 
+Recently completed infra hardening (October 2025)
+- CI: actionlint pinned, concurrency enabled, OS+Python matrix, job-level timeouts
+- Coverage: tokenless uploads with Codecov v5
+- Release: PyPI Trusted Publisher (OIDC) with `pypa/gh-action-pypi-publish@v1`
+- DevEx: pre-commit consolidated, `.yamllint.yaml` added, additional adapter/reporter edge tests
+
 ## Step 14 — Interactive Wizard (Beginner Onboarding)
 
 Objective
