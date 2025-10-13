@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint test verify clean tools verify-env dev-deps
+.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -71,6 +71,12 @@ verify-env:
 
 dev-deps:
 	$(PY) -m pip install -r requirements-dev.txt || true
+
+# Convenience target: install dev deps and the package in editable mode so
+# `from scripts...` imports work without tweaking PYTHONPATH.
+dev-setup:
+	$(PY) -m pip install -r requirements-dev.txt
+	$(PY) -m pip install -e .
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__ */__pycache__ *.pyc *.pyo .mypy_cache

@@ -68,6 +68,17 @@ xdg-open results/summaries/dashboard.html  # mac: open
 - Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
 - Different Python version: tests target 3.11 in CI; using older versions may cause minor differences.
 
+### Import errors like `ModuleNotFoundError: No module named 'scripts'`
+
+This repo ships as a Python package (entry point `jmo = scripts.cli.jmo:main`).
+When running tests locally, install the package in editable mode so imports work:
+
+```bash
+make dev-setup  # or: python -m pip install -r requirements-dev.txt && python -m pip install -e .
+```
+
+Alternatively, you can set `PYTHONPATH=.` for ad-hoc runs, but installing with `-e .` matches CI and is recommended.
+
 ---
 
 Happy testing!
