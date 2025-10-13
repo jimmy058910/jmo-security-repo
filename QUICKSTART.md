@@ -105,6 +105,18 @@ python3 scripts/cli/jmo.py ci --repos-dir ~/security-testing --fail-on HIGH --pr
 # Or run scan and report separately
 python3 scripts/cli/jmo.py scan --repos-dir ~/security-testing --profile-name balanced --human-logs
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
+
+## Optional: reproducible dev dependencies
+
+If you contribute often, you can pin dev dependencies for consistency using pip-tools:
+
+```bash
+make upgrade-pip
+make deps-compile
+make deps-sync
+```
+
+CI checks that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
 ```
 
 ## Step 4: Review Results

@@ -25,6 +25,106 @@ make test         # run unit tests and coverage
 make fmt && make lint
 ```
 
+## Dependency management
+
+This repo keeps Python runtime deps minimal (declared in `pyproject.toml`; optional extras under `[project.optional-dependencies]`) and relies on a few external security tools installed on your system. Here's the recommended way to install and update everything.
+
+### Python environment
+
+- Create and use a local virtualenv (the Makefile auto-detects `.venv`):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip setuptools wheel
+```
+
+- Install dev dependencies and the package in editable mode:
+
+```bash
+make dev-setup
+# Optional reporters and YAML: install extras
+pip install -e ".[reporting]"
+```
+
+- Update Python tooling/deps:
+
+```bash
+python -m pip install -U pip setuptools wheel
+make dev-deps   # re-installs latest unpinned dev deps from requirements-dev.txt
+```
+
+Notes:
+- `requirements-dev.txt` is intentionally lightweight. For reproducible, pinned dev deps, this repo now includes a `requirements-dev.in` and Make targets for pip-tools and uv.
+
+### Reproducible dev deps (pip-tools or uv)
+
+Use pip-tools (default):
+
+```bash
+make upgrade-pip         # optional but recommended
+make deps-compile        # compile requirements-dev.in -> requirements-dev.txt
+make deps-sync           # sync your env to requirements-dev.txt (installs/removes as needed)
+```
+
+Or use uv (fast alternative) if installed:
+
+```bash
+make uv-sync
+```
+
+CI note: Pull requests include an automated check that `requirements-dev.txt` matches `requirements-dev.in`. If it fails, run `make deps-compile` locally, commit the updated `requirements-dev.txt`, and push.
+
+### External security tools (CLI)
+
+- Install curated tools (semgrep, trivy, syft, checkov, tfsec, bandit, gitleaks, trufflehog, hadolint, osv-scanner, etc.):
+
+```bash
+make tools
+```
+
+- Upgrade/refresh installed tools in place:
+
+```bash
+make tools-upgrade
+# or directly:
+bash scripts/dev/install_tools.sh --upgrade
+```
+
+- Targeted updates (user-local):
+
+```bash
+bash scripts/dev/update_tools.sh gitleaks
+bash scripts/dev/update_tools.sh trivy
+```
+
+- Verify your environment at any time:
+
+```bash
+make verify-env
+```
+
+### Pre-commit hooks
+
+- Install and enable hooks:
+
+```bash
+make pre-commit-install
+```
+
+- Update all hook versions to the latest:
+
+```bash
+pre-commit autoupdate
+```
+
+### When to bump project dependencies
+
+- Runtime deps live in `pyproject.toml`. If you need newer features or fixes from `PyYAML`/`jsonschema` (used for reporting), bump the constraints under `[project.optional-dependencies]` and open a PR with a brief note in `RELEASE_NOTES.md`.
+- Dev-only tools are managed via `requirements-dev.txt` and pre-commit; prefer updating them via `pre-commit autoupdate` and re-running `make dev-deps`.
+
+If you’re unsure which path to use, open an issue and we’ll help you choose between bumping project deps vs. updating local dev tooling.
+
 ## Pre-commit Hooks
 
 We use [pre-commit](https://pre-commit.com/) to automatically run formatting and linting checks before each commit. This ensures code quality and consistency.

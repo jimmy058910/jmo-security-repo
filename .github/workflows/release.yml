@@ -1,6 +1,5 @@
 name: Release (PyPI)
-
-on:
+"on":
   push:
     tags:
       - 'v*'

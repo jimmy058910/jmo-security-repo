@@ -1,0 +1,30 @@
+name: Check deps-compile freshness
+"on":
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  deps-compile-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install pip-tools
+        run: |
+          python -m pip install -U pip setuptools wheel pip-tools
+
+      - name: Compile requirements-dev.in
+        run: |
+          python -m piptools compile -o requirements-dev.txt requirements-dev.in
+
+      - name: Verify no diff
+        run: |
+          git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)

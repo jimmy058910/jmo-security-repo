@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run
+.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -19,6 +19,11 @@ help:
 	@echo "  profile  - Same as report, but records timings.json (JMO_PROFILE=1)"
 	@echo "  verify-env - Check OS/WSL/macOS and required tools"
 	@echo "  dev-deps  - Install Python dev dependencies"
+	@echo "  upgrade-pip - Upgrade pip/setuptools/wheel in current Python env"
+	@echo "  deps-compile - Use pip-tools to compile requirements-dev.in -> requirements-dev.txt"
+	@echo "  deps-sync    - Use pip-tools to sync the environment to requirements-dev.txt"
+	@echo "  deps-refresh - Recompile + sync dev deps (pip-tools)"
+	@echo "  uv-sync      - Sync dev deps with uv if installed (alternative to pip-tools)"
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
 	@echo "  smoke-ai   - Run AI repo finder smoke test (creates TSV/CSV/JSONL in ai-search/smoke)"
@@ -80,6 +85,27 @@ verify-env:
 dev-deps:
 	$(PY) -m pip install -r requirements-dev.txt || true
 	@if ! command -v pre-commit >/dev/null 2>&1; then $(PY) -m pip install pre-commit || true; fi
+
+upgrade-pip:
+	$(PY) -m pip install -U pip setuptools wheel
+
+deps-compile:
+	@$(PY) -m pip show pip-tools >/dev/null 2>&1 || $(PY) -m pip install pip-tools
+	@if [ -f requirements-dev.in ]; then $(PY) -m piptools compile -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
+
+deps-sync:
+	@$(PY) -m pip show pip-tools >/dev/null 2>&1 || $(PY) -m pip install pip-tools
+	@if [ -f requirements-dev.txt ]; then $(PY) -m piptools sync requirements-dev.txt; else echo 'requirements-dev.txt not found'; exit 1; fi
+
+deps-refresh: upgrade-pip deps-compile deps-sync
+
+uv-sync:
+	@if command -v uv >/dev/null 2>&1; then \
+		uv pip compile -o requirements-dev.txt requirements-dev.in; \
+		uv pip sync requirements-dev.txt; \
+	else \
+		echo 'uv not found. See https://docs.astral.sh/uv/'; exit 1; \
+	fi
 
 pre-commit-install:
 	@if command -v pre-commit >/dev/null 2>&1; then pre-commit install; else echo 'pre-commit not found. Run: make dev-deps'; fi

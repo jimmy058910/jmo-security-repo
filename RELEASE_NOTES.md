@@ -1,5 +1,15 @@
 # Release Notes
 
+## Unreleased
+
+Developer experience improvements:
+- Optional reproducible dev deps via pip-tools and uv:
+	- Added `requirements-dev.in` and Make targets: `upgrade-pip`, `deps-compile`, `deps-sync`, `deps-refresh`, `uv-sync`.
+	- Local pre-commit hook auto-runs `deps-compile` when `requirements-dev.in` changes.
+	- CI workflow `deps-compile-check` ensures `requirements-dev.txt` stays fresh on PRs.
+
+No changes to runtime packaging. Existing workflows (`make dev-deps`, `make dev-setup`) continue to work unchanged.
+
 ## 0.3.0 (2025-10-12)
 
 Highlights:

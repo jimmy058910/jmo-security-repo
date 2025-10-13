@@ -137,6 +137,18 @@ These run locally via pre-commit and are also enforced in CI.
 
 We ship a `.yamllint.yaml` and validate GitHub Actions workflows via `actionlint`. The same checks are executed in CI.
 
+#### Reproducible dev dependencies (optional)
+
+This repo ships a `requirements-dev.in` with a compiled `requirements-dev.txt`. Use pip-tools or uv to pin/sync your dev environment:
+
+```bash
+make upgrade-pip
+make deps-compile   # compile dev deps
+make deps-sync      # sync env to compiled lock
+```
+
+CI verifies that `requirements-dev.txt` is up to date on PRs. If it fails, run `make deps-compile` and commit the diff.
+
 ### Quick Start (Unified CLI)
 
 1. Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:

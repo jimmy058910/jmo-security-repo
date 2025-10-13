@@ -63,3 +63,13 @@ repos:
     rev: v3.6.0-1
     hooks:
       - id: shfmt
+
+  # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes
+  - repo: local
+    hooks:
+      - id: deps-compile
+        name: deps-compile (generate requirements-dev.txt)
+        language: system
+        files: ^requirements-dev\.in$
+        pass_filenames: false
+        entry: make deps-compile
