@@ -1,0 +1,2 @@
+[console_scripts]
+jmo = scripts.cli.jmo:main

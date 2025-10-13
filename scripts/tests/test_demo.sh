@@ -13,8 +13,8 @@ echo ""
 
 echo "This demo will:"
 echo "  1. Create a test directory structure"
-echo "  2. Use existing sample JSON data"
-echo "  3. Generate reports and dashboard"
+echo "  2. Populate minimal synthetic JSON stubs (no secrets)"
+echo "  3. Generate dashboard and comparison reports"
 echo "  4. Display results"
 echo ""
 
@@ -25,31 +25,26 @@ mkdir -p "$DEMO_DIR/tool-comparisons"
 mkdir -p "$DEMO_DIR/summaries"
 mkdir -p "$DEMO_DIR/raw-outputs"
 
-# Copy sample data
-echo "📋 Copying sample data..."
-SAMPLE_GITLEAKS_DIR="$SCRIPT_DIR/samples/gitleaks"
-
-if [ ! -d "$SAMPLE_GITLEAKS_DIR" ]; then
-    echo "  ⚠️  Sample Gitleaks directory not found: $SAMPLE_GITLEAKS_DIR"
-else
-    for json_file in "$SAMPLE_GITLEAKS_DIR"/gitleaks-*.json; do
-        if [ -f "$json_file" ]; then
-            repo_name=$(basename "$json_file" .json | sed 's/gitleaks-//')
-            mkdir -p "$DEMO_DIR/individual-repos/$repo_name"
-            cp "$json_file" "$DEMO_DIR/individual-repos/$repo_name/gitleaks.json"
-            echo "  ✓ Added $repo_name"
-        fi
-    done
-fi
+# Populate minimal synthetic data (no gitleaks samples; clean slate)
+echo "📋 Creating synthetic per-repo stubs..."
+for repo_name in demo-a demo-b; do
+  mkdir -p "$DEMO_DIR/individual-repos/$repo_name"
+  # Create empty results for supported tools (all zero findings)
+  echo '{"results": []}' > "$DEMO_DIR/individual-repos/$repo_name/semgrep.json"
+  echo '{"Results": []}' > "$DEMO_DIR/individual-repos/$repo_name/trivy.json"
+  echo '{"results": {"failed_checks": []}}' > "$DEMO_DIR/individual-repos/$repo_name/checkov.json"
+  echo '{"results": []}' > "$DEMO_DIR/individual-repos/$repo_name/tfsec.json"
+  echo '[]' > "$DEMO_DIR/individual-repos/$repo_name/noseyparker.json"
+  echo '[]' > "$DEMO_DIR/individual-repos/$repo_name/trufflehog.json"
+  echo "  ✓ Added $repo_name (synthetic)"
+done
 
 # Create sample metrics CSV
 echo "📊 Generating sample metrics..."
 cat > "$DEMO_DIR/summaries/metrics.csv" << EOF
 repository,total_issues,critical,high,medium
-The-Complete-2024-Web-Development-Bootcamp,19,0,19,0
-WhiteNoise,0,0,0,0
-amplify-vite-react-template,0,0,0,0
-developer-bootcamp-2024,0,0,0,0
+demo-a,0,0,0,0
+demo-b,0,0,0,0
 EOF
 
 # Generate dashboard
@@ -65,39 +60,36 @@ cat > "$DEMO_DIR/SUMMARY_REPORT.md" << EOF
 # Security Audit Report - Demo
 
 **Date:** $(date)
-**Testing Directory:** Demo with sample data
-**Total Repositories Analyzed:** 4
+**Testing Directory:** Demo with synthetic sample data (clean slate)
+**Total Repositories Analyzed:** 2
 
 ---
 
 ## Executive Summary
 
-This is a demonstration using sample data from existing Gitleaks scans.
+This is a demonstration using synthetic, non-sensitive sample data.
 
-### Tools Used:
-- **Gitleaks**: Git history secret scanning
-- **TruffleHog**: Deep secret scanning with verification
-- **Semgrep**: Pattern-based vulnerability detection
-- **Nosey Parker**: Deep pattern matching for secrets
+### Tools Illustrated:
+- **TruffleHog**: Deep secret scanning with verification (synthetic empty)
+- **Semgrep**: Pattern-based vulnerability detection (synthetic empty)
+- **Nosey Parker**: Deep pattern matching for secrets (synthetic empty)
 
 ---
 
 ## Aggregate Results
 
 ### Overall Statistics
-- **Total Issues Found:** 19
+- **Total Issues Found:** 0
 - **Critical Issues:** 0
-- **High Severity Issues:** 19
+- **High Severity Issues:** 0
 - **Medium Severity Issues:** 0
 
 ### Repository Breakdown
 
 | Repository | Total Issues | Critical | High | Medium |
 |------------|--------------|----------|------|--------|
-| The-Complete-2024-Web-Development-Bootcamp | 19 | 0 | 19 | 0 |
-| WhiteNoise | 0 | 0 | 0 | 0 |
-| amplify-vite-react-template | 0 | 0 | 0 | 0 |
-| developer-bootcamp-2024 | 0 | 0 | 0 | 0 |
+| demo-a | 0 | 0 | 0 | 0 |
+| demo-b | 0 | 0 | 0 | 0 |
 
 ---
 

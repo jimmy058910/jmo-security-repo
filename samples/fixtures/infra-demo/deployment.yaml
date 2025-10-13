@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insecure-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insecure-app
+  template:
+    metadata:
+      labels:
+        app: insecure-app
+    spec:
+      containers:
+        - name: insecure-app
+          image: insecure/app:latest
+          securityContext:
+            runAsUser: 0  # Trivy misconfig: running as root
+            allowPrivilegeEscalation: true
+          env:
+            - name: SECRET_KEY
+              value: "hardcoded"

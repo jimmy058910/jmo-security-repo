@@ -87,7 +87,7 @@ done
 
 # Check tools
 if [ $CHECK_ONLY -eq 1 ]; then
-    run_tool_check
+    run_tool_check "$@"
     exit $?
 fi
 
@@ -105,10 +105,10 @@ fi
 
 # Run tool check first
 echo -e "${BLUE}Checking required tools...${NC}"
-if ! run_tool_check > /dev/null 2>&1; then
+if ! run_tool_check "$@" > /dev/null 2>&1; then
     echo -e "${YELLOW}Some tools are missing. Running full check:${NC}"
     echo ""
-    run_tool_check
+    run_tool_check "$@"
     echo ""
     echo -e "${YELLOW}Install missing tools before continuing.${NC}"
     exit 1
@@ -127,7 +127,19 @@ else
 fi
 
 # Get the results directory (from the audit script output or use last created)
-RESULTS_DIR=$(ls -td $HOME/security-results-* 2>/dev/null | head -1)
+RESULTS_DIR=$(python3 - <<'PY'
+import os
+from pathlib import Path
+
+home = Path(os.path.expanduser("~"))
+dirs = sorted(
+    (p for p in home.glob("security-results-*") if p.is_dir()),
+    key=lambda p: p.stat().st_mtime,
+    reverse=True,
+)
+print(dirs[0]) if dirs else print("")
+PY
+)
 
 if [ -n "$RESULTS_DIR" ] && [ -d "$RESULTS_DIR" ]; then
     echo ""

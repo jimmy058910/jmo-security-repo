@@ -4,7 +4,34 @@
    <img src="assets/jmo-logo.png" alt="JMo Security Audit Tool Suite" width="220" />
 </p>
 
-A comprehensive security audit toolkit for analyzing repositories using multiple security scanning tools including Gitleaks, TruffleHog, Semgrep, and Nosey Parker.
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml?query=branch%3Amain)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fjmotools.com)](https://jmotools.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](#)
+[![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
+[![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](#support)
+
+<!-- CI/coverage/package badges (enable once configured)
+[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
+<!-- If/when a workflow exists, switch to:
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml)
+-->
+<!-- Codecov (enable after uploading coverage):
+[![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://codecov.io/gh/jimmy058910/jmo-security-repo)
+-->
+<!-- PyPI (enable after first release):
+[![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)
+-->
+
+A terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners (secrets, SAST, SBOM, IaC, Dockerfile) with a unified Python CLI, normalized outputs, and an HTML dashboard.
+
+👉 New here? Read the comprehensive User Guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+Docs hub: [docs/index.md](docs/index.md)
+Project homepage: [jmotools.com](https://jmotools.com)
+
+> Origin story: This started as part of a Cybersecurity Capstone Project. It has since grown into a general-purpose toolkit. I’d love for folks with deeper expertise to jump in—issues and PRs are welcome!
+
+Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and release steps.
 
 ## 🎯 Overview
 
@@ -12,53 +39,61 @@ This project provides an automated framework for conducting thorough security au
 
 ### Key Features
 
-- ✅ **Multi-Tool Scanning**: Integrates Gitleaks, TruffleHog, Semgrep, and Nosey Parker
-- 📊 **Comprehensive Reporting**: Generates HTML dashboards, markdown summaries, and detailed findings
+- ✅ **Multi-Tool Scanning**: Curated set covering secrets (gitleaks, noseyparker), SAST (semgrep, bandit), SBOM+vuln/misconfig (syft+trivy), IaC (checkov, tfsec), Dockerfile (hadolint)
+- 📊 **Comprehensive Reporting**: Unified findings (JSON/YAML), SARIF, Markdown summary, and an interactive HTML dashboard
 - 🎨 **Easy-to-Read Outputs**: Well-formatted reports with severity categorization
-- 🔄 **Automated Workflows**: Single command to run complete security audits
-- 📈 **Comparative Analysis**: Tool performance comparison and metrics
-- 🎯 **Actionable Insights**: Prioritized recommendations based on severity
+- 🔄 **Automated Workflows**: One CLI to scan, aggregate, and gate on severity (scan/report/ci)
+- 🧭 **Profiles and Overrides**: Named profiles, per-tool flags/timeouts, include/exclude patterns
+- 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Install or Update (curated tools)
 
-Install the required security tools:
+These targets detect Linux/WSL/macOS and install or upgrade the curated CLI tools used by this suite. They also surface helpful hints if a platform step needs manual action.
 
 ```bash
-# Check if tools are installed
-./scripts/cli/security_audit.sh --check
-
-# Or manually check
-./scripts/core/check_tools.sh
+make tools           # one-time install of curated tools
+make tools-upgrade   # refresh/upgrade curated tools
+make verify-env      # check OS/WSL/macOS and tool availability
+make dev-deps        # install Python dev dependencies
 ```
 
-Required tools:
-- **cloc**: Code metrics
-- **Gitleaks**: Git secret scanning
-- **TruffleHog**: Secret scanning with verification
-- **Semgrep**: Pattern-based vulnerability detection
-- **Nosey Parker**: Deep pattern matching
-- **jq**: JSON processing
+### Quick Start (Unified CLI)
 
-### Installation
+1) Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:
 
-1. Clone this repository:
 ```bash
-git clone https://github.com/jimmy058910/iod-capstone.git
-cd iod-capstone
+make verify-env
 ```
 
-2. Make scripts executable:
+2) Install Python dev dependencies (for running tests and reporters):
+
 ```bash
-find scripts -type f -name "*.sh" -exec chmod +x {} +
+make dev-deps
 ```
 
-3. Install required tools (see Tool Installation section below)
+3) Scan repositories using a profile, then aggregate reports:
+
+```bash
+# Scan immediate subfolders under ~/repos with the 'balanced' profile (default)
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --human-logs
+
+# Aggregate and write unified outputs to results/summaries
+# (positional or --results-dir are both accepted)
+python3 scripts/cli/jmo.py report ./results --profile --human-logs
+# or
+python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
+
+# Or do both in one step for CI with a failure threshold
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
+```
+
+Outputs include: summaries/findings.json, SUMMARY.md, findings.yaml, findings.sarif (enabled by default), dashboard.html, and timings.json (when profiling).
 
 ### Basic Usage
 
-#### Quick Setup with Helper Script
+#### Optional: Quick Setup with Helper Script
 
 Use the `populate_targets.sh` helper script to clone multiple repositories for testing (optimized for WSL):
 
@@ -76,21 +111,13 @@ Use the `populate_targets.sh` helper script to clone multiple repositories for t
 ./scripts/core/populate_targets.sh --unshallow
 ```
 
-#### Running Security Scans
+#### Running Security Scans (legacy shell script)
 
-1. **Simple Scan** - Scan repositories in default directory:
-```bash
-./scripts/cli/security_audit.sh -d ~/security-testing
-```
+Prefer the Python CLI above. For legacy flows, you can still use the shell wrapper:
 
-2. **Custom Output** - Specify custom output directory:
 ```bash
-./scripts/cli/security_audit.sh -d ~/my-repos -o ~/scan-results
-```
-
-3. **Check Tools** - Verify tool installation:
-```bash
-./scripts/cli/security_audit.sh --check
+./scripts/cli/security_audit.sh -d ~/security-testing    # scan
+./scripts/cli/security_audit.sh --check                  # verify tools
 ```
 
 #### End-to-End Workflow
@@ -99,8 +126,8 @@ Use the `populate_targets.sh` helper script to clone multiple repositories for t
 # 1. Clone test repositories (shallow for speed)
 ./scripts/core/populate_targets.sh --dest ~/test-repos --parallel 4
 
-# 2. Run security audit
-./scripts/cli/security_audit.sh -d ~/test-repos
+# 2. Run security audit (preferred)
+python3 scripts/cli/jmo.py ci --repos-dir ~/test-repos --fail-on HIGH --profile --human-logs
 
 # 3. View results
 cat ~/security-results-*/SUMMARY_REPORT.md
@@ -108,17 +135,19 @@ cat ~/security-results-*/SUMMARY_REPORT.md
 # Linux: xdg-open ~/security-results-*/dashboard.html
 ```
 
+Looking for screenshots and how to capture them? See: [docs/screenshots/README.md](docs/screenshots/README.md)
+
 ## 📚 Documentation
 
-### Workflow
+### Workflow (at a glance)
 
 The security audit follows this workflow:
 
 1. **Tool Verification**: Checks all required tools are installed
-2. **Repository Scanning**: Runs all security tools on each repository
-3. **Results Aggregation**: Collects and processes findings
-4. **Report Generation**: Creates multiple report formats
-5. **Dashboard Creation**: Generates interactive HTML dashboard
+2. **Repository Scanning**: jmo scan orchestrates tools per jmo.yml (profiles, overrides, retries)
+3. **Results Aggregation**: jmo report normalizes tool outputs to a CommonFinding shape
+4. **Report Generation**: JSON/MD/YAML/HTML/SARIF and suppression summary
+5. **Dashboard Creation**: Self-contained HTML dashboard with an optional profiling panel
 
 ### Output Structure
 
@@ -168,6 +197,14 @@ security-results-YYYYMMDD-HHMMSS/
    - Implementation strategy guide
    - Tool selection recommendations
 
+### How we normalize findings
+
+All tool outputs are converted into a single CommonFinding schema during aggregation. This enables a unified view (JSON/YAML/HTML/SARIF) and consistent gating.
+
+- Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
+- Required fields include: schemaVersion (1.0.0), id, ruleId, severity, tool (name/version), location (path/lines), and message. Optional fields include title, description, remediation, references, tags, cvss, and raw (original tool payload).
+- Fingerprint (id): deterministically derived from a stable subset of attributes (tool | ruleId | path | startLine | message snippet) to support cross-tool dedupe. The aggregation step deduplicates by this id.
+
 
 
 ## 🛠️ Tool Installation
@@ -211,6 +248,62 @@ curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scr
 # Nosey Parker
 # Download from: https://github.com/praetorian-inc/noseyparker/releases
 ```
+
+### Nosey Parker (manual install)
+
+Nosey Parker doesn’t ship via apt/brew universally. Install the release binary and put it on your PATH:
+
+1) Download the latest release for your OS/arch from:
+   https://github.com/praetorian-inc/noseyparker/releases
+
+2) Unpack and move the binary onto PATH (example for Linux x86_64):
+
+```bash
+tar -xzf noseyparker-*.tar.gz
+chmod +x noseyparker
+sudo mv noseyparker /usr/local/bin/
+noseyparker --version
+```
+
+Tip: run `make verify-env` to confirm the tool is detected.
+
+### Nosey Parker on WSL (native recommended) + Docker fallback
+
+On WSL Ubuntu, installing Nosey Parker natively is the most reliable path (prebuilt binaries can hit glibc issues). See “User Guide — Nosey Parker on WSL” for a short build-from-source flow using Rust and Boost. When the local binary is not available or fails to run, the CLI automatically falls back to a Docker-based runner.
+
+The CLI automatically falls back to a Docker-based Nosey Parker runner when the local binary is missing or not runnable (common on older WSL/glibc). When enabled via profiles, scans will transparently produce the expected JSON here:
+
+```
+results/individual-repos/<repo-name>/noseyparker.json
+```
+
+Requirements for the fallback:
+- Docker installed and running
+- Ability to pull or use `ghcr.io/praetorian-inc/noseyparker:latest`
+
+Manual usage (optional):
+
+```bash
+bash scripts/core/run_noseyparker_docker.sh \
+   --repo /path/to/repo \
+   --out results/individual-repos/<repo-name>/noseyparker.json
+```
+
+This mounts your repository read-only into the container, scans it, and writes a JSON report to the `--out` path. The CLI uses this same script automatically when needed.
+
+### Semgrep (latest via official script, optional)
+
+If you prefer the bleeding-edge standalone installer maintained by Semgrep:
+
+```bash
+curl -sL https://semgrep.dev/install.sh | sh
+
+# Ensure ~/.local/bin is on PATH (the installer places semgrep there by default)
+export PATH="$HOME/.local/bin:$PATH"
+semgrep --version
+```
+
+Note: we recommend isolating CLI tools via pipx or OS packages for stability. The official installer is a convenient alternative when you need the newest release.
 
 ## 📋 Advanced Usage
 
@@ -286,6 +379,105 @@ The dashboard generator supports:
 - Graceful handling of missing or empty scan results
 - UTF-8 safe file I/O for international characters
 
+### Unified CLI: report-only
+
+After scans complete, you can generate unified, normalized reports via the Python CLI:
+
+```bash
+# Default reports (formats controlled by jmo.yml)
+python3 scripts/cli/jmo.py report /path/to/security-results
+
+# Set thread workers explicitly for aggregation
+python3 scripts/cli/jmo.py report /path/to/security-results --threads 6
+
+# Record profiling timings (writes summaries/timings.json)
+python3 scripts/cli/jmo.py report /path/to/security-results --profile
+
+# Human-friendly colored logs (stderr)
+python3 scripts/cli/jmo.py report /path/to/security-results --human-logs
+```
+
+Or using Make:
+
+```bash
+make report RESULTS_DIR=/path/to/security-results THREADS=6
+make profile RESULTS_DIR=/path/to/security-results THREADS=6
+```
+
+When profiling is enabled, `timings.json` will include aggregate time, a recommended thread count, and per-job timings.
+
+### Unified CLI: scan/ci
+
+```bash
+# Scan a single repo with a custom tool subset and timeouts
+python3 scripts/cli/jmo.py scan --repo /path/to/repo --tools gitleaks semgrep --timeout 300 --human-logs
+
+# CI convenience – scan then report with gating on severity
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name balanced --fail-on HIGH --profile
+```
+
+### Output Structure (Summaries)
+
+The `summaries/` folder also contains unified outputs:
+
+```
+summaries/
+├── findings.json     # Unified normalized findings (machine-readable)
+├── SUMMARY.md        # Human-readable summary
+├── findings.yaml     # Optional YAML (requires PyYAML)
+├── dashboard.html    # Self-contained HTML view
+├── findings.sarif    # SARIF 2.1.0 for code scanning
+├── SUPPRESSIONS.md   # Suppression summary
+└── timings.json      # Profiling (when --profile used)
+```
+
+### Profiles, per-tool overrides, retries
+
+You can define named profiles in `jmo.yml` to control which tools run, include/exclude repo patterns, timeouts, and threads. You can also provide per-tool flags and timeouts, and a global retry count for flaky tools.
+
+Example `jmo.yml` snippet:
+
+```
+default_profile: fast
+retries: 1
+profiles:
+   fast:
+      tools: [gitleaks, semgrep]
+      include: ["*"]
+      exclude: ["big-monorepo*"]
+      timeout: 300
+      threads: 8
+      per_tool:
+         semgrep:
+            flags: ["--exclude", "node_modules", "--exclude", "dist"]
+            timeout: 180
+   deep:
+      tools: [gitleaks, semgrep, syft, trivy, hadolint, checkov, tfsec, noseyparker]
+      timeout: 1200
+      threads: 4
+
+per_tool:
+   trivy:
+      flags: ["--ignore-unfixed"]
+      timeout: 1200
+```
+
+Using a profile from CLI:
+
+```
+# Scan using profile 'fast' with human-friendly logs
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name fast --human-logs
+
+# CI convenience: scan then report, failing on HIGH or worse, record timings, use 'deep' profile
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name deep --fail-on HIGH --profile
+```
+
+Retries behavior:
+- Global `retries` (or per-profile) retries failed tool commands a limited number of times
+- Some tools use non-zero exit to indicate “findings”; we treat those as success codes to avoid useless retries
+
+Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
+
 4. **Generate Comparison Report**:
 ```bash
 ./scripts/core/generate_comparison_report.sh /path/to/results
@@ -293,16 +485,17 @@ The dashboard generator supports:
 
 ### Customizing Tool Execution
 
-Edit `scripts/core/run_security_audit.sh` to enable/disable tools:
+Prefer jmo.yml profiles and per_tool overrides. For one-off local tweaks, use:
 
 ```bash
-# Tool flags (set to 1 to enable, 0 to disable)
-RUN_CLOC=1
-RUN_GITLEAKS=1
-RUN_TRUFFLEHOG=1
-RUN_SEMGREP=1
-RUN_NOSEYPARKER=1
+python3 scripts/cli/jmo.py scan --repos-dir ~/repos --tools gitleaks semgrep --timeout 300
 ```
+
+## 📚 Examples, Screenshots, and Testing
+
+- Examples: see `docs/examples/README.md` for common CLI patterns and CI gating.
+- Screenshots: `docs/screenshots/README.md` and `docs/screenshots/capture.sh` to generate dashboard visuals.
+- Testing: see `TEST.md` for running lint, tests, and coverage locally (CI gate ≥85%).
 
 ## 🔍 Understanding Results
 
@@ -375,9 +568,17 @@ The HTML dashboard provides:
 
 Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
+## ❤️ Support
+
+If this toolkit saves you time, consider fueling development with an energy drink.
+
+- Badge link above jumps here: [Buy me an energy drink](#support)
+- When you’re ready, replace the badge target with your preferred platform: GitHub Sponsors (industry standard), Open Collective, Ko-fi, or Stripe Checkout.
+- GitHub Sponsors integrates directly with your GitHub profile and repository sidebar once enabled.
+
 ## 📝 License
 
-This project is part of the IOD Capstone program.
+MIT License. See LICENSE.
 
 ## 🔗 Related Resources
 

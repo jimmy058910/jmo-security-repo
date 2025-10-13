@@ -1,0 +1,46 @@
+# Default config for scanning and reporting
+# tools: default tool set (fallback when no profile selected)
+# outputs: which reporter formats to emit
+# fail_on: optional severity threshold to exit non-zero (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+
+# Curated default: prefer coverage over duplication.
+# Categories:
+# - Secrets: gitleaks, noseyparker (fast + deep). TruffleHog optional.
+# - SAST: semgrep
+# - SBOM+Vuln/Misconfig/Secrets: syft + trivy
+# - IaC: checkov (tfsec optional)
+# - Dockerfile: hadolint
+
+tools: [gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint]
+outputs: [json, md, yaml, html, sarif]
+fail_on: ""
+
+default_profile: balanced
+
+profiles:
+  fast:
+    tools: [gitleaks, semgrep]
+    threads: 4
+    timeout: 300
+    per_tool:
+      semgrep:
+        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+  balanced:
+    tools: [gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint]
+    threads: 4
+    timeout: 600
+    per_tool:
+      semgrep:
+        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+      trivy:
+        flags: ["--no-progress"]
+  deep:
+    tools: [gitleaks, noseyparker, trufflehog, semgrep, syft, trivy, checkov, tfsec, hadolint, bandit, osv-scanner]
+    threads: 4
+    timeout: 900
+    retries: 1
+    per_tool:
+      semgrep:
+        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+      trivy:
+        flags: ["--no-progress"]

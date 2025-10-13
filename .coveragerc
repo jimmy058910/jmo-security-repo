@@ -1,0 +1,14 @@
+[run]
+source = scripts
+omit =
+    scripts/core/generate_dashboard.py
+    scripts/core/reporters/suppression_reporter.py
+    scripts/core/schema_utils.py
+    scripts/core/suppress.py
+
+[report]
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.: 
+    raise SystemExit

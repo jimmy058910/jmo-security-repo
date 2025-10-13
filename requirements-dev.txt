@@ -1,0 +1,8 @@
+pytest
+pytest-cov
+hypothesis
+ruff
+bandit
+black
+pyyaml
+jsonschema

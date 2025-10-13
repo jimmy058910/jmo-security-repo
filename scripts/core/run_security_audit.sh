@@ -1,8 +1,7 @@
 #!/bin/bash
 # run_security_audit.sh - Master security testing orchestrator
 
-set -e  # Exit on error
-set -o pipefail  # Exit on pipe failure
+set -Eeuo pipefail  # Exit on error, unset, and pipefail
 
 # Configuration
 TESTING_DIR="${1:-$HOME/security-testing}"
@@ -88,7 +87,8 @@ EOF
 # Function to test individual repository
 test_repository() {
     local repo_path=$1
-    local repo_name=$(basename "$repo_path")
+    local repo_name
+    repo_name=$(basename "$repo_path")
     local repo_results="$RESULTS_DIR/individual-repos/$repo_name"
     
     mkdir -p "$repo_results"
@@ -143,10 +143,12 @@ EOF
                 total_issues=$((total_issues + GITLEAKS_COUNT))
                 high_issues=$((high_issues + GITLEAKS_COUNT))
                 
-                echo "## 🔍 Gitleaks Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Secrets Found:** $GITLEAKS_COUNT" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔍 Gitleaks Results"
+                                    echo ""
+                                    echo "**Secrets Found:** $GITLEAKS_COUNT"
+                                    echo ""
+                                } >> "$repo_results/README.md"
                 
                 if [ "$GITLEAKS_COUNT" -gt 0 ]; then
                     echo "### Findings Details:" >> "$repo_results/README.md"
@@ -156,10 +158,12 @@ EOF
                 fi
             else
                 log_warning "Gitleaks JSON output not found for $repo_name"
-                echo "## 🔍 Gitleaks Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Status:** No findings or scan failed" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔍 Gitleaks Results"
+                                    echo ""
+                                    echo "**Status:** No findings or scan failed"
+                                    echo ""
+                                } >> "$repo_results/README.md"
             fi
         else
             log_warning "Gitleaks not installed, skipping"
@@ -183,12 +187,14 @@ EOF
                 critical_issues=$((critical_issues + TRUFFLE_VERIFIED))
                 medium_issues=$((medium_issues + TRUFFLE_TOTAL - TRUFFLE_VERIFIED))
                 
-                echo "## 🔎 TruffleHog Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Total Findings:** $TRUFFLE_TOTAL" >> "$repo_results/README.md"
-                echo "**Verified Secrets:** $TRUFFLE_VERIFIED" >> "$repo_results/README.md"
-                echo "**Unverified:** $((TRUFFLE_TOTAL - TRUFFLE_VERIFIED))" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔎 TruffleHog Results"
+                                    echo ""
+                                    echo "**Total Findings:** $TRUFFLE_TOTAL"
+                                    echo "**Verified Secrets:** $TRUFFLE_VERIFIED"
+                                    echo "**Unverified:** $((TRUFFLE_TOTAL - TRUFFLE_VERIFIED))"
+                                    echo ""
+                                } >> "$repo_results/README.md"
                 
                 if [ "$TRUFFLE_VERIFIED" -gt 0 ]; then
                     echo "### ⚠️ Verified Secrets (CRITICAL):" >> "$repo_results/README.md"
@@ -197,10 +203,12 @@ EOF
                     echo "" >> "$repo_results/README.md"
                 fi
             else
-                echo "## 🔎 TruffleHog Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Status:** No findings or scan failed" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔎 TruffleHog Results"
+                                    echo ""
+                                    echo "**Status:** No findings or scan failed"
+                                    echo ""
+                                } >> "$repo_results/README.md"
             fi
         else
             log_warning "TruffleHog not installed, skipping"
@@ -228,13 +236,15 @@ EOF
                 high_issues=$((high_issues + SEMGREP_HIGH))
                 medium_issues=$((medium_issues + SEMGREP_MEDIUM))
                 
-                echo "## 🛡️ Semgrep Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Total Findings:** $SEMGREP_TOTAL" >> "$repo_results/README.md"
-                echo "- **High Severity (ERROR):** $SEMGREP_HIGH" >> "$repo_results/README.md"
-                echo "- **Medium Severity (WARNING):** $SEMGREP_MEDIUM" >> "$repo_results/README.md"
-                echo "- **Low Severity (INFO):** $SEMGREP_LOW" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🛡️ Semgrep Results"
+                                    echo ""
+                                    echo "**Total Findings:** $SEMGREP_TOTAL"
+                                    echo "- **High Severity (ERROR):** $SEMGREP_HIGH"
+                                    echo "- **Medium Severity (WARNING):** $SEMGREP_MEDIUM"
+                                    echo "- **Low Severity (INFO):** $SEMGREP_LOW"
+                                    echo ""
+                                } >> "$repo_results/README.md"
                 
                 if [ "$SEMGREP_HIGH" -gt 0 ]; then
                     echo "### High Severity Issues:" >> "$repo_results/README.md"
@@ -243,10 +253,12 @@ EOF
                     echo "" >> "$repo_results/README.md"
                 fi
             else
-                echo "## 🛡️ Semgrep Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Status:** No findings or scan failed" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🛡️ Semgrep Results"
+                                    echo ""
+                                    echo "**Status:** No findings or scan failed"
+                                    echo ""
+                                } >> "$repo_results/README.md"
             fi
         else
             log_warning "Semgrep not installed, skipping"
@@ -276,10 +288,12 @@ EOF
                 total_issues=$((total_issues + NP_FINDINGS))
                 high_issues=$((high_issues + NP_FINDINGS))
                 
-                echo "## 🔬 Nosey Parker Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Total Findings:** $NP_FINDINGS" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔬 Nosey Parker Results"
+                                    echo ""
+                                    echo "**Total Findings:** $NP_FINDINGS"
+                                    echo ""
+                                } >> "$repo_results/README.md"
 
                 if [ "$NP_FINDINGS" -gt 0 ]; then
                     echo "### Sensitive Patterns Detected:" >> "$repo_results/README.md"
@@ -293,10 +307,12 @@ EOF
                 # Fallback to text parsing
                 NP_FINDINGS=$(noseyparker report --datastore "$NP_DATASTORE" 2>/dev/null | grep -oP '\d+(?= findings)' || echo 0)
                 
-                echo "## 🔬 Nosey Parker Results" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
-                echo "**Total Findings:** $NP_FINDINGS" >> "$repo_results/README.md"
-                echo "" >> "$repo_results/README.md"
+                                {
+                                    echo "## 🔬 Nosey Parker Results"
+                                    echo ""
+                                    echo "**Total Findings:** $NP_FINDINGS"
+                                    echo ""
+                                } >> "$repo_results/README.md"
             fi
             
             # Cleanup
@@ -307,18 +323,20 @@ EOF
     fi
     
     # Add summary section to repo report
-    echo "---" >> "$repo_results/README.md"
-    echo "" >> "$repo_results/README.md"
-    echo "## 📊 Summary" >> "$repo_results/README.md"
-    echo "" >> "$repo_results/README.md"
-    echo "**Total Issues Found:** $total_issues" >> "$repo_results/README.md"
-    echo "- **Critical:** $critical_issues" >> "$repo_results/README.md"
-    echo "- **High:** $high_issues" >> "$repo_results/README.md"
-    echo "- **Medium:** $medium_issues" >> "$repo_results/README.md"
-    echo "" >> "$repo_results/README.md"
-    echo "---" >> "$repo_results/README.md"
-    echo "" >> "$repo_results/README.md"
-    echo "*📁 Full logs and JSON outputs available in this directory*" >> "$repo_results/README.md"
+    {
+        echo "---"
+        echo ""
+        echo "## 📊 Summary"
+        echo ""
+        echo "**Total Issues Found:** $total_issues"
+        echo "- **Critical:** $critical_issues"
+        echo "- **High:** $high_issues"
+        echo "- **Medium:** $medium_issues"
+        echo ""
+        echo "---"
+        echo ""
+        echo "*📁 Full logs and JSON outputs available in this directory*"
+    } >> "$repo_results/README.md"
     
     # Save metrics for aggregation
     echo "$repo_name,$total_issues,$critical_issues,$high_issues,$medium_issues" >> "$RESULTS_DIR/summaries/metrics.csv"
@@ -608,9 +626,11 @@ fi
 
 log_info "Rendering HTML dashboard..."
 if command -v python3 &> /dev/null; then
-    python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$RESULTS_DIR/dashboard.html" >/dev/null 2>&1 && \
-        log_success "Dashboard written to $RESULTS_DIR/dashboard.html" || \
+    if python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$RESULTS_DIR/dashboard.html" >/dev/null 2>&1; then
+        log_success "Dashboard written to $RESULTS_DIR/dashboard.html"
+    else
         log_warning "Dashboard generation failed"
+    fi
 fi
 
 # Generate comparative analysis

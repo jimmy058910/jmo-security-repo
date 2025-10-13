@@ -5,6 +5,7 @@
 # Example vulnerable test repositories
 https://github.com/OWASP/NodeGoat.git
 https://github.com/WebGoat/WebGoat.git
+https://github.com/OWASP/railsgoat.git
 
 # Add your repositories here
 # https://github.com/username/repo1.git

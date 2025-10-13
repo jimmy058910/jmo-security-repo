@@ -1,18 +1,16 @@
-# Quick Start Guide - Security Audit Tool
+# Quick Start – JMo Security CLI
 
-This guide will help you get started with the security audit tools in under 5 minutes.
+Get up and running in under 5 minutes using the unified Python CLI (scan/report/ci).
 
-## Step 1: Check Prerequisites
-
-Run the tool check to see what's installed:
+## Step 1: Verify environment
 
 ```bash
-./scripts/cli/security_audit.sh --check
+make verify-env
 ```
 
-If any tools are missing, install them following the instructions in the main README.md.
+This detects Linux/WSL/macOS, checks for optional tools (gitleaks, semgrep, trivy, etc.), and prints install hints.
 
-## Step 2: Prepare Your Repositories
+## Step 2: Prepare your repositories
 
 ### Option A: Use Helper Script (Recommended - Fast & Easy)
 
@@ -59,37 +57,36 @@ Some secret scanners work better with full git history. If you used shallow clon
 ./scripts/core/populate_targets.sh --dest ~/security-testing --unshallow
 ```
 
-## Step 3: Run the Security Audit
+## Step 3: Run the security audit
 
-Execute the comprehensive security scan:
+Use the Python CLI for a single repo or a directory of repos:
 
 ```bash
-cd /path/to/iod-capstone
-./scripts/cli/security_audit.sh -d ~/security-testing
-```
+# Scan + report in one step for CI-like flow
+python3 scripts/cli/jmo.py ci --repos-dir ~/security-testing --fail-on HIGH --profile --human-logs
 
-The script will:
-- ✅ Verify all tools are installed
-- 🔍 Scan each repository with all security tools
-- 📊 Generate comprehensive reports
-- 🎨 Create an interactive HTML dashboard
+# Or run scan and report separately
+python3 scripts/cli/jmo.py scan --repos-dir ~/security-testing --profile-name balanced --human-logs
+python3 scripts/cli/jmo.py report ./results --profile --human-logs
+```
 
 ## Step 4: Review Results
 
-After the scan completes, you'll see output like:
+After the scan completes, results land in `results/` (or the directory you pass via `--results-dir`). Unified artifacts live under `results/summaries/`:
 
-```
-📁 Results Directory: /home/user/security-results-20251010-111033
+- `SUMMARY.md` — human-readable overview with severity counts
+- `findings.json` / `findings.yaml` — normalized data for automation (YAML requires PyYAML)
+- `dashboard.html` — interactive view of all findings
+- `findings.sarif` — SARIF 2.1.0 for code scanning integrations
+- `timings.json` — written when `--profile` is used
+- `SUPPRESSIONS.md` — appears when a suppression file filtered findings
 
-📊 Generated Reports:
-  • Summary Report:    /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
-  • HTML Dashboard:    /home/user/security-results-20251010-111033/dashboard.html
-  • Tool Comparison:   /home/user/security-results-20251010-111033/tool-comparisons/comparison.md
+Quick commands:
 
-Quick Commands:
-  View summary:        cat /home/user/security-results-20251010-111033/SUMMARY_REPORT.md
-  Open dashboard (mac):open /home/user/security-results-20251010-111033/dashboard.html
-  Open dashboard (linux):xdg-open /home/user/security-results-20251010-111033/dashboard.html
+```bash
+cat results/summaries/SUMMARY.md
+xdg-open results/summaries/dashboard.html   # macOS: open
+ls -1 results/individual-repos/infra-demo   # per-tool raw outputs
 ```
 
 ### Review Priority:
@@ -97,6 +94,7 @@ Quick Commands:
 1. **Open the HTML Dashboard** - Visual overview of all findings
 2. **Check SUMMARY_REPORT.md** - Executive summary with recommendations
 3. **Review Individual Reports** - Detailed findings per repository
+4. Optional: For a machine-readable format, check summaries/findings.json or summaries/findings.sarif
 
 ## Understanding the Results
 
@@ -117,7 +115,7 @@ Quick Commands:
 
 ## Example Workflows
 
-### Workflow 1: Quick Scan of Single Repo
+### Workflow 1: Quick scan of single repo
 
 ```bash
 # Create test directory with one repo
@@ -125,14 +123,15 @@ mkdir -p ~/quick-scan
 cd ~/quick-scan
 git clone https://github.com/username/test-repo.git
 
-# Run scan
-./scripts/cli/security_audit.sh -d ~/quick-scan
+# Run scan (Python CLI)
+python3 scripts/cli/jmo.py scan --repos-dir ~/quick-scan --human-logs
 
 # View results
-cat ~/security-results-*/SUMMARY_REPORT.md
+cat results/summaries/SUMMARY.md
+ls -1 results/individual-repos
 ```
 
-### Workflow 2: Comprehensive Multi-Repo Audit (Using Helper Script)
+### Workflow 2: Comprehensive multi-repo audit (helper script)
 
 ```bash
 # Create a custom repository list
@@ -145,14 +144,15 @@ EOF
 # Clone all repos in parallel (fast shallow clones)
 ./scripts/core/populate_targets.sh --list my-repos.txt --dest ~/comprehensive-audit --parallel 6
 
-# Run comprehensive scan
-./scripts/cli/security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
+# Run comprehensive scan + report via CLI
+python3 scripts/cli/jmo.py ci --repos-dir ~/comprehensive-audit --profile-name deep --fail-on HIGH --profile
 
 # Open dashboard in browser
-open ~/audit-results-*/dashboard.html
+xdg-open results/summaries/dashboard.html   # macOS: open
+ls -1 results/summaries
 ```
 
-### Workflow 2b: Comprehensive Multi-Repo Audit (Manual Method)
+### Workflow 2b: Comprehensive multi-repo audit (manual)
 
 ```bash
 # Prepare multiple repositories
@@ -161,35 +161,41 @@ cd ~/comprehensive-audit
 
 # Clone multiple repos
 for repo in repo1 repo2 repo3; do
-    git clone https://github.com/org/$repo.git
+  git clone https://github.com/org/$repo.git
 done
 
-# Run comprehensive scan
-./scripts/cli/security_audit.sh -d ~/comprehensive-audit -o ~/audit-results-$(date +%Y%m%d)
+# Run comprehensive scan via CLI
+python3 scripts/cli/jmo.py ci --repos-dir ~/comprehensive-audit --profile-name balanced --fail-on HIGH --profile
 
 # Open dashboard in browser
-open ~/audit-results-*/dashboard.html
+xdg-open results/summaries/dashboard.html   # macOS: open
 ```
 
-### Workflow 3: Scheduled Weekly Audit
+### Workflow 3: Scheduled weekly audit
 
 Create a cron job or scheduled task:
 
 ```bash
 # Add to crontab (runs every Monday at 9 AM)
-0 9 * * 1 /path/to/iod-capstone/scripts/cli/security_audit.sh -d ~/repos-to-monitor
+0 9 * * 1 python3 /path/to/repo/scripts/cli/jmo.py ci --repos-dir ~/repos-to-monitor --profile-name fast --fail-on HIGH --profile
 
 # Or use a shell script
 cat > ~/weekly-audit.sh << 'EOF'
 #!/bin/bash
-AUDIT_DIR=~/weekly-security-audit-$(date +%Y%m%d)
-/path/to/iod-capstone/scripts/cli/security_audit.sh -d ~/production-repos -o $AUDIT_DIR
-# Email results or upload to dashboard
+set -euo pipefail
+WORKDIR=~/weekly-security-audit
+python3 /path/to/repo/scripts/cli/jmo.py ci \
+  --repos-dir ~/production-repos \
+  --results-dir "$WORKDIR" \
+  --profile-name balanced \
+  --fail-on HIGH \
+  --profile
+echo "Summaries written to $WORKDIR/summaries"
 EOF
 chmod +x ~/weekly-audit.sh
 ```
 
-### Workflow 4: CI/CD Integration
+### Workflow 4: CI/CD integration
 
 Add to your CI/CD pipeline:
 
@@ -212,9 +218,9 @@ jobs:
         run: |
           # Install Gitleaks, TruffleHog, Semgrep
           
-      - name: Run Security Audit
+      - name: Run Security Audit (scan + report)
         run: |
-          ./scripts/cli/security_audit.sh -d .
+          python3 scripts/cli/jmo.py ci --repos-dir . --profile-name balanced --fail-on HIGH --profile
           
       - name: Upload Results
         uses: actions/upload-artifact@v2
@@ -254,6 +260,8 @@ ls -la ~/security-testing/
 
 ### Issue: "Out of memory during scan"
 
+Note for WSL users: For the best Nosey Parker experience on WSL, prefer a native install; see the User Guide section “Nosey Parker on WSL (native recommended) and auto-fallback (Docker)”.
+
 **Solution**: Scan repos in smaller batches
 ```bash
 # Instead of scanning all at once, batch them
@@ -275,6 +283,21 @@ For more advanced features and customization options, see:
 - [README.md](README.md) - Comprehensive documentation
 - [Tool Comparison Report](tool-comparisons/comparison.md) - Understanding tool capabilities
 - Individual tool documentation for detailed configuration
+
+### Profiling and Performance
+
+To record timing information and a heuristic thread recommendation when generating unified reports:
+
+```bash
+# After a scan completes, generate reports with profiling enabled
+make profile RESULTS_DIR=/path/to/security-results
+
+# Or directly via CLI
+python3 scripts/cli/jmo.py report /path/to/security-results --profile
+
+# Inspect timings
+cat /path/to/security-results/summaries/timings.json
+```
 
 ## Getting Help
 

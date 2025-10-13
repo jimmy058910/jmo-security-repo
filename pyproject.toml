@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jmo-security"
+version = "0.3.1"
+description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "James Moceri", email = "general@jmogaming.com" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+reporting = ["PyYAML>=6.0", "jsonschema>=4.0"]
+
+[project.scripts]
+jmo = "scripts.cli.jmo:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["scripts*"]

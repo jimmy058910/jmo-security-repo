@@ -269,6 +269,15 @@ if [ ! -f "$RESULTS_DIR/dashboard.html" ]; then
     fi
 fi
 
+# Generate unified normalized reports (JSON/MD/YAML/HTML/SARIF)
+log_info "Generating unified reports (JSON/MD/YAML/HTML/SARIF)..."
+if command -v python3 &> /dev/null; then
+    # Prefer CLI which respects jmo.yml
+    python3 "$REPO_ROOT/scripts/cli/jmo.py" report "$RESULTS_DIR" --out "$RESULTS_DIR/summaries" --config "$REPO_ROOT/jmo.yml" || log_warning "Unified report generation encountered issues"
+else
+    log_warning "Python 3 not found, skipping unified report generation"
+fi
+
 # Verify artifacts if requested
 if [ "$VERIFY" -eq 1 ]; then
     echo ""

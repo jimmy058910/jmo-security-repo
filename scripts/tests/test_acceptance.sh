@@ -6,6 +6,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="/tmp/acceptance-test-$$"
+SCRIPTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CORE_DIR="$SCRIPTS_ROOT/core"
+CLI_DIR="$SCRIPTS_ROOT/cli"
 
 # Colors
 GREEN='\033[0;32m'
@@ -77,7 +80,7 @@ echo ""
 
 # Test 1: Default output location
 echo "Test: Dashboard generation with default output..."
-if OUTPUT=$(python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" 2>&1); then
+if OUTPUT=$(python3 "$CORE_DIR/generate_dashboard.py" "$RESULTS_DIR" 2>&1); then
     if [ -f "$RESULTS_DIR/dashboard.html" ]; then
         echo -e "${GREEN}✓ PASS${NC} - Dashboard created without errors"
         echo "  $OUTPUT" | grep "Total findings:"
@@ -95,7 +98,7 @@ echo ""
 # Test 2: Custom output path (from acceptance criteria)
 echo "Test: Dashboard with custom output path (reports/dashboard.html)..."
 CUSTOM_OUT="$TEST_DIR/reports/dashboard.html"
-if python3 "$SCRIPT_DIR/generate_dashboard.py" "$RESULTS_DIR" "$CUSTOM_OUT" 2>&1; then
+if python3 "$CORE_DIR/generate_dashboard.py" "$RESULTS_DIR" "$CUSTOM_OUT" 2>&1; then
     if [ -f "$CUSTOM_OUT" ]; then
         echo -e "${GREEN}✓ PASS${NC} - Dashboard created at custom path with parent directory creation"
     else
@@ -111,8 +114,8 @@ echo ""
 # Verify dashboard renders (contains expected HTML structure)
 echo "Test: Dashboard renders valid HTML..."
 if grep -q "<!DOCTYPE html>" "$RESULTS_DIR/dashboard.html" && \
-   grep -q "Security Audit Dashboard" "$RESULTS_DIR/dashboard.html" && \
-   grep -q "Total Findings" "$RESULTS_DIR/dashboard.html"; then
+    grep -q "Security Audit Dashboard" "$RESULTS_DIR/dashboard.html" && \
+    grep -q "Total Findings" "$RESULTS_DIR/dashboard.html"; then
     echo -e "${GREEN}✓ PASS${NC} - Dashboard contains valid HTML structure"
 else
     echo -e "${RED}✗ FAIL${NC} - Dashboard missing expected HTML elements"
@@ -131,11 +134,11 @@ echo "Wrapper script uses absolute paths without errors"
 echo ""
 
 # Verify REPO_ROOT calculation
-WRAPPER_SCRIPT="$SCRIPT_DIR/scripts/run_audit_and_report.sh"
+WRAPPER_SCRIPT="$CLI_DIR/run_audit_and_report.sh"
 if [ -f "$WRAPPER_SCRIPT" ]; then
     # Check that temp script is not used
-    if grep -q 'TEMP_AUDIT_SCRIPT="/tmp/run_security_audit_wrapper' "$WRAPPER_SCRIPT" && \
-       grep -q 'cat > "$TEMP_AUDIT_SCRIPT"' "$WRAPPER_SCRIPT"; then
+     if grep -q "TEMP_AUDIT_SCRIPT=\"/tmp/run_security_audit_wrapper" "$WRAPPER_SCRIPT" && \
+         grep -q "cat > \"\$TEMP_AUDIT_SCRIPT\"" "$WRAPPER_SCRIPT"; then
         echo -e "${RED}✗ FAIL${NC} - Wrapper still uses temp script workaround"
         exit 1
     else
@@ -143,7 +146,7 @@ if [ -f "$WRAPPER_SCRIPT" ]; then
     fi
     
     # Check that absolute paths are used
-    if grep -q 'AUDIT_SCRIPT="$REPO_ROOT/run_security_audit.sh"' "$WRAPPER_SCRIPT"; then
+    if grep -q "AUDIT_SCRIPT=\"\$CORE_DIR/run_security_audit.sh\"" "$WRAPPER_SCRIPT"; then
         echo -e "${GREEN}✓ PASS${NC} - Wrapper uses absolute path for audit script"
     else
         echo -e "${RED}✗ FAIL${NC} - Wrapper doesn't use absolute path for audit script"
@@ -190,6 +193,10 @@ echo "  ✓ VERIFY mode normalizes JSON files"
 echo "  ✓ Dashboard auto-generation enabled"
 echo ""
 
-# Cleanup
-rm -rf "$TEST_DIR"
-echo "Test artifacts cleaned up."
+# Cleanup (unless debugging)
+if [ "${KEEP_RESULTS:-0}" -eq 1 ]; then
+    echo "KEEP_RESULTS=1 set; leaving test artifacts in $TEST_DIR"
+else
+    rm -rf "$TEST_DIR"
+    echo "Test artifacts cleaned up."
+fi

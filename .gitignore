@@ -1,3 +1,5 @@
+# Review tracking artifacts
+REVIEW.md
 # Python
 __pycache__/
 *.py[cod]
@@ -26,7 +28,15 @@ Thumbs.db
 # Test results and temporary files
 /tmp/
 *.log
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Security scan results (don't commit actual scan results)
 security-results-*/
 results/
+
+# (formerly) Local roadmap file removed; keep repo docs public
+
+# Private repo search and outputs (moved under ai-search)
+/ai-search

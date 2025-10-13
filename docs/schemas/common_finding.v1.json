@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jmo.local/schemas/common_finding.v1.json",
+  "title": "CommonFinding",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "ruleId",
+    "severity",
+    "tool",
+    "location",
+    "message"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "id": { "type": "string", "description": "Deterministic fingerprint" },
+    "ruleId": { "type": "string" },
+    "title": { "type": "string" },
+    "message": { "type": "string" },
+    "description": { "type": "string" },
+    "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+    "cvss": { "type": "number" },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "startLine": { "type": "integer", "minimum": 0 },
+        "endLine": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "remediation": { "type": "string" },
+    "references": { "type": "array", "items": { "type": "string", "format": "uri" } },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "raw": { "type": "object" }
+  },
+  "additionalProperties": true
+}

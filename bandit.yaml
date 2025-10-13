@@ -1,0 +1,20 @@
+# Bandit configuration for jmo-security-repo
+# Goal: keep Bandit strict on source code while reducing noise in tests/docs/samples
+
+# Exclude non-source directories from recursive scans
+exclude_dirs:
+  - .venv
+  - venv
+  - docs
+  - samples
+  - assets
+  - archive
+  - tests
+
+# Do not globally skip tests; we handle targeted skips via Makefile for tests/ only.
+skips: []
+
+# Set minimum severity/confidence thresholds for reporting (default is LOW/HIGH)
+# Keep defaults by commenting these out; uncomment to raise thresholds if needed.
+# severity: MEDIUM
+# confidence: HIGH

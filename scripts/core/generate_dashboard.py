@@ -2,9 +2,8 @@
 # generate_dashboard.py - Create HTML dashboard with metrics
 
 import json
-import os
-import sys
 import html
+import sys
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
@@ -222,7 +221,13 @@ def calculate_metrics(results_dir):
 
     all_findings = []
     repo_stats = []
-    tool_stats = defaultdict(lambda: {'count': 0, 'repos': set()})
+    # Initialize tool stats explicitly to avoid type ambiguity and ensure stable keys
+    tool_stats = {
+        'gitleaks': {'count': 0, 'repos': set()},
+        'trufflehog': {'count': 0, 'repos': set()},
+        'semgrep': {'count': 0, 'repos': set()},
+        'noseyparker': {'count': 0, 'repos': set()},
+    }
     
     if not repos_dir.exists() or not repos_dir.is_dir():
         print(f"Warning: Results directory '{repos_dir}' not found. Returning empty dashboard metrics.")
@@ -321,10 +326,11 @@ def calculate_metrics(results_dir):
     # Calculate unique issues (by type)
     unique_types = set(f.get('type', 'unknown') for f in all_findings)
 
+    # Convert repo sets to sorted lists for display and potential JSON compatibility
     normalized_tool_stats = {
         tool: {
             'count': stats['count'],
-            'repos': stats['repos']
+            'repos': sorted(list(stats['repos'])),
         }
         for tool, stats in tool_stats.items()
     }

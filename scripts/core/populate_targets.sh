@@ -17,7 +17,8 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default values
-REPO_LIST="${SCRIPT_DIR}/../samples/repos.txt"
+# Resolve to repo-root/samples/repos.txt (SCRIPT_DIR is scripts/core)
+REPO_LIST="${SCRIPT_DIR}/../../samples/repos.txt"
 DEST_DIR="$HOME/security-testing"
 SHALLOW=1
 PARALLEL=4
@@ -153,7 +154,8 @@ clone_repo() {
     local shallow="$3"
     
     # Extract repo name from URL
-    local repo_name=$(basename "$repo_url" .git)
+    local repo_name
+    repo_name=$(basename "$repo_url" .git)
     local repo_path="$dest_dir/$repo_name"
     
     # Skip if already exists
@@ -185,7 +187,8 @@ clone_repo() {
 # Function to unshallow a repository
 unshallow_repo() {
     local repo_path="$1"
-    local repo_name=$(basename "$repo_path")
+    local repo_name
+    repo_name=$(basename "$repo_path")
     
     if [ ! -d "$repo_path/.git" ]; then
         log_warning "Not a git repository: $repo_name (skipping)"
@@ -303,6 +306,6 @@ if [ "$SHALLOW" -eq 1 ]; then
 fi
 
 echo -e "${CYAN}📝 Next Steps:${NC}"
-echo -e "   1. Run security audit: ${BLUE}./security_audit.sh -d $DEST_DIR${NC}"
+echo -e "   1. Run security audit: ${BLUE}./scripts/cli/security_audit.sh -d $DEST_DIR${NC}"
 echo -e "   2. View repositories:  ${BLUE}ls -la $DEST_DIR${NC}"
 echo ""
