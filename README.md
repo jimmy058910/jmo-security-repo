@@ -9,11 +9,10 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)
 [![Website](https://img.shields.io/website?url=https%3A%2F%2Fjmotools.com)](https://jmotools.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](#)
-```bash
+[![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+
 [![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
 [![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](https://ko-fi.com/jmogaming)
-```
 
 <!-- CI/coverage/package badges (enable once configured)
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
@@ -140,19 +139,19 @@ We ship a `.yamllint.yaml` and validate GitHub Actions workflows via `actionlint
 
 ### Quick Start (Unified CLI)
 
-1) Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:
+1. Verify your environment (Linux/WSL/macOS) and see install hints for optional tools:
 
 ```bash
 make verify-env
 ```
 
-2) Install Python dev dependencies (for running tests and reporters):
+1. Install Python dev dependencies (for running tests and reporters):
 
 ```bash
 make dev-deps
 ```
 
-3) Scan repositories using a profile, then aggregate reports:
+1. Scan repositories using a profile, then aggregate reports:
 
 ```bash
 # Scan immediate subfolders under ~/repos with the 'balanced' profile (default)
@@ -163,24 +162,21 @@ python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --hu
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 # or
 python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
-```bash
-
-# Or do both in one step for CI with a failure threshold
-python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
+
+#### Or do both in one step for CI with a failure threshold
+
+```bash
+python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
 
 Outputs include: summaries/findings.json, SUMMARY.md, findings.yaml, findings.sarif (enabled by default), dashboard.html, and timings.json (when profiling).
-```bash
 
 ### Basic Usage
-```
 
 #### Optional: Quick Setup with Helper Script
-```bash
 
 Use the `populate_targets.sh` helper script to clone multiple repositories for testing (optimized for WSL):
-```
 
 ```bash
 # Clone sample vulnerable repos (fast shallow clones)
@@ -236,7 +232,7 @@ The security audit follows this workflow:
 
 ### Output Structure
 
-```
+```text
 security-results-YYYYMMDD-HHMMSS/
 ├── SUMMARY_REPORT.md              # Executive summary
 ├── dashboard.html                  # Interactive HTML dashboard
@@ -338,10 +334,10 @@ curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scr
 
 Nosey Parker doesn’t ship via apt/brew universally. Install the release binary and put it on your PATH:
 
-1) Download the latest release for your OS/arch from:
+1. Download the latest release for your OS/arch from:
    https://github.com/praetorian-inc/noseyparker/releases
 
-2) Unpack and move the binary onto PATH (example for Linux x86_64):
+2. Unpack and move the binary onto PATH (example for Linux x86_64):
 
 ```bash
 tar -xzf noseyparker-*.tar.gz
@@ -358,7 +354,7 @@ On WSL Ubuntu, installing Nosey Parker natively is the most reliable path (prebu
 
 The CLI automatically falls back to a Docker-based Nosey Parker runner when the local binary is missing or not runnable (common on older WSL/glibc). When enabled via profiles, scans will transparently produce the expected JSON here:
 
-```
+```text
 results/individual-repos/<repo-name>/noseyparker.json
 ```
 
@@ -424,7 +420,8 @@ This helper script streamlines the process of cloning multiple repositories for 
 ```
 
 **Repository List Format (`samples/repos.txt`):**
-```
+
+```text
 # One GitHub repository URL per line
 # Lines starting with # are comments
 https://github.com/user/repo1.git
@@ -432,6 +429,7 @@ https://github.com/user/repo2.git
 ```
 
 **Performance Tips for WSL:**
+
 1. Use shallow clones initially for 10x faster cloning
 2. Adjust `--parallel` based on network speed (default: 4)
 3. Use `--unshallow` only if secret scanners need full git history
@@ -440,16 +438,19 @@ https://github.com/user/repo2.git
 ### Running Individual Scripts
 
 1. **Tool Check Only**:
+
 ```bash
 ./scripts/core/check_tools.sh
 ```
 
-2. **Main Audit Script**:
+1. **Main Audit Script**:
+
 ```bash
 ./scripts/core/run_security_audit.sh [testing_directory] [output_directory]
 ```
 
-3. **Generate Dashboard Only**:
+1. **Generate Dashboard Only**:
+
 ```bash
 # Generate dashboard with default output (results_dir/dashboard.html)
 python3 scripts/core/generate_dashboard.py /path/to/results
@@ -505,7 +506,7 @@ python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name balanced --fail
 
 The `summaries/` folder also contains unified outputs:
 
-```
+```text
 summaries/
 ├── findings.json     # Unified normalized findings (machine-readable)
 ├── SUMMARY.md        # Human-readable summary
@@ -522,7 +523,7 @@ You can define named profiles in `jmo.yml` to control which tools run, include/e
 
 Example `jmo.yml` snippet:
 
-```
+```yaml
 default_profile: fast
 retries: 1
 profiles:
@@ -549,7 +550,7 @@ per_tool:
 
 Using a profile from CLI:
 
-```
+```bash
 # Scan using profile 'fast' with human-friendly logs
 python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name fast --human-logs
 
@@ -563,7 +564,8 @@ Retries behavior:
 
 Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
 
-4. **Generate Comparison Report**:
+1. **Generate Comparison Report**:
+
 ```bash
 ./scripts/core/generate_comparison_report.sh /path/to/results
 ```
@@ -633,6 +635,7 @@ The HTML dashboard provides:
 - Actionable recommendations
 
 ### Sample Summary Report
+
 ```markdown
 ## Aggregate Results
 
@@ -670,10 +673,6 @@ MIT License. See LICENSE.
 - [Gitleaks Documentation](https://github.com/zricethezav/gitleaks)
 - [TruffleHog Documentation](https://github.com/trufflesecurity/trufflehog)
 - [Semgrep Documentation](https://semgrep.dev)
-- [Nosey Parker Documentation](https://github.com/praetorian-inc/noseyparker)
-
-## 💡 Tips
-
 1. **Start Small**: Test on a single repository first
 2. **Review Regularly**: Schedule periodic audits
 3. **Act Quickly**: Rotate verified secrets immediately
@@ -695,6 +694,10 @@ MIT License. See LICENSE.
 
 **Problem**: Out of memory
 - **Solution**: Scan repositories in smaller batches
+
+```bash
+./scripts/core/populate_targets.sh --unshallow
+```
 
 **Problem**: Path errors (e.g., "//run_security_audit.sh not found")
 - **Solution**: This issue has been fixed in the latest version. Update to the latest main branch.

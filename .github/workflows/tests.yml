@@ -29,7 +29,7 @@ jobs:
         with:
           extra_args: --all-files
         env:
-          SKIP: markdownlint,bandit
+          SKIP: bandit
       - name: Validate GitHub workflows (actionlint)
         uses: rhysd/actionlint@v1.7.1
       - name: "Guardrails: forbid tracked venv/artifacts"

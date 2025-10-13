@@ -151,20 +151,20 @@ Full Hook Set (from `.pre-commit-config.yaml`)
 - shfmt
 
 Plan to Re-enable in CI (staged)
-1) Check-only mode for formatters
+1. Check-only mode for formatters
   - Switch ruff-format/black/shfmt to check-only in CI (no writes) and gate with clear messages.
   - Keep auto-fix local via pre-commit to reduce CI churn.
-2) Markdown lint tuning
+1. Markdown lint tuning
   - Add project-specific `.markdownlint.json` with rule relaxations for docs (line length, code blocks).
   - Enable markdownlint in CI after config lands.
-3) Python lint policy
+1. Python lint policy
   - Pin ruff version; add minimal allowlist of rules to start (E, F) and gradually enable more.
   - Gate on ruff in CI once baseline passes; add rule-by-rule PRs to expand coverage.
-4) Shell formatting
+1. Shell formatting
   - Configure shfmt style (indent, binary ops) and pin version; run in check-only in CI.
-5) Security linting
+1. Security linting
   - Keep bandit limited to `scripts/` with explicit `-c bandit.yaml`; consider a weekly scheduled job for full repo scan in “info-only” mode.
-6) Scheduling and PR signal
+1. Scheduling and PR signal
   - Add a nightly `lint-full` workflow running all hooks in check-only; PR CI remains fast/structural.
   - Post summary annotations; if stable for >2 weeks, migrate checks into PR CI gating.
 

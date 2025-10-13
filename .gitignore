@@ -1,5 +1,6 @@
 # Local virtual environments
 .venv/
+.venv-pypi/
 .tmp-venv-pypi/
 .post-release-venv/
 

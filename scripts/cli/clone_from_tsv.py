@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import subprocess
+import subprocess  # nosec B404 - this CLI intentionally shells out to git
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -54,7 +54,7 @@ def run(
     cmd: List[str], cwd: Optional[Path] = None, ok_rcs: Tuple[int, ...] = (0,)
 ) -> Tuple[int, str, str]:
     try:
-        cp = subprocess.run(
+        cp = subprocess.run(  # nosec B603 - command is list-based, constructed by this tool; shell=False
             cmd,
             cwd=str(cwd) if cwd else None,
             stdout=subprocess.PIPE,

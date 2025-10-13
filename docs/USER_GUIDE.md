@@ -8,7 +8,7 @@ Note: The CLI is available as the console command `jmo` (via PyPI) and also as a
 
 Prereqs: Linux, WSL, or macOS with Python 3.8+.
 
-1) Install the CLI
+1. Install the CLI
 
 ```bash
 # Preferred (isolated):
@@ -20,13 +20,13 @@ pip install --user "jmo-security[reporting]"
 
 The `reporting` extra bundles PyYAML and jsonschema so YAML output and schema validation work automatically. If you only need JSON/Markdown/SARIF, install the base package (`jmo-security`) instead.
 
-2) Verify your environment and get install tips for optional tools
+1. Verify your environment and get install tips for optional tools
 
 ```bash
 make verify-env
 ```
 
-3) Run a fast multi-repo scan + report in one step
+1. Run a fast multi-repo scan + report in one step
 
 ```bash
 # Scan all immediate subfolders under ~/repos with the default (balanced) profile
@@ -254,7 +254,7 @@ noseyparker --version
 
 The CLI will use the local `noseyparker` binary when available. If it’s missing or fails to run, it automatically falls back to a Docker-based runner and writes:
 
-```
+```text
 results/individual-repos/<repo-name>/noseyparker.json
 ```
 

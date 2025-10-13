@@ -28,12 +28,14 @@ make fmt && make lint
 ## Running the tool locally
 
 - Basic workflow:
+
 ```bash
 python3 scripts/cli/jmo.py scan --repos-dir ~/repos --human-logs
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 ```
 
 - Demo workflow (no external scanners required):
+
 ```bash
 make screenshots-demo
 ```

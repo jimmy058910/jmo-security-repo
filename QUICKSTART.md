@@ -282,6 +282,7 @@ See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for the ex
 ### Issue: "Tools not found"
 
 **Solution**: Install missing tools
+
 ```bash
 # Check which tools are missing
 ./scripts/cli/security_audit.sh --check
@@ -292,6 +293,7 @@ See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for the ex
 ### Issue: "Permission denied"
 
 **Solution**: Make scripts executable
+
 ```bash
 find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
@@ -299,6 +301,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 ### Issue: "No repositories found"
 
 **Solution**: Ensure directory has git repositories
+
 ```bash
 # Check directory structure
 ls -la ~/security-testing/
@@ -311,6 +314,7 @@ ls -la ~/security-testing/
 Note for WSL users: For the best Nosey Parker experience on WSL, prefer a native install; see the User Guide section “Nosey Parker on WSL (native recommended) and auto-fallback (Docker)”.
 
 **Solution**: Scan repos in smaller batches
+
 ```bash
 # Instead of scanning all at once, batch them
 ./scripts/cli/security_audit.sh -d ~/batch1
