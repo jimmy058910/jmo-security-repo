@@ -61,9 +61,21 @@ jobs:
           PIP_DEFAULT_TIMEOUT: "60"
         run: |
           python -m pip install --upgrade pip
-          for i in 1 2 3; do pip install -r requirements-dev.txt && break || sleep 5; done
+          for attempt in 1 2 3; do
+            echo "[deps] attempt ${attempt} to install requirements-dev.txt"
+            if pip install -r requirements-dev.txt; then
+              break
+            fi
+            sleep 5
+          done
           # Install the project in editable mode so 'scripts' package is importable
-          for i in 1 2 3; do pip install -e . && break || sleep 5; done
+          for attempt in 1 2 3; do
+            echo "[deps] attempt ${attempt} to install project in editable mode"
+            if pip install -e .; then
+              break
+            fi
+            sleep 5
+          done
       - name: Run tests (no coverage on most legs)
         if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11') }}
         env:
