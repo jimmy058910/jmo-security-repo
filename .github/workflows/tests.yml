@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate GitHub workflows (actionlint)
+        uses: rhysd/actionlint@v1
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: |
           bash scripts/dev/guardrails_check.sh
