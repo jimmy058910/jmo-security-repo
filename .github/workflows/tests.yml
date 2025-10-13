@@ -79,7 +79,15 @@ jobs:
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
         run: |
-          python -m pytest -q --maxfail=1 --disable-warnings --reruns 2 --reruns-delay 2 --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+          python -m pytest -q \
+            --maxfail=1 \
+            --disable-warnings \
+            --reruns 2 \
+            --reruns-delay 2 \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=85
       - name: Upload coverage to Codecov (single leg)
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@v5.3.1
