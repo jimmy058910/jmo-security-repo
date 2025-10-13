@@ -35,7 +35,7 @@ if (( ${#violations[@]} > 0 )); then
   for v in "${violations[@]}"; do
     echo "  - $v" >&2
   done
-  echo "\nPlease add to .gitignore and remove from git history (git rm --cached <path>)." >&2
+  printf "\nPlease add to .gitignore and remove from git history (git rm --cached <path>).\n" >&2
   exit 1
 fi
 
