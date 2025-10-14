@@ -47,8 +47,8 @@ For scanning a list of repos from a TSV end-to-end (clone + unshallow + full too
 ## ✅ CI and release at a glance
 
 - Tests run on a matrix of operating systems and Python versions:
-   - OS: ubuntu-latest, macos-latest
-   - Python: 3.10, 3.11, 3.12
+  - OS: ubuntu-latest, macos-latest
+  - Python: 3.10, 3.11, 3.12
 - CI uses concurrency to cancel redundant runs on rapid pushes and sets a 20-minute job timeout.
 - Coverage is uploaded to Codecov without a token (OIDC/tokenless on public repos) using `codecov/codecov-action@v5`.
 - Releases to PyPI use Trusted Publishers (OIDC) via `pypa/gh-action-pypi-publish@v1`; no PyPI API token is required once the repo is authorized in PyPI.
@@ -199,7 +199,6 @@ This project provides an automated framework for conducting thorough security au
 - 🧭 **Profiles and Overrides**: Named profiles, per-tool flags/timeouts, include/exclude patterns, configurable thread recommendations
 - 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 - 🔒 **Security-First**: XSS vulnerability patched, comprehensive input escaping, secure-by-default configurations
-
 
 ## 🚀 Quick Start (Local Installation)
 
@@ -385,8 +384,6 @@ All tool outputs are converted into a single CommonFinding schema during aggrega
 - Required fields include: schemaVersion (1.0.0), id, ruleId, severity, tool (name/version), location (path/lines), and message. Optional fields include title, description, remediation, references, tags, cvss, and raw (original tool payload).
 - Fingerprint (id): deterministically derived from a stable subset of attributes (tool | ruleId | path | startLine | message snippet) to support cross-tool dedupe. The aggregation step deduplicates by this id.
 
-
-
 ## 🛠️ Tool Installation
 
 ### macOS (Homebrew)
@@ -434,7 +431,7 @@ curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scr
 Nosey Parker doesn’t ship via apt/brew universally. Install the release binary and put it on your PATH:
 
 1. Download the latest release for your OS/arch from:
-   https://github.com/praetorian-inc/noseyparker/releases
+   <https://github.com/praetorian-inc/noseyparker/releases>
 
 2. Unpack and move the binary onto PATH (example for Linux x86_64):
 
@@ -654,8 +651,6 @@ Retries behavior:
 
 Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
 
-
-
 ### Customizing Tool Execution
 
 Prefer jmo.yml profiles and per_tool overrides. For one-off local tweaks, use:
@@ -728,7 +723,7 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 If this toolkit saves you time, consider fueling development with an energy drink.
 
-- Prefer one-time tips? Ko‑fi: https://ko-fi.com/jmogaming
+- Prefer one-time tips? Ko‑fi: <https://ko-fi.com/jmogaming>
 - When you’re ready, replace the badge target with your preferred platform: GitHub Sponsors (industry standard), Open Collective, Ko-fi, or Stripe Checkout.
 - GitHub Sponsors integrates directly with your GitHub profile and repository sidebar once enabled.
 
@@ -741,6 +736,7 @@ MIT License. See LICENSE.
 - [Gitleaks Documentation](https://github.com/zricethezav/gitleaks)
 - [TruffleHog Documentation](https://github.com/trufflesecurity/trufflehog)
 - [Semgrep Documentation](https://semgrep.dev)
+
 1. **Start Small**: Test on a single repository first
 2. **Review Regularly**: Schedule periodic audits
 3. **Act Quickly**: Rotate verified secrets immediately

@@ -212,7 +212,7 @@ cat results/summaries/SUMMARY.md
 
 - **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
 - **Discussions:** <https://github.com/jimmy058910/jmo-security-repo/discussions>
-- **Email:** general@jmogaming.com
+- **Email:** <general@jmogaming.com>
 - **Website:** <https://jmotools.com>
 
 ### Support the Project
@@ -243,9 +243,9 @@ make verify-env
 jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
 
-
 1. Open the dashboard (results/summaries/dashboard.html)
-	- Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+
+- Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
 
 Note: CI runs on ubuntu-latest and macos-latest across Python 3.10, 3.11, and 3.12, with concurrency and job timeouts to keep runs fast and reliable.
 

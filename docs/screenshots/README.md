@@ -13,8 +13,8 @@ Saved under `docs/screenshots/` by default:
 
 - Python 3.8+ (your system has Python 3.8.10)
 - A Chromium-based browser for headless capture:
-	- Linux: `chromium` or `google-chrome` on PATH
-	- macOS: `google-chrome`
+  - Linux: `chromium` or `google-chrome` on PATH
+  - macOS: `google-chrome`
 - For GIF recording (optional): `peek` (Linux) or QuickTime (macOS)
 
 Tip: Use `make verify-env` to see detected tools and install hints.
@@ -54,6 +54,7 @@ Optional variables:
 Behind the scenes, the target runs:
 
 1) `python3 scripts/cli/jmo.py report ...` to ensure `dashboard.html` exists
+
 2) `docs/screenshots/capture.sh` to run `chromium --headless --screenshot`
 
 ## Manual quick capture (interactive)
@@ -66,10 +67,12 @@ xdg-open /path/to/results/summaries/dashboard.html  # mac: open
 ```
 
 2) Use a screen capture tool while interacting with the dashboard:
+
 - Linux: `peek`, `vokoscreenNG`, or `kazam`
 - macOS: QuickTime screen recording
 
 3) Save outputs into `docs/screenshots/` (filenames are suggestions):
+
 - dashboard-overview.png
 - severity-breakdown.png
 - repo-comparison.gif

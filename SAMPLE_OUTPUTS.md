@@ -39,14 +39,14 @@ The aggregate JSON/YAML/SARIF files in the same directory mirror these counts fo
 
 | Tool        | Findings | Notes |
 |-------------|----------|-------|
-| trivy       | 4 Dockerfile + 19 Kubernetes + 3 Terraform misconfigurations; CRITICAL `aws-vpc-no-public-egress-sgr` plus HIGH `AVD-AWS-0107` confirm the Terraform security group is wide open. |
-| checkov     | 7 Terraform findings covering unrestricted ingress/egress; no false positives observed. |
-| tfsec       | 3 Terraform findings, including two CRITICAL rules overlapping with Trivy; demonstrates cross-tool agreement. |
-| hadolint    | DL3007/DL3008/DL3009/DL3015 flag lack of pinned distro, package pinning, and missing non-root user in the Dockerfile. |
-| semgrep     | 3 results (Dockerfile USER, Kubernetes `runAsNonRoot`, `allowPrivilegeEscalation`); all intentional. |
-| noseyparker | 0 matches against the fixture; confirms our sample does not carry additional plaintext secrets. |
-| syft        | 0 SBOM artifacts for this minimal fixture; expected because no build artifacts are present. |
-| trufflehog  | Produced no findings (and therefore an empty JSON file) when run separately with `--tools trufflehog`; see REVIEW.md for guidance on interpreting the output stream. |
+| trivy       | 26       | 4 Dockerfile + 19 Kubernetes + 3 Terraform misconfigurations; CRITICAL `aws-vpc-no-public-egress-sgr` plus HIGH `AVD-AWS-0107` confirm the Terraform security group is wide open. |
+| checkov     | 7        | 7 Terraform findings covering unrestricted ingress/egress; no false positives observed. |
+| tfsec       | 3        | 3 Terraform findings, including two CRITICAL rules overlapping with Trivy; demonstrates cross-tool agreement. |
+| hadolint    | 4        | DL3007/DL3008/DL3009/DL3015 flag lack of pinned distro, package pinning, and missing non-root user in the Dockerfile. |
+| semgrep     | 3        | 3 results (Dockerfile USER, Kubernetes `runAsNonRoot`, `allowPrivilegeEscalation`); all intentional. |
+| noseyparker | 0        | 0 matches against the fixture; confirms our sample does not carry additional plaintext secrets. |
+| syft        | 0        | 0 SBOM artifacts for this minimal fixture; expected because no build artifacts are present. |
+| trufflehog  | 0        | Produced no findings (and therefore an empty JSON file) when run separately with `--tools trufflehog`; see REVIEW.md for guidance on interpreting the output stream. |
 
 ## HTML Dashboard (`summaries/dashboard.html`)
 

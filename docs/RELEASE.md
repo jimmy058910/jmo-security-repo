@@ -101,7 +101,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 **Problem:** Release workflow fails with "Trusted Publisher authentication failed"
 
 - **Solution:** Verify the repository is configured as a Trusted Publisher in PyPI settings
-- **Check:** https://pypi.org/manage/account/publishing/ (must match org/repo/workflow)
+- **Check:** <https://pypi.org/manage/account/publishing/> (must match org/repo/workflow)
 
 **Problem:** Tests fail in CI but pass locally
 

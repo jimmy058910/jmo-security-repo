@@ -192,7 +192,6 @@ make deps-sync
 
 CI checks that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
 
-
 ## Step 4: Review Results
 
 After the scan completes, results land in `results/` (or the directory you pass via `--results-dir`). Unified artifacts live under `results/summaries/`:
@@ -212,7 +211,7 @@ xdg-open results/summaries/dashboard.html   # macOS: open
 ls -1 results/individual-repos/infra-demo   # per-tool raw outputs
 ```
 
-### Review Priority:
+### Review Priority
 
 1. **Open the HTML Dashboard** - Visual overview of all findings
 2. **Check SUMMARY.md** - Human-readable overview and top rules
@@ -475,4 +474,4 @@ If you encounter issues:
 
 ---
 
-**Happy Scanning! 🔒**
+Happy Scanning! 🔒

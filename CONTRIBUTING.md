@@ -8,8 +8,8 @@ Be respectful and constructive. We expect contributors to follow a standard code
 
 ## How to get started
 
-- Good first issues: https://github.com/jimmy058910/jmo-security-repo/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
-- Browse open issues: https://github.com/jimmy058910/jmo-security-repo/issues
+- Good first issues: <https://github.com/jimmy058910/jmo-security-repo/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22>
+- Browse open issues: <https://github.com/jimmy058910/jmo-security-repo/issues>
 - Ask questions by opening a discussion or issue.
 
 ## Development setup
@@ -249,7 +249,7 @@ make screenshots-demo
 
 We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos. For maintainers, the quickest path is:
 
-1. Sign in to https://codecov.io with your GitHub account.
+1. Sign in to <https://codecov.io> with your GitHub account.
 2. Ensure a `main` branch test run completes (uploads `coverage.xml`).
 3. The `codecov.yml` in the repo sets statuses to informational.
 4. Optional: add `CODECOV_TOKEN` only if Codecov explicitly recommends it (public repos usually don’t need it). OIDC may also be enabled in Codecov org settings.

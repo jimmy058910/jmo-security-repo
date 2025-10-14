@@ -1,3 +1,6 @@
 # GitHub issue/PR templates intentionally start with ## not #
 .github/ISSUE_TEMPLATE/*.md
 .github/PULL_REQUEST_TEMPLATE.md
+
+# Archived documentation - historical reference only
+docs/archive/*.md
