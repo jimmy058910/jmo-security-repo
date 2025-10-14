@@ -27,24 +27,21 @@ RUN apk add --no-cache \
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel
 
-# Install build dependencies for Python packages that require compilation (rustworkx)
-# These will be removed after pip install to keep image size minimal
-RUN apk add --no-cache --virtual .build-deps \
-    gcc \
-    musl-dev \
-    python3-dev \
-    cargo \
-    rust
-
-# Install Python tools
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.94.0 \
-    checkov==3.2.255
-
-# Remove build dependencies to reduce image size
-RUN apk del .build-deps
-
+# Install Python tools with platform-specific handling
+# ARM64: Skip semgrep/checkov due to rustworkx compilation time (10+ min on QEMU)
+# AMD64: Install normally (pre-built wheels available)
 ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        # AMD64: Install build deps temporarily for any compilation needs
+        apk add --no-cache --virtual .build-deps gcc musl-dev python3-dev cargo rust && \
+        python3 -m pip install --no-cache-dir --break-system-packages \
+            semgrep==1.94.0 \
+            checkov==3.2.255 && \
+        apk del .build-deps; \
+    else \
+        # ARM64: Skip semgrep/checkov - other tools (gitleaks, syft, trivy) cover security scanning
+        echo "Skipping semgrep/checkov on ARM64 due to rustworkx build time"; \
+    fi
 
 # Install gitleaks
 RUN GITLEAKS_VERSION="8.21.2" && \
@@ -86,16 +83,21 @@ COPY . /opt/jmo-security/
 RUN cd /opt/jmo-security && \
     python3 -m pip install --no-cache-dir --break-system-packages -e .
 
-# Verify tools
-RUN echo "=== Verifying Alpine tools ===" && \
+# Verify tools (platform-specific)
+ARG TARGETARCH
+RUN echo "=== Verifying Alpine tools (${TARGETARCH}) ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
     gitleaks version && \
-    semgrep --version && \
     syft version && \
     trivy --version && \
     hadolint --version && \
-    checkov --version && \
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        semgrep --version && \
+        checkov --version; \
+    else \
+        echo "Skipped: semgrep/checkov (ARM64 - rustworkx build time)"; \
+    fi && \
     echo "=== Alpine tools verified ==="
 
 ENTRYPOINT ["jmo"]
