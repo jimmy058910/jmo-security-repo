@@ -72,4 +72,4 @@ repos:
         language: system
         files: ^requirements-dev\.in$
         pass_filenames: false
-        entry: make deps-compile
+        entry: make PY=python deps-compile
