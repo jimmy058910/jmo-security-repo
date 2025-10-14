@@ -93,6 +93,7 @@ jmotools wizard --yes
 ```
 
 **Note:** Non-interactive mode uses these defaults:
+
 - Profile: balanced
 - Target: current directory (repos-dir mode)
 - Docker: enabled if available and running
@@ -189,12 +190,14 @@ on:
     branches: [main]
   pull_request:
   schedule:
+
     - cron: '0 0 * * 0'  # Weekly
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -245,6 +248,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
+
     - cron: '0 0 * * 0'  # Weekly
 
 jobs:
@@ -253,6 +257,7 @@ jobs:
     container:
       image: ghcr.io/jimmy058910/jmo-security:latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Run Security Scan
@@ -287,6 +292,7 @@ jmotools wizard --docker
 ```
 
 **Steps:**
+
 1. Choose **balanced** profile (default)
 2. Docker mode detected and enabled
 3. Enter repos directory path
@@ -304,6 +310,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml
 Then edit the generated workflow to add `--fail-on HIGH`:
 
 ```yaml
+
 - name: Run Security Scan
   run: |
     jmotools balanced --repos-dir . --results-dir results \
@@ -387,6 +394,7 @@ jmotools wizard --yes
 ```
 
 Uses defaults:
+
 - Profile: balanced
 - Target: current directory
 - Results: `./results`
@@ -417,6 +425,7 @@ jmotools balanced --repos-dir ~/repos --results-dir results --threads 4 --timeou
 ### 2. Docker Mode for Clean Environments
 
 Use Docker mode for:
+
 - CI/CD pipelines (consistent environment)
 - Testing new tool versions
 - Avoiding local tool installation
@@ -476,6 +485,7 @@ docker info
 If wizard warns "No git repositories detected" in repos-dir mode:
 
 **Check:**
+
 1. Path points to directory containing repos (not a single repo)
 2. Each subdirectory has a `.git` folder
 

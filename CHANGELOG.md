@@ -7,6 +7,7 @@ For the release process, see docs/RELEASE.md.
 ### Interactive Wizard (ROADMAP Item 2 - October 2025)
 
 **Guided first-run experience for beginners:**
+
 - **Interactive wizard command** (`jmotools wizard`):
   - Step-by-step prompts for profile selection (fast/balanced/deep with time estimates)
   - Docker vs native mode selection with auto-detection
@@ -53,6 +54,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml
 ```
 
 **Testing:**
+
 - 18 unit tests covering all wizard functionality
 - Command generation for native and Docker modes
 - Artifact generation (Makefile/shell/GHA)
@@ -62,6 +64,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml
 ### Docker All-in-One Images (ROADMAP Item 1 - October 2025)
 
 **Zero-installation friction for immediate scanning:**
+
 - **3 Docker image variants** (full, slim, alpine) with all security tools pre-installed
   - **Full image** (~500MB): 11+ scanners including gitleaks, trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, tfsec, hadolint, osv-scanner
   - **Slim image** (~200MB): 6 core scanners for fast CI/CD (gitleaks, semgrep, syft, trivy, checkov, hadolint)
@@ -96,15 +99,18 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 container:
   image: ghcr.io/jimmy058910/jmo-security:latest
 steps:
+
   - run: jmo ci --repo . --fail-on HIGH --profile
 ```
 
 **Testing:**
+
 - Integration tests: `tests/integration/test_docker_images.py`
 - Validates tool availability, version checks, and basic scan functionality
 - Docker Compose syntax validation
 
 **Distribution:**
+
 - Primary: GitHub Container Registry (`ghcr.io/jimmy058910/jmo-security`)
 - Planned: Docker Hub support (configuration ready)
 - Automated builds on push to main and tagged releases
@@ -112,21 +118,25 @@ steps:
 ### Code Quality & Security Improvements (Phase 1 - October 2025)
 
 **Security Fixes:**
+
 - **XSS vulnerability patched in HTML dashboard**: Added comprehensive HTML escaping function covering all dangerous characters (`&`, `<`, `>`, `"`, `'`) to prevent cross-site scripting attacks in the interactive dashboard.
 
 **Critical Bug Fixes:**
+
 - **OSV scanner fully integrated**:
   - Integrated `osv_adapter` into `normalize_and_report.py` aggregation pipeline
   - Added OSV scanner tool invocation to CLI scan command
   - Enabled vulnerability detection from OSV database for comprehensive open-source vulnerability scanning
 
 **Code Quality & Maintainability:**
+
 - **Magic numbers extracted to constants**: Extracted `FINGERPRINT_LENGTH` (16) and `MESSAGE_SNIPPET_LENGTH` (120) as named constants with documentation in `common_finding.py`
 - **Severity type safety**: Converted severity strings to proper `Enum` with comparison operators (`<`, `>`, `<=`, `>=`) while maintaining full backward compatibility. Enables cleaner severity-based filtering and sorting throughout the codebase.
 - **Backward compatibility for suppressions**: Updated `suppress.py` to support both `suppressions` (recommended) and `suppress` (legacy) keys in YAML config without breaking existing workflows
 - **Configurable CPU count**: Moved hardcoded CPU recommendation logic to `jmo.yml` `profiling` section (min/max/default threads) for better configurability across different environments
 
 **Enhanced Outputs:**
+
 - **SARIF enrichment**: Enhanced SARIF 2.1.0 output with:
   - Code snippets in region context for better IDE integration
   - CWE/OWASP/CVE taxonomy references for security categorization
@@ -135,6 +145,7 @@ steps:
   - Better GitHub/GitLab code scanning integration
 
 **Documentation:**
+
 - **ROADMAP.md updates**:
   - Removed 124-line duplicate section
   - Added 9 new future enhancement steps (Steps 15-23):
@@ -150,6 +161,7 @@ steps:
 - **Configuration updates**: Added `profiling` section to `jmo.yml` for thread recommendations with configurable min/max/default values
 
 **Testing:**
+
 - All 100 tests passing ✅
 - Coverage: 88% (exceeds 85% requirement)
 - Backward compatibility verified across all changes
@@ -158,6 +170,7 @@ steps:
 ### Developer Experience (October 2025)
 
 Developer experience improvements:
+
 - Optional reproducible dev deps via pip-tools and uv:
 	- Added `requirements-dev.in` and Make targets: `upgrade-pip`, `deps-compile`, `deps-sync`, `deps-refresh`, `uv-sync`.
 	- Local pre-commit hook auto-runs `deps-compile` when `requirements-dev.in` changes.
@@ -168,18 +181,21 @@ No changes to runtime packaging. Existing workflows (`make dev-deps`, `make dev-
 ## 0.3.0 (2025-10-12)
 
 Highlights:
+
 - Documentation now reflects the `jmo report <results_dir>` syntax across README, Quickstart, User Guide, and example workflows.
 - Packaging adds a `reporting` extra (`pip install jmo-security[reporting]`) bundling PyYAML and jsonschema for YAML output and schema validation.
 - Acceptance suite updated to exercise the current dashboard generator and wrapper scripts end-to-end.
 - Shell/Python lint fixes ensure `make lint` runs cleanly in CI and locally.
 
 Operational notes:
+
 - Acceptance fixtures expanded to cover additional TruffleHog output shapes while cleaning up temp artifacts automatically.
 - Repository metadata bumped to 0.3.0 (`pyproject.toml`, roadmap) to align with this release.
 
 ## 0.2.0
 
 Highlights:
+
 - HTML reporter enhancements: sortable columns, tool filter dropdown, CSV/JSON export, persisted filters/sort, deep-links, and theme toggle.
 - Profiling mode (`--profile`) now records per-job timings and thread recommendations. Timing metadata exposed.
 - Thread control improvements: `--threads` flag with precedence over env/config; config supports `threads:`.
@@ -192,6 +208,7 @@ Highlights:
 - Optional human-friendly colored logs via `--human-logs`
 
 Roadmap items completed in this release:
+
 - Profiles and per-tool overrides; retries; graceful cancel; human logs
 - Syft→Trivy enrichment and expanded adapters (Syft, Trivy, Hadolint, Checkov, tfsec)
 - HTML dashboard improvements and profiling summary
@@ -199,16 +216,19 @@ Roadmap items completed in this release:
 - Local verification scripts (verify-env, populate_targets), docs and examples
 
 Notes:
+
 - Syft adapter emits INFO package entries and vulnerability entries when present; used for context and future cross-linking.
 - Backwards compatibility maintained; features are additive.
 
 Planned (future ideas):
+
 - Additional adapters and policy scanners
 - Richer cross-tool correlation and dedupe
 - Configurable SARIF tuning and rule metadata enrichment
 - Optional containerized all-in-one image for turnkey runs
 
 ## 0.1.0
+
 - Initial CLI and adapters (Gitleaks, TruffleHog, Semgrep, Nosey Parker, OSV, Trivy)
 - Unified reporters (JSON, Markdown, YAML, HTML, SARIF) and suppression report
 - Config file, aggregation, and basic performance optimizations
@@ -232,4 +252,5 @@ Planned (future ideas):
 - Step 13 — Docs & examples: polished README/QUICKSTART/USER_GUIDE; examples and screenshots; suppression docs.
 
 Notes
+
 - These steps are broadly complete; ongoing incremental polish may land across releases.

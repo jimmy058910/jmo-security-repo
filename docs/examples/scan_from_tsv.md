@@ -37,6 +37,7 @@ python3 scripts/cli/clone_from_tsv.py --tsv ./repos.tsv --dest repos-tsv --targe
 ```
 
 TSV format note:
+
 - The file must include either a column named `url` (preferred) or `full_name`.
 - If `url` is missing, `full_name` should be of the form `owner/repo` and will be converted to `https://github.com/owner/repo.git`.
 
@@ -55,6 +56,7 @@ example/project-b
 ```
 
 This will:
+
 - Clone missing repos into `repos-tsv/owner/repo`
 - Update existing clones, fetch tags, and unshallow shallow clones
 - Write absolute paths to `results/targets.tsv.txt`
@@ -77,6 +79,7 @@ python3 scripts/cli/jmo.py ci \
 ```
 
 Notes:
+
 - Nosey Parker uses the local binary if installed; otherwise it will attempt a Docker fallback via `scripts/core/run_noseyparker_docker.sh`. Ensure Docker is available for fallback.
 - Increase `--threads` if your machine has more cores.
 - If you want the command to fail on HIGH/CRITICAL findings, add `--fail-on HIGH`.

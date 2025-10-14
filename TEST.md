@@ -36,6 +36,7 @@ make lint    # lint (shellcheck, ruff, bandit)
 ```
 
 Notes:
+
 - If ruff/bandit/shellcheck are missing, install via `make tools`.
 
 ## End-to-End Smoke (optional)

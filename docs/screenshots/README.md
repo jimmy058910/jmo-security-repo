@@ -5,6 +5,7 @@ This folder documents how to generate the HTML dashboard and capture screenshots
 ## What you'll produce
 
 Saved under `docs/screenshots/` by default:
+
 - dashboard.png — static capture of the dashboard
 - (optional) repo-comparison.gif — a short animated recording
 
@@ -27,10 +28,12 @@ make screenshots-demo
 ```
 
 Outputs:
+
 - Results under `/tmp/jmo-infra-demo-results/summaries/`
 - Screenshot saved to `docs/screenshots/dashboard.png`
 
 Notes:
+
 - Works even if some external scanners aren't installed (uses stub outputs where needed).
 - Re-run anytime to refresh the screenshot after UI changes.
 
@@ -43,11 +46,13 @@ make capture-screenshot RESULTS_DIR=/path/to/results
 ```
 
 Optional variables:
+
 - `OUT=/custom/summaries` — where to write the HTML summary (defaults to `RESULTS_DIR/summaries`)
 - `OUTDIR=/custom/screenshots` — where to save PNGs (defaults to `docs/screenshots`)
 - `CONFIG=jmo.yml` — custom config if needed
 
 Behind the scenes, the target runs:
+
 1) `python3 scripts/cli/jmo.py report ...` to ensure `dashboard.html` exists
 2) `docs/screenshots/capture.sh` to run `chromium --headless --screenshot`
 
