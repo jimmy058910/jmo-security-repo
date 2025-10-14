@@ -107,6 +107,18 @@ document.getElementById('themeToggle').addEventListener('click', ()=>{
   setTheme(t);
 });
 
+// HTML escaping to prevent XSS
+function escapeHtml(str){
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+  return (str||'').replace(/[&<>"']/g, m => map[m]);
+}
+
 function severityRank(s){
   const i = SEV_ORDER.indexOf(s||'');
   return i === -1 ? SEV_ORDER.length : i;
@@ -143,12 +155,12 @@ function render(){
   const rows = sortRows(filtered());
   const html = rows.map(f => `
     <tr>
-      <td class="sev-${'${'}f.severity${'}'}">${'${'}f.severity${'}'}</td>
-      <td>${'${'}(f.ruleId||'')${'}'}</td>
-      <td>${'${'}(f.location?.path||'')${'}'}</td>
+      <td class="sev-${'${'}escapeHtml(f.severity)${'}'}">${'${'}escapeHtml(f.severity)${'}'}</td>
+      <td>${'${'}escapeHtml(f.ruleId)${'}'}</td>
+      <td>${'${'}escapeHtml(f.location?.path)${'}'}</td>
       <td>${'${'}(f.location?.startLine||0)${'}'}</td>
-      <td>${'${'}(f.message||'').replace(/</g,'&lt;')${'}'}</td>
-      <td>${'${'}(f.tool?.name||'')${'}'}</td>
+      <td>${'${'}escapeHtml(f.message)${'}'}</td>
+      <td>${'${'}escapeHtml(f.tool?.name)${'}'}</td>
     </tr>`).join('');
   document.querySelector('#tbl tbody').innerHTML = html || '<tr><td colspan="6">No results</td></tr>';
 }

@@ -28,6 +28,10 @@ class Config:
     profiles: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     per_tool: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     retries: int = 0
+    # Profiling thread recommendations (used when --profile flag set)
+    profiling_min_threads: int = 2
+    profiling_max_threads: int = 8
+    profiling_default_threads: int = 4
 
 
 def load_config(path: Optional[str]) -> Config:
@@ -77,4 +81,13 @@ def load_config(path: Optional[str]) -> Config:
     rv = data.get("retries")
     if isinstance(rv, int) and rv >= 0:
         cfg.retries = rv
+    # profiling thread recommendations
+    if "profiling" in data and isinstance(data["profiling"], dict):
+        prof = data["profiling"]
+        if isinstance(prof.get("min_threads"), int) and prof["min_threads"] > 0:
+            cfg.profiling_min_threads = prof["min_threads"]
+        if isinstance(prof.get("max_threads"), int) and prof["max_threads"] > 0:
+            cfg.profiling_max_threads = prof["max_threads"]
+        if isinstance(prof.get("default_threads"), int) and prof["default_threads"] > 0:
+            cfg.profiling_default_threads = prof["default_threads"]
     return cfg

@@ -30,6 +30,16 @@ class Suppression:
 
 
 def load_suppressions(path: Optional[str]) -> Dict[str, Suppression]:
+    """Load suppressions from YAML file.
+
+    Supports both 'suppressions' (recommended) and 'suppress' (backward compat) keys.
+
+    Args:
+        path: Path to suppression YAML file (e.g., jmo.suppress.yml)
+
+    Returns:
+        Dict mapping finding IDs to Suppression objects
+    """
     if not path:
         return {}
     p = Path(path)
@@ -37,7 +47,9 @@ def load_suppressions(path: Optional[str]) -> Dict[str, Suppression]:
         return {}
     data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     items = {}
-    for ent in data.get("suppress", []):
+    # Support both 'suppressions' (preferred) and 'suppress' (legacy)
+    entries = data.get("suppressions", data.get("suppress", []))
+    for ent in entries:
         sid = str(ent.get("id") or "").strip()
         if not sid:
             continue

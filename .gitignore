@@ -60,5 +60,9 @@ results/
 
 # (formerly) Local roadmap file removed; keep repo docs public
 
+# Private planning documents (developer-specific, not for public repo)
+DEVELOPER_ROADMAP.md
+BUSINESS_MODEL.md
+
 # Private local scripts and outputs (ignored)
 /ai-search

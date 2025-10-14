@@ -33,6 +33,7 @@ from scripts.core.adapters.checkov_adapter import load_checkov
 from scripts.core.adapters.tfsec_adapter import load_tfsec
 from scripts.core.adapters.trivy_adapter import load_trivy
 from scripts.core.adapters.bandit_adapter import load_bandit
+from scripts.core.adapters.osv_adapter import load_osv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 
@@ -82,6 +83,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
             bd = repo / "bandit.json"
             tf = repo / "tfsec.json"
             tv = repo / "trivy.json"
+            osv_file = repo / "osv-scanner.json"
             for path, loader in (
                 (gl, load_gitleaks),
                 (th, load_trufflehog),
@@ -93,6 +95,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 (bd, load_bandit),
                 (tf, load_tfsec),
                 (tv, load_trivy),
+                (osv_file, load_osv),
             ):
                 jobs.append(ex.submit(_safe_load, loader, path, profiling))
         for fut in as_completed(jobs):

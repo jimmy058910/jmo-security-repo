@@ -312,15 +312,17 @@ def cmd_report(args) -> int:
         try:
             import os
 
-            cpu = os.cpu_count() or 4
-            rec_threads = max(2, min(8, cpu))
+            cpu = os.cpu_count() or cfg.profiling_default_threads
+            rec_threads = max(
+                cfg.profiling_min_threads, min(cfg.profiling_max_threads, cpu)
+            )
         except Exception as e:
             _log(
                 args,
                 "DEBUG",
                 f"Failed to determine CPU count, using default threads: {e}",
             )
-            rec_threads = 4
+            rec_threads = cfg.profiling_default_threads
         job_timings = []
         meta = {}
         try:
@@ -408,6 +410,7 @@ def _write_stub(tool: str, out_path: Path) -> None:
         "checkov": {"results": {"failed_checks": []}},
         "tfsec": {"results": []},
         "bandit": {"results": []},
+        "osv-scanner": {"results": []},
     }
     payload = stubs.get(tool, {})
     out_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -1106,6 +1109,41 @@ def cmd_scan(args) -> int:
             elif args.allow_missing_tools:
                 _write_stub("tfsec", out)
                 statuses["tfsec"] = True
+
+        if "osv-scanner" in tools:
+            out = out_dir / "osv-scanner.json"
+            if _tool_exists("osv-scanner"):
+                flags = (
+                    pt.get("osv-scanner", {}).get("flags", [])
+                    if isinstance(pt.get("osv-scanner", {}), dict)
+                    else []
+                )
+                cmd = [
+                    "osv-scanner",
+                    "--format", "json",
+                    "--output", str(out),
+                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    str(repo),
+                ]
+                rc, _, _, used = _run_cmd(
+                    cmd, t_override("osv-scanner", to), retries=retries, ok_rcs=(0, 1)
+                )
+                ok = rc == 0 or rc == 1
+                if ok and out.exists():
+                    statuses["osv-scanner"] = True
+                    attempts_map["osv-scanner"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("osv-scanner", out)
+                    statuses["osv-scanner"] = True
+                    if used:
+                        attempts_map["osv-scanner"] = used
+                else:
+                    statuses["osv-scanner"] = False
+                    if used:
+                        attempts_map["osv-scanner"] = used
+            elif args.allow_missing_tools:
+                _write_stub("osv-scanner", out)
+                statuses["osv-scanner"] = True
 
         if attempts_map:
             statuses["__attempts__"] = attempts_map  # type: ignore

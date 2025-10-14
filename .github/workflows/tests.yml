@@ -41,7 +41,7 @@ jobs:
           # Colorize output in logs and fail the job on any finding
           actionlint_flags: -color
           level: error
-          fail_on_error: true
+          fail_level: error
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
 
