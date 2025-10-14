@@ -1,11 +1,13 @@
 # Release Guide
 
+Remember to update CHANGELOG.md with user-facing changes.
+
 This project publishes to PyPI via GitHub Actions on git tags of the form `v*`.
 
 ## Prerequisites
 - Ensure `secrets.PYPI_API_TOKEN` is configured in the GitHub repo settings.
 - Ensure tests are green and coverage passes locally.
-- Update `RELEASE_NOTES.md` as needed.
+- Update `CHANGELOG.md` as needed.
 
 ## Step-by-step
 1. Bump version in `pyproject.toml` (for example, `0.3.3`).

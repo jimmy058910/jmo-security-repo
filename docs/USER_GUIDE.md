@@ -4,9 +4,11 @@ This guide walks you through everything from a 2‑minute quick start to advance
 
 Note: The CLI is available as the console command `jmo` (via PyPI) and also as a script at `scripts/cli/jmo.py` in this repo. The examples below use the `jmo` command, but you can replace it with `python3 scripts/cli/jmo.py` if running from source.
 
+If you're brand new, you can also use the beginner‑friendly wrapper `jmotools` described below.
+
 ## Quick start (2 minutes)
 
-Prereqs: Linux, WSL, or macOS with Python 3.8+.
+Prereqs: Linux, WSL, or macOS with Python 3.10+ recommended (3.8+ supported).
 
 1. Install the CLI
 
@@ -38,6 +40,34 @@ open results/summaries/dashboard.html       # macOS
 ```
 
 Outputs are written under `results/` by default, with unified summaries in `results/summaries/` (JSON/MD/YAML/HTML/SARIF). SARIF is enabled by default via `jmo.yml`.
+
+### Beginner mode: jmotools wrapper (optional, simpler commands)
+
+Prefer memorable commands that verify tools, optionally clone from a TSV, run the right profile, and open results at the end? Use `jmotools`:
+
+```bash
+# Quick fast scan (auto-opens results)
+jmotools fast --repos-dir ~/security-testing
+
+# Deep/full scan using the curated 'deep' profile
+jmotools full --repos-dir ~/security-testing --allow-missing-tools
+
+# Clone from TSV first, then balanced scan
+jmotools balanced --tsv ./candidates.tsv --dest ./repos-tsv
+
+# Bootstrap and verify curated tools (Linux/WSL/macOS)
+jmotools setup --check
+jmotools setup --auto-install
+```
+
+Makefile shortcuts are also available:
+
+```bash
+make setup             # jmotools setup --check (installs package if needed)
+make fast DIR=~/repos  # jmotools fast --repos-dir ~/repos
+make balanced DIR=~/repos
+make full DIR=~/repos
+```
 
 ## Everyday basics
 
@@ -74,6 +104,8 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 ./scripts/core/populate_targets.sh --dest ~/security-testing --parallel 8
 ```
 
+Tip: You can also run `make tools` to install/upgrade the curated external scanners (semgrep, trivy, syft, checkov, tfsec, bandit, gitleaks, trufflehog, hadolint, osv-scanner, etc.) and `make verify-env` to validate your setup.
+
 ## Output overview
 
 Unified summaries live in `results/summaries/`:
@@ -87,6 +119,12 @@ Unified summaries live in `results/summaries/`:
 - SUPPRESSIONS.md — Summary of filtered IDs when suppressions are applied
 
 Per‑repo raw tool output is under `results/individual-repos/<repo>/`.
+
+Data model: Aggregated findings conform to a CommonFinding shape used by all reporters. See `docs/schemas/common_finding.v1.json` for the full schema. At a glance, each finding includes:
+
+- id (stable fingerprint), ruleId, severity (CRITICAL|HIGH|MEDIUM|LOW|INFO)
+- tool { name, version }, message, location { path, startLine, endLine? }
+- optional: title, description, remediation, references, tags, cvss, context, raw
 
 ## Configuration (jmo.yml)
 
@@ -144,6 +182,12 @@ Use a profile at runtime:
 jmo scan --repos-dir ~/repos --profile-name fast
 ```
 
+Notes and precedence:
+
+- Severity order is CRITICAL > HIGH > MEDIUM > LOW > INFO. Thresholds gate at and above the chosen level.
+- Threads/timeout/tool lists are merged from config + profile; CLI flags override config/profile where provided.
+- Per‑tool overrides are merged with root config; values set in a profile win over root.
+
 ## Key CLI commands and flags
 
 Subcommands: scan, report, ci
@@ -165,6 +209,10 @@ Notes on exit codes:
 
 Graceful cancel:
 - During scans, Ctrl‑C (SIGINT) will request a graceful stop after in‑flight tasks finish.
+
+Environment variables:
+- JMO_THREADS: when set, influences worker selection during scan; report also seeds this internally based on `--threads` or config to optimize aggregation.
+- JMO_PROFILE: when set to 1, aggregation collects timing metadata; `--profile` toggles this automatically for report/ci and writes `timings.json`.
 
 ## Per‑tool overrides and retries
 
@@ -188,6 +236,10 @@ Retries:
 - Set `retries: N` at the root or inside a profile to automatically retry failing tool commands up to N times.
 - Human logs will show attempts when > 1, e.g. `attempts={'semgrep': 2}`.
 
+Threading and performance:
+- Scan workers: precedence is CLI/profile threads > JMO_THREADS env > config default > auto.
+- Report workers: set via `--threads` (preferred) or config; the aggregator will also suggest `recommended_threads` in `timings.json` based on CPU count.
+
 ## Suppressions
 
 You can suppress specific finding IDs during report/ci. The reporter looks for `jmo.suppress.yml` first in `results/` and then in the current working directory.
@@ -207,6 +259,8 @@ Behavior:
 - Active suppressions remove matching findings from outputs.
 - A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
 
+Search order for the suppression file is: `<results_dir>/jmo.suppress.yml` first, then `./jmo.suppress.yml` in the current working directory.
+
 ## SARIF and HTML dashboard
 
 - SARIF emission is enabled by default in this repo (`outputs: [json, md, yaml, html, sarif]`). If you remove `sarif` from outputs, SARIF won’t be written.
@@ -221,6 +275,14 @@ Run `make verify-env` to detect your OS/WSL and see smart install hints. Typical
 - Linux: use apt/yum/pacman for basics; use official install scripts for trivy/syft; use pipx for Python‑based tools like checkov/semgrep; see hints printed by `verify-env`.
 
 You can run with `--allow-missing-tools` to generate empty stubs for any tools you haven’t installed yet.
+
+Curated installer:
+
+```bash
+make tools           # install core scanners
+make tools-upgrade   # upgrade/refresh installed scanners
+make verify-env      # detect OS/WSL/macOS and show install hints
+```
 
 ### Nosey Parker on WSL (native recommended) and auto-fallback (Docker)
 
@@ -279,6 +341,8 @@ You do not need to call this manually during normal `jmo scan/ci`; it’s used a
 jmo ci --repos-dir ~/repos --profile-name balanced --fail-on HIGH --profile
 ```
 
+Outputs include: `summaries/findings.json`, `SUMMARY.md`, `findings.yaml`, `findings.sarif`, `dashboard.html`, and `timings.json` (when profiling).
+
 ### Interpreting CI failures (deeper guide)
 
 Common failure modes in `.github/workflows/tests.yml` and how to fix them:
@@ -327,6 +391,12 @@ YAML reporter missing
 
 Permission denied on scripts
 - Ensure scripts are executable: `find scripts -type f -name "*.sh" -exec chmod +x {} +`
+
+Hadolint shows no results
+- Hadolint only runs when a `Dockerfile` exists at the repo root; this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
+
+TruffleHog output looks empty
+- Depending on flags and repo history, TruffleHog may stream JSON objects rather than a single array. The CLI captures and writes this stream verbatim; empty output is valid if no secrets are detected.
 
 ## Reference: CLI synopsis
 

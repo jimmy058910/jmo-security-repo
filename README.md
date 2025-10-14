@@ -37,7 +37,7 @@ Project homepage: [jmotools.com](https://jmotools.com)
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and coding standards. For publishing, see [docs/RELEASE.md](docs/RELEASE.md).
 
 Roadmap & history:
-- Completed steps (summary): see [RELEASE_NOTES.md](RELEASE_NOTES.md) → “Roadmap Summary (Steps 1–13)”
+- Completed steps (summary): see [CHANGELOG.md](CHANGELOG.md) → “Roadmap Summary (Steps 1–13)”
 - Active/planned work: see [ROADMAP.md](ROADMAP.md)
 
 For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
@@ -67,11 +67,13 @@ Examples:
 
 ```bash
 # Fast profile over repos listed in a TSV (auto-clone) and open dashboard when done
-jmotools fast --tsv ai-search/candidates.tsv --dest ./repos-tsv
+jmotools fast --tsv ./candidates.tsv --dest ./repos-tsv
 
 # Full (deep) profile targeting an existing directory of repos
 jmotools full --repos-dir ./repos-tsv --allow-missing-tools
 ```
+
+Note: Provide any TSV with a `url` or `full_name` column.
 
 Under the hood, these commands verify your OS/tools, optionally clone from a TSV, run `jmo ci` with the appropriate profile, and open `dashboard.html` and `SUMMARY.md` on completion.
 
@@ -223,9 +225,9 @@ Prefer the Python CLI above. For legacy flows, you can still use the shell wrapp
 python3 scripts/cli/jmo.py ci --repos-dir ~/test-repos --fail-on HIGH --profile --human-logs
 
 # 3. View results
-cat ~/security-results-*/SUMMARY_REPORT.md
-# macOS: open ~/security-results-*/dashboard.html
-# Linux: xdg-open ~/security-results-*/dashboard.html
+cat results/summaries/SUMMARY.md
+# macOS: open results/summaries/dashboard.html
+# Linux: xdg-open results/summaries/dashboard.html
 ```
 
 Looking for screenshots and how to capture them? See: [docs/screenshots/README.md](docs/screenshots/README.md)
@@ -242,53 +244,44 @@ The security audit follows this workflow:
 4. **Report Generation**: JSON/MD/YAML/HTML/SARIF and suppression summary
 5. **Dashboard Creation**: Self-contained HTML dashboard with an optional profiling panel
 
-### Output Structure
+### Output Structure (Default)
 
 ```text
-security-results-YYYYMMDD-HHMMSS/
-├── SUMMARY_REPORT.md              # Executive summary
-├── dashboard.html                  # Interactive HTML dashboard
-├── individual-repos/               # Per-repository results
-│   └── [repo-name]/
-│       ├── README.md              # Formatted findings report
-│       ├── gitleaks.json          # Gitleaks raw output
-│       ├── trufflehog.json        # TruffleHog raw output
-│       ├── semgrep.json           # Semgrep raw output
-│       ├── noseyparker.json       # Nosey Parker raw output
-│       └── *.log                  # Tool execution logs
-├── raw-outputs/                   # Compressed per-repo raw artifacts
-├── tool-comparisons/
-│   └── comparison.md              # Tool performance comparison
-├── summaries/
-│   └── metrics.csv                # Aggregated metrics
-
+results/
+├── individual-repos/
+│   └── <repo-name>/
+│       ├── gitleaks.json
+│       ├── trufflehog.json
+│       ├── semgrep.json
+│       ├── noseyparker.json
+│       ├── syft.json
+│       ├── trivy.json
+│       ├── hadolint.json
+│       ├── checkov.json
+│       ├── tfsec.json
+│       └── bandit.json
+└── summaries/
+   ├── findings.json
+   ├── findings.yaml        # requires PyYAML
+   ├── findings.sarif       # SARIF 2.1.0
+   ├── SUMMARY.md
+   ├── dashboard.html
+   ├── SUPPRESSIONS.md      # written when suppressions apply
+   └── timings.json         # written when --profile is used
 ```
 
-### Report Types
+### Reporters
 
-1. **Summary Report** (`SUMMARY_REPORT.md`)
-   - Executive summary
-   - Aggregate statistics
-   - Repository breakdown table
-   - Prioritized recommendations
+The aggregator writes unified outputs under `results/summaries/`:
 
-2. **HTML Dashboard** (`dashboard.html`)
-   - Visual metrics cards
-   - Severity breakdown
-   - Repository comparison table
-   - Tool performance analysis
+- JSON (`findings.json`) — complete, machine-readable findings list
+- Markdown (`SUMMARY.md`) — human-readable overview with severity counts and top rules
+- YAML (`findings.yaml`) — optional; requires PyYAML
+- HTML (`dashboard.html`) — interactive dashboard with filters, sorting, exports, and theme toggle
+- SARIF (`findings.sarif`) — 2.1.0 for code scanning integrations
+- Suppression summary (`SUPPRESSIONS.md`) — appears when suppression rules filter findings
 
-3. **Individual Reports** (`individual-repos/*/README.md`)
-   - Repository-specific findings
-   - Tool-by-tool breakdown
-   - Detailed issue listings
-   - Severity classifications
-
-4. **Tool Comparison** (`tool-comparisons/comparison.md`)
-   - Detection metrics
-   - Tool capabilities matrix
-   - Implementation strategy guide
-   - Tool selection recommendations
+See `SAMPLE_OUTPUTS.md` for real examples produced from the `infra-demo` fixture.
 
 ### How we normalize findings
 
@@ -447,35 +440,23 @@ https://github.com/user/repo2.git
 3. Use `--unshallow` only if secret scanners need full git history
 4. Clone to WSL filesystem (not Windows mount) for better performance
 
-### Running Individual Scripts
+### CLI-first usage
 
-1. **Tool Check Only**:
-
-```bash
-./scripts/core/check_tools.sh
-```
-
-1. **Main Audit Script**:
+Prefer the Python CLI for report generation from existing results:
 
 ```bash
-./scripts/core/run_security_audit.sh [testing_directory] [output_directory]
+# Default reporters (formats controlled by jmo.yml)
+python3 scripts/cli/jmo.py report /path/to/results
+
+# Set thread workers explicitly for aggregation
+python3 scripts/cli/jmo.py report /path/to/results --threads 6
+
+# Record profiling timings (writes summaries/timings.json)
+python3 scripts/cli/jmo.py report /path/to/results --profile
+
+# Human-friendly colored logs (stderr)
+python3 scripts/cli/jmo.py report /path/to/results --human-logs
 ```
-
-1. **Generate Dashboard Only**:
-
-```bash
-# Generate dashboard with default output (results_dir/dashboard.html)
-python3 scripts/core/generate_dashboard.py /path/to/results
-
-# Generate dashboard with custom output path
-python3 scripts/core/generate_dashboard.py /path/to/results /custom/path/dashboard.html
-```
-
-The dashboard generator supports:
-- Multiple TruffleHog output formats (JSON arrays, NDJSON, single objects, empty files)
-- Automatic parent directory creation for custom output paths
-- Graceful handling of missing or empty scan results
-- UTF-8 safe file I/O for international characters
 
 ### Unified CLI: report-only
 
@@ -576,11 +557,7 @@ Retries behavior:
 
 Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
 
-1. **Generate Comparison Report**:
-
-```bash
-./scripts/core/generate_comparison_report.sh /path/to/results
-```
+ 
 
 ### Customizing Tool Execution
 
@@ -636,33 +613,9 @@ python3 scripts/cli/jmo.py scan --repos-dir ~/repos --tools gitleaks semgrep --t
 - **Purpose**: Comprehensive security assessment
 - **Frequency**: Weekly/monthly
 
-## 📊 Sample Output
+## 📊 Sample Outputs
 
-### Dashboard Preview
-The HTML dashboard provides:
-- Visual metric cards with key statistics
-- Severity breakdown tables
-- Repository-by-repository comparison
-- Tool performance analysis
-- Actionable recommendations
-
-### Sample Summary Report
-
-```markdown
-## Aggregate Results
-
-### Overall Statistics
-- Total Issues Found: 1562
-- Critical Issues: 5
-- High Severity Issues: 579
-- Medium Severity Issues: 61
-- Verified Secrets: 5
-
-### Recommendations
-- Rotate all 5 verified secrets immediately
-- Prioritize remediation of 584 critical and high severity issues
-- Schedule follow-up review for the remaining medium findings
-```
+For a current snapshot produced from the `infra-demo` fixture, see: [SAMPLE_OUTPUTS.md](SAMPLE_OUTPUTS.md).
 
 ## 🤝 Contributing
 
@@ -696,13 +649,17 @@ MIT License. See LICENSE.
 ### Common Issues
 
 **Problem**: Tools not found
-- **Solution**: Run `./scripts/cli/security_audit.sh --check` to verify installation
+- **Solution**: Run `make verify-env` (or `jmotools setup --check`) to verify installation and get platform-specific hints
 
 **Problem**: JSON parsing errors
 - **Solution**: Ensure jq is installed and tools are outputting valid JSON
 
 **Problem**: Permission denied
-- **Solution**: Run `chmod +x *.sh` to make scripts executable
+- **Solution**: Ensure scripts are executable:
+
+```bash
+find scripts -type f -name "*.sh" -exec chmod +x {} +
+```
 
 **Problem**: Out of memory
 - **Solution**: Scan repositories in smaller batches
@@ -745,5 +702,5 @@ This is useful when you want to:
 
 ---
 
-**Last Updated**: October 10th, 2025
+**Last Updated**: October 13th, 2025
 **Author**: James Moceri

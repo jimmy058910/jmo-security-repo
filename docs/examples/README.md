@@ -44,31 +44,4 @@ python3 scripts/cli/jmo.py report ./results --profile --threads 6
 cat results/summaries/timings.json
 ```
 
-## 6) Discover AI-generated repos (ai-search)
-
-Use the enhanced helper to search GitHub for repos that self-identify as AI-generated or reference LLM tooling.
-
-Basic (TSV to stdout):
-
-```bash
-./ai-search/find-ai-generated-repos.sh
-```
-
-Write multiple formats to samples/:
-
-```bash
-./ai-search/find-ai-generated-repos.sh \
-  --limit 100 --months 6 --stars-max 50 \
-  --formats tsv,csv,jsonl,md --outdir ai-search
-```
-
-Language filters and custom queries:
-
-```bash
-./ai-search/find-ai-generated-repos.sh \
-  --include-langs python,typescript --exclude-langs html \
-  --query-file ai-search/queries.txt --limit 200 --rpm 20
-```
-
-Outputs include TSV, CSV, JSONL and an optional Markdown preview under `ai-search/` (when using `--outdir ai-search`).
-Environment variables can override flags, for example: `FORMATS=jsonl RPM=15 ./ai-search/find-ai-generated-repos.sh`.
+<!-- Removed ai-search private examples to keep public docs neutral. -->

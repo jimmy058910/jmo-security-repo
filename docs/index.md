@@ -62,7 +62,7 @@ If you're on Windows Subsystem for Linux (WSL), this gets you to green fast:
 ## Contributing and releases
 
 - Tests: [../TEST.md](../TEST.md)
-- Release notes: [../RELEASE_NOTES.md](../RELEASE_NOTES.md)
+- Changelog: [../CHANGELOG.md](../CHANGELOG.md)
 - License: [../LICENSE](../LICENSE)
 
 ## FAQ

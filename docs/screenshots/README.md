@@ -1,6 +1,6 @@
 # Dashboard screenshots & capture
 
-This folder documents how to generate the HTML dashboard and capture screenshots or GIFs for the README and release notes.
+This folder documents how to generate the HTML dashboard and capture screenshots or GIFs for the README and changelog.
 
 ## What you'll produce
 

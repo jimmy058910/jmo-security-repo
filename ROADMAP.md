@@ -1,6 +1,6 @@
 # JMO Security Suite — Roadmap
 
-Note: Steps 1–13 have been completed and are summarized in `RELEASE_NOTES.md` under “Roadmap Summary (Steps 1–13)”. This roadmap now tracks only active/planned work.
+Note: Steps 1–13 have been completed and are summarized in `CHANGELOG.md` under “Roadmap Summary (Steps 1–13)”. This roadmap now tracks only active/planned work.
 
 Recently completed infra hardening (October 2025)
 - CI: actionlint pinned, concurrency enabled, OS+Python matrix, job-level timeouts

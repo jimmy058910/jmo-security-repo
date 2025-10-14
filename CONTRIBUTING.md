@@ -120,7 +120,7 @@ pre-commit autoupdate
 
 ### When to bump project dependencies
 
-- Runtime deps live in `pyproject.toml`. If you need newer features or fixes from `PyYAML`/`jsonschema` (used for reporting), bump the constraints under `[project.optional-dependencies]` and open a PR with a brief note in `RELEASE_NOTES.md`.
+- Runtime deps live in `pyproject.toml`. If you need newer features or fixes from `PyYAML`/`jsonschema` (used for reporting), bump the constraints under `[project.optional-dependencies]` and open a PR with a brief note in `CHANGELOG.md`.
 - Dev-only tools are managed via `requirements-dev.txt` and pre-commit; prefer updating them via `pre-commit autoupdate` and re-running `make dev-deps`.
 
 If you’re unsure which path to use, open an issue and we’ll help you choose between bumping project deps vs. updating local dev tooling.

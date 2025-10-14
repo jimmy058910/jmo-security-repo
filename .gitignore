@@ -60,5 +60,5 @@ results/
 
 # (formerly) Local roadmap file removed; keep repo docs public
 
-# Private repo search and outputs (moved under ai-search)
+# Private local scripts and outputs (ignored)
 /ai-search

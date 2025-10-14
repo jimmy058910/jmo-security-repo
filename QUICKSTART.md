@@ -14,8 +14,10 @@ jmotools fast --repos-dir ~/security-testing
 jmotools full --repos-dir ~/security-testing --allow-missing-tools
 
 # Clone from TSV first, then scan
-jmotools balanced --tsv ai-search/candidates.tsv --dest ./repos-tsv
+jmotools balanced --tsv ./candidates.tsv --dest ./repos-tsv
 ```
+
+Note: Provide any TSV with a `url` or `full_name` header.
 
 What it does for you:
 - Detects OS/WSL and verifies tools
@@ -105,6 +107,7 @@ python3 scripts/cli/jmo.py ci --repos-dir ~/security-testing --fail-on HIGH --pr
 # Or run scan and report separately
 python3 scripts/cli/jmo.py scan --repos-dir ~/security-testing --profile-name balanced --human-logs
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
+```
 
 ## Optional: reproducible dev dependencies
 
@@ -141,7 +144,7 @@ ls -1 results/individual-repos/infra-demo   # per-tool raw outputs
 ### Review Priority:
 
 1. **Open the HTML Dashboard** - Visual overview of all findings
-2. **Check SUMMARY_REPORT.md** - Executive summary with recommendations
+2. **Check SUMMARY.md** - Human-readable overview and top rules
 3. **Review Individual Reports** - Detailed findings per repository
 4. Optional: For a machine-readable format, check summaries/findings.json or summaries/findings.sarif
 
