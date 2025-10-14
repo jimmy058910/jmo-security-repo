@@ -63,6 +63,7 @@ results/
 # Private planning documents (developer-specific, not for public repo)
 DEVELOPER_ROADMAP.md
 BUSINESS_MODEL.md
+docs/VERSION_TAG.md
 
 # Private local scripts and outputs (ignored)
 /ai-search
