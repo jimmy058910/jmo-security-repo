@@ -13,6 +13,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 ## Pre-Release Checklist
 
 1. **Run full test suite locally:**
+
    ```bash
    make test
    # or
@@ -20,6 +21,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    ```
 
 2. **Verify linting and formatting:**
+
    ```bash
    make lint
    make fmt
@@ -39,6 +41,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 ## Step-by-Step Release Process
 
 1. **Bump version in `pyproject.toml`** (for example, `0.4.0`):
+
    ```toml
    [project]
    name = "jmo-security"
@@ -47,6 +50,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 2. **Update CHANGELOG.md:**
    - Move "Unreleased" section content to a new version section:
+
      ```markdown
      ## 0.4.0 (2025-10-15)
 
@@ -59,12 +63,14 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
      ```
 
 3. **Commit the version bump and changelog:**
+
    ```bash
    git add pyproject.toml CHANGELOG.md
    git commit -m "release: v0.4.0"
    ```
 
 4. **Create and push the tag:**
+
    ```bash
    git tag v0.4.0
    git push origin main
@@ -79,6 +85,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
      - No token/secret required!
 
 6. **Verify the release:**
+
    ```bash
    # Wait a few minutes for PyPI to update, then:
    pip install --upgrade jmo-security==0.4.0

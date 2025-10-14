@@ -191,6 +191,7 @@ Enable custom security gating policies using Open Policy Agent (OPA) Rego langua
 ### Use Cases
 
 **Example 1: Path-based gating**
+
 ```rego
 # Block HIGH+ findings in src/, allow in tests/
 deny[msg] {
@@ -201,7 +202,9 @@ deny[msg] {
 }
 ```
 
+
 **Example 2: Tool combination requirements**
+
 ```rego
 # Require gitleaks + trufflehog for secrets
 deny[msg] {
@@ -211,7 +214,9 @@ deny[msg] {
 }
 ```
 
+
 **Example 3: CWE-specific requirements**
+
 ```rego
 # Zero tolerance for SQL injection (CWE-89)
 deny[msg] {
@@ -222,6 +227,7 @@ deny[msg] {
     ])
 }
 ```
+
 
 ### Implementation Plan
 
@@ -263,6 +269,7 @@ jmo policy dry-run my-policy.rego ./results
 jmo policy init --template zero-secrets > my-policy.rego
 ```
 
+
 ### Configuration in jmo.yml
 
 ```yaml
@@ -272,6 +279,7 @@ policy:
   file: policies/company-standard.rego
   fail_on_violation: true
 ```
+
 
 ### Dependencies
 
@@ -391,6 +399,7 @@ SLSA is an industry framework for software supply chain security. We'll implemen
 }
 ```
 
+
 ### CLI Interface
 
 ```bash
@@ -416,6 +425,7 @@ jmo ci --repo . --attest --results results/
 # Produces: results/summaries/findings.json + attestation.json
 ```
 
+
 ### Dependencies
 
 - **Sigstore Python SDK** (`sigstore-python`) for keyless signing
@@ -434,6 +444,7 @@ attestation:
   transparency_log:
     enabled: true  # Upload to Rekor (Sigstore transparency log)
 ```
+
 
 ### Testing Strategy
 
@@ -508,6 +519,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 open results/summaries/dashboard.html
 ```
 
+
 ### docker-compose.yml Support
 
 ```yaml
@@ -520,6 +532,7 @@ services:
       - ./results:/results
     command: jmo scan --repos-dir /repos --results /results --profile deep
 ```
+
 
 ### GitHub Actions Integration
 
@@ -541,9 +554,11 @@ jobs:
           path: results/
 ```
 
+
 ### Implementation
 
 **Dockerfile:**
+
 ```dockerfile
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
@@ -568,6 +583,7 @@ WORKDIR /scan
 ENTRYPOINT ["jmo"]
 CMD ["--help"]
 ```
+
 
 ### Testing
 
@@ -609,6 +625,7 @@ Compare scan results across time/commits to identify new findings, resolved find
 ### Use Cases
 
 **Use Case 1: PR Diffs**
+
 ```bash
 # Scan PR branch
 jmo scan --repo . --results pr-results/
@@ -622,26 +639,33 @@ jmo diff main-results/ pr-results/ --output pr-diff.md
 # Shows: 3 new findings, 1 resolved, 2 unchanged
 ```
 
+
 **Use Case 2: Sprint Retrospective**
+
 ```bash
 # Compare this sprint vs last sprint
 jmo diff sprint-14-results/ sprint-15-results/ --format html
 # Output: trend charts, top fixes, top new issues
 ```
 
+
 **Use Case 3: Continuous Monitoring**
+
 ```bash
 # Weekly scans, track over time
 jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 # Output: Time-series chart of finding counts by severity
 ```
 
+
 ### Implementation
 
 **Command:**
+
 ```bash
 jmo diff <baseline_dir> <current_dir> [options]
 ```
+
 
 **Options:**
 - `--output <file>` - Output file (default: stdout)
@@ -660,6 +684,7 @@ jmo diff <baseline_dir> <current_dir> [options]
    - **Modified**: Same location but different severity/message
 
 **Output (Markdown):**
+
 ```markdown
 # Security Scan Diff: sprint-14 → sprint-15
 
@@ -681,6 +706,7 @@ jmo diff <baseline_dir> <current_dir> [options]
 | CRITICAL | gitleaks | github-pat | .env:12 |
 ...
 ```
+
 
 **Output (HTML):**
 - Interactive dashboard like main dashboard
@@ -763,6 +789,7 @@ class MyToolAdapter(AdapterPlugin):
 register_adapter(MyToolAdapter)
 ```
 
+
 ### Usage
 
 ```bash
@@ -772,6 +799,7 @@ jmo plugin install ~/.jmo/plugins/my_tool_adapter.py
 # Use in scan
 jmo scan --repo . --tools gitleaks,semgrep,my-tool
 ```
+
 
 ### Rollout
 
@@ -801,6 +829,7 @@ jmo schedule --list
 # Remove scheduled scan
 jmo schedule --remove <id>
 ```
+
 
 ### Rollout
 

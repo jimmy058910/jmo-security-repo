@@ -1120,8 +1120,10 @@ def cmd_scan(args) -> int:
                 )
                 cmd = [
                     "osv-scanner",
-                    "--format", "json",
-                    "--output", str(out),
+                    "--format",
+                    "json",
+                    "--output",
+                    str(out),
                     *([str(x) for x in flags] if isinstance(flags, list) else []),
                     str(repo),
                 ]

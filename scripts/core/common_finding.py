@@ -60,7 +60,13 @@ class Severity(str, Enum):
         """Enable severity comparisons: CRITICAL > HIGH > MEDIUM > LOW > INFO."""
         if not isinstance(other, Severity):
             return NotImplemented
-        order = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
+        order = [
+            Severity.INFO,
+            Severity.LOW,
+            Severity.MEDIUM,
+            Severity.HIGH,
+            Severity.CRITICAL,
+        ]
         return order.index(self) < order.index(other)
 
     def __le__(self, other: object) -> bool:
