@@ -281,14 +281,26 @@ suppressions:
 
 **Coverage:**
 
-CI enforces ≥85% coverage (see `.github/workflows/tests.yml`). Upload to Codecov uses OIDC (tokenless) for public repos.
+CI enforces ≥85% coverage (see [.github/workflows/ci.yml](.github/workflows/ci.yml)). Upload to Codecov uses OIDC (tokenless) for public repos.
 
 ## CI/CD
 
 **GitHub Actions Workflows:**
 
-- `.github/workflows/tests.yml` — Test matrix (Ubuntu/macOS × Python 3.10/3.11/3.12), coverage upload, pre-commit checks
-- `.github/workflows/release.yml` — Automated PyPI publishing on `v*` tags using Trusted Publishers (OIDC, no token required)
+The project uses 2 consolidated workflows for all CI/CD operations:
+
+1. **[.github/workflows/ci.yml](.github/workflows/ci.yml)** — Primary CI workflow
+   - `quick-checks` job: actionlint, yamllint, deps-compile freshness, guardrails (2-3 min)
+   - `test-matrix` job: Ubuntu/macOS × Python 3.10/3.11/3.12 (parallel, independent)
+   - `lint-full` job: Full pre-commit suite (nightly scheduled runs only)
+   - Triggers: push, pull_request, workflow_dispatch, schedule (nightly at 6 AM UTC)
+
+2. **[.github/workflows/release.yml](.github/workflows/release.yml)** — Release automation
+   - `pypi-publish` job: Build and publish to PyPI (Trusted Publishers OIDC)
+   - `docker-build` job: Multi-arch Docker images (full/slim/alpine variants)
+   - `docker-scan` job: Trivy vulnerability scanning
+   - `docker-hub-readme` job: Sync README to Docker Hub (future)
+   - Triggers: version tags (`v*`), workflow_dispatch
 
 **Pre-commit Hooks:**
 
@@ -657,5 +669,5 @@ When adding/updating documentation:
 | `Makefile` | Developer shortcuts for common tasks |
 | `Dockerfile`, `Dockerfile.slim`, `Dockerfile.alpine` | Docker image variants |
 | `.pre-commit-config.yaml` | Pre-commit hook configuration |
-| `.github/workflows/tests.yml` | CI test matrix and coverage |
-| `.github/workflows/release.yml` | Automated PyPI publishing |
+| `.github/workflows/ci.yml` | Primary CI: tests, quick checks, nightly lint |
+| `.github/workflows/release.yml` | Release automation: PyPI + Docker builds |
