@@ -2,9 +2,9 @@
 name: Docker Build and Push
 
 on:
+  # Only build Docker images on version tags and manual triggers
+  # Saves ~8 minutes of CI time per push
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   pull_request:
