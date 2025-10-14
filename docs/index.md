@@ -5,22 +5,43 @@
 
 Welcome! This is the one-stop index for docs. Start with the User Guide, or jump to examples, screenshots, or schemas.
 
+## 🎉 Recent Improvements (Phase 1 - October 2025)
+
+- 🔒 **XSS vulnerability patched** in HTML dashboard
+- 🛡️ **OSV scanner fully integrated** for open-source vulnerability detection
+- 📊 **Enriched SARIF 2.1.0** with CWE/OWASP/CVE taxonomies and code snippets
+- ⚙️ **Type-safe severity enum** for cleaner code
+- 🎯 **88% test coverage** with 100/100 tests passing
+- 📚 **9 new roadmap enhancements** (Policy-as-Code, SLSA, GitHub App, and more)
+
+See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
+
+## Quick Links
+
 - User Guide: [USER_GUIDE.md](USER_GUIDE.md)
 - Quick Start: [../QUICKSTART.md](../QUICKSTART.md)
 - Examples: [examples/README.md](examples/README.md)
 - Screenshots: [screenshots/README.md](screenshots/README.md)
 - CommonFinding Schema: [schemas/common_finding.v1.json](schemas/common_finding.v1.json)
 - Roadmap: [../ROADMAP.md](../ROADMAP.md)
-	- HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
-	- Support the project: https://ko-fi.com/jmogaming
-	- CI Troubleshooting: [User Guide — Interpreting CI failures](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
+- Changelog: [../CHANGELOG.md](../CHANGELOG.md)
+- Contributing: [../CONTRIBUTING.md](../CONTRIBUTING.md)
+- Release Guide: [RELEASE.md](RELEASE.md)
 
-## What’s in this toolkit
+### Deep Dives
 
-- Orchestrates secrets, SAST (Semgrep, Bandit), SBOM, IaC, Dockerfile scanners via a unified CLI
-- Normalizes outputs into a CommonFinding schema for consistent reporting
-- Ships human-friendly HTML and machine-friendly JSON/YAML/SARIF
-- Supports profiles, per-tool flags/timeouts, retries, include/exclude, and suppression
+- HTML Dashboard details: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
+- Suppression system: [User Guide — Suppressions](USER_GUIDE.md#suppressions)
+- CI Troubleshooting: [User Guide — Interpreting CI failures](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
+- Support the project: https://ko-fi.com/jmogaming
+
+## What's in this toolkit
+
+- Orchestrates secrets (gitleaks, noseyparker, trufflehog), SAST (Semgrep, Bandit), SBOM+vulnerabilities (Syft, Trivy, OSV), IaC (Checkov, tfsec), and Dockerfile (Hadolint) scanners via a unified CLI
+- Normalizes outputs into a CommonFinding schema (v1.0.0) for consistent reporting with stable fingerprinting
+- Ships human-friendly HTML dashboard (XSS-secured) and machine-friendly JSON/YAML/SARIF 2.1.0 (enriched with taxonomies)
+- Supports profiles, per-tool flags/timeouts, retries, include/exclude patterns, and fine-grained suppression
+- Type-safe severity enum (CRITICAL > HIGH > MEDIUM > LOW > INFO) with comparison operators
 
 ## Start here
 

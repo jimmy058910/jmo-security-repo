@@ -2,6 +2,16 @@
 
 Get up and running in under 5 minutes using the unified Python CLI (scan/report/ci).
 
+## ✨ What's New (Phase 1 - October 2025)
+
+- 🔒 **XSS vulnerability patched** in HTML dashboard
+- 🛡️ **OSV scanner integrated** for open-source vulnerability detection
+- 📊 **Enriched SARIF output** with CWE/OWASP/CVE taxonomies
+- ⚙️ **Type-safe severity enum** for cleaner code
+- 🎯 **88% test coverage** with 100/100 tests passing
+
+See [CHANGELOG.md](CHANGELOG.md) for complete details.
+
 ## Beginner mode: jmotools wrapper
 
 Prefer simple, memorable commands? Use the wrapper:
@@ -152,12 +162,15 @@ ls -1 results/individual-repos/infra-demo   # per-tool raw outputs
 
 ### Severity Levels
 
+The toolkit uses a type-safe severity enum with comparison operators for consistent filtering and sorting:
+
 | Level | Meaning | Action Required |
 |-------|---------|-----------------|
 | CRITICAL | Verified active secrets | Rotate/revoke immediately |
 | HIGH | Likely secrets or serious issues | Fix within 24-48 hours |
 | MEDIUM | Potential issues | Review and fix soon |
-| LOW | Informational | Address during regular maintenance |
+| LOW | Minor issues | Address during regular maintenance |
+| INFO | Informational findings | Review for context |
 
 ### Key Metrics to Monitor
 

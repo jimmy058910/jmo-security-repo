@@ -4,6 +4,54 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+### Code Quality & Security Improvements (Phase 1 - October 2025)
+
+**Security Fixes:**
+- **XSS vulnerability patched in HTML dashboard**: Added comprehensive HTML escaping function covering all dangerous characters (`&`, `<`, `>`, `"`, `'`) to prevent cross-site scripting attacks in the interactive dashboard.
+
+**Critical Bug Fixes:**
+- **OSV scanner fully integrated**:
+  - Integrated `osv_adapter` into `normalize_and_report.py` aggregation pipeline
+  - Added OSV scanner tool invocation to CLI scan command
+  - Enabled vulnerability detection from OSV database for comprehensive open-source vulnerability scanning
+
+**Code Quality & Maintainability:**
+- **Magic numbers extracted to constants**: Extracted `FINGERPRINT_LENGTH` (16) and `MESSAGE_SNIPPET_LENGTH` (120) as named constants with documentation in `common_finding.py`
+- **Severity type safety**: Converted severity strings to proper `Enum` with comparison operators (`<`, `>`, `<=`, `>=`) while maintaining full backward compatibility. Enables cleaner severity-based filtering and sorting throughout the codebase.
+- **Backward compatibility for suppressions**: Updated `suppress.py` to support both `suppressions` (recommended) and `suppress` (legacy) keys in YAML config without breaking existing workflows
+- **Configurable CPU count**: Moved hardcoded CPU recommendation logic to `jmo.yml` `profiling` section (min/max/default threads) for better configurability across different environments
+
+**Enhanced Outputs:**
+- **SARIF enrichment**: Enhanced SARIF 2.1.0 output with:
+  - Code snippets in region context for better IDE integration
+  - CWE/OWASP/CVE taxonomy references for security categorization
+  - CVSS scores and metadata for vulnerability prioritization
+  - Richer rule descriptions and fix suggestions
+  - Better GitHub/GitLab code scanning integration
+
+**Documentation:**
+- **ROADMAP.md updates**:
+  - Removed 124-line duplicate section
+  - Added 9 new future enhancement steps (Steps 15-23):
+    - Policy-as-Code Integration (OPA)
+    - Supply Chain Attestation (SLSA)
+    - Docker All-in-One Image
+    - Machine-Readable Diff Reports
+    - Web UI for Results Exploration
+    - Plugin System for Custom Adapters
+    - Scheduled Scans & Cron Support
+    - GitHub App Integration
+    - React/Vue Dashboard Alternative
+- **Configuration updates**: Added `profiling` section to `jmo.yml` for thread recommendations with configurable min/max/default values
+
+**Testing:**
+- All 100 tests passing ✅
+- Coverage: 88% (exceeds 85% requirement)
+- Backward compatibility verified across all changes
+- No breaking changes to existing workflows
+
+### Developer Experience (October 2025)
+
 Developer experience improvements:
 - Optional reproducible dev deps via pip-tools and uv:
 	- Added `requirements-dev.in` and Make targets: `upgrade-pip`, `deps-compile`, `deps-sync`, `deps-refresh`, `uv-sync`.

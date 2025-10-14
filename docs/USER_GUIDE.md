@@ -6,6 +6,26 @@ Note: The CLI is available as the console command `jmo` (via PyPI) and also as a
 
 If you're brand new, you can also use the beginner‑friendly wrapper `jmotools` described below.
 
+## ✨ Recent Improvements (Phase 1 - October 2025)
+
+**Security & Code Quality:**
+- 🔒 **XSS vulnerability patched** in HTML dashboard with comprehensive input escaping
+- 🛡️ **OSV scanner fully integrated** for open-source vulnerability detection
+- ⚙️ **Type-safe severity enum** with comparison operators for cleaner, more maintainable code
+- 🔄 **Backward-compatible suppression keys** supporting both `suppressions` (recommended) and `suppress` (legacy)
+
+**Enhanced Features:**
+- 📊 **Enriched SARIF 2.1.0 output** with CWE/OWASP/CVE taxonomies, code snippets, and CVSS scores
+- 🎯 **Configurable thread recommendations** via `jmo.yml` profiling section
+- 📝 **Magic numbers extracted** to named constants (FINGERPRINT_LENGTH, MESSAGE_SNIPPET_LENGTH)
+
+**Quality Metrics:**
+- ✅ 100/100 tests passing
+- ✅ 88% code coverage (exceeds 85% requirement)
+- ✅ No breaking changes to existing workflows
+
+See [CHANGELOG.md](../CHANGELOG.md) for complete details.
+
 ## Quick start (2 minutes)
 
 Prereqs: Linux, WSL, or macOS with Python 3.10+ recommended (3.8+ supported).
@@ -244,27 +264,47 @@ Threading and performance:
 
 You can suppress specific finding IDs during report/ci. The reporter looks for `jmo.suppress.yml` first in `results/` and then in the current working directory.
 
-File format:
+File format (supports both `suppressions` and legacy `suppress` keys):
 
 ```yaml
-suppress:
+# Recommended format (new):
+suppressions:
   - id: abcdef1234567890
     reason: false positive (hashing rule)
     expires: 2025-12-31   # optional ISO date; omit to never expire
   - id: 9999deadbeef
     reason: accepted risk for demo
+
+# Legacy format (still supported for backward compatibility):
+suppress:
+  - id: abcdef1234567890
+    reason: false positive (hashing rule)
+    expires: 2025-12-31
 ```
 
 Behavior:
 - Active suppressions remove matching findings from outputs.
 - A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
+- The tool automatically detects which key (`suppressions` or `suppress`) is present in your config.
 
 Search order for the suppression file is: `<results_dir>/jmo.suppress.yml` first, then `./jmo.suppress.yml` in the current working directory.
 
 ## SARIF and HTML dashboard
 
-- SARIF emission is enabled by default in this repo (`outputs: [json, md, yaml, html, sarif]`). If you remove `sarif` from outputs, SARIF won’t be written.
+### SARIF 2.1.0 Output (Enriched)
+
+- SARIF emission is enabled by default in this repo (`outputs: [json, md, yaml, html, sarif]`). If you remove `sarif` from outputs, SARIF won't be written.
+- **Enhanced in Phase 1:** SARIF output now includes:
+  - **Code snippets** in region context for better IDE integration
+  - **CWE/OWASP/CVE taxonomy references** for security categorization
+  - **CVSS scores and metadata** for vulnerability prioritization
+  - **Richer rule descriptions** and fix suggestions
+  - **Improved GitHub/GitLab code scanning integration**
+
+### HTML Dashboard (Secured)
+
 - The HTML dashboard (`dashboard.html`) is fully self‑contained and supports client‑side sorting, tool filtering, CSV/JSON export, persisted filters/sort, and deep‑linkable URLs.
+- **Security Fix (Phase 1):** XSS vulnerability patched with comprehensive HTML escaping covering all dangerous characters (`&`, `<`, `>`, `"`, `'`).
 - When `--profile` is used during report/ci, a `timings.json` file is produced; the dashboard shows a profiling panel when this file is present.
 
 ## OS notes (installing tools)
