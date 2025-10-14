@@ -239,7 +239,9 @@ def test_run_wizard_non_interactive(
     mock_jmotools_main = MagicMock(return_value=0)
 
     with patch("wizard.Path.cwd", return_value=Path("/home/user/repos")):
-        with patch.dict('sys.modules', {'jmotools': MagicMock(main=mock_jmotools_main)}):
+        with patch.dict(
+            "sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}
+        ):
             rc = run_wizard(yes=True)
 
     # Should not have prompted for profile/target selection

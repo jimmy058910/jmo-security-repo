@@ -138,7 +138,7 @@ jobs:
           # Extract tag (use 'latest' for main branch, otherwise use git ref)
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             TAG="latest"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          elif [ "${GITHUB_REF#refs/tags/}" != "${GITHUB_REF}" ]; then
             TAG="${GITHUB_REF#refs/tags/}"
           else
             TAG="${GITHUB_REF#refs/heads/}"
@@ -151,13 +151,13 @@ jobs:
 
           # Create manifest for amd64 + arm64
           docker buildx imagetools create -t \
-            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX} \
-            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX}" \
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}"
 
       - name: Inspect manifest
         run: |
           TAG="latest"
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [ "${GITHUB_REF#refs/tags/}" != "${GITHUB_REF}" ]; then
             TAG="${GITHUB_REF#refs/tags/}"
           fi
 
@@ -167,7 +167,7 @@ jobs:
           fi
 
           docker buildx imagetools inspect \
-            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX}
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX}"
 
   scan-images:
     name: Scan ${{ matrix.variant }} for vulnerabilities

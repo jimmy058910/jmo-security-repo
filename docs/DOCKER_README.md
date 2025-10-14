@@ -149,7 +149,7 @@ type results\summaries\SUMMARY.md
 
 **Results Structure:**
 
-```
+```text
 results/
 ├── individual-repos/
 │   └── your-project/

@@ -6,6 +6,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        exclude: ^docs/examples/github-actions-docker\.yml$  # Multi-document examples file
       - id: check-json
       - id: check-toml
       - id: mixed-line-ending

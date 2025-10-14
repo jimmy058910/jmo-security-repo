@@ -85,7 +85,9 @@ def test_retries_attempts_logging(tmp_path: Path, monkeypatch):
     # First two runs non-ok rc=2, third ok rc=1 (acceptable for trufflehog)
     state = {"n": 0}
 
-    def run_cmd(cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None):  # noqa: ARG001
+    def run_cmd(
+        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
+    ):  # noqa: ARG001
         state["n"] += 1
         rc = 2 if state["n"] < 3 else 1
         return rc, json.dumps({}), "", 1
@@ -132,7 +134,9 @@ def test_semgrep_rc2_and_trivy_rc1_accepted(tmp_path: Path, monkeypatch):
             "per_tool": {},
         }
 
-    def run_cmd(cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None):  # noqa: ARG001
+    def run_cmd(
+        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
+    ):  # noqa: ARG001
         prog = cmd[0]
         if prog == "semgrep":
             # rc=2 acceptable; write output file

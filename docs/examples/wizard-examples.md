@@ -480,7 +480,8 @@ If wizard warns "No git repositories detected" in repos-dir mode:
 2. Each subdirectory has a `.git` folder
 
 **Example correct structure:**
-```
+
+```text
 ~/my-repos/
 ├── repo1/
 │   └── .git/

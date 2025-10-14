@@ -19,7 +19,6 @@ Examples:
 from __future__ import annotations
 
 import os
-import platform
 import shutil
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
@@ -135,7 +134,12 @@ def _prompt_choice(
             return default
         if any(c[0] == choice for c in choices):
             return choice
-        print(_colorize(f"Invalid choice. Please enter one of: {', '.join(c[0] for c in choices)}", "red"))
+        print(
+            _colorize(
+                f"Invalid choice. Please enter one of: {', '.join(c[0] for c in choices)}",
+                "red",
+            )
+        )
 
 
 def _prompt_text(question: str, default: str = "") -> str:
@@ -258,7 +262,9 @@ def select_profile() -> str:
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
         print(f"\n  {_colorize(info['name'], 'bold')} ({key})")
-        print(f"    Tools: {', '.join(info['tools'][:3])}{'...' if len(info['tools']) > 3 else ''}")
+        print(
+            f"    Tools: {', '.join(info['tools'][:3])}{'...' if len(info['tools']) > 3 else ''}"
+        )
         print(f"    Time: {info['est_time']}")
         print(f"    Use: {info['use_case']}")
 
@@ -284,12 +290,16 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         return True
 
     print("\nExecution modes:")
-    print(f"  [native] Use locally installed tools")
-    print(f"  [docker] Use pre-built Docker image (zero installation)")
+    print("  [native] Use locally installed tools")
+    print("  [docker] Use pre-built Docker image (zero installation)")
     print()
-    print(f"Docker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}")
+    print(
+        f"Docker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}"
+    )
     if has_docker:
-        print(f"Docker running: {_colorize('Yes' if docker_running else 'No', 'green' if docker_running else 'yellow')}")
+        print(
+            f"Docker running: {_colorize('Yes' if docker_running else 'No', 'green' if docker_running else 'yellow')}"
+        )
 
     if not has_docker:
         print(_colorize("\nDocker not detected. Using native mode.", "yellow"))
@@ -299,7 +309,9 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         print(_colorize("\nDocker daemon not running. Using native mode.", "yellow"))
         return False
 
-    use_docker = _prompt_yes_no("\nUse Docker mode? (Recommended for first-time users)", default=True)
+    use_docker = _prompt_yes_no(
+        "\nUse Docker mode? (Recommended for first-time users)", default=True
+    )
     return use_docker
 
 
@@ -350,7 +362,9 @@ def select_target() -> Tuple[str, str, str, str]:
             if mode == "repos-dir":
                 repos = _detect_repos_in_dir(validated)
                 if repos:
-                    print(f"\n{_colorize(f'Found {len(repos)} repositories:', 'green')}")
+                    print(
+                        f"\n{_colorize(f'Found {len(repos)} repositories:', 'green')}"
+                    )
                     for repo in repos[:5]:
                         print(f"  - {repo.name}")
                     if len(repos) > 5:
@@ -377,7 +391,7 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
     profile_info = PROFILES[profile]
     cpu_count = _get_cpu_count()
 
-    print(f"\nProfile defaults:")
+    print("\nProfile defaults:")
     print(f"  Threads: {profile_info['threads']}")
     print(f"  Timeout: {profile_info['timeout']}s")
     print(f"  Tools: {len(profile_info['tools'])}")
@@ -388,10 +402,8 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
 
     # Threads
     print(f"\nThread count (1-{cpu_count * 2})")
-    print(f"  Lower = more thorough, Higher = faster (if I/O bound)")
-    threads_str = _prompt_text(
-        f"Threads", default=str(profile_info["threads"])
-    )
+    print("  Lower = more thorough, Higher = faster (if I/O bound)")
+    threads_str = _prompt_text("Threads", default=str(profile_info["threads"]))
     try:
         threads = int(threads_str)
         threads = max(1, min(threads, cpu_count * 2))
@@ -399,10 +411,8 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
         threads = profile_info["threads"]
 
     # Timeout
-    print(f"\nPer-tool timeout in seconds")
-    timeout_str = _prompt_text(
-        "Timeout", default=str(profile_info["timeout"])
-    )
+    print("\nPer-tool timeout in seconds")
+    timeout_str = _prompt_text("Timeout", default=str(profile_info["timeout"]))
     try:
         timeout = int(timeout_str)
         timeout = max(60, timeout)
@@ -410,8 +420,8 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
         timeout = profile_info["timeout"]
 
     # Fail-on severity
-    print(f"\nFail on severity threshold (for CI/CD)")
-    print(f"  CRITICAL > HIGH > MEDIUM > LOW > INFO")
+    print("\nFail on severity threshold (for CI/CD)")
+    print("  CRITICAL > HIGH > MEDIUM > LOW > INFO")
     fail_on_choices = [
         ("", "Don't fail (default)"),
         ("critical", "CRITICAL only"),
@@ -456,7 +466,9 @@ def review_and_confirm(config: WizardConfig) -> bool:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
     print(f"\n  Estimated time: {_colorize(profile_info['est_time'], 'yellow')}")
-    print(f"  Tools: {len(profile_info['tools'])} ({', '.join(profile_info['tools'][:3])}...)")
+    print(
+        f"  Tools: {len(profile_info['tools'])} ({', '.join(profile_info['tools'][:3])}...)"
+    )
 
     return _prompt_yes_no("\nProceed with scan?", default=True)
 
@@ -485,7 +497,7 @@ def generate_command(config: WizardConfig) -> str:
 
         if config.target_mode in ("repo", "repos-dir"):
             cmd_parts.append("--repos-dir /scan")
-        cmd_parts.append(f"--results /results")
+        cmd_parts.append("--results /results")
         cmd_parts.append(f"--profile {config.profile}")
 
     else:
@@ -599,8 +611,8 @@ set -euo pipefail
 def generate_github_actions(config: WizardConfig) -> str:
     """Generate a GitHub Actions workflow."""
     profile_info = PROFILES[config.profile]
-    threads = config.threads or profile_info['threads']
-    timeout = config.timeout or profile_info['timeout']
+    threads = config.threads or profile_info["threads"]
+    timeout = config.timeout or profile_info["timeout"]
 
     if config.use_docker:
         # Docker-based workflow
@@ -657,7 +669,7 @@ jobs:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
 
-        tools_list = ', '.join(profile_info['tools'])
+        tools_list = ", ".join(profile_info["tools"])
 
         return f"""name: Security Scan
 on:
@@ -737,7 +749,9 @@ def run_wizard(
             # Non-interactive mode: use defaults
             print("\n" + _colorize("Non-interactive mode: using defaults", "yellow"))
             config.profile = "balanced"
-            config.use_docker = force_docker and _detect_docker() and _check_docker_running()
+            config.use_docker = (
+                force_docker and _detect_docker() and _check_docker_running()
+            )
             config.target_mode = "repos-dir"
             config.target_path = str(Path.cwd())
             config.results_dir = "results"
@@ -811,9 +825,7 @@ def main() -> int:
     parser.add_argument(
         "--emit-make-target", metavar="FILE", help="Generate Makefile target"
     )
-    parser.add_argument(
-        "--emit-script", metavar="FILE", help="Generate shell script"
-    )
+    parser.add_argument("--emit-script", metavar="FILE", help="Generate shell script")
     parser.add_argument(
         "--emit-gha", metavar="FILE", help="Generate GitHub Actions workflow"
     )

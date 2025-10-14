@@ -1193,7 +1193,7 @@ Mark completed items with ✅:
   - Now supports both 'suppressions' and 'suppress' keys
   - Backward compatible
   - Added documentation
-- [x] **Issue #1**: OSV Adapter Integration - DONE  
+- [x] **Issue #1**: OSV Adapter Integration - DONE
   - Added load_osv import to normalize_and_report.py
   - Wired osv-scanner.json into aggregation loop
   - Tests passing
@@ -1202,7 +1202,7 @@ Mark completed items with ✅:
 
 - [ ] **Issue #5**: HTML Template Escaping
 - [ ] **Issue #2**: Add OSV Scanner Tool Invocation to jmo.py
-- [ ] **Issue #6**: Hardcoded CPU Count to Config  
+- [ ] **Issue #6**: Hardcoded CPU Count to Config
 - [ ] **Issue #7**: Edge Case Tests with Hypothesis
 - [ ] **Issue #8**: Type Hints + MyPy
 - [ ] **Issue #10**: TODO Comments Audit
@@ -1216,7 +1216,7 @@ Priority order for continuation:
 1. Issue #5: HTML Escaping (30 min) - Security fix
 2. Issue #2: OSV Tool Invocation (1 hour) - Complete OSV integration
 3. Issue #6: CPU Count Config (1 hour) - Config improvement
-4. Refactor: Severity Enum (30 min) - Type safety  
+4. Refactor: Severity Enum (30 min) - Type safety
 5. Enhancement #1: Parallel Tools (3 hours) - Performance boost
 6. Issue #7: Edge Tests (4 hours) - Robustness
 7. Issue #8: Type Hints (3 hours) - Code quality
@@ -1526,7 +1526,7 @@ pytest -q
 # New fuzzing tests breakdown:
 tests/adapters/test_adapter_fuzzing.py:
   - test_gitleaks_handles_malformed_json: PASSED
-  - test_semgrep_handles_malformed_json: PASSED  
+  - test_semgrep_handles_malformed_json: PASSED
   - test_trivy_handles_malformed_json: PASSED
   - test_checkov_handles_malformed_json: PASSED
   - test_bandit_handles_malformed_json: PASSED
@@ -1681,4 +1681,3 @@ tests/adapters/test_adapter_fuzzing.py:
 **Status: ✅ 12/13 items complete (92%)**
 **Next Steps: Optional - implement parallel execution when performance needed**
 **Recommendation: Current state is production-ready with excellent test coverage**
-

@@ -32,7 +32,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 
 **Next Steps:**
 1. Run your first scan (wizard handles it)
-2. Learn about results: [Understanding Results](#understanding-results)
+2. Learn about results: [Understanding Results](#-understanding-results)
 3. Explore wizard patterns: [Wizard Examples](examples/wizard-examples.md)
 
 ---

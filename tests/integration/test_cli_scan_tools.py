@@ -42,7 +42,9 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         def __init__(self):
             self.calls = []
 
-        def run_cmd(self, cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None):  # noqa: D401
+        def run_cmd(
+            self, cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
+        ):  # noqa: D401
             self.calls.append(cmd)
             prog = cmd[0]
             # Create out files for flags-based outputs

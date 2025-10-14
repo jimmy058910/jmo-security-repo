@@ -35,6 +35,7 @@ For the release process, see docs/RELEASE.md.
   - 18 comprehensive tests with 100% pass rate
 
 **Usage:**
+
 ```bash
 # Interactive mode
 jmotools wizard
@@ -84,6 +85,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml
   - Read-only volume mounts for security
 
 **Usage:**
+
 ```bash
 # Pull and scan
 docker pull ghcr.io/jimmy058910/jmo-security:latest

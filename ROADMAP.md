@@ -52,6 +52,7 @@ Items are ordered by optimal implementation priority based on user value, depend
 - Multi-arch: linux/amd64, linux/arm64
 
 **Usage:**
+
 ```bash
 # Pull and run
 docker pull ghcr.io/jimmy058910/jmo-security:latest
@@ -97,6 +98,7 @@ steps:
 9. Generate reusable artifacts (Make target, shell script, GitHub Actions workflow with Docker support)
 
 **CLI:**
+
 ```bash
 # Interactive mode
 jmotools wizard
@@ -180,6 +182,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 - **Sprint KPIs:** "How many findings did we fix this sprint?"
 
 **Implementation:**
+
 ```bash
 # PR diff workflow
 jmo diff main-results/ pr-results/ --output pr-diff.md
@@ -218,6 +221,7 @@ jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 **Objective:** Run scans automatically on schedule without manual intervention.
 
 **Implementation:**
+
 ```bash
 # Install cron job
 jmo schedule --cron "0 2 * * *" --repos-dir ~/repos --profile balanced
@@ -254,6 +258,7 @@ jmo schedule --remove <id>
 - Community contribution (lower barrier)
 
 **Plugin API:**
+
 ```python
 # ~/.jmo/plugins/my_tool_adapter.py
 from jmo.plugin import AdapterPlugin, Finding, Severity
@@ -271,6 +276,7 @@ register_adapter(MyToolAdapter)
 ```
 
 **Usage:**
+
 ```bash
 # Install plugin
 jmo plugin install ~/.jmo/plugins/my_tool_adapter.py
@@ -302,6 +308,7 @@ jmo scan --repo . --tools gitleaks,semgrep,my-tool
 **Example Policies:**
 
 Path-based gating:
+
 ```rego
 # Block HIGH+ findings in src/, allow in tests/
 deny[msg] {
@@ -313,6 +320,7 @@ deny[msg] {
 ```
 
 CWE-specific requirements:
+
 ```rego
 # Zero tolerance for SQL injection (CWE-89)
 deny[msg] {
@@ -325,6 +333,7 @@ deny[msg] {
 ```
 
 **CLI:**
+
 ```bash
 # Basic usage
 jmo report ./results --policy my-policy.rego
@@ -373,6 +382,7 @@ jmo policy init --template zero-secrets > my-policy.rego
 - Verification: Anyone can verify authenticity
 
 **Attestation Format (in-toto SLSA Provenance v1.0):**
+
 ```json
 {
   "_type": "https://in-toto.io/Statement/v1",
@@ -402,6 +412,7 @@ jmo policy init --template zero-secrets > my-policy.rego
 ```
 
 **CLI:**
+
 ```bash
 # Generate and sign attestation
 jmo attest results/findings.json --sign --keyless --output attestation.json
@@ -480,6 +491,7 @@ jmo ci --repo . --attest --results results/
 - Team annotations (requires database)
 
 **Implementation:**
+
 ```bash
 # Start server
 jmo serve results/ --port 8080

@@ -25,7 +25,9 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
 
     seen = {"cmd": None}
 
-    def run_cmd(cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None):  # noqa: ARG001
+    def run_cmd(
+        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
+    ):  # noqa: ARG001
         seen["cmd"] = cmd
         # semgrep writes to --output path
         p = Path(cmd[cmd.index("--output") + 1])

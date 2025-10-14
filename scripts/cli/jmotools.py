@@ -278,9 +278,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.mode == "wizard":
         wizard_script = Path(__file__).resolve().parent / "wizard.py"
         if not wizard_script.exists():
-            sys.stderr.write(
-                "\x1b[31m[ERROR]\x1b[0m Wizard script not found.\n"
-            )
+            sys.stderr.write("\x1b[31m[ERROR]\x1b[0m Wizard script not found.\n")
             return 2
 
         # Import and run wizard
@@ -288,11 +286,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         from wizard import run_wizard
 
         return run_wizard(
-            yes=getattr(args, 'yes', False),
-            force_docker=getattr(args, 'docker', False),
-            emit_make=getattr(args, 'emit_make_target', None),
-            emit_script=getattr(args, 'emit_script', None),
-            emit_gha=getattr(args, 'emit_gha', None),
+            yes=getattr(args, "yes", False),
+            force_docker=getattr(args, "docker", False),
+            emit_make=getattr(args, "emit_make_target", None),
+            emit_script=getattr(args, "emit_script", None),
+            emit_gha=getattr(args, "emit_gha", None),
         )
 
     # Handle setup early
