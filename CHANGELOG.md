@@ -4,6 +4,50 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+## 0.4.0 (2025-10-14)
+
+**Major Release: Workflow Consolidation + Wizard + Docker**
+
+This release completes ROADMAP items #1 (Docker All-in-One Images) and #2 (Interactive Wizard), and introduces a streamlined CI/CD infrastructure to reduce maintenance burden and CI breakage.
+
+### GitHub Actions Workflow Consolidation (NEW)
+
+**Problem solved:** Frequent CI breakage due to 5 separate workflows with overlapping concerns, serial dependencies, and duplicate pre-commit runs.
+
+**Changes:**
+
+- **Consolidated 5 workflows → 2 workflows** (60% reduction):
+  - New [.github/workflows/ci.yml](.github/workflows/ci.yml): Primary CI with quick-checks, test-matrix, and nightly lint-full jobs
+  - Enhanced [.github/workflows/release.yml](.github/workflows/release.yml): PyPI publishing + Docker multi-arch builds
+  - Deleted: tests.yml, docker-build.yml, lint-full.yml, deps-compile-check.yml
+
+- **ci.yml jobs:**
+  - `quick-checks` (2-3 min): actionlint, yamllint, deps-compile freshness, guardrails
+  - `test-matrix` (6-10 min, parallel): Ubuntu/macOS × Python 3.10/3.11/3.12
+    - Tests run independently (no lint blocking!)
+    - Coverage + Codecov upload on Ubuntu 3.11 only
+  - `lint-full` (nightly only): Full pre-commit suite at 6 AM UTC
+
+- **release.yml jobs:**
+  - `pypi-publish`: Build and publish to PyPI
+  - `docker-build`: Multi-arch images (full/slim/alpine)
+  - `docker-scan`: Trivy vulnerability scanning
+  - `docker-hub-readme`: README sync (placeholder)
+
+**Benefits:**
+- **~40% faster CI feedback** (~6-10 min vs ~10-15 min)
+- **No test blocking:** Tests run even if lint fails
+- **Clearer separation:** CI (validation) vs Release (distribution)
+- **Easier maintenance:** Single source of truth for CI logic
+- **Nightly drift detection:** Catches pre-commit hook drift before it breaks PRs
+
+**Nightly CI Explained:**
+- Runs automatically every night at 6 AM UTC via GitHub Actions cron
+- Executes full pre-commit suite in check-only mode
+- Catches tool version drift, rule changes, and dependency shifts
+- Does NOT run on normal pushes/PRs (keeps CI fast)
+- Prevents surprise failures during development
+
 ### Interactive Wizard (ROADMAP Item 2 - October 2025)
 
 **Guided first-run experience for beginners:**
