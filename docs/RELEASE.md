@@ -5,6 +5,7 @@ Remember to update CHANGELOG.md with user-facing changes.
 This project publishes to PyPI via GitHub Actions on git tags of the form `v*` using Trusted Publishers (OIDC).
 
 ## Prerequisites
+
 - **No PyPI API token required!** This repo uses Trusted Publishers (OIDC) for tokenless publishing.
 - Ensure the repository is configured as a Trusted Publisher in PyPI settings (one-time setup).
 - Ensure tests are green and coverage passes locally (≥85% required).
@@ -55,6 +56,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
      ## 0.4.0 (2025-10-15)
 
      Highlights:
+
      - [Content from Unreleased section]
 
      ## Unreleased
@@ -97,14 +99,17 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 ## Troubleshooting
 
 **Problem:** Release workflow fails with "Trusted Publisher authentication failed"
+
 - **Solution:** Verify the repository is configured as a Trusted Publisher in PyPI settings
 - **Check:** https://pypi.org/manage/account/publishing/ (must match org/repo/workflow)
 
 **Problem:** Tests fail in CI but pass locally
+
 - **Solution:** Check matrix differences (Ubuntu vs macOS, Python 3.10 vs 3.11 vs 3.12)
 - **Check:** Run `make test` with different Python versions locally
 
 **Problem:** Coverage below 85%
+
 - **Solution:** Add tests for uncovered code paths
 - **Check:** Run `pytest --cov=. --cov-report=term-missing` to see gaps
 

@@ -4,12 +4,12 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except Exception:
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -65,8 +65,9 @@ def filter_suppressed(
     out = []
     for f in findings:
         sid = f.get("id")
-        sup = suppressions.get(sid)
-        if sup and sup.is_active():
-            continue
+        if sid and isinstance(sid, str):
+            sup = suppressions.get(sid)
+            if sup and sup.is_active():
+                continue
         out.append(f)
     return out

@@ -9,17 +9,20 @@ If you're brand new, you can also use the beginner‑friendly wrapper `jmotools`
 ## ✨ Recent Improvements (Phase 1 - October 2025)
 
 **Security & Code Quality:**
+
 - 🔒 **XSS vulnerability patched** in HTML dashboard with comprehensive input escaping
 - 🛡️ **OSV scanner fully integrated** for open-source vulnerability detection
 - ⚙️ **Type-safe severity enum** with comparison operators for cleaner, more maintainable code
 - 🔄 **Backward-compatible suppression keys** supporting both `suppressions` (recommended) and `suppress` (legacy)
 
 **Enhanced Features:**
+
 - 📊 **Enriched SARIF 2.1.0 output** with CWE/OWASP/CVE taxonomies, code snippets, and CVSS scores
 - 🎯 **Configurable thread recommendations** via `jmo.yml` profiling section
 - 📝 **Magic numbers extracted** to named constants (FINGERPRINT_LENGTH, MESSAGE_SNIPPET_LENGTH)
 
 **Quality Metrics:**
+
 - ✅ 100/100 tests passing
 - ✅ 88% code coverage (exceeds 85% requirement)
 - ✅ No breaking changes to existing workflows
@@ -213,6 +216,7 @@ Notes and precedence:
 Subcommands: scan, report, ci
 
 Common flags:
+
 - --config jmo.yml: choose a config file (default: jmo.yml)
 - --profile-name NAME: apply a named profile from config
 - --threads N: set workers (scan/report)
@@ -224,13 +228,16 @@ Common flags:
 - --profile (report/ci): write timings.json with summary and per‑job timings
 
 Notes on exit codes:
+
 - Some tools intentionally return non‑zero to signal “findings.” The CLI treats these as success codes internally (gitleaks/trivy/checkov: 0/1; semgrep: 0/1/2) to avoid false failures.
 - The overall exit code of report/ci can be gated by --fail-on or fail_on in config.
 
 Graceful cancel:
+
 - During scans, Ctrl‑C (SIGINT) will request a graceful stop after in‑flight tasks finish.
 
 Environment variables:
+
 - JMO_THREADS: when set, influences worker selection during scan; report also seeds this internally based on `--threads` or config to optimize aggregation.
 - JMO_PROFILE: when set to 1, aggregation collects timing metadata; `--profile` toggles this automatically for report/ci and writes `timings.json`.
 
@@ -253,10 +260,12 @@ profiles:
 ```
 
 Retries:
+
 - Set `retries: N` at the root or inside a profile to automatically retry failing tool commands up to N times.
 - Human logs will show attempts when > 1, e.g. `attempts={'semgrep': 2}`.
 
 Threading and performance:
+
 - Scan workers: precedence is CLI/profile threads > JMO_THREADS env > config default > auto.
 - Report workers: set via `--threads` (preferred) or config; the aggregator will also suggest `recommended_threads` in `timings.json` based on CPU count.
 
@@ -269,20 +278,24 @@ File format (supports both `suppressions` and legacy `suppress` keys):
 ```yaml
 # Recommended format (new):
 suppressions:
+
   - id: abcdef1234567890
     reason: false positive (hashing rule)
     expires: 2025-12-31   # optional ISO date; omit to never expire
+
   - id: 9999deadbeef
     reason: accepted risk for demo
 
 # Legacy format (still supported for backward compatibility):
 suppress:
+
   - id: abcdef1234567890
     reason: false positive (hashing rule)
     expires: 2025-12-31
 ```
 
 Behavior:
+
 - Active suppressions remove matching findings from outputs.
 - A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
 - The tool automatically detects which key (`suppressions` or `suppress`) is present in your config.
@@ -390,20 +403,20 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
 - Workflow validation (actionlint)
   - Symptom: step “Validate GitHub workflows (actionlint)” fails early.
   - Why: Invalid `uses:` reference, missing version tag, or schema errors.
-  - Fix locally: run `pre-commit run actionlint --all-files`. See the action: https://github.com/rhysd/actionlint and our workflow at `.github/workflows/tests.yml`.
+  - Fix locally: run `pre-commit run actionlint --all-files`. See the action: <https://github.com/rhysd/actionlint> and our workflow at `.github/workflows/tests.yml`.
 
 - Pre-commit hooks (YAML/format/lint)
   - Symptom: pre-commit step fails on YAML (`yamllint`), markdownlint, ruff/black, or shell checks.
-  - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: https://pre-commit.com/
+  - Fix locally: `make pre-commit-run` or run individual hooks. Config lives in `.pre-commit-config.yaml`; YAML rules in `.yamllint.yaml`; ruff/black use defaults in this repo. Docs: <https://pre-commit.com/>
 
 - Test coverage threshold not met
   - Symptom: Tests pass, but `--cov-fail-under=85` fails the job.
-  - Fix locally: run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` to identify gaps, then add tests. High‑leverage areas include adapters’ malformed/empty JSON handling and reporters’ edge cases. Pytest‑cov docs: https://pytest-cov.readthedocs.io/
+  - Fix locally: run `pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing` to identify gaps, then add tests. High‑leverage areas include adapters' malformed/empty JSON handling and reporters' edge cases. Pytest‑cov docs: <https://pytest-cov.readthedocs.io/>
 
 - Codecov upload warnings (tokenless OIDC)
   - Symptom: Codecov step asks for a token or indicates OIDC not enabled.
   - Context: Public repos usually don’t require `CODECOV_TOKEN`. This repo uses tokenless OIDC with `codecov/codecov-action@v5` and minimal permissions (`contents: read`).
-  - Fix: Ensure `coverage.xml` exists (the tests step emits it) and confirm OIDC is enabled in your Codecov org/repo. Action docs: https://github.com/codecov/codecov-action and OIDC docs: https://docs.codecov.com/docs/tokenless-uploads
+  - Fix: Ensure `coverage.xml` exists (the tests step emits it) and confirm OIDC is enabled in your Codecov org/repo. Action docs: <https://github.com/codecov/codecov-action> and OIDC docs: <https://docs.codecov.com/docs/tokenless-uploads>
 
 - Canceled runs (concurrency)
   - Symptom: A run is marked “canceled.”
@@ -418,24 +431,31 @@ If the failure isn’t listed, expand the step logs in GitHub Actions for detail
 ## Troubleshooting
 
 Tools not found
+
 - Run `make verify-env` for detection and install hints, or install missing tools; use `--allow-missing-tools` for exploratory runs.
 
 No repositories to scan
+
 - Ensure you passed `--repo`, `--repos-dir`, or `--targets`; when using `--repos-dir`, only immediate subfolders are considered.
 
 Slow scans
+
 - Reduce the toolset via a lighter profile (`fast`), or increase threads; use `report --profile` to inspect `timings.json` and adjust.
 
 YAML reporter missing
+
 - If PyYAML isn’t installed, YAML output is skipped with a DEBUG log; install `pyyaml` to enable.
 
 Permission denied on scripts
+
 - Ensure scripts are executable: `find scripts -type f -name "*.sh" -exec chmod +x {} +`
 
 Hadolint shows no results
+
 - Hadolint only runs when a `Dockerfile` exists at the repo root; this is expected. With `--allow-missing-tools`, a stub may be created when appropriate so reporting still works.
 
 TruffleHog output looks empty
+
 - Depending on flags and repo history, TruffleHog may stream JSON objects rather than a single array. The CLI captures and writes this stream verbatim; empty output is valid if no secrets are detected.
 
 ## Reference: CLI synopsis

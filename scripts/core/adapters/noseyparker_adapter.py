@@ -39,8 +39,10 @@ def load_noseyparker(path: str | Path) -> List[Dict[str, Any]]:
         line_no = 0
         if isinstance(m.get("line_number"), int):
             line_no = m["line_number"]
-        elif isinstance((m.get("location") or {}).get("startLine"), int):
-            line_no = (m.get("location") or {}).get("startLine")
+        else:
+            start_line_val = (m.get("location") or {}).get("startLine")
+            if isinstance(start_line_val, int):
+                line_no = start_line_val
         msg = m.get("match") or m.get("context") or signature
         sev = normalize_severity("MEDIUM")
         fid = fingerprint("noseyparker", signature, path_str, line_no, msg)

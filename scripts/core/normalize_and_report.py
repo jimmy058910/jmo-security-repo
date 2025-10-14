@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 
 # When profiling is enabled (env JMO_PROFILE=1), this will be populated with per-job timings
-PROFILE_TIMINGS = {
+PROFILE_TIMINGS: Dict[str, Any] = {
     "jobs": [],  # list of {"tool": str, "path": str, "seconds": float, "count": int}
     "meta": {},  # miscellaneous metadata like max_workers
 }
@@ -124,7 +124,7 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
     try:
         if profiling:
             t0 = time.perf_counter()
-            res = loader(path)
+            res: List[Dict[str, Any]] = loader(path)
             dt = time.perf_counter() - t0
             try:
                 PROFILE_TIMINGS["jobs"].append(
@@ -140,7 +140,8 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
                 ...
             return res
         else:
-            return loader(path)
+            result: List[Dict[str, Any]] = loader(path)
+            return result
     except Exception:
         # If any adapter throws, return an empty list for resilience
         return []
@@ -155,8 +156,8 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
     - When matched, attach context.sbom = {name, version, path} and add a tag 'pkg:name@version'.
     """
     # Build indexes from Syft package entries (INFO-level with tags include 'sbom'/'package')
-    by_path = {}
-    by_name = {}
+    by_path: Dict[str, List[Dict[str, str]]] = {}
+    by_name: Dict[str, List[Dict[str, str]]] = {}
     for f in findings:
         if not isinstance(f, dict):
             continue

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 JMo Security Audit Tool Suite is a terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners with a unified Python CLI, normalized outputs, and an HTML dashboard. The project scans repositories for secrets, vulnerabilities, misconfigurations, and security issues using industry-standard tools.
 
 **Key Philosophy:**
+
 - Two-phase architecture: **scan** (invoke tools, write raw JSON) → **report** (normalize, dedupe, emit unified outputs)
 - Unified CommonFinding schema with stable fingerprinting for deduplication
 - Profile-based configuration for different scan depths (fast/balanced/deep)
@@ -255,8 +256,10 @@ per_tool:
 
 ```yaml
 suppressions:
+
   - id: "fingerprint-id-here"
     reason: "False positive, accepted risk"
+
   - ruleId: "G101"
     path: "tests/*"
     reason: "Test files excluded"
@@ -511,42 +514,49 @@ Never change default paths without updating all tests and documentation.
 ### Documentation Content Guidelines
 
 **README.md:**
+
 - Purpose: First impression, project value proposition, quick navigation
 - Content: Badges, "Three Ways to Get Started" (Wizard/Docker/Local), features overview, tool list
 - Length: Moderate (current length is appropriate)
 - Updates: When major features added (Docker, Wizard) or key workflows change
 
 **QUICKSTART.md:**
+
 - Purpose: Get ANY user from zero to first scan in 5 minutes
 - Content: Platform-specific setup (Linux/WSL/macOS), basic scan commands, result viewing
 - Length: Concise, scannable
 - Updates: When default workflows or commands change
 
 **docs/USER_GUIDE.md:**
+
 - Purpose: Comprehensive reference for all features
 - Content: Configuration reference, CLI synopsis, profiles, suppressions, CI troubleshooting
 - Length: Long (current length appropriate)
 - Updates: When new CLI flags, config options, or features added
 
 **docs/DOCKER_README.md:**
+
 - Purpose: Complete Docker guide for all skill levels
 - Content: Image variants, CI/CD patterns, troubleshooting, security considerations
 - Length: Medium-long
 - Updates: When new Docker images, variants, or CI examples added
 
 **docs/DOCKER_README.md#quick-start-absolute-beginners:**
+
 - Purpose: Hand-holding tutorial for absolute beginners
 - Content: Docker installation, first scan, understanding results, common scenarios
 - Length: Long (step-by-step requires detail)
 - Updates: When beginner workflows or Docker commands change
 
 **docs/examples/wizard-examples.md:**
+
 - Purpose: Wizard workflows and use cases
 - Content: Interactive mode, non-interactive mode, artifact generation, common patterns
 - Length: Medium
 - Updates: When wizard features or flags added
 
 **docs/index.md:**
+
 - Purpose: Documentation hub - single source of truth for all doc links
 - Content: Links to all docs organized by purpose, quick links, FAQ
 - Length: Short (just navigation)
@@ -602,14 +612,17 @@ Never change default paths without updating all tests and documentation.
 ### Documentation Cross-References
 
 **Always use relative links:**
+
 - ✅ `[docs/USER_GUIDE.md](docs/USER_GUIDE.md)`
 - ❌ `https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/USER_GUIDE.md` (breaks in forks)
 
 **Link to section anchors when helpful:**
+
 - ✅ `[USER_GUIDE.md — Configuration](docs/USER_GUIDE.md#configuration-jmoyml)`
 - ✅ `[QUICKSTART.md — Docker Mode](QUICKSTART.md#docker-mode)`
 
 **Maintain bi-directional links:**
+
 - README.md → QUICKSTART.md → USER_GUIDE.md → docs/examples/
 - Each doc should link back to docs/index.md or README.md
 

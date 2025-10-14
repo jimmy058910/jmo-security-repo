@@ -11,6 +11,7 @@ Context7 maintains a **curated database of popular libraries** that is **already
 Context7 has **thousands of popular libraries** pre-indexed, including:
 
 #### Security Tools (Relevant to This Project)
+
 - ✅ **Semgrep** - SAST scanner
 - ✅ **Trivy** - Container vulnerability scanner
 - ✅ **Checkov** - IaC scanner
@@ -18,6 +19,7 @@ Context7 has **thousands of popular libraries** pre-indexed, including:
 - ✅ **TruffleHog** - Secret scanner
 
 #### Python Ecosystem
+
 - ✅ **pytest** - Testing framework
 - ✅ **black** - Code formatter
 - ✅ **ruff** - Linter
@@ -27,11 +29,13 @@ Context7 has **thousands of popular libraries** pre-indexed, including:
 - ✅ **subprocess** - Python stdlib
 
 #### Container/DevOps
+
 - ✅ **Docker** - Container platform
 - ✅ **GitHub Actions** - CI/CD
 - ✅ **Kubernetes** - Container orchestration
 
-#### And Many More!
+#### And Many More
+
 - Next.js, React, Vue, Angular
 - Node.js, Express, FastAPI, Django
 - PostgreSQL, MongoDB, Redis
@@ -48,6 +52,7 @@ Context7 has **thousands of popular libraries** pre-indexed, including:
 ```
 
 Context7 will:
+
 1. Automatically detect you're asking about pytest
 2. Fetch the latest pytest documentation
 3. Inject it into the context
@@ -90,13 +95,16 @@ Context7 will:
 ## What Context7 CANNOT Do
 
 ❌ **Upload your custom project documentation**
+
 - Context7 only supports libraries in its public database
 - It cannot learn from your CLAUDE.md, README.md, or custom docs
 
 ❌ **Index private repositories**
+
 - Only public, popular libraries are supported
 
 ❌ **Store project-specific patterns**
+
 - Your adapter pattern, CommonFinding schema, etc. are not in Context7
 
 ## How Your Project Docs Work
@@ -216,6 +224,7 @@ Then use context7 to show me GitHub Actions matrix build syntax."
 ### "Library not found" Error
 
 **Solution:** The library may not be in Context7's database. Options:
+
 1. Use web search to find official docs
 2. Use the library's GitHub repository documentation
 3. Ask without "use context7" and Claude will use training data
@@ -223,6 +232,7 @@ Then use context7 to show me GitHub Actions matrix build syntax."
 ### Outdated Information Despite Context7
 
 **Solution:**
+
 1. Specify the version: "Show me pytest 8.x fixtures. use context7"
 2. Check if the library is actively maintained
 3. Verify the library name matches Context7's format
@@ -230,6 +240,7 @@ Then use context7 to show me GitHub Actions matrix build syntax."
 ### Context7 Not Responding
 
 **Solution:**
+
 1. Check MCP server status: `/mcp` in Claude Code
 2. Verify npx is installed: `npx --version`
 3. Restart Claude Code
@@ -246,12 +257,14 @@ Then use context7 to show me GitHub Actions matrix build syntax."
 5. ✅ **Project docs via Read tool** - CLAUDE.md, README.md automatically available
 
 **Simple Rule:**
+
 - External library question → "use context7"
 - Project-specific question → Use Read tool or ask directly
 
 ---
 
 **Related Documentation:**
+
 - [MCP_SETUP.md](MCP_SETUP.md) - Full MCP server setup guide
 - [CLAUDE.md](../CLAUDE.md) - Project architecture and conventions
 - [Context7 GitHub](https://github.com/upstash/context7) - Official Context7 docs

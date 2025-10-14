@@ -37,6 +37,7 @@ Project homepage: [jmotools.com](https://jmotools.com)
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and coding standards. For publishing, see [docs/RELEASE.md](docs/RELEASE.md).
 
 Roadmap & history:
+
 - **Latest:** ROADMAP #2 (Interactive Wizard) ✅ Complete - see [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
 - Completed steps (summary): see [CHANGELOG.md](CHANGELOG.md) → ROADMAP Items #1-2 and Steps 1–13
 - Active/planned work: see [ROADMAP.md](ROADMAP.md)
@@ -59,18 +60,21 @@ Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md
 ## 🎉 Recent Improvements (Phase 1 - October 2025)
 
 **Security & Bug Fixes:**
+
 - ✅ **XSS vulnerability patched** in HTML dashboard with comprehensive input escaping
 - ✅ **OSV scanner fully integrated** for open-source vulnerability detection
 - ✅ **Type-safe severity enum** with comparison operators for cleaner code
 - ✅ **Backward-compatible suppression keys** (`suppressions` and legacy `suppress`)
 
 **Enhanced Features:**
+
 - 🚀 **Enriched SARIF output** with CWE/OWASP/CVE taxonomies, code snippets, and CVSS scores
 - ⚙️ **Configurable thread recommendations** via `jmo.yml` profiling section
 - 📝 **Magic numbers extracted** to named constants for better maintainability
 - 📚 **9 new roadmap enhancements** including Policy-as-Code (OPA), SLSA attestation, GitHub App, and more
 
 **Quality Metrics:**
+
 - ✅ 100/100 tests passing
 - ✅ 88% code coverage (exceeds 85% requirement)
 - ✅ No breaking changes to existing workflows
@@ -88,6 +92,7 @@ jmotools wizard
 ```
 
 The wizard provides:
+
 - ✅ **Step-by-step guidance** through all configuration options
 - ✅ **Profile selection** (fast/balanced/deep) with time estimates
 - ✅ **Docker vs native mode** - zero-installation Docker option!
@@ -132,6 +137,7 @@ xdg-open results/summaries/dashboard.html  # Linux
 ```
 
 **Three image variants available:**
+
 - `latest` (~500MB) - All 11+ scanners included
 - `slim` (~200MB) - Core 6 scanners for CI/CD
 - `alpine` (~150MB) - Minimal footprint
@@ -452,6 +458,7 @@ results/individual-repos/<repo-name>/noseyparker.json
 ```
 
 Requirements for the fallback:
+
 - Docker installed and running
 - Ability to pull or use `ghcr.io/praetorian-inc/noseyparker:latest`
 
@@ -488,6 +495,7 @@ Note: we recommend isolating CLI tools via pipx or OS packages for stability. Th
 This helper script streamlines the process of cloning multiple repositories for security scanning, with performance optimizations for WSL environments.
 
 **Features:**
+
 - 🚀 Shallow clones (depth=1) for faster cloning
 - ⚡ Parallel cloning for improved performance
 - 🔄 Unshallow option for secret scanners requiring full history
@@ -640,6 +648,7 @@ python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name deep --fail-on 
 ```
 
 Retries behavior:
+
 - Global `retries` (or per-profile) retries failed tool commands a limited number of times
 - Some tools use non-zero exit to indicate “findings”; we treat those as success codes to avoid useless retries
 
@@ -690,16 +699,19 @@ The toolkit uses a type-safe severity enum with comparison operators for consist
 ## 🎯 Three-Stage Implementation Strategy
 
 ### Stage 1: Pre-commit Hooks
+
 - **Tool**: Gitleaks
 - **Purpose**: Prevent secrets before commit
 - **Speed**: Fast (suitable for developer workflow)
 
 ### Stage 2: CI/CD Pipeline
+
 - **Tools**: Gitleaks + Semgrep
 - **Purpose**: Automated PR/commit scanning
 - **Coverage**: Secrets + vulnerabilities
 
 ### Stage 3: Deep Periodic Audits
+
 - **Tools**: All tools
 - **Purpose**: Comprehensive security assessment
 - **Frequency**: Weekly/monthly
@@ -740,12 +752,15 @@ MIT License. See LICENSE.
 ### Common Issues
 
 **Problem**: Tools not found
+
 - **Solution**: Run `make verify-env` (or `jmotools setup --check`) to verify installation and get platform-specific hints
 
 **Problem**: JSON parsing errors
+
 - **Solution**: Ensure jq is installed and tools are outputting valid JSON
 
 **Problem**: Permission denied
+
 - **Solution**: Ensure scripts are executable:
 
 ```bash
@@ -753,6 +768,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
 
 **Problem**: Out of memory
+
 - **Solution**: Scan repositories in smaller batches
 
 ```bash
@@ -760,10 +776,12 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 ```
 
 **Problem**: Path errors (e.g., "//run_security_audit.sh not found")
+
 - **Solution**: This issue has been fixed in the latest version. Update to the latest main branch.
 - The wrapper scripts now use absolute paths computed from the script's real path location.
 
 **Problem**: AttributeError when generating dashboard with TruffleHog results
+
 - **Solution**: This has been fixed. The dashboard generator now handles all TruffleHog output formats:
   - JSON arrays: `[{...}, {...}]`
   - Single objects: `{...}`
@@ -787,6 +805,7 @@ python3 scripts/core/generate_dashboard.py ~/security-results-20251010-120000 ~/
 ```
 
 This is useful when you want to:
+
 - Update the dashboard after manually editing JSON files
 - Generate multiple dashboards with different configurations
 - Share results by exporting to a specific location

@@ -22,6 +22,7 @@ We use **project-scoped configuration** via `.mcp.json` for the following reason
 ### Why Not VS Code Extensions?
 
 VS Code marketplace has MCP server extensions, but they are:
+
 - ❌ Not syncable across machines via git
 - ❌ Installed per-machine, not per-project
 - ❌ Less flexible for team collaboration
@@ -177,6 +178,7 @@ Provides tools for GitHub operations. Example prompts:
 ```
 
 **Available Toolsets:**
+
 - `context` - Repository context and file operations
 - `repos` - Repository management
 - `issues` - Issue tracking
@@ -267,6 +269,7 @@ sudo apt-get install -f
 **Error:** `No MCP servers configured`
 
 **Solution:**
+
 1. Ensure `.claude/mcp.json` exists in the project
 2. Restart Claude Code / VS Code completely
 3. Try using `/mcp` within Claude Code to see server status
@@ -480,6 +483,7 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
 4. Subsequent queries use cached index (fast)
 
 **Resources:**
+
 - [Serena GitHub](https://github.com/oraios/serena)
 - [Serena Documentation](https://github.com/oraios/serena/blob/main/README.md)
 
@@ -576,6 +580,7 @@ To add Serena to your MCP configuration, edit `.claude/mcp.json`:
 ## Support
 
 For issues or questions:
+
 1. Check this guide first
 2. Review the troubleshooting section
 3. Open an issue in the repository with details about your setup

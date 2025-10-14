@@ -23,7 +23,7 @@ import shutil
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 # Profile definitions with resource estimates
 PROFILES = {
@@ -197,7 +197,7 @@ def _get_cpu_count() -> int:
 
 def _detect_repos_in_dir(path: Path) -> List[Path]:
     """Detect git repositories in a directory."""
-    repos = []
+    repos: List[Path] = []
     if not path.exists() or not path.is_dir():
         return repos
 
@@ -261,14 +261,16 @@ def select_profile() -> str:
 
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
-        print(f"\n  {_colorize(info['name'], 'bold')} ({key})")
+        name = cast(str, info['name'])
+        tools = cast(List[str], info['tools'])
+        print(f"\n  {_colorize(name, 'bold')} ({key})")
         print(
-            f"    Tools: {', '.join(info['tools'][:3])}{'...' if len(info['tools']) > 3 else ''}"
+            f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}"
         )
         print(f"    Time: {info['est_time']}")
         print(f"    Use: {info['use_case']}")
 
-    choices = [(k, PROFILES[k]["name"]) for k in PROFILES.keys()]
+    choices = [(k, str(PROFILES[k]["name"])) for k in PROFILES.keys()]
     return _prompt_choice("\nSelect profile:", choices, default="balanced")
 
 
@@ -390,11 +392,14 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
 
     profile_info = PROFILES[profile]
     cpu_count = _get_cpu_count()
+    profile_threads = cast(int, profile_info['threads'])
+    profile_timeout = cast(int, profile_info['timeout'])
+    profile_tools = cast(List[str], profile_info['tools'])
 
     print("\nProfile defaults:")
-    print(f"  Threads: {profile_info['threads']}")
-    print(f"  Timeout: {profile_info['timeout']}s")
-    print(f"  Tools: {len(profile_info['tools'])}")
+    print(f"  Threads: {profile_threads}")
+    print(f"  Timeout: {profile_timeout}s")
+    print(f"  Tools: {len(profile_tools)}")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
@@ -403,21 +408,21 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
     # Threads
     print(f"\nThread count (1-{cpu_count * 2})")
     print("  Lower = more thorough, Higher = faster (if I/O bound)")
-    threads_str = _prompt_text("Threads", default=str(profile_info["threads"]))
+    threads_str = _prompt_text("Threads", default=str(profile_threads))
     try:
         threads = int(threads_str)
         threads = max(1, min(threads, cpu_count * 2))
     except ValueError:
-        threads = profile_info["threads"]
+        threads = profile_threads
 
     # Timeout
     print("\nPer-tool timeout in seconds")
-    timeout_str = _prompt_text("Timeout", default=str(profile_info["timeout"]))
+    timeout_str = _prompt_text("Timeout", default=str(profile_timeout))
     try:
         timeout = int(timeout_str)
         timeout = max(60, timeout)
     except ValueError:
-        timeout = profile_info["timeout"]
+        timeout = profile_timeout
 
     # Fail-on severity
     print("\nFail on severity threshold (for CI/CD)")
@@ -443,9 +448,14 @@ def review_and_confirm(config: WizardConfig) -> bool:
     _print_step(5, 6, "Review Configuration")
 
     profile_info = PROFILES[config.profile]
+    profile_name = cast(str, profile_info['name'])
+    profile_threads = cast(int, profile_info["threads"])
+    profile_timeout = cast(int, profile_info["timeout"])
+    profile_est_time = cast(str, profile_info['est_time'])
+    profile_tools = cast(List[str], profile_info['tools'])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
-    print(f"  Profile: {_colorize(profile_info['name'], 'green')} ({config.profile})")
+    print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
     print(f"  Mode: {_colorize('Docker' if config.use_docker else 'Native', 'green')}")
     print(f"  Target: {_colorize(config.target_mode, 'green')}")
 
@@ -457,17 +467,17 @@ def review_and_confirm(config: WizardConfig) -> bool:
 
     print(f"  Results: {config.results_dir}")
 
-    threads = config.threads or profile_info["threads"]
-    timeout = config.timeout or profile_info["timeout"]
+    threads = config.threads or profile_threads
+    timeout = config.timeout or profile_timeout
     print(f"  Threads: {threads}")
     print(f"  Timeout: {timeout}s")
 
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
-    print(f"\n  Estimated time: {_colorize(profile_info['est_time'], 'yellow')}")
+    print(f"\n  Estimated time: {_colorize(profile_est_time, 'yellow')}")
     print(
-        f"  Tools: {len(profile_info['tools'])} ({', '.join(profile_info['tools'][:3])}...)"
+        f"  Tools: {len(profile_tools)} ({', '.join(profile_tools[:3])}...)"
     )
 
     return _prompt_yes_no("\nProceed with scan?", default=True)
@@ -476,6 +486,8 @@ def review_and_confirm(config: WizardConfig) -> bool:
 def generate_command(config: WizardConfig) -> str:
     """Generate the jmotools command from config."""
     profile_info = PROFILES[config.profile]
+    profile_threads = cast(int, profile_info["threads"])
+    profile_timeout = cast(int, profile_info["timeout"])
 
     if config.use_docker:
         # Docker command
@@ -516,8 +528,8 @@ def generate_command(config: WizardConfig) -> str:
         cmd_parts.extend(["--results-dir", config.results_dir])
 
     # Common options
-    threads = config.threads or profile_info["threads"]
-    timeout = config.timeout or profile_info["timeout"]
+    threads = config.threads or profile_threads
+    timeout = config.timeout or profile_timeout
 
     cmd_parts.extend(["--threads", str(threads)])
     cmd_parts.extend(["--timeout", str(timeout)])
@@ -574,7 +586,8 @@ def execute_scan(config: WizardConfig) -> int:
 
             # Build argv
             argv = command.split()[1:]  # Skip 'jmotools'
-            return jmotools_main(argv)
+            exit_code: int = jmotools_main(argv)
+            return exit_code
 
     except KeyboardInterrupt:
         print(_colorize("\n\nScan cancelled by user", "yellow"))
@@ -611,8 +624,10 @@ set -euo pipefail
 def generate_github_actions(config: WizardConfig) -> str:
     """Generate a GitHub Actions workflow."""
     profile_info = PROFILES[config.profile]
-    threads = config.threads or profile_info["threads"]
-    timeout = config.timeout or profile_info["timeout"]
+    profile_threads = cast(int, profile_info["threads"])
+    profile_timeout = cast(int, profile_info["timeout"])
+    threads = config.threads or profile_threads
+    timeout = config.timeout or profile_timeout
 
     if config.use_docker:
         # Docker-based workflow
@@ -669,7 +684,8 @@ jobs:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
 
-        tools_list = ", ".join(profile_info["tools"])
+        profile_tools = cast(List[str], profile_info["tools"])
+        tools_list = ", ".join(profile_tools)
 
         return f"""name: Security Scan
 on:
@@ -783,17 +799,17 @@ def run_wizard(
 
         if emit_script:
             content = generate_shell_script(config)
-            path = Path(emit_script)
-            path.write_text(content)
-            path.chmod(0o755)
+            script_path = Path(emit_script)
+            script_path.write_text(content)
+            script_path.chmod(0o755)
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
             return 0
 
         if emit_gha:
             content = generate_github_actions(config)
-            path = Path(emit_gha)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content)
+            gha_path = Path(emit_gha)
+            gha_path.parent.mkdir(parents=True, exist_ok=True)
+            gha_path.write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
             return 0
 

@@ -23,7 +23,7 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         SARIF document as dict
     """
-    rules = {}
+    rules: Dict[str, Dict[str, Any]] = {}
     results = []
 
     for f in findings:
@@ -125,7 +125,7 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Read version from pyproject.toml if possible
     version = "0.4.0"  # Default
     try:
-        import tomli  # type: ignore
+        import tomli
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
         if pyproject_path.exists():

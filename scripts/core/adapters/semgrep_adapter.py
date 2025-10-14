@@ -53,8 +53,10 @@ def load_semgrep(path: str | Path) -> List[Dict[str, Any]]:
         start_line = 0
         if isinstance(r.get("start"), dict) and isinstance(r["start"].get("line"), int):
             start_line = r["start"]["line"]
-        elif isinstance((r.get("start") or {}).get("line"), int):
-            start_line = (r.get("start") or {}).get("line")
+        else:
+            line_val = (r.get("start") or {}).get("line")
+            if isinstance(line_val, int):
+                start_line = line_val
         loc = r.get("location")
         if (
             isinstance(loc, dict)

@@ -15,6 +15,7 @@ jmotools wizard
 ```
 
 **What the wizard does:**
+
 - Guides profile selection (fast/balanced/deep with time estimates)
 - Detects Docker availability (zero-installation path!)
 - Auto-discovers repositories in directories
@@ -51,6 +52,7 @@ xdg-open results/summaries/dashboard.html  # Linux
 ```
 
 **Three image variants:**
+
 - `:latest` (~500MB) - All 11+ scanners
 - `:slim` (~200MB) - Core 6 scanners for CI/CD
 - `:alpine` (~150MB) - Minimal footprint
@@ -135,6 +137,7 @@ Use the automated helper script to clone multiple repositories quickly:
 ```
 
 The helper script will:
+
 - ✅ Clone repositories in parallel for speed
 - ✅ Use shallow clones (depth=1) for 10x faster cloning
 - ✅ Automatically create the destination directory
@@ -329,12 +332,14 @@ on:
   push:
     branches: [ main ]
   schedule:
+
     - cron: '0 0 * * 0'  # Weekly on Sunday
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
+
       - uses: actions/checkout@v2
 
       - name: Install tools
@@ -439,6 +444,7 @@ If a failure isn’t listed here, click into the failed step logs in GitHub Acti
 ## Advanced Usage
 
 For more advanced features and customization options, see:
+
 - [README.md](README.md) - Comprehensive documentation
 - [Tool Comparison Report](tool-comparisons/comparison.md) - Understanding tool capabilities
 - Individual tool documentation for detailed configuration
@@ -461,6 +467,7 @@ cat /path/to/security-results/summaries/timings.json
 ## Getting Help
 
 If you encounter issues:
+
 1. Check this Quick Start Guide
 2. Review the main README.md
 3. Check tool-specific documentation

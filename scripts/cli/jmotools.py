@@ -285,13 +285,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         sys.path.insert(0, str(wizard_script.parent))
         from wizard import run_wizard
 
-        return run_wizard(
+        exit_code: int = run_wizard(
             yes=getattr(args, "yes", False),
             force_docker=getattr(args, "docker", False),
             emit_make=getattr(args, "emit_make_target", None),
             emit_script=getattr(args, "emit_script", None),
             emit_gha=getattr(args, "emit_gha", None),
         )
+        return exit_code
 
     # Handle setup early
     if args.mode == "setup":

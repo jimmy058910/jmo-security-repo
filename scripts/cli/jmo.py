@@ -326,10 +326,10 @@ def cmd_report(args) -> int:
         job_timings = []
         meta = {}
         try:
-            from scripts.core.normalize_and_report import PROFILE_TIMINGS  # type: ignore
+            from scripts.core.normalize_and_report import PROFILE_TIMINGS
 
-            job_timings = PROFILE_TIMINGS.get("jobs", [])  # type: ignore
-            meta = PROFILE_TIMINGS.get("meta", {})  # type: ignore
+            job_timings = PROFILE_TIMINGS.get("jobs", [])
+            meta = PROFILE_TIMINGS.get("meta", {})
         except Exception as e:
             _log(args, "DEBUG", f"Profiling data unavailable: {e}")
         timings = {
@@ -433,7 +433,7 @@ def _run_cmd(
 
     attempts = max(0, retries) + 1
     used_attempts = 0
-    last_exc = None
+    last_exc: Exception | None = None
     rc = 1
     for i in range(attempts):
         used_attempts = i + 1
@@ -1160,9 +1160,11 @@ def cmd_scan(args) -> int:
         for fut in as_completed(futures):
             try:
                 name, statuses = fut.result()
-                attempts_map = {}
+                attempts_map: dict[str, int] = {}
                 if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    attempts_map = statuses.pop("__attempts__") or {}
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
                 ok = all(v for k, v in statuses.items()) if statuses else True
                 extra = (
                     f" attempts={attempts_map}"

@@ -93,9 +93,10 @@ RUN TFSEC_VERSION="1.28.11" && \
     rm /tmp/tfsec.tar.gz
 
 # Install osv-scanner (Google OSV vulnerability scanner)
+# Note: OSV-Scanner release naming changed - no version in filename (just osv-scanner_linux_ARCH)
 RUN OSV_VERSION="1.9.2" && \
     OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_${OSV_VERSION}_linux_${OSV_ARCH}" \
+    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_${OSV_ARCH}" \
     -o /usr/local/bin/osv-scanner && \
     chmod +x /usr/local/bin/osv-scanner
 

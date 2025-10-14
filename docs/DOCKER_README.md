@@ -84,6 +84,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 ```
 
 **Download info:**
+
 - Time: 1-3 minutes (depending on internet speed)
 - Size: ~180MB compressed, ~500MB uncompressed
 - One-time download - future runs are instant!
@@ -102,6 +103,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **What this command does:**
+
 - `docker run` - Run a container
 - `--rm` - Auto-remove container when done
 - `-v $(pwd):/scan` - Mount current directory into container at `/scan`
@@ -189,6 +191,7 @@ Three optimized images for different needs:
 ### Tools Included
 
 **Full (`:latest`):**
+
 - **Secrets:** gitleaks, trufflehog, noseyparker
 - **SAST:** semgrep, bandit
 - **SBOM+Vuln:** syft, trivy, osv-scanner
@@ -197,6 +200,7 @@ Three optimized images for different needs:
 - **Utilities:** shellcheck, shfmt, ruff
 
 **Slim/Alpine (`:slim`, `:alpine`):**
+
 - **Secrets:** gitleaks
 - **SAST:** semgrep
 - **SBOM+Vuln:** syft, trivy
@@ -269,6 +273,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Exit codes:**
+
 - `0` - Success (no findings above threshold)
 - `1` - Findings detected above threshold
 
@@ -291,6 +296,7 @@ jobs:
     container:
       image: ghcr.io/jimmy058910/jmo-security:latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Run Security Scan
@@ -317,6 +323,7 @@ name: Weekly Security Audit
 
 on:
   schedule:
+
     - cron: '0 0 * * 0'  # Every Sunday at midnight
 
 jobs:
@@ -325,6 +332,7 @@ jobs:
     container:
       image: ghcr.io/jimmy058910/jmo-security:latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Deep Scan
@@ -353,6 +361,7 @@ jobs:
       matrix:
         repo: [repo1, repo2, repo3]
     steps:
+
       - uses: actions/checkout@v4
         with:
           repository: ${{ matrix.repo }}
@@ -367,11 +376,13 @@ jobs:
 security-scan:
   image: ghcr.io/jimmy058910/jmo-security:latest
   script:
+
     - jmo ci --repo . --fail-on HIGH --profile
   artifacts:
     reports:
       sast: results/summaries/findings.sarif
     paths:
+
       - results/
     when: always
     expire_in: 30 days
@@ -437,8 +448,10 @@ Create `jmo.suppress.yml` to ignore false positives:
 
 ```yaml
 suppressions:
+
   - id: "fingerprint-id-here"
     reason: "False positive - test file"
+
   - ruleId: "G101"
     path: "tests/*"
     reason: "Test secrets excluded"
@@ -478,8 +491,10 @@ services:
   scan:
     image: ghcr.io/jimmy058910/jmo-security:latest
     volumes:
+
       - .:/scan
     command:
+
       - scan
       - --repo
       - /scan
@@ -493,8 +508,10 @@ services:
   ci:
     image: ghcr.io/jimmy058910/jmo-security:latest
     volumes:
+
       - .:/scan
     command:
+
       - ci
       - --repo
       - /scan
@@ -506,8 +523,10 @@ services:
   fast:
     image: ghcr.io/jimmy058910/jmo-security:slim
     volumes:
+
       - .:/scan
     command:
+
       - scan
       - --repo
       - /scan
@@ -541,6 +560,7 @@ docker-compose run --rm fast
 **Problem:** Docker is not installed or not in PATH
 
 **Solution:**
+
 - **Windows/macOS:** Launch Docker Desktop application
 - **Linux:** Start Docker service: `sudo systemctl start docker`
 - Verify: `docker --version`
@@ -557,6 +577,7 @@ sudo usermod -aG docker $USER
 ```
 
 **Solution (Windows/macOS):**
+
 - Ensure Docker Desktop is running (check system tray/menu bar)
 
 #### "Cannot connect to the Docker daemon"
@@ -564,6 +585,7 @@ sudo usermod -aG docker $USER
 **Problem:** Docker daemon not running
 
 **Solution:**
+
 - **Windows/macOS:** Launch Docker Desktop app
 - **Linux:** `sudo systemctl start docker`
 
@@ -596,6 +618,7 @@ docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-sec
 #### Results folder not created
 
 **Check:**
+
 1. Scan completed successfully? Look for final success message
 2. In correct directory? Run `pwd` (macOS/Linux) or `cd` (Windows)
 3. Try with `--allow-missing-tools` flag:
@@ -658,6 +681,7 @@ RUN pip install bandit==1.7.5
 ### Image Security
 
 **Practices we follow:**
+
 - Official base images (Ubuntu 22.04, Alpine 3.18)
 - Pinned tool versions (reproducible builds)
 - Trivy scanning in CI (gate on HIGH/CRITICAL)
@@ -723,9 +747,9 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 
 - **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
 - **Discussions:** <https://github.com/jimmy058910/jmo-security-repo/discussions>
-- **Email:** general@jmogaming.com
+- **Email:** <general@jmogaming.com>
 - **Website:** <https://jmotools.com>
 
 ---
 
-**Happy Scanning! 🔒**
+Happy Scanning! 🔒

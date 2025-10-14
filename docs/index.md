@@ -31,6 +31,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 **Why:** Zero-installation path with step-by-step guidance. The wizard walks you through everything interactively.
 
 **Next Steps:**
+
 1. Run your first scan (wizard handles it)
 2. Learn about results: [Understanding Results](#-understanding-results)
 3. Explore wizard patterns: [Wizard Examples](examples/wizard-examples.md)
@@ -44,6 +45,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 **Why:** Fast 5-minute setup with platform-specific instructions (Linux/WSL/macOS).
 
 **Next Steps:**
+
 1. Install and verify tools: [QUICKSTART — Step 1](../QUICKSTART.md#step-1-verify-environment)
 2. Run your first scan: [QUICKSTART — Step 3](../QUICKSTART.md#step-3-run-the-security-audit)
 3. Explore advanced features: [User Guide](USER_GUIDE.md)
@@ -57,6 +59,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 **Why:** Container-based deployment, proven CI/CD patterns for GitHub Actions, GitLab CI, Jenkins.
 
 **Next Steps:**
+
 1. Review CI/CD examples: [GitHub Actions Docker Examples](examples/github-actions-docker.yml)
 2. Configure severity gating: [Docker Guide — CI Gating](DOCKER_README.md#scan-with-ci-gating)
 3. Set up SARIF uploads: [User Guide — SARIF](USER_GUIDE.md#sarif-and-html-dashboard)
@@ -70,6 +73,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 **Why:** Comprehensive configuration reference, CLI synopsis, suppressions, advanced workflows.
 
 **Next Steps:**
+
 1. Create custom profiles: [User Guide — Configuration](USER_GUIDE.md#configuration-jmoyml)
 2. Set up suppressions: [User Guide — Suppressions](USER_GUIDE.md#suppressions)
 3. Optimize performance: [User Guide — Profiling](USER_GUIDE.md#profiling-and-performance)
@@ -83,6 +87,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 **Why:** Dev setup, coding standards, PR workflow, testing requirements.
 
 **Next Steps:**
+
 1. Set up dev environment: [CONTRIBUTING — Dev Setup](../CONTRIBUTING.md#development-setup)
 2. Understand testing: [Testing Guide](../TEST.md)
 3. Learn release process: [Release Guide](RELEASE.md)
@@ -186,6 +191,7 @@ cat results/summaries/SUMMARY.md
 ```
 
 **Common workflows:**
+
 - [Fast pre-commit scan](examples/wizard-examples.md#quick-validation-before-commit)
 - [CI/CD integration](DOCKER_README.md#cicd-integration)
 - [Multi-repo audit](examples/scan_from_tsv.md)
@@ -269,16 +275,21 @@ If you're on Windows Subsystem for Linux (WSL), this gets you to green fast:
 ## FAQ
 
 Q: Tools not found or partial toolchain installed?
+
 - A: Run `make verify-env` for OS-aware hints. You can also run with `--allow-missing-tools` to generate empty stubs and still exercise the pipeline.
 
 Q: No repositories detected when using `--repos-dir`?
+
 - A: Only immediate subfolders are considered repos. Ensure each contains a `.git` folder or pass `--repo` for a single path, or `--targets` file.
 
 Q: YAML output missing?
+
 - A: Install `pyyaml` to enable the YAML reporter. Otherwise JSON/MD/HTML still work; see [User Guide — Troubleshooting](USER_GUIDE.md#troubleshooting).
 
 Q: Scans are slow on large directories?
+
 - A: Use the `fast` profile, increase `threads`, and consult `timings.json` by running `jmo report --profile`. See [User Guide — Configuration](USER_GUIDE.md#configuration-jmoyml).
 
 Q: How do I suppress false positives?
+
 - A: Create a `jmo.suppress.yml` as described in [User Guide — Suppressions](USER_GUIDE.md#suppressions). A summary is written to `SUPPRESSIONS.md` during report/ci.

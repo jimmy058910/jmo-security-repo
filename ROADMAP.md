@@ -3,6 +3,7 @@
 **Note:** Steps 1–13 completed. See `CHANGELOG.md` for details. Implementation log archived in `docs/archive/IMPLEMENTATION_LOG_10-14-25.md`.
 
 **Recently Completed (October 2025):**
+
 - Phase 1: Core fixes (OSV integration, XSS fix, Severity enum, SARIF enrichment, config improvements)
 - Phase 2: Testing & type safety (15 edge case tests with Hypothesis, MyPy integration, zero TODOs)
 - **Phase 3: ROADMAP Item #1 - Docker All-in-One Image** ✅ **COMPLETE** (October 14, 2025)
@@ -40,11 +41,13 @@ Items are ordered by optimal implementation priority based on user value, depend
 **Objective:** Single Docker image with all security tools pre-installed for zero-setup scanning.
 
 **Key Benefits:**
+
 - New users scan without installing 10+ tools
 - Portable, reproducible scans in any CI system
 - Everyone uses same tool versions
 
 **Implementation:**
+
 - Base: `ubuntu:22.04` or `alpine:3.18` (slim variant)
 - Tools: gitleaks, trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, tfsec, hadolint, osv-scanner
 - Image sizes: ~500MB (full), ~200MB (slim), ~150MB (alpine)
@@ -63,10 +66,12 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 container:
   image: ghcr.io/jimmy058910/jmo-security:latest
 steps:
+
   - run: jmo scan --repo . --results results --fail-on HIGH
 ```
 
 **Deliverables:**
+
 - Dockerfile with all tools
 - docker-compose.yml example
 - GitHub Actions integration example
@@ -87,6 +92,7 @@ steps:
 **Objective:** Interactive guided flow for beginners to complete first scan without knowing flags.
 
 **Key Features:**
+
 1. Profile selection with context (fast/balanced/deep with time estimates)
 2. Target selection (single repo, repos-dir, targets file, clone from TSV)
 3. Smart defaults (CPU-based thread recommendations, profile-based timeouts)
@@ -115,6 +121,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 ```
 
 **Implementation:**
+
 - `jmotools wizard` command (scripts/cli/wizard.py - ~800 lines)
 - Interactive prompts with smart defaults and ANSI colors
 - Docker mode integration with auto-detection
@@ -126,6 +133,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
   - `--emit-gha`: GitHub Actions workflows (native & Docker variants)
 
 **Deliverables:**
+
 - ✅ `jmotools wizard` command
 - ✅ Interactive prompts with smart defaults
 - ✅ Docker mode selection (leverages ROADMAP #1)
@@ -143,10 +151,12 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 **Objective:** Enable full pre-commit hook coverage in CI while keeping PR feedback fast.
 
 **Current State:**
+
 - CI runs structural checks only (actionlint, yamllint)
 - Full hook set available locally via `.pre-commit-config.yaml`
 
 **Full Hook Set:**
+
 - Basic: trailing-whitespace, end-of-file-fixer, check-yaml, check-json, check-toml, mixed-line-ending, detect-private-key, check-added-large-files
 - YAML: yamllint (`.yamllint.yaml`)
 - Actions: actionlint
@@ -155,6 +165,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 - Shell: shellcheck, shfmt
 
 **Implementation Plan:**
+
 1. Check-only mode for formatters (ruff-format, black, shfmt in CI - no writes)
 2. Markdown lint tuning (`.markdownlint.json` with rule relaxations)
 3. Python lint policy (pin ruff version, minimal allowlist, expand gradually)
@@ -164,6 +175,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 7. Migrate to PR CI after 2 weeks stable on main
 
 **Acceptance Criteria:**
+
 - PR CI remains <5–7 min
 - Nightly `lint-full` green on main for 2 weeks before gating PRs
 - Clear contributor docs for local auto-fixes
@@ -177,6 +189,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 **Objective:** Compare scan results across time/commits to identify new/resolved findings and track security trends.
 
 **Key Use Cases:**
+
 - **PR Reviews:** "Show only NEW findings introduced by this PR"
 - **Trend Analysis:** "Are we getting better or worse over time?"
 - **Sprint KPIs:** "How many findings did we fix this sprint?"
@@ -196,17 +209,20 @@ jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 ```
 
 **Diff Algorithm:**
+
 1. Load findings from both directories
 2. Match by fingerprint ID (stable deduplication)
 3. Classify: New, Resolved, Unchanged, Modified
 4. Generate report with summary tables
 
 **Output Formats:**
+
 - JSON (machine-readable)
 - Markdown (human-readable tables)
 - HTML (interactive dashboard with filters)
 
 **Deliverables:**
+
 - `jmo diff` command
 - Fingerprint-based matching algorithm
 - JSON/MD/HTML reporters
@@ -234,11 +250,13 @@ jmo schedule --remove <id>
 ```
 
 **Platform Support:**
+
 - Linux: cron integration
 - systemd timers (alternative)
 - Notification integration (email on failures)
 
 **Deliverables:**
+
 - `jmo schedule` command
 - Cron job management
 - systemd timer support
@@ -253,6 +271,7 @@ jmo schedule --remove <id>
 **Objective:** Allow users to add custom security tools without forking codebase.
 
 **Key Benefits:**
+
 - Proprietary tools support (company-internal scanners)
 - Niche tools (regional compliance, domain-specific)
 - Community contribution (lower barrier)
@@ -286,6 +305,7 @@ jmo scan --repo . --tools gitleaks,semgrep,my-tool
 ```
 
 **Deliverables:**
+
 - Plugin API design and base classes
 - Plugin discovery and loading
 - Plugin registry (optional marketplace)
@@ -300,6 +320,7 @@ jmo scan --repo . --tools gitleaks,semgrep,my-tool
 **Objective:** Enable custom security gating policies using Open Policy Agent (OPA) Rego language for context-aware rules beyond simple severity thresholds.
 
 **Key Benefits:**
+
 - Flexibility (different requirements per team/project)
 - Context-aware (gate on paths, repos, finding age, tool combinations)
 - Compliance (encode regulatory requirements as testable policies)
@@ -351,12 +372,14 @@ jmo policy init --template zero-secrets > my-policy.rego
 ```
 
 **Policy Marketplace:**
+
 - `owasp-top-10.rego` - OWASP compliance
 - `pci-dss.rego` - PCI-DSS requirements
 - `hipaa.rego` - HIPAA compliance
 - `zero-secrets.rego` - No secrets allowed
 
 **Deliverables:**
+
 - OPA integration with `--policy` flag
 - Policy testing and dry-run commands
 - Curated policy marketplace (5+ policies)
@@ -371,12 +394,14 @@ jmo policy init --template zero-secrets > my-policy.rego
 **Objective:** Generate signed attestations for scan results, enabling verifiable provenance and tamper-proof audit trails.
 
 **Key Benefits:**
+
 - Trust (prove scan results are authentic/unmodified)
 - Compliance (SOC2, ISO27001, PCI-DSS require verifiable audit trails)
 - Supply chain security (like signing container images)
 - Non-repudiation (cryptographic proof of scan execution)
 
 **SLSA Level 2 Implementation:**
+
 - Provenance: Record what was scanned, when, by which tools
 - Signing: Sigstore (keyless) or custom keys
 - Verification: Anyone can verify authenticity
@@ -425,11 +450,13 @@ jmo ci --repo . --attest --results results/
 ```
 
 **Dependencies:**
+
 - Sigstore Python SDK for keyless signing
 - in-toto library for attestation format
 - Optional: cosign CLI for external verification
 
 **Deliverables:**
+
 - `jmo attest` command with Sigstore integration
 - `jmo verify` command
 - Auto-attest in CI mode
@@ -444,6 +471,7 @@ jmo ci --repo . --attest --results results/
 **Objective:** Auto-scan pull requests and post findings as comments (SaaS offering).
 
 **Key Features:**
+
 - Automatic PR scanning on push
 - Comment with findings directly on PR
 - Status checks (block merge on thresholds)
@@ -451,6 +479,7 @@ jmo ci --repo . --attest --results results/
 - Diff reports (show only new findings in PR)
 
 **GitHub App Flow:**
+
 1. User installs app on repo
 2. PR opened/updated → webhook triggered
 3. App clones repo, runs scan with diff
@@ -458,11 +487,13 @@ jmo ci --repo . --attest --results results/
 5. Sets status check (pass/fail based on policy)
 
 **Pricing Tiers:**
+
 - Free: Public repos, basic scanning
 - Pro: Private repos, advanced policies
 - Enterprise: Unlimited repos, SLSA attestation, SLA
 
 **Deliverables:**
+
 - GitHub App implementation
 - Webhook handlers
 - PR comment formatting
@@ -480,11 +511,13 @@ jmo ci --repo . --attest --results results/
 **Objective:** Launch `jmo serve` command to start local web server with interactive dashboard, better for large result sets than static HTML.
 
 **Key Benefits:**
+
 - Large scans (1000+ findings easier to navigate)
 - Sharing (share results with team without copying files)
 - Advanced queries (SQL-like filtering, grouping, aggregations)
 
 **Features:**
+
 - Server-side search/filter (faster for large datasets)
 - Advanced queries: "Show HIGH+ findings in files modified in last 30 days"
 - Saved searches/bookmarks
@@ -499,11 +532,13 @@ jmo serve results/ --port 8080
 ```
 
 **Tech Stack:**
+
 - Backend: FastAPI + SQLite (optional persistence)
 - Frontend: Same HTML dashboard with API calls
 - Optional: Team collaboration features (annotations, assignments)
 
 **Deliverables:**
+
 - `jmo serve` command with FastAPI backend
 - Server-side search and filtering
 - Advanced query language
@@ -518,18 +553,21 @@ jmo serve results/ --port 8080
 **Objective:** Modern SPA dashboard as alternative to self-contained HTML, with richer interactivity.
 
 **Key Benefits:**
+
 - More responsive for large datasets
 - Advanced visualizations (D3.js charts, trend graphs)
 - Better mobile experience
 - Progressive web app capabilities
 
 **Implementation:**
+
 - Framework: Next.js or Vue 3 + Vite
 - API backend: FastAPI (from Step 10)
 - Progressive enhancement (works without JS)
 - Advanced features: charts, trends, heatmaps
 
 **Deliverables:**
+
 - Modern SPA dashboard
 - Feature parity with HTML dashboard
 - Advanced visualizations
@@ -542,23 +580,28 @@ jmo serve results/ --port 8080
 **Optimal Implementation Order:**
 
 **Phase A - Foundation & Distribution:**
+
 1. Docker All-in-One Image
 2. Interactive Wizard
 3. CI Linting - Full Pre-commit Coverage
 
 **Phase B - CI/CD Integration:**
+
 4. Machine-Readable Diff Reports
 5. Scheduled Scans & Cron Support
 
 **Phase C - Extensibility & Flexibility:**
+
 6. Plugin System for Custom Adapters
 7. Policy-as-Code Integration (OPA)
 
 **Phase D - Enterprise & Revenue:**
+
 8. Supply Chain Attestation (SLSA)
 9. GitHub App Integration
 
 **Phase E - Advanced UI:**
+
 10. Web UI for Results Exploration
 11. React/Vue Dashboard Alternative
 

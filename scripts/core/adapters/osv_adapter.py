@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 from scripts.core.common_finding import fingerprint
 
 
-SEV_FROM_CVSS = {
+SEV_FROM_CVSS: Dict[str, str] = {
     # Rough mapping; better to parse CVSS vector or score
 }
 

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except Exception:  # optional dependency
-    yaml = None
+    yaml = None  # type: ignore[assignment]
 
 
 def write_yaml(findings: List[Dict[str, Any]], out_path: str | Path) -> None:

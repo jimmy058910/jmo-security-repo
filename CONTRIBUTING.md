@@ -55,6 +55,7 @@ make dev-deps   # re-installs latest unpinned dev deps from requirements-dev.txt
 ```
 
 Notes:
+
 - `requirements-dev.txt` is intentionally lightweight. For reproducible, pinned dev deps, this repo now includes a `requirements-dev.in` and Make targets for pip-tools and uv.
 
 ### Reproducible dev deps (pip-tools or uv)
@@ -247,6 +248,7 @@ make screenshots-demo
 ### Coverage reporting (Codecov)
 
 We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos. For maintainers, the quickest path is:
+
 1. Sign in to https://codecov.io with your GitHub account.
 2. Ensure a `main` branch test run completes (uploads `coverage.xml`).
 3. The `codecov.yml` in the repo sets statuses to informational.

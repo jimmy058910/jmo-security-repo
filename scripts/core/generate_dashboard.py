@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+from typing import Any, Dict, List, Set
 
 
 def parse_json_safe(filepath):
@@ -73,7 +74,7 @@ def parse_trufflehog(filepath):
             "description": f"Found {item.get('DetectorName', 'secret')}",
         }
 
-    findings = []
+    findings: List[Dict[str, Any]] = []
 
     try:
         raw_content = Path(filepath).read_text().strip()
@@ -202,7 +203,7 @@ def parse_noseyparker(filepath):
                     if not isinstance(source, dict):
                         continue
                     if source.get("kind") == "file" and source.get("path"):
-                        file_path = source.get("path")
+                        file_path = str(source.get("path"))
                         break
                     if source.get("kind") == "git_repo":
                         commit = source.get("first_commit", {}) or {}
@@ -246,10 +247,10 @@ def calculate_metrics(results_dir):
 
     repos_dir = Path(results_dir) / "individual-repos"
 
-    all_findings = []
-    repo_stats = []
+    all_findings: List[Dict[str, Any]] = []
+    repo_stats: List[Dict[str, Any]] = []
     # Initialize tool stats explicitly to avoid type ambiguity and ensure stable keys
-    tool_stats = {
+    tool_stats: Dict[str, Dict[str, Any]] = {
         "gitleaks": {"count": 0, "repos": set()},
         "trufflehog": {"count": 0, "repos": set()},
         "semgrep": {"count": 0, "repos": set()},
@@ -296,8 +297,10 @@ def calculate_metrics(results_dir):
             all_findings.extend(findings)
             repo_findings["gitleaks"] = len(findings)
             if findings:
-                tool_stats["gitleaks"]["count"] += len(findings)
-                tool_stats["gitleaks"]["repos"].add(repo_name)
+                gitleaks_stats = tool_stats["gitleaks"]
+                gitleaks_stats["count"] = gitleaks_stats["count"] + len(findings)
+                gitleaks_repos: Set[str] = gitleaks_stats["repos"]
+                gitleaks_repos.add(repo_name)
 
         trufflehog_file = repo_dir / "trufflehog.json"
         if trufflehog_file.exists():
@@ -307,8 +310,10 @@ def calculate_metrics(results_dir):
             all_findings.extend(findings)
             repo_findings["trufflehog"] = len(findings)
             if findings:
-                tool_stats["trufflehog"]["count"] += len(findings)
-                tool_stats["trufflehog"]["repos"].add(repo_name)
+                trufflehog_stats = tool_stats["trufflehog"]
+                trufflehog_stats["count"] = trufflehog_stats["count"] + len(findings)
+                trufflehog_repos: Set[str] = trufflehog_stats["repos"]
+                trufflehog_repos.add(repo_name)
 
         semgrep_file = repo_dir / "semgrep.json"
         if semgrep_file.exists():
@@ -318,8 +323,10 @@ def calculate_metrics(results_dir):
             all_findings.extend(findings)
             repo_findings["semgrep"] = len(findings)
             if findings:
-                tool_stats["semgrep"]["count"] += len(findings)
-                tool_stats["semgrep"]["repos"].add(repo_name)
+                semgrep_stats = tool_stats["semgrep"]
+                semgrep_stats["count"] = semgrep_stats["count"] + len(findings)
+                semgrep_repos: Set[str] = semgrep_stats["repos"]
+                semgrep_repos.add(repo_name)
 
         noseyparker_file = repo_dir / "noseyparker.json"
         if noseyparker_file.exists():
@@ -329,8 +336,10 @@ def calculate_metrics(results_dir):
             all_findings.extend(findings)
             repo_findings["noseyparker"] = len(findings)
             if findings:
-                tool_stats["noseyparker"]["count"] += len(findings)
-                tool_stats["noseyparker"]["repos"].add(repo_name)
+                noseyparker_stats = tool_stats["noseyparker"]
+                noseyparker_stats["count"] = noseyparker_stats["count"] + len(findings)
+                noseyparker_repos: Set[str] = noseyparker_stats["repos"]
+                noseyparker_repos.add(repo_name)
 
         repo_findings["total"] = sum(
             [
@@ -344,7 +353,7 @@ def calculate_metrics(results_dir):
         repo_stats.append({"name": repo_name, **repo_findings})
 
     # Calculate severity distribution
-    severity_counts = defaultdict(int)
+    severity_counts: Dict[str, int] = defaultdict(int)
     for finding in all_findings:
         severity_counts[finding.get("severity", "UNKNOWN")] += 1
 
@@ -355,7 +364,7 @@ def calculate_metrics(results_dir):
     unique_types = set(f.get("type", "unknown") for f in all_findings)
 
     # Convert repo sets to sorted lists for display and potential JSON compatibility
-    normalized_tool_stats = {
+    normalized_tool_stats: Dict[str, Dict[str, Any]] = {
         tool: {
             "count": stats["count"],
             "repos": sorted(list(stats["repos"])),
