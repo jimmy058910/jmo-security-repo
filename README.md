@@ -37,7 +37,8 @@ Project homepage: [jmotools.com](https://jmotools.com)
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and coding standards. For publishing, see [docs/RELEASE.md](docs/RELEASE.md).
 
 Roadmap & history:
-- Completed steps (summary): see [CHANGELOG.md](CHANGELOG.md) → “Roadmap Summary (Steps 1–13)”
+- **Latest:** ROADMAP #2 (Interactive Wizard) ✅ Complete - see [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
+- Completed steps (summary): see [CHANGELOG.md](CHANGELOG.md) → ROADMAP Items #1-2 and Steps 1–13
 - Active/planned work: see [ROADMAP.md](ROADMAP.md)
 
 For scanning a list of repos from a TSV end-to-end (clone + unshallow + full toolchain), see: [docs/examples/scan_from_tsv.md](docs/examples/scan_from_tsv.md)
