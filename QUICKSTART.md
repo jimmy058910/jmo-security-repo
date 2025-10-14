@@ -120,7 +120,7 @@ make deps-sync
 ```
 
 CI checks that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
-```
+
 
 ## Step 4: Review Results
 

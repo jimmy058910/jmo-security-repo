@@ -557,7 +557,7 @@ Retries behavior:
 
 Human logs show per-tool retry attempts when > 1, e.g.: `attempts={'semgrep': 2}`
 
- 
+
 
 ### Customizing Tool Execution
 

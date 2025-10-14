@@ -1,9 +1,9 @@
 name: Check deps-compile freshness
 "on":
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   deps-compile-check:
