@@ -141,12 +141,8 @@ jobs:
 
       - name: Test image (amd64 only)
         run: |
-          # Determine the tag to test
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            TEST_TAG="${{ github.ref_name }}-${{ matrix.variant }}"
-          else
-            TEST_TAG="latest-${{ matrix.variant }}"
-          fi
+          # Use the first tag from metadata output (e.g., 0.4.0-full)
+          TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
 
           echo "Testing image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
           docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
@@ -172,8 +168,11 @@ jobs:
       - name: Determine image tag
         id: tag
         run: |
+          # For tags like v0.4.0, the image is tagged as 0.4.0-variant (without 'v')
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "value=${{ github.ref_name }}-${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Strip 'v' prefix
+            echo "value=${VERSION}-${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
           else
             echo "value=latest-${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
           fi
