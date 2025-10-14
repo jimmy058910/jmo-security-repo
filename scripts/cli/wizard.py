@@ -261,12 +261,10 @@ def select_profile() -> str:
 
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
-        name = cast(str, info['name'])
-        tools = cast(List[str], info['tools'])
+        name = cast(str, info["name"])
+        tools = cast(List[str], info["tools"])
         print(f"\n  {_colorize(name, 'bold')} ({key})")
-        print(
-            f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}"
-        )
+        print(f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}")
         print(f"    Time: {info['est_time']}")
         print(f"    Use: {info['use_case']}")
 
@@ -392,9 +390,9 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
 
     profile_info = PROFILES[profile]
     cpu_count = _get_cpu_count()
-    profile_threads = cast(int, profile_info['threads'])
-    profile_timeout = cast(int, profile_info['timeout'])
-    profile_tools = cast(List[str], profile_info['tools'])
+    profile_threads = cast(int, profile_info["threads"])
+    profile_timeout = cast(int, profile_info["timeout"])
+    profile_tools = cast(List[str], profile_info["tools"])
 
     print("\nProfile defaults:")
     print(f"  Threads: {profile_threads}")
@@ -448,11 +446,11 @@ def review_and_confirm(config: WizardConfig) -> bool:
     _print_step(5, 6, "Review Configuration")
 
     profile_info = PROFILES[config.profile]
-    profile_name = cast(str, profile_info['name'])
+    profile_name = cast(str, profile_info["name"])
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_est_time = cast(str, profile_info['est_time'])
-    profile_tools = cast(List[str], profile_info['tools'])
+    profile_est_time = cast(str, profile_info["est_time"])
+    profile_tools = cast(List[str], profile_info["tools"])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
     print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
@@ -476,9 +474,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
     print(f"\n  Estimated time: {_colorize(profile_est_time, 'yellow')}")
-    print(
-        f"  Tools: {len(profile_tools)} ({', '.join(profile_tools[:3])}...)"
-    )
+    print(f"  Tools: {len(profile_tools)} ({', '.join(profile_tools[:3])}...)")
 
     return _prompt_yes_no("\nProceed with scan?", default=True)
 
