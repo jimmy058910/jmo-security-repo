@@ -121,8 +121,8 @@ jobs:
             docker pull ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}
             IMAGE_ID="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}"
           fi
-          docker run --rm $IMAGE_ID --version
-          docker run --rm $IMAGE_ID --help
+          docker run --rm "$IMAGE_ID" --version
+          docker run --rm "$IMAGE_ID" --help
 
   create-manifest:
     name: Create multi-arch manifest for ${{ matrix.variant }}

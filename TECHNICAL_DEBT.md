@@ -77,6 +77,7 @@ This file tracks temporarily disabled checks and features that need to be fixed.
 **Verification:**
 
 Local Docker builds already verified in previous session:
+
 - ✅ Full variant (Dockerfile) - all 14 tools
 - ✅ Slim variant (Dockerfile.slim) - 6 core tools
 - ✅ Alpine variant (Dockerfile.alpine) - 6 core tools + Rust support
