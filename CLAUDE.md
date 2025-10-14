@@ -37,9 +37,7 @@ make lint
 
 # Run tests with coverage (CI requires ≥85%)
 make test
-```text
-
-```text
+```
 
 ### Dependency Management
 
@@ -55,9 +53,7 @@ make upgrade-pip
 
 # Alternative: use uv for faster compilation/sync
 make uv-sync
-```text
-
-```text
+```
 
 ### Running Scans
 
@@ -79,9 +75,7 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 
 # CI mode: scan + report + threshold gating in one command
 python3 scripts/cli/jmo.py ci --repos-dir ~/repos --fail-on HIGH --profile
-```text
-
-```text
+```
 
 ### Running a Single Test
 
@@ -94,9 +88,7 @@ pytest tests/unit/test_common_and_sarif.py::test_write_sarif -v
 
 # Run with coverage
 pytest tests/unit/ --cov=scripts --cov-report=term-missing
-```text
-
-```text
+```
 
 ## Architecture
 
@@ -131,7 +123,7 @@ tests/
 ├── reporters/         # Reporter tests
 ├── integration/       # End-to-end CLI tests
 └── cli/               # CLI argument and smoke tests
-```text
+```
 
 ### Key Concepts
 

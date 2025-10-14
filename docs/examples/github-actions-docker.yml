@@ -1,0 +1,358 @@
+---
+# JMo Security Suite - GitHub Actions Integration Examples
+# Copy these workflows to .github/workflows/ in your repository
+
+# Example 1: Basic security scan on every push
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+
+jobs:
+  security-scan:
+    name: Run JMo Security Scan
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jimmy058910/jmo-security:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security scan
+        run: |
+          jmo scan --repo . --results results --profile balanced --human-logs
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-results
+          path: results/
+          retention-days: 30
+
+      - name: Upload dashboard
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-dashboard
+          path: results/summaries/dashboard.html
+
+---
+# Example 2: CI mode with failure threshold (gate PRs)
+name: Security Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-gate:
+    name: Security Threshold Check
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jimmy058910/jmo-security:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security scan with gating
+        run: |
+          jmo ci --repo . --fail-on HIGH --profile --human-logs
+
+      - name: Upload results on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: security-failures
+          path: results/
+
+---
+# Example 3: SARIF upload to GitHub Security tab
+name: Security Scan with SARIF
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-sarif:
+    name: Security Scan + SARIF Upload
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security scan
+        run: |
+          docker run --rm -v $(pwd):/scan \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results /scan/results --profile balanced --human-logs
+
+      - name: Generate report
+        run: |
+          docker run --rm -v $(pwd):/scan \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            report /scan/results --profile
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results/summaries/findings.sarif
+          category: jmo-security
+
+      - name: Upload detailed results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-results
+          path: results/
+
+---
+# Example 4: Matrix scanning (multiple profiles/variants)
+name: Security Scan Matrix
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM
+
+jobs:
+  security-matrix:
+    name: Scan with ${{ matrix.profile }} profile
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [fast, balanced, deep]
+        image: [latest, slim]
+        exclude:
+          - profile: deep
+            image: slim  # Slim doesn't have all tools for deep scan
+
+    container:
+      image: ghcr.io/jimmy058910/jmo-security:${{ matrix.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ${{ matrix.profile }} scan
+        run: |
+          jmo scan --repo . --results results --profile ${{ matrix.profile }} --human-logs
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-results-${{ matrix.profile }}-${{ matrix.image }}
+          path: results/
+
+---
+# Example 5: Scan multiple repositories
+name: Multi-Repo Security Scan
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'  # Weekly on Sunday at 4 AM
+  workflow_dispatch:
+
+jobs:
+  scan-repos:
+    name: Scan Multiple Repositories
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repos config
+        uses: actions/checkout@v4
+
+      - name: Create repos directory
+        run: mkdir -p repos
+
+      - name: Clone target repositories
+        run: |
+          # Clone multiple repos to scan
+          git clone https://github.com/org/repo1 repos/repo1
+          git clone https://github.com/org/repo2 repos/repo2
+          git clone https://github.com/org/repo3 repos/repo3
+
+      - name: Scan all repositories
+        run: |
+          docker run --rm \
+            -v $(pwd)/repos:/repos:ro \
+            -v $(pwd)/results:/results \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repos-dir /repos --results /results --profile balanced --human-logs
+
+      - name: Upload consolidated results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multi-repo-security-results
+          path: results/
+
+---
+# Example 6: PR comment with findings summary
+name: Security PR Comment
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-pr-comment:
+    name: Post Security Summary to PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run security scan
+        run: |
+          docker run --rm -v $(pwd):/scan \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            ci --repo /scan --results /scan/results --profile balanced --human-logs || true
+
+      - name: Read summary
+        id: summary
+        if: always()
+        run: |
+          if [ -f results/summaries/SUMMARY.md ]; then
+            {
+              echo 'summary<<EOF'
+              cat results/summaries/SUMMARY.md
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment PR
+        uses: actions/github-script@v7
+        if: always() && steps.summary.outputs.summary
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Security Scan Results\n\n' + process.env.SUMMARY
+            })
+        env:
+          SUMMARY: ${{ steps.summary.outputs.summary }}
+
+---
+# Example 7: Scheduled deep scan with notifications
+name: Weekly Deep Security Scan
+
+on:
+  schedule:
+    - cron: '0 1 * * 0'  # Sunday at 1 AM
+  workflow_dispatch:
+
+jobs:
+  deep-scan:
+    name: Deep Security Audit
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jimmy058910/jmo-security:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run deep scan
+        id: scan
+        run: |
+          jmo ci --repo . --results results --profile deep --fail-on MEDIUM --human-logs || true
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-deep-scan
+          path: results/
+
+      - name: Create issue on failures
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('results/summaries/SUMMARY.md', 'utf8');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Security Scan Failed - Review Required',
+              body: `The weekly deep security scan has detected issues:\n\n${summary}`,
+              labels: ['security', 'automated']
+            });
+
+---
+# Example 8: Differential scan (show only new findings)
+name: PR Differential Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  diff-scan:
+    name: Show New Findings Only
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Scan PR branch
+        run: |
+          docker run --rm -v $(pwd):/scan \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results /scan/results-pr --profile balanced --human-logs
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          clean: false
+
+      - name: Scan base branch
+        run: |
+          docker run --rm -v $(pwd):/scan \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results /scan/results-base --profile balanced --human-logs
+
+      # Note: Diff command requires Item 4 from ROADMAP (Machine-Readable Diff Reports)
+      # This is a placeholder for future functionality
+      - name: Generate diff report (coming soon)
+        run: |
+          echo "Diff functionality will be available in future release"
+          echo "For now, compare results-base/ and results-pr/ manually"
+
+      - name: Upload both results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-diff-results
+          path: |
+            results-pr/
+            results-base/

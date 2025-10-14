@@ -390,12 +390,12 @@ def generate_dashboard(results_dir, output_path=None):
         for repo in metrics["repo_stats"]:
             repo_rows += f"""
             <tr>
-                <td>{repo['name']}</td>
-                <td>{repo['gitleaks']}</td>
-                <td>{repo['trufflehog']}</td>
-                <td>{repo['semgrep']}</td>
-                <td>{repo['noseyparker']}</td>
-                <td><strong>{repo['total']}</strong></td>
+                <td>{repo["name"]}</td>
+                <td>{repo["gitleaks"]}</td>
+                <td>{repo["trufflehog"]}</td>
+                <td>{repo["semgrep"]}</td>
+                <td>{repo["noseyparker"]}</td>
+                <td><strong>{repo["total"]}</strong></td>
             </tr>
         """
     if not repo_rows:
@@ -414,7 +414,7 @@ def generate_dashboard(results_dir, output_path=None):
             tool_rows += f"""
             <tr>
                 <td>{tool_name}</td>
-                <td>{stats['count']}</td>
+                <td>{stats["count"]}</td>
                 <td>{repos_count}</td>
                 <td>{avg_findings:.1f}</td>
             </tr>
@@ -430,19 +430,19 @@ def generate_dashboard(results_dir, output_path=None):
     severity_rows = f"""
         <tr>
             <td class="severity-critical">Critical</td>
-            <td>{metrics['critical_count']}</td>
+            <td>{metrics["critical_count"]}</td>
         </tr>
         <tr>
             <td class="severity-high">High</td>
-            <td>{metrics['high_count']}</td>
+            <td>{metrics["high_count"]}</td>
         </tr>
         <tr>
             <td class="severity-medium">Medium</td>
-            <td>{metrics['medium_count']}</td>
+            <td>{metrics["medium_count"]}</td>
         </tr>
         <tr>
             <td class="severity-low">Low</td>
-            <td>{metrics['low_count']}</td>
+            <td>{metrics["low_count"]}</td>
         </tr>
     """
 
@@ -539,30 +539,30 @@ def generate_dashboard(results_dir, output_path=None):
     <body>
         <div class="container">
             <h1>Security Audit Dashboard</h1>
-            <p><strong>Generated:</strong> {metrics['timestamp']}</p>
+            <p><strong>Generated:</strong> {metrics["timestamp"]}</p>
 
             <div class="summary">
                 <h3>Executive Summary</h3>
-                <p>Total security issues identified: <strong>{metrics['total_findings']}</strong></p>
-                <p>Verified secrets requiring immediate action: <strong>{metrics['verified_secrets']}</strong></p>
-                <p>Unique issue types detected: <strong>{metrics['unique_secrets']}</strong></p>
+                <p>Total security issues identified: <strong>{metrics["total_findings"]}</strong></p>
+                <p>Verified secrets requiring immediate action: <strong>{metrics["verified_secrets"]}</strong></p>
+                <p>Unique issue types detected: <strong>{metrics["unique_secrets"]}</strong></p>
             </div>
 
             <div class="metrics">
                 <div class="metric-card">
-                    <div class="metric-value">{metrics['total_findings']}</div>
+                    <div class="metric-value">{metrics["total_findings"]}</div>
                     <div class="metric-label">Total Findings</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value">{metrics['critical_count']}</div>
+                    <div class="metric-value">{metrics["critical_count"]}</div>
                     <div class="metric-label">Critical Issues</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value">{metrics['high_count']}</div>
+                    <div class="metric-value">{metrics["high_count"]}</div>
                     <div class="metric-label">High Severity</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value">{metrics['verified_secrets']}</div>
+                    <div class="metric-value">{metrics["verified_secrets"]}</div>
                     <div class="metric-label">Verified Secrets</div>
                 </div>
             </div>
@@ -616,9 +616,9 @@ def generate_dashboard(results_dir, output_path=None):
             <div class="summary" style="margin-top: 30px;">
                 <h3>Recommendations</h3>
                 <ul>
-                    <li><strong>Immediate:</strong> Review and rotate {metrics['verified_secrets']} verified secrets</li>
-                    <li><strong>High Priority:</strong> Address {metrics['critical_count'] + metrics['high_count']} critical and high severity issues</li>
-                    <li><strong>Medium Priority:</strong> Plan remediation for {metrics['medium_count']} medium severity issues</li>
+                    <li><strong>Immediate:</strong> Review and rotate {metrics["verified_secrets"]} verified secrets</li>
+                    <li><strong>High Priority:</strong> Address {metrics["critical_count"] + metrics["high_count"]} critical and high severity issues</li>
+                    <li><strong>Medium Priority:</strong> Plan remediation for {metrics["medium_count"]} medium severity issues</li>
                     <li><strong>Process:</strong> Implement pre-commit hooks to prevent future issues</li>
                 </ul>
             </div>

@@ -1,0 +1,93 @@
+# JMo Security Suite - Alpine Docker Image
+# Base: Alpine Linux 3.18 for minimal size
+# Size: ~150MB | Tools: Core scanners with minimal footprint
+
+FROM alpine:3.18 AS base
+
+LABEL org.opencontainers.image.title="JMo Security Suite (Alpine)"
+LABEL org.opencontainers.image.description="Ultra-lightweight security toolkit based on Alpine Linux"
+LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
+LABEL org.opencontainers.image.url="https://jmotools.com"
+LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:${PATH}"
+
+# Install core dependencies (Alpine packages are smaller)
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    git \
+    curl \
+    ca-certificates \
+    jq \
+    bash \
+    && ln -sf python3 /usr/bin/python
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel
+
+# Install Python tools
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    semgrep==1.94.0 \
+    checkov==3.2.255
+
+ARG TARGETARCH
+
+# Install gitleaks
+RUN GITLEAKS_VERSION="8.21.2" && \
+    GITLEAKS_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x64") && \
+    wget -q "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${GITLEAKS_ARCH}.tar.gz" \
+    -O /tmp/gitleaks.tar.gz && \
+    tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks && \
+    rm /tmp/gitleaks.tar.gz
+
+# Install Syft
+RUN SYFT_VERSION="1.18.1" && \
+    SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    wget -q "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
+    -O /tmp/syft.tar.gz && \
+    tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft && \
+    rm /tmp/syft.tar.gz
+
+# Install Trivy
+RUN TRIVY_VERSION="0.58.1" && \
+    TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
+    wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    -O /tmp/trivy.tar.gz && \
+    tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy && \
+    rm /tmp/trivy.tar.gz
+
+# Install Hadolint
+RUN HADOLINT_VERSION="2.12.0" && \
+    HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
+    wget -q "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
+    -O /usr/local/bin/hadolint && \
+    chmod +x /usr/local/bin/hadolint
+
+WORKDIR /scan
+
+# Copy JMo Security Suite
+COPY . /opt/jmo-security/
+
+# Install JMo
+RUN cd /opt/jmo-security && \
+    python3 -m pip install --no-cache-dir --break-system-packages -e .
+
+# Verify tools
+RUN echo "=== Verifying Alpine tools ===" && \
+    python3 --version && \
+    jmo --help > /dev/null && \
+    gitleaks version && \
+    semgrep --version && \
+    syft version && \
+    trivy --version && \
+    hadolint --version && \
+    checkov --version && \
+    echo "=== Alpine tools verified ==="
+
+ENTRYPOINT ["jmo"]
+CMD ["--help"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD jmo --help > /dev/null || exit 1

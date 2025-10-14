@@ -17,9 +17,7 @@ class _CP:
 def test_run_cmd_ok_rcs_and_retries(monkeypatch):
     calls = {"n": 0}
 
-    def fake_run(
-        cmd, stdout=None, stderr=None, text=None, timeout=None
-    ):  # noqa: ARG001
+    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: ARG001
         calls["n"] += 1
         # First attempt: returncode 2 (not ok); then 1 (ok because in ok_rcs)
         if calls["n"] == 1:
@@ -36,9 +34,7 @@ def test_run_cmd_ok_rcs_and_retries(monkeypatch):
 def test_run_cmd_timeout_then_fail(monkeypatch):
     calls = {"n": 0}
 
-    def fake_run(
-        cmd, stdout=None, stderr=None, text=None, timeout=None
-    ):  # noqa: ARG001
+    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: ARG001
         calls["n"] += 1
         # Always timeout
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout or 0)

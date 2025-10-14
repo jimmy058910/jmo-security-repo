@@ -1,0 +1,134 @@
+---
+# JMo Security Suite - Docker Compose Examples
+# Usage:
+#   docker-compose run --rm jmo-scan          # Run scan on current directory
+#   docker-compose run --rm jmo-ci            # Run CI mode with failure threshold
+#   docker-compose run --rm jmo-custom        # Custom scan with flags
+
+version: '3.8'
+
+services:
+  # Full image with all tools
+  jmo-scan:
+    image: ghcr.io/jimmy058910/jmo-security:latest
+    volumes:
+      - .:/scan:ro                    # Mount current directory as read-only
+      - ./results:/scan/results       # Mount results directory as writable
+    command:
+      - scan
+      - --repo
+      - /scan
+      - --results
+      - /scan/results
+      - --profile
+      - balanced
+      - --human-logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    working_dir: /scan
+
+  # CI mode with threshold gating
+  jmo-ci:
+    image: ghcr.io/jimmy058910/jmo-security:latest
+    volumes:
+      - .:/scan:ro
+      - ./results:/scan/results
+    command:
+      - ci
+      - --repo
+      - /scan
+      - --results
+      - /scan/results
+      - --fail-on
+      - HIGH
+      - --profile
+      - --human-logs
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Slim variant (smaller image, fewer tools)
+  jmo-slim:
+    image: ghcr.io/jimmy058910/jmo-security:slim
+    volumes:
+      - .:/scan:ro
+      - ./results:/scan/results
+    command:
+      - scan
+      - --repo
+      - /scan
+      - --results
+      - /scan/results
+      - --profile
+      - fast
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Alpine variant (minimal size)
+  jmo-alpine:
+    image: ghcr.io/jimmy058910/jmo-security:alpine
+    volumes:
+      - .:/scan:ro
+      - ./results:/scan/results
+    command:
+      - scan
+      - --repo
+      - /scan
+      - --results
+      - /scan/results
+      - --profile
+      - fast
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Interactive shell for debugging
+  jmo-shell:
+    image: ghcr.io/jimmy058910/jmo-security:latest
+    volumes:
+      - .:/scan
+      - ./results:/scan/results
+    entrypoint: ["/bin/bash"]
+    stdin_open: true
+    tty: true
+    working_dir: /scan
+
+  # Scheduled scan with results persistence
+  jmo-scheduled:
+    image: ghcr.io/jimmy058910/jmo-security:latest
+    volumes:
+      - /path/to/repos:/repos:ro
+      - ./results:/results
+    command:
+      - scan
+      - --repos-dir
+      - /repos
+      - --results
+      - /results
+      - --profile
+      - balanced
+      - --allow-missing-tools
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Uncomment to run as cron job (requires docker-compose with cron support)
+    # deploy:
+    #   restart_policy:
+    #     condition: on-failure
+
+# Example usage patterns:
+#
+# 1. Quick scan of current directory:
+#    docker-compose run --rm jmo-scan
+#
+# 2. CI mode with failure on HIGH severity:
+#    docker-compose run --rm jmo-ci
+#
+# 3. Scan multiple repos directory:
+#    docker-compose run --rm jmo-scan scan --repos-dir /scan/repos --results /scan/results
+#
+# 4. Interactive debugging:
+#    docker-compose run --rm jmo-shell
+#
+# 5. Generate report only (after scan):
+#    docker-compose run --rm jmo-scan report /scan/results --profile --human-logs
+#
+# 6. Custom profile:
+#    docker-compose run --rm jmo-scan scan --repo /scan --profile deep --timeout 900

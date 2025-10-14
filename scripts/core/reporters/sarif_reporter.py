@@ -4,6 +4,7 @@
 Generates SARIF (Static Analysis Results Interchange Format) output
 with code snippets, fix suggestions, and taxonomy mappings where available.
 """
+
 from __future__ import annotations
 
 import json

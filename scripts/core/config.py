@@ -3,12 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, TYPE_CHECKING, Any as AnyType
 
-try:
-    import yaml  # type: ignore
-except Exception:
-    yaml = None
+if TYPE_CHECKING:
+    import yaml as YamlModule
+else:
+    try:
+        import yaml as YamlModule  # type: ignore[assignment]
+    except ImportError:
+        YamlModule = None  # type: ignore[assignment]
+
+yaml: Optional[AnyType] = YamlModule
 
 
 @dataclass
@@ -73,10 +78,10 @@ def load_config(path: Optional[str]) -> Config:
         cfg.default_profile = str(data["default_profile"]).strip() or None
     # profiles (free-form dict)
     if isinstance(data.get("profiles"), dict):
-        cfg.profiles = data["profiles"]  # type: ignore
+        cfg.profiles = data["profiles"]
     # per_tool overrides
     if isinstance(data.get("per_tool"), dict):
-        cfg.per_tool = data["per_tool"]  # type: ignore
+        cfg.per_tool = data["per_tool"]
     # retries
     rv = data.get("retries")
     if isinstance(rv, int) and rv >= 0:

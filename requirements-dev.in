@@ -8,3 +8,5 @@ black
 pyyaml
 jsonschema
 pre-commit
+mypy
+types-PyYAML

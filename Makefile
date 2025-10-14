@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync
+.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-push docker-test
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -11,6 +11,7 @@ help:
 	@echo "  tools-upgrade - Upgrade/refresh CLI tools"
 	@echo "  fmt      - Run formatters (shfmt, black, ruff-format)"
 	@echo "  lint     - Run linters (shellcheck, ruff, bandit)"
+	@echo "  typecheck - Run mypy type checking on scripts/"
 	@echo "  test     - Run tests (pytest if tests/ exists)"
 	@echo "  verify   - Local CI: lint+test+fast security scans"
 	@echo "  clean    - Clean temporary artifacts"
@@ -33,6 +34,12 @@ help:
 	@echo "  fast      - Fast profile scan via jmotools"
 	@echo "  balanced  - Balanced profile scan via jmotools"
 	@echo "  full      - Deep profile scan via jmotools"
+	@echo ""
+	@echo "Docker Targets:"
+	@echo "  docker-build      - Build Docker image (VARIANT=full|slim|alpine, default: full)"
+	@echo "  docker-build-all  - Build all Docker image variants (full, slim, alpine)"
+	@echo "  docker-test       - Test Docker image (VARIANT=full|slim|alpine, default: full)"
+	@echo "  docker-push       - Push Docker image to registry (VARIANT=full|slim|alpine, TAG=latest)"
 
 TOOLS_SCRIPT := scripts/dev/install_tools.sh
 VERIFY_SCRIPT := scripts/dev/ci-local.sh
@@ -67,6 +74,12 @@ lint:
 		fi ; \
 	else echo 'bandit not found'; fi
 	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files || true; else echo 'pre-commit not found'; fi
+
+typecheck:
+	@if command -v mypy >/dev/null 2>&1; then \
+		echo "Running mypy on scripts/..." ; \
+		mypy scripts/ --config-file=pyproject.toml || true ; \
+	else echo 'mypy not found. Run: make dev-deps'; fi
 
 TEST_FLAGS ?= -q --maxfail=1 --disable-warnings
 
@@ -192,3 +205,51 @@ full:
 	@if [ -n "$(DIR)" ]; then jmotools full --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
 	elif [ -n "$(TARGETS)" ]; then jmotools full --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
 	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
+
+# ============================================================================
+# Docker Build Targets
+# ============================================================================
+
+# Docker image configuration
+DOCKER_REGISTRY ?= ghcr.io
+DOCKER_ORG ?= jimmy058910
+DOCKER_IMAGE ?= jmo-security
+DOCKER_TAG ?= latest
+VARIANT ?= full
+
+# Determine Dockerfile based on variant
+DOCKERFILE := $(if $(filter full,$(VARIANT)),Dockerfile,Dockerfile.$(VARIANT))
+
+docker-build:
+	@echo "Building Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
+	docker build -f $(DOCKERFILE) -t $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) .
+	@if [ "$(VARIANT)" = "full" ]; then \
+		docker tag $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
+		echo "Tagged as latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
+	fi
+
+docker-build-all:
+	@echo "Building all Docker image variants..."
+	$(MAKE) docker-build VARIANT=full
+	$(MAKE) docker-build VARIANT=slim
+	$(MAKE) docker-build VARIANT=alpine
+
+docker-test:
+	@echo "Testing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
+	docker run --rm $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) --version
+	docker run --rm $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) --help
+	@echo "Creating test scan..."
+	@mkdir -p /tmp/docker-test-scan
+	@echo "print('test')" > /tmp/docker-test-scan/test.py
+	docker run --rm -v /tmp/docker-test-scan:/scan $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) \
+		scan --repo /scan --results /scan/results --profile fast --human-logs || true
+	@rm -rf /tmp/docker-test-scan
+	@echo "Test completed successfully"
+
+docker-push:
+	@echo "Pushing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
+	docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)
+	@if [ "$(VARIANT)" = "full" ]; then \
+		docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
+		echo "Pushed latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
+	fi

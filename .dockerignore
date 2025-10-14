@@ -1,0 +1,126 @@
+# JMo Security Suite - Docker Build Ignore
+# Exclude unnecessary files from Docker context to speed up builds
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+ENV/
+env/
+.post-release-venv/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+.cache
+nosetests.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Linting and formatting
+.ruff_cache/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# GitHub
+.github/
+
+# CI/CD artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Documentation (not needed in runtime image)
+docs/
+*.md
+!README.md
+LICENSE
+
+# Test files
+tests/
+samples/
+
+# Development tools
+.pre-commit-config.yaml
+.editorconfig
+.yamllint.yaml
+.markdownlint.json
+.markdownlintignore
+bandit.yaml
+codecov.yml
+.coveragerc
+.guardrails-allowlist
+
+# Archives and temporary files
+archive/
+ai-search/
+*.tar.gz
+*.zip
+*.log
+*.tmp
+
+# Results directories (don't include in image)
+results/
+output/
+scans/
+
+# Local configuration overrides
+jmo.local.yml
+jmo.suppress.local.yml
+.env
+.env.local
+
+# Development dependencies file
+requirements-dev.in
+requirements-dev.txt
+
+# Business documents
+BUSINESS_MODEL.md
+ROADMAP.md
+CHANGELOG.md
+CONTRIBUTING.md
+QUICKSTART.md
+TEST.md
+SAMPLE_OUTPUTS.md
+
+# Docker files (don't need them inside the image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Makefiles (development only)
+Makefile
+
+# Claude AI context
+.claude/
+CLAUDE.md
