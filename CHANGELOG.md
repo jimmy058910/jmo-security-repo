@@ -4,6 +4,109 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+### Interactive Wizard (ROADMAP Item 2 - October 2025)
+
+**Guided first-run experience for beginners:**
+- **Interactive wizard command** (`jmotools wizard`):
+  - Step-by-step prompts for profile selection (fast/balanced/deep with time estimates)
+  - Docker vs native mode selection with auto-detection
+  - Target selection (repo/repos-dir/targets/TSV) with repository auto-discovery
+  - Advanced configuration (threads, timeout, fail-on severity)
+  - Preflight summary with generated command preview
+  - Automatic execution and results opening
+- **Non-interactive mode** (`--yes` flag):
+  - Uses smart defaults for scripting and automation
+  - Profile: balanced, Target: current directory, Docker: auto-detected
+- **Docker mode integration** (`--docker` flag):
+  - Leverages completed ROADMAP #1 Docker images
+  - Zero-installation path for beginners
+  - Detects Docker availability and running status
+- **Artifact generation**:
+  - `--emit-make-target`: Generate Makefile targets
+  - `--emit-script`: Generate executable shell scripts
+  - `--emit-gha`: Generate GitHub Actions workflows (both native and Docker variants)
+- **Smart defaults**:
+  - CPU-based thread recommendations
+  - Profile-based timeout configurations
+  - System detection (OS, Docker, repo discovery)
+- **Comprehensive documentation**:
+  - Wizard examples guide: [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
+  - Updated README and QUICKSTART with wizard instructions
+  - 18 comprehensive tests with 100% pass rate
+
+**Usage:**
+```bash
+# Interactive mode
+jmotools wizard
+
+# Non-interactive (automation)
+jmotools wizard --yes
+
+# Force Docker mode
+jmotools wizard --docker
+
+# Generate artifacts
+jmotools wizard --emit-make-target Makefile.security
+jmotools wizard --emit-script scan.sh
+jmotools wizard --emit-gha .github/workflows/security.yml
+```
+
+**Testing:**
+- 18 unit tests covering all wizard functionality
+- Command generation for native and Docker modes
+- Artifact generation (Makefile/shell/GHA)
+- Profile validation and resource estimates
+- Non-interactive mode and smart defaults
+
+### Docker All-in-One Images (ROADMAP Item 1 - October 2025)
+
+**Zero-installation friction for immediate scanning:**
+- **3 Docker image variants** (full, slim, alpine) with all security tools pre-installed
+  - **Full image** (~500MB): 11+ scanners including gitleaks, trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, tfsec, hadolint, osv-scanner
+  - **Slim image** (~200MB): 6 core scanners for fast CI/CD (gitleaks, semgrep, syft, trivy, checkov, hadolint)
+  - **Alpine image** (~150MB): Minimal footprint on Alpine Linux with core tools
+- **Multi-architecture support**: linux/amd64 and linux/arm64 (Apple Silicon compatible)
+- **GitHub Actions workflow** (`.github/workflows/docker-build.yml`):
+  - Automated build and push to GitHub Container Registry
+  - Multi-platform builds with BuildKit
+  - Trivy vulnerability scanning of images
+  - SBOM and provenance attestations
+  - SARIF upload to GitHub Security
+- **Comprehensive documentation**:
+  - Docker quick start guide in README with CI/CD examples
+  - Full usage documentation: [docs/DOCKER_README.md](docs/DOCKER_README.md)
+  - 8 GitHub Actions workflow examples: [docs/examples/github-actions-docker.yml](docs/examples/github-actions-docker.yml)
+  - Docker Compose configuration for common use cases
+- **Developer-friendly**:
+  - Makefile targets: `docker-build`, `docker-build-all`, `docker-test`, `docker-push`
+  - Optimized `.dockerignore` to minimize build context
+  - Health checks and proper labels
+  - Read-only volume mounts for security
+
+**Usage:**
+```bash
+# Pull and scan
+docker pull ghcr.io/jimmy058910/jmo-security:latest
+docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results --profile balanced
+
+# CI/CD integration
+container:
+  image: ghcr.io/jimmy058910/jmo-security:latest
+steps:
+  - run: jmo ci --repo . --fail-on HIGH --profile
+```
+
+**Testing:**
+- Integration tests: `tests/integration/test_docker_images.py`
+- Validates tool availability, version checks, and basic scan functionality
+- Docker Compose syntax validation
+
+**Distribution:**
+- Primary: GitHub Container Registry (`ghcr.io/jimmy058910/jmo-security`)
+- Planned: Docker Hub support (configuration ready)
+- Automated builds on push to main and tagged releases
+
 ### Code Quality & Security Improvements (Phase 1 - October 2025)
 
 **Security Fixes:**

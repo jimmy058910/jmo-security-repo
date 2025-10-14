@@ -245,6 +245,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit non-zero if tools are missing and not auto-installed",
     )
 
+    # Wizard subcommand: interactive guided setup
+    sp_wizard = sub.add_parser(
+        "wizard", help="Interactive wizard for guided security scanning"
+    )
+    sp_wizard.add_argument(
+        "--yes", "-y", action="store_true", help="Non-interactive mode (use defaults)"
+    )
+    sp_wizard.add_argument(
+        "--docker", action="store_true", help="Force Docker execution mode"
+    )
+    sp_wizard.add_argument(
+        "--emit-make-target", metavar="FILE", help="Generate Makefile target"
+    )
+    sp_wizard.add_argument(
+        "--emit-script", metavar="FILE", help="Generate shell script"
+    )
+    sp_wizard.add_argument(
+        "--emit-gha", metavar="FILE", help="Generate GitHub Actions workflow"
+    )
+
     return ap
 
 
@@ -253,6 +273,27 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     _print_os_info()
+
+    # Handle wizard early
+    if args.mode == "wizard":
+        wizard_script = Path(__file__).resolve().parent / "wizard.py"
+        if not wizard_script.exists():
+            sys.stderr.write(
+                "\x1b[31m[ERROR]\x1b[0m Wizard script not found.\n"
+            )
+            return 2
+
+        # Import and run wizard
+        sys.path.insert(0, str(wizard_script.parent))
+        from wizard import run_wizard
+
+        return run_wizard(
+            yes=getattr(args, 'yes', False),
+            force_docker=getattr(args, 'docker', False),
+            emit_make=getattr(args, 'emit_make_target', None),
+            emit_script=getattr(args, 'emit_script', None),
+            emit_gha=getattr(args, 'emit_gha', None),
+        )
 
     # Handle setup early
     if args.mode == "setup":

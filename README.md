@@ -76,9 +76,42 @@ Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md
 
 See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
-## 🧪 New: Simple wrapper commands
+## 🧙 New: Interactive Wizard (Beginner-Friendly!)
 
-If you're just getting started, use the beginner-friendly wrapper:
+**Never used security scanners before?** Start with the interactive wizard:
+
+```bash
+jmotools wizard
+```
+
+The wizard guides you through:
+- ✅ Profile selection (fast/balanced/deep)
+- ✅ Docker vs native mode (zero-installation option!)
+- ✅ Target selection with auto-detection
+- ✅ Smart defaults based on your system
+- ✅ Command preview before execution
+- ✅ Automatic results opening
+
+**Non-interactive mode:**
+```bash
+jmotools wizard --yes              # Use smart defaults
+jmotools wizard --docker           # Force Docker mode
+```
+
+**Generate reusable artifacts:**
+```bash
+jmotools wizard --emit-make-target Makefile.security
+jmotools wizard --emit-script scan.sh
+jmotools wizard --emit-gha .github/workflows/security.yml
+```
+
+📖 **Full wizard guide:** [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
+
+---
+
+## 🧪 Simple wrapper commands
+
+If you know what you want, use the profile shortcuts:
 
 - `jmotools fast` — quick scan (fast profile)
 - `jmotools balanced` — default balanced scan
@@ -91,7 +124,7 @@ Examples:
 jmotools fast --tsv ./candidates.tsv --dest ./repos-tsv
 
 # Full (deep) profile targeting an existing directory of repos
-jmotools full --repos-dir ./repos-tsv --allow-missing-tools
+jmotools full --repos-dir ./repos-tsv
 ```
 
 Note: Provide any TSV with a `url` or `full_name` column.
@@ -129,7 +162,62 @@ This project provides an automated framework for conducting thorough security au
 - 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 - 🔒 **Security-First**: XSS vulnerability patched, comprehensive input escaping, secure-by-default configurations
 
-## 🚀 Quick Start
+## 🐳 Docker Quick Start (Recommended)
+
+The easiest way to get started is with our Docker images - **zero installation friction!**
+
+### Pull and Run
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/jimmy058910/jmo-security:latest
+
+# Scan current directory
+docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results --profile balanced --human-logs
+
+# View results
+open results/summaries/dashboard.html
+```
+
+### Image Variants
+
+| Variant | Size | Tools | Use Case |
+|---------|------|-------|----------|
+| **latest** | ~500MB | 11+ scanners | Complete scanning |
+| **slim** | ~200MB | 6 core scanners | Fast CI/CD |
+| **alpine** | ~150MB | 6 core scanners | Minimal footprint |
+
+### CI/CD Integration
+
+#### GitHub Actions
+
+```yaml
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/jimmy058910/jmo-security:latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: jmo ci --repo . --fail-on HIGH --profile
+```
+
+#### GitLab CI
+
+```yaml
+security-scan:
+  image: ghcr.io/jimmy058910/jmo-security:latest
+  script:
+    - jmo ci --repo . --fail-on HIGH --profile
+```
+
+📖 **Full Docker documentation:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
+📝 **More CI examples:** [docs/examples/github-actions-docker.yml](docs/examples/github-actions-docker.yml)
+
+---
+
+## 🚀 Quick Start (Local Installation)
 
 ### Install or Update (curated tools)
 

@@ -12,16 +12,42 @@ Get up and running in under 5 minutes using the unified Python CLI (scan/report/
 
 See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
+## 🧙 Quickest Start: Interactive Wizard
+
+**Brand new to security scanning?** Use the interactive wizard:
+
+```bash
+jmotools wizard
+```
+
+The wizard will:
+1. Guide you through profile selection (fast/balanced/deep)
+2. Detect if Docker is available (zero-installation option!)
+3. Help you select scan targets
+4. Configure advanced options if needed
+5. Show a preview of the command
+6. Execute the scan and open results
+
+**For automated workflows:**
+```bash
+jmotools wizard --yes        # Use smart defaults
+jmotools wizard --docker     # Force Docker mode
+```
+
+📖 **Full wizard guide:** [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
+
+---
+
 ## Beginner mode: jmotools wrapper
 
-Prefer simple, memorable commands? Use the wrapper:
+Already know what you want? Use the profile shortcuts:
 
 ```bash
 # Quick fast scan (auto-opens results)
 jmotools fast --repos-dir ~/security-testing
 
 # Deep/full scan using the curated 'deep' profile
-jmotools full --repos-dir ~/security-testing --allow-missing-tools
+jmotools full --repos-dir ~/security-testing
 
 # Clone from TSV first, then scan
 jmotools balanced --tsv ./candidates.tsv --dest ./repos-tsv
