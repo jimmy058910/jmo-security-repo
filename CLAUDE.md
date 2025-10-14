@@ -313,6 +313,48 @@ Configured via `.pre-commit-config.yaml`:
 
 Run `make pre-commit-run` before committing. CI enforces these checks.
 
+**CI/CD Common Fixes (Lessons Learned):**
+
+When working with release.yml or ci.yml workflows, apply these proven fixes:
+
+1. **Docker Tag Extraction:**
+   - ❌ DON'T: Construct tags manually from `github.ref_name` (includes 'v' prefix)
+   - ✅ DO: Extract tag directly from `metadata-action` output (strips 'v' automatically)
+   ```yaml
+   TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
+   ```
+
+2. **Actionlint Parameters:**
+   - ❌ DON'T: Use deprecated `fail_on_error: true`
+   - ✅ DO: Use current API `fail_level: error`
+   ```yaml
+   - uses: reviewdog/action-actionlint@v1
+     with:
+       fail_level: error
+   ```
+
+3. **Docker Image Testing:**
+   - ❌ DON'T: Use `jmo --version` (CLI doesn't support top-level version flag)
+   - ✅ DO: Use `jmo --help` and `jmo scan --help` (tests CLI works correctly)
+   ```yaml
+   docker run --rm jmo-security:tag --help
+   docker run --rm jmo-security:tag scan --help
+   ```
+
+4. **SARIF Upload Permissions:**
+   - ❌ DON'T: Omit `security-events: write` permission (causes "Resource not accessible by integration")
+   - ✅ DO: Add `security-events: write` to workflow permissions
+   ```yaml
+   permissions:
+     security-events: write  # Required for uploading SARIF to GitHub Security
+   ```
+
+5. **Docker Hub README Sync:**
+   - Use `peter-evans/dockerhub-description@v4` (not v3)
+   - Gate with repository variable: `if: vars.DOCKERHUB_ENABLED == 'true'`
+   - Requires secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (PAT with read/write/delete scope)
+   - Only run on version tags: `if: startsWith(github.ref, 'refs/tags/v')`
+
 ## Common Development Tasks
 
 ### Adding a New Tool Adapter

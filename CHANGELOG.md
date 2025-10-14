@@ -4,6 +4,44 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+## 0.4.3 (2025-10-14)
+
+**Patch Release: CI/CD Security & Docker Hub Integration**
+
+This release fixes critical CI/CD infrastructure issues and enables Docker Hub README synchronization:
+
+**Bug Fixes:**
+
+1. **Trivy SARIF upload to GitHub Security**:
+   - Fixed "Resource not accessible by integration" error
+   - Root cause: Missing `security-events: write` permission in workflow
+   - Solution: Added `security-events: write` to release.yml permissions
+   - Trivy vulnerability scans now upload successfully to GitHub Security dashboard
+
+2. **Docker Hub README synchronization**:
+   - Upgraded to `peter-evans/dockerhub-description@v4` (was v3)
+   - Changed trigger to version tags only (was main branch)
+   - Added repository variable gate: `vars.DOCKERHUB_ENABLED == 'true'`
+   - Added helpful skip message with setup instructions when disabled
+   - Ready to enable when Docker Hub credentials configured
+
+**Documentation:**
+
+- **CLAUDE.md**: Added comprehensive "CI/CD Common Fixes (Lessons Learned)" section
+  - Docker tag extraction from metadata-action
+  - Actionlint parameter updates (fail_level vs fail_on_error)
+  - Docker image testing commands (--help vs --version)
+  - SARIF upload permissions requirements
+  - Docker Hub README sync configuration
+
+**Technical Details:**
+
+- release.yml: Added `security-events: write` to workflow permissions (line 19)
+- release.yml: Enhanced docker-hub-readme job with proper gating and v4 action (lines 196-228)
+- CLAUDE.md: Added CI/CD troubleshooting reference (lines 316-356)
+
+No functional changes to tools, CLI, or outputs. CI/CD infrastructure improvements only.
+
 ## 0.4.2 (2025-10-14)
 
 **Patch Release: Docker Image Test Fix**
