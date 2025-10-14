@@ -34,13 +34,12 @@ permissions:
 
 jobs:
   build-and-push:
-    name: Build ${{ matrix.variant }} (${{ matrix.platform }})
+    name: Build and push ${{ matrix.variant }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         variant: [full, slim, alpine]
-        platform: [linux/amd64, linux/arm64]
 
     steps:
       - name: Checkout repository
@@ -82,7 +81,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix={{branch}}-
           flavor: |
             suffix=-${{ matrix.variant }},onlatest=true
             latest=false
@@ -97,35 +95,42 @@ jobs:
           fi
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ steps.dockerfile.outputs.file }}
-          platforms: ${{ matrix.platform }}
-          push: ${{ github.event_name != 'pull_request' || github.event.inputs.push_images == 'true' }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ (github.event_name != 'pull_request') || (github.event.inputs.push_images == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+          provenance: false
+          sbom: false
 
-      - name: Test image
-        if: matrix.platform == 'linux/amd64'
+      - name: Test image (amd64 only)
+        if: github.event_name != 'pull_request' || github.event.inputs.push_images == 'true'
         run: |
-          # Load the image from build cache instead of pulling from registry
-          # The image may not have been pushed yet (e.g., workflow_dispatch with push_images=false)
-          IMAGE_ID=$(docker images -q | head -1)
-          if [ -z "$IMAGE_ID" ]; then
-            echo "No image found in local cache, attempting to pull..."
-            docker pull ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}
-            IMAGE_ID="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}"
+          # Determine the tag to test based on event type
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            # For tag pushes, use the tag name
+            TEST_TAG="${{ github.ref_name }}-${{ matrix.variant }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # For main branch, use 'latest'
+            TEST_TAG="latest-${{ matrix.variant }}"
+          else
+            # For other branches, use branch name
+            TEST_TAG="${{ github.ref_name }}-${{ matrix.variant }}"
           fi
-          docker run --rm "$IMAGE_ID" --version
-          docker run --rm "$IMAGE_ID" --help
 
-  create-manifest:
-    name: Create multi-arch manifest for ${{ matrix.variant }}
+          echo "Testing image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
+          docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}" --version
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}" --help
+
+  scan-images:
+    name: Scan ${{ matrix.variant }} for vulnerabilities
     runs-on: ubuntu-latest
     needs: build-and-push
     if: github.event_name != 'pull_request'
@@ -141,63 +146,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifest
+      - name: Determine image tag
+        id: tag
         run: |
-          # Extract tag (use 'latest' for main branch, otherwise use git ref)
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            TAG="latest"
-          elif [ "${GITHUB_REF#refs/tags/}" != "${GITHUB_REF}" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "value=${{ github.ref_name }}-${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
           else
-            TAG="${GITHUB_REF#refs/heads/}"
+            echo "value=latest-${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
           fi
-
-          VARIANT_SUFFIX=""
-          if [ "${{ matrix.variant }}" != "full" ]; then
-            VARIANT_SUFFIX="-${{ matrix.variant }}"
-          fi
-
-          # Create manifest for amd64 + arm64
-          docker buildx imagetools create -t \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX}" \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}"
-
-      - name: Inspect manifest
-        run: |
-          TAG="latest"
-          if [ "${GITHUB_REF#refs/tags/}" != "${GITHUB_REF}" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-
-          VARIANT_SUFFIX=""
-          if [ "${{ matrix.variant }}" != "full" ]; then
-            VARIANT_SUFFIX="-${{ matrix.variant }}"
-          fi
-
-          docker buildx imagetools inspect \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TAG}${VARIANT_SUFFIX}"
-
-  scan-images:
-    name: Scan ${{ matrix.variant }} for vulnerabilities
-    runs-on: ubuntu-latest
-    needs: create-manifest
-    if: github.event_name != 'pull_request'
-    strategy:
-      matrix:
-        variant: [full, slim, alpine]
-
-    steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY_GHCR }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}
+          image-ref: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
           format: 'sarif'
           output: 'trivy-results-${{ matrix.variant }}.sarif'
           severity: 'CRITICAL,HIGH'
@@ -211,7 +172,7 @@ jobs:
   publish-readme:
     name: Update Docker Hub README
     runs-on: ubuntu-latest
-    needs: create-manifest
+    needs: build-and-push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     # Uncomment when Docker Hub is configured
     # steps:
