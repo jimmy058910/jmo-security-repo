@@ -146,8 +146,9 @@ jobs:
 
           echo "Testing image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
           docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}"
-          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}" --version
+          # Test basic commands (jmo CLI doesn't have --version, use --help instead)
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}" --help
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${TEST_TAG}" scan --help
 
   # Scan Docker images for vulnerabilities
   docker-scan:

@@ -4,6 +4,26 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+## 0.4.2 (2025-10-14)
+
+**Patch Release: Docker Image Test Fix**
+
+This release fixes the Docker image testing step that was failing in v0.4.1:
+
+**Bug Fix:**
+
+- **Docker image tests using unsupported CLI flag**:
+  - Fixed test step trying to run `jmo --version` which doesn't exist
+  - Root cause: jmo CLI uses subcommands (scan/report/ci) and doesn't have a top-level `--version` flag
+  - Solution: Changed tests to use `jmo --help` and `jmo scan --help` which are supported
+  - All 3 Docker variants (full, slim, alpine) now pass tests successfully
+
+**Technical Details:**
+- release.yml: Updated Docker image test commands to use `--help` instead of `--version`
+- No changes to Docker images themselves - they were building correctly all along
+
+No functional changes to tools, CLI, or outputs. Purely CI/CD test infrastructure fix.
+
 ## 0.4.1 (2025-10-14)
 
 **Patch Release: Docker Build Fixes**
