@@ -66,3 +66,7 @@ BUSINESS_MODEL.md
 
 # Private local scripts and outputs (ignored)
 /ai-search
+
+# MCP configuration with sensitive tokens (keep .mcp.json.example in repo)
+.mcp.json
+.claude/mcp.json

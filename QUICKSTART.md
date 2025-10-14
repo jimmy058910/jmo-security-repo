@@ -1,34 +1,29 @@
 # Quick Start – JMo Security CLI
 
-Get up and running in under 5 minutes using the unified Python CLI (scan/report/ci).
+**Get scanning in under 5 minutes. Three entry points based on your experience level.**
 
-## ✨ What's New (Phase 1 - October 2025)
+---
 
-- 🔒 **XSS vulnerability patched** in HTML dashboard
-- 🛡️ **OSV scanner integrated** for open-source vulnerability detection
-- 📊 **Enriched SARIF output** with CWE/OWASP/CVE taxonomies
-- ⚙️ **Type-safe severity enum** for cleaner code
-- 🎯 **88% test coverage** with 100/100 tests passing
+## 🚀 Choose Your Path
 
-See [CHANGELOG.md](CHANGELOG.md) for complete details.
+### Option 1: 🧙 Interactive Wizard (Recommended for Beginners)
 
-## 🧙 Quickest Start: Interactive Wizard
-
-**Brand new to security scanning?** Use the interactive wizard:
+**Zero knowledge required. The wizard guides you through everything:**
 
 ```bash
 jmotools wizard
 ```
 
-The wizard will:
-1. Guide you through profile selection (fast/balanced/deep)
-2. Detect if Docker is available (zero-installation option!)
-3. Help you select scan targets
-4. Configure advanced options if needed
-5. Show a preview of the command
-6. Execute the scan and open results
+**What the wizard does:**
+- Guides profile selection (fast/balanced/deep with time estimates)
+- Detects Docker availability (zero-installation path!)
+- Auto-discovers repositories in directories
+- Configures threads and timeouts
+- Shows command preview before execution
+- Auto-opens results when complete
 
-**For automated workflows:**
+**Non-interactive mode for automation:**
+
 ```bash
 jmotools wizard --yes        # Use smart defaults
 jmotools wizard --docker     # Force Docker mode
@@ -38,44 +33,81 @@ jmotools wizard --docker     # Force Docker mode
 
 ---
 
-## Beginner mode: jmotools wrapper
+### Option 2: 🐳 Docker (Zero Installation)
 
-Already know what you want? Use the profile shortcuts:
+**Don't want to install 11+ security tools? Use Docker:**
+
+```bash
+# One-time pull
+docker pull ghcr.io/jimmy058910/jmo-security:latest
+
+# Scan current directory
+docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results /scan/results --profile balanced --human-logs
+
+# View results
+open results/summaries/dashboard.html  # macOS
+xdg-open results/summaries/dashboard.html  # Linux
+```
+
+**Three image variants:**
+- `:latest` (~500MB) - All 11+ scanners
+- `:slim` (~200MB) - Core 6 scanners for CI/CD
+- `:alpine` (~150MB) - Minimal footprint
+
+📖 **Complete Docker guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
+
+---
+
+### Option 3: 💻 CLI Wrapper Commands (Local Install)
+
+**Already have tools installed? Use the quick wrapper commands:**
 
 ```bash
 # Quick fast scan (auto-opens results)
-jmotools fast --repos-dir ~/security-testing
+jmotools fast --repos-dir ~/repos
 
-# Deep/full scan using the curated 'deep' profile
-jmotools full --repos-dir ~/security-testing
+# Balanced scan (recommended)
+jmotools balanced --repos-dir ~/repos
 
-# Clone from TSV first, then scan
-jmotools balanced --tsv ./candidates.tsv --dest ./repos-tsv
+# Deep scan with all tools
+jmotools full --repos-dir ~/repos
+
+# Clone from TSV and scan
+jmotools balanced --tsv ./repositories.tsv --dest ./cloned-repos
 ```
 
-Note: Provide any TSV with a `url` or `full_name` header.
-
-What it does for you:
-- Detects OS/WSL and verifies tools
-- Optionally clones from a TSV and writes `results/targets.tsv.txt`
-- Runs `jmo ci` with the selected profile
-- Opens `results/summaries/dashboard.html` and `SUMMARY.md` at the end
-
-### Bootstrap tools
+**Bootstrap tools:**
 
 ```bash
-jmotools setup --check
-jmotools setup --auto-install       # optional, Linux/WSL
+jmotools setup --check           # Verify installation
+jmotools setup --auto-install    # Auto-install (Linux/WSL/macOS)
 ```
 
-### Makefile shortcuts
+**Makefile shortcuts:**
 
 ```bash
-make setup                   # verify tools (installs package if needed)
-make fast DIR=~/repos        # run fast profile
-make balanced DIR=~/repos    # run balanced profile
-make full DIR=~/repos        # run deep profile
+make setup                   # Verify tools
+make fast DIR=~/repos        # Run fast profile
+make balanced DIR=~/repos    # Run balanced profile
+make full DIR=~/repos        # Run deep profile
 ```
+
+---
+
+## ✨ What's New (Phase 1 - October 2025)
+
+- 🧙 **Interactive Wizard** - Beginner-friendly guided scanning
+- 🐳 **Docker Images** - Zero-installation security scanning
+- 🔒 **XSS Patched** - HTML dashboard security hardened
+- 🛡️ **OSV Scanner** - Open-source vulnerability detection
+- 📊 **Enriched SARIF** - CWE/OWASP/CVE taxonomies
+- ⚙️ **Type-Safe Severity** - Cleaner code with enum
+- 🎯 **88% Coverage** - 100/100 tests passing
+
+See [CHANGELOG.md](CHANGELOG.md) for complete details.
+
+---
 
 ## Step 1: Verify environment
 

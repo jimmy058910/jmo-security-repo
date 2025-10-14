@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "description": "Up-to-date code documentation for libraries and frameworks"
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GH_TOKEN}"
+      },
+      "description": "GitHub API integration for repos, issues, PRs, and more"
+    },
+    "serena": {
+      "command": "npx",
+      "args": ["-y", "@oraios/serena-mcp"],
+      "description": "Semantic code analysis and editing via LSP"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"],
+      "description": "Chrome DevTools integration for browser automation and debugging"
+    }
+  }
+}
