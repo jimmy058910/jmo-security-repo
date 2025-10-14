@@ -27,10 +27,22 @@ RUN apk add --no-cache \
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel
 
+# Install build dependencies for Python packages that require compilation (rustworkx)
+# These will be removed after pip install to keep image size minimal
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    musl-dev \
+    python3-dev \
+    cargo \
+    rust
+
 # Install Python tools
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.94.0 \
     checkov==3.2.255
+
+# Remove build dependencies to reduce image size
+RUN apk del .build-deps
 
 ARG TARGETARCH
 

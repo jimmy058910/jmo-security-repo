@@ -113,8 +113,16 @@ jobs:
       - name: Test image
         if: matrix.platform == 'linux/amd64'
         run: |
-          docker run --rm ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }} --version
-          docker run --rm ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }} --help
+          # Load the image from build cache instead of pulling from registry
+          # The image may not have been pushed yet (e.g., workflow_dispatch with push_images=false)
+          IMAGE_ID=$(docker images -q | head -1)
+          if [ -z "$IMAGE_ID" ]; then
+            echo "No image found in local cache, attempting to pull..."
+            docker pull ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}
+            IMAGE_ID="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-${{ matrix.variant }}"
+          fi
+          docker run --rm $IMAGE_ID --version
+          docker run --rm $IMAGE_ID --help
 
   create-manifest:
     name: Create multi-arch manifest for ${{ matrix.variant }}
