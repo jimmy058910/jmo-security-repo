@@ -4,6 +4,30 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+## 0.4.1 (2025-10-14)
+
+**Patch Release: Docker Build Fixes**
+
+This release fixes two critical CI issues discovered in v0.4.0:
+
+**Bug Fixes:**
+
+1. **Docker tag mismatch** causing test failures:
+   - Fixed test step trying to pull `v0.4.0-full` when images were tagged as `0.4.0-full`
+   - Root cause: metadata-action strips 'v' prefix, but test logic didn't account for it
+   - Solution: Extract tag directly from metadata output
+
+2. **Actionlint deprecation warning**:
+   - Replaced deprecated `fail_on_error: true` with `fail_level: error`
+   - Resolves VSCode diagnostic warning in ci.yml
+
+**Technical Details:**
+- release.yml: Use `steps.meta.outputs.tags` for accurate Docker image testing
+- release.yml: Strip 'v' prefix in docker-scan job for tag consistency
+- ci.yml: Update reviewdog/action-actionlint parameters to current API
+
+No functional changes to tools, CLI, or outputs. Purely CI/CD infrastructure improvements.
+
 ## 0.4.0 (2025-10-14)
 
 **Major Release: Workflow Consolidation + Wizard + Docker**
