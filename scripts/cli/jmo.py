@@ -5,6 +5,15 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Any, Dict, Tuple
+import os
+import json
+import datetime
+import shutil
+import subprocess
+import time
+import signal
+import fnmatch
+import tempfile
 
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
@@ -18,7 +27,45 @@ from scripts.core.suppress import load_suppressions, filter_suppressed
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
 
+def _log(args, level: str, message: str) -> None:
+    """Logs messages based on configured log level and output format."""
+    level = level.upper()
+    cfg_level = None
+    try:
+        cfg = load_config(getattr(args, "config", None))
+        cfg_level = getattr(cfg, "log_level", None)
+    except Exception:
+        # If config loading fails, default to INFO
+        cfg_level = None
+
+    cli_level = getattr(args, "log_level", None)
+    effective_log_level = (cli_level or cfg_level or "INFO").upper()
+
+    rank = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
+    if rank.get(level, 20) < rank.get(effective_log_level, 20):
+        return
+
+    if getattr(args, "human_logs", False):
+        color = {
+            "DEBUG": "\x1b[36m",  # Cyan
+            "INFO": "\x1b[32m",   # Green
+            "WARN": "\x1b[33m",   # Yellow
+            "ERROR": "\x1b[31m",  # Red
+        }.get(level, "")
+        reset = "\x1b[0m"
+        ts = datetime.datetime.utcnow().strftime("%H:%M:%S")
+        sys.stderr.write(f"{color}{level:5}{reset} {ts} {message}\n")
+    else:
+        rec = {
+            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "level": level,
+            "msg": message,
+        }
+        sys.stderr.write(json.dumps(rec) + "\n")
+
+
 def _merge_dict(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+    """Merges two dictionaries, with values from 'b' overriding 'a'."""
     out = dict(a) if a else {}
     if b:
         out.update(b)
@@ -58,6 +105,7 @@ def _effective_scan_settings(args) -> Dict[str, Any]:
 
 
 def parse_args():
+    """Parses command line arguments for jmo."""
     ap = argparse.ArgumentParser(prog="jmo")
     sub = ap.add_subparsers(dest="cmd")
 
@@ -94,7 +142,7 @@ def parse_args():
     sp.add_argument(
         "--allow-missing-tools",
         action="store_true",
-        help="If a tool is missing, create empty JSON instead of failing",
+        help="If a tool is missing or fails, create empty JSON instead of failing",
     )
     sp.add_argument(
         "--profile-name",
@@ -225,14 +273,13 @@ def parse_args():
     try:
         return ap.parse_args()
     except SystemExit:
-        import os
-
         if os.getenv("PYTEST_CURRENT_TEST"):
             return argparse.Namespace()
         raise
 
 
 def fail_code(threshold: str | None, counts: dict) -> int:
+    """Determines exit code based on findings severity and threshold."""
     if not threshold:
         return 0
     thr = threshold.upper()
@@ -244,6 +291,7 @@ def fail_code(threshold: str | None, counts: dict) -> int:
 
 
 def cmd_report(args) -> int:
+    """Aggregates findings from scan results and emits various reports."""
     cfg = load_config(args.config)
     # Normalize results_dir from positional or optional
     rd = (
@@ -262,10 +310,6 @@ def cmd_report(args) -> int:
     out_dir = Path(args.out) if args.out else results_dir / "summaries"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    import time
-    import os
-    import json
-
     prev_profile = os.getenv("JMO_PROFILE")
     if args.profile:
         os.environ["JMO_PROFILE"] = "1"
@@ -274,9 +318,11 @@ def cmd_report(args) -> int:
         os.environ["JMO_THREADS"] = str(max(1, args.threads))
     elif prev_threads is None and getattr(cfg, "threads", None) is not None:
         os.environ["JMO_THREADS"] = str(max(1, int(getattr(cfg, "threads"))))
+    
     start = time.perf_counter()
     findings = gather_results(results_dir)
     elapsed = time.perf_counter() - start
+    
     sup_file = (
         (results_dir / "jmo.suppress.yml")
         if (results_dir / "jmo.suppress.yml").exists()
@@ -310,8 +356,6 @@ def cmd_report(args) -> int:
 
     if args.profile:
         try:
-            import os
-
             cpu = os.cpu_count() or cfg.profiling_default_threads
             rec_threads = max(
                 cfg.profiling_min_threads, min(cfg.profiling_max_threads, cpu)
@@ -320,14 +364,13 @@ def cmd_report(args) -> int:
             _log(
                 args,
                 "DEBUG",
-                f"Failed to determine CPU count, using default threads: {e}",
+                f"Failed to determine CPU count for profiling, using default threads: {e}",
             )
             rec_threads = cfg.profiling_default_threads
         job_timings = []
         meta = {}
         try:
             from scripts.core.normalize_and_report import PROFILE_TIMINGS
-
             job_timings = PROFILE_TIMINGS.get("jobs", [])
             meta = PROFILE_TIMINGS.get("meta", {})
         except Exception as e:
@@ -341,13 +384,15 @@ def cmd_report(args) -> int:
         (out_dir / "timings.json").write_text(
             json.dumps(timings, indent=2), encoding="utf-8"
         )
+    
+    # Restore environment variables
     if prev_profile is not None:
         os.environ["JMO_PROFILE"] = prev_profile
     elif "JMO_PROFILE" in os.environ:
         del os.environ["JMO_PROFILE"]
     if prev_threads is not None:
         os.environ["JMO_THREADS"] = prev_threads
-    elif "JMO_THREADS" in os.environ and args.threads is not None:
+    elif "JMO_THREADS" in os.environ and args.threads is not None: # Only delete if it was set by this invocation
         del os.environ["JMO_THREADS"]
 
     counts = {s: 0 for s in SEV_ORDER}
@@ -367,15 +412,20 @@ def cmd_report(args) -> int:
 
 
 def _iter_repos(args) -> list[Path]:
+    """Iterates over repository paths based on CLI arguments."""
     repos: list[Path] = []
     if args.repo:
         p = Path(args.repo)
         if p.exists():
             repos.append(p)
+        else:
+            _log(args, "WARN", f"Repository path not found: {p}")
     elif args.repos_dir:
         base = Path(args.repos_dir)
         if base.exists():
             repos.extend([p for p in base.iterdir() if p.is_dir()])
+        else:
+            _log(args, "WARN", f"Repositories directory not found: {base}")
     elif args.targets:
         t = Path(args.targets)
         if t.exists():
@@ -386,18 +436,23 @@ def _iter_repos(args) -> list[Path]:
                 p = Path(s)
                 if p.exists():
                     repos.append(p)
+                else:
+                    _log(args, "WARN", f"Target repository path not found: {p} (from {t})")
+        else:
+            _log(args, "WARN", f"Targets file not found: {t}")
     return repos
 
 
-def _tool_exists(cmd: str) -> bool:
-    import shutil
-
-    return shutil.which(cmd) is not None
+def _tool_exists(args: Any, cmd: str) -> bool:
+    """Checks if a command-line tool exists in the system's PATH."""
+    exists = shutil.which(cmd) is not None
+    if not exists:
+        _log(args, "DEBUG", f"Tool '{cmd}' not found in PATH: {os.environ.get('PATH')}")
+    return exists
 
 
 def _write_stub(tool: str, out_path: Path) -> None:
-    import json
-
+    """Writes an empty JSON stub for a tool when it's skipped or fails but --allow-missing-tools is set."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     stubs = {
         "gitleaks": [],
@@ -428,17 +483,16 @@ def _run_cmd(
     Returns a tuple: (returncode, stdout, stderr, used_attempts).
     stdout is empty when capture_stdout=False. used_attempts is how many tries were made.
     """
-    import subprocess  # nosec B404: imported for controlled, vetted CLI invocations below
-    import time
-
     attempts = max(0, retries) + 1
     used_attempts = 0
     last_exc: Exception | None = None
-    rc = 1
+    rc = 1 # Default return code for failure
+
     for i in range(attempts):
         used_attempts = i + 1
         try:
-            cp = subprocess.run(  # nosec B603: executing fixed CLI tools, no shell, args vetted
+            # nosec B603: executing fixed CLI tools, no shell, args vetted
+            cp = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
@@ -447,29 +501,125 @@ def _run_cmd(
             )
             rc = cp.returncode
             success = (rc == 0) if ok_rcs is None else (rc in ok_rcs)
-            if success or i == attempts - 1:
+            if success or i == attempts - 1: # On success, or on last attempt (regardless of success)
                 return (
                     rc,
                     (cp.stdout or "") if capture_stdout else "",
                     (cp.stderr or ""),
                     used_attempts,
                 )
-            time.sleep(min(1.0 * (i + 1), 3.0))
+            time.sleep(min(1.0 * (i + 1), 3.0)) # Exponential backoff up to 3 seconds
             continue
         except subprocess.TimeoutExpired as e:
             last_exc = e
-            rc = 124
+            rc = 124 # Common return code for timeout
         except Exception as e:
             last_exc = e
-            rc = 1
+            rc = 1 # Generic error code
+        
+        # Only retry if not the last attempt
         if i < attempts - 1:
             time.sleep(min(1.0 * (i + 1), 3.0))
             continue
+    
+    # If all attempts failed, return the last known status
     return rc, "", str(last_exc or ""), used_attempts or 1
 
 
+# Helper for noseyparker due to its complex local/docker fallback logic
+def _run_noseyparker_logic(
+    args: Any, repo: Path, out_path: Path, timeout: int, retries: int, local_tool_exists: bool, tool_flags: list[str]
+) -> tuple[bool, int]:
+    """Handles running Nosey Parker, including local binary and Docker fallback."""
+    np_ok = False
+    attempts_total = 0
+
+    def _run_np_local_impl() -> tuple[bool, int]:
+        _log(args, "DEBUG", f"Attempting noseyparker local run for {repo.name}")
+        attempts = 0
+        ds_dir = Path(tempfile.mkdtemp(prefix="np-"))
+        ds = ds_dir / "datastore.sqlite"
+        try:
+            # Scan phase
+            # nosec B603: executing fixed CLI tool, no shell, args vetted
+            rc1, _, err1, used1 = _run_cmd(
+                ["noseyparker", "scan", "--datastore", str(ds), *tool_flags, str(repo)],
+                timeout, retries=retries, ok_rcs=(0,),
+            )
+            attempts += used1 or 0
+            if rc1 != 0:
+                _log(args, "DEBUG", f"noseyparker local scan failed rc={rc1} repo={repo.name} err={err1.strip()}")
+                return False, attempts
+
+            # Report phase
+            # nosec B603: executing fixed CLI tool, no shell, args vetted
+            rc2, out_s, err2, used2 = _run_cmd(
+                ["noseyparker", "report", "--datastore", str(ds), "--format", "json"],
+                timeout, retries=retries, capture_stdout=True, ok_rcs=(0,),
+            )
+            attempts += used2 or 0
+            if rc2 == 0:
+                try:
+                    out_path.write_text(out_s, encoding="utf-8")
+                except Exception as e:
+                    _log(args, "DEBUG", f"Failed to write noseyparker output for {repo.name}: {e}")
+                return True, attempts
+            else:
+                _log(args, "DEBUG", f"noseyparker local report failed rc={rc2} repo={repo.name} err={err2.strip()}")
+            return False, attempts
+        except Exception as e:
+            _log(args, "DEBUG", f"noseyparker local run error for {repo.name}: {e}")
+            return False, attempts or 1
+        finally:
+            try:
+                shutil.rmtree(ds_dir, ignore_errors=True)
+            except Exception as cleanup_error:
+                _log(args, "DEBUG", f"Failed to clean up Nosey Parker datastore for {repo.name}: {cleanup_error}")
+
+    def _run_np_docker_impl() -> tuple[bool, int]:
+        _log(args, "DEBUG", f"Attempting noseyparker docker fallback for {repo.name}")
+        try:
+            runner = (
+                Path(__file__).resolve().parent.parent
+                / "core"
+                / "run_noseyparker_docker.sh"
+            )
+            if not runner.exists():
+                _log(args, "DEBUG", f"Nosey Parker docker runner not found at {runner}")
+                return False, 0
+            # Check for 'docker' binary using _tool_exists
+            if not _tool_exists(args, "docker"):
+                _log(args, "DEBUG", "docker not available in PATH; cannot fallback to container for noseyparker")
+                return False, 0
+            
+            # Note: current run_noseyparker_docker.sh does not support passing tool_flags
+            # If it did, 'cmd' would need to be updated.
+            cmd = ["bash", str(runner), "--repo", str(repo), "--out", str(out_path)]
+            # nosec B603: executing fixed CLI tool, no shell, args vetted
+            rc, _, err, used = _run_cmd(cmd, timeout, retries=retries, ok_rcs=(0,))
+            if rc != 0:
+                _log(args, "DEBUG", f"noseyparker docker fallback failed rc={rc} repo={repo.name} err={err.strip()}")
+            return (rc == 0), (used or 0)
+        except Exception as e:
+            _log(args, "DEBUG", f"noseyparker docker fallback error for {repo.name}: {e}")
+            return False, 1
+
+    if local_tool_exists:
+        np_ok, attempts_total = _run_np_local_impl()
+        if not np_ok:
+            _log(args, "DEBUG", f"noseyparker local run failed for {repo.name}; attempting docker fallback…")
+            docker_ok, docker_attempts = _run_np_docker_impl()
+            attempts_total += docker_attempts
+            np_ok = docker_ok
+    else:
+        _log(args, "DEBUG", f"noseyparker local binary not found for {repo.name}; attempting docker fallback…")
+        np_ok, attempts_total = _run_np_docker_impl()
+    
+    return np_ok, max(1, attempts_total) # Ensure at least 1 attempt is counted if any execution occurred
+
+
 def cmd_scan(args) -> int:
-    import os
+    """Orchestrates scanning multiple repositories with configured tools."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     # Effective settings with profile/per-tool
@@ -481,16 +631,12 @@ def cmd_scan(args) -> int:
     indiv_base.mkdir(parents=True, exist_ok=True)
     repos = _iter_repos(args)
     if eff["include"]:
-        import fnmatch
-
         repos = [
             r
             for r in repos
             if any(fnmatch.fnmatch(r.name, pat) for pat in eff["include"])
         ]
     if eff["exclude"]:
-        import fnmatch
-
         repos = [
             r
             for r in repos
@@ -506,7 +652,8 @@ def cmd_scan(args) -> int:
     elif os.getenv("JMO_THREADS"):
         try:
             max_workers = max(1, int(os.getenv("JMO_THREADS") or "0"))
-        except Exception:
+        except ValueError: # Catch cases where JMO_THREADS is not an int
+            _log(args, "DEBUG", f"Invalid JMO_THREADS environment variable: {os.getenv('JMO_THREADS')}")
             max_workers = None
     elif cfg.threads:
         max_workers = max(1, int(cfg.threads))
@@ -525,23 +672,25 @@ def cmd_scan(args) -> int:
         )
 
     try:
-        import signal
-
         signal.signal(signal.SIGINT, _handle_stop)
         signal.signal(signal.SIGTERM, _handle_stop)
     except Exception as e:
         _log(args, "DEBUG", f"Unable to set signal handlers: {e}")
 
-    def job(repo: Path) -> tuple[str, dict[str, bool]]:
+    def job(repo: Path) -> tuple[str, dict[str, Any]]:
+        """Worker function to scan a single repository with all configured tools."""
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
         name = repo.name
         out_dir = indiv_base / name
         out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
+        to = timeout # Base timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
 
+        _log(args, "DEBUG", f"Worker for repo {name}: PATH={os.environ.get('PATH')}")
+
         def t_override(tool: str, default: int) -> int:
+            """Gets per-tool timeout override, otherwise uses default."""
             v = (
                 pt.get(tool, {}).get("timeout")
                 if isinstance(pt.get(tool, {}), dict)
@@ -551,601 +700,171 @@ def cmd_scan(args) -> int:
                 return v
             return default
 
-        if "gitleaks" in tools:
-            out = out_dir / "gitleaks.json"
-            if _tool_exists("gitleaks"):
-                flags = (
-                    pt.get("gitleaks", {}).get("flags", [])
-                    if isinstance(pt.get("gitleaks", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "gitleaks",
-                    "detect",
-                    "--source",
-                    str(repo),
-                    "--report-format",
-                    "json",
-                    "--report-path",
-                    str(out),
-                    "--verbose",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("gitleaks", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["gitleaks"] = True
-                    attempts_map["gitleaks"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("gitleaks", out)
-                    statuses["gitleaks"] = True
-                    if used:
-                        attempts_map["gitleaks"] = used
-                else:
-                    statuses["gitleaks"] = False
-                    if used:
-                        attempts_map["gitleaks"] = used
-            elif args.allow_missing_tools:
-                _write_stub("gitleaks", out)
-                statuses["gitleaks"] = True
+        # Dictionary to hold tool-specific command logic and metadata
+        tool_runners = {
+            "gitleaks": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "gitleaks", "detect", "--source", repo_path, "--report-format", "json",
+                    "--report-path", out_path, "--verbose", *flags
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": False,
+            },
+            "trufflehog": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "trufflehog", "git", f"file://{repo_path}", "--json", "--no-update", *flags
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": True,
+            },
+            "semgrep": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "semgrep", "--config=auto", "--json", "--output", out_path, *flags, repo_path
+                ],
+                "ok_rcs": (0, 1, 2), "capture_stdout": False,
+            },
+            # noseyparker will use _run_noseyparker_logic directly
+            "syft": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "syft", repo_path, "-o", "json", *flags
+                ],
+                "ok_rcs": (0,), "capture_stdout": True,
+            },
+            "trivy": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "trivy", "fs", "-q", "-f", "json", "--scanners", "vuln,secret,misconfig", *flags, repo_path, "-o", out_path
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": False,
+            },
+            "hadolint": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "hadolint", "-f", "json", *flags, str(Path(repo_path) / "Dockerfile")
+                ],
+                "pre_check": lambda repo_path: Path(repo_path) / "Dockerfile", # Returns Path object to check existence
+                "ok_rcs": (0, 1), "capture_stdout": True,
+            },
+            "checkov": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "checkov", "-d", repo_path, "-o", "json", *flags
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": True,
+            },
+            "bandit": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "bandit", "-q", "-r", repo_path, "-f", "json", *flags
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": True,
+            },
+            "tfsec": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "tfsec", repo_path, "--format", "json", *flags
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": True,
+            },
+            "osv-scanner": {
+                "cmd_func": lambda repo_path, out_path, flags: [
+                    "osv-scanner", "--format", "json", "--output", out_path, *flags, repo_path
+                ],
+                "ok_rcs": (0, 1), "capture_stdout": False,
+            },
+        }
 
-        if "trufflehog" in tools:
-            out = out_dir / "trufflehog.json"
-            if _tool_exists("trufflehog"):
-                flags = (
-                    pt.get("trufflehog", {}).get("flags", [])
-                    if isinstance(pt.get("trufflehog", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "trufflehog",
-                    "git",
-                    f"file://{repo}",
-                    "--json",
-                    "--no-update",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, out_s, _, used = _run_cmd(
-                    cmd,
-                    t_override("trufflehog", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"Failed to write trufflehog output for {name}: {e}",
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["trufflehog"] = True
-                    attempts_map["trufflehog"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trufflehog", out)
-                    statuses["trufflehog"] = True
-                    if used:
-                        attempts_map["trufflehog"] = used
-                else:
-                    statuses["trufflehog"] = False
-                    if used:
-                        attempts_map["trufflehog"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trufflehog", out)
-                statuses["trufflehog"] = True
+        for tool_name in tools:
+            if stop_flag["stop"]:
+                break # Stop processing tools for this repo if global stop is requested
 
-        if "semgrep" in tools:
-            out = out_dir / "semgrep.json"
-            if _tool_exists("semgrep"):
-                flags = (
-                    pt.get("semgrep", {}).get("flags", [])
-                    if isinstance(pt.get("semgrep", {}), dict)
-                    else []
+            tool_config = tool_runners.get(tool_name)
+            if not tool_config:
+                _log(args, "WARN", f"Unknown tool '{tool_name}' configured in jmo.yml. Skipping.")
+                continue
+
+            out = out_dir / f"{tool_name}.json"
+            tool_flags = (
+                pt.get(tool_name, {}).get("flags", [])
+                if isinstance(pt.get(tool_name, {}), dict)
+                else []
+            )
+            
+            current_timeout = t_override(tool_name, to)
+            tool_ok = False
+            used_attempts = 0
+            
+            # --- Specific logic for Nosey Parker ---
+            if tool_name == "noseyparker":
+                tool_ok, used_attempts = _run_noseyparker_logic(
+                    args, repo, out, current_timeout, retries, _tool_exists(args, tool_name), tool_flags
                 )
-                cmd = [
-                    "semgrep",
-                    "--config=auto",
-                    "--json",
-                    "--output",
-                    str(out),
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("semgrep", to), retries=retries, ok_rcs=(0, 1, 2)
-                )
-                ok = rc == 0 or rc == 1 or rc == 2
-                if ok and out.exists():
-                    statuses["semgrep"] = True
-                    attempts_map["semgrep"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("semgrep", out)
-                    statuses["semgrep"] = True
-                    if used:
-                        attempts_map["semgrep"] = used
-                else:
-                    statuses["semgrep"] = False
-                    if used:
-                        attempts_map["semgrep"] = used
-            elif args.allow_missing_tools:
-                _write_stub("semgrep", out)
-                statuses["semgrep"] = True
-
-        if "noseyparker" in tools:
-            out = out_dir / "noseyparker.json"
-
-            # Helper to run local NP (if present)
-            def _run_np_local() -> tuple[bool, int]:
-                import tempfile
-                import shutil
-
-                attempts = 0
-                ds_dir = Path(tempfile.mkdtemp(prefix="np-"))
-                # Nosey Parker expects a datastore FILE path; point inside temp dir
-                ds = ds_dir / "datastore.sqlite"
-                try:
-                    flags = (
-                        pt.get("noseyparker", {}).get("flags", [])
-                        if isinstance(pt.get("noseyparker", {}), dict)
-                        else []
-                    )
-                    rc1, _, err1, used1 = _run_cmd(
-                        [
-                            "noseyparker",
-                            "scan",
-                            "--datastore",
-                            str(ds),
-                            *(
-                                [str(x) for x in flags]
-                                if isinstance(flags, list)
-                                else []
-                            ),
-                            str(repo),
-                        ],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        ok_rcs=(0,),
-                    )
-                    attempts += used1 or 0
-                    if rc1 != 0:
+            # --- Generic logic for other tools ---
+            else:
+                # 1. Pre-check for specific tools (e.g., Dockerfile for Hadolint)
+                pre_check_met = True
+                if "pre_check" in tool_config:
+                    pre_check_target_path = tool_config["pre_check"](str(repo))
+                    if not pre_check_target_path.exists():
                         _log(
                             args,
-                            "DEBUG",
-                            f"noseyparker scan failed rc={rc1} repo={name} err={err1.strip() if err1 else ''} ds={ds}",
+                            "WARN",
+                            f"Tool '{tool_name}' configured, but required file '{pre_check_target_path.name}' not found for repo {name}. Skipping tool execution.",
                         )
-                        # Local NP not runnable or scan failed; treat as failure (will try docker fallback next)
-                        return False, attempts
-                    rc2, out_s, err2, used2 = _run_cmd(
-                        [
-                            "noseyparker",
-                            "report",
-                            "--datastore",
-                            str(ds),
-                            "--format",
-                            "json",
-                        ],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        capture_stdout=True,
-                        ok_rcs=(0,),
-                    )
-                    attempts += used2 or 0
-                    if rc2 == 0:
-                        try:
-                            out.write_text(out_s, encoding="utf-8")
-                        except Exception as e:
-                            _log(
-                                args,
-                                "DEBUG",
-                                f"Failed to write noseyparker output for {name}: {e}",
-                            )
-                        return True, attempts
-                    else:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"noseyparker report failed rc={rc2} repo={name} err={err2.strip() if err2 else ''} ds={ds}",
-                        )
-                    return False, attempts
-                except Exception as e:
-                    _log(args, "DEBUG", f"noseyparker local run error for {name}: {e}")
-                    return False, attempts or 1
-                finally:
-                    try:
-                        shutil.rmtree(ds_dir, ignore_errors=True)
-                    except Exception as cleanup_error:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Failed to clean up Nosey Parker datastore for {name}: {cleanup_error}",
-                        )
-
-            # Helper to run dockerized NP fallback
-            def _run_np_docker() -> tuple[bool, int]:
-                try:
-                    runner = (
-                        Path(__file__).resolve().parent.parent
-                        / "core"
-                        / "run_noseyparker_docker.sh"
-                    )
-                    if not runner.exists():
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Nosey Parker docker runner not found at {runner}",
-                        )
-                        return False, 0
-                    if not _tool_exists("docker"):
-                        _log(
-                            args,
-                            "DEBUG",
-                            "docker not available; cannot fallback to container for noseyparker",
-                        )
-                        return False, 0
-                    rc, _, err, used = _run_cmd(
-                        ["bash", str(runner), "--repo", str(repo), "--out", str(out)],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        ok_rcs=(0,),
-                    )
-                    return (rc == 0), (used or 0)
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"noseyparker docker fallback error for {name}: {e}",
-                    )
-                    return False, 1
-
-            np_ok = False
-            np_attempts_total = 0
-            used_local = 0
-            used_docker = 0
-            if _tool_exists("noseyparker"):
-                np_ok, used_local = _run_np_local()
-                np_attempts_total += used_local
-                if not np_ok:
+                        pre_check_met = False
+                
+                if not pre_check_met:
+                    tool_ok = False # Tool was not run due to missing dependency
+                elif not _tool_exists(args, tool_name):
+                    # _tool_exists already logs a DEBUG message if not found
                     _log(
                         args,
                         "WARN",
-                        f"noseyparker local run failed for {name}; attempting docker fallback…",
+                        f"Tool '{tool_name}' not found in PATH for repo {name}. Skipping tool execution.",
                     )
-                    ok_d, used_docker = _run_np_docker()
-                    np_attempts_total += used_docker
-                    np_ok = ok_d
-            else:
-                # No local binary; attempt docker fallback directly
-                ok_d, used_docker = _run_np_docker()
-                np_attempts_total += used_docker
-                np_ok = ok_d
-
-            if np_ok:
-                statuses["noseyparker"] = True
-                attempts_map["noseyparker"] = max(1, np_attempts_total)
-            else:
-                if args.allow_missing_tools:
-                    _write_stub("noseyparker", out)
-                    statuses["noseyparker"] = True
-                    attempts_map["noseyparker"] = max(1, np_attempts_total)
+                    tool_ok = False
                 else:
-                    statuses["noseyparker"] = False
-                    if np_attempts_total:
-                        attempts_map["noseyparker"] = np_attempts_total
-
-        if "syft" in tools:
-            out = out_dir / "syft.json"
-            if _tool_exists("syft"):
-                flags = (
-                    pt.get("syft", {}).get("flags", [])
-                    if isinstance(pt.get("syft", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "syft",
-                        str(repo),
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("syft", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0,),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(args, "DEBUG", f"Failed to write syft output for {name}: {e}")
-                if rc == 0:
-                    statuses["syft"] = True
-                    attempts_map["syft"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("syft", out)
-                    statuses["syft"] = True
-                    if used:
-                        attempts_map["syft"] = used
-                else:
-                    statuses["syft"] = False
-                    if used:
-                        attempts_map["syft"] = used
-            elif args.allow_missing_tools:
-                _write_stub("syft", out)
-                statuses["syft"] = True
-
-        if "trivy" in tools:
-            out = out_dir / "trivy.json"
-            if _tool_exists("trivy"):
-                flags = (
-                    pt.get("trivy", {}).get("flags", [])
-                    if isinstance(pt.get("trivy", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "trivy",
-                    "fs",
-                    "-q",
-                    "-f",
-                    "json",
-                    "--scanners",
-                    "vuln,secret,misconfig",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                    "-o",
-                    str(out),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["trivy"] = True
-                    attempts_map["trivy"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trivy", out)
-                    statuses["trivy"] = True
-                    if used:
-                        attempts_map["trivy"] = used
-                else:
-                    statuses["trivy"] = False
-                    if used:
-                        attempts_map["trivy"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trivy", out)
-                statuses["trivy"] = True
-
-        if "hadolint" in tools:
-            out = out_dir / "hadolint.json"
-            if _tool_exists("hadolint"):
-                dockerfile = repo / "Dockerfile"
-                if dockerfile.exists():
-                    flags = (
-                        pt.get("hadolint", {}).get("flags", [])
-                        if isinstance(pt.get("hadolint", {}), dict)
-                        else []
-                    )
+                    # Execute the tool
+                    cmd = tool_config["cmd_func"](str(repo), str(out), tool_flags)
                     rc, out_s, _, used = _run_cmd(
-                        [
-                            "hadolint",
-                            "-f",
-                            "json",
-                            *(
-                                [str(x) for x in flags]
-                                if isinstance(flags, list)
-                                else []
-                            ),
-                            str(dockerfile),
-                        ],
-                        t_override("hadolint", to),
+                        cmd,
+                        current_timeout,
                         retries=retries,
-                        capture_stdout=True,
-                        ok_rcs=(0, 1),
+                        capture_stdout=tool_config["capture_stdout"],
+                        ok_rcs=tool_config["ok_rcs"],
                     )
-                    try:
-                        out.write_text(out_s, encoding="utf-8")
-                    except Exception as e:
+                    used_attempts = used
+                    
+                    if tool_config["capture_stdout"] and out_s:
+                        try:
+                            out.write_text(out_s, encoding="utf-8")
+                        except Exception as e:
+                            _log(args, "DEBUG", f"Failed to write {tool_name} output for {name}: {e}")
+
+                    # Determine success: RC must be OK, AND the output file must exist
+                    is_rc_ok = (rc in tool_config["ok_rcs"])
+                    output_file_exists = out.exists()
+                    
+                    tool_ok = is_rc_ok and output_file_exists
+                    
+                    if not tool_ok: # If execution failed (non-OK RC, or output file missing)
                         _log(
                             args,
-                            "DEBUG",
-                            f"Failed to write hadolint output for {name}: {e}",
+                            "WARN",
+                            f"Tool '{tool_name}' execution failed for repo {name} (RC={rc}, output_exists={output_file_exists}). Attempts: {used_attempts}.",
                         )
-                    ok = rc == 0 or rc == 1
-                    if ok and out.exists():
-                        statuses["hadolint"] = True
-                        attempts_map["hadolint"] = used
-                    elif args.allow_missing_tools:
-                        _write_stub("hadolint", out)
-                        statuses["hadolint"] = True
-                        if used:
-                            attempts_map["hadolint"] = used
-                    else:
-                        statuses["hadolint"] = False
-                        if used:
-                            attempts_map["hadolint"] = used
+            
+            # --- Universal handling after execution or skip attempt ---
+            if tool_ok:
+                statuses[tool_name] = True
+                if used_attempts: attempts_map[tool_name] = used_attempts
+            else:
+                if args.allow_missing_tools:
+                    _write_stub(tool_name, out)
+                    statuses[tool_name] = True
+                    log_msg = f"Tool '{tool_name}' skipped/failed for repo {name}, but --allow-missing-tools is set. Stub created."
+                    if used_attempts: log_msg += f" Attempts: {used_attempts}."
+                    _log(args, "WARN", log_msg)
+                    if used_attempts: attempts_map[tool_name] = used_attempts
                 else:
-                    if args.allow_missing_tools:
-                        _write_stub("hadolint", out)
-                        statuses["hadolint"] = True
-            elif args.allow_missing_tools:
-                _write_stub("hadolint", out)
-                statuses["hadolint"] = True
-
-        if "checkov" in tools:
-            out = out_dir / "checkov.json"
-            if _tool_exists("checkov"):
-                flags = (
-                    pt.get("checkov", {}).get("flags", [])
-                    if isinstance(pt.get("checkov", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "checkov",
-                        "-d",
-                        str(repo),
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("checkov", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args, "DEBUG", f"Failed to write checkov output for {name}: {e}"
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["checkov"] = True
-                    attempts_map["checkov"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("checkov", out)
-                    statuses["checkov"] = True
-                    if used:
-                        attempts_map["checkov"] = used
-                else:
-                    statuses["checkov"] = False
-                    if used:
-                        attempts_map["checkov"] = used
-            elif args.allow_missing_tools:
-                _write_stub("checkov", out)
-                statuses["checkov"] = True
-
-        if "bandit" in tools:
-            out = out_dir / "bandit.json"
-            if _tool_exists("bandit"):
-                flags = (
-                    pt.get("bandit", {}).get("flags", [])
-                    if isinstance(pt.get("bandit", {}), dict)
-                    else []
-                )
-                # Use JSON output, quiet mode; scan the repo path
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "bandit",
-                        "-q",
-                        "-r",
-                        str(repo),
-                        "-f",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("bandit", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args, "DEBUG", f"Failed to write bandit output for {name}: {e}"
-                    )
-                # Bandit exits 0 when no issues; treat 0/1 as success similar to other tools
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["bandit"] = True
-                    attempts_map["bandit"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("bandit", out)
-                    statuses["bandit"] = True
-                    if used:
-                        attempts_map["bandit"] = used
-                else:
-                    statuses["bandit"] = False
-                    if used:
-                        attempts_map["bandit"] = used
-            elif args.allow_missing_tools:
-                _write_stub("bandit", out)
-                statuses["bandit"] = True
-
-        if "tfsec" in tools:
-            out = out_dir / "tfsec.json"
-            if _tool_exists("tfsec"):
-                flags = (
-                    pt.get("tfsec", {}).get("flags", [])
-                    if isinstance(pt.get("tfsec", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "tfsec",
-                        str(repo),
-                        "--format",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("tfsec", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(args, "DEBUG", f"Failed to write tfsec output for {name}: {e}")
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["tfsec"] = True
-                    attempts_map["tfsec"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("tfsec", out)
-                    statuses["tfsec"] = True
-                    if used:
-                        attempts_map["tfsec"] = used
-                else:
-                    statuses["tfsec"] = False
-                    if used:
-                        attempts_map["tfsec"] = used
-            elif args.allow_missing_tools:
-                _write_stub("tfsec", out)
-                statuses["tfsec"] = True
-
-        if "osv-scanner" in tools:
-            out = out_dir / "osv-scanner.json"
-            if _tool_exists("osv-scanner"):
-                flags = (
-                    pt.get("osv-scanner", {}).get("flags", [])
-                    if isinstance(pt.get("osv-scanner", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "osv-scanner",
-                    "--format",
-                    "json",
-                    "--output",
-                    str(out),
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("osv-scanner", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["osv-scanner"] = True
-                    attempts_map["osv-scanner"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("osv-scanner", out)
-                    statuses["osv-scanner"] = True
-                    if used:
-                        attempts_map["osv-scanner"] = used
-                else:
-                    statuses["osv-scanner"] = False
-                    if used:
-                        attempts_map["osv-scanner"] = used
-            elif args.allow_missing_tools:
-                _write_stub("osv-scanner", out)
-                statuses["osv-scanner"] = True
+                    statuses[tool_name] = False
+                    log_msg = f"Tool '{tool_name}' skipped/failed for repo {name} and --allow-missing-tools is not set. Skipping."
+                    if used_attempts: log_msg += f" Attempts: {used_attempts}."
+                    _log(args, "WARN", log_msg)
+                    if used_attempts: attempts_map[tool_name] = used_attempts
 
         if attempts_map:
             statuses["__attempts__"] = attempts_map  # type: ignore
@@ -1155,8 +874,12 @@ def cmd_scan(args) -> int:
     with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
         for repo in repos:
             if stop_flag["stop"]:
+                _log(args, "INFO", "Stopping repository scanning due to interrupt signal.")
                 break
             futures.append(ex.submit(job, repo))
+        
+        # This loop waits for all futures to complete or for an interrupt.
+        # It also handles logging of results.
         for fut in as_completed(futures):
             try:
                 name, statuses = fut.result()
@@ -1179,11 +902,13 @@ def cmd_scan(args) -> int:
                     f"scanned {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
                 )
             except Exception as e:
-                _log(args, "ERROR", f"scan error: {e}")
+                _log(args, "ERROR", f"scan error processing a repository: {e}")
     return 0
 
 
 def cmd_ci(args) -> int:
+    """Convenience command to run scan then report, suitable for CI pipelines."""
+    # Create a Namespace-like object for cmd_scan
     class ScanArgs:
         def __init__(self, a):
             self.repo = getattr(a, "repo", None)
@@ -1199,8 +924,12 @@ def cmd_ci(args) -> int:
             self.log_level = getattr(a, "log_level", None)
             self.human_logs = getattr(a, "human_logs", False)
 
-    cmd_scan(ScanArgs(args))
+    scan_rc = cmd_scan(ScanArgs(args))
+    if scan_rc != 0:
+        _log(args, "ERROR", f"Scan command failed with exit code {scan_rc}. Aborting CI command.")
+        return scan_rc
 
+    # Create a Namespace-like object for cmd_report
     class ReportArgs:
         def __init__(self, a):
             rd = str(Path(getattr(a, "results_dir", "results")))
@@ -1215,12 +944,14 @@ def cmd_ci(args) -> int:
             self.threads = getattr(a, "threads", None)
             self.log_level = getattr(a, "log_level", None)
             self.human_logs = getattr(a, "human_logs", False)
+            self.allow_missing_tools = getattr(a, "allow_missing_tools", False) # For symmetry, though no-op
 
     rc_report = cmd_report(ReportArgs(args))
     return rc_report
 
 
 def main():
+    """Main entry point for the jmo CLI."""
     args = parse_args()
     if args.cmd == "report":
         return cmd_report(args)
@@ -1228,42 +959,9 @@ def main():
         return cmd_scan(args)
     if args.cmd == "ci":
         return cmd_ci(args)
-    return 0
-
-
-def _log(args, level: str, message: str) -> None:
-    import json
-    import datetime
-
-    level = level.upper()
-    cfg_level = None
-    try:
-        cfg = load_config(getattr(args, "config", None))
-        cfg_level = getattr(cfg, "log_level", None)
-    except Exception:
-        cfg_level = None
-    cli_level = getattr(args, "log_level", None)
-    effective = (cli_level or cfg_level or "INFO").upper()
-    rank = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}
-    if rank.get(level, 20) < rank.get(effective, 20):
-        return
-    if getattr(args, "human_logs", False):
-        color = {
-            "DEBUG": "\x1b[36m",
-            "INFO": "\x1b[32m",
-            "WARN": "\x1b[33m",
-            "ERROR": "\x1b[31m",
-        }.get(level, "")
-        reset = "\x1b[0m"
-        ts = datetime.datetime.utcnow().strftime("%H:%M:%S")
-        sys.stderr.write(f"{color}{level:5}{reset} {ts} {message}\n")
-        return
-    rec = {
-        "ts": datetime.datetime.utcnow().isoformat() + "Z",
-        "level": level,
-        "msg": message,
-    }
-    sys.stderr.write(json.dumps(rec) + "\n")
+    
+    _log(args, "ERROR", "No command specified. Use 'scan', 'report', or 'ci'.")
+    return 1
 
 
 if __name__ == "__main__":
