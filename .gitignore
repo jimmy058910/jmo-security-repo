@@ -70,4 +70,6 @@ docs/VERSION_TAG.md
 
 # MCP configuration with sensitive tokens (keep .mcp.json.example in repo)
 .mcp.json
-.claude/mcp.json
+
+# Claude Code user-specific configuration (open-source project)
+.claude/
