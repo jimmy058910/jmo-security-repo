@@ -250,12 +250,158 @@ jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 - Markdown (human-readable tables)
 - HTML (interactive dashboard with filters)
 
+**Implementation Phases:**
+
+### Phase 1: Core Diff Engine (Week 1)
+
+**Scope:** Foundation for fingerprint-based comparison
+
+**Tasks:**
+
+1. Add `diff` subcommand to `scripts/cli/jmo.py`
+   - CLI arguments: `--baseline`, `--compare`, `--output`, `--format`
+   - Support single comparison and multi-baseline modes
+2. Create `scripts/core/diff_engine.py`:
+   - `load_findings(results_dir)` - Reuse `gather_results()` logic
+   - `compare_findings(baseline, compare)` - Match by fingerprint ID
+   - Classification logic: `new`, `resolved`, `unchanged`, `modified`
+   - Handle edge cases: missing directories, empty scans
+3. Support baseline comparison (multiple directories for trend analysis)
+4. Core data structures:
+   ```python
+   DiffResult = {
+       "new": List[Finding],       # In compare, not in baseline
+       "resolved": List[Finding],  # In baseline, not in compare
+       "unchanged": List[Finding], # Same fingerprint, same severity
+       "modified": List[Finding]   # Same fingerprint, changed severity/details
+   }
+   ```
+
 **Deliverables:**
 
-- `jmo diff` command
-- Fingerprint-based matching algorithm
-- JSON/MD/HTML reporters
-- GitHub Actions integration (comment on PRs)
+- ✅ `jmo diff` CLI command
+- ✅ Fingerprint matching algorithm
+- ✅ Classification engine
+- ✅ Unit tests for diff logic
+
+**Estimated Effort:** 5-6 days
+
+---
+
+### Phase 2: Diff Reporters (Week 2)
+
+**Scope:** Human and machine-readable output formats
+
+**Tasks:**
+
+1. Create `scripts/core/reporters/diff_reporter.py`:
+   - `write_diff_json(diff_result, output_path)` - Machine-readable
+   - `write_diff_markdown(diff_result, output_path)` - Human-readable tables
+   - `write_diff_html(diff_result, output_path)` - Interactive dashboard
+2. JSON format:
+   ```json
+   {
+     "summary": {
+       "new": 3, "resolved": 1, "unchanged": 10, "modified": 0,
+       "baseline_dir": "main-results/", "compare_dir": "pr-results/"
+     },
+     "by_severity": {
+       "CRITICAL": {"new": 1, "resolved": 0},
+       "HIGH": {"new": 2, "resolved": 1}
+     },
+     "findings": {
+       "new": [...], "resolved": [...], "unchanged": [...], "modified": [...]
+     }
+   }
+   ```
+3. Markdown format:
+   - Summary table with counts
+   - Detailed tables by status (new/resolved/modified)
+   - Grouped by severity within each section
+4. HTML dashboard:
+   - Interactive filters (severity, status, tool)
+   - Sortable tables
+   - Diff visualization (red for new, green for resolved)
+   - Reuse existing `html_reporter.py` patterns
+
+**Deliverables:**
+
+- ✅ Three output formats (JSON/MD/HTML)
+- ✅ Summary statistics
+- ✅ Severity-based grouping
+- ✅ Tests for each reporter
+
+**Estimated Effort:** 5-6 days
+
+---
+
+### Phase 3: CI Integration & Documentation (Week 3)
+
+**Scope:** GitHub Actions integration and production readiness
+
+**Tasks:**
+
+1. GitHub Actions workflow examples:
+   - `docs/examples/pr-diff-workflow.yml` - PR comment integration
+   - `docs/examples/trend-monitoring-workflow.yml` - Nightly trend analysis
+2. PR comment formatter:
+   - Markdown summary for GitHub comments
+   - Collapsible sections for detailed findings
+   - Badge-style severity indicators
+3. Example workflow:
+   ```yaml
+   - name: Run baseline scan
+     run: jmo scan --repo . --results baseline-results/
+
+   - name: Run PR scan
+     run: jmo scan --repo . --results pr-results/
+
+   - name: Generate diff
+     run: jmo diff baseline-results/ pr-results/ --format md --output pr-diff.md
+
+   - name: Comment on PR
+     uses: actions/github-script@v7
+     with:
+       script: |
+         const fs = require('fs');
+         const diff = fs.readFileSync('pr-diff.md', 'utf8');
+         github.rest.issues.createComment({
+           issue_number: context.issue.number,
+           body: diff
+         });
+   ```
+4. Documentation:
+   - Update `README.md` with diff examples
+   - Add `docs/DIFF_GUIDE.md` with use cases
+   - Update `docs/USER_GUIDE.md` with diff command reference
+   - Add examples to `SAMPLE_OUTPUTS.md`
+
+**Deliverables:**
+
+- ✅ GitHub Actions workflow examples
+- ✅ PR comment integration pattern
+- ✅ Comprehensive documentation
+- ✅ End-to-end integration tests
+
+**Estimated Effort:** 4-5 days
+
+---
+
+**Total Effort:** 2-3 weeks (14-17 days)
+
+**Dependencies:**
+
+- Existing fingerprinting in `common_finding.py`
+- Reporter infrastructure in `scripts/core/reporters/`
+- `gather_results()` in `normalize_and_report.py`
+
+**Success Criteria:**
+
+- Diff accurately identifies new/resolved findings
+- All three output formats work correctly
+- GitHub Actions example posts PR comments successfully
+- Documentation covers all use cases
+- Test coverage ≥85% for new code
 
 ---
 
