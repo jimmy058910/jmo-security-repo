@@ -21,11 +21,34 @@
   - See: [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md) and [docs/WIZARD_IMPLEMENTATION.md](docs/WIZARD_IMPLEMENTATION.md)
 - Current Status: 140 tests passing, 88% coverage, production-ready
 
+**Active Migration:**
+
+- **tfsec → Trivy IaC Scanning** ([#41](https://github.com/jimmy058910/jmo-security-repo/issues/41))
+  - tfsec is deprecated (archived by Aqua Security)
+  - Migration to Trivy's IaC scanning capabilities
+  - See issue for implementation plan and timeline
+
 ---
 
 ## Implementation Order
 
 Items are ordered by optimal implementation priority based on user value, dependencies, and logical progression.
+
+### Quick Reference
+
+| # | Feature | Status | Phase | GitHub Issue |
+|---|---------|--------|-------|--------------|
+| 1 | Docker All-in-One Image | ✅ Complete | A - Foundation | [#29](https://github.com/jimmy058910/jmo-security-repo/issues/29) |
+| 2 | Interactive Wizard | ✅ Complete | A - Foundation | [#30](https://github.com/jimmy058910/jmo-security-repo/issues/30) |
+| 3 | CI Linting - Full Pre-commit | 🚧 In Progress | A - Foundation | [#31](https://github.com/jimmy058910/jmo-security-repo/issues/31) |
+| 4 | Machine-Readable Diff Reports | 📋 Planned | B - CI/CD | [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32) |
+| 5 | Scheduled Scans & Cron | 📋 Planned | B - CI/CD | [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33) |
+| 6 | Plugin System | 📋 Planned | C - Extensibility | [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34) |
+| 7 | Policy-as-Code (OPA) | 📋 Planned | C - Extensibility | [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35) |
+| 8 | Supply Chain Attestation (SLSA) | 📋 Planned | D - Enterprise | [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36) |
+| 9 | GitHub App Integration | 📋 Planned | D - Enterprise | [#37](https://github.com/jimmy058910/jmo-security-repo/issues/37) |
+| 10 | Web UI for Results | 📋 Planned | E - Advanced UI | [#38](https://github.com/jimmy058910/jmo-security-repo/issues/38) |
+| 11 | React/Vue Dashboard | 📋 Planned | E - Advanced UI | [#39](https://github.com/jimmy058910/jmo-security-repo/issues/39) |
 
 ---
 
@@ -146,6 +169,9 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 
 ## 3. CI Linting - Full Pre-commit Coverage
 
+**Status:** 🚧 In Progress
+**GitHub Issue:** [#31](https://github.com/jimmy058910/jmo-security-repo/issues/31)
+
 **Why Third:** Establishes quality baseline before adding more features.
 
 **Objective:** Enable full pre-commit hook coverage in CI while keeping PR feedback fast.
@@ -183,6 +209,9 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 ---
 
 ## 4. Machine-Readable Diff Reports
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32)
 
 **Why Fourth:** Essential for PR reviews and CI/CD workflows, builds on Docker foundation.
 
@@ -232,6 +261,9 @@ jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 
 ## 5. Scheduled Scans & Cron Support
 
+**Status:** 📋 Planned
+**GitHub Issue:** [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33)
+
 **Why Fifth:** Automation layer for continuous monitoring, simple to implement.
 
 **Objective:** Run scans automatically on schedule without manual intervention.
@@ -265,6 +297,9 @@ jmo schedule --remove <id>
 ---
 
 ## 6. Plugin System for Custom Adapters
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34)
 
 **Why Sixth:** Enables community contributions and proprietary tool support, unlocks ecosystem.
 
@@ -314,6 +349,9 @@ jmo scan --repo . --tools gitleaks,semgrep,my-tool
 ---
 
 ## 7. Policy-as-Code Integration (OPA)
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35)
 
 **Why Seventh:** Builds on plugin system, provides advanced flexibility for teams.
 
@@ -388,6 +426,9 @@ jmo policy init --template zero-secrets > my-policy.rego
 ---
 
 ## 8. Supply Chain Attestation (SLSA)
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36)
 
 **Why Eighth:** Enterprise compliance feature, requires mature scanning foundation.
 
@@ -466,6 +507,9 @@ jmo ci --repo . --attest --results results/
 
 ## 9. GitHub App Integration
 
+**Status:** 📋 Planned
+**GitHub Issue:** [#37](https://github.com/jimmy058910/jmo-security-repo/issues/37)
+
 **Why Ninth:** Revenue driver, requires all CI/CD features to be mature.
 
 **Objective:** Auto-scan pull requests and post findings as comments (SaaS offering).
@@ -505,6 +549,9 @@ jmo ci --repo . --attest --results results/
 ---
 
 ## 10. Web UI for Results Exploration
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#38](https://github.com/jimmy058910/jmo-security-repo/issues/38)
 
 **Why Tenth:** Advanced feature for large result sets, requires server infrastructure.
 
@@ -547,6 +594,9 @@ jmo serve results/ --port 8080
 ---
 
 ## 11. React/Vue Dashboard Alternative
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#39](https://github.com/jimmy058910/jmo-security-repo/issues/39)
 
 **Why Last:** Polish/modernization, existing HTML dashboard works well.
 
@@ -609,4 +659,21 @@ jmo serve results/ --port 8080
 
 ---
 
-**Status:** All items are planned. Implementation will proceed in order based on user feedback and business priorities.
+## Contributing to the Roadmap
+
+Want to help implement these features? Check out our [good first issues](https://github.com/jimmy058910/jmo-security-repo/labels/good%20first%20issue) and [help wanted](https://github.com/jimmy058910/jmo-security-repo/labels/help%20wanted) labels:
+
+**Good First Issues (Easy Contributions):**
+
+- [#17](https://github.com/jimmy058910/jmo-security-repo/issues/17) - Docs: Add "Try it with fixtures" snippet to README
+- [#18](https://github.com/jimmy058910/jmo-security-repo/issues/18) - Tests: Add smoke test for `dashboard.html` generation
+- [#20](https://github.com/jimmy058910/jmo-security-repo/issues/20) - Docs: Packaging note for `long_description_content_type`
+- [#23](https://github.com/jimmy058910/jmo-security-repo/issues/23) - Tests: Add unit test for fingerprint stability
+- [#24](https://github.com/jimmy058910/jmo-security-repo/issues/24) - CI: Add `make lint` check to tests workflow
+- [#25](https://github.com/jimmy058910/jmo-security-repo/issues/25) - UX: Add `make screenshots-demo` snippet to README
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and workflow.
+
+---
+
+**Status:** All roadmap items are planned. Implementation will proceed in order based on user feedback and business priorities. See individual GitHub issues for detailed tracking.
