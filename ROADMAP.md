@@ -41,14 +41,16 @@ Items are ordered by optimal implementation priority based on user value, depend
 | 1 | Docker All-in-One Image | ✅ Complete | A - Foundation | [#29](https://github.com/jimmy058910/jmo-security-repo/issues/29) |
 | 2 | Interactive Wizard | ✅ Complete | A - Foundation | [#30](https://github.com/jimmy058910/jmo-security-repo/issues/30) |
 | 3 | CI Linting - Full Pre-commit | 🚧 In Progress | A - Foundation | [#31](https://github.com/jimmy058910/jmo-security-repo/issues/31) |
-| 4 | Machine-Readable Diff Reports | 📋 Planned | B - CI/CD | [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32) |
-| 5 | Scheduled Scans & Cron | 📋 Planned | B - CI/CD | [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33) |
-| 6 | Plugin System | 📋 Planned | C - Extensibility | [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34) |
-| 7 | Policy-as-Code (OPA) | 📋 Planned | C - Extensibility | [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35) |
-| 8 | Supply Chain Attestation (SLSA) | 📋 Planned | D - Enterprise | [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36) |
-| 9 | GitHub App Integration | 📋 Planned | D - Enterprise | [#37](https://github.com/jimmy058910/jmo-security-repo/issues/37) |
-| 10 | Web UI for Results | 📋 Planned | E - Advanced UI | [#38](https://github.com/jimmy058910/jmo-security-repo/issues/38) |
-| 11 | React/Vue Dashboard | 📋 Planned | E - Advanced UI | [#39](https://github.com/jimmy058910/jmo-security-repo/issues/39) |
+| 4 | HTML Dashboard v2: Actionable Findings | 📋 Planned | B - Reporting & UX | [#44](https://github.com/jimmy058910/jmo-security-repo/issues/44) |
+| 5 | Enhanced Markdown Summary | 📋 Planned | B - Reporting & UX | [#45](https://github.com/jimmy058910/jmo-security-repo/issues/45) |
+| 6 | Machine-Readable Diff Reports | 📋 Planned | C - CI/CD | [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32) |
+| 7 | Scheduled Scans & Cron | 📋 Planned | C - CI/CD | [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33) |
+| 8 | Plugin System | 📋 Planned | D - Extensibility | [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34) |
+| 9 | Policy-as-Code (OPA) | 📋 Planned | D - Extensibility | [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35) |
+| 10 | Supply Chain Attestation (SLSA) | 📋 Planned | E - Enterprise | [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36) |
+| 11 | GitHub App Integration | 📋 Planned | E - Enterprise | [#37](https://github.com/jimmy058910/jmo-security-repo/issues/37) |
+| 12 | Web UI for Results | 📋 Planned | F - Advanced UI | [#38](https://github.com/jimmy058910/jmo-security-repo/issues/38) |
+| 13 | React/Vue Dashboard | 📋 Planned | F - Advanced UI | [#39](https://github.com/jimmy058910/jmo-security-repo/issues/39) |
 
 ---
 
@@ -208,12 +210,299 @@ jmotools wizard --emit-gha .github/workflows/security.yml --docker
 
 ---
 
-## 4. Machine-Readable Diff Reports
+## 4. HTML Dashboard v2: Actionable Findings & Enhanced UX
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#44](https://github.com/jimmy058910/jmo-security-repo/issues/44)
+
+**Why Fourth:** After foundation is solid, enhance user experience for maximum actionability and remediation efficiency.
+
+**Objective:** Transform HTML dashboard from "good finding detection" to "actionable remediation platform" with code context, specific fixes, grouping, and triage workflow.
+
+**Current State:**
+
+- Dashboard is functional with filtering/sorting/export
+- Lacks code context (users must open IDE)
+- Generic remediation ("Review and remediate per rule guidance")
+- Flat table of findings = cognitive overload
+- Metadata (CWE, OWASP, confidence) buried in `raw` field
+
+**Key Enhancements:**
+
+### 1. Surface Actionable Fixes (Critical Priority)
+
+Extract Semgrep's `raw.extra.fix` and surface in remediation field:
+
+```json
+"remediation": {
+  "summary": "Add USER directive before ENTRYPOINT",
+  "fix": "USER non-root\nENTRYPOINT [\"jmo\"]",
+  "steps": [
+    "Add 'USER non-root' before ENTRYPOINT",
+    "Rebuild Docker image",
+    "Test with non-root user"
+  ]
+}
+```
+
+**HTML:** Add "Suggested Fix" column (collapsed), code block formatting, "Copy Fix" button
+
+### 2. Add Code Context Snippets (Critical Priority)
+
+Extract 2-5 line code snippets during scan phase:
+
+```json
+"context": {
+  "snippet": "143: RUN apt-get install -y\n144: \n145: ENTRYPOINT [\"jmo\"]\n146: ",
+  "startLine": 143,
+  "endLine": 146,
+  "language": "dockerfile"
+}
+```
+
+**HTML:** Expandable rows, syntax-highlighted snippets, highlighted match lines
+
+**Impact:** Eliminates IDE context-switching, 50% faster triage
+
+### 3. Enhance Secrets Detection Display (Critical Priority)
+
+Normalize gitleaks adapter to surface:
+
+```json
+"secretContext": {
+  "type": "generic-api-key",
+  "secret": "sk-1234567890abcdef",  // NOT redacted
+  "entropy": 4.25,
+  "commit": "ffbea16c",
+  "author": "jimmy058910",
+  "date": "2025-10-09T22:40:52Z",
+  "gitUrl": "https://github.com/..."
+}
+```
+
+**HTML:** Show `🔑 sk-1234567890abcdef (entropy: 4.25) in commit ffbea16c by jimmy058910` with "View in GitHub" button and step-by-step rotation guide
+
+### 4. Group Findings by File/Category (Critical Priority)
+
+Add grouping mode: "Group by: [File | Rule | Tool | Severity]"
+
+```text
+▼ /home/.../Dockerfile (3 findings) ████████████ HIGH
+  ├─ missing-user-entrypoint (line 145) HIGH
+  ├─ missing-user (line 148) HIGH
+  └─ ...
+
+▼ /home/.../docker-compose.yml (12 findings) ████ MEDIUM
+  ├─ no-new-privileges × 6 (lines 12,31,50,67,84,95) MEDIUM
+  └─ ...
+```
+
+**Optional:** File tree sidebar with badge counts
+
+**Impact:** 80% faster navigation, better mental model
+
+### 5. Add Risk Metadata (CWE, OWASP, Confidence) (High Priority)
+
+Normalize to CommonFinding v1.1.0:
+
+```json
+"risk": {
+  "cwe": ["CWE-269"],
+  "owasp": ["A04:2021"],
+  "confidence": "MEDIUM",
+  "likelihood": "LOW",
+  "impact": "MEDIUM"
+}
+```
+
+**HTML:** Tooltips on severity badges, filterable by CWE/OWASP, compliance mode
+
+### 6. Triage Workflow Support (High Priority)
+
+**Triage state file:** `results/summaries/triage.json`
+
+```json
+{
+  "c9c15e6b45a56b74": {
+    "status": "accepted_risk",
+    "reason": "Test Dockerfile, not production",
+    "assignee": "jimmy058910",
+    "date": "2025-10-15"
+  }
+}
+```
+
+**HTML:** Checkbox column, bulk actions ("Mark as: Fixed | False Positive | Accepted Risk"), comments per finding, export action items
+
+**CLI:**
+```bash
+jmo triage --status accepted_risk --id c9c15e6b45a56b74 --reason "Test file"
+jmo report --exclude-accepted  # Filter triaged findings
+```
+
+### 7. Interactive Filters Enhancement (Medium Priority)
+
+**Enhanced filters:**
+
+- Multi-select severities (HIGH + MEDIUM)
+- Tag filter (sast, secrets, iac)
+- CWE/OWASP filter
+- File path patterns (regex/glob)
+- Exclude patterns (hide test files)
+
+**Schema Evolution:**
+
+CommonFinding v1.1.0 adds:
+
+- `context` (code snippets)
+- `risk` (CWE/OWASP/confidence/likelihood/impact)
+- `secretContext` (commit/author/entropy for secrets)
+- `remediation` (object with summary/fix/steps/references)
+
+**Implementation Files:**
+
+- `scripts/core/common_finding.py` - Schema v1.1.0
+- `scripts/core/adapters/*.py` - Extract metadata
+- `scripts/core/reporters/html_reporter.py` - All HTML enhancements
+- `scripts/cli/jmo.py` - Add `triage` subcommand
+- `tests/` - Comprehensive test coverage
+
+**Success Criteria:**
+
+- Code snippets in expandable rows
+- Semgrep fixes displayed with copy button
+- Secrets show full context (commit, author, entropy)
+- Grouping by file/rule/tool/severity works smoothly
+- CWE/OWASP visible in tooltips and filterable
+- Triage workflow allows persistent marking
+- Test coverage ≥85%
+
+**Impact Projection:**
+
+- Time to triage: 50% faster
+- Time to fix: 70% faster
+- Noise reduction: 80%
+- Executive buy-in: 3× better
+
+---
+
+## 5. Enhanced Markdown Summary: Risk Breakdown & Remediation Priorities
+
+**Status:** 📋 Planned
+**GitHub Issue:** [#45](https://github.com/jimmy058910/jmo-security-repo/issues/45)
+
+**Why Fifth:** Complements HTML dashboard with better executive summaries and actionable next steps.
+
+**Objective:** Transform Markdown summary from raw counts to actionable risk breakdown with remediation priorities.
+
+**Current State:**
+
+```markdown
+# Security Summary
+
+Total findings: 57
+
+## By Severity
+- CRITICAL: 0
+- HIGH: 36
+- MEDIUM: 20
+- LOW: 1
+- INFO: 0
+
+## Top Rules
+- generic-api-key: 32
+```
+
+**Issues:** No file breakdown, no tool breakdown, no remediation guidance, just counts
+
+**Enhanced Format:**
+
+```markdown
+# Security Summary
+
+Total findings: 57 | 🔴 36 HIGH | 🟡 20 MEDIUM | ⚪ 1 LOW
+
+## Top Risks by File
+| File | Findings | Severity | Top Issue |
+|------|----------|----------|-----------|
+| docker-compose.yml | 12 | 🟡 MEDIUM | Privilege escalation (6×) |
+| Dockerfile | 3 | 🔴 HIGH | Missing USER directive |
+| gitleaks-*.json | 32 | 🔴 HIGH | Exposed API keys |
+
+## By Tool
+- **gitleaks**: 32 secrets (🔴 32 HIGH)
+- **semgrep**: 25 code issues (🔴 4 HIGH, 🟡 20 MEDIUM, ⚪ 1 LOW)
+
+## Remediation Priorities
+1. **Rotate 32 exposed API keys** (HIGH) → [Secret rotation guide]
+2. **Add USER directives to Dockerfiles** (3 findings) → [Fix example]
+3. **Harden docker-compose.yml** (12 findings) → [Security template]
+
+## By Category
+- 🔑 Secrets: 32 findings (56% of total)
+- 🐳 Container Security: 15 findings (26%)
+- 🔧 Code Quality: 10 findings (18%)
+
+## What's New (vs Last Scan)
+- ⬆️ +12 findings (was 45, now 57)
+- ⬆️ +10 HIGH severity
+- 🆕 New tool: semgrep (25 findings)
+```
+
+**Key Features:**
+
+1. **File breakdown table** - Top 5 files with most issues
+2. **Tool breakdown** - Per-tool severity counts
+3. **Remediation priorities** - Top 3-5 actionable next steps
+4. **Category grouping** - By tags (secrets/iac/sast)
+5. **Trend analysis** - Changes vs previous scan (optional, requires history)
+6. **Visual indicators** - Emoji badges for quick scanning
+
+**Implementation:**
+
+**Files:**
+- `scripts/core/reporters/basic_reporter.py` - Update `write_markdown()`
+
+**New aggregations:**
+```python
+# File breakdown
+file_counts = Counter(f['location']['path'] for f in findings)
+
+# Tool breakdown with severity
+tool_severity = defaultdict(lambda: Counter())
+for f in findings:
+    tool_severity[f['tool']['name']][f['severity']] += 1
+
+# Category by tags
+category_counts = Counter()
+for f in findings:
+    if 'secrets' in f.get('tags', []):
+        category_counts['Secrets'] += 1
+    elif 'iac' in f.get('tags', []):
+        category_counts['Container Security'] += 1
+```
+
+**Success Criteria:**
+
+- File breakdown table (top 5 files)
+- Tool breakdown with severity counts
+- Remediation priorities (top 3-5)
+- Category grouping by tags
+- Visual emoji badges
+- Trend analysis (if history available)
+
+**Dependencies:**
+
+- May benefit from CommonFinding v1.1.0 (ROADMAP #4) for richer metadata
+
+---
+
+## 6. Machine-Readable Diff Reports
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32)
 
-**Why Fourth:** Essential for PR reviews and CI/CD workflows, builds on Docker foundation.
+**Why Sixth:** Essential for PR reviews and CI/CD workflows, builds on reporting foundation.
 
 **Objective:** Compare scan results across time/commits to identify new/resolved findings and track security trends.
 
@@ -405,12 +694,12 @@ jmo diff --baseline week-1/ week-2/ week-3/ week-4/
 
 ---
 
-## 5. Scheduled Scans & Cron Support
+## 7. Scheduled Scans & Cron Support
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33)
 
-**Why Fifth:** Automation layer for continuous monitoring, simple to implement.
+**Why Seventh:** Automation layer for continuous monitoring, simple to implement.
 
 **Objective:** Run scans automatically on schedule without manual intervention.
 
@@ -442,12 +731,12 @@ jmo schedule --remove <id>
 
 ---
 
-## 6. Plugin System for Custom Adapters
+## 8. Plugin System for Custom Adapters
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#34](https://github.com/jimmy058910/jmo-security-repo/issues/34)
 
-**Why Sixth:** Enables community contributions and proprietary tool support, unlocks ecosystem.
+**Why Eighth:** Enables community contributions and proprietary tool support, unlocks ecosystem.
 
 **Objective:** Allow users to add custom security tools without forking codebase.
 
@@ -494,12 +783,12 @@ jmo scan --repo . --tools gitleaks,semgrep,my-tool
 
 ---
 
-## 7. Policy-as-Code Integration (OPA)
+## 9. Policy-as-Code Integration (OPA)
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35)
 
-**Why Seventh:** Builds on plugin system, provides advanced flexibility for teams.
+**Why Ninth:** Builds on plugin system, provides advanced flexibility for teams.
 
 **Objective:** Enable custom security gating policies using Open Policy Agent (OPA) Rego language for context-aware rules beyond simple severity thresholds.
 
@@ -571,12 +860,12 @@ jmo policy init --template zero-secrets > my-policy.rego
 
 ---
 
-## 8. Supply Chain Attestation (SLSA)
+## 10. Supply Chain Attestation (SLSA)
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36)
 
-**Why Eighth:** Enterprise compliance feature, requires mature scanning foundation.
+**Why Tenth:** Enterprise compliance feature, requires mature scanning foundation.
 
 **Objective:** Generate signed attestations for scan results, enabling verifiable provenance and tamper-proof audit trails.
 
@@ -651,12 +940,12 @@ jmo ci --repo . --attest --results results/
 
 ---
 
-## 9. GitHub App Integration
+## 11. GitHub App Integration
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#37](https://github.com/jimmy058910/jmo-security-repo/issues/37)
 
-**Why Ninth:** Revenue driver, requires all CI/CD features to be mature.
+**Why Eleventh:** Revenue driver, requires all CI/CD features to be mature.
 
 **Objective:** Auto-scan pull requests and post findings as comments (SaaS offering).
 
@@ -694,12 +983,12 @@ jmo ci --repo . --attest --results results/
 
 ---
 
-## 10. Web UI for Results Exploration
+## 12. Web UI for Results Exploration
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#38](https://github.com/jimmy058910/jmo-security-repo/issues/38)
 
-**Why Tenth:** Advanced feature for large result sets, requires server infrastructure.
+**Why Twelfth:** Advanced feature for large result sets, requires server infrastructure.
 
 **Objective:** Launch `jmo serve` command to start local web server with interactive dashboard, better for large result sets than static HTML.
 
@@ -739,7 +1028,7 @@ jmo serve results/ --port 8080
 
 ---
 
-## 11. React/Vue Dashboard Alternative
+## 13. React/Vue Dashboard Alternative
 
 **Status:** 📋 Planned
 **GitHub Issue:** [#39](https://github.com/jimmy058910/jmo-security-repo/issues/39)
@@ -781,27 +1070,76 @@ jmo serve results/ --port 8080
 2. Interactive Wizard
 3. CI Linting - Full Pre-commit Coverage
 
-**Phase B - CI/CD Integration:**
+**Phase B - Reporting & UX:**
 
-4. Machine-Readable Diff Reports
-5. Scheduled Scans & Cron Support
+4. HTML Dashboard v2: Actionable Findings & Enhanced UX
+5. Enhanced Markdown Summary: Risk Breakdown & Remediation Priorities
 
-**Phase C - Extensibility & Flexibility:**
+**Phase C - CI/CD Integration:**
 
-6. Plugin System for Custom Adapters
-7. Policy-as-Code Integration (OPA)
+6. Machine-Readable Diff Reports
+7. Scheduled Scans & Cron Support
 
-**Phase D - Enterprise & Revenue:**
+**Phase D - Extensibility & Flexibility:**
 
-8. Supply Chain Attestation (SLSA)
-9. GitHub App Integration
+8. Plugin System for Custom Adapters
+9. Policy-as-Code Integration (OPA)
 
-**Phase E - Advanced UI:**
+**Phase E - Enterprise & Revenue:**
 
-10. Web UI for Results Exploration
-11. React/Vue Dashboard Alternative
+10. Supply Chain Attestation (SLSA)
+11. GitHub App Integration
 
-**Rationale:** This order prioritizes user adoption (Docker, Wizard), then workflow integration (Diff Reports, Scheduling), then extensibility (Plugins, Policies), then enterprise features (Attestation, GitHub App), and finally UI polish (Web UI, Modern Dashboard).
+**Phase F - Advanced UI:**
+
+12. Web UI for Results Exploration
+13. React/Vue Dashboard Alternative
+
+**Rationale:** This order prioritizes user adoption (Docker, Wizard), then actionable reporting (Dashboard v2, Enhanced Summaries), then workflow integration (Diff Reports, Scheduling), then extensibility (Plugins, Policies), then enterprise features (Attestation, GitHub App), and finally UI polish (Web UI, Modern Dashboard).
+
+---
+
+## Future Ideation & Research
+
+The following ideas are under consideration for future development but require additional research, user feedback, or dependency completion before formal planning.
+
+### Executive Dashboard & Trend Analysis
+
+**Concept:** Integrated executive summary view combining elements from enhanced Markdown summaries with visual trend charts and risk scoring.
+
+**Potential Features:**
+
+- **Risk Score Dashboard**: Weighted severity calculations (e.g., "Risk Score: 78/100")
+- **Trend Charts**: Multi-run history visualization showing findings over time
+- **Top Risks Panel**: Priority-ranked actionable items with drivers
+- **Compliance Status**: OWASP Top 10 coverage, regulatory mapping
+- **Integration Point**: Could be integrated with Enhanced Markdown Summary (ROADMAP #5) or Web UI (ROADMAP #12)
+
+**User Value:** C-level visibility, justification for remediation efforts, compliance reporting
+
+**Dependencies:** Multi-run history storage, risk scoring algorithm, charting library
+
+**Status:** Ideation - awaiting user feedback on Enhanced Markdown Summary implementation
+
+---
+
+### Performance Profiling Enhancements
+
+**Concept:** Enhanced profiling and optimization recommendations for scan performance.
+
+**Potential Features:**
+
+- **Always-on profiling**: Track scan/report duration even without `--profile` flag
+- **Performance recommendations**: "Current thread count (4) is optimal" based on analysis
+- **Slow tool alerts**: "⚠️ Warning: trivy took 45s (timeout: 60s)"
+- **CI/CD optimization insights**: Suggestions for parallelization, timeout tuning
+- **Profiling dashboard**: Visual breakdown of tool execution times
+
+**User Value:** Better CI/CD pipeline optimization, faster feedback loops
+
+**Dependencies:** Timing infrastructure (already exists), recommendation engine
+
+**Status:** Ideation - low priority, nice-to-have for power users
 
 ---
 
