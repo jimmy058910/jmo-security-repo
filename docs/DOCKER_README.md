@@ -79,9 +79,33 @@ Expected: `Docker version XX.X.X`
 
 ### Step 2: Pull the JMo Security Image (One-Time)
 
+#### Registry Options
+
+We publish to two Docker registries:
+
+**GitHub Container Registry (GHCR) - Recommended:**
+
 ```bash
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 ```
+
+- ✅ **Unlimited pulls** (no rate limits)
+- ✅ **Best for CI/CD** (production-grade)
+- ✅ **Multi-arch support** (amd64 + arm64)
+- ✅ **Free for all users**
+
+**Docker Hub - Coming in v0.5.2+:**
+
+```bash
+# Available starting v0.5.2
+docker pull jmogaming/jmo-security:latest
+```
+
+- ✅ **Traditional registry** (familiar to Docker users)
+- ✅ **Higher discoverability** (appears in Docker Hub search)
+- ⚠️ **Rate limits:** 200 pulls per 6 hours (free tier)
+
+**Recommendation:** Use GHCR for production and CI/CD pipelines to avoid rate limits.
 
 **Download info:**
 
@@ -744,8 +768,8 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 - **User Guide:** [USER_GUIDE.md](USER_GUIDE.md)
 - **Wizard Examples:** [examples/wizard-examples.md](examples/wizard-examples.md)
 - **GitHub Actions Examples:** [examples/github-actions-docker.yml](examples/github-actions-docker.yml)
-- **Docker Hub:** Coming soon
-- **GitHub Container Registry:** <https://ghcr.io/jimmy058910/jmo-security>
+- **GitHub Container Registry (Primary):** <https://ghcr.io/jimmy058910/jmo-security>
+- **Docker Hub (Available v0.5.2+):** <https://hub.docker.com/r/jmogaming/jmo-security>
 
 ---
 
