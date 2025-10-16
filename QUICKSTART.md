@@ -97,15 +97,25 @@ make full DIR=~/repos        # Run deep profile
 
 ---
 
-## ✨ What's New (Phase 1 - October 2025)
+## ✨ What's New (v0.5.0 - October 2025)
+
+**Tool Suite Consolidation:**
+
+- 🎯 **DAST Added** - OWASP ZAP for runtime vulnerability detection (20-30% more findings)
+- 🛡️ **Runtime Security** - Falco for container/K8s monitoring (deep profile)
+- 🔬 **Fuzzing** - AFL++ for coverage-guided vulnerability discovery (deep profile)
+- ✅ **Verified Secrets** - TruffleHog with 95% false positive reduction
+- 🧹 **Removed Deprecated** - gitleaks, tfsec, osv-scanner removed
+- 📊 **Profile Restructuring** - Fast: 3 tools, Balanced: 7 tools, Deep: 11 tools
+
+**Previous Enhancements (Phase 1):**
 
 - 🧙 **Interactive Wizard** - Beginner-friendly guided scanning
 - 🐳 **Docker Images** - Zero-installation security scanning
 - 🔒 **XSS Patched** - HTML dashboard security hardened
-- 🛡️ **OSV Scanner** - Open-source vulnerability detection
 - 📊 **Enriched SARIF** - CWE/OWASP/CVE taxonomies
 - ⚙️ **Type-Safe Severity** - Cleaner code with enum
-- 🎯 **88% Coverage** - 100/100 tests passing
+- 🎯 **91% Coverage** - 272/272 tests passing
 
 See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
@@ -117,7 +127,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
 make verify-env
 ```
 
-This detects Linux/WSL/macOS, checks for optional tools (gitleaks, semgrep, trivy, etc.), and prints install hints.
+This detects Linux/WSL/macOS, checks for optional tools (trufflehog, semgrep, trivy, zap, etc.), and prints install hints.
 
 ## Step 2: Prepare your repositories
 
@@ -343,7 +353,7 @@ jobs:
 
       - name: Install tools
         run: |
-          # Install Gitleaks, TruffleHog, Semgrep
+          # Install TruffleHog, Semgrep, Trivy, ZAP, etc.
 
       - name: Run Security Audit (scan + report)
         run: |

@@ -10,7 +10,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import (
+    extract_code_snippet,
+    fingerprint,
+    normalize_severity,
+)
 
 
 SEMGREP_TO_SEV = {
@@ -65,26 +69,86 @@ def load_semgrep(path: str | Path) -> List[Dict[str, Any]]:
         ):
             start_line = loc["start"]["line"]
         fid = fingerprint("semgrep", check_id, path_str, start_line, msg)
-        out.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": check_id,
-                "title": check_id,
-                "message": msg,
-                "description": msg,
-                "severity": severity,
-                "tool": {
-                    "name": "semgrep",
-                    "version": str(
-                        (data.get("version") if isinstance(data, dict) else None)
-                        or "unknown"
-                    ),
-                },
-                "location": {"path": path_str, "startLine": start_line},
-                "remediation": "Review and remediate per rule guidance.",
-                "tags": ["sast"],
-                "raw": r,
+
+        # Extract v1.1.0 fields
+        extra = r.get("extra", {})
+
+        # Remediation with autofix
+        remediation: str | dict[str, Any] = "Review and remediate per rule guidance."
+        autofix = extra.get("fix")
+        if autofix:
+            remediation = {
+                "summary": msg,
+                "fix": autofix,
+                "steps": [
+                    "Apply the suggested fix above",
+                    "Test the changes",
+                    "Commit the fix",
+                ],
             }
-        )
+
+        # Risk metadata (CWE, OWASP, confidence)
+        risk = {}
+        metadata = extra.get("metadata", {})
+        if metadata:
+            # CWE
+            cwe_list = metadata.get("cwe", [])
+            if isinstance(cwe_list, list) and cwe_list:
+                risk["cwe"] = cwe_list
+            elif isinstance(cwe_list, str):
+                risk["cwe"] = [cwe_list]
+
+            # OWASP
+            owasp = metadata.get("owasp", [])
+            if isinstance(owasp, list) and owasp:
+                risk["owasp"] = owasp
+            elif isinstance(owasp, str):
+                risk["owasp"] = [owasp]
+
+            # Confidence
+            confidence = metadata.get("confidence", "").upper()
+            if confidence in ["HIGH", "MEDIUM", "LOW"]:
+                risk["confidence"] = confidence
+
+            # Likelihood/Impact
+            likelihood = metadata.get("likelihood", "").upper()
+            if likelihood in ["HIGH", "MEDIUM", "LOW"]:
+                risk["likelihood"] = likelihood
+            impact = metadata.get("impact", "").upper()
+            if impact in ["HIGH", "MEDIUM", "LOW"]:
+                risk["impact"] = impact
+
+        # Code context
+        context = None
+        if path_str and start_line:
+            context = extract_code_snippet(path_str, start_line, context_lines=2)
+
+        finding: Dict[str, Any] = {
+            "schemaVersion": "1.1.0",
+            "id": fid,
+            "ruleId": check_id,
+            "title": check_id,
+            "message": msg,
+            "description": msg,
+            "severity": severity,
+            "tool": {
+                "name": "semgrep",
+                "version": str(
+                    (data.get("version") if isinstance(data, dict) else None)
+                    or "unknown"
+                ),
+            },
+            "location": {"path": path_str, "startLine": start_line},
+            "remediation": remediation,
+            "tags": ["sast"],
+            "raw": r,
+        }
+
+        # Add optional v1.1.0 fields if present
+        if context:
+            finding["context"] = context
+        if risk:
+            finding["risk"] = risk
+
+        out.append(finding)
     return out

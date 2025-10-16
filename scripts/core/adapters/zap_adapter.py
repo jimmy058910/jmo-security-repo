@@ -173,7 +173,9 @@ def load_zap(path: str | Path) -> List[Dict[str, Any]]:
                         "uri": uri,
                         "method": method,
                         "param": param,
-                        "evidence": evidence[:200] if evidence else "",  # Truncate long evidence
+                        "evidence": (
+                            evidence[:200] if evidence else ""
+                        ),  # Truncate long evidence
                         "confidence": confidence,
                         "risk": risk,
                     },

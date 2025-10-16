@@ -128,7 +128,10 @@ CWE_TO_OWASP_TOP10_2021 = {
     # A02:2021 - Cryptographic Failures
     "CWE-259": ["A02:2021"],  # Use of Hard-coded Password
     "CWE-261": ["A02:2021"],  # Weak Cryptography for Passwords
-    "CWE-295": ["A02:2021", "A07:2021"],  # Improper Certificate Validation (crypto + auth)
+    "CWE-295": [
+        "A02:2021",
+        "A07:2021",
+    ],  # Improper Certificate Validation (crypto + auth)
     "CWE-297": ["A02:2021"],  # Improper Validation of Certificate
     "CWE-310": ["A02:2021"],  # Cryptographic Issues
     "CWE-311": ["A02:2021"],  # Missing Encryption of Sensitive Data

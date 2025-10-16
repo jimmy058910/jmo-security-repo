@@ -9,7 +9,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import (
+    extract_code_snippet,
+    fingerprint,
+    normalize_severity,
+)
 
 
 def load_trivy(path: str | Path) -> List[Dict[str, Any]]:
@@ -59,26 +63,50 @@ def load_trivy(path: str | Path) -> List[Dict[str, Any]]:
                     int(line) if isinstance(line, int) else 0,
                     str(msg),
                 )
-                out.append(
-                    {
-                        "schemaVersion": "1.0.0",
-                        "id": fid,
-                        "ruleId": str(rule_id),
-                        "title": str(rule_id),
-                        "message": str(msg),
-                        "description": str(item.get("Description") or msg),
-                        "severity": severity,
-                        "tool": {
-                            "name": "trivy",
-                            "version": str(data.get("Version") or "unknown"),
-                        },
-                        "location": {
-                            "path": str(path_str),
-                            "startLine": int(line) if isinstance(line, int) else 0,
-                        },
-                        "remediation": str(item.get("PrimaryURL") or "See advisory"),
-                        "tags": [tag],
-                        "raw": item,
-                    }
-                )
+
+                # Code context (for misconfigurations)
+                context = None
+                if tag == "misconfig" and path_str and line:
+                    context = extract_code_snippet(
+                        str(path_str), int(line), context_lines=2
+                    )
+
+                # Risk metadata for vulnerabilities
+                risk = {}
+                if tag == "vulnerability":
+                    cvss_dict = item.get("CVSS", {})
+                    if isinstance(cvss_dict, dict):
+                        # Extract CWE
+                        cwe_ids = item.get("CweIDs", [])
+                        if cwe_ids and isinstance(cwe_ids, list):
+                            risk["cwe"] = cwe_ids
+
+                finding: Dict[str, Any] = {
+                    "schemaVersion": "1.1.0",
+                    "id": fid,
+                    "ruleId": str(rule_id),
+                    "title": str(rule_id),
+                    "message": str(msg),
+                    "description": str(item.get("Description") or msg),
+                    "severity": severity,
+                    "tool": {
+                        "name": "trivy",
+                        "version": str(data.get("Version") or "unknown"),
+                    },
+                    "location": {
+                        "path": str(path_str),
+                        "startLine": int(line) if isinstance(line, int) else 0,
+                    },
+                    "remediation": str(item.get("PrimaryURL") or "See advisory"),
+                    "tags": [tag],
+                    "raw": item,
+                }
+
+                # Add optional v1.1.0 fields if present
+                if context:
+                    finding["context"] = context
+                if risk:
+                    finding["risk"] = risk
+
+                out.append(finding)
     return out

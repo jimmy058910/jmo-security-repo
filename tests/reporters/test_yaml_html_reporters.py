@@ -34,5 +34,7 @@ def test_write_html(tmp_path: Path):
     write_html(SAMPLE, out)
     s = out.read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in s
-    assert "Security Summary" in s
+    assert (
+        "Security Dashboard" in s or "Security Summary" in s
+    )  # v2 renamed to Dashboard
     assert "aws-key" in s or "AWS" in s

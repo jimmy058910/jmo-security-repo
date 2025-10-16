@@ -95,7 +95,9 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
         # Extract key information
         container_id = str(output_fields.get("container.id") or "")
         container_name = str(output_fields.get("container.name") or "")
-        proc_name = str(output_fields.get("proc.name") or output_fields.get("proc.cmdline") or "")
+        proc_name = str(
+            output_fields.get("proc.name") or output_fields.get("proc.cmdline") or ""
+        )
         fd_name = str(output_fields.get("fd.name") or "")
         user_name = str(output_fields.get("user.name") or "")
 

@@ -51,5 +51,5 @@ def test_gather_results_merges_and_dedupes(tmp_path: Path):
     assert len(findings) >= 4
     # Ensure required keys exist in normalized items
     for f in findings:
-        assert f["schemaVersion"] == "1.0.0"
+        assert f["schemaVersion"] in ["1.0.0", "1.1.0"]
         assert "ruleId" in f and "severity" in f and "location" in f and "message" in f

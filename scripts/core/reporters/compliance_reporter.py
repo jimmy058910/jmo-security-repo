@@ -15,8 +15,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.core.common_finding import Severity
-
 
 def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> None:
     """Generate PCI DSS 4.0 compliance report in Markdown format.
@@ -26,10 +24,7 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
         output_path: Output file path for the report
     """
     # Filter findings with PCI DSS mappings
-    pci_findings = [
-        f for f in findings
-        if f.get("compliance", {}).get("pciDss4_0")
-    ]
+    pci_findings = [f for f in findings if f.get("compliance", {}).get("pciDss4_0")]
 
     # Group by requirement
     by_requirement = defaultdict(list)
@@ -37,11 +32,13 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
         pci_mappings = f.get("compliance", {}).get("pciDss4_0", [])
         for mapping in pci_mappings:
             req = mapping.get("requirement", "Unknown")
-            by_requirement[req].append({
-                "finding": f,
-                "description": mapping.get("description", ""),
-                "priority": mapping.get("priority", "MEDIUM"),
-            })
+            by_requirement[req].append(
+                {
+                    "finding": f,
+                    "description": mapping.get("description", ""),
+                    "priority": mapping.get("priority", "MEDIUM"),
+                }
+            )
 
     # Count findings by severity
     total_critical = sum(1 for f in pci_findings if f.get("severity") == "CRITICAL")
@@ -72,7 +69,7 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
     # Sort requirements numerically
     sorted_requirements = sorted(
         by_requirement.keys(),
-        key=lambda x: tuple(map(lambda y: int(y) if y.isdigit() else 0, x.split(".")))
+        key=lambda x: tuple(map(lambda y: int(y) if y.isdigit() else 0, x.split("."))),
     )
 
     for req in sorted_requirements:
@@ -87,9 +84,13 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
         lines.append("")
 
         # Count by severity for this requirement
-        req_critical = sum(1 for item in items if item["finding"].get("severity") == "CRITICAL")
+        req_critical = sum(
+            1 for item in items if item["finding"].get("severity") == "CRITICAL"
+        )
         req_high = sum(1 for item in items if item["finding"].get("severity") == "HIGH")
-        req_medium = sum(1 for item in items if item["finding"].get("severity") == "MEDIUM")
+        req_medium = sum(
+            1 for item in items if item["finding"].get("severity") == "MEDIUM"
+        )
 
         if req_critical > 0:
             lines.append(f"- **CRITICAL**: {req_critical} findings")
@@ -109,7 +110,9 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
                 rule_id = f.get("ruleId", "")
                 msg = f.get("message", "")[:100]
                 loc = f.get("location", {})
-                path = loc.get("path", "unknown") if isinstance(loc, dict) else "unknown"
+                path = (
+                    loc.get("path", "unknown") if isinstance(loc, dict) else "unknown"
+                )
                 line = loc.get("startLine", 0) if isinstance(loc, dict) else 0
 
                 lines.append(f"{i}. **[{sev}]** `{rule_id}` - {msg}")
@@ -120,22 +123,28 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
         lines.append("")
 
     # Recommendations section
-    lines.extend([
-        "## Recommendations",
-        "",
-        "### Critical Actions Required",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Recommendations",
+            "",
+            "### Critical Actions Required",
+            "",
+        ]
+    )
 
     # Group critical findings by requirement
     critical_by_req = defaultdict(int)
     for req, items in by_requirement.items():
-        critical_count = sum(1 for item in items if item["finding"].get("severity") == "CRITICAL")
+        critical_count = sum(
+            1 for item in items if item["finding"].get("severity") == "CRITICAL"
+        )
         if critical_count > 0:
             critical_by_req[req] = critical_count
 
     if critical_by_req:
-        lines.append("The following PCI DSS requirements have CRITICAL findings that must be addressed immediately:")
+        lines.append(
+            "The following PCI DSS requirements have CRITICAL findings that must be addressed immediately:"
+        )
         lines.append("")
         for req, count in sorted(critical_by_req.items(), key=lambda x: -x[1]):
             description = by_requirement[req][0]["description"]
@@ -143,37 +152,43 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
             lines.append(f"   - {count} CRITICAL findings")
             lines.append("")
     else:
-        lines.append("No CRITICAL findings detected. Continue monitoring HIGH and MEDIUM findings.")
+        lines.append(
+            "No CRITICAL findings detected. Continue monitoring HIGH and MEDIUM findings."
+        )
         lines.append("")
 
-    lines.extend([
-        "### Compliance Status",
-        "",
-        "- **Requirements Passed**: N/A (manual validation required)",
-        f"- **Requirements with Findings**: {len(by_requirement)}",
-        "- **Requirements Not Tested**: N/A (scope determined by organization)",
-        "",
-        "### Next Steps",
-        "",
-        "1. **Remediate CRITICAL findings** within 24 hours (per PCI DSS remediation SLAs)",
-        "2. **Remediate HIGH findings** within 7 days",
-        "3. **Document compensating controls** for accepted risks",
-        "4. **Re-scan** after remediation to verify fixes",
-        "5. **Submit ASV scan report** to Qualified Security Assessor (if applicable)",
-        "",
-        "---",
-        "",
-        "*This report was generated by JMo Security Audit Tool Suite.*",
-        "*Report generation date: Auto-generated*",
-        "",
-    ])
+    lines.extend(
+        [
+            "### Compliance Status",
+            "",
+            "- **Requirements Passed**: N/A (manual validation required)",
+            f"- **Requirements with Findings**: {len(by_requirement)}",
+            "- **Requirements Not Tested**: N/A (scope determined by organization)",
+            "",
+            "### Next Steps",
+            "",
+            "1. **Remediate CRITICAL findings** within 24 hours (per PCI DSS remediation SLAs)",
+            "2. **Remediate HIGH findings** within 7 days",
+            "3. **Document compensating controls** for accepted risks",
+            "4. **Re-scan** after remediation to verify fixes",
+            "5. **Submit ASV scan report** to Qualified Security Assessor (if applicable)",
+            "",
+            "---",
+            "",
+            "*This report was generated by JMo Security Audit Tool Suite.*",
+            "*Report generation date: Auto-generated*",
+            "",
+        ]
+    )
 
     # Write report
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_attack_navigator_json(findings: List[Dict[str, Any]], output_path: Path) -> None:
+def write_attack_navigator_json(
+    findings: List[Dict[str, Any]], output_path: Path
+) -> None:
     """Generate MITRE ATT&CK Navigator JSON for visualization.
 
     Args:
@@ -182,8 +197,7 @@ def write_attack_navigator_json(findings: List[Dict[str, Any]], output_path: Pat
     """
     # Filter findings with ATT&CK mappings
     attack_findings = [
-        f for f in findings
-        if f.get("compliance", {}).get("mitreAttack")
+        f for f in findings if f.get("compliance", {}).get("mitreAttack")
     ]
 
     # Count techniques
@@ -232,41 +246,26 @@ def write_attack_navigator_json(findings: List[Dict[str, Any]], output_path: Pat
         else:
             color = "#99ccff"  # Blue (low)
 
-        techniques_list.append({
-            "techniqueID": tech_id,
-            "tactic": meta["tactic"].lower().replace(" ", "-"),
-            "score": score,
-            "color": color,
-            "comment": f"{count} finding(s) detected",
-            "enabled": True,
-            "metadata": [
-                {
-                    "name": "Findings",
-                    "value": str(count)
-                }
-            ],
-            "showSubtechniques": bool(meta["subtechnique"]),
-        })
+        techniques_list.append(
+            {
+                "techniqueID": tech_id,
+                "tactic": meta["tactic"].lower().replace(" ", "-"),
+                "score": score,
+                "color": color,
+                "comment": f"{count} finding(s) detected",
+                "enabled": True,
+                "metadata": [{"name": "Findings", "value": str(count)}],
+                "showSubtechniques": bool(meta["subtechnique"]),
+            }
+        )
 
     # Build ATT&CK Navigator JSON
     navigator_layer = {
         "name": "JMo Security Scan Results",
-        "versions": {
-            "attack": "16",
-            "navigator": "5.0.1",
-            "layer": "4.5"
-        },
+        "versions": {"attack": "16", "navigator": "5.0.1", "layer": "4.5"},
         "domain": "enterprise-attack",
         "description": f"Security findings mapped to MITRE ATT&CK techniques. Total findings: {len(attack_findings)}, Techniques covered: {len(technique_counts)}",
-        "filters": {
-            "platforms": [
-                "Linux",
-                "macOS",
-                "Windows",
-                "Cloud",
-                "Containers"
-            ]
-        },
+        "filters": {"platforms": ["Linux", "macOS", "Windows", "Cloud", "Containers"]},
         "sorting": 3,
         "layout": {
             "layout": "side",
@@ -274,40 +273,29 @@ def write_attack_navigator_json(findings: List[Dict[str, Any]], output_path: Pat
             "showID": True,
             "showName": True,
             "showAggregateScores": False,
-            "countUnscored": False
+            "countUnscored": False,
         },
         "hideDisabled": False,
         "techniques": techniques_list,
         "gradient": {
-            "colors": [
-                "#99ccff",
-                "#ffcc66",
-                "#ff9966",
-                "#ff6666"
-            ],
+            "colors": ["#99ccff", "#ffcc66", "#ff9966", "#ff6666"],
             "minValue": 0,
-            "maxValue": 100
+            "maxValue": 100,
         },
         "legendItems": [
-            {
-                "label": f"Total Findings: {len(attack_findings)}",
-                "color": "#ffffff"
-            },
+            {"label": f"Total Findings: {len(attack_findings)}", "color": "#ffffff"},
             {
                 "label": f"Techniques Covered: {len(technique_counts)}",
-                "color": "#ffffff"
-            }
+                "color": "#ffffff",
+            },
         ],
         "metadata": [
-            {
-                "name": "Generated by",
-                "value": "JMo Security Audit Tool Suite"
-            }
+            {"name": "Generated by", "value": "JMo Security Audit Tool Suite"}
         ],
         "showTacticRowBackground": True,
         "tacticRowBackground": "#dddddd",
         "selectTechniquesAcrossTactics": True,
-        "selectSubtechniquesWithParent": True
+        "selectSubtechniquesWithParent": True,
     }
 
     # Write JSON
@@ -400,12 +388,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
 
     # OWASP Top 10 2021 breakdown
     if owasp_counts:
-        lines.extend([
-            "## OWASP Top 10 2021",
-            "",
-            "| Category | Findings |",
-            "|----------|----------|",
-        ])
+        lines.extend(
+            [
+                "## OWASP Top 10 2021",
+                "",
+                "| Category | Findings |",
+                "|----------|----------|",
+            ]
+        )
         for cat in sorted(owasp_counts.keys()):
             count = owasp_counts[cat]
             lines.append(f"| {cat} | {count} |")
@@ -413,12 +403,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
 
     # CWE Top 25 2024 breakdown (top 10)
     if cwe_top25_counts:
-        lines.extend([
-            "## CWE Top 25 2024 (Top 10 Most Frequent)",
-            "",
-            "| CWE ID | Rank | Findings |",
-            "|--------|------|----------|",
-        ])
+        lines.extend(
+            [
+                "## CWE Top 25 2024 (Top 10 Most Frequent)",
+                "",
+                "| CWE ID | Rank | Findings |",
+                "|--------|------|----------|",
+            ]
+        )
         sorted_cwes = sorted(cwe_top25_counts.items(), key=lambda x: -x[1])[:10]
         for cwe_id, count in sorted_cwes:
             # Try to get rank from first finding with this CWE
@@ -436,12 +428,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
 
     # NIST CSF 2.0 breakdown
     if nist_csf_functions:
-        lines.extend([
-            "## NIST Cybersecurity Framework 2.0",
-            "",
-            "| Function | Findings |",
-            "|----------|----------|",
-        ])
+        lines.extend(
+            [
+                "## NIST Cybersecurity Framework 2.0",
+                "",
+                "| Function | Findings |",
+                "|----------|----------|",
+            ]
+        )
         for func in ["GOVERN", "IDENTIFY", "PROTECT", "DETECT", "RESPOND", "RECOVER"]:
             count = nist_csf_functions.get(func, 0)
             if count > 0:
@@ -450,27 +444,31 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
 
     # PCI DSS 4.0 summary
     if pci_dss_requirements:
-        lines.extend([
-            "## PCI DSS 4.0",
-            "",
-            f"**Requirements with Findings:** {len(pci_dss_requirements)}",
-            "",
-            "See `PCI_DSS_COMPLIANCE.md` for detailed PCI DSS compliance report.",
-            "",
-        ])
+        lines.extend(
+            [
+                "## PCI DSS 4.0",
+                "",
+                f"**Requirements with Findings:** {len(pci_dss_requirements)}",
+                "",
+                "See `PCI_DSS_COMPLIANCE.md` for detailed PCI DSS compliance report.",
+                "",
+            ]
+        )
 
     # MITRE ATT&CK summary
     if mitre_techniques:
-        lines.extend([
-            "## MITRE ATT&CK",
-            "",
-            f"**Techniques Detected:** {len(mitre_techniques)}",
-            "",
-            "See `attack-navigator.json` for interactive ATT&CK Navigator visualization.",
-            "",
-            "**Top 5 Techniques:**",
-            "",
-        ])
+        lines.extend(
+            [
+                "## MITRE ATT&CK",
+                "",
+                f"**Techniques Detected:** {len(mitre_techniques)}",
+                "",
+                "See `attack-navigator.json` for interactive ATT&CK Navigator visualization.",
+                "",
+                "**Top 5 Techniques:**",
+                "",
+            ]
+        )
 
         # Count techniques across all findings
         tech_counts = defaultdict(int)
@@ -491,12 +489,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
 
         lines.append("")
 
-    lines.extend([
-        "---",
-        "",
-        "*Generated by JMo Security Audit Tool Suite*",
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "*Generated by JMo Security Audit Tool Suite*",
+            "",
+        ]
+    )
 
     # Write report
     output_path.parent.mkdir(parents=True, exist_ok=True)

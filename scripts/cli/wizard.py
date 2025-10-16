@@ -25,54 +25,54 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-# Profile definitions with resource estimates
+# Profile definitions with resource estimates (v0.5.0)
 PROFILES = {
     "fast": {
         "name": "Fast",
-        "description": "Quick scan with core tools (gitleaks, semgrep)",
-        "tools": ["gitleaks", "semgrep"],
+        "description": "Speed + coverage with 3 best-in-breed tools",
+        "tools": ["trufflehog", "semgrep", "trivy"],
         "timeout": 300,
         "threads": 8,
-        "est_time": "2-5 minutes",
-        "use_case": "Pre-commit checks, quick validation",
+        "est_time": "5-8 minutes",
+        "use_case": "Pre-commit checks, quick validation, CI/CD gate",
     },
     "balanced": {
         "name": "Balanced",
-        "description": "Comprehensive scan with all recommended tools",
+        "description": "Production-ready with DAST and comprehensive coverage",
         "tools": [
-            "gitleaks",
-            "noseyparker",
+            "trufflehog",
             "semgrep",
             "syft",
             "trivy",
             "checkov",
             "hadolint",
+            "zap",
         ],
         "timeout": 600,
         "threads": 4,
-        "est_time": "5-15 minutes",
-        "use_case": "CI/CD pipelines, regular audits",
+        "est_time": "15-20 minutes",
+        "use_case": "CI/CD pipelines, regular audits, production scans",
     },
     "deep": {
         "name": "Deep",
-        "description": "Exhaustive scan with all tools and full history",
+        "description": "Maximum coverage with runtime monitoring and fuzzing",
         "tools": [
-            "gitleaks",
-            "noseyparker",
             "trufflehog",
+            "noseyparker",
             "semgrep",
             "bandit",
             "syft",
             "trivy",
             "checkov",
-            "tfsec",
             "hadolint",
-            "osv-scanner",
+            "zap",
+            "falco",
+            "afl++",
         ],
         "timeout": 900,
         "threads": 2,
-        "est_time": "15-45 minutes",
-        "use_case": "Periodic deep audits, compliance checks",
+        "est_time": "30-60 minutes",
+        "use_case": "Security audits, compliance scans, pre-release validation",
     },
 }
 

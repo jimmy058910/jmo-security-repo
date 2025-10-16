@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# install_tools.sh - Bootstrap curated CLIs for Linux/WSL and macOS
+# install_tools.sh - Bootstrap curated CLIs for Linux/WSL and macOS (v0.5.0)
 # Installs core + curated tools:
 # - Core: python3, pip, jq, curl, git
 # - Linters: shellcheck, shfmt, ruff, bandit
-# - Secrets: gitleaks, trufflehog, noseyparker (optional)
-# - SAST: semgrep
+# - Secrets: trufflehog (verified), noseyparker (optional, deep profile)
+# - SAST: semgrep, bandit (Python-specific)
 # - SBOM/Vuln/Misconfig: syft, trivy
-# - IaC: checkov, tfsec
+# - IaC: checkov
 # - Dockerfile: hadolint
-# - Deps: osv-scanner
+# - DAST: OWASP ZAP (web security)
+# - Runtime: Falco (container/K8s monitoring, deep profile)
+# - Fuzzing: AFL++ (coverage-guided fuzzing, deep profile)
 # Usage:
 #   bash scripts/dev/install_tools.sh          # install if missing
 #   bash scripts/dev/install_tools.sh --upgrade # upgrade/refresh when possible
@@ -112,12 +114,24 @@ Darwin)
   brew_install python@3 || true
   brew_install jq || true
   brew_install git || true
-  # Single bulk brew install is usually faster
+  # Single bulk brew install is usually faster (v0.5.0 tool suite)
   brew tap trufflesecurity/tap >/dev/null 2>&1 || true
-  brew install shellcheck shfmt ruff bandit semgrep gitleaks syft trivy hadolint tfsec checkov trufflesecurity/tap/trufflehog osv-scanner || true
-  # Nosey Parker (optional; requires Rust env)
+  brew install shellcheck shfmt ruff bandit semgrep syft trivy hadolint checkov trufflesecurity/tap/trufflehog || true
+  # OWASP ZAP (DAST)
+  if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
+    brew install --cask owasp-zap || warn "ZAP installation failed; install manually from https://www.zaproxy.org/download/"
+  fi
+  # Nosey Parker (optional; deep profile only)
   if ! command -v noseyparker >/dev/null 2>&1; then
-    warn "noseyparker not found; install via: brew install noseyparker (if available) or see upstream docs"
+    warn "noseyparker not found (optional for deep profile); install via: brew install noseyparker or see upstream docs"
+  fi
+  # Falco (optional; deep profile, requires kernel modules)
+  if ! command -v falco >/dev/null 2>&1; then
+    warn "falco not found (optional for deep profile); install via: brew tap falcosecurity/tap && brew install falco"
+  fi
+  # AFL++ (optional; deep profile)
+  if ! command -v afl-fuzz >/dev/null 2>&1; then
+    warn "AFL++ not found (optional for deep profile); install via: brew install afl++"
   fi
   ;;
 Linux)
@@ -151,17 +165,13 @@ Linux)
     if ! command -v semgrep >/dev/null 2>&1; then
       bg pipx_or_pip_install semgrep
     else ok "semgrep installed"; fi
-    # Gitleaks
-    if ! command -v gitleaks >/dev/null 2>&1; then
-      bg bash -c 'curl -sSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest | jq -r ".assets[] | select(.name | test(\"linux_amd64.tar.gz\")) | .browser_download_url" | head -1 | xargs -I{} bash -c "curl -L -o /tmp/gitleaks.tgz {} && sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks"'
-    else ok "gitleaks installed"; fi
-    # TruffleHog
+    # TruffleHog (primary secrets scanner)
     if ! command -v trufflehog >/dev/null 2>&1; then
       bg bash -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'
     else ok "trufflehog installed"; fi
-    # Nosey Parker - optional
+    # Nosey Parker - optional (deep profile only)
     if ! command -v noseyparker >/dev/null 2>&1; then
-      warn "noseyparker not found; see https://github.com/praetorian-inc/noseyparker for install options"
+      warn "noseyparker not found (optional for deep profile); see https://github.com/praetorian-inc/noseyparker for install options"
     fi
     # SBOM & scanners
     if ! command -v syft >/dev/null 2>&1; then
@@ -179,18 +189,27 @@ Linux)
       esac
       bg bash -c 'sudo curl -sSL "https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-'"${HAD_ARCH}"'" -o /usr/local/bin/hadolint && sudo chmod +x /usr/local/bin/hadolint'
     else ok "hadolint installed"; fi
-    # tfsec binary
-    if ! command -v tfsec >/dev/null 2>&1; then
-      bg bash -c 'sudo curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o /usr/local/bin/tfsec && sudo chmod +x /usr/local/bin/tfsec'
-    else ok "tfsec installed"; fi
     # checkov (python)
     if ! command -v checkov >/dev/null 2>&1; then
       bg pipx_or_pip_install checkov
     else ok "checkov installed"; fi
-    # osv-scanner binary
-    if ! command -v osv-scanner >/dev/null 2>&1; then
-      bg bash -c 'sudo curl -sSL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o /usr/local/bin/osv-scanner && sudo chmod +x /usr/local/bin/osv-scanner'
-    else ok "osv-scanner installed"; fi
+    # OWASP ZAP (DAST - web security)
+    if ! command -v zap.sh >/dev/null 2>&1 && ! command -v zap >/dev/null 2>&1; then
+      warn "OWASP ZAP not found; installing via snap or manual download"
+      if command -v snap >/dev/null 2>&1; then
+        bg bash -c 'sudo snap install zaproxy --classic'
+      else
+        warn "ZAP installation requires manual setup; see https://www.zaproxy.org/download/"
+      fi
+    else ok "ZAP installed"; fi
+    # Falco (runtime security - optional, deep profile)
+    if ! command -v falco >/dev/null 2>&1; then
+      warn "falco not found (optional for deep profile); requires kernel modules - see https://falco.org/docs/getting-started/installation/"
+    fi
+    # AFL++ (fuzzing - optional, deep profile)
+    if ! command -v afl-fuzz >/dev/null 2>&1; then
+      warn "AFL++ not found (optional for deep profile); install via: sudo apt-get install afl++ or build from source"
+    fi
     # Wait for background installers to finish
     bg_wait
   else

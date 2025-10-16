@@ -12,7 +12,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import (
+    extract_code_snippet,
+    fingerprint,
+    normalize_severity,
+)
 
 
 def _iter_findings(obj: Any) -> Iterable[Dict[str, Any]]:
@@ -73,23 +77,80 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
         )
         severity = normalize_severity(str(f.get("Severity") or "HIGH"))
         fid = fingerprint("gitleaks", rule_id, file_path, start_line, msg)
-        out.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": rule_id,
-                "title": f.get("Rule") or rule_id,
-                "message": msg,
-                "description": f.get("Description") or msg,
-                "severity": severity,
-                "tool": {
-                    "name": "gitleaks",
-                    "version": str(f.get("Version") or "unknown"),
-                },
-                "location": {"path": file_path, "startLine": start_line or 0},
-                "remediation": "Rotate credentials and remove secrets from history.",
-                "tags": ["secrets"],
-                "raw": f,
-            }
-        )
+
+        # Extract secretContext for v1.1.0
+        secret_context = {}
+        secret = f.get("Secret") or f.get("Match")
+        if secret:
+            secret_context["type"] = rule_id
+            secret_context["secret"] = secret
+
+        # Entropy
+        entropy = f.get("Entropy")
+        if isinstance(entropy, (int, float)):
+            secret_context["entropy"] = float(entropy)
+
+        # Git metadata
+        commit = f.get("Commit") or f.get("CommitSHA")
+        if commit:
+            secret_context["commit"] = commit
+
+        author = f.get("Author") or f.get("CommitAuthor")
+        if author:
+            secret_context["author"] = author
+
+        date = f.get("Date") or f.get("CommitDate")
+        if date:
+            secret_context["date"] = date
+
+        # Git URL (if available)
+        git_url = f.get("GitURL")
+        if git_url:
+            secret_context["gitUrl"] = git_url
+
+        # Code context
+        context = None
+        if file_path and start_line:
+            context = extract_code_snippet(file_path, start_line, context_lines=2)
+
+        # Enhanced remediation with secret rotation steps
+        remediation = {
+            "summary": "Rotate credentials and remove secrets from history",
+            "steps": [
+                f"Rotate the exposed {rule_id}",
+                "Remove the secret from Git history using git-filter-repo or BFG Repo-Cleaner",
+                "Scan other repositories for the same secret",
+                "Audit access logs for unauthorized usage",
+                "Update secret scanning rules to prevent future leaks",
+            ],
+            "references": [
+                "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository"
+            ],
+        }
+
+        finding: Dict[str, Any] = {
+            "schemaVersion": "1.1.0",
+            "id": fid,
+            "ruleId": rule_id,
+            "title": f.get("Rule") or rule_id,
+            "message": msg,
+            "description": f.get("Description") or msg,
+            "severity": severity,
+            "tool": {
+                "name": "gitleaks",
+                "version": str(f.get("Version") or "unknown"),
+            },
+            "location": {"path": file_path, "startLine": start_line or 0},
+            "remediation": remediation,
+            "tags": ["secrets"],
+            "raw": f,
+        }
+
+        # Add optional v1.1.0 fields if present
+        if context:
+            finding["context"] = context
+        if secret_context:
+            finding["secretContext"] = secret_context
+
+        out.append(finding)
     return out

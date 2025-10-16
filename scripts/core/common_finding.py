@@ -124,3 +124,78 @@ def fingerprint(
     snippet = (message or "").strip()[:MESSAGE_SNIPPET_LENGTH]
     base = f"{tool}|{rule_id or ''}|{path or ''}|{start_line or 0}|{snippet}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:FINGERPRINT_LENGTH]
+
+
+def extract_code_snippet(
+    file_path: str,
+    start_line: int,
+    context_lines: int = 2,
+) -> dict[str, any] | None:
+    """Extract code snippet around a specific line for context.
+
+    Args:
+        file_path: Path to source file
+        start_line: Line number where finding occurred (1-indexed)
+        context_lines: Number of context lines before and after (default: 2)
+
+    Returns:
+        Dictionary with snippet, startLine, endLine, language or None if file not readable
+    """
+    from pathlib import Path
+
+    try:
+        p = Path(file_path)
+        if not p.exists() or not p.is_file():
+            return None
+
+        # Read file lines
+        lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if not lines:
+            return None
+
+        # Calculate snippet bounds (convert to 0-indexed)
+        line_idx = max(0, start_line - 1)
+        snippet_start = max(0, line_idx - context_lines)
+        snippet_end = min(len(lines), line_idx + context_lines + 1)
+
+        # Extract snippet
+        snippet_lines = lines[snippet_start:snippet_end]
+        snippet = "\n".join(
+            f"{i + snippet_start + 1}: {line}" for i, line in enumerate(snippet_lines)
+        )
+
+        # Infer language from extension
+        ext_map = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".go": "go",
+            ".rs": "rust",
+            ".java": "java",
+            ".c": "c",
+            ".cpp": "cpp",
+            ".rb": "ruby",
+            ".php": "php",
+            ".sh": "bash",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+            ".json": "json",
+            ".xml": "xml",
+            ".html": "html",
+            ".css": "css",
+            ".sql": "sql",
+            ".dockerfile": "dockerfile",
+            ".tf": "terraform",
+        }
+        language = ext_map.get(p.suffix.lower(), "text")
+        if p.name.lower() == "dockerfile":
+            language = "dockerfile"
+
+        return {
+            "snippet": snippet,
+            "startLine": snippet_start + 1,  # 1-indexed
+            "endLine": snippet_end,  # 1-indexed (exclusive)
+            "language": language,
+        }
+    except Exception:
+        return None
