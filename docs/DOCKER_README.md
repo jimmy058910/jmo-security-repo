@@ -155,7 +155,7 @@ type results\summaries\SUMMARY.md
 results/
 ├── individual-repos/
 │   └── your-project/
-│       ├── gitleaks.json      # Secrets scan
+│       ├── trufflehog.json    # Verified secrets scan
 │       ├── semgrep.json       # SAST results
 │       ├── trivy.json         # Vulnerabilities
 │       └── ...
@@ -192,20 +192,24 @@ Three optimized images for different needs:
 
 **Full (`:latest`):**
 
-- **Secrets:** gitleaks, trufflehog, noseyparker
-- **SAST:** semgrep, bandit
-- **SBOM+Vuln:** syft, trivy, osv-scanner
-- **IaC:** checkov, tfsec
+- **Secrets:** trufflehog (verified), noseyparker (deep profile)
+- **SAST:** semgrep, bandit (deep profile)
+- **SBOM+Vuln:** syft, trivy
+- **IaC:** checkov
 - **Dockerfile:** hadolint
+- **DAST:** OWASP ZAP (balanced + deep)
+- **Runtime Security:** Falco (deep profile)
+- **Fuzzing:** AFL++ (deep profile)
 - **Utilities:** shellcheck, shfmt, ruff
 
 **Slim/Alpine (`:slim`, `:alpine`):**
 
-- **Secrets:** gitleaks
+- **Secrets:** trufflehog (verified secrets only)
 - **SAST:** semgrep
 - **SBOM+Vuln:** syft, trivy
 - **IaC:** checkov
 - **Dockerfile:** hadolint
+- **DAST:** OWASP ZAP (balanced profile support)
 
 ### Choosing a Variant
 
@@ -234,7 +238,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** ~30-60 seconds
-**Tools:** gitleaks, semgrep only
+**Tools:** trufflehog, semgrep, trivy (3 tools)
 
 #### Balanced Scan (Recommended Default)
 
@@ -244,7 +248,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** 2-5 minutes
-**Tools:** All 7 core scanners
+**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, zap (7 tools)
 
 #### Deep Scan (Comprehensive)
 
@@ -427,7 +431,7 @@ cat > jmo.yml <<EOF
 default_profile: custom
 profiles:
   custom:
-    tools: [gitleaks, semgrep, trivy]
+    tools: [trufflehog, semgrep, trivy]
     timeout: 300
     threads: 8
 per_tool:
@@ -435,6 +439,8 @@ per_tool:
     flags: ["--exclude", "node_modules", "--exclude", "*.test.js"]
   trivy:
     flags: ["--severity", "HIGH,CRITICAL"]
+  zap:
+    flags: ["-config", "api.disablekey=true"]
 EOF
 
 # Run with custom profile

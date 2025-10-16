@@ -77,7 +77,7 @@ python3 /home/jimmy058910/jmo-security-repo/scripts/cli/jmo.py ci \
 
 **Output Structure:**
 
-```
+```text
 /tmp/deep-scan-results-native/
 ├── individual-repos/
 │   └── ai-news-scraper/
@@ -147,7 +147,7 @@ jq '.[0] | {tool: .tool.name, ruleId, severity, compliance: .compliance | keys}'
 
 ## Test 2: Docker Mode
 
-### Command Executed
+### Command Executed (Docker)
 
 ```bash
 docker run --rm \
@@ -157,7 +157,7 @@ docker run --rm \
   ci --repo /repo --profile-name deep --results-dir /results --human-logs --profile
 ```
 
-### Results
+### Results (Docker)
 
 **Execution Time:** ~1 minute
 **Exit Code:** 0 (success)
@@ -165,7 +165,7 @@ docker run --rm \
 
 **Output Structure:**
 
-```
+```text
 /tmp/deep-scan-results-docker/summaries/
 ├── SUMMARY.md             (236 bytes)
 ├── dashboard.html         (23.9 KB)
@@ -192,6 +192,7 @@ docker run --rm \
 **Root Cause:**
 
 The Docker image `ghcr.io/jimmy058910/jmo-security:latest-full` was built before v0.5.0 and does not include:
+
 - Compliance framework integration (v0.5.1)
 - Tool consolidation updates (v0.5.0)
 - New adapters (syft_adapter, updated trivy_adapter)
@@ -228,7 +229,7 @@ docker push ghcr.io/jimmy058910/jmo-security:latest-full
 
 ## Test 3: Wizard-Based Command
 
-### Command Executed
+### Command Executed (Wizard)
 
 The wizard doesn't accept direct CLI arguments for profile/repos. Instead, I generated a script using wizard defaults, then modified it for deep profile testing:
 
@@ -244,7 +245,7 @@ python3 /home/jimmy058910/jmo-security-repo/scripts/cli/jmo.py ci \
 
 **Note:** The wizard (`scripts/cli/wizard.py`) is designed for interactive use and emitting reusable artifacts (Makefile, shell script, GitHub Actions workflow). For automated deep profile testing, the native CLI command is more appropriate.
 
-### Results
+### Results (Wizard)
 
 **Execution Time:** ~2 minutes
 **Exit Code:** 0 (success)
@@ -252,7 +253,7 @@ python3 /home/jimmy058910/jmo-security-repo/scripts/cli/jmo.py ci \
 
 **Output Structure:**
 
-```
+```text
 /tmp/deep-scan-wizard-results/summaries/
 ├── COMPLIANCE_SUMMARY.md         (1,204 bytes)
 ├── PCI_DSS_COMPLIANCE.md         (7,618 bytes)
@@ -284,6 +285,7 @@ python3 /home/jimmy058910/jmo-security-repo/scripts/cli/jmo.py ci \
 | dashboard.html size | 758.7 KB | 759.3 KB | ✅ (~0.08% diff) |
 
 **Note:** Minor file size differences (0.06-0.08%) are expected due to:
+
 - Timestamp differences in scan metadata
 - Non-deterministic ordering of concurrent tool execution
 - JSON/HTML whitespace variations
@@ -312,7 +314,7 @@ mcp__puppeteer__puppeteer_screenshot({
 });
 ```
 
-### Results
+### Dashboard Rendering Results
 
 **Dashboard Loading:** ✅ Success
 **Page Title:** "Security Dashboard v2.0"
@@ -501,7 +503,7 @@ mcp__puppeteer__puppeteer_screenshot({
 
 **ATT&CK Navigator Import Test:**
 
-1. Navigate to https://mitre-attack.github.io/attack-navigator/
+1. Navigate to <https://mitre-attack.github.io/attack-navigator/>
 2. Click "Open Existing Layer" → "Upload from Local"
 3. Select `attack-navigator.json`
 4. **Result:** ✅ Successfully imported, T1195.001 highlighted in red
@@ -584,6 +586,7 @@ mcp__puppeteer__puppeteer_screenshot({
 **Variance Explanation:**
 
 Minimal differences (0.06-0.11%) are due to:
+
 - Scan timestamps in metadata
 - Non-deterministic tool execution order (threads: 2)
 - JSON key ordering differences

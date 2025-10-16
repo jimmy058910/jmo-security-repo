@@ -27,31 +27,83 @@ from typing import Any, Dict, List, Optional
 # =============================================================================
 
 CWE_TOP_25_2024 = {
-    "CWE-79": {"rank": 1, "category": "Injection", "name": "Cross-site Scripting (XSS)"},
+    "CWE-79": {
+        "rank": 1,
+        "category": "Injection",
+        "name": "Cross-site Scripting (XSS)",
+    },
     "CWE-787": {"rank": 2, "category": "Memory Safety", "name": "Out-of-bounds Write"},
     "CWE-89": {"rank": 3, "category": "Injection", "name": "SQL Injection"},
-    "CWE-20": {"rank": 4, "category": "Input Validation", "name": "Improper Input Validation"},
+    "CWE-20": {
+        "rank": 4,
+        "category": "Input Validation",
+        "name": "Improper Input Validation",
+    },
     "CWE-78": {"rank": 5, "category": "Injection", "name": "OS Command Injection"},
     "CWE-125": {"rank": 6, "category": "Memory Safety", "name": "Out-of-bounds Read"},
     "CWE-416": {"rank": 7, "category": "Memory Safety", "name": "Use After Free"},
     "CWE-22": {"rank": 8, "category": "Path Traversal", "name": "Path Traversal"},
     "CWE-352": {"rank": 9, "category": "CSRF", "name": "Cross-Site Request Forgery"},
-    "CWE-434": {"rank": 10, "category": "File Upload", "name": "Unrestricted Upload of Dangerous File Type"},
-    "CWE-862": {"rank": 11, "category": "Access Control", "name": "Missing Authorization"},
-    "CWE-476": {"rank": 12, "category": "Null Pointer", "name": "NULL Pointer Dereference"},
-    "CWE-287": {"rank": 13, "category": "Authentication", "name": "Improper Authentication"},
+    "CWE-434": {
+        "rank": 10,
+        "category": "File Upload",
+        "name": "Unrestricted Upload of Dangerous File Type",
+    },
+    "CWE-862": {
+        "rank": 11,
+        "category": "Access Control",
+        "name": "Missing Authorization",
+    },
+    "CWE-476": {
+        "rank": 12,
+        "category": "Null Pointer",
+        "name": "NULL Pointer Dereference",
+    },
+    "CWE-287": {
+        "rank": 13,
+        "category": "Authentication",
+        "name": "Improper Authentication",
+    },
     "CWE-190": {"rank": 14, "category": "Integer Overflow", "name": "Integer Overflow"},
-    "CWE-502": {"rank": 15, "category": "Deserialization", "name": "Insecure Deserialization"},
+    "CWE-502": {
+        "rank": 15,
+        "category": "Deserialization",
+        "name": "Insecure Deserialization",
+    },
     "CWE-77": {"rank": 16, "category": "Injection", "name": "Command Injection"},
     "CWE-119": {"rank": 17, "category": "Memory Safety", "name": "Buffer Overflow"},
-    "CWE-798": {"rank": 18, "category": "Credentials", "name": "Use of Hard-coded Credentials"},
-    "CWE-918": {"rank": 19, "category": "SSRF", "name": "Server-Side Request Forgery (SSRF)"},
-    "CWE-306": {"rank": 20, "category": "Authentication", "name": "Missing Authentication"},
+    "CWE-798": {
+        "rank": 18,
+        "category": "Credentials",
+        "name": "Use of Hard-coded Credentials",
+    },
+    "CWE-918": {
+        "rank": 19,
+        "category": "SSRF",
+        "name": "Server-Side Request Forgery (SSRF)",
+    },
+    "CWE-306": {
+        "rank": 20,
+        "category": "Authentication",
+        "name": "Missing Authentication",
+    },
     "CWE-362": {"rank": 21, "category": "Race Condition", "name": "Race Condition"},
-    "CWE-269": {"rank": 22, "category": "Privilege Management", "name": "Improper Privilege Management"},
+    "CWE-269": {
+        "rank": 22,
+        "category": "Privilege Management",
+        "name": "Improper Privilege Management",
+    },
     "CWE-94": {"rank": 23, "category": "Code Injection", "name": "Code Injection"},
-    "CWE-863": {"rank": 24, "category": "Authorization", "name": "Incorrect Authorization"},
-    "CWE-276": {"rank": 25, "category": "Permissions", "name": "Incorrect Default Permissions"},
+    "CWE-863": {
+        "rank": 24,
+        "category": "Authorization",
+        "name": "Incorrect Authorization",
+    },
+    "CWE-276": {
+        "rank": 25,
+        "category": "Permissions",
+        "name": "Incorrect Default Permissions",
+    },
 }
 
 # =============================================================================
@@ -73,11 +125,10 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-706": ["A01:2021"],  # Incorrect Object-Level Authorization
     "CWE-862": ["A01:2021"],  # Missing Authorization
     "CWE-863": ["A01:2021"],  # Incorrect Authorization
-
     # A02:2021 - Cryptographic Failures
     "CWE-259": ["A02:2021"],  # Use of Hard-coded Password
     "CWE-261": ["A02:2021"],  # Weak Cryptography for Passwords
-    "CWE-295": ["A02:2021"],  # Improper Certificate Validation
+    "CWE-295": ["A02:2021", "A07:2021"],  # Improper Certificate Validation (crypto + auth)
     "CWE-297": ["A02:2021"],  # Improper Validation of Certificate
     "CWE-310": ["A02:2021"],  # Cryptographic Issues
     "CWE-311": ["A02:2021"],  # Missing Encryption of Sensitive Data
@@ -94,12 +145,15 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-329": ["A02:2021"],  # Not Using Random IV
     "CWE-330": ["A02:2021"],  # Insufficient Randomness
     "CWE-331": ["A02:2021"],  # Insufficient Entropy
-    "CWE-335": ["A02:2021"],  # Incorrect Usage of Seeds in Pseudo-Random Number Generator
+    "CWE-335": [
+        "A02:2021"
+    ],  # Incorrect Usage of Seeds in Pseudo-Random Number Generator
     "CWE-338": ["A02:2021"],  # Use of Weak Pseudo-Random Number Generator
     "CWE-759": ["A02:2021"],  # Use of a One-Way Hash without a Salt
     "CWE-798": ["A02:2021"],  # Use of Hard-coded Credentials
-    "CWE-916": ["A02:2021"],  # Use of Password Hash with Insufficient Computational Effort
-
+    "CWE-916": [
+        "A02:2021"
+    ],  # Use of Password Hash with Insufficient Computational Effort
     # A03:2021 - Injection
     "CWE-20": ["A03:2021"],  # Improper Input Validation
     "CWE-77": ["A03:2021"],  # Command Injection
@@ -116,14 +170,12 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-97": ["A03:2021"],  # Server-Side Template Injection
     "CWE-99": ["A03:2021"],  # Resource Injection
     "CWE-917": ["A03:2021"],  # Expression Language Injection
-
     # A04:2021 - Insecure Design
     "CWE-209": ["A04:2021"],  # Information Exposure Through Error Messages
     "CWE-256": ["A04:2021"],  # Plaintext Storage of Password
     "CWE-257": ["A04:2021"],  # Storing Passwords in Recoverable Format
     "CWE-522": ["A04:2021"],  # Insufficiently Protected Credentials
     "CWE-525": ["A04:2021"],  # Information Exposure Through Browser Caching
-
     # A05:2021 - Security Misconfiguration
     "CWE-2": ["A05:2021"],  # Environmental Security Flaws
     "CWE-11": ["A05:2021"],  # ASP.NET Misconfiguration
@@ -140,12 +192,10 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-611": ["A05:2021"],  # XML External Entity (XXE)
     "CWE-732": ["A05:2021"],  # Incorrect Permission Assignment
     "CWE-942": ["A05:2021"],  # Permissive Cross-domain Policy
-
     # A06:2021 - Vulnerable and Outdated Components
     "CWE-1104": ["A06:2021"],  # Use of Unmaintained Third-Party Components
     "CWE-1035": ["A06:2021"],  # 2021 CWE Top 25
     "CWE-1329": ["A06:2021"],  # Reliance on Component That is Not Updateable
-
     # A07:2021 - Identification and Authentication Failures
     "CWE-287": ["A07:2021"],  # Improper Authentication
     "CWE-288": ["A07:2021"],  # Authentication Bypass Using Alternate Path
@@ -157,14 +207,15 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-303": ["A07:2021"],  # Incorrect Implementation of Authentication Algorithm
     "CWE-304": ["A07:2021"],  # Missing Critical Step in Authentication
     "CWE-306": ["A07:2021"],  # Missing Authentication
-    "CWE-307": ["A07:2021"],  # Improper Restriction of Excessive Authentication Attempts
+    "CWE-307": [
+        "A07:2021"
+    ],  # Improper Restriction of Excessive Authentication Attempts
     "CWE-346": ["A07:2021"],  # Origin Validation Error
     "CWE-384": ["A07:2021"],  # Session Fixation
     "CWE-521": ["A07:2021"],  # Weak Password Requirements
     "CWE-613": ["A07:2021"],  # Insufficient Session Expiration
     "CWE-620": ["A07:2021"],  # Unverified Password Change
     "CWE-640": ["A07:2021"],  # Weak Password Recovery
-
     # A08:2021 - Software and Data Integrity Failures
     "CWE-345": ["A08:2021"],  # Insufficient Verification of Data Authenticity
     "CWE-353": ["A08:2021"],  # Missing Support for Integrity Check
@@ -174,14 +225,14 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-565": ["A08:2021"],  # Reliance on Cookies without Validation
     "CWE-829": ["A08:2021"],  # Inclusion of Functionality from Untrusted Control Sphere
     "CWE-830": ["A08:2021"],  # Inclusion of Web Functionality from Untrusted Source
-    "CWE-915": ["A08:2021"],  # Improperly Controlled Modification of Dynamically-Determined Object Attributes
-
+    "CWE-915": [
+        "A08:2021"
+    ],  # Improperly Controlled Modification of Dynamically-Determined Object Attributes
     # A09:2021 - Security Logging and Monitoring Failures
     "CWE-117": ["A09:2021"],  # Improper Output Neutralization for Logs
     "CWE-223": ["A09:2021"],  # Omission of Security-relevant Information
     "CWE-532": ["A09:2021"],  # Information Exposure Through Log Files
     "CWE-778": ["A09:2021"],  # Insufficient Logging
-
     # A10:2021 - Server-Side Request Forgery (SSRF)
     "CWE-918": ["A10:2021"],  # Server-Side Request Forgery
 }
@@ -333,7 +384,7 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
         "40031": ["A05:2021"],  # POODLE
         "40032": ["A02:2021"],  # SSL/TLS weak cipher
         "40033": ["A03:2021"],  # LDAP injection
-        "40034": ["A03:2021"],  #.NET padding oracle
+        "40034": ["A03:2021"],  # .NET padding oracle
         "40035": ["A05:2021"],  # Hidden file finder
         "40036": ["A05:2021"],  # Java serialization object
         "40037": ["A03:2021"],  # Remote file inclusion
@@ -373,39 +424,119 @@ TOOL_RULE_TO_OWASP_TOP10_2021 = {
 # Maps tool/finding types to CIS Controls v8.1
 CIS_CONTROLS_V8_1 = {
     "secrets": [
-        {"control": "3.11", "title": "Encrypt Sensitive Data at Rest", "implementationGroup": "IG1"},
-        {"control": "5.4", "title": "Restrict Administrator Privileges to Dedicated Administrator Accounts", "implementationGroup": "IG1"},
+        {
+            "control": "3.11",
+            "title": "Encrypt Sensitive Data at Rest",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "5.4",
+            "title": "Restrict Administrator Privileges to Dedicated Administrator Accounts",
+            "implementationGroup": "IG1",
+        },
     ],
     "sast": [
-        {"control": "16.2", "title": "Establish and Maintain a Secure Application Development Process", "implementationGroup": "IG1"},
-        {"control": "16.5", "title": "Use Up-to-Date and Trusted Third-Party Software Components", "implementationGroup": "IG2"},
-        {"control": "16.7", "title": "Use Standard Hardening Configuration Templates for Application Infrastructure", "implementationGroup": "IG2"},
-        {"control": "16.11", "title": "Leverage Vetted Modules or Services for Application Security Components", "implementationGroup": "IG2"},
+        {
+            "control": "16.2",
+            "title": "Establish and Maintain a Secure Application Development Process",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "16.5",
+            "title": "Use Up-to-Date and Trusted Third-Party Software Components",
+            "implementationGroup": "IG2",
+        },
+        {
+            "control": "16.7",
+            "title": "Use Standard Hardening Configuration Templates for Application Infrastructure",
+            "implementationGroup": "IG2",
+        },
+        {
+            "control": "16.11",
+            "title": "Leverage Vetted Modules or Services for Application Security Components",
+            "implementationGroup": "IG2",
+        },
     ],
     "sca": [
-        {"control": "7.1", "title": "Establish and Maintain a Vulnerability Management Process", "implementationGroup": "IG1"},
-        {"control": "7.2", "title": "Establish and Maintain a Remediation Process", "implementationGroup": "IG1"},
-        {"control": "7.3", "title": "Perform Automated Operating System Patch Management", "implementationGroup": "IG1"},
-        {"control": "7.4", "title": "Perform Automated Application Patch Management", "implementationGroup": "IG2"},
-        {"control": "16.11", "title": "Leverage Vetted Modules or Services for Application Security Components", "implementationGroup": "IG2"},
+        {
+            "control": "7.1",
+            "title": "Establish and Maintain a Vulnerability Management Process",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "7.2",
+            "title": "Establish and Maintain a Remediation Process",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "7.3",
+            "title": "Perform Automated Operating System Patch Management",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "7.4",
+            "title": "Perform Automated Application Patch Management",
+            "implementationGroup": "IG2",
+        },
+        {
+            "control": "16.11",
+            "title": "Leverage Vetted Modules or Services for Application Security Components",
+            "implementationGroup": "IG2",
+        },
     ],
     "iac": [
-        {"control": "4.1", "title": "Establish and Maintain a Secure Configuration Process", "implementationGroup": "IG1"},
-        {"control": "4.2", "title": "Establish and Maintain a Secure Configuration Process for Network Infrastructure", "implementationGroup": "IG1"},
-        {"control": "4.7", "title": "Manage Default Accounts on Enterprise Assets and Software", "implementationGroup": "IG1"},
-        {"control": "12.4", "title": "Deny Communication over Unauthorized Ports", "implementationGroup": "IG1"},
+        {
+            "control": "4.1",
+            "title": "Establish and Maintain a Secure Configuration Process",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "4.2",
+            "title": "Establish and Maintain a Secure Configuration Process for Network Infrastructure",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "4.7",
+            "title": "Manage Default Accounts on Enterprise Assets and Software",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "12.4",
+            "title": "Deny Communication over Unauthorized Ports",
+            "implementationGroup": "IG1",
+        },
     ],
     "dast": [
-        {"control": "16.13", "title": "Conduct Application Penetration Testing", "implementationGroup": "IG2"},
-        {"control": "18.3", "title": "Remediate Penetration Test Findings", "implementationGroup": "IG2"},
+        {
+            "control": "16.13",
+            "title": "Conduct Application Penetration Testing",
+            "implementationGroup": "IG2",
+        },
+        {
+            "control": "18.3",
+            "title": "Remediate Penetration Test Findings",
+            "implementationGroup": "IG2",
+        },
     ],
     "container": [
-        {"control": "4.1", "title": "Establish and Maintain a Secure Configuration Process", "implementationGroup": "IG1"},
-        {"control": "4.7", "title": "Manage Default Accounts on Enterprise Assets and Software", "implementationGroup": "IG1"},
+        {
+            "control": "4.1",
+            "title": "Establish and Maintain a Secure Configuration Process",
+            "implementationGroup": "IG1",
+        },
+        {
+            "control": "4.7",
+            "title": "Manage Default Accounts on Enterprise Assets and Software",
+            "implementationGroup": "IG1",
+        },
     ],
     "runtime": [
         {"control": "8.2", "title": "Collect Audit Logs", "implementationGroup": "IG1"},
-        {"control": "8.5", "title": "Collect Detailed Audit Logs", "implementationGroup": "IG2"},
+        {
+            "control": "8.5",
+            "title": "Collect Detailed Audit Logs",
+            "implementationGroup": "IG2",
+        },
     ],
 }
 
@@ -484,23 +615,58 @@ NIST_CSF_2_0 = {
 # Maps CWEs to NIST CSF 2.0
 CWE_TO_NIST_CSF_2_0 = {
     "CWE-798": [
-        {"function": "PROTECT", "category": "PR.AC", "subcategory": "PR.AC-1", "description": "Identities and credentials are issued, managed, verified, revoked, and audited"},
-        {"function": "PROTECT", "category": "PR.DS", "subcategory": "PR.DS-1", "description": "Data-at-rest is protected"},
+        {
+            "function": "PROTECT",
+            "category": "PR.AC",
+            "subcategory": "PR.AC-1",
+            "description": "Identities and credentials are issued, managed, verified, revoked, and audited",
+        },
+        {
+            "function": "PROTECT",
+            "category": "PR.DS",
+            "subcategory": "PR.DS-1",
+            "description": "Data-at-rest is protected",
+        },
     ],
     "CWE-259": [
-        {"function": "PROTECT", "category": "PR.AC", "subcategory": "PR.AC-1", "description": "Identities and credentials are issued, managed, verified, revoked, and audited"},
+        {
+            "function": "PROTECT",
+            "category": "PR.AC",
+            "subcategory": "PR.AC-1",
+            "description": "Identities and credentials are issued, managed, verified, revoked, and audited",
+        },
     ],
     "CWE-327": [
-        {"function": "PROTECT", "category": "PR.DS", "subcategory": "PR.DS-2", "description": "Data-in-transit is protected"},
+        {
+            "function": "PROTECT",
+            "category": "PR.DS",
+            "subcategory": "PR.DS-2",
+            "description": "Data-in-transit is protected",
+        },
     ],
     "CWE-79": [
-        {"function": "DETECT", "category": "DE.CM", "subcategory": "DE.CM-8", "description": "Vulnerability scans are performed"},
+        {
+            "function": "DETECT",
+            "category": "DE.CM",
+            "subcategory": "DE.CM-8",
+            "description": "Vulnerability scans are performed",
+        },
     ],
     "CWE-89": [
-        {"function": "DETECT", "category": "DE.CM", "subcategory": "DE.CM-8", "description": "Vulnerability scans are performed"},
+        {
+            "function": "DETECT",
+            "category": "DE.CM",
+            "subcategory": "DE.CM-8",
+            "description": "Vulnerability scans are performed",
+        },
     ],
     "CWE-1104": [
-        {"function": "GOVERN", "category": "GV.SC", "subcategory": "GV.SC-3", "description": "Cybersecurity supply chain risk management processes are identified"},
+        {
+            "function": "GOVERN",
+            "category": "GV.SC",
+            "subcategory": "GV.SC-3",
+            "description": "Cybersecurity supply chain risk management processes are identified",
+        },
     ],
 }
 
@@ -570,23 +736,51 @@ PCI_DSS_4_0 = {
 # Maps CWEs to PCI DSS 4.0
 CWE_TO_PCI_DSS_4_0 = {
     "CWE-798": [
-        {"requirement": "8.3.2", "description": "Strong cryptography for authentication credentials", "priority": "CRITICAL"},
-        {"requirement": "8.2.1", "description": "Verify user identity before credential modification", "priority": "HIGH"},
+        {
+            "requirement": "8.3.2",
+            "description": "Strong cryptography for authentication credentials",
+            "priority": "CRITICAL",
+        },
+        {
+            "requirement": "8.2.1",
+            "description": "Verify user identity before credential modification",
+            "priority": "HIGH",
+        },
     ],
     "CWE-259": [
-        {"requirement": "8.3.2", "description": "Strong cryptography for authentication credentials", "priority": "CRITICAL"},
+        {
+            "requirement": "8.3.2",
+            "description": "Strong cryptography for authentication credentials",
+            "priority": "CRITICAL",
+        },
     ],
     "CWE-327": [
-        {"requirement": "4.2.1", "description": "Strong cryptography is used for PAN transmission", "priority": "CRITICAL"},
+        {
+            "requirement": "4.2.1",
+            "description": "Strong cryptography is used for PAN transmission",
+            "priority": "CRITICAL",
+        },
     ],
     "CWE-79": [
-        {"requirement": "6.2.4", "description": "Prevent XSS attacks in bespoke software", "priority": "CRITICAL"},
+        {
+            "requirement": "6.2.4",
+            "description": "Prevent XSS attacks in bespoke software",
+            "priority": "CRITICAL",
+        },
     ],
     "CWE-89": [
-        {"requirement": "6.2.4", "description": "Prevent SQL injection attacks in bespoke software", "priority": "CRITICAL"},
+        {
+            "requirement": "6.2.4",
+            "description": "Prevent SQL injection attacks in bespoke software",
+            "priority": "CRITICAL",
+        },
     ],
     "CWE-352": [
-        {"requirement": "6.2.4", "description": "Prevent CSRF attacks in bespoke software", "priority": "CRITICAL"},
+        {
+            "requirement": "6.2.4",
+            "description": "Prevent CSRF attacks in bespoke software",
+            "priority": "CRITICAL",
+        },
     ],
 }
 
@@ -667,28 +861,65 @@ MITRE_ATTACK = {
 # Maps CWEs to MITRE ATT&CK
 CWE_TO_MITRE_ATTACK = {
     "CWE-798": [
-        {"tactic": "Credential Access", "technique": "T1552", "techniqueName": "Unsecured Credentials", "subtechnique": "T1552.001", "subtechniqueName": "Credentials in Files"},
+        {
+            "tactic": "Credential Access",
+            "technique": "T1552",
+            "techniqueName": "Unsecured Credentials",
+            "subtechnique": "T1552.001",
+            "subtechniqueName": "Credentials in Files",
+        },
     ],
     "CWE-259": [
-        {"tactic": "Credential Access", "technique": "T1552", "techniqueName": "Unsecured Credentials", "subtechnique": "T1552.001", "subtechniqueName": "Credentials in Files"},
+        {
+            "tactic": "Credential Access",
+            "technique": "T1552",
+            "techniqueName": "Unsecured Credentials",
+            "subtechnique": "T1552.001",
+            "subtechniqueName": "Credentials in Files",
+        },
     ],
     "CWE-79": [
-        {"tactic": "Initial Access", "technique": "T1190", "techniqueName": "Exploit Public-Facing Application", "subtechnique": "", "subtechniqueName": ""},
+        {
+            "tactic": "Initial Access",
+            "technique": "T1190",
+            "techniqueName": "Exploit Public-Facing Application",
+            "subtechnique": "",
+            "subtechniqueName": "",
+        },
     ],
     "CWE-89": [
-        {"tactic": "Initial Access", "technique": "T1190", "techniqueName": "Exploit Public-Facing Application", "subtechnique": "", "subtechniqueName": ""},
+        {
+            "tactic": "Initial Access",
+            "technique": "T1190",
+            "techniqueName": "Exploit Public-Facing Application",
+            "subtechnique": "",
+            "subtechniqueName": "",
+        },
     ],
     "CWE-78": [
-        {"tactic": "Execution", "technique": "T1059", "techniqueName": "Command and Scripting Interpreter", "subtechnique": "", "subtechniqueName": ""},
+        {
+            "tactic": "Execution",
+            "technique": "T1059",
+            "techniqueName": "Command and Scripting Interpreter",
+            "subtechnique": "",
+            "subtechniqueName": "",
+        },
     ],
     "CWE-1104": [
-        {"tactic": "Initial Access", "technique": "T1195", "techniqueName": "Supply Chain Compromise", "subtechnique": "T1195.001", "subtechniqueName": "Compromise Software Dependencies"},
+        {
+            "tactic": "Initial Access",
+            "technique": "T1195",
+            "techniqueName": "Supply Chain Compromise",
+            "subtechnique": "T1195.001",
+            "subtechniqueName": "Compromise Software Dependencies",
+        },
     ],
 }
 
 # =============================================================================
 # Enrichment Functions
 # =============================================================================
+
 
 def get_tool_category(tool_name: str, tags: List[str]) -> Optional[str]:
     """Determine tool category for framework mapping.
@@ -766,11 +997,13 @@ def map_cwe_to_top25_2024(cwes: List[str]) -> List[Dict[str, Any]]:
     for cwe in cwes:
         cwe_clean = cwe.upper().strip()
         if cwe_clean in CWE_TOP_25_2024:
-            top25_entries.append({
-                "id": cwe_clean,
-                "rank": CWE_TOP_25_2024[cwe_clean]["rank"],
-                "category": CWE_TOP_25_2024[cwe_clean]["category"],
-            })
+            top25_entries.append(
+                {
+                    "id": cwe_clean,
+                    "rank": CWE_TOP_25_2024[cwe_clean]["rank"],
+                    "category": CWE_TOP_25_2024[cwe_clean]["category"],
+                }
+            )
 
     # Sort by rank
     top25_entries.sort(key=lambda x: x["rank"])
@@ -793,7 +1026,9 @@ def map_to_cis_controls_v8_1(tool_name: str, tags: List[str]) -> List[Dict[str, 
     return []
 
 
-def map_to_nist_csf_2_0(tool_name: str, tags: List[str], cwes: List[str]) -> List[Dict[str, str]]:
+def map_to_nist_csf_2_0(
+    tool_name: str, tags: List[str], cwes: List[str]
+) -> List[Dict[str, str]]:
     """Map finding to NIST CSF 2.0.
 
     Args:
@@ -829,7 +1064,9 @@ def map_to_nist_csf_2_0(tool_name: str, tags: List[str], cwes: List[str]) -> Lis
     return unique_mappings
 
 
-def map_to_pci_dss_4_0(tool_name: str, tags: List[str], cwes: List[str]) -> List[Dict[str, str]]:
+def map_to_pci_dss_4_0(
+    tool_name: str, tags: List[str], cwes: List[str]
+) -> List[Dict[str, str]]:
     """Map finding to PCI DSS 4.0 requirements.
 
     Args:
@@ -865,7 +1102,9 @@ def map_to_pci_dss_4_0(tool_name: str, tags: List[str], cwes: List[str]) -> List
     return unique_mappings
 
 
-def map_to_mitre_attack(tool_name: str, tags: List[str], cwes: List[str], rule_id: str) -> List[Dict[str, str]]:
+def map_to_mitre_attack(
+    tool_name: str, tags: List[str], cwes: List[str], rule_id: str
+) -> List[Dict[str, str]]:
     """Map finding to MITRE ATT&CK techniques.
 
     Args:
@@ -889,7 +1128,9 @@ def map_to_mitre_attack(tool_name: str, tags: List[str], cwes: List[str], rule_i
     category = get_tool_category(tool_name, tags)
 
     # Special case for injection findings
-    if category == "sast" and any(inj in rule_id.lower() for inj in ["inject", "xss", "sql", "command", "eval"]):
+    if category == "sast" and any(
+        inj in rule_id.lower() for inj in ["inject", "xss", "sql", "command", "eval"]
+    ):
         category = "sast_injection"
 
     if category and category in MITRE_ATTACK:
@@ -1021,7 +1262,9 @@ def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
     return finding
 
 
-def enrich_findings_with_compliance(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def enrich_findings_with_compliance(
+    findings: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """Enrich a list of findings with compliance framework mappings.
 
     Args:

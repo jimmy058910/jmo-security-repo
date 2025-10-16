@@ -301,6 +301,7 @@ Q: How do I suppress false positives?
 **Decision:** Removed Gitleaks, kept TruffleHog as primary secrets scanner
 
 **Rationale:**
+
 - **Verification Advantage:** TruffleHog actively verifies secrets against 800+ service APIs, eliminating **95% of false positives**
 - **Precision:** 74% precision (TruffleHog) vs 46% precision (Gitleaks) in academic benchmarks
 - **Platform Coverage:** TruffleHog scans Git repos, Docker images, S3 buckets, Slack, and 17+ platforms; Gitleaks is code-only
@@ -316,6 +317,7 @@ Q: How do I suppress false positives?
 **Decision:** Removed TFSec completely, consolidated to Trivy
 
 **Rationale:**
+
 - **Deprecated:** TFSec acquired by Aqua Security in July 2021, fully merged into Trivy
 - **Official Statement:** TFSec GitHub repository explicitly states "tfsec is now part of Trivy"
 - **Zero New Development:** TFSec is in maintenance mode with zero new features
@@ -331,6 +333,7 @@ Q: How do I suppress false positives?
 **Decision:** Removed OSV-Scanner, kept Trivy as primary vulnerability scanner
 
 **Rationale:**
+
 - **Container Limitation:** OSV-Scanner's documented weakness in scanning containerized applications is a showstopper for modern DevSecOps
 - **Vendor-Aware Detection:** Trivy handles backported fixes correctly (e.g., Red Hat patches CVEs in older package versions without version number changes)
 - **Layer-Aware Scanning:** Trivy identifies which container layer introduced vulnerabilities, OSV-Scanner cannot
@@ -346,6 +349,7 @@ Q: How do I suppress false positives?
 **Decision:** Kept Nosey Parker in deep profile despite tool consolidation goals
 
 **Rationale:**
+
 - **Best-in-Class Precision:** 98.5% precision (best of all secrets scanners per Praetorian testing)
 - **ML-Powered Denoising:** Finds secrets TruffleHog misses (266 vs 197 true positives in research)
 - **Complementary Coverage:** ML approach catches patterns verification-based scanners miss
@@ -361,6 +365,7 @@ Q: How do I suppress false positives?
 **Decision:** Kept Bandit in deep profile for Python-specific edge cases
 
 **Rationale:**
+
 - **Unique Findings:** Real-world Zulip testing showed 10% of findings unique to Bandit
 - **68 Refined Checks:** Python-specific checks refined over years from OpenStack Security Project
 - **Confidence Ratings:** Provides both confidence and severity ratings (Semgrep only has severity)
@@ -376,6 +381,7 @@ Q: How do I suppress false positives?
 **Decision:** Added OWASP ZAP to balanced + deep profiles
 
 **Rationale:**
+
 - **Critical Gap:** Static analysis (SAST) misses environment-specific issues and runtime vulnerabilities
 - **20-30% More Vulnerabilities:** DAST finds an average of 20-30% more vulnerabilities than SAST alone (industry research)
 - **Runtime Testing:** Detects authentication bypass, session hijacking, business logic flaws, production misconfigurations
@@ -391,6 +397,7 @@ Q: How do I suppress false positives?
 **Decision:** Added Falco to deep profile for container/Kubernetes security
 
 **Rationale:**
+
 - **Zero-Day Detection:** Static scanning (Trivy) only catches known vulnerabilities; runtime security detects zero-day exploits
 - **eBPF-Based Monitoring:** Kernel-level visibility without overhead
 - **Container Escapes:** Detects container escape attempts, privilege escalation, unauthorized file access
@@ -406,6 +413,7 @@ Q: How do I suppress false positives?
 **Decision:** Added AFL++ to deep profile for coverage-guided fuzzing
 
 **Rationale:**
+
 - **Unknown Vulnerabilities:** Fuzzing discovers bugs that traditional testing misses (not pattern-matching)
 - **10,000+ Bugs Found:** Google's OSS-Fuzz has found 10,000+ bugs in critical open-source projects using AFL-based fuzzing
 - **Coverage-Guided:** Mutates inputs to maximize code path exploration (smarter than random fuzzing)
@@ -420,6 +428,7 @@ Q: How do I suppress false positives?
 **Decision:** Trivy is the core of all three profiles
 
 **Rationale:**
+
 - **Multi-Purpose:** Vulnerabilities, container security, IaC scanning, secrets detection (secondary), SBOM generation
 - **Lightning Fast:** Scans complete in seconds (critical for CI/CD)
 - **Inherited TFSec:** Complete Terraform scanning engine from deprecated TFSec
@@ -433,12 +442,15 @@ Q: How do I suppress false positives?
 ### Profile Philosophy
 
 **Fast (3 tools):** Best-in-breed tools for each major category (secrets, SAST, SCA/container/IaC)
+
 - Use Case: Pre-commit checks, quick validation, CI/CD gates (5-8 minutes)
 
 **Balanced (7 tools):** Production-ready comprehensive coverage with DAST
+
 - Use Case: CI/CD pipelines, regular audits, production scans (15-20 minutes)
 
 **Deep (11 tools):** Maximum coverage accepting tool overhead for exhaustive detection
+
 - Use Case: Security audits, compliance scans, pre-release validation (30-60 minutes)
 
 ---
@@ -446,11 +458,13 @@ Q: How do I suppress false positives?
 ### Industry Validation
 
 **Survey Data (2024-2025):**
+
 - 74% of organizations want toolchain consolidation (GitLab Global DevSecOps Survey)
 - Best-in-class teams use 6-8 tools orchestrated through ASPM platforms
 - Organizations with 11+ tools report highest false positive rates
 
 **OWASP DevSecOps Maturity Model:**
+
 - Level 2 (Walk): 5-7 tools (our balanced profile)
 - Level 3 (Run): 6-8 tools orchestrated (our approach)
 

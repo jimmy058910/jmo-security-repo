@@ -27,6 +27,7 @@ The **deep scan profile** is designed to use **11 comprehensive security tools**
 | 11 | **afl++** | Fuzzing (coverage-guided) | ⚠️ Docker only | Requires compilation from source |
 
 **Legend:**
+
 - ✅ **Installed**: Tool is easy to install and works in all environments
 - ⚠️ **Docker only**: Tool requires complex setup, recommended via Docker image
 
@@ -37,6 +38,7 @@ The **deep scan profile** is designed to use **11 comprehensive security tools**
 ### ZAP (OWASP Zed Attack Proxy)
 
 **Requirements:**
+
 - Java Runtime Environment (JRE 11+)
 - 500MB download (includes GUI, add-ons)
 - Complex PATH configuration
@@ -45,6 +47,7 @@ The **deep scan profile** is designed to use **11 comprehensive security tools**
 **Build Time:** ~2 minutes (download)
 
 **Why Docker Only:**
+
 - Most users don't have Java installed
 - Large download impacts local environment
 - Docker image pre-packages Java + ZAP
@@ -64,6 +67,7 @@ sudo ln -s /opt/ZAP_${ZAP_VERSION}/zap.sh /usr/local/bin/zap
 ### Falco (Runtime Security)
 
 **Requirements:**
+
 - Linux kernel modules (eBPF or kernel driver)
 - Kernel headers matching running kernel
 - Root access for module loading
@@ -72,12 +76,14 @@ sudo ln -s /opt/ZAP_${ZAP_VERSION}/zap.sh /usr/local/bin/zap
 **Build Time:** N/A (kernel-dependent)
 
 **Why Docker Only (falcoctl variant):**
+
 - Full Falco requires kernel modules incompatible with WSL/macOS
 - Designed for Kubernetes/container runtime environments
 - Docker image includes **falcoctl** (CLI tool for static rule validation)
 - Runtime scanning requires Falco DaemonSet on K8s cluster
 
 **What We Install:**
+
 - ✅ **falcoctl**: CLI tool for rule management and static analysis
 - ❌ **falco daemon**: Runtime monitoring (requires kernel modules)
 
@@ -103,6 +109,7 @@ chmod +x /usr/local/bin/falcoctl
 ### AFL++ (American Fuzzy Lop)
 
 **Requirements:**
+
 - C/C++ compiler (gcc/clang)
 - LLVM development libraries
 - Build tools (make, autoconf)
@@ -112,6 +119,7 @@ chmod +x /usr/local/bin/falcoctl
 **Build Time:** ~10-15 minutes (compilation from source)
 
 **Why Docker Only:**
+
 - Requires compilation from source (no pre-built binaries)
 - Long build time impacts developer experience
 - Complex dependencies (LLVM, clang, build-essential)
@@ -153,6 +161,7 @@ make tools  # Installs 8/11 tools automatically
 ```
 
 **Why This Works:**
+
 - Fast installation (< 5 minutes)
 - No compilation required
 - Works on WSL, macOS, Linux
@@ -180,6 +189,7 @@ docker run --rm \
 ```
 
 **Why This Works:**
+
 - All 11 tools pre-installed and verified
 - Consistent environment across teams
 - No local installation required
@@ -209,6 +219,7 @@ kubectl apply -f k8s/jmo-security-cronjob.yaml
 ```
 
 **Why This Works:**
+
 - Falco daemon monitors runtime threats (syscalls, network, file access)
 - JMo Security provides static analysis of images/manifests
 - Combined coverage: SAST + SCA + IaC + DAST + runtime monitoring
@@ -337,6 +348,7 @@ docker run --rm -v $(pwd):/repo:ro ghcr.io/jimmy058910/jmo-security:v0.5.1-full 
 ### Q: Do I need all 11 tools?
 
 **A:** No. The 8 core tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint) cover 95% of security use cases. ZAP, Falco, and AFL++ are for specialized scenarios:
+
 - **ZAP:** Dynamic web application testing
 - **Falco:** Runtime threat detection (K8s/containers)
 - **AFL++:** Fuzzing C/C++ binaries
@@ -344,6 +356,7 @@ docker run --rm -v $(pwd):/repo:ro ghcr.io/jimmy058910/jmo-security:v0.5.1-full 
 ### Q: Can I install just ZAP/Falco/AFL++ locally?
 
 **A:** Yes, but it's not recommended due to complexity. Use Docker instead:
+
 - **ZAP:** Requires Java + 500MB download
 - **Falco:** Requires kernel modules (K8s only for full runtime)
 - **AFL++:** Requires 10-15 minute compilation
@@ -351,7 +364,8 @@ docker run --rm -v $(pwd):/repo:ro ghcr.io/jimmy058910/jmo-security:v0.5.1-full 
 ### Q: Will the deep profile fail if tools are missing?
 
 **A:** No. The scan continues with available tools and generates reports normally. You'll see warning logs like:
-```
+
+```text
 WARN: Tool 'zap' not found, skipping
 WARN: Tool 'falco' not found, skipping
 INFO: Scanning with 8/11 tools
@@ -376,6 +390,7 @@ make verify-env
 | **deep** | 11 | 30-60 min | Security audits, compliance, pre-release |
 
 **Recommendation:**
+
 - **Development:** Use `balanced` (7 tools, 15-20 min)
 - **CI/CD:** Use `balanced` with Docker for consistency
 - **Security Audits:** Use `deep` with Docker for maximum coverage
@@ -387,7 +402,8 @@ make verify-env
 ### Tool Not Found Errors
 
 **Symptom:**
-```
+
+```text
 ERROR: Tool 'zap' not found in PATH
 ```
 
@@ -401,7 +417,8 @@ docker run --rm -v $(pwd):/repo:ro ghcr.io/jimmy058910/jmo-security:v0.5.1-full 
 ### Docker Build Fails on Falco
 
 **Symptom:**
-```
+
+```text
 ERROR: falco tarball not in gzip format
 ```
 
@@ -411,7 +428,8 @@ Use the fixed Dockerfile (v0.5.1+) which installs falcoctl instead of full Falco
 ### AFL++ Compilation Fails
 
 **Symptom:**
-```
+
+```text
 ERROR: make failed during AFL++ installation
 ```
 

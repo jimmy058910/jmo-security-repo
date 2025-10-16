@@ -421,7 +421,7 @@ All 323 findings have 4-framework compliance mappings (CIS, NIST, PCI DSS, MITRE
 - ✅ Score normalized to 0-100 range
 - ✅ Color gradient applied (low findings = blue, high = red)
 - ✅ Legend items with total findings and techniques covered
-- ✅ Importable to https://mitre-attack.github.io/attack-navigator/
+- ✅ Importable to <https://mitre-attack.github.io/attack-navigator/>
 
 **Sample Technique Entry:**
 
@@ -442,7 +442,7 @@ All 323 findings have 4-framework compliance mappings (CIS, NIST, PCI DSS, MITRE
 
 **ATT&CK Navigator Import Test:**
 
-1. Visit https://mitre-attack.github.io/attack-navigator/
+1. Visit <https://mitre-attack.github.io/attack-navigator/>
 2. Click "Open Existing Layer" → "Upload from Local"
 3. Select `attack-navigator.json` from repo 2 results
 4. **Result:** ✅ Successfully imported, 5 techniques highlighted on matrix

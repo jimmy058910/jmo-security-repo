@@ -33,7 +33,7 @@ jobs:
         with:
           actionlint_flags: -color
           level: error
-          fail_level: error
+          fail_on_error: true
 
       - name: Validate YAML files (yamllint)
         run: |

@@ -172,13 +172,21 @@ All tool outputs are converted to a unified shape defined in `docs/schemas/commo
 - **Optional fields:** `title`, `description`, `remediation`, `references`, `tags`, `cvss`, `context`, `raw` (original tool payload)
 - **Fingerprinting:** Deterministic ID computed from `tool | ruleId | path | startLine | message[:120]` to enable cross-run deduplication
 
-**Profiles:**
+**Profiles (v0.5.0):**
 
 Configuration via `jmo.yml` supports named profiles for different scan depths:
 
-- **fast:** Minimal tools (gitleaks, semgrep), 300s timeout, 4 threads
-- **balanced:** Default comprehensive (gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint), 600s timeout
-- **deep:** All tools including tfsec, bandit, trufflehog, osv-scanner, 900s timeout, retries enabled
+- **fast:** 3 best-in-breed tools (trufflehog, semgrep, trivy), 300s timeout, 8 threads, 5-8 minutes
+  - Use case: Pre-commit checks, quick validation, CI/CD gate
+  - Coverage: Verified secrets, SAST, SCA, containers, IaC, backup secrets scanning
+
+- **balanced:** 7 production-ready tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap), 600s timeout, 4 threads, 15-20 minutes
+  - Use case: CI/CD pipelines, regular audits, production scans
+  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
+
+- **deep:** 11 comprehensive tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++), 900s timeout, 2 threads, 30-60 minutes, retries enabled
+  - Use case: Security audits, compliance scans, pre-release validation
+  - Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, runtime security, fuzzing
 
 Profiles can override tools, timeouts, threads, and per-tool flags. Use `--profile-name <name>` to apply.
 
@@ -202,13 +210,22 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 4. Generate stable fingerprint ID
 5. Return list of findings
 
-**Supported Tools:**
+**Supported Tools (v0.5.0):**
 
-- **Secrets:** gitleaks, noseyparker (local + Docker fallback), trufflehog
-- **SAST:** semgrep, bandit
+- **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
+- **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
 - **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
-- **IaC:** checkov, tfsec
-- **Dockerfile:** hadolint
+- **IaC:** checkov (policy-as-code)
+- **Dockerfile:** hadolint (best practices)
+- **DAST:** OWASP ZAP (web security, runtime vulnerabilities)
+- **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
+- **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
+
+**Removed Tools (v0.5.0):**
+
+- ❌ gitleaks → Replaced by trufflehog (better verification, fewer false positives)
+- ❌ tfsec → Deprecated since 2021, functionality merged into trivy
+- ❌ osv-scanner → Trivy provides superior container/dependency scanning
 
 **Nosey Parker Fallback:**
 
@@ -228,11 +245,11 @@ Report phase writes to `<results_dir>/summaries/`:
 
 ### Configuration
 
-**jmo.yml** controls tool selection, output formats, thresholds, and profiles:
+**jmo.yml** controls tool selection, output formats, thresholds, and profiles (v0.5.0):
 
 ```yaml
 default_profile: balanced
-tools: [gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint]
+tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
 outputs: [json, md, yaml, html, sarif]
 fail_on: ""  # Optional: CRITICAL/HIGH/MEDIUM/LOW/INFO
 retries: 0   # Global retry count for flaky tools
@@ -240,15 +257,38 @@ threads: 4   # Default parallelism
 
 profiles:
   fast:
-    tools: [gitleaks, semgrep]
+    tools: [trufflehog, semgrep, trivy]
+    threads: 8
     timeout: 300
     per_tool:
       semgrep:
-        flags: ["--exclude", "node_modules"]
+        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+      trivy:
+        flags: ["--no-progress", "--scanners", "vuln,secret,misconfig"]
+
+  balanced:
+    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+    threads: 4
+    timeout: 600
+    per_tool:
+      zap:
+        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
+
+  deep:
+    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
+    threads: 2
+    timeout: 900
+    retries: 1
+    per_tool:
+      noseyparker:
+        timeout: 1200
+      afl++:
+        timeout: 1800
+        flags: ["-m", "none"]
 
 per_tool:
   trivy:
-    flags: ["--ignore-unfixed"]
+    flags: ["--no-progress"]
     timeout: 1200
 ```
 
@@ -312,6 +352,35 @@ Configured via `.pre-commit-config.yaml`:
 - **Security:** Bandit (local only; skipped in CI pre-commit stage but covered by `make lint`)
 
 Run `make pre-commit-run` before committing. CI enforces these checks.
+
+**Technical Debt Management:**
+
+**IMPORTANT PRINCIPLE: Never leave technical debt when found. Fix it immediately.**
+
+When working on any task and you encounter linting issues, failing tests, or code quality problems:
+
+1. **Fix all issues comprehensively**, not just the ones related to your current task
+2. **Example:** If you add content to CHANGELOG.md and markdownlint shows 8 warnings (3 from your changes + 5 from previous releases), fix all 8 warnings, not just the 3 new ones
+3. **Rationale:**
+   - Technical debt compounds quickly if left unaddressed
+   - "Boy Scout Rule": Leave the codebase better than you found it
+   - Future contributors shouldn't have to fix your accumulated debt
+   - Linting issues indicate real problems (accessibility, compatibility, maintainability)
+4. **Common scenarios:**
+   - Markdown linting: Fix ALL MD036 (emphasis as heading), MD032 (blanks around lists), MD040 (code fence language) issues
+   - Python linting: Fix all ruff/black/bandit violations in touched files
+   - YAML linting: Fix all yamllint violations when editing workflow files
+   - Shell linting: Fix all shellcheck issues when editing bash scripts
+
+**Documentation debt specifically:**
+
+- Markdown linting failures are NOT cosmetic; they affect:
+  - Screen reader accessibility (heading hierarchy)
+  - Rendering consistency across platforms
+  - Copy-paste reliability of code blocks
+  - Link resolution in different viewers
+- Always run `pre-commit run markdownlint --all-files` after documentation changes
+- Fix issues incrementally: use `pre-commit run markdownlint --files <file>` to verify fixes
 
 **CI/CD Common Fixes (Lessons Learned):**
 
