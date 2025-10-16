@@ -2865,17 +2865,17 @@ policy_engine:
   enabled: true
   policy_dir: ./policies/  # Rego policy files
   data_dir: ./policy-data/  # Policy input data
-  
+
   # Policy decision points
   gates:
     - name: "critical-vulnerabilities"
       policy: "allow_critical_vulns"
       fail_on_deny: true
-    
+
     - name: "license-compliance"
       policy: "allowed_licenses"
       fail_on_deny: true
-    
+
     - name: "secret-exposure"
       policy: "verify_secrets_only"
       fail_on_deny: false  # Warning only
@@ -2893,7 +2893,7 @@ deny[msg] {
     finding.severity == "CRITICAL"
     finding.tool.name == "trivy"
     count(finding.remediation) == 0  # No remediation available
-    
+
     msg := sprintf("CRITICAL vulnerability without remediation: %v", [finding.ruleId])
 }
 
@@ -2986,17 +2986,17 @@ allow_critical_vulns {
 aspm:
   enabled: true
   platform: "defectdojo"  # or "jit", "aikido"
-  
+
   defectdojo:
     url: "https://defectdojo.example.com"
     api_key: "${DEFECTDOJO_API_KEY}"
     product_name: "my-application"
     engagement_name: "CI Scan - ${GIT_BRANCH}"
-    
+
   upload:
     - format: "sarif"  # Upload SARIF to ASPM
     - format: "json"   # Upload CommonFinding JSON
-  
+
   deduplication: true  # Let ASPM handle dedup
   risk_scoring: true   # Use ASPM risk scores
 ```
