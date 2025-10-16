@@ -204,7 +204,6 @@ CWE_TO_OWASP_TOP10_2021 = {
     "CWE-288": ["A07:2021"],  # Authentication Bypass Using Alternate Path
     "CWE-290": ["A07:2021"],  # Authentication Bypass by Spoofing
     "CWE-294": ["A07:2021"],  # Authentication Bypass by Capture-replay
-    "CWE-295": ["A07:2021"],  # Improper Certificate Validation
     "CWE-300": ["A07:2021"],  # Channel Accessible by Non-Endpoint
     "CWE-302": ["A07:2021"],  # Authentication Bypass by Assumed-Immutable Data
     "CWE-303": ["A07:2021"],  # Incorrect Implementation of Authentication Algorithm
