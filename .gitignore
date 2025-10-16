@@ -77,3 +77,4 @@ BUSINESS_PLAN.md
 
 # Claude Code user-specific configuration (open-source project)
 .claude/
+samples/fixtures/infra-demo/docker-test-results/
