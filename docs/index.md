@@ -293,3 +293,167 @@ Q: Scans are slow on large directories?
 Q: How do I suppress false positives?
 
 - A: Create a `jmo.suppress.yml` as described in [User Guide — Suppressions](USER_GUIDE.md#suppressions). A summary is written to `SUPPRESSIONS.md` during report/ci.
+
+## Why These Tools? (v0.5.0 Tool Selection Rationale)
+
+### Why TruffleHog over Gitleaks?
+
+**Decision:** Removed Gitleaks, kept TruffleHog as primary secrets scanner
+
+**Rationale:**
+- **Verification Advantage:** TruffleHog actively verifies secrets against 800+ service APIs, eliminating **95% of false positives**
+- **Precision:** 74% precision (TruffleHog) vs 46% precision (Gitleaks) in academic benchmarks
+- **Platform Coverage:** TruffleHog scans Git repos, Docker images, S3 buckets, Slack, and 17+ platforms; Gitleaks is code-only
+- **Actionable Results:** `--only-verified` flag provides verified credentials that actually authenticate, not just pattern matches
+- **False Positive Reduction:** 70-80% reduction in triage time compared to pattern-only scanners
+
+**Use Case:** Run TruffleHog with `--only-verified` in CI/CD for zero-false-positive secrets detection
+
+---
+
+### Why Remove TFSec?
+
+**Decision:** Removed TFSec completely, consolidated to Trivy
+
+**Rationale:**
+- **Deprecated:** TFSec acquired by Aqua Security in July 2021, fully merged into Trivy
+- **Official Statement:** TFSec GitHub repository explicitly states "tfsec is now part of Trivy"
+- **Zero New Development:** TFSec is in maintenance mode with zero new features
+- **100% Redundant:** Trivy inherited TFSec's entire Terraform scanning engine (154 policies)
+- **Superior Coverage:** Trivy provides **322 total IaC policies** (vs TFSec's 154) plus container scanning, vulnerability detection, and SBOM generation
+
+**Migration:** All TFSec functionality available in Trivy's IaC scanning mode
+
+---
+
+### Why Remove OSV-Scanner?
+
+**Decision:** Removed OSV-Scanner, kept Trivy as primary vulnerability scanner
+
+**Rationale:**
+- **Container Limitation:** OSV-Scanner's documented weakness in scanning containerized applications is a showstopper for modern DevSecOps
+- **Vendor-Aware Detection:** Trivy handles backported fixes correctly (e.g., Red Hat patches CVEs in older package versions without version number changes)
+- **Layer-Aware Scanning:** Trivy identifies which container layer introduced vulnerabilities, OSV-Scanner cannot
+- **OS Package Coverage:** Trivy provides superior OS package vulnerability coverage with vendor-specific advisories (RHEL, Debian, Ubuntu)
+- **42Analytics Testing:** OSV-Scanner misses vulnerabilities in language-specific libraries installed within Docker images
+
+**Use Case:** Trivy for container-based workflows, OSV-Scanner optional only for pure source code scanning
+
+---
+
+### Why Keep Nosey Parker (Deep Profile Only)?
+
+**Decision:** Kept Nosey Parker in deep profile despite tool consolidation goals
+
+**Rationale:**
+- **Best-in-Class Precision:** 98.5% precision (best of all secrets scanners per Praetorian testing)
+- **ML-Powered Denoising:** Finds secrets TruffleHog misses (266 vs 197 true positives in research)
+- **Complementary Coverage:** ML approach catches patterns verification-based scanners miss
+- **Deep Profile Philosophy:** Accept longer scan times for maximum coverage in comprehensive audits
+- **Use Case:** Historical repository audits, compliance scans, security audits requiring exhaustive coverage
+
+**Trade-off:** Slightly higher tool count in deep profile for significantly better coverage
+
+---
+
+### Why Keep Bandit (Deep Profile Only)?
+
+**Decision:** Kept Bandit in deep profile for Python-specific edge cases
+
+**Rationale:**
+- **Unique Findings:** Real-world Zulip testing showed 10% of findings unique to Bandit
+- **68 Refined Checks:** Python-specific checks refined over years from OpenStack Security Project
+- **Confidence Ratings:** Provides both confidence and severity ratings (Semgrep only has severity)
+- **Edge Case Coverage:** Detects patterns Semgrep misses (e.g., Django `QuerySet.extra()` usage, capitalized environment variables)
+- **Deep Profile Philosophy:** Maximize coverage, not minimize tool count
+
+**Alternative:** Organizations can consolidate to Semgrep Pro for multi-language SAST, accepting 5-10% edge case detection loss
+
+---
+
+### Why Add OWASP ZAP (DAST)?
+
+**Decision:** Added OWASP ZAP to balanced + deep profiles
+
+**Rationale:**
+- **Critical Gap:** Static analysis (SAST) misses environment-specific issues and runtime vulnerabilities
+- **20-30% More Vulnerabilities:** DAST finds an average of 20-30% more vulnerabilities than SAST alone (industry research)
+- **Runtime Testing:** Detects authentication bypass, session hijacking, business logic flaws, production misconfigurations
+- **API Coverage:** 83% of web traffic is APIs, ZAP provides REST API and GraphQL testing
+- **Free + Mature:** 12,000+ GitHub stars, Apache 2.0 license, active community
+
+**Use Case:** Run ZAP in test environments during build stage (15-30 min)
+
+---
+
+### Why Add Falco (Runtime Security)?
+
+**Decision:** Added Falco to deep profile for container/Kubernetes security
+
+**Rationale:**
+- **Zero-Day Detection:** Static scanning (Trivy) only catches known vulnerabilities; runtime security detects zero-day exploits
+- **eBPF-Based Monitoring:** Kernel-level visibility without overhead
+- **Container Escapes:** Detects container escape attempts, privilege escalation, unauthorized file access
+- **CNCF Graduated:** Industry-standard runtime security for Kubernetes (used by major enterprises)
+- **Policy Violations:** Real-time detection of policy violations during execution
+
+**Use Case:** Continuous monitoring in production Kubernetes environments
+
+---
+
+### Why Add AFL++ (Fuzzing)?
+
+**Decision:** Added AFL++ to deep profile for coverage-guided fuzzing
+
+**Rationale:**
+- **Unknown Vulnerabilities:** Fuzzing discovers bugs that traditional testing misses (not pattern-matching)
+- **10,000+ Bugs Found:** Google's OSS-Fuzz has found 10,000+ bugs in critical open-source projects using AFL-based fuzzing
+- **Coverage-Guided:** Mutates inputs to maximize code path exploration (smarter than random fuzzing)
+- **Proven Track Record:** Most advanced fork of American Fuzzy Lop with feedback-based mutation engine
+
+**Use Case:** Nightly fuzzing runs on 3-5 critical components (parsers, input handlers, cryptographic functions)
+
+---
+
+### Why Trivy as Multi-Purpose Champion?
+
+**Decision:** Trivy is the core of all three profiles
+
+**Rationale:**
+- **Multi-Purpose:** Vulnerabilities, container security, IaC scanning, secrets detection (secondary), SBOM generation
+- **Lightning Fast:** Scans complete in seconds (critical for CI/CD)
+- **Inherited TFSec:** Complete Terraform scanning engine from deprecated TFSec
+- **Container-Native:** Layer-aware scanning, vendor-aware detection, Docker/OCI image support
+- **Low False Positives:** Conservative secrets scanning, backport-aware vulnerability detection
+
+**Use Case:** Run Trivy in all profiles for speed + breadth of coverage
+
+---
+
+### Profile Philosophy
+
+**Fast (3 tools):** Best-in-breed tools for each major category (secrets, SAST, SCA/container/IaC)
+- Use Case: Pre-commit checks, quick validation, CI/CD gates (5-8 minutes)
+
+**Balanced (7 tools):** Production-ready comprehensive coverage with DAST
+- Use Case: CI/CD pipelines, regular audits, production scans (15-20 minutes)
+
+**Deep (11 tools):** Maximum coverage accepting tool overhead for exhaustive detection
+- Use Case: Security audits, compliance scans, pre-release validation (30-60 minutes)
+
+---
+
+### Industry Validation
+
+**Survey Data (2024-2025):**
+- 74% of organizations want toolchain consolidation (GitLab Global DevSecOps Survey)
+- Best-in-class teams use 6-8 tools orchestrated through ASPM platforms
+- Organizations with 11+ tools report highest false positive rates
+
+**OWASP DevSecOps Maturity Model:**
+- Level 2 (Walk): 5-7 tools (our balanced profile)
+- Level 3 (Run): 6-8 tools orchestrated (our approach)
+
+**Key Principle:** One excellent tool beats three mediocre tools. Prioritize developer experience and low false positives over tool count.
+
+---
