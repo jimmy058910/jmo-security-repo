@@ -19,7 +19,7 @@ yaml: Optional[AnyType] = YamlModule
 @dataclass
 class Config:
     tools: List[str] = field(
-        default_factory=lambda: ["gitleaks", "trufflehog", "semgrep", "noseyparker"]
+        default_factory=lambda: ["trufflehog", "semgrep", "syft", "trivy", "checkov", "hadolint", "zap"]
     )
     outputs: List[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
     fail_on: str = ""

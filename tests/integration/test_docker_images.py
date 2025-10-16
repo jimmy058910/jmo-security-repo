@@ -25,24 +25,25 @@ DOCKER_TAG = "test"
 
 VARIANTS = ["full", "slim", "alpine"]
 
-# Tools expected in each variant
+# Tools expected in each variant (v0.5.0)
 EXPECTED_TOOLS = {
     "full": [
-        "gitleaks",
         "trufflehog",
+        "noseyparker",
         "semgrep",
+        "bandit",
         "syft",
         "trivy",
-        "hadolint",
-        "tfsec",
         "checkov",
-        "osv-scanner",
-        "bandit",
+        "hadolint",
+        "zap",
+        "falco",
+        "afl-fuzz",  # AFL++ binary
         "shellcheck",
         "shfmt",
     ],
-    "slim": ["gitleaks", "semgrep", "syft", "trivy", "hadolint", "checkov"],
-    "alpine": ["gitleaks", "semgrep", "syft", "trivy", "hadolint", "checkov"],
+    "slim": ["trufflehog", "semgrep", "syft", "trivy", "hadolint", "checkov", "zap"],
+    "alpine": ["trufflehog", "semgrep", "syft", "trivy", "hadolint", "checkov", "zap"],
 }
 
 
