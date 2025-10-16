@@ -715,7 +715,8 @@ def test_configure_advanced_no_customize(mock_yes_no):
 @patch("wizard._prompt_yes_no", return_value=True)
 @patch("wizard._prompt_text", side_effect=["8", "1200", ""])
 @patch("wizard._prompt_choice", return_value="high")
-def test_configure_advanced_customize(mock_choice, mock_text, mock_yes_no):
+@patch("wizard._get_cpu_count", return_value=4)
+def test_configure_advanced_customize(mock_cpu, mock_choice, mock_text, mock_yes_no):
     """Test configure_advanced with customization."""
     from wizard import configure_advanced
 
