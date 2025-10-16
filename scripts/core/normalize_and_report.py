@@ -34,8 +34,12 @@ from scripts.core.adapters.tfsec_adapter import load_tfsec
 from scripts.core.adapters.trivy_adapter import load_trivy
 from scripts.core.adapters.bandit_adapter import load_bandit
 from scripts.core.adapters.osv_adapter import load_osv
+from scripts.core.adapters.zap_adapter import load_zap
+from scripts.core.adapters.falco_adapter import load_falco
+from scripts.core.adapters.aflplusplus_adapter import load_aflplusplus
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
+from scripts.core.compliance_mapper import enrich_findings_with_compliance
 
 # When profiling is enabled (env JMO_PROFILE=1), this will be populated with per-job timings
 PROFILE_TIMINGS: Dict[str, Any] = {
@@ -84,6 +88,9 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
             tf = repo / "tfsec.json"
             tv = repo / "trivy.json"
             osv_file = repo / "osv-scanner.json"
+            zap_file = repo / "zap.json"
+            falco_file = repo / "falco.json"
+            afl_file = repo / "afl++.json"
             for path, loader in (
                 (gl, load_gitleaks),
                 (th, load_trufflehog),
@@ -96,6 +103,9 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 (tf, load_tfsec),
                 (tv, load_trivy),
                 (osv_file, load_osv),
+                (zap_file, load_zap),
+                (falco_file, load_falco),
+                (afl_file, load_aflplusplus),
             ):
                 jobs.append(ex.submit(_safe_load, loader, path, profiling))
         for fut in as_completed(jobs):
@@ -117,6 +127,14 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
         # best-effort enrichment; ignore failures
         # leave silent to avoid noisy logs at import-time context
         ...
+
+    # Enrich all findings with compliance framework mappings (v1.2.0)
+    try:
+        deduped = enrich_findings_with_compliance(deduped)
+    except Exception:
+        # best-effort enrichment; ignore failures
+        ...
+
     return deduped
 
 

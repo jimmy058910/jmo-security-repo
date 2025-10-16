@@ -13,7 +13,7 @@
     "message"
   ],
   "properties": {
-    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "schemaVersion": { "type": "string", "enum": ["1.0.0", "1.1.0", "1.2.0"] },
     "id": { "type": "string", "description": "Deterministic fingerprint" },
     "ruleId": { "type": "string" },
     "title": { "type": "string" },
@@ -38,9 +38,139 @@
         "endLine": { "type": "integer", "minimum": 0 }
       }
     },
-    "remediation": { "type": "string" },
+    "remediation": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "summary": { "type": "string", "description": "Brief remediation description" },
+            "fix": { "type": "string", "description": "Suggested code fix (e.g., from Semgrep autofix)" },
+            "steps": { "type": "array", "items": { "type": "string" }, "description": "Step-by-step remediation instructions" },
+            "references": { "type": "array", "items": { "type": "string", "format": "uri" }, "description": "Links to remediation guides" }
+          }
+        }
+      ]
+    },
     "references": { "type": "array", "items": { "type": "string", "format": "uri" } },
     "tags": { "type": "array", "items": { "type": "string" } },
+    "context": {
+      "type": "object",
+      "description": "Code context for the finding (v1.1.0)",
+      "properties": {
+        "snippet": { "type": "string", "description": "2-5 line code snippet around the finding" },
+        "startLine": { "type": "integer", "minimum": 0, "description": "First line of snippet" },
+        "endLine": { "type": "integer", "minimum": 0, "description": "Last line of snippet" },
+        "language": { "type": "string", "description": "Programming language for syntax highlighting" }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "description": "Risk metadata (v1.1.0)",
+      "properties": {
+        "cwe": { "type": "array", "items": { "type": "string" }, "description": "CWE IDs (e.g., ['CWE-269'])" },
+        "owasp": { "type": "array", "items": { "type": "string" }, "description": "OWASP categories (e.g., ['A04:2021'])" },
+        "nist": {
+          "type": "object",
+          "description": "NIST framework mappings",
+          "properties": {
+            "sp80053": { "type": "array", "items": { "type": "string" }, "description": "NIST SP 800-53 controls (e.g., ['AC-6', 'IA-5'])" },
+            "csf": { "type": "array", "items": { "type": "string" }, "description": "NIST Cybersecurity Framework (e.g., ['PR.AC-1', 'DE.CM-1'])" },
+            "ssdf": { "type": "array", "items": { "type": "string" }, "description": "NIST SSDF practices (e.g., ['PW.8.2'])" }
+          }
+        },
+        "confidence": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"], "description": "Confidence level of finding" },
+        "likelihood": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"], "description": "Likelihood of exploitation" },
+        "impact": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"], "description": "Impact if exploited" }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "description": "Compliance framework mappings (v1.2.0)",
+      "properties": {
+        "owaspTop10_2021": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "OWASP Top 10 2021 categories (e.g., ['A02:2021', 'A06:2021'])"
+        },
+        "cweTop25_2024": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "description": "CWE ID (e.g., 'CWE-79')" },
+              "rank": { "type": "integer", "minimum": 1, "maximum": 25, "description": "CWE Top 25 rank" },
+              "category": { "type": "string", "description": "Category (e.g., 'Injection', 'Cryptographic Issues')" }
+            }
+          },
+          "description": "CWE Top 25 2024 Most Dangerous Weaknesses with rank"
+        },
+        "cisControlsV8_1": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "control": { "type": "string", "description": "CIS Control ID (e.g., '16.7')" },
+              "title": { "type": "string", "description": "Control title" },
+              "implementationGroup": { "type": "string", "enum": ["IG1", "IG2", "IG3"], "description": "Implementation Group" }
+            }
+          },
+          "description": "CIS Controls v8.1 mappings with Implementation Group"
+        },
+        "nistCsf2_0": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "function": { "type": "string", "enum": ["GOVERN", "IDENTIFY", "PROTECT", "DETECT", "RESPOND", "RECOVER"], "description": "CSF Function" },
+              "category": { "type": "string", "description": "Category ID (e.g., 'GV.SC', 'PR.DS')" },
+              "subcategory": { "type": "string", "description": "Subcategory ID (e.g., 'PR.DS-1')" },
+              "description": { "type": "string", "description": "Subcategory description" }
+            }
+          },
+          "description": "NIST Cybersecurity Framework 2.0 mappings"
+        },
+        "pciDss4_0": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "requirement": { "type": "string", "description": "PCI DSS 4.0 requirement (e.g., '6.2.4')" },
+              "description": { "type": "string", "description": "Requirement description" },
+              "priority": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM"], "description": "Compliance priority" }
+            }
+          },
+          "description": "PCI DSS 4.0 requirement mappings"
+        },
+        "mitreAttack": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tactic": { "type": "string", "description": "ATT&CK Tactic (e.g., 'Initial Access', 'Execution')" },
+              "technique": { "type": "string", "description": "Technique ID (e.g., 'T1190', 'T1552')" },
+              "techniqueName": { "type": "string", "description": "Technique name (e.g., 'Exploit Public-Facing Application')" },
+              "subtechnique": { "type": "string", "description": "Subtechnique ID (e.g., 'T1552.001')" },
+              "subtechniqueName": { "type": "string", "description": "Subtechnique name (e.g., 'Credentials in Files')" }
+            }
+          },
+          "description": "MITRE ATT&CK technique mappings"
+        }
+      }
+    },
+    "secretContext": {
+      "type": "object",
+      "description": "Secret-specific context (v1.1.0)",
+      "properties": {
+        "type": { "type": "string", "description": "Secret type (e.g., 'generic-api-key')" },
+        "secret": { "type": "string", "description": "The detected secret value" },
+        "entropy": { "type": "number", "description": "Shannon entropy score" },
+        "commit": { "type": "string", "description": "Git commit hash" },
+        "author": { "type": "string", "description": "Git commit author" },
+        "date": { "type": "string", "format": "date-time", "description": "Git commit date (ISO 8601)" },
+        "gitUrl": { "type": "string", "format": "uri", "description": "Link to view in Git hosting (GitHub, GitLab, etc.)" }
+      }
+    },
     "raw": { "type": "object" }
   },
   "additionalProperties": true
