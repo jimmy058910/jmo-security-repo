@@ -223,7 +223,7 @@ cat results/summaries/SUMMARY.md
 
 ## What's in this toolkit
 
-- Orchestrates secrets (gitleaks, noseyparker, trufflehog), SAST (Semgrep, Bandit), SBOM+vulnerabilities (Syft, Trivy, OSV), IaC (Checkov, tfsec), and Dockerfile (Hadolint) scanners via a unified CLI
+- Orchestrates secrets (TruffleHog verified, Nosey Parker), SAST (Semgrep, Bandit), SBOM+vulnerabilities (Syft, Trivy), IaC (Checkov), Dockerfile (Hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++) scanners via a unified CLI
 - Normalizes outputs into a CommonFinding schema (v1.0.0) for consistent reporting with stable fingerprinting
 - Ships human-friendly HTML dashboard (XSS-secured) and machine-friendly JSON/YAML/SARIF 2.1.0 (enriched with taxonomies)
 - Supports profiles, per-tool flags/timeouts, retries, include/exclude patterns, and fine-grained suppression

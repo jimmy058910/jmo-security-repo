@@ -78,7 +78,7 @@ CI note: Pull requests include an automated check that `requirements-dev.txt` ma
 
 ### External security tools (CLI)
 
-- Install curated tools (semgrep, trivy, syft, checkov, tfsec, bandit, gitleaks, trufflehog, hadolint, osv-scanner, etc.):
+- Install curated tools (trufflehog, semgrep, trivy, syft, checkov, bandit, hadolint, OWASP ZAP, Falco, AFL++, etc.):
 
 ```bash
 make tools
@@ -95,7 +95,7 @@ bash scripts/dev/install_tools.sh --upgrade
 - Targeted updates (user-local):
 
 ```bash
-bash scripts/dev/update_tools.sh gitleaks
+bash scripts/dev/update_tools.sh trufflehog
 bash scripts/dev/update_tools.sh trivy
 ```
 
