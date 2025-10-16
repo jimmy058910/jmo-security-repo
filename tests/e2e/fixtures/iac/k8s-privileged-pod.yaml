@@ -1,0 +1,55 @@
+# Kubernetes manifest with known security issues
+# Used for testing K8s security scanning
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-test-pod
+  labels:
+    app: insecure-app
+    environment: test
+spec:
+  # CIS 5.2.1: Minimize admission of privileged containers
+  containers:
+  - name: app-container
+    image: nginx:latest  # No image pinning (CIS 5.1.1)
+
+    securityContext:
+      privileged: true    # CIS 5.2.1 violation
+      runAsUser: 0        # CIS 5.2.6: Run as non-root user
+      allowPrivilegeEscalation: true  # CIS 5.2.5
+      readOnlyRootFilesystem: false   # CIS 5.2.9
+
+    resources:
+      # No resource limits set (CIS 5.2.13)
+      requests:
+        memory: "64Mi"
+        cpu: "250m"
+
+    # CIS 5.7.3: Apply security context to containers
+    # Missing: runAsNonRoot, capabilities drop, etc.
+
+  # No network policies defined (CIS 5.3.2)
+  # No pod security policy (CIS 5.2.0)
+
+  hostNetwork: true     # CIS 5.2.4: Do not use host network
+  hostPID: true         # CIS 5.2.2: Do not use host PID
+  hostIPC: true         # CIS 5.2.3: Do not use host IPC
+
+  volumes:
+  - name: host-root
+    hostPath:
+      path: /           # CIS 5.2.8: Minimize mounting host volumes
+      type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insecure-service
+spec:
+  type: LoadBalancer  # Exposed to internet without authentication
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: insecure-app

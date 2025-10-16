@@ -20,9 +20,21 @@ def write_html(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     # - Risk metadata (CWE/OWASP) tooltips and filters
     # - Triage workflow support
     # - Enhanced filters with multi-select and patterns
-    # Escape backticks to prevent breaking JavaScript template literals when embedded in HTML
-    # Must escape backticks AFTER json.dumps to avoid breaking JSON structure
-    data_json = json.dumps(findings).replace("`", "\\`")
+    # Escape dangerous characters that could break the <script> tag or JavaScript
+    # Must escape AFTER json.dumps to avoid breaking JSON structure
+    # Note: json.dumps already escapes backslashes, quotes, etc. per JSON spec
+    # We only need to escape characters that break HTML <script> context:
+    # 1. </script> breaks out of script tag (CRITICAL: causes premature script closure)
+    # 2. <script> could inject new script tags
+    # 3. <!-- could start HTML comment (breaks in some parsers)
+    # 4. Backticks break JavaScript template literals (if used in JS)
+    data_json = (
+        json.dumps(findings)
+        .replace("</script>", "<\\/script>")  # Prevent script tag breakout
+        .replace("<script", "<\\script")  # Prevent script injection (catches <script and <Script)
+        .replace("<!--", "<\\!--")  # Prevent HTML comment injection
+        .replace("`", "\\`")  # Prevent template literal breakout
+    )
     sev_badges = "".join(
         f'<span class="badge sev-{s}">{s}: {sev_counts.get(s, 0)}</span>'
         for s in SEV_ORDER
@@ -92,7 +104,7 @@ h1,h2{margin: 0 0 12px 0}
 <body>
 <div class="header">
   <div>
-    <h1>Security Dashboard v2.0</h1>
+    <h1>Security Dashboard v2.1 (Compliance-Aware)</h1>
     <div>
       <span class="badge">Total: __TOTAL__</span>
       __SEV_BADGES__
@@ -112,8 +124,35 @@ h1,h2{margin: 0 0 12px 0}
       <option value="">All</option>
     </select>
   </label>
-  <label>CWE/OWASP:
-    <input id="riskFilter" placeholder="CWE-79, A03:2021" style="width:150px"/>
+  <label>OWASP Top 10:
+    <select id="owaspFilter">
+      <option value="">All</option>
+    </select>
+  </label>
+  <label>CWE Top 25:
+    <select id="cweFilter">
+      <option value="">All</option>
+    </select>
+  </label>
+  <label>CIS Controls:
+    <select id="cisFilter">
+      <option value="">All</option>
+    </select>
+  </label>
+  <label>NIST CSF:
+    <select id="nistFilter">
+      <option value="">All</option>
+    </select>
+  </label>
+  <label>PCI DSS:
+    <select id="pciFilter">
+      <option value="">All</option>
+    </select>
+  </label>
+  <label>MITRE ATT&CK:
+    <select id="attackFilter">
+      <option value="">All</option>
+    </select>
   </label>
   <label>Path Pattern:
     <input id="pathPattern" placeholder="src/, *.py" style="width:120px"/>
@@ -236,13 +275,24 @@ function matchesFilter(f){
   const q = document.getElementById('q').value.toLowerCase();
   if(q && !(f.ruleId||'').toLowerCase().includes(q) && !(f.message||'').toLowerCase().includes(q) && !(f.location?.path||'').toLowerCase().includes(q)) return false;
 
-  const riskFilter = document.getElementById('riskFilter').value.toUpperCase();
-  if(riskFilter){
-    const risk = f.risk || {};
-    const cweMatch = (risk.cwe||[]).some(c => c.toUpperCase().includes(riskFilter));
-    const owaspMatch = (risk.owasp||[]).some(o => o.toUpperCase().includes(riskFilter));
-    if(!cweMatch && !owaspMatch) return false;
-  }
+  // Compliance framework filters
+  const owaspFilter = document.getElementById('owaspFilter').value;
+  if(owaspFilter && !(f.compliance?.owasp_top_10_2021||[]).includes(owaspFilter)) return false;
+
+  const cweFilter = document.getElementById('cweFilter').value;
+  if(cweFilter && !(f.compliance?.cwe_top_25_2024||[]).includes(cweFilter)) return false;
+
+  const cisFilter = document.getElementById('cisFilter').value;
+  if(cisFilter && !(f.compliance?.cis_controls_v8_1||[]).includes(cisFilter)) return false;
+
+  const nistFilter = document.getElementById('nistFilter').value;
+  if(nistFilter && !(f.compliance?.nist_csf_2_0||[]).includes(nistFilter)) return false;
+
+  const pciFilter = document.getElementById('pciFilter').value;
+  if(pciFilter && !(f.compliance?.pci_dss_4_0||[]).includes(pciFilter)) return false;
+
+  const attackFilter = document.getElementById('attackFilter').value;
+  if(attackFilter && !(f.compliance?.mitre_attack_v16_1||[]).includes(attackFilter)) return false;
 
   const pathPattern = document.getElementById('pathPattern').value.toLowerCase();
   if(pathPattern && !(f.location?.path||'').toLowerCase().includes(pathPattern)) return false;
@@ -323,6 +373,31 @@ function renderDetailRow(f){
     if(f.risk.confidence) html += `<div>Confidence: ${escapeHtml(f.risk.confidence)}</div>`;
     if(f.risk.likelihood) html += `<div>Likelihood: ${escapeHtml(f.risk.likelihood)}</div>`;
     if(f.risk.impact) html += `<div>Impact: ${escapeHtml(f.risk.impact)}</div>`;
+    html += '</div>';
+  }
+
+  // Compliance mappings
+  if(f.compliance){
+    html += '<div class="meta-section"><strong>Compliance Frameworks:</strong></div>';
+    html += '<div style="font-size:12px;margin-left:8px">';
+    if(f.compliance.owasp_top_10_2021 && f.compliance.owasp_top_10_2021.length > 0){
+      html += `<div><strong>OWASP Top 10 2021:</strong> ${f.compliance.owasp_top_10_2021.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
+    if(f.compliance.cwe_top_25_2024 && f.compliance.cwe_top_25_2024.length > 0){
+      html += `<div><strong>CWE Top 25 2024:</strong> ${f.compliance.cwe_top_25_2024.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
+    if(f.compliance.cis_controls_v8_1 && f.compliance.cis_controls_v8_1.length > 0){
+      html += `<div><strong>CIS Controls v8.1:</strong> ${f.compliance.cis_controls_v8_1.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
+    if(f.compliance.nist_csf_2_0 && f.compliance.nist_csf_2_0.length > 0){
+      html += `<div><strong>NIST CSF 2.0:</strong> ${f.compliance.nist_csf_2_0.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
+    if(f.compliance.pci_dss_4_0 && f.compliance.pci_dss_4_0.length > 0){
+      html += `<div><strong>PCI DSS 4.0:</strong> ${f.compliance.pci_dss_4_0.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
+    if(f.compliance.mitre_attack_v16_1 && f.compliance.mitre_attack_v16_1.length > 0){
+      html += `<div><strong>MITRE ATT&CK v16.1:</strong> ${f.compliance.mitre_attack_v16_1.map(v => escapeHtml(v)).join(', ')}</div>`;
+    }
     html += '</div>';
   }
 
@@ -474,6 +549,38 @@ function populateToolFilter(){
   tools.forEach(t => { const o = document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
 }
 
+function populateComplianceFilters(){
+  // Populate OWASP Top 10
+  const owasps = Array.from(new Set(data.flatMap(f => f.compliance?.owasp_top_10_2021||[]))).sort();
+  const owaspSel = document.getElementById('owaspFilter');
+  owasps.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; owaspSel.appendChild(o); });
+
+  // Populate CWE Top 25
+  const cwes = Array.from(new Set(data.flatMap(f => f.compliance?.cwe_top_25_2024||[]))).sort();
+  const cweSel = document.getElementById('cweFilter');
+  cwes.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; cweSel.appendChild(o); });
+
+  // Populate CIS Controls
+  const cis = Array.from(new Set(data.flatMap(f => f.compliance?.cis_controls_v8_1||[]))).sort();
+  const cisSel = document.getElementById('cisFilter');
+  cis.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; cisSel.appendChild(o); });
+
+  // Populate NIST CSF
+  const nist = Array.from(new Set(data.flatMap(f => f.compliance?.nist_csf_2_0||[]))).sort();
+  const nistSel = document.getElementById('nistFilter');
+  nist.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; nistSel.appendChild(o); });
+
+  // Populate PCI DSS
+  const pci = Array.from(new Set(data.flatMap(f => f.compliance?.pci_dss_4_0||[]))).sort();
+  const pciSel = document.getElementById('pciFilter');
+  pci.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; pciSel.appendChild(o); });
+
+  // Populate MITRE ATT&CK
+  const attack = Array.from(new Set(data.flatMap(f => f.compliance?.mitre_attack_v16_1||[]))).sort();
+  const attackSel = document.getElementById('attackFilter');
+  attack.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; attackSel.appendChild(o); });
+}
+
 function setSort(key){
   const ths = document.querySelectorAll('#tbl thead th');
   ths.forEach(th=> th.classList.remove('sort-asc','sort-desc'));
@@ -532,7 +639,7 @@ document.getElementById('bulkTriage').addEventListener('click', ()=>{
 });
 
 // Wire filters with persistence
-['sev','q','tool','riskFilter','pathPattern','excludePattern','hideTriaged','groupBy'].forEach(id => {
+['sev','q','tool','owaspFilter','cweFilter','cisFilter','nistFilter','pciFilter','attackFilter','pathPattern','excludePattern','hideTriaged','groupBy'].forEach(id => {
   const el = document.getElementById(id);
   if(!el) return;
   el.addEventListener(id === 'hideTriaged' ? 'change' : 'input', ()=>{
@@ -549,11 +656,12 @@ document.querySelectorAll('#tbl thead th').forEach(th => {
 });
 
 populateToolFilter();
+populateComplianceFilters();
 // Restore persisted state
 try{
   const savedTheme = localStorage.getItem('jmo_theme')||'light';
   setTheme(savedTheme);
-  ['sev','q','tool','riskFilter','pathPattern','excludePattern','groupBy'].forEach(id => {
+  ['sev','q','tool','owaspFilter','cweFilter','cisFilter','nistFilter','pciFilter','attackFilter','pathPattern','excludePattern','groupBy'].forEach(id => {
     const val = localStorage.getItem('jmo_'+id);
     if(val) document.getElementById(id).value = val;
   });

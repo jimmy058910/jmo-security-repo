@@ -1,11 +1,11 @@
 # JMo Security Suite - Alpine Docker Image
 # Base: Alpine Linux 3.18 for minimal size
-# Size: ~150MB | Tools: 7 core scanners (v0.5.0) with minimal footprint
+# Size: ~150MB | Tools: 7 core scanners (v0.6.0) with minimal footprint
 
 FROM alpine:3.18 AS base
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Alpine)"
-LABEL org.opencontainers.image.description="Ultra-lightweight security toolkit with 7 core scanners (v0.5.0) based on Alpine Linux"
+LABEL org.opencontainers.image.description="Ultra-lightweight security toolkit with 7 core scanners + multi-target scanning (v0.6.0) based on Alpine Linux"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"

@@ -25,7 +25,11 @@ def test_gitleaks_array_normalization(tmp_path: Path):
     out = load_gitleaks(path)
     assert len(out) == 1
     item = out[0]
-    assert item["schemaVersion"] in ["1.0.0", "1.1.0"]
+    assert item["schemaVersion"] in [
+        "1.0.0",
+        "1.1.0",
+        "1.2.0",
+    ]  # Enriched findings get 1.2.0
     assert item["ruleId"] == "generic-api-key"
     assert item["severity"] == "HIGH"
     assert item["location"]["path"] == "src/app.py"

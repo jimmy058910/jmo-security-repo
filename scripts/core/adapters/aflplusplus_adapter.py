@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def _crash_type_to_severity(crash_type: str) -> str:
@@ -195,6 +196,8 @@ def load_aflplusplus(path: str | Path) -> List[Dict[str, Any]]:
             "raw": crash,
         }
 
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
         findings.append(finding)
 
     return findings

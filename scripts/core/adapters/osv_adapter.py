@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 SEV_FROM_CVSS: Dict[str, str] = {
@@ -79,23 +80,25 @@ def load_osv(path: str | Path) -> List[Dict[str, Any]]:
             path_str = source or ""
             msg = f"{vid} in {pkg or 'unknown'}: {summary}"
             fid = fingerprint("osv", str(vid), path_str, 0, msg)
-            out.append(
-                {
-                    "schemaVersion": "1.0.0",
-                    "id": fid,
-                    "ruleId": str(vid),
-                    "title": vid,
-                    "message": msg,
-                    "description": summary,
-                    "severity": sev,
-                    "tool": {
-                        "name": "osv-scanner",
-                        "version": str(data.get("version") or "unknown"),
-                    },
-                    "location": {"path": path_str, "startLine": 0},
-                    "remediation": "Update to a non-vulnerable version per advisory.",
-                    "tags": ["dependency", "vulnerability"],
-                    "raw": v,
-                }
-            )
+            finding = {
+                "schemaVersion": "1.0.0",
+                "id": fid,
+                "ruleId": str(vid),
+                "title": vid,
+                "message": msg,
+                "description": summary,
+                "severity": sev,
+                "tool": {
+                    "name": "osv-scanner",
+                    "version": str(data.get("version") or "unknown"),
+                },
+                "location": {"path": path_str, "startLine": 0},
+                "remediation": "Update to a non-vulnerable version per advisory.",
+                "tags": ["dependency", "vulnerability"],
+                "risk": {"cwe": ["CWE-1104"]},
+                "raw": v,
+            }
+            # Enrich with compliance framework mappings
+            finding = enrich_finding_with_compliance(finding)
+            out.append(finding)
     return out

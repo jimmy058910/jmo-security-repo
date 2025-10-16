@@ -74,14 +74,40 @@ jmotools balanced --repos-dir ~/repos
 # Full deep scan
 jmotools full --repos-dir ~/repos
 
-# Manual scan using Python CLI
+# Manual scan using Python CLI - Repository scanning
 python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --human-logs
 
-# Aggregate and report
+# Multi-target scanning (v0.6.0+)
+# Scan container images
+python3 scripts/cli/jmo.py scan --image nginx:latest --tools trivy syft
+
+# Scan IaC files
+python3 scripts/cli/jmo.py scan --terraform-state infrastructure.tfstate --tools checkov trivy
+
+# Scan live web URLs (DAST)
+python3 scripts/cli/jmo.py scan --url https://example.com --tools zap
+
+# Scan GitLab repositories
+python3 scripts/cli/jmo.py scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
+
+# Scan Kubernetes clusters
+python3 scripts/cli/jmo.py scan --k8s-context prod --k8s-all-namespaces --tools trivy
+
+# Scan multiple target types in one command
+python3 scripts/cli/jmo.py scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --terraform-state infrastructure.tfstate \
+  --url https://myapp.com \
+  --gitlab-repo myorg/backend \
+  --k8s-context prod \
+  --results-dir ./comprehensive-audit
+
+# Aggregate and report (all target types)
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 
-# CI mode: scan + report + threshold gating in one command
-python3 scripts/cli/jmo.py ci --repos-dir ~/repos --fail-on HIGH --profile
+# CI mode: scan + report + threshold gating (multi-target support)
+python3 scripts/cli/jmo.py ci --image nginx:latest --url https://api.example.com --fail-on HIGH --profile
 ```
 
 ### Running a Single Test
@@ -150,18 +176,33 @@ tests/
 **Two-Phase Workflow:**
 
 1. **Scan Phase** (`jmo scan`):
-   - Discovers repos from `--repo`, `--repos-dir`, or `--targets`
+   - **v0.5.x and earlier:** Discovers repos from `--repo`, `--repos-dir`, or `--targets`
+   - **v0.6.0+:** Multi-target scanning across 6 target types:
+     - **Repositories:** `--repo`, `--repos-dir`, `--targets` (local Git repos)
+     - **Container Images:** `--image`, `--images-file` (Docker/OCI images)
+     - **IaC Files:** `--terraform-state`, `--cloudformation`, `--k8s-manifest`
+     - **Web URLs:** `--url`, `--urls-file`, `--api-spec` (DAST scanning)
+     - **GitLab Repos:** `--gitlab-repo`, `--gitlab-group` (GitLab integration)
+     - **Kubernetes Clusters:** `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces`
    - Invokes tools in parallel (configurable threads)
-   - Writes raw JSON to `results/individual-repos/<repo>/{tool}.json`
+   - Writes raw JSON to results directories by target type:
+     - `results/individual-repos/<repo>/{tool}.json`
+     - `results/individual-images/<image>/{tool}.json`
+     - `results/individual-iac/<file>/{tool}.json`
+     - `results/individual-web/<domain>/{tool}.json`
+     - `results/individual-gitlab/<group>_<repo>/{tool}.json`
+     - `results/individual-k8s/<context>_<namespace>/{tool}.json`
    - Supports timeouts, retries, and per-tool overrides
    - Gracefully handles missing tools with `--allow-missing-tools` (writes empty stubs)
 
 2. **Report Phase** (`jmo report`):
+   - Scans all 6 target type directories for tool outputs
    - Loads all tool outputs via adapters
-   - Normalizes to CommonFinding schema
-   - Deduplicates by fingerprint ID
+   - Normalizes to CommonFinding schema (v1.2.0 with compliance fields)
+   - Deduplicates by fingerprint ID across all target types
+   - Enriches findings with compliance frameworks (OWASP, CWE, CIS, NIST CSF, PCI DSS, ATT&CK)
    - Enriches Trivy findings with Syft SBOM context
-   - Writes unified outputs: `findings.json`, `SUMMARY.md`, `dashboard.html`, `findings.sarif`, etc.
+   - Writes unified outputs: `findings.json`, `SUMMARY.md`, `dashboard.html`, `findings.sarif`, `COMPLIANCE_SUMMARY.md`, etc.
    - Supports severity-based failure thresholds (`--fail-on HIGH`)
 
 **CommonFinding Schema:**
@@ -170,7 +211,19 @@ All tool outputs are converted to a unified shape defined in `docs/schemas/commo
 
 - **Required fields:** `schemaVersion`, `id` (fingerprint), `ruleId`, `severity`, `tool` (name/version), `location` (path/lines), `message`
 - **Optional fields:** `title`, `description`, `remediation`, `references`, `tags`, `cvss`, `context`, `raw` (original tool payload)
+- **Compliance field (v1.2.0+):** `compliance` object with 6 framework mappings:
+  - `owaspTop10_2021`: Array of OWASP Top 10 categories (e.g., ["A02:2021", "A06:2021"])
+  - `cweTop25_2024`: Array of CWE Top 25 entries with rank, category
+  - `cisControlsV8_1`: Array of CIS Controls with Implementation Group (IG1/IG2/IG3)
+  - `nistCsf2_0`: Array of NIST CSF mappings (function, category, subcategory)
+  - `pciDss4_0`: Array of PCI DSS 4.0 requirements with priority
+  - `mitreAttack`: Array of ATT&CK techniques (tactic, technique, subtechnique)
+- **Risk field (v1.1.0+):** `risk` object with CWE, confidence, likelihood, impact
 - **Fingerprinting:** Deterministic ID computed from `tool | ruleId | path | startLine | message[:120]` to enable cross-run deduplication
+- **Schema Versions:**
+  - **1.0.0:** Basic finding format
+  - **1.1.0:** Added `risk`, `context`, enhanced remediation
+  - **1.2.0:** Added `compliance` field (v0.5.1+), auto-enriched during reporting
 
 **Profiles (v0.5.0):**
 
@@ -230,6 +283,119 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 **Nosey Parker Fallback:**
 
 When local binary is missing/fails, automatically falls back to Docker-based runner via `scripts/core/run_noseyparker_docker.sh`. Requires Docker installed and `ghcr.io/praetorian-inc/noseyparker:latest` image.
+
+### Multi-Target Scanning Architecture (v0.6.0+)
+
+**Overview:**
+
+v0.6.0 expands scanning beyond local Git repositories to 5 additional target types, enabling comprehensive security coverage across an organization's entire infrastructure.
+
+**Supported Target Types:**
+
+1. **Repositories** (existing): Local Git repos via `--repo`, `--repos-dir`, `--targets`
+2. **Container Images** (NEW): Docker/OCI images via `--image`, `--images-file`
+3. **IaC Files** (NEW): Terraform/CloudFormation/K8s manifests via `--terraform-state`, `--cloudformation`, `--k8s-manifest`
+4. **Web URLs** (NEW): Live web apps/APIs via `--url`, `--urls-file`, `--api-spec`
+5. **GitLab Repos** (NEW): GitLab-hosted repos via `--gitlab-repo`, `--gitlab-group`
+6. **Kubernetes Clusters** (NEW): Live K8s clusters via `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces`
+
+**Implementation Pattern:**
+
+All scan targets follow a consistent pattern in [jmo.py](scripts/cli/jmo.py):
+
+```python
+# 1. Target Collection Function
+def _iter_images(args) -> list[str]:
+    """Collect container images from CLI arguments."""
+    images = []
+    if getattr(args, "image", None):
+        images.append(args.image)
+    if getattr(args, "images_file", None):
+        # Load from file, skip comments/empty lines
+        ...
+    return images
+
+# 2. Scan Job Function (ThreadPoolExecutor)
+def job_image(image: str) -> tuple[str, dict[str, bool]]:
+    """Scan a container image with trivy and syft."""
+    # Sanitize name for directory
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
+    out_dir = results_dir / "individual-images" / safe_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Tool invocation
+    if "trivy" in tools:
+        cmd = ["trivy", "image", "-q", "-f", "json", image, "-o", str(out)]
+        rc, _, _, used = _run_cmd(cmd, timeout, retries, ok_rcs=(0, 1))
+
+    # Return status
+    return image, statuses
+
+# 3. Parallel Execution
+with ThreadPoolExecutor(max_workers=max_workers) as ex:
+    for image in images:
+        futures.append(ex.submit(job_image, image))
+    for fut in as_completed(futures):
+        name, statuses = fut.result()
+        _log(args, "INFO", f"scanned image {name}: {statuses}")
+```
+
+**Key Architectural Decisions:**
+
+- **Parallel execution:** All target types use ThreadPoolExecutor for concurrent scanning
+- **Consistent logging:** Each scan target type has distinct log prefix (`repo`, `image`, `IaC`, `URL`, `GitLab`, `K8s`)
+- **Directory isolation:** Each target type writes to separate `individual-{type}/` directories
+- **Error resilience:** `--allow-missing-tools` writes empty stubs, allowing partial results
+- **Unified reporting:** `normalize_and_report.py` scans all 6 directories and deduplicates across targets
+
+**Tool Assignments by Target Type:**
+
+| Target Type | Primary Tools | Secondary Tools |
+|-------------|---------------|-----------------|
+| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit |
+| Container Images | trivy, syft | - |
+| IaC Files | checkov, trivy | - |
+| Web URLs | zap | - |
+| GitLab Repos | trufflehog | - |
+| Kubernetes | trivy | - |
+
+**CLI Argument Design:**
+
+- **Single target:** `--image nginx:latest`
+- **Batch file:** `--images-file images.txt` (one per line, # comments supported)
+- **Type-specific:** `--terraform-state` vs `--cloudformation` for IaC type detection
+- **Context-aware:** `--gitlab-url`, `--gitlab-token` for authentication
+- **Namespace control:** `--k8s-namespace` vs `--k8s-all-namespaces`
+
+**Results Aggregation:**
+
+[normalize_and_report.py:75-132](scripts/core/normalize_and_report.py#L75-L132) scans all target directories:
+
+```python
+target_dirs = [
+    results_dir / "individual-repos",
+    results_dir / "individual-images",
+    results_dir / "individual-iac",
+    results_dir / "individual-web",
+    results_dir / "individual-gitlab",
+    results_dir / "individual-k8s",
+]
+
+for target_dir in target_dirs:
+    if not target_dir.exists():
+        continue
+    for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
+        # Load all tool outputs (trivy, syft, checkov, zap, trufflehog, etc.)
+        # Findings deduplicated by fingerprint ID across all targets
+```
+
+**Benefits:**
+
+- **Unified security posture:** Single tool for all asset types
+- **Reduced tooling sprawl:** No separate container scanners, IaC validators, DAST tools
+- **Consistent findings:** All findings normalized to CommonFinding schema
+- **Compliance automation:** All findings enriched with 6 compliance frameworks
+- **CI/CD efficiency:** Multi-target scanning in single pipeline step
 
 ### Output Formats
 
@@ -497,27 +663,49 @@ CI validates that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
 - No shell=True in subprocess calls (use list args)
 - Validate all file paths from user input
 
-### Results Directory Layout
+### Results Directory Layout (v0.6.0+)
 
 ```text
 results/
-├── individual-repos/
+├── individual-repos/          # Repository scans (existing)
 │   └── <repo-name>/
-│       ├── gitleaks.json
+│       ├── trufflehog.json
 │       ├── semgrep.json
 │       ├── trivy.json
 │       └── ...
-└── summaries/
-    ├── findings.json
-    ├── SUMMARY.md
-    ├── findings.yaml
-    ├── dashboard.html
-    ├── findings.sarif
-    ├── SUPPRESSIONS.md
-    └── timings.json (when --profile used)
+├── individual-images/         # v0.6.0: Container image scans
+│   └── <sanitized-image>/
+│       ├── trivy.json
+│       └── syft.json
+├── individual-iac/            # v0.6.0: IaC file scans
+│   └── <file-stem>/
+│       ├── checkov.json
+│       └── trivy.json
+├── individual-web/            # v0.6.0: Web app/API scans
+│   └── <domain>/
+│       └── zap.json
+├── individual-gitlab/         # v0.6.0: GitLab repository scans
+│   └── <group>_<repo>/
+│       └── trufflehog.json
+├── individual-k8s/            # v0.6.0: Kubernetes cluster scans
+│   └── <context>_<namespace>/
+│       └── trivy.json
+└── summaries/                 # Aggregated reports (all targets)
+    ├── findings.json          # Unified findings from all target types
+    ├── SUMMARY.md             # Summary with severity counts
+    ├── findings.yaml          # Optional YAML format
+    ├── dashboard.html         # Interactive dashboard
+    ├── findings.sarif         # SARIF 2.1.0 format
+    ├── SUPPRESSIONS.md        # Suppression summary
+    ├── COMPLIANCE_SUMMARY.md  # v0.5.1: Multi-framework compliance
+    ├── PCI_DSS_COMPLIANCE.md  # v0.5.1: PCI DSS report
+    ├── attack-navigator.json  # v0.5.1: MITRE ATT&CK Navigator
+    └── timings.json           # Performance profiling (when --profile used)
 ```
 
-Never change default paths without updating all tests and documentation.
+**Important:** Never change default paths without updating all tests and documentation.
+
+**v0.6.0 Note:** `normalize_and_report.py` automatically scans all 6 target directories. Findings are deduplicated across all target types by fingerprint ID.
 
 ## Release Process
 

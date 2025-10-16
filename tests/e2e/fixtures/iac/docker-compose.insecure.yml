@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    image: nginx:latest  # No version pinning
+    ports:
+      - "80:80"  # Exposed to all interfaces
+    environment:
+      - API_KEY=hardcoded-key-12345  # Hardcoded secret
+    privileged: true  # Unnecessary privileges
+    network_mode: host  # Using host network
+
+  db:
+    image: postgres:latest
+    ports:
+      - "5432:5432"  # Database exposed externally
+    environment:
+      - POSTGRES_PASSWORD=weak123  # Weak password
+      - POSTGRES_HOST_AUTH_METHOD=trust  # No authentication
+    volumes:
+      - /:/host-root  # Mounting host root

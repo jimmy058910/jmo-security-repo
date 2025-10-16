@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-push docker-test
+.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -36,10 +36,11 @@ help:
 	@echo "  full      - Deep profile scan via jmotools"
 	@echo ""
 	@echo "Docker Targets:"
-	@echo "  docker-build      - Build Docker image (VARIANT=full|slim|alpine, default: full)"
-	@echo "  docker-build-all  - Build all Docker image variants (full, slim, alpine)"
-	@echo "  docker-test       - Test Docker image (VARIANT=full|slim|alpine, default: full)"
-	@echo "  docker-push       - Push Docker image to registry (VARIANT=full|slim|alpine, TAG=latest)"
+	@echo "  docker-build         - Build Docker image (VARIANT=full|slim|alpine, default: full)"
+	@echo "  docker-build-all     - Build all Docker image variants (full, slim, alpine)"
+	@echo "  docker-build-local   - Build all variants with 'local' tag for testing before release"
+	@echo "  docker-test          - Test Docker image (VARIANT=full|slim|alpine, default: full)"
+	@echo "  docker-push          - Push Docker image to registry (VARIANT=full|slim|alpine, TAG=latest)"
 
 TOOLS_SCRIPT := scripts/dev/install_tools.sh
 VERIFY_SCRIPT := scripts/dev/ci-local.sh
@@ -233,6 +234,20 @@ docker-build-all:
 	$(MAKE) docker-build VARIANT=full
 	$(MAKE) docker-build VARIANT=slim
 	$(MAKE) docker-build VARIANT=alpine
+
+docker-build-local:
+	@echo "Building all Docker variants with 'local' tag for testing..."
+	docker build -f Dockerfile -t jmo-security:local-full .
+	docker build -f Dockerfile.slim -t jmo-security:local-slim .
+	docker build -f Dockerfile.alpine -t jmo-security:local-alpine .
+	@echo ""
+	@echo "✅ Local Docker images built successfully:"
+	@echo "  - jmo-security:local-full"
+	@echo "  - jmo-security:local-slim"
+	@echo "  - jmo-security:local-alpine"
+	@echo ""
+	@echo "Test with: docker run --rm jmo-security:local-full --help"
+	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local bash tests/e2e/run_comprehensive_tests.sh"
 
 docker-test:
 	@echo "Testing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"

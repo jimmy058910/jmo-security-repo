@@ -15,6 +15,7 @@ from scripts.core.common_finding import (
     fingerprint,
     normalize_severity,
 )
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 SEMGREP_TO_SEV = {
@@ -150,5 +151,7 @@ def load_semgrep(path: str | Path) -> List[Dict[str, Any]]:
         if risk:
             finding["risk"] = risk
 
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
         out.append(finding)
     return out

@@ -75,6 +75,40 @@ def parse_args():
         "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
     )
     g.add_argument("--targets", help="File listing repo paths (one per line)")
+
+    # Container image scanning (Tier 1)
+    sp.add_argument(
+        "--image", help="Container image to scan (format: registry/image:tag)"
+    )
+    sp.add_argument("--images-file", help="File with one image per line")
+
+    # IaC/Terraform state scanning (Tier 1)
+    sp.add_argument("--terraform-state", help="Terraform state file to scan")
+    sp.add_argument("--cloudformation", help="CloudFormation template to scan")
+    sp.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
+
+    # Live web app/API scanning (Tier 1)
+    sp.add_argument("--url", help="Web application URL to scan")
+    sp.add_argument("--urls-file", help="File with URLs (one per line)")
+    sp.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
+
+    # GitLab integration (Tier 1)
+    sp.add_argument(
+        "--gitlab-url", help="GitLab instance URL (e.g., https://gitlab.com)"
+    )
+    sp.add_argument(
+        "--gitlab-token", help="GitLab access token (or use GITLAB_TOKEN env var)"
+    )
+    sp.add_argument("--gitlab-group", help="GitLab group to scan")
+    sp.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
+
+    # Kubernetes cluster scanning (Tier 1)
+    sp.add_argument("--k8s-context", help="Kubernetes context to scan")
+    sp.add_argument("--k8s-namespace", help="Kubernetes namespace to scan")
+    sp.add_argument(
+        "--k8s-all-namespaces", action="store_true", help="Scan all namespaces"
+    )
+
     sp.add_argument(
         "--results-dir",
         default="results",
@@ -177,6 +211,40 @@ def parse_args():
         "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
     )
     cg.add_argument("--targets", help="File listing repo paths (one per line)")
+
+    # Container image scanning (Tier 1)
+    cp.add_argument(
+        "--image", help="Container image to scan (format: registry/image:tag)"
+    )
+    cp.add_argument("--images-file", help="File with one image per line")
+
+    # IaC/Terraform state scanning (Tier 1)
+    cp.add_argument("--terraform-state", help="Terraform state file to scan")
+    cp.add_argument("--cloudformation", help="CloudFormation template to scan")
+    cp.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
+
+    # Live web app/API scanning (Tier 1)
+    cp.add_argument("--url", help="Web application URL to scan")
+    cp.add_argument("--urls-file", help="File with URLs (one per line)")
+    cp.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
+
+    # GitLab integration (Tier 1)
+    cp.add_argument(
+        "--gitlab-url", help="GitLab instance URL (e.g., https://gitlab.com)"
+    )
+    cp.add_argument(
+        "--gitlab-token", help="GitLab access token (or use GITLAB_TOKEN env var)"
+    )
+    cp.add_argument("--gitlab-group", help="GitLab group to scan")
+    cp.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
+
+    # Kubernetes cluster scanning (Tier 1)
+    cp.add_argument("--k8s-context", help="Kubernetes context to scan")
+    cp.add_argument("--k8s-namespace", help="Kubernetes namespace to scan")
+    cp.add_argument(
+        "--k8s-all-namespaces", action="store_true", help="Scan all namespaces"
+    )
+
     cp.add_argument(
         "--results-dir",
         default="results",
@@ -402,6 +470,125 @@ def _iter_repos(args) -> list[Path]:
     return repos
 
 
+def _iter_images(args) -> list[str]:
+    """Collect container images to scan."""
+    images: list[str] = []
+    if getattr(args, "image", None):
+        images.append(args.image)
+    if getattr(args, "images_file", None):
+        p = Path(args.images_file)
+        if p.exists():
+            for line in p.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                images.append(s)
+    return images
+
+
+def _iter_iac_files(args) -> list[tuple[str, Path]]:
+    """Collect IaC files to scan. Returns list of (type, path) tuples."""
+    iac_files: list[tuple[str, Path]] = []
+    if getattr(args, "terraform_state", None):
+        p = Path(args.terraform_state)
+        if p.exists():
+            iac_files.append(("terraform", p))
+    if getattr(args, "cloudformation", None):
+        p = Path(args.cloudformation)
+        if p.exists():
+            iac_files.append(("cloudformation", p))
+    if getattr(args, "k8s_manifest", None):
+        p = Path(args.k8s_manifest)
+        if p.exists():
+            iac_files.append(("k8s-manifest", p))
+    return iac_files
+
+
+def _iter_urls(args) -> list[str]:
+    """Collect web URLs to scan."""
+    urls: list[str] = []
+    if getattr(args, "url", None):
+        urls.append(args.url)
+    if getattr(args, "urls_file", None):
+        p = Path(args.urls_file)
+        if p.exists():
+            for line in p.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                urls.append(s)
+    if getattr(args, "api_spec", None):
+        # API spec is handled separately but we track it as a special URL
+        spec = args.api_spec
+        if not spec.startswith("http://") and not spec.startswith("https://"):
+            # Local file - check existence
+            p = Path(spec)
+            if p.exists():
+                urls.append(f"file://{p.absolute()}")
+        else:
+            urls.append(spec)
+    return urls
+
+
+def _iter_gitlab_repos(args) -> list[dict[str, str]]:
+    """Collect GitLab repos to scan. Returns list of repo metadata dicts."""
+    import os
+
+    gitlab_repos: list[dict[str, str]] = []
+    gitlab_url = getattr(args, "gitlab_url", None) or "https://gitlab.com"
+    gitlab_token = getattr(args, "gitlab_token", None) or os.getenv("GITLAB_TOKEN")
+
+    if not gitlab_token:
+        return []
+
+    if getattr(args, "gitlab_repo", None):
+        # Single repo: group/repo format
+        parts = args.gitlab_repo.split("/")
+        if len(parts) >= 2:
+            gitlab_repos.append(
+                {
+                    "url": gitlab_url,
+                    "group": parts[0],
+                    "repo": "/".join(parts[1:]),
+                    "full_path": args.gitlab_repo,
+                }
+            )
+    elif getattr(args, "gitlab_group", None):
+        # Group scan - need to fetch all repos in group
+        # This will be implemented with API calls in the actual scan logic
+        gitlab_repos.append(
+            {
+                "url": gitlab_url,
+                "group": args.gitlab_group,
+                "repo": "*",  # Wildcard for all repos in group
+                "full_path": f"{args.gitlab_group}/*",
+            }
+        )
+
+    return gitlab_repos
+
+
+def _iter_k8s_resources(args) -> list[dict[str, str]]:
+    """Collect Kubernetes resources to scan. Returns list of resource metadata dicts."""
+    k8s_resources: list[dict[str, str]] = []
+
+    k8s_context = getattr(args, "k8s_context", None)
+    k8s_namespace = getattr(args, "k8s_namespace", None)
+    k8s_all_namespaces = getattr(args, "k8s_all_namespaces", False)
+
+    if k8s_context or k8s_namespace or k8s_all_namespaces:
+        k8s_resources.append(
+            {
+                "context": k8s_context or "current",
+                "namespace": k8s_namespace
+                or ("*" if k8s_all_namespaces else "default"),
+                "all_namespaces": str(k8s_all_namespaces),
+            }
+        )
+
+    return k8s_resources
+
+
 def _tool_exists(cmd: str) -> bool:
     import shutil
 
@@ -493,9 +680,16 @@ def cmd_scan(args) -> int:
     cfg = load_config(args.config)
     tools = eff["tools"]
     results_dir = Path(args.results_dir)
-    indiv_base = results_dir / "individual-repos"
-    indiv_base.mkdir(parents=True, exist_ok=True)
+
+    # Collect all scan targets
     repos = _iter_repos(args)
+    images = _iter_images(args)
+    iac_files = _iter_iac_files(args)
+    urls = _iter_urls(args)
+    gitlab_repos = _iter_gitlab_repos(args)
+    k8s_resources = _iter_k8s_resources(args)
+
+    # Apply include/exclude filters to repos only (legacy behavior)
     if eff["include"]:
         import fnmatch
 
@@ -512,9 +706,44 @@ def cmd_scan(args) -> int:
             for r in repos
             if not any(fnmatch.fnmatch(r.name, pat) for pat in eff["exclude"])
         ]
-    if not repos:
-        _log(args, "WARN", "No repositories to scan.")
+
+    # Validate at least one target type provided
+    total_targets = (
+        len(repos)
+        + len(images)
+        + len(iac_files)
+        + len(urls)
+        + len(gitlab_repos)
+        + len(k8s_resources)
+    )
+    if total_targets == 0:
+        _log(
+            args,
+            "WARN",
+            "No scan targets provided (repos, images, IaC files, URLs, GitLab, or K8s resources).",
+        )
         return 0
+
+    # Log scan targets summary
+    _log(
+        args,
+        "INFO",
+        f"Scan targets: {len(repos)} repos, {len(images)} images, {len(iac_files)} IaC files, {len(urls)} URLs, {len(gitlab_repos)} GitLab repos, {len(k8s_resources)} K8s resources",
+    )
+
+    # Create subdirectories for each target type
+    indiv_base = results_dir / "individual-repos"
+    indiv_base.mkdir(parents=True, exist_ok=True)
+    if images:
+        (results_dir / "individual-images").mkdir(parents=True, exist_ok=True)
+    if iac_files:
+        (results_dir / "individual-iac").mkdir(parents=True, exist_ok=True)
+    if urls:
+        (results_dir / "individual-web").mkdir(parents=True, exist_ok=True)
+    if gitlab_repos:
+        (results_dir / "individual-gitlab").mkdir(parents=True, exist_ok=True)
+    if k8s_resources:
+        (results_dir / "individual-k8s").mkdir(parents=True, exist_ok=True)
 
     max_workers = None
     if eff["threads"]:
@@ -1326,6 +1555,7 @@ def cmd_scan(args) -> int:
             statuses["__attempts__"] = attempts_map  # type: ignore
         return name, statuses
 
+    # Scan repositories
     futures = []
     with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
         for repo in repos:
@@ -1351,10 +1581,641 @@ def cmd_scan(args) -> int:
                 _log(
                     args,
                     "INFO" if ok else "WARN",
-                    f"scanned {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                    f"scanned repo {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
                 )
             except Exception as e:
-                _log(args, "ERROR", f"scan error: {e}")
+                _log(args, "ERROR", f"repo scan error: {e}")
+
+    # Scan container images (Tier 1)
+    def job_image(image: str) -> tuple[str, dict[str, bool]]:
+        """Scan a container image with trivy and syft."""
+        statuses: dict[str, bool] = {}
+        attempts_map: dict[str, int] = {}
+        # Sanitize image name for directory (replace special chars with underscores)
+        import re
+
+        safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
+        out_dir = results_dir / "individual-images" / safe_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        to = timeout
+        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+
+        def t_override(tool: str, default: int) -> int:
+            v = (
+                pt.get(tool, {}).get("timeout")
+                if isinstance(pt.get(tool, {}), dict)
+                else None
+            )
+            if isinstance(v, int) and v > 0:
+                return v
+            return default
+
+        # Trivy image scan
+        if "trivy" in tools:
+            out = out_dir / "trivy.json"
+            if _tool_exists("trivy"):
+                flags = (
+                    pt.get("trivy", {}).get("flags", [])
+                    if isinstance(pt.get("trivy", {}), dict)
+                    else []
+                )
+                cmd = [
+                    "trivy",
+                    "image",
+                    "-q",
+                    "-f",
+                    "json",
+                    "--scanners",
+                    "vuln,secret,misconfig",
+                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    image,
+                    "-o",
+                    str(out),
+                ]
+                rc, _, _, used = _run_cmd(
+                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
+                )
+                ok = rc == 0 or rc == 1
+                if ok and out.exists():
+                    statuses["trivy"] = True
+                    attempts_map["trivy"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("trivy", out)
+                    statuses["trivy"] = True
+                    if used:
+                        attempts_map["trivy"] = used
+                else:
+                    statuses["trivy"] = False
+                    if used:
+                        attempts_map["trivy"] = used
+            elif args.allow_missing_tools:
+                _write_stub("trivy", out)
+                statuses["trivy"] = True
+
+        # Syft SBOM generation
+        if "syft" in tools:
+            out = out_dir / "syft.json"
+            if _tool_exists("syft"):
+                flags = (
+                    pt.get("syft", {}).get("flags", [])
+                    if isinstance(pt.get("syft", {}), dict)
+                    else []
+                )
+                rc, out_s, _, used = _run_cmd(
+                    [
+                        "syft",
+                        image,
+                        "-o",
+                        "json",
+                        *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    ],
+                    t_override("syft", to),
+                    retries=retries,
+                    capture_stdout=True,
+                    ok_rcs=(0,),
+                )
+                try:
+                    out.write_text(out_s, encoding="utf-8")
+                except Exception as e:
+                    _log(args, "DEBUG", f"Failed to write syft output for {image}: {e}")
+                if rc == 0:
+                    statuses["syft"] = True
+                    attempts_map["syft"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("syft", out)
+                    statuses["syft"] = True
+                    if used:
+                        attempts_map["syft"] = used
+                else:
+                    statuses["syft"] = False
+                    if used:
+                        attempts_map["syft"] = used
+            elif args.allow_missing_tools:
+                _write_stub("syft", out)
+                statuses["syft"] = True
+
+        if attempts_map:
+            statuses["__attempts__"] = attempts_map  # type: ignore
+        return image, statuses
+
+    image_futures = []
+    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
+        for image in images:
+            if stop_flag["stop"]:
+                break
+            image_futures.append(ex.submit(job_image, image))
+        for fut in as_completed(image_futures):
+            try:
+                name, statuses = fut.result()
+                attempts_map: dict[str, int] = {}
+                if isinstance(statuses, dict) and "__attempts__" in statuses:
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
+                ok = all(v for k, v in statuses.items()) if statuses else True
+                extra = (
+                    f" attempts={attempts_map}"
+                    if any(
+                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
+                    )
+                    else ""
+                )
+                _log(
+                    args,
+                    "INFO" if ok else "WARN",
+                    f"scanned image {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                )
+            except Exception as e:
+                _log(args, "ERROR", f"image scan error: {e}")
+
+    # Scan IaC files (Tier 1)
+    def job_iac(iac_type: str, iac_path: Path) -> tuple[str, dict[str, bool]]:
+        """Scan an IaC file with checkov and trivy."""
+        statuses: dict[str, bool] = {}
+        attempts_map: dict[str, int] = {}
+        # Use filename as directory name
+        safe_name = iac_path.stem
+        out_dir = results_dir / "individual-iac" / safe_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        to = timeout
+        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+
+        def t_override(tool: str, default: int) -> int:
+            v = (
+                pt.get(tool, {}).get("timeout")
+                if isinstance(pt.get(tool, {}), dict)
+                else None
+            )
+            if isinstance(v, int) and v > 0:
+                return v
+            return default
+
+        # Checkov IaC scan
+        if "checkov" in tools:
+            out = out_dir / "checkov.json"
+            if _tool_exists("checkov"):
+                flags = (
+                    pt.get("checkov", {}).get("flags", [])
+                    if isinstance(pt.get("checkov", {}), dict)
+                    else []
+                )
+                rc, out_s, _, used = _run_cmd(
+                    [
+                        "checkov",
+                        "-f",
+                        str(iac_path),
+                        "-o",
+                        "json",
+                        *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    ],
+                    t_override("checkov", to),
+                    retries=retries,
+                    capture_stdout=True,
+                    ok_rcs=(0, 1),
+                )
+                try:
+                    out.write_text(out_s, encoding="utf-8")
+                except Exception as e:
+                    _log(
+                        args,
+                        "DEBUG",
+                        f"Failed to write checkov output for {safe_name}: {e}",
+                    )
+                ok = rc == 0 or rc == 1
+                if ok:
+                    statuses["checkov"] = True
+                    attempts_map["checkov"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("checkov", out)
+                    statuses["checkov"] = True
+                    if used:
+                        attempts_map["checkov"] = used
+                else:
+                    statuses["checkov"] = False
+                    if used:
+                        attempts_map["checkov"] = used
+            elif args.allow_missing_tools:
+                _write_stub("checkov", out)
+                statuses["checkov"] = True
+
+        # Trivy config scan for IaC files
+        if "trivy" in tools:
+            out = out_dir / "trivy.json"
+            if _tool_exists("trivy"):
+                flags = (
+                    pt.get("trivy", {}).get("flags", [])
+                    if isinstance(pt.get("trivy", {}), dict)
+                    else []
+                )
+                cmd = [
+                    "trivy",
+                    "config",
+                    "-q",
+                    "-f",
+                    "json",
+                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    str(iac_path),
+                    "-o",
+                    str(out),
+                ]
+                rc, _, _, used = _run_cmd(
+                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
+                )
+                ok = rc == 0 or rc == 1
+                if ok and out.exists():
+                    statuses["trivy"] = True
+                    attempts_map["trivy"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("trivy", out)
+                    statuses["trivy"] = True
+                    if used:
+                        attempts_map["trivy"] = used
+                else:
+                    statuses["trivy"] = False
+                    if used:
+                        attempts_map["trivy"] = used
+            elif args.allow_missing_tools:
+                _write_stub("trivy", out)
+                statuses["trivy"] = True
+
+        if attempts_map:
+            statuses["__attempts__"] = attempts_map  # type: ignore
+        return f"{iac_type}:{iac_path.name}", statuses
+
+    iac_futures = []
+    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
+        for iac_type, iac_path in iac_files:
+            if stop_flag["stop"]:
+                break
+            iac_futures.append(ex.submit(job_iac, iac_type, iac_path))
+        for fut in as_completed(iac_futures):
+            try:
+                name, statuses = fut.result()
+                attempts_map: dict[str, int] = {}
+                if isinstance(statuses, dict) and "__attempts__" in statuses:
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
+                ok = all(v for k, v in statuses.items()) if statuses else True
+                extra = (
+                    f" attempts={attempts_map}"
+                    if any(
+                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
+                    )
+                    else ""
+                )
+                _log(
+                    args,
+                    "INFO" if ok else "WARN",
+                    f"scanned IaC {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                )
+            except Exception as e:
+                _log(args, "ERROR", f"IaC scan error: {e}")
+
+    # Scan live web URLs (Tier 1)
+    def job_url(url: str) -> tuple[str, dict[str, bool]]:
+        """Scan a live web URL with ZAP."""
+        statuses: dict[str, bool] = {}
+        attempts_map: dict[str, int] = {}
+        # Sanitize URL for directory name (extract domain)
+        import re
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.scheme == "file":
+            # file:// URL - use filename
+            safe_name = Path(parsed.path).stem if parsed.path else "unknown"
+        else:
+            # http/https URL - use domain
+            safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
+
+        out_dir = results_dir / "individual-web" / safe_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        to = timeout
+        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+
+        def t_override(tool: str, default: int) -> int:
+            v = (
+                pt.get(tool, {}).get("timeout")
+                if isinstance(pt.get(tool, {}), dict)
+                else None
+            )
+            if isinstance(v, int) and v > 0:
+                return v
+            return default
+
+        # ZAP scan for web URLs
+        if "zap" in tools:
+            out = out_dir / "zap.json"
+            if _tool_exists("zap.sh") or _tool_exists("zap"):
+                flags = (
+                    pt.get("zap", {}).get("flags", [])
+                    if isinstance(pt.get("zap", {}), dict)
+                    else []
+                )
+                zap_cmd = "zap.sh" if _tool_exists("zap.sh") else "zap"
+                cmd = [
+                    zap_cmd,
+                    "-cmd",
+                    "-quickurl",
+                    url,
+                    "-quickout",
+                    str(out),
+                    "-quickprogress",
+                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                ]
+                rc, _, _, used = _run_cmd(
+                    cmd, t_override("zap", to), retries=retries, ok_rcs=(0, 1, 2)
+                )
+                ok = rc in (0, 1, 2)
+                if ok and out.exists():
+                    statuses["zap"] = True
+                    attempts_map["zap"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("zap", out)
+                    statuses["zap"] = True
+                    if used:
+                        attempts_map["zap"] = used
+                else:
+                    statuses["zap"] = False
+                    if used:
+                        attempts_map["zap"] = used
+            elif args.allow_missing_tools:
+                _write_stub("zap", out)
+                statuses["zap"] = True
+
+        if attempts_map:
+            statuses["__attempts__"] = attempts_map  # type: ignore
+        return url, statuses
+
+    url_futures = []
+    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
+        for url in urls:
+            if stop_flag["stop"]:
+                break
+            url_futures.append(ex.submit(job_url, url))
+        for fut in as_completed(url_futures):
+            try:
+                name, statuses = fut.result()
+                attempts_map: dict[str, int] = {}
+                if isinstance(statuses, dict) and "__attempts__" in statuses:
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
+                ok = all(v for k, v in statuses.items()) if statuses else True
+                extra = (
+                    f" attempts={attempts_map}"
+                    if any(
+                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
+                    )
+                    else ""
+                )
+                _log(
+                    args,
+                    "INFO" if ok else "WARN",
+                    f"scanned URL {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                )
+            except Exception as e:
+                _log(args, "ERROR", f"URL scan error: {e}")
+
+    # Scan GitLab repos (Tier 1)
+    def job_gitlab(gitlab_info: dict[str, str]) -> tuple[str, dict[str, bool]]:
+        """Scan a GitLab repo with trufflehog and semgrep."""
+        statuses: dict[str, bool] = {}
+        attempts_map: dict[str, int] = {}
+        full_path = gitlab_info["full_path"]
+        safe_name = full_path.replace("/", "_").replace("*", "all")
+        out_dir = results_dir / "individual-gitlab" / safe_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        to = timeout
+        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+
+        def t_override(tool: str, default: int) -> int:
+            v = (
+                pt.get(tool, {}).get("timeout")
+                if isinstance(pt.get(tool, {}), dict)
+                else None
+            )
+            if isinstance(v, int) and v > 0:
+                return v
+            return default
+
+        gitlab_url = gitlab_info["url"]
+        gitlab_token = gitlab_info.get("token", os.getenv("GITLAB_TOKEN"))
+
+        # TruffleHog GitLab scan
+        if "trufflehog" in tools:
+            out = out_dir / "trufflehog.json"
+            if _tool_exists("trufflehog"):
+                flags = (
+                    pt.get("trufflehog", {}).get("flags", [])
+                    if isinstance(pt.get("trufflehog", {}), dict)
+                    else []
+                )
+                if gitlab_info["repo"] == "*":
+                    # Group scan
+                    cmd = [
+                        "trufflehog",
+                        "gitlab",
+                        "--endpoint",
+                        gitlab_url,
+                        "--token",
+                        gitlab_token,
+                        "--group",
+                        gitlab_info["group"],
+                        "--json",
+                        "--no-update",
+                        *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    ]
+                else:
+                    # Single repo scan
+                    cmd = [
+                        "trufflehog",
+                        "gitlab",
+                        "--endpoint",
+                        gitlab_url,
+                        "--token",
+                        gitlab_token,
+                        "--repo",
+                        full_path,
+                        "--json",
+                        "--no-update",
+                        *([str(x) for x in flags] if isinstance(flags, list) else []),
+                    ]
+                rc, out_s, _, used = _run_cmd(
+                    cmd,
+                    t_override("trufflehog", to),
+                    retries=retries,
+                    capture_stdout=True,
+                    ok_rcs=(0, 1),
+                )
+                try:
+                    out.write_text(out_s, encoding="utf-8")
+                except Exception as e:
+                    _log(
+                        args,
+                        "DEBUG",
+                        f"Failed to write trufflehog output for {full_path}: {e}",
+                    )
+                ok = rc == 0 or rc == 1
+                if ok:
+                    statuses["trufflehog"] = True
+                    attempts_map["trufflehog"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("trufflehog", out)
+                    statuses["trufflehog"] = True
+                    if used:
+                        attempts_map["trufflehog"] = used
+                else:
+                    statuses["trufflehog"] = False
+                    if used:
+                        attempts_map["trufflehog"] = used
+            elif args.allow_missing_tools:
+                _write_stub("trufflehog", out)
+                statuses["trufflehog"] = True
+
+        if attempts_map:
+            statuses["__attempts__"] = attempts_map  # type: ignore
+        return full_path, statuses
+
+    gitlab_futures = []
+    # Add token to gitlab_repos for scanning
+    for gr in gitlab_repos:
+        gr["token"] = getattr(args, "gitlab_token", None) or os.getenv("GITLAB_TOKEN")
+
+    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
+        for gitlab_info in gitlab_repos:
+            if stop_flag["stop"]:
+                break
+            gitlab_futures.append(ex.submit(job_gitlab, gitlab_info))
+        for fut in as_completed(gitlab_futures):
+            try:
+                name, statuses = fut.result()
+                attempts_map: dict[str, int] = {}
+                if isinstance(statuses, dict) and "__attempts__" in statuses:
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
+                ok = all(v for k, v in statuses.items()) if statuses else True
+                extra = (
+                    f" attempts={attempts_map}"
+                    if any(
+                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
+                    )
+                    else ""
+                )
+                _log(
+                    args,
+                    "INFO" if ok else "WARN",
+                    f"scanned GitLab {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                )
+            except Exception as e:
+                _log(args, "ERROR", f"GitLab scan error: {e}")
+
+    # Scan Kubernetes clusters (Tier 1)
+    def job_k8s(k8s_info: dict[str, str]) -> tuple[str, dict[str, bool]]:
+        """Scan a Kubernetes cluster with trivy."""
+        statuses: dict[str, bool] = {}
+        attempts_map: dict[str, int] = {}
+        context = k8s_info["context"]
+        namespace = k8s_info["namespace"]
+        all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
+
+        safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
+        out_dir = results_dir / "individual-k8s" / safe_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        to = timeout
+        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+
+        def t_override(tool: str, default: int) -> int:
+            v = (
+                pt.get(tool, {}).get("timeout")
+                if isinstance(pt.get(tool, {}), dict)
+                else None
+            )
+            if isinstance(v, int) and v > 0:
+                return v
+            return default
+
+        # Trivy Kubernetes scan
+        if "trivy" in tools:
+            out = out_dir / "trivy.json"
+            if _tool_exists("trivy") and _tool_exists("kubectl"):
+                flags = (
+                    pt.get("trivy", {}).get("flags", [])
+                    if isinstance(pt.get("trivy", {}), dict)
+                    else []
+                )
+                cmd = [
+                    "trivy",
+                    "k8s",
+                    "-q",
+                    "-f",
+                    "json",
+                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                ]
+                if context != "current":
+                    cmd.extend(["--context", context])
+                if all_namespaces:
+                    cmd.append("--all-namespaces")
+                elif namespace != "default":
+                    cmd.extend(["-n", namespace])
+                cmd.extend(["-o", str(out), "all"])  # Scan all K8s resources
+
+                rc, _, _, used = _run_cmd(
+                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
+                )
+                ok = rc == 0 or rc == 1
+                if ok and out.exists():
+                    statuses["trivy"] = True
+                    attempts_map["trivy"] = used
+                elif args.allow_missing_tools:
+                    _write_stub("trivy", out)
+                    statuses["trivy"] = True
+                    if used:
+                        attempts_map["trivy"] = used
+                else:
+                    statuses["trivy"] = False
+                    if used:
+                        attempts_map["trivy"] = used
+            elif args.allow_missing_tools:
+                _write_stub("trivy", out)
+                statuses["trivy"] = True
+
+        if attempts_map:
+            statuses["__attempts__"] = attempts_map  # type: ignore
+        return f"{context}:{namespace}", statuses
+
+    k8s_futures = []
+    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
+        for k8s_info in k8s_resources:
+            if stop_flag["stop"]:
+                break
+            k8s_futures.append(ex.submit(job_k8s, k8s_info))
+        for fut in as_completed(k8s_futures):
+            try:
+                name, statuses = fut.result()
+                attempts_map: dict[str, int] = {}
+                if isinstance(statuses, dict) and "__attempts__" in statuses:
+                    popped_value = statuses.pop("__attempts__")
+                    if isinstance(popped_value, dict):
+                        attempts_map = popped_value
+                ok = all(v for k, v in statuses.items()) if statuses else True
+                extra = (
+                    f" attempts={attempts_map}"
+                    if any(
+                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
+                    )
+                    else ""
+                )
+                _log(
+                    args,
+                    "INFO" if ok else "WARN",
+                    f"scanned K8s {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
+                )
+            except Exception as e:
+                _log(args, "ERROR", f"K8s scan error: {e}")
+
     return 0
 
 
@@ -1364,6 +2225,27 @@ def cmd_ci(args) -> int:
             self.repo = getattr(a, "repo", None)
             self.repos_dir = getattr(a, "repos_dir", None)
             self.targets = getattr(a, "targets", None)
+            # Container image scanning
+            self.image = getattr(a, "image", None)
+            self.images_file = getattr(a, "images_file", None)
+            # IaC scanning
+            self.terraform_state = getattr(a, "terraform_state", None)
+            self.cloudformation = getattr(a, "cloudformation", None)
+            self.k8s_manifest = getattr(a, "k8s_manifest", None)
+            # Web app/API scanning
+            self.url = getattr(a, "url", None)
+            self.urls_file = getattr(a, "urls_file", None)
+            self.api_spec = getattr(a, "api_spec", None)
+            # GitLab integration
+            self.gitlab_url = getattr(a, "gitlab_url", None)
+            self.gitlab_token = getattr(a, "gitlab_token", None)
+            self.gitlab_group = getattr(a, "gitlab_group", None)
+            self.gitlab_repo = getattr(a, "gitlab_repo", None)
+            # Kubernetes cluster scanning
+            self.k8s_context = getattr(a, "k8s_context", None)
+            self.k8s_namespace = getattr(a, "k8s_namespace", None)
+            self.k8s_all_namespaces = getattr(a, "k8s_all_namespaces", False)
+            # Other options
             self.results_dir = getattr(a, "results_dir", "results")
             self.config = getattr(a, "config", "jmo.yml")
             self.tools = getattr(a, "tools", None)

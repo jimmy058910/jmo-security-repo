@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def _zap_risk_to_severity(risk: str) -> str:
@@ -192,6 +193,8 @@ def load_zap(path: str | Path) -> List[Dict[str, Any]]:
                     },
                 }
 
+                # Enrich with compliance framework mappings
+                finding = enrich_finding_with_compliance(finding)
                 findings.append(finding)
 
     return findings

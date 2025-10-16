@@ -50,9 +50,6 @@ PROFILE_TIMINGS: Dict[str, Any] = {
 
 def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
-    indiv = results_dir / "individual-repos"
-    if not indiv.exists():
-        return findings
     jobs = []
     max_workers = 8
     try:
@@ -75,39 +72,53 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
             # profiling metadata update is best-effort
             ...
 
+    # Scan all target type directories: repos, images, IaC, web, gitlab, k8s
+    target_dirs = [
+        results_dir / "individual-repos",
+        results_dir / "individual-images",
+        results_dir / "individual-iac",
+        results_dir / "individual-web",
+        results_dir / "individual-gitlab",
+        results_dir / "individual-k8s",
+    ]
+
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        for repo in sorted(p for p in indiv.iterdir() if p.is_dir()):
-            gl = repo / "gitleaks.json"
-            th = repo / "trufflehog.json"
-            sg = repo / "semgrep.json"
-            np = repo / "noseyparker.json"
-            sy = repo / "syft.json"
-            hd = repo / "hadolint.json"
-            ck = repo / "checkov.json"
-            bd = repo / "bandit.json"
-            tf = repo / "tfsec.json"
-            tv = repo / "trivy.json"
-            osv_file = repo / "osv-scanner.json"
-            zap_file = repo / "zap.json"
-            falco_file = repo / "falco.json"
-            afl_file = repo / "afl++.json"
-            for path, loader in (
-                (gl, load_gitleaks),
-                (th, load_trufflehog),
-                (sg, load_semgrep),
-                (np, load_noseyparker),
-                (sy, load_syft),
-                (hd, load_hadolint),
-                (ck, load_checkov),
-                (bd, load_bandit),
-                (tf, load_tfsec),
-                (tv, load_trivy),
-                (osv_file, load_osv),
-                (zap_file, load_zap),
-                (falco_file, load_falco),
-                (afl_file, load_aflplusplus),
-            ):
-                jobs.append(ex.submit(_safe_load, loader, path, profiling))
+        for target_dir in target_dirs:
+            if not target_dir.exists():
+                continue
+
+            for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
+                gl = target / "gitleaks.json"
+                th = target / "trufflehog.json"
+                sg = target / "semgrep.json"
+                np = target / "noseyparker.json"
+                sy = target / "syft.json"
+                hd = target / "hadolint.json"
+                ck = target / "checkov.json"
+                bd = target / "bandit.json"
+                tf = target / "tfsec.json"
+                tv = target / "trivy.json"
+                osv_file = target / "osv-scanner.json"
+                zap_file = target / "zap.json"
+                falco_file = target / "falco.json"
+                afl_file = target / "afl++.json"
+                for path, loader in (
+                    (gl, load_gitleaks),
+                    (th, load_trufflehog),
+                    (sg, load_semgrep),
+                    (np, load_noseyparker),
+                    (sy, load_syft),
+                    (hd, load_hadolint),
+                    (ck, load_checkov),
+                    (bd, load_bandit),
+                    (tf, load_tfsec),
+                    (tv, load_trivy),
+                    (osv_file, load_osv),
+                    (zap_file, load_zap),
+                    (falco_file, load_falco),
+                    (afl_file, load_aflplusplus),
+                ):
+                    jobs.append(ex.submit(_safe_load, loader, path, profiling))
         for fut in as_completed(jobs):
             try:
                 findings.extend(fut.result())

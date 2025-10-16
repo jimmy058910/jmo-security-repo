@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def load_tfsec(path: str | Path) -> List[Dict[str, Any]]:
@@ -42,25 +43,24 @@ def load_tfsec(path: str | Path) -> List[Dict[str, Any]]:
         msg = str(it.get("description") or it.get("impact") or rid)
         sev = normalize_severity(it.get("severity") or "MEDIUM")
         fid = fingerprint("tfsec", rid, file_path, line, msg)
-        out.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": rid,
-                "title": rid,
-                "message": msg,
-                "description": str(it.get("resolution") or msg),
-                "severity": sev,
-                "tool": {
-                    "name": "tfsec",
-                    "version": str(data.get("version") or "unknown"),
-                },
-                "location": {"path": file_path, "startLine": line},
-                "remediation": str(
-                    it.get("resolution") or "Review resolution guidance"
-                ),
-                "tags": ["iac", "terraform"],
-                "raw": it,
-            }
-        )
+        finding = {
+            "schemaVersion": "1.0.0",
+            "id": fid,
+            "ruleId": rid,
+            "title": rid,
+            "message": msg,
+            "description": str(it.get("resolution") or msg),
+            "severity": sev,
+            "tool": {
+                "name": "tfsec",
+                "version": str(data.get("version") or "unknown"),
+            },
+            "location": {"path": file_path, "startLine": line},
+            "remediation": str(it.get("resolution") or "Review resolution guidance"),
+            "tags": ["iac", "terraform"],
+            "raw": it,
+        }
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
+        out.append(finding)
     return out

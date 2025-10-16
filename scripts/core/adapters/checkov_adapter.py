@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def load_checkov(path: str | Path) -> List[Dict[str, Any]]:
@@ -50,23 +51,24 @@ def load_checkov(path: str | Path) -> List[Dict[str, Any]]:
             msg = str(it.get("check_name") or it.get("check_id") or "Policy failure")
             sev = normalize_severity(it.get("severity") or "MEDIUM")
             fid = fingerprint("checkov", rid, file_path, line, msg)
-            out.append(
-                {
-                    "schemaVersion": "1.0.0",
-                    "id": fid,
-                    "ruleId": rid,
-                    "title": rid,
-                    "message": msg,
-                    "description": str(it.get("guideline") or msg),
-                    "severity": sev,
-                    "tool": {
-                        "name": "checkov",
-                        "version": str(data.get("checkov_version") or "unknown"),
-                    },
-                    "location": {"path": file_path, "startLine": line},
-                    "remediation": str(it.get("guideline") or "Review policy guidance"),
-                    "tags": ["iac", "policy"],
-                    "raw": it,
-                }
-            )
+            finding = {
+                "schemaVersion": "1.0.0",
+                "id": fid,
+                "ruleId": rid,
+                "title": rid,
+                "message": msg,
+                "description": str(it.get("guideline") or msg),
+                "severity": sev,
+                "tool": {
+                    "name": "checkov",
+                    "version": str(data.get("checkov_version") or "unknown"),
+                },
+                "location": {"path": file_path, "startLine": line},
+                "remediation": str(it.get("guideline") or "Review policy guidance"),
+                "tags": ["iac", "policy"],
+                "raw": it,
+            }
+            # Enrich with compliance framework mappings
+            finding = enrich_finding_with_compliance(finding)
+            out.append(finding)
     return out

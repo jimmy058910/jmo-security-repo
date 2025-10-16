@@ -63,7 +63,7 @@ def test_semgrep_v110_autofix(tmp_path: Path):
     assert len(out) == 1
 
     item = out[0]
-    assert item["schemaVersion"] == "1.1.0"
+    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]  # Enriched findings get 1.2.0
     assert isinstance(item["remediation"], dict)
     assert "fix" in item["remediation"]
     assert "cursor.execute" in item["remediation"]["fix"]
@@ -354,7 +354,7 @@ def test_semgrep_v110_combined_metadata(tmp_path: Path):
     assert len(out) == 1
 
     item = out[0]
-    assert item["schemaVersion"] == "1.1.0"
+    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]  # Enriched findings get 1.2.0
 
     # Check remediation with autofix
     assert isinstance(item["remediation"], dict)

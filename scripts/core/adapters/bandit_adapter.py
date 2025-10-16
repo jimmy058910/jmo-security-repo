@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def load_bandit(path: str | Path) -> List[Dict[str, Any]]:
@@ -73,20 +74,21 @@ def load_bandit(path: str | Path) -> List[Dict[str, Any]]:
         sev_src = str(r.get("issue_severity") or "MEDIUM").upper()
         severity = normalize_severity(sev_src)
         fid = fingerprint("bandit", rule_id, file_path, start_line, msg)
-        results.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": rule_id,
-                "title": r.get("test_name") or rule_id,
-                "message": msg,
-                "description": msg,
-                "severity": severity,
-                "tool": {"name": "bandit", "version": version_hint},
-                "location": {"path": file_path, "startLine": start_line or 0},
-                "remediation": "Refactor code to avoid insecure patterns flagged by Bandit.",
-                "tags": ["sast", "python"],
-                "raw": r,
-            }
-        )
+        finding = {
+            "schemaVersion": "1.0.0",
+            "id": fid,
+            "ruleId": rule_id,
+            "title": r.get("test_name") or rule_id,
+            "message": msg,
+            "description": msg,
+            "severity": severity,
+            "tool": {"name": "bandit", "version": version_hint},
+            "location": {"path": file_path, "startLine": start_line or 0},
+            "remediation": "Refactor code to avoid insecure patterns flagged by Bandit.",
+            "tags": ["sast", "python"],
+            "raw": r,
+        }
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
+        results.append(finding)
     return results

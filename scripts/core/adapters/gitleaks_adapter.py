@@ -17,6 +17,7 @@ from scripts.core.common_finding import (
     fingerprint,
     normalize_severity,
 )
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def _iter_findings(obj: Any) -> Iterable[Dict[str, Any]]:
@@ -143,6 +144,7 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
             "location": {"path": file_path, "startLine": start_line or 0},
             "remediation": remediation,
             "tags": ["secrets"],
+            "risk": {"cwe": ["CWE-798"]},
             "raw": f,
         }
 
@@ -152,5 +154,7 @@ def load_gitleaks(path: str | Path) -> List[Dict[str, Any]]:
         if secret_context:
             finding["secretContext"] = secret_context
 
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
         out.append(finding)
     return out

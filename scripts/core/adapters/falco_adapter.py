@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def _falco_priority_to_severity(priority: str) -> str:
@@ -161,6 +162,8 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
             "raw": event,
         }
 
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
         findings.append(finding)
 
     return findings

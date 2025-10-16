@@ -57,7 +57,47 @@ See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for detail
 
 Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
 
-## 🎉 Recent Improvements (v0.5.0 - October 2025)
+## 🎉 Recent Improvements
+
+### v0.6.0 - Multi-Target Scanning (October 2025)
+
+**BREAKTHROUGH: Unified Security Platform (ROADMAP #4 - Phase 1):**
+
+Scan repositories AND infrastructure in one unified workflow!
+
+- ✅ **Container Image Scanning** - Scan Docker/OCI images with Trivy + Syft for vulnerabilities, secrets, and SBOMs
+- ✅ **IaC File Scanning** - Scan Terraform/CloudFormation/K8s manifests with Checkov + Trivy
+- ✅ **Live Web URL Scanning** - DAST scanning of web apps and APIs with OWASP ZAP
+- ✅ **GitLab Integration** - Scan GitLab repos with TruffleHog verified secrets detection
+- ✅ **Kubernetes Cluster Scanning** - Live K8s cluster scanning with Trivy for vulnerabilities and misconfigurations
+- ✅ **Unified Results** - All targets aggregated, deduplicated, and reported in one dashboard
+- ✅ **Multi-Target CI/CD** - Scan multiple target types in one pipeline run
+
+**Key Benefits:**
+
+- 🎯 **Single Tool** - Replace 5+ separate security tools with one unified CLI
+- 🚀 **Parallel Execution** - Scan images/IaC/URLs/repos simultaneously for faster results
+- 📊 **Unified Reporting** - One dashboard for all findings across all targets
+- 🔁 **CI/CD Ready** - Multi-target scanning with severity gating in one command
+- 🔧 **Flexible** - Scan single targets or batch process from files
+
+**Example: Complete Security Audit in One Command:**
+
+```bash
+# Scan repo + container image + live web app + K8s cluster together
+jmo scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --url https://myapp.com \
+  --k8s-context prod \
+  --results-dir ./audit-results
+```
+
+See [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060) for complete documentation.
+
+---
+
+### v0.5.0 - Tool Suite Consolidation (October 2025)
 
 **Tool Suite Consolidation (ROADMAP #3):**
 
@@ -195,12 +235,126 @@ make full DIR=~/repos
 
 Note: Under the hood, wrapper commands verify your OS/tools, optionally clone from TSV, run `jmo ci` with the appropriate profile, and auto-open results.
 
+---
+
+## 🎯 Multi-Target Scanning Examples (v0.6.0+)
+
+**New in v0.6.0:** Scan 6 different target types in one unified workflow!
+
+### Quick Examples
+
+**Scan a container image:**
+
+```bash
+jmo scan --image nginx:latest --results-dir ./image-scan
+```
+
+**Scan multiple images from file:**
+
+```bash
+# images.txt: one image per line
+# nginx:latest
+# postgres:15
+# redis:alpine
+jmo scan --images-file images.txt --results-dir ./registry-audit
+```
+
+**Scan Terraform state file:**
+
+```bash
+jmo scan --terraform-state terraform.tfstate --tools checkov trivy
+```
+
+**Scan live web application:**
+
+```bash
+jmo scan --url https://example.com --tools zap --results-dir ./web-audit
+```
+
+**Scan GitLab organization (all repos):**
+
+```bash
+jmo scan --gitlab-url https://gitlab.com --gitlab-token $GITLAB_TOKEN \
+  --gitlab-group myorg --tools trufflehog
+```
+
+**Scan Kubernetes cluster:**
+
+```bash
+jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
+```
+
+**Multi-target audit (everything at once!):**
+
+```bash
+# Scan repository + container + web app + K8s in one command
+jmo scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --url https://myapp.com \
+  --k8s-context prod \
+  --k8s-namespace default \
+  --results-dir ./complete-audit
+```
+
+**CI mode with multi-target scanning:**
+
+```bash
+# Scan + report + fail on HIGH severity in one command
+jmo ci \
+  --image myapp:latest \
+  --url https://staging.myapp.com \
+  --fail-on HIGH \
+  --profile balanced
+```
+
+### Supported Target Types
+
+| Target Type | Tools | CLI Arguments | Use Case |
+|-------------|-------|---------------|----------|
+| **Repositories** | trufflehog, semgrep, bandit, syft, trivy, checkov, hadolint | `--repo`, `--repos-dir`, `--targets` | Source code scanning |
+| **Container Images** | trivy, syft | `--image`, `--images-file` | Registry audits, CI/CD gates |
+| **IaC Files** | checkov, trivy | `--terraform-state`, `--cloudformation`, `--k8s-manifest` | Infrastructure compliance |
+| **Web URLs** | zap | `--url`, `--urls-file`, `--api-spec` | DAST scanning |
+| **GitLab Repos** | trufflehog | `--gitlab-repo`, `--gitlab-group`, `--gitlab-token` | GitLab security audits |
+| **Kubernetes Clusters** | trivy | `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces` | Live cluster audits |
+
+**Results structure:**
+
+```text
+results/
+├── individual-repos/        # Repository scans
+├── individual-images/       # Container image scans
+├── individual-iac/          # IaC file scans
+├── individual-web/          # Web app/API scans
+├── individual-gitlab/       # GitLab repo scans
+├── individual-k8s/          # K8s cluster scans
+└── summaries/               # Unified reports (all targets)
+    ├── findings.json
+    ├── SUMMARY.md
+    ├── dashboard.html
+    └── findings.sarif
+```
+
+📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
+
+---
+
 ## 🎯 Overview
 
-This project provides an automated framework for conducting thorough security audits on code repositories. It orchestrates multiple industry-standard security tools to detect secrets, vulnerabilities, and security issues.
+**A unified security platform for scanning code repositories, container images, infrastructure-as-code, web applications, GitLab repos, and Kubernetes clusters.**
+
+This project provides an automated framework for conducting thorough security audits across your entire application stack. It orchestrates multiple industry-standard security tools to detect secrets, vulnerabilities, misconfigurations, and security issues.
 
 ### Key Features
 
+- 🎯 **Multi-Target Scanning (v0.6.0+)**: Scan 6 target types in one unified workflow
+  - Repositories (source code)
+  - Container images (Docker/OCI)
+  - IaC files (Terraform/CloudFormation/K8s)
+  - Live web URLs (DAST)
+  - GitLab repos (verified secrets)
+  - Kubernetes clusters (live audits)
 - ✅ **Multi-Tool Scanning**: Curated set covering secrets (trufflehog verified, noseyparker), SAST (semgrep, bandit), SBOM+vuln/misconfig (syft+trivy), IaC (checkov), Dockerfile (hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++)
   - **v0.5.0 Update:** Removed deprecated tools (gitleaks, tfsec, osv-scanner), added DAST/runtime/fuzzing capabilities
 - 📊 **Comprehensive Reporting**: Unified findings (JSON/YAML), enriched SARIF 2.1.0 with taxonomies, Markdown summary, and an interactive HTML dashboard with XSS protection
@@ -281,10 +435,35 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
 ```
 
+#### Multi-target scanning (v0.6.0+)
+
+```bash
+# Scan container image
+python3 scripts/cli/jmo.py scan --image nginx:latest --human-logs
+
+# Scan Terraform state
+python3 scripts/cli/jmo.py scan --terraform-state terraform.tfstate --human-logs
+
+# Scan live web app
+python3 scripts/cli/jmo.py scan --url https://example.com --tools zap --human-logs
+
+# Scan everything together
+python3 scripts/cli/jmo.py scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --url https://myapp.com \
+  --k8s-context prod \
+  --human-logs
+```
+
 #### Or do both in one step for CI with a failure threshold
 
 ```bash
+# Repository CI
 python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
+
+# Multi-target CI (v0.6.0+)
+python3 scripts/cli/jmo.py ci --image myapp:latest --url https://staging.myapp.com --fail-on HIGH --human-logs
 ```
 
 Outputs include: summaries/findings.json, SUMMARY.md, findings.yaml, findings.sarif (enabled by default), dashboard.html, and timings.json (when profiling).
@@ -351,7 +530,7 @@ The security audit follows this workflow:
 
 ```text
 results/
-├── individual-repos/
+├── individual-repos/           # Repository scans
 │   └── <repo-name>/
 │       ├── trufflehog.json
 │       ├── semgrep.json
@@ -364,7 +543,24 @@ results/
 │       ├── bandit.json        # deep only
 │       ├── falco.json         # deep only
 │       └── afl++.json         # deep only
-└── summaries/
+├── individual-images/          # ✨ NEW v0.6.0: Container image scans
+│   └── <sanitized-image>/
+│       ├── trivy.json
+│       └── syft.json
+├── individual-iac/             # ✨ NEW v0.6.0: IaC file scans
+│   └── <file-stem>/
+│       ├── checkov.json
+│       └── trivy.json
+├── individual-web/             # ✨ NEW v0.6.0: Web app/API scans
+│   └── <domain>/
+│       └── zap.json
+├── individual-gitlab/          # ✨ NEW v0.6.0: GitLab scans
+│   └── <group>_<repo>/
+│       └── trufflehog.json
+├── individual-k8s/             # ✨ NEW v0.6.0: K8s cluster scans
+│   └── <context>_<namespace>/
+│       └── trivy.json
+└── summaries/                  # Unified reports (ALL targets)
    ├── findings.json
    ├── findings.yaml        # requires PyYAML
    ├── findings.sarif       # SARIF 2.1.0
@@ -855,5 +1051,5 @@ This is useful when you want to:
 
 ---
 
-**Last Updated**: October 13th, 2025
+**Last Updated**: October 16th, 2025 (v0.6.0)
 **Author**: James Moceri

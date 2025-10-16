@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def load_noseyparker(path: str | Path) -> List[Dict[str, Any]]:
@@ -46,23 +47,25 @@ def load_noseyparker(path: str | Path) -> List[Dict[str, Any]]:
         msg = m.get("match") or m.get("context") or signature
         sev = normalize_severity("MEDIUM")
         fid = fingerprint("noseyparker", signature, path_str, line_no, msg)
-        out.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": signature,
-                "title": signature,
-                "message": msg if isinstance(msg, str) else str(msg),
-                "description": "Potential secret detected by Nosey Parker",
-                "severity": sev,
-                "tool": {
-                    "name": "noseyparker",
-                    "version": str(data.get("version") or "unknown"),
-                },
-                "location": {"path": path_str, "startLine": line_no},
-                "remediation": "Rotate credentials and purge from history.",
-                "tags": ["secrets"],
-                "raw": m,
-            }
-        )
+        finding = {
+            "schemaVersion": "1.0.0",
+            "id": fid,
+            "ruleId": signature,
+            "title": signature,
+            "message": msg if isinstance(msg, str) else str(msg),
+            "description": "Potential secret detected by Nosey Parker",
+            "severity": sev,
+            "tool": {
+                "name": "noseyparker",
+                "version": str(data.get("version") or "unknown"),
+            },
+            "location": {"path": path_str, "startLine": line_no},
+            "remediation": "Rotate credentials and purge from history.",
+            "tags": ["secrets"],
+            "risk": {"cwe": ["CWE-798"]},
+            "raw": m,
+        }
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
+        out.append(finding)
     return out

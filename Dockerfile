@@ -1,13 +1,13 @@
 # JMo Security Suite - All-in-One Docker Image (Full)
 # Base: Ubuntu 22.04 with all security tools pre-installed
-# Size: ~1.5GB | Tools: 11 security scanners (v0.5.1) | Multi-arch: amd64, arm64
-# v0.5.1: Compliance framework integration (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK)
+# Size: ~1.5GB | Tools: 11 security scanners (v0.6.0) | Multi-arch: amd64, arm64
+# v0.6.0: Multi-target unified scanning (repos, images, IaC, URLs, GitLab, K8s)
 
 FROM ubuntu:22.04 AS base
 
 LABEL org.opencontainers.image.title="JMo Security Suite"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 11 pre-installed scanners + compliance integration (v0.5.1)"
-LABEL org.opencontainers.image.version="0.5.1"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 11 pre-installed scanners + multi-target scanning (v0.6.0)"
+LABEL org.opencontainers.image.version="0.6.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"

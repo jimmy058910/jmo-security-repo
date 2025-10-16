@@ -1,11 +1,11 @@
 # JMo Security Suite - Slim Docker Image
 # Base: Ubuntu 22.04 with core security tools only
-# Size: ~200MB | Tools: 7 core scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap) - v0.5.0
+# Size: ~200MB | Tools: 7 core scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap) - v0.6.0
 
 FROM ubuntu:22.04 AS base
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
-LABEL org.opencontainers.image.description="Lightweight security audit toolkit with 7 core scanners (v0.5.0)"
+LABEL org.opencontainers.image.description="Lightweight security audit toolkit with 7 core scanners + multi-target scanning (v0.6.0)"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"

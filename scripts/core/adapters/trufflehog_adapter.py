@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def _flatten(obj: Any) -> Iterable[Dict[str, Any]]:
@@ -85,23 +86,30 @@ def load_trufflehog(path: str | Path) -> List[Dict[str, Any]]:
         severity = normalize_severity(sev)
         rule_id = detector
         fid = fingerprint("trufflehog", rule_id, file_path, start_line, msg)
-        out.append(
-            {
-                "schemaVersion": "1.0.0",
-                "id": fid,
-                "ruleId": rule_id,
-                "title": f"{detector} secret",
-                "message": msg if isinstance(msg, str) else str(msg),
-                "description": "Potential secret detected by TruffleHog",
-                "severity": severity,
-                "tool": {
-                    "name": "trufflehog",
-                    "version": str(f.get("Version") or "unknown"),
-                },
-                "location": {"path": file_path, "startLine": start_line or 0},
-                "remediation": "Rotate credentials and purge from history.",
-                "tags": ["secrets", "verified" if verified else "unverified"],
-                "raw": f,
-            }
-        )
+        finding = {
+            "schemaVersion": "1.0.0",
+            "id": fid,
+            "ruleId": rule_id,
+            "title": f"{detector} secret",
+            "message": msg if isinstance(msg, str) else str(msg),
+            "description": "Potential secret detected by TruffleHog",
+            "severity": severity,
+            "tool": {
+                "name": "trufflehog",
+                "version": str(f.get("Version") or "unknown"),
+            },
+            "location": {"path": file_path, "startLine": start_line or 0},
+            "remediation": "Rotate credentials and purge from history.",
+            "tags": ["secrets", "verified" if verified else "unverified"],
+            "risk": {
+                "cwe": ["CWE-798"],  # Use of Hard-coded Credentials
+                "confidence": "HIGH" if verified else "MEDIUM",
+                "likelihood": "HIGH",
+                "impact": "HIGH",
+            },
+            "raw": f,
+        }
+        # Enrich with compliance framework mappings
+        finding = enrich_finding_with_compliance(finding)
+        out.append(finding)
     return out

@@ -97,7 +97,42 @@ make full DIR=~/repos        # Run deep profile
 
 ---
 
-## ✨ What's New (v0.5.0 - October 2025)
+## ✨ What's New
+
+### v0.6.0 - Multi-Target Scanning (October 2025)
+
+**🚀 BREAKTHROUGH: Unified Security Platform**
+
+Scan repositories AND infrastructure in one workflow!
+
+- 🐳 **Container Image Scanning** - Scan Docker/OCI images with Trivy + Syft
+- ⚙️ **IaC File Scanning** - Scan Terraform/CloudFormation/K8s manifests with Checkov + Trivy
+- 🌐 **Live Web URL Scanning** - DAST scanning with OWASP ZAP
+- 🦊 **GitLab Integration** - Scan GitLab repos with TruffleHog
+- ☸️ **Kubernetes Cluster Scanning** - Live K8s audits with Trivy
+- 📊 **Unified Reporting** - All targets aggregated in one dashboard
+
+**Quick Examples:**
+
+```bash
+# Scan a container image
+jmo scan --image nginx:latest
+
+# Scan Terraform state
+jmo scan --terraform-state terraform.tfstate
+
+# Scan live web app
+jmo scan --url https://example.com --tools zap
+
+# Scan everything together!
+jmo scan --repo ./myapp --image myapp:latest --url https://myapp.com --k8s-context prod
+```
+
+📖 **Full guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
+
+---
+
+### v0.5.0 - Tool Suite Consolidation (October 2025)
 
 **Tool Suite Consolidation:**
 
@@ -189,6 +224,117 @@ python3 scripts/cli/jmo.py ci --repos-dir ~/security-testing --fail-on HIGH --pr
 python3 scripts/cli/jmo.py scan --repos-dir ~/security-testing --profile-name balanced --human-logs
 python3 scripts/cli/jmo.py report ./results --profile --human-logs
 ```
+
+---
+
+## 🆕 Multi-Target Scanning (v0.6.0+)
+
+**New in v0.6.0:** Scan 6 different target types beyond just repositories!
+
+### Quick Start: Container Image Scanning
+
+```bash
+# Scan a single image
+jmo scan --image nginx:latest --results-dir ./image-scan
+
+# Scan multiple images from file (images.txt: one per line)
+jmo scan --images-file images.txt --results-dir ./registry-audit
+
+# CI mode: Scan image and fail on HIGH severity
+jmo ci --image myapp:latest --fail-on HIGH --profile balanced
+```
+
+### Quick Start: Infrastructure-as-Code Scanning
+
+```bash
+# Scan Terraform state file
+jmo scan --terraform-state terraform.tfstate --tools checkov trivy
+
+# Scan CloudFormation template
+jmo scan --cloudformation template.yml
+
+# Scan Kubernetes manifest
+jmo scan --k8s-manifest deployment.yaml
+```
+
+### Quick Start: Live Web Application Scanning
+
+```bash
+# Scan live web application (DAST)
+jmo scan --url https://example.com --tools zap
+
+# Scan multiple URLs from file
+jmo scan --urls-file urls.txt --results-dir ./web-audit
+
+# Scan API with OpenAPI spec
+jmo scan --api-spec swagger.json --tools zap
+```
+
+### Quick Start: GitLab Scanning
+
+```bash
+# Scan single GitLab repo
+jmo scan --gitlab-url https://gitlab.com --gitlab-token $TOKEN \
+  --gitlab-repo mygroup/myrepo --tools trufflehog
+
+# Scan entire GitLab group (all repos)
+jmo scan --gitlab-url https://gitlab.com --gitlab-token $TOKEN \
+  --gitlab-group myorg --tools trufflehog
+```
+
+### Quick Start: Kubernetes Cluster Scanning
+
+```bash
+# Scan K8s cluster (current context)
+jmo scan --k8s-context prod --k8s-namespace default --tools trivy
+
+# Scan all namespaces
+jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
+```
+
+### Multi-Target Audit: Scan Everything Together!
+
+```bash
+# Complete security audit in ONE command
+jmo scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --url https://myapp.com \
+  --k8s-context prod \
+  --k8s-namespace default \
+  --results-dir ./complete-audit
+
+# CI mode: Multi-target with severity gating
+jmo ci \
+  --repo ./myapp \
+  --image myapp:latest \
+  --url https://staging.myapp.com \
+  --fail-on HIGH \
+  --profile balanced
+```
+
+### Results Structure (Multi-Target)
+
+```text
+results/
+├── individual-repos/        # Repository scans
+├── individual-images/       # Container image scans
+├── individual-iac/          # IaC file scans
+├── individual-web/          # Web app/API scans
+├── individual-gitlab/       # GitLab repo scans
+├── individual-k8s/          # K8s cluster scans
+└── summaries/               # Unified reports (ALL targets)
+    ├── findings.json
+    ├── SUMMARY.md
+    ├── dashboard.html       # Shows ALL findings across all targets!
+    └── findings.sarif
+```
+
+**Key insight:** All target types are aggregated, deduplicated, and reported in one unified dashboard!
+
+📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
+
+---
 
 ## Optional: reproducible dev dependencies
 
@@ -330,40 +476,71 @@ EOF
 chmod +x ~/weekly-audit.sh
 ```
 
-### Workflow 4: CI/CD integration
+### Workflow 4: Multi-Target CI/CD Integration (v0.6.0+)
 
-Add to your CI/CD pipeline:
+**Scan code + container + web app in one CI pipeline:**
 
 ```yaml
 # Example GitHub Actions workflow
-name: Security Audit
+name: Multi-Target Security Audit
 on:
   push:
     branches: [ main ]
+  pull_request:
   schedule:
-
     - cron: '0 0 * * 0'  # Weekly on Sunday
 
 jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
-
       - uses: actions/checkout@v2
 
       - name: Install tools
         run: |
           # Install TruffleHog, Semgrep, Trivy, ZAP, etc.
 
-      - name: Run Security Audit (scan + report)
+      - name: Build container image
         run: |
-          python3 scripts/cli/jmo.py ci --repos-dir . --profile-name balanced --fail-on HIGH --profile
+          docker build -t myapp:${{ github.sha }} .
+
+      - name: Run Multi-Target Security Audit
+        run: |
+          python3 scripts/cli/jmo.py ci \
+            --repo . \
+            --image myapp:${{ github.sha }} \
+            --url https://staging.myapp.com \
+            --profile-name balanced \
+            --fail-on HIGH \
+            --profile
 
       - name: Upload Results
         uses: actions/upload-artifact@v2
+        if: always()
         with:
           name: security-results
-          path: ~/security-results-*
+          path: results/
+
+      - name: Upload SARIF (Code Scanning)
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: results/summaries/findings.sarif
+```
+
+### Workflow 5: Container Registry Audit
+
+**Audit all images in a container registry:**
+
+```bash
+# Create images list from registry
+docker images --format "{{.Repository}}:{{.Tag}}" | grep myorg/ > images.txt
+
+# Scan all images
+jmo scan --images-file images.txt --results-dir ./registry-audit --profile fast
+
+# CI mode: Fail if any HIGH severity found
+jmo ci --images-file images.txt --fail-on HIGH --profile fast
 
 ## CI at a glance
 

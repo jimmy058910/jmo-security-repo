@@ -1,0 +1,12 @@
+{
+  "name": "vulnerable-app",
+  "version": "1.0.0",
+  "description": "Test app with known vulnerabilities",
+  "dependencies": {
+    "express": "4.16.0",
+    "lodash": "4.17.4",
+    "jquery": "2.1.4",
+    "moment": "2.19.1",
+    "axios": "0.18.0"
+  }
+}

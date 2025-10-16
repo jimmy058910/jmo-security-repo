@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.compliance_mapper import enrich_finding_with_compliance
 
 
 def load_syft(path: str | Path) -> List[Dict[str, Any]]:
@@ -45,25 +46,26 @@ def load_syft(path: str | Path) -> List[Dict[str, Any]]:
             title = f"{name} {version}".strip()
             msg = f"Package discovered: {title}"
             fid = fingerprint("syft", name, location, 0, msg)
-            out.append(
-                {
-                    "schemaVersion": "1.0.0",
-                    "id": fid,
-                    "ruleId": "SBOM.PACKAGE",
-                    "title": title,
-                    "message": msg,
-                    "description": msg,
-                    "severity": "INFO",
-                    "tool": {
-                        "name": "syft",
-                        "version": str(data.get("artifactRelationships") and "unknown"),
-                    },
-                    "location": {"path": location, "startLine": 0},
-                    "remediation": "Track and scan dependencies.",
-                    "tags": ["sbom", "package"],
-                    "raw": a,
-                }
-            )
+            finding = {
+                "schemaVersion": "1.0.0",
+                "id": fid,
+                "ruleId": "SBOM.PACKAGE",
+                "title": title,
+                "message": msg,
+                "description": msg,
+                "severity": "INFO",
+                "tool": {
+                    "name": "syft",
+                    "version": str(data.get("artifactRelationships") and "unknown"),
+                },
+                "location": {"path": location, "startLine": 0},
+                "remediation": "Track and scan dependencies.",
+                "tags": ["sbom", "package"],
+                "raw": a,
+            }
+            # Enrich with compliance framework mappings
+            finding = enrich_finding_with_compliance(finding)
+            out.append(finding)
 
     vulns = data.get("vulnerabilities") if isinstance(data, dict) else None
     if isinstance(vulns, list):
@@ -86,24 +88,26 @@ def load_syft(path: str | Path) -> List[Dict[str, Any]]:
                     location = str(loc0.get("path") or "")
             msg = str(v.get("description") or v.get("summary") or vid)
             fid = fingerprint("syft", vid, location, 0, msg)
-            out.append(
-                {
-                    "schemaVersion": "1.0.0",
-                    "id": fid,
-                    "ruleId": vid,
-                    "title": vid,
-                    "message": msg,
-                    "description": msg,
-                    "severity": sev,
-                    "tool": {
-                        "name": "syft",
-                        "version": str(data.get("artifactRelationships") and "unknown"),
-                    },
-                    "location": {"path": location, "startLine": 0},
-                    "remediation": str(v.get("url") or "See advisory"),
-                    "tags": ["sbom", "vulnerability"],
-                    "raw": v,
-                }
-            )
+            finding = {
+                "schemaVersion": "1.0.0",
+                "id": fid,
+                "ruleId": vid,
+                "title": vid,
+                "message": msg,
+                "description": msg,
+                "severity": sev,
+                "tool": {
+                    "name": "syft",
+                    "version": str(data.get("artifactRelationships") and "unknown"),
+                },
+                "location": {"path": location, "startLine": 0},
+                "remediation": str(v.get("url") or "See advisory"),
+                "tags": ["sbom", "vulnerability"],
+                "risk": {"cwe": ["CWE-1104"]},
+                "raw": v,
+            }
+            # Enrich with compliance framework mappings
+            finding = enrich_finding_with_compliance(finding)
+            out.append(finding)
 
     return out

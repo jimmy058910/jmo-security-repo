@@ -69,6 +69,9 @@ BUSINESS_MODEL.md
 docs/VERSION_TAG.md
 BUSINESS_PLAN.md
 
+# Archived documentation (historical reference, not for version control)
+docs/archive/
+
 # Private local scripts and outputs (ignored)
 /ai-search
 

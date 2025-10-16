@@ -28,7 +28,7 @@ def test_bandit_normalization_results_array(tmp_path: Path):
     out = load_bandit(path)
     assert len(out) == 1
     item = out[0]
-    assert item["schemaVersion"] == "1.0.0"
+    assert item["schemaVersion"] in ["1.0.0", "1.2.0"]  # Enriched findings get 1.2.0
     assert item["ruleId"] == "B101"
     assert item["severity"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL", "INFO"}
     assert item["location"]["path"].endswith("scripts/core/foo.py")

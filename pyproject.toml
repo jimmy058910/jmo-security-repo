@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmo-security"
-version = "0.5.1"
-description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs)"
+version = "0.6.0"
+description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs, multi-target scanning)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT OR Apache-2.0" }

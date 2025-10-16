@@ -1,0 +1,37 @@
+# Dockerfile with known security issues
+# Used for testing Hadolint scanning
+
+# DL3006: Always tag the version of an image explicitly
+FROM ubuntu:latest
+
+# DL3009: Delete the apt-get lists after installing
+# DL3008: Pin versions in apt-get install
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    netcat
+
+# DL3020: Use COPY instead of ADD for files
+ADD http://example.com/big-file.tar.gz /tmp/
+
+# CIS 4.1: Create a user for the container
+# Running as root (implicit)
+
+# DL3045: Use --no-cache-dir with pip
+RUN pip install requests
+
+# DL3025: Use JSON format for CMD and ENTRYPOINT
+ENTRYPOINT curl http://example.com
+
+# Hardcoded secrets (CWE-798)
+ENV API_KEY="sk-1234567890abcdef"
+ENV DATABASE_PASSWORD="SuperSecret123!"
+
+# DL3000: Use absolute WORKDIR
+WORKDIR app
+
+# CIS 4.7: Do not store secrets in environment variables
+# Exposed port without documentation
+EXPOSE 8080
+
+# No HEALTHCHECK instruction (CIS 4.6)

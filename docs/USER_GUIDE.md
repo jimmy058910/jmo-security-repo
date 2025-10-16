@@ -149,6 +149,402 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 
 Tip: You can also run `make tools` to install/upgrade the curated external scanners (trufflehog, semgrep, trivy, syft, checkov, bandit, hadolint, zap, noseyparker, falco, afl++, etc.) and `make verify-env` to validate your setup.
 
+## Multi-Target Scanning (v0.6.0+)
+
+**New in v0.6.0:** Scan beyond local repositories to cover your entire infrastructure.
+
+### Supported Target Types
+
+JMO Security now scans 6 target types in a single unified workflow:
+
+1. **Repositories** (existing) - Local Git repositories
+2. **Container Images** (NEW) - Docker/OCI images from registries
+3. **IaC Files** (NEW) - Terraform, CloudFormation, Kubernetes manifests
+4. **Web URLs** (NEW) - Live web applications and APIs (DAST)
+5. **GitLab Repos** (NEW) - GitLab-hosted repositories
+6. **Kubernetes Clusters** (NEW) - Live K8s clusters
+
+### Quick Examples
+
+```bash
+# Scan a container image
+jmo scan --image nginx:latest --tools trivy syft
+
+# Scan multiple images from file
+jmo scan --images-file images.txt --results-dir ./image-scan
+
+# Scan Terraform state file
+jmo scan --terraform-state infrastructure.tfstate --tools checkov trivy
+
+# Scan CloudFormation template
+jmo scan --cloudformation template.yml --tools checkov trivy
+
+# Scan Kubernetes manifest
+jmo scan --k8s-manifest deployment.yaml --tools checkov trivy
+
+# Scan live web application (DAST)
+jmo scan --url https://example.com --tools zap
+
+# Scan multiple URLs from file
+jmo scan --urls-file urls.txt --tools zap
+
+# Scan GitLab repository
+jmo scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
+
+# Scan entire GitLab group
+jmo scan --gitlab-group mygroup --gitlab-token TOKEN --tools trufflehog
+
+# Scan Kubernetes cluster
+jmo scan --k8s-context prod --k8s-namespace default --tools trivy
+
+# Scan all namespaces in cluster
+jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
+
+# Scan multiple target types in one command
+jmo scan \
+  --repo ./myapp \
+  --image myapp:latest \
+  --terraform-state infrastructure.tfstate \
+  --url https://myapp.com \
+  --gitlab-repo myorg/backend \
+  --k8s-context prod \
+  --results-dir ./comprehensive-scan
+```
+
+### CLI Arguments Reference
+
+#### Container Images
+
+- `--image IMAGE`: Scan a single container image (format: `registry/image:tag`)
+- `--images-file FILE`: File with one image per line (supports `#` comments)
+
+**Example images.txt:**
+```text
+# Production images
+nginx:latest
+mysql:8.0
+redis:7.2-alpine
+
+# Custom images
+myregistry.io/myapp:v1.2.3
+ghcr.io/myorg/api:main
+```
+
+**Tools used:** Trivy (vulnerabilities, secrets, misconfigurations), Syft (SBOM generation)
+
+#### IaC Files
+
+- `--terraform-state FILE`: Terraform state file to scan
+- `--cloudformation FILE`: CloudFormation template (JSON/YAML)
+- `--k8s-manifest FILE`: Kubernetes manifest file
+
+**Tools used:** Checkov (policy-as-code), Trivy (configuration scanning)
+
+**Note:** Type detection is automatic based on flag used. All IaC files support both Checkov and Trivy scanning.
+
+#### Web URLs (DAST)
+
+- `--url URL`: Single web application URL to scan
+- `--urls-file FILE`: File with URLs (one per line, supports `#` comments)
+- `--api-spec FILE_OR_URL`: OpenAPI/Swagger spec (local file or URL)
+
+**Example urls.txt:**
+```text
+# Production endpoints
+https://api.example.com
+https://app.example.com
+https://admin.example.com/login
+
+# Staging environment
+https://staging.example.com
+```
+
+**Tools used:** OWASP ZAP (dynamic application security testing)
+
+**URL schemes supported:** `http://`, `https://`, `file://` (for local HTML files)
+
+#### GitLab Integration
+
+- `--gitlab-url URL`: GitLab instance URL (default: `https://gitlab.com`)
+- `--gitlab-token TOKEN`: GitLab access token (or use `GITLAB_TOKEN` env var)
+- `--gitlab-group GROUP`: Scan all repositories in a group
+- `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
+
+**Tools used:** TruffleHog (GitLab-native secrets scanning with verification)
+
+**Authentication:**
+```bash
+# Via environment variable (recommended)
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
+jmo scan --gitlab-group mygroup
+
+# Via CLI argument
+jmo scan --gitlab-group mygroup --gitlab-token "glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+**Permissions required:** `read_api`, `read_repository` scopes
+
+#### Kubernetes Clusters
+
+- `--k8s-context CONTEXT`: Kubernetes context to use (from kubeconfig)
+- `--k8s-namespace NAMESPACE`: Specific namespace to scan
+- `--k8s-all-namespaces`: Scan all namespaces (overrides `--k8s-namespace`)
+
+**Tools used:** Trivy (K8s cluster vulnerabilities, misconfigurations)
+
+**Prerequisites:**
+- `kubectl` installed and configured
+- Valid kubeconfig with cluster access
+- Appropriate RBAC permissions (read-only sufficient)
+
+**Examples:**
+```bash
+# Scan specific namespace
+jmo scan --k8s-context prod --k8s-namespace default --tools trivy
+
+# Scan all namespaces
+jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
+
+# Scan using current context
+jmo scan --k8s-namespace kube-system --tools trivy
+```
+
+### Results Directory Structure
+
+Multi-target scanning creates separate directories for each target type:
+
+```
+results/
+├── individual-repos/          # Repository scans (existing)
+│   └── myapp/
+│       ├── trufflehog.json
+│       ├── semgrep.json
+│       └── trivy.json
+├── individual-images/         # Container image scans (v0.6.0)
+│   └── nginx_latest/
+│       ├── trivy.json
+│       └── syft.json
+├── individual-iac/            # IaC file scans (v0.6.0)
+│   └── infrastructure/
+│       ├── checkov.json
+│       └── trivy.json
+├── individual-web/            # Web URL scans (v0.6.0)
+│   └── example_com/
+│       └── zap.json
+├── individual-gitlab/         # GitLab repository scans (v0.6.0)
+│   └── mygroup_myrepo/
+│       └── trufflehog.json
+├── individual-k8s/            # Kubernetes cluster scans (v0.6.0)
+│   └── prod_default/
+│       └── trivy.json
+└── summaries/                 # Unified aggregated reports
+    ├── findings.json          # All findings from all target types
+    ├── SUMMARY.md
+    ├── dashboard.html
+    ├── findings.sarif
+    ├── COMPLIANCE_SUMMARY.md
+    ├── PCI_DSS_COMPLIANCE.md
+    └── attack-navigator.json
+```
+
+**Key points:**
+- Each target type has its own `individual-{type}/` directory
+- Target names are sanitized (special characters replaced with `_`)
+- `summaries/` contains unified reports across all target types
+- Findings are deduplicated by fingerprint ID across all targets
+
+### Multi-Target CI/CD Integration
+
+Use multi-target scanning in CI pipelines:
+
+```yaml
+# GitHub Actions example
+name: Comprehensive Security Scan
+on: [push, pull_request]
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Multi-Target Security Scan
+        run: |
+          # Scan repository code
+          jmo scan --repo . --tools trufflehog semgrep trivy
+
+          # Scan container images in docker-compose
+          jmo scan \
+            --image nginx:latest \
+            --image redis:7.2 \
+            --results-dir ./results
+
+          # Scan IaC files
+          jmo scan \
+            --terraform-state terraform.tfstate \
+            --k8s-manifest k8s/deployment.yaml \
+            --results-dir ./results
+
+          # Scan live staging environment
+          jmo scan --url https://staging.example.com --tools zap --results-dir ./results
+
+          # Generate unified reports
+          jmo report ./results --fail-on HIGH --profile
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/summaries/findings.sarif
+
+      - name: Upload Dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-dashboard
+          path: results/summaries/dashboard.html
+```
+
+### Advanced Multi-Target Workflows
+
+#### Scenario 1: Complete Infrastructure Audit
+
+Scan all infrastructure components in one command:
+
+```bash
+jmo ci \
+  --repo ./application-code \
+  --image myregistry.io/app:v1.0.0 \
+  --terraform-state ./infra/terraform.tfstate \
+  --cloudformation ./infra/cloudformation.yml \
+  --url https://app.example.com \
+  --k8s-context prod \
+  --k8s-all-namespaces \
+  --fail-on HIGH \
+  --profile \
+  --results-dir ./full-audit
+```
+
+#### Scenario 2: Container Registry Audit
+
+Scan all images in your registry:
+
+```bash
+# Create images list
+docker images --format "{{.Repository}}:{{.Tag}}" > registry-images.txt
+
+# Scan all images
+jmo scan --images-file registry-images.txt --tools trivy syft --results-dir ./registry-audit
+
+# Generate report
+jmo report ./registry-audit --fail-on CRITICAL
+```
+
+#### Scenario 3: Multi-Environment DAST Scanning
+
+Scan development, staging, and production:
+
+```bash
+# Create URLs file
+cat > environments.txt <<EOF
+https://dev.example.com
+https://staging.example.com
+https://prod.example.com
+EOF
+
+# Scan all environments
+jmo scan --urls-file environments.txt --tools zap --results-dir ./dast-scan
+```
+
+#### Scenario 4: GitLab Organization-Wide Audit
+
+Scan all repositories in your GitLab organization:
+
+```bash
+export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
+
+# Scan entire organization/group
+jmo scan \
+  --gitlab-url https://gitlab.company.com \
+  --gitlab-group engineering \
+  --tools trufflehog \
+  --results-dir ./gitlab-audit \
+  --threads 4
+```
+
+### Performance Tips
+
+**1. Parallel scanning with multiple targets:**
+
+```bash
+# Separate scans in parallel (faster but separate result dirs)
+jmo scan --repo ./app1 --results-dir ./results/app1 &
+jmo scan --image app1:latest --results-dir ./results/app1 &
+wait
+
+# Single unified scan (slower but single result dir)
+jmo scan --repo ./app1 --image app1:latest --results-dir ./results
+```
+
+**2. Use profiles for faster scanning:**
+
+```bash
+# Fast profile for quick feedback (3 tools, 300s timeout)
+jmo scan --image nginx:latest --profile-name fast
+
+# Deep profile for comprehensive audits (11 tools, 900s timeout)
+jmo scan --k8s-context prod --k8s-all-namespaces --profile-name deep
+```
+
+**3. Batch processing:**
+
+```bash
+# Process batches of images
+split -l 10 all-images.txt batch-
+for batch in batch-*; do
+  jmo scan --images-file "$batch" --results-dir "./results/$(basename $batch)"
+done
+```
+
+### Tool Compatibility Matrix
+
+| Target Type | Trivy | Syft | Checkov | ZAP | TruffleHog | Semgrep |
+|-------------|-------|------|---------|-----|------------|---------|
+| Repositories | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Container Images | ✓ | ✓ | - | - | - | - |
+| IaC Files | ✓ | - | ✓ | - | - | - |
+| Web URLs | - | - | - | ✓ | - | - |
+| GitLab Repos | - | - | - | - | ✓ | - |
+| Kubernetes | ✓ | - | - | - | - | - |
+
+**Note:** Tool selection is automatic based on target type. Use `--tools` to override defaults.
+
+### Troubleshooting Multi-Target Scans
+
+**No targets found:**
+- Verify file paths exist (IaC files, image lists, URL lists)
+- Check GitLab token has correct permissions
+- Ensure kubectl is configured for K8s scanning
+
+**Image scan fails:**
+- Verify Docker/Podman is running for local images
+- Check registry authentication for private images
+- Use `docker login` before scanning private registries
+
+**ZAP scan timeout:**
+- Increase timeout: `--timeout 1200` or in `jmo.yml` per_tool override
+- Reduce spider duration: `zap.flags: ["-config", "spider.maxDuration=3"]`
+- Use targeted scanning with `--api-spec` instead of full crawl
+
+**GitLab scan fails:**
+- Verify token: `curl -H "PRIVATE-TOKEN: $GITLAB_TOKEN" https://gitlab.com/api/v4/user`
+- Check group/repo name format: `group/repo` or `group/subgroup/repo`
+- Ensure token has `read_api` and `read_repository` scopes
+
+**K8s scan fails:**
+- Test kubectl access: `kubectl --context prod get pods -n default`
+- Check RBAC permissions: `kubectl auth can-i list pods --all-namespaces`
+- Verify Trivy supports your K8s version: `trivy k8s --help`
+
 ## Output overview
 
 Unified summaries live in `results/summaries/`:
@@ -1040,10 +1436,15 @@ TruffleHog output looks empty
 
 ## Reference: CLI synopsis
 
-Scan
+Scan (v0.6.0+ with multi-target support)
 
 ```bash
 jmo scan [--repo PATH | --repos-dir DIR | --targets FILE] \
+  [--image IMAGE | --images-file FILE] \
+  [--terraform-state FILE | --cloudformation FILE | --k8s-manifest FILE] \
+  [--url URL | --urls-file FILE | --api-spec FILE_OR_URL] \
+  [--gitlab-repo REPO | --gitlab-group GROUP] [--gitlab-url URL] [--gitlab-token TOKEN] \
+  [--k8s-context CONTEXT] [--k8s-namespace NS | --k8s-all-namespaces] \
   [--results-dir DIR] [--config FILE] [--tools ...] [--timeout SECS] [--threads N] \
   [--allow-missing-tools] [--profile-name NAME] [--log-level LEVEL] [--human-logs]
 ```
@@ -1055,10 +1456,15 @@ jmo report RESULTS_DIR [--out DIR] [--config FILE] [--fail-on SEV] [--profile] \
   [--threads N] [--log-level LEVEL] [--human-logs]
 ```
 
-CI (scan + report)
+CI (scan + report with v0.6.0 multi-target support)
 
 ```bash
 jmo ci [--repo PATH | --repos-dir DIR | --targets FILE] \
+  [--image IMAGE | --images-file FILE] \
+  [--terraform-state FILE | --cloudformation FILE | --k8s-manifest FILE] \
+  [--url URL | --urls-file FILE | --api-spec FILE_OR_URL] \
+  [--gitlab-repo REPO | --gitlab-group GROUP] [--gitlab-url URL] [--gitlab-token TOKEN] \
+  [--k8s-context CONTEXT] [--k8s-namespace NS | --k8s-all-namespaces] \
   [--results-dir DIR] [--config FILE] [--tools ...] [--timeout SECS] [--threads N] \
   [--allow-missing-tools] [--profile-name NAME] [--fail-on SEV] [--profile] \
   [--log-level LEVEL] [--human-logs]
