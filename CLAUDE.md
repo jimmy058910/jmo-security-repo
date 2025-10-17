@@ -56,6 +56,74 @@ make upgrade-pip
 make uv-sync
 ```
 
+### Version Management (v0.6.1+)
+
+**IMPORTANT: Use the 5-layer version management system to update tool versions.**
+
+```bash
+# Check current versions
+python3 scripts/dev/update_versions.py --report
+
+# Check for available updates
+python3 scripts/dev/update_versions.py --check-latest
+
+# Update a specific tool
+python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+
+# Sync all Dockerfiles with versions.yaml
+python3 scripts/dev/update_versions.py --sync
+
+# Validate consistency (CI uses this)
+python3 scripts/dev/update_versions.py --sync --dry-run
+```
+
+**Key Files:**
+- **[versions.yaml](versions.yaml)** — Single source of truth for all tool versions
+- **[scripts/dev/update_versions.py](scripts/dev/update_versions.py)** — Automation script
+- **[.github/workflows/version-check.yml](.github/workflows/version-check.yml)** — Weekly CI checks
+- **[.github/dependabot.yml](.github/dependabot.yml)** — Python/Docker/Actions updates
+- **[docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** — Complete guide
+
+**Critical Rules:**
+1. **NEVER manually edit tool versions in Dockerfiles** — Always use `update_versions.py`
+2. **ALWAYS sync after updating versions.yaml** — Run `update_versions.py --sync`
+3. **CRITICAL: Trivy versions MUST match** — Mismatches cause CVE detection gaps (see ROADMAP #14)
+4. **Update critical tools within 7 days** — trivy, trufflehog, semgrep, checkov, syft, zap
+5. **Monthly review process** — First Monday: check-latest → review → update → test → commit
+
+**Workflow for Updating Tools:**
+
+```bash
+# Step 1: Check for updates
+python3 scripts/dev/update_versions.py --check-latest
+# Output: [warn] trivy: 0.67.2 → 0.68.0 (UPDATE AVAILABLE)
+
+# Step 2: Review release notes
+gh release view v0.68.0 --repo aquasecurity/trivy
+
+# Step 3: Update versions.yaml
+python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+
+# Step 4: Sync Dockerfiles
+python3 scripts/dev/update_versions.py --sync
+
+# Step 5: Verify changes
+git diff versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
+
+# Step 6: Test locally
+make docker-build
+
+# Step 7: Commit
+git add versions.yaml Dockerfile*
+git commit -m "deps(tools): update trivy to v0.68.0
+
+- trivy: 0.67.2 → 0.68.0 (CVE database updates)
+
+Related: ROADMAP #14, Issue #46"
+```
+
+**See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) for complete documentation.**
+
 ### Running Scans
 
 ```bash
@@ -755,6 +823,7 @@ results/
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Testing: [TEST.md](TEST.md)
 - Release Process: [docs/RELEASE.md](docs/RELEASE.md)
+- **Version Management: [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** (v0.6.1+)
 - CommonFinding Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
 - Copilot Instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
 - Project Homepage: [jmotools.com](https://jmotools.com)
@@ -963,10 +1032,14 @@ When adding/updating documentation:
 | `scripts/core/common_finding.py` | CommonFinding schema and fingerprinting |
 | `scripts/core/adapters/*.py` | Tool output parsers |
 | `scripts/core/reporters/*.py` | Output formatters (JSON/MD/YAML/HTML/SARIF) |
+| `scripts/dev/update_versions.py` | **Version management automation (v0.6.1+)** |
 | `jmo.yml` | Main configuration file |
+| `versions.yaml` | **Central tool version registry (v0.6.1+)** |
 | `pyproject.toml` | Python package metadata and build config |
 | `Makefile` | Developer shortcuts for common tasks |
 | `Dockerfile`, `Dockerfile.slim`, `Dockerfile.alpine` | Docker image variants |
 | `.pre-commit-config.yaml` | Pre-commit hook configuration |
 | `.github/workflows/ci.yml` | Primary CI: tests, quick checks, nightly lint |
 | `.github/workflows/release.yml` | Release automation: PyPI + Docker builds |
+| `.github/workflows/version-check.yml` | **Weekly version consistency checks (v0.6.1+)** |
+| `.github/dependabot.yml` | **Automated dependency updates (v0.6.1+)** |

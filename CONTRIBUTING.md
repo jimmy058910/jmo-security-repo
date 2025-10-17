@@ -222,6 +222,65 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 make screenshots-demo
 ```
 
+## Docker local testing
+
+Before publishing Docker images to GHCR, test them locally to validate changes:
+
+### Build local images
+
+```bash
+# Build all variants (full/slim/alpine)
+make docker-build-local
+
+# Or build specific variant
+docker build -t jmo-security:local-full -f Dockerfile .
+```
+
+### Test local images
+
+```bash
+# Test CLI works
+docker run --rm jmo-security:local-full --help
+docker run --rm jmo-security:local-full ci --help
+
+# Test scan with volume mount
+docker run --rm \
+  -v $(pwd):/scan \
+  -v $(pwd)/results:/results \
+  jmo-security:local-full ci \
+  --repo /scan \
+  --results-dir /results \
+  --profile-name fast \
+  --allow-missing-tools
+```
+
+### Run E2E tests with local images
+
+```bash
+# Set environment variables to use local images
+export DOCKER_IMAGE_BASE="jmo-security"
+export DOCKER_TAG="local"
+
+# Run specific Docker tests
+bash tests/e2e/run_comprehensive_tests.sh --test U9
+bash tests/e2e/run_comprehensive_tests.sh --test U10
+bash tests/e2e/run_comprehensive_tests.sh --test U11
+
+# Or run full suite
+bash tests/e2e/run_comprehensive_tests.sh
+```
+
+### Pre-release Docker checklist
+
+Before pushing Docker images:
+
+- [ ] Build all three variants locally
+- [ ] Test CLI works (`--help`, `scan --help`, `ci --help`)
+- [ ] Test single repo scan
+- [ ] Test multi-target scan (v0.6.0+ feature)
+- [ ] Run E2E tests U9, U10, U11 with local images
+- [ ] Verify image sizes are reasonable
+
 ## Git workflow
 
 - Create a feature branch from `main`.

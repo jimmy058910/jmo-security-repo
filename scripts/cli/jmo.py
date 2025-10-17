@@ -671,7 +671,133 @@ def _run_cmd(
     return rc, "", str(last_exc or ""), used_attempts or 1
 
 
+def _check_first_run() -> bool:
+    """Check if this is user's first time running jmo."""
+    config_path = Path.home() / ".jmo" / "config.yml"
+    if not config_path.exists():
+        return True
+    try:
+        import yaml
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+        return not config.get("onboarding_completed", False)
+    except Exception:
+        return False
+
+
+def _collect_email_opt_in(args) -> None:
+    """Non-intrusive email collection on first run."""
+    print("\n🎉 Welcome to JMo Security!\n")
+    print("📧 Get notified about new features, updates, and security tips?")
+    print("   (We'll never spam you. Unsubscribe anytime.)\n")
+
+    email = input("   Enter email (or press Enter to skip): ").strip()
+
+    config_path = Path.home() / ".jmo" / "config.yml"
+    config_path.parent.mkdir(exist_ok=True)
+
+    if email and "@" in email:
+        # Attempt to send welcome email (fails silently if resend not installed)
+        try:
+            from scripts.core.email_service import send_welcome_email, validate_email
+
+            if validate_email(email):
+                success = send_welcome_email(email, source="cli_onboarding")
+
+                # Save to config
+                import yaml
+                config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+                with open(config_path, "w") as f:
+                    yaml.dump(config, f)
+
+                if success:
+                    print(f"\n✅ Thanks! Check your inbox for a welcome message.\n")
+                else:
+                    print(f"\n✅ Thanks! You're all set.\n")
+                    _log(args, "DEBUG", "Email collection succeeded but welcome email not sent (resend may not be configured)")
+            else:
+                print("\n❌ Invalid email address. Skipping...\n")
+                # Mark onboarding complete even if email invalid
+                import yaml
+                config = {"onboarding_completed": True}
+                with open(config_path, "w") as f:
+                    yaml.dump(config, f)
+        except ImportError:
+            # email_service module not available (resend not installed)
+            print(f"\n✅ Thanks! You're all set.\n")
+            import yaml
+            config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+            with open(config_path, "w") as f:
+                yaml.dump(config, f)
+            _log(args, "DEBUG", "Email recorded but welcome email not sent (install resend: pip install resend)")
+        except Exception as e:
+            # Any other error - fail gracefully
+            print(f"\n✅ Thanks! You're all set.\n")
+            import yaml
+            config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+            with open(config_path, "w") as f:
+                yaml.dump(config, f)
+            _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
+    else:
+        print("\n👍 No problem! You can always add your email later with:")
+        print("   jmo config --email your@email.com\n")
+
+        # Mark onboarding complete even if skipped
+        import yaml
+        config = {"onboarding_completed": True}
+        with open(config_path, "w") as f:
+            yaml.dump(config, f)
+
+
+def _show_kofi_reminder(args) -> None:
+    """Show Ko-Fi support reminder every 5th scan (non-intrusive).
+
+    Tracks scan count in ~/.jmo/config.yml and displays friendly reminder
+    every 5 scans to support full-time development.
+    """
+    config_path = Path.home() / ".jmo" / "config.yml"
+    config_path.parent.mkdir(exist_ok=True)
+
+    # Load existing config
+    config = {}
+    if config_path.exists():
+        try:
+            import yaml
+            with open(config_path) as f:
+                config = yaml.safe_load(f) or {}
+        except Exception:
+            pass
+
+    # Increment scan count
+    scan_count = config.get("scan_count", 0) + 1
+    config["scan_count"] = scan_count
+
+    # Save updated config
+    try:
+        import yaml
+        with open(config_path, "w") as f:
+            yaml.safe_dump(config, f, default_flow_style=False)
+    except Exception:
+        pass  # Fail silently, don't block workflow
+
+    # Show Ko-Fi message every 3rd scan
+    if scan_count % 3 == 0:
+        print("\n" + "=" * 70 + "\n"
+              + "💚 Enjoying JMo Security? Support full-time development!\n"
+              + "   → https://ko-fi.com/jmogaming\n"
+              + "\n"
+              + "   Your support helps maintain 11+ security tools, add new features,\n"
+              + "   and provide free security scanning for the community.\n"
+              + "\n"
+              + f"   You've run {scan_count} scans - thank you for using JMo Security!\n"
+              + "=" * 70 + "\n")
+
+
 def cmd_scan(args) -> int:
+    # Check for first-run email prompt (non-blocking)
+    if _check_first_run():
+        _collect_email_opt_in(args)
+
     import os
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -2215,6 +2341,9 @@ def cmd_scan(args) -> int:
                 )
             except Exception as e:
                 _log(args, "ERROR", f"K8s scan error: {e}")
+
+    # Show Ko-Fi support reminder every 5th scan (non-intrusive)
+    _show_kofi_reminder(args)
 
     return 0
 

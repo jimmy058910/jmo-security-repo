@@ -4,6 +4,186 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+### Version Management System (v0.6.1 - January 16, 2025)
+
+**Major Enhancement:** 5-layer automated version management system to prevent tool version drift and CVE detection gaps
+
+**Problem Solved:**
+
+- Tool version inconsistencies between Docker images and native installations
+- Manual version updates prone to human error
+- No automated detection of outdated security tools
+- Critical tools missing vulnerability database updates (real-world: Trivy v0.58.1 → v0.67.2 missed 16 CVEs)
+- No centralized version tracking or update policies
+
+**Real-World Impact (ROADMAP #14):**
+
+During comprehensive testing (October 2025), discovered critical version mismatch:
+
+- **Native Trivy:** v0.67.2 (database updated 2025-10-15) → 651 findings
+- **Docker Trivy (Dockerfile.slim/alpine):** v0.58.1 (9 weeks outdated) → 635 findings
+- **Missing:** 16 CVE vulnerabilities (1 CRITICAL, 4 HIGH, 9 MEDIUM, 2 LOW)
+- **Impact:** CVE-2025-7783 (form-data), high CVEs in pillow/protobuf/tornado/axios
+- **Cause:** Manual version pinning in Dockerfiles, no automated consistency checks
+
+**The 5-Layer System:**
+
+**Layer 1: Central Version Registry ([versions.yaml](versions.yaml))**
+
+- Single source of truth for all external tool versions
+- 20+ tool versions tracked (Python packages, binary tools, Docker base images)
+- Metadata: GitHub repo, PyPI package, release pattern, architectures, critical priority
+- Update policies: Critical tools (7-day SLA), non-critical tools (monthly)
+- Version history audit trail
+
+**Layer 2: Automated Version Checker ([.github/workflows/version-check.yml](.github/workflows/version-check.yml))**
+
+- **Scheduled runs:** Weekly (Sunday 00:00 UTC)
+- **Actions:**
+  - Checks latest versions via GitHub/PyPI APIs
+  - Detects Trivy version mismatches across all 3 Dockerfiles (critical)
+  - Creates GitHub issues for outdated CRITICAL tools (auto-labeled)
+  - Validates Dockerfile consistency (no hardcoded versions)
+  - Checks Python dependency freshness
+- **Jobs:**
+  - `check-versions` — Latest version checks + issue creation
+  - `check-dockerfile-consistency` — Hardcoded version detection
+  - `check-python-deps` — PyPI update checks
+  - `version-check-summary` — Overall status reporting
+
+**Layer 3: Dockerfile Build-Time Variables**
+
+- All Dockerfiles use parameterized versions via ARG variables
+- Single update command affects all 3 Docker variants (full/slim/alpine)
+- Consistent architecture: `TOOL_VERSION="X.Y.Z"` pattern
+- No hardcoded versions in download URLs
+
+**Layer 4: Update Automation Script ([scripts/dev/update_versions.py](scripts/dev/update_versions.py))**
+
+Comprehensive CLI for version management:
+
+```bash
+# Check for updates
+python3 scripts/dev/update_versions.py --check-latest
+
+# Update specific tool
+python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+
+# Sync all Dockerfiles
+python3 scripts/dev/update_versions.py --sync
+
+# Dry-run validation (CI uses this)
+python3 scripts/dev/update_versions.py --sync --dry-run
+
+# Generate version report
+python3 scripts/dev/update_versions.py --report
+
+# Check outdated + create GitHub issues
+python3 scripts/dev/update_versions.py --check-outdated --create-issues
+```
+
+**Features:**
+
+- GitHub API integration for latest releases
+- PyPI integration for Python packages
+- Automatic Dockerfile synchronization
+- Dry-run mode for CI validation
+- Comprehensive version reporting
+- Automated GitHub issue creation
+
+**Layer 5: Dependabot Configuration ([.github/dependabot.yml](.github/dependabot.yml))**
+
+- **Python dependencies:** Weekly updates for dev dependencies (pytest, black, ruff, etc.)
+- **Docker base images:** Weekly updates for ubuntu:22.04, alpine:3.18
+- **GitHub Actions:** Weekly updates for all workflow actions
+- **Grouping:** Minor/patch updates grouped to reduce PR noise
+- **Labels:** Auto-labeled with `dependencies`, `python|docker|ci`
+- **Reviewers:** Auto-requested reviews
+
+**Note:** Dependabot only tracks Python packages and Docker base images. Binary tools (trivy, trufflehog, syft, etc.) managed via Layer 2 automation.
+
+**Critical Bug Fix:**
+
+- **Fixed Trivy version inconsistency across Docker images:**
+  - Dockerfile: v0.67.2 ✅
+  - Dockerfile.slim: v0.58.1 → v0.67.2 (FIXED)
+  - Dockerfile.alpine: v0.58.1 → v0.67.2 (FIXED)
+  - Automated via `python3 scripts/dev/update_versions.py --sync`
+
+**Documentation:**
+
+- **Comprehensive guide:** [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
+  - Quick start, monthly update workflow, troubleshooting
+  - All 5 layers explained in detail
+  - Critical vs. non-critical tool classifications
+  - Dependabot integration patterns
+- **CLAUDE.md updates:**
+  - New "Version Management" section in Core Commands
+  - Critical rules for contributors
+  - Step-by-step update workflow
+  - Added to Key Files Reference and Additional Resources
+
+**Testing & Validation:**
+
+- Dry-run validation integrated into CI (`quick-checks` job)
+- Version consistency checks on every PR
+- Weekly automated issue creation for outdated tools
+- Dockerfile consistency enforcement (prevents manual edits)
+
+**Impact:**
+
+- **Prevents CVE detection gaps:** Ensures tool versions always match across Docker/native
+- **Reduces manual maintenance:** Automated checks + issue creation replaces manual tracking
+- **Improves security posture:** Critical tools updated within 7 days
+- **Audit trail:** Version history tracking in versions.yaml
+- **Developer efficiency:** Single command updates all 3 Dockerfiles
+
+**Monthly Update Workflow:**
+
+1. **Automated check** (every Sunday via CI): Creates issues for outdated critical tools
+2. **Manual review** (first Monday of month):
+   - Run: `python3 scripts/dev/update_versions.py --check-latest`
+   - Review release notes and prioritize security-critical tools
+3. **Update & test:**
+   - Update: `python3 scripts/dev/update_versions.py --tool trivy --version X.Y.Z`
+   - Sync: `python3 scripts/dev/update_versions.py --sync`
+   - Test: `make docker-build`
+4. **Commit & release:**
+   - Commit with conventional format: `deps(tools): update trivy to vX.Y.Z`
+   - CI validates consistency before merge
+
+**Files Added:**
+
+- `versions.yaml` — Central tool version registry (+280 lines)
+- `scripts/dev/update_versions.py` — Version management automation script (+580 lines)
+- `.github/workflows/version-check.yml` — Weekly version checks workflow (+240 lines)
+- `.github/dependabot.yml` — Automated dependency updates (+80 lines)
+- `docs/VERSION_MANAGEMENT.md` — Complete version management guide (+850 lines)
+
+**Files Updated:**
+
+- `Dockerfile.slim` — Trivy version 0.58.1 → 0.67.2 (line 68)
+- `Dockerfile.alpine` — Trivy version 0.58.1 → 0.67.2 (line 74)
+- `CLAUDE.md` — Added Version Management section (+65 lines) and updated Key Files Reference
+- `CHANGELOG.md` — This entry
+
+**Migration Guide:**
+
+No action required for users. Version management is automated:
+
+- CI automatically validates version consistency on PRs
+- Weekly checks create issues for outdated tools
+- Developers use `update_versions.py` for updates (documented in CLAUDE.md)
+- Existing workflows unchanged
+
+**Related:**
+
+- [ROADMAP.md #14](ROADMAP.md#1-tool-version-consistency--automated-dependency-management) — Full 5-layer system design
+- [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46) — Tool version consistency tracking
+- [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12) — Dependency locking & updates
+
+---
+
 ### Multi-Target Scanning: Container Images, IaC, Web Apps, GitLab, Kubernetes (v0.6.0 - October 16, 2025)
 
 **Major Enhancement:** Expanded scanning beyond local repositories to 5 new target types

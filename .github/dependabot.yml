@@ -1,0 +1,90 @@
+# Dependabot configuration for JMo Security Suite
+# Part of 5-layer version management system (ROADMAP.md #14, Issue #46)
+# Handles: Python packages, Docker base images, GitHub Actions
+
+version: 2
+
+updates:
+  # Python dependencies (requirements-dev.txt via pip-tools)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jimmy058910"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps(python)"
+      include: "scope"
+    # Group minor/patch updates to reduce PR noise
+    groups:
+      development-dependencies:
+        patterns:
+          - "pytest*"
+          - "coverage*"
+          - "black*"
+          - "ruff*"
+          - "pre-commit*"
+        update-types:
+          - "minor"
+          - "patch"
+      testing-dependencies:
+        patterns:
+          - "pytest-*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker base images (Ubuntu, Alpine)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "jimmy058910"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps(docker)"
+      include: "scope"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "jimmy058910"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+    # Group patch updates for actions
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+
+# Important notes:
+# 1. Dependabot DOES NOT track binary tools (trivy, trufflehog, syft, etc.)
+#    Those are managed via versions.yaml + update_versions.py + CI checks
+# 2. Python security tools (semgrep, checkov, bandit) are tracked in Dockerfiles
+#    but should be manually synced via update_versions.py after Dependabot PRs
+# 3. For critical tool updates, use scripts/dev/update_versions.py directly
+# 4. Weekly version-check.yml workflow creates issues for outdated tools

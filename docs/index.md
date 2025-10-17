@@ -249,6 +249,45 @@ jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-
 
 Note: CI runs on ubuntu-latest and macos-latest across Python 3.10, 3.11, and 3.12, with concurrency and job timeouts to keep runs fast and reliable.
 
+## 🪟 Windows Users Quick Start
+
+**Windows has three options - choose based on your skill level:**
+
+### ✅ Recommended: Docker Desktop OR WSL 2
+
+Both options provide full 11+ tool support. Native Windows only supports 6 tools (55% coverage).
+
+**Docker Desktop (Easiest - 5 minutes):**
+
+- Download: <https://www.docker.com/products/docker-desktop>
+- Pull image: `docker pull ghcr.io/jimmy058910/jmo-security:latest`
+- Run scan (PowerShell): `docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced --human-logs`
+- View results: `start results\summaries\dashboard.html`
+- **Key Windows syntax:** Use `${PWD}` (with curly braces) and quotes
+
+**WSL 2 (Best Performance - 15 minutes):**
+
+1. Install WSL 2 (PowerShell as Admin): `wsl --install`
+2. Restart, then launch Ubuntu from Start Menu
+3. Update packages: `sudo apt-get update -y && sudo apt-get upgrade -y`
+4. Install dependencies: `sudo apt-get install -y build-essential git jq python3 python3-pip curl wget`
+5. Install JMo: `pip install jmo-security`
+6. Add to PATH: `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`
+7. Auto-install tools: `git clone https://github.com/jimmy058910/jmo-security-repo.git && cd jmo-security-repo && make tools`
+8. Run scan: `jmotools balanced --repos-dir ~/projects`
+9. View results: `explorer.exe results/summaries/dashboard.html`
+
+**Performance tip:** Use WSL filesystem (`~` paths) instead of Windows filesystem (`/mnt/c/`) for 2-3x faster scans.
+
+**⚠️ Native Windows (NOT recommended):**
+
+- Only 6 out of 11+ tools work (55% coverage)
+- Missing DAST (ZAP), runtime security (Falco), fuzzing (AFL++), Hadolint, Nosey Parker
+- You will miss 20-30% of vulnerabilities
+- Only use if Docker/WSL prohibited by organization
+
+📖 **Full Windows guide:** [QUICKSTART.md — Windows Users](../QUICKSTART.md#-windows-users-start-here)
+
 ## WSL quick install checklist
 
 If you're on Windows Subsystem for Linux (WSL), this gets you to green fast:

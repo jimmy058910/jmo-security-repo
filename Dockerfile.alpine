@@ -35,8 +35,8 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
         # AMD64: Install build deps temporarily for any compilation needs
         apk add --no-cache --virtual .build-deps gcc musl-dev python3-dev cargo rust && \
         python3 -m pip install --no-cache-dir --break-system-packages \
-            semgrep==1.94.0 \
-            checkov==3.2.255 && \
+            semgrep==1.99.0 \
+            checkov==3.2.477 && \
         apk del .build-deps; \
     else \
         # ARM64: Skip semgrep/checkov - other tools (trufflehog, syft, trivy, zap) cover security scanning
@@ -44,7 +44,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi
 
 # Install TruffleHog (verified secrets)
-RUN TRUFFLEHOG_VERSION="3.84.2" && \
+RUN TRUFFLEHOG_VERSION="3.90.11" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     wget -q "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -O /tmp/trufflehog.tar.gz && \
@@ -52,7 +52,7 @@ RUN TRUFFLEHOG_VERSION="3.84.2" && \
     rm /tmp/trufflehog.tar.gz
 
 # Install OWASP ZAP (DAST - requires Java)
-RUN ZAP_VERSION="2.15.0" && \
+RUN ZAP_VERSION="2.16.1" && \
     apk add --no-cache openjdk11-jre-headless && \
     wget -q "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
     -O /tmp/zap.tar.gz && \
@@ -63,7 +63,7 @@ RUN ZAP_VERSION="2.15.0" && \
     rm /tmp/zap.tar.gz
 
 # Install Syft
-RUN SYFT_VERSION="1.18.1" && \
+RUN SYFT_VERSION="1.34.2" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     wget -q "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -O /tmp/syft.tar.gz && \
@@ -71,7 +71,7 @@ RUN SYFT_VERSION="1.18.1" && \
     rm /tmp/syft.tar.gz
 
 # Install Trivy
-RUN TRIVY_VERSION="0.58.1" && \
+RUN TRIVY_VERSION="0.67.2" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -O /tmp/trivy.tar.gz && \

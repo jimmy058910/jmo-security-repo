@@ -1,0 +1,32 @@
+{
+  "name": "jmo-security-subscribe-api",
+  "version": "1.0.0",
+  "description": "Email subscription API endpoint for JMo Security",
+  "main": "subscribe_endpoint.js",
+  "scripts": {
+    "start": "node subscribe_endpoint.js",
+    "dev": "nodemon subscribe_endpoint.js",
+    "test": "curl -X POST http://localhost:3000/api/subscribe -H 'Content-Type: application/json' -d '{\"email\":\"test@example.com\",\"source\":\"test\"}'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "express-rate-limit": "^7.1.5",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "api",
+    "newsletter",
+    "subscription",
+    "resend",
+    "email"
+  ],
+  "author": "James Moceri <general@jmogaming.com>",
+  "license": "MIT OR Apache-2.0"
+}

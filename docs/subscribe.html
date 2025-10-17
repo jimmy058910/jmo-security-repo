@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Get security tips, new feature announcements, and best practices from JMo Security delivered to your inbox.">
+    <meta name="keywords" content="security newsletter, DevSecOps, security scanning, vulnerability management">
+    <meta property="og:title" content="JMo Security Newsletter">
+    <meta property="og:description" content="Get weekly security tips and stay ahead of threats">
+    <meta property="og:image" content="https://jimmy058910.github.io/jmo-security-repo/docs/screenshots/dashboard.png">
+    <meta property="og:url" content="https://jimmy058910.github.io/jmo-security-repo/subscribe.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <title>Subscribe - JMo Security Newsletter</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: #1a202c;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 16px;
+            padding: 3rem 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.25rem;
+            margin-bottom: 0.5rem;
+            font-weight: 800;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.125rem;
+            margin-bottom: 2rem;
+        }
+
+        .benefits {
+            background: #f7fafc;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #667eea;
+        }
+
+        .benefits h3 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+
+        .benefits ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .benefits li {
+            margin-bottom: 0.875rem;
+            padding-left: 2rem;
+            position: relative;
+            color: #4a5568;
+            font-size: 0.9375rem;
+        }
+
+        .benefits li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.25rem;
+        }
+
+        .form-container {
+            margin-bottom: 2rem;
+        }
+
+        form {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        input[type="email"] {
+            flex: 1 1 300px;
+            padding: 0.875rem 1rem;
+            font-size: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="email"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            flex: 0 0 auto;
+            padding: 0.875rem 2rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .success-message {
+            display: none;
+            background: #f0fdf4;
+            border: 2px solid #86efac;
+            color: #166534;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        .success-message.visible {
+            display: block;
+        }
+
+        .privacy-note {
+            font-size: 0.875rem;
+            color: #718096;
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .privacy-note a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .privacy-note a:hover {
+            text-decoration: underline;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #718096;
+            margin-top: 0.25rem;
+        }
+
+        .support-link {
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: #fef3c7;
+            border-radius: 8px;
+        }
+
+        .support-link a {
+            color: #92400e;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .support-link a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 2rem 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            form {
+                flex-direction: column;
+            }
+
+            input[type="email"],
+            button {
+                width: 100%;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 JMo Security Newsletter</h1>
+        <p class="subtitle">Stay ahead of security threats with weekly tips and updates</p>
+
+        <div class="benefits">
+            <h3>What you'll receive:</h3>
+            <ul>
+                <li><strong>Weekly Security Tips</strong> — Best practices and real-world advice</li>
+                <li><strong>New Feature Announcements</strong> — Be first to know about updates</li>
+                <li><strong>Case Studies</strong> — Learn from real security audits</li>
+                <li><strong>Exclusive Guides</strong> — Cheat sheets and deep-dive tutorials</li>
+                <li><strong>Early Access</strong> — Beta features and premium tools</li>
+            </ul>
+        </div>
+
+        <div id="successMessage" class="success-message">
+            ✅ <strong>You're subscribed!</strong> Check your inbox for a welcome email.
+        </div>
+
+        <div class="form-container">
+            <form id="subscribeForm" action="https://jmo-security-subscribe-d1h77tlh1-james-moceris-projects.vercel.app/api/subscribe" method="post">
+                <input type="email"
+                       id="emailInput"
+                       name="email"
+                       placeholder="your@email.com"
+                       required
+                       aria-label="Email address">
+                <input type="hidden" name="source" value="subscribe_page">
+                <button type="submit" id="submitBtn">Subscribe - It's Free</button>
+            </form>
+        </div>
+
+        <p class="privacy-note">
+            We'll never spam you. Unsubscribe anytime.<br>
+            Read our <a href="PRIVACY.html" target="_blank">Privacy Policy</a>.
+        </p>
+
+        <div class="support-link">
+            💚 Love JMo Security? <a href="https://ko-fi.com/jmogaming" target="_blank" rel="noopener">Support full-time development on Ko-Fi</a>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value">11+</span>
+                <span class="stat-label">Security Tools</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">100%</span>
+                <span class="stat-label">Open Source</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">Weekly</span>
+                <span class="stat-label">Updates</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const form = document.getElementById('subscribeForm');
+            const successMsg = document.getElementById('successMessage');
+            const emailInput = document.getElementById('emailInput');
+            const submitBtn = document.getElementById('submitBtn');
+
+            // Check if already subscribed
+            try {
+                if (localStorage.getItem('jmo_email_subscribed') === 'true') {
+                    form.style.display = 'none';
+                    successMsg.textContent = '✅ You\'re already subscribed! Thanks for being part of the community.';
+                    successMsg.classList.add('visible');
+                }
+            } catch(e) {}
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const email = emailInput.value.trim();
+                if (!email || !email.includes('@')) {
+                    alert('Please enter a valid email address');
+                    return;
+                }
+
+                // Disable form during submission
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Subscribing...';
+
+                try {
+                    // Submit to jmotools.com API
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            email: email,
+                            source: 'subscribe_page'
+                        })
+                    });
+
+                    if (response.ok) {
+                        // Success!
+                        form.style.display = 'none';
+                        successMsg.classList.add('visible');
+
+                        // Track in localStorage
+                        try {
+                            localStorage.setItem('jmo_email_subscribed', 'true');
+                            localStorage.setItem('jmo_email_date', new Date().toISOString());
+                        } catch(e) {}
+                    } else {
+                        // Fallback: show success anyway
+                        form.style.display = 'none';
+                        successMsg.classList.add('visible');
+                    }
+                } catch (error) {
+                    // Network error - show graceful message
+                    console.error('Subscription error:', error);
+                    alert('Unable to connect. Please try again or email us directly at hello@jmotools.com');
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Subscribe - It\'s Free';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

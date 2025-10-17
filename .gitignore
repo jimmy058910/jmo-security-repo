@@ -69,8 +69,10 @@ BUSINESS_MODEL.md
 docs/VERSION_TAG.md
 BUSINESS_PLAN.md
 
-# Archived documentation (historical reference, not for version control)
-docs/archive/
+# Archived documentation (historical reference)
+# v0.6.0 archive is included for historical reference
+docs/archive/*
+!docs/archive/v0.6.0/
 
 # Private local scripts and outputs (ignored)
 /ai-search
@@ -81,3 +83,8 @@ docs/archive/
 # Claude Code user-specific configuration (open-source project)
 .claude/
 samples/fixtures/infra-demo/docker-test-results/
+
+# Node.js dependencies (API)
+node_modules/
+scripts/api/node_modules/
+scripts/api/.vercel/

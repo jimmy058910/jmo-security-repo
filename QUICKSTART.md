@@ -101,7 +101,7 @@ make full DIR=~/repos        # Run deep profile
 
 ### v0.6.0 - Multi-Target Scanning (October 2025)
 
-**🚀 BREAKTHROUGH: Unified Security Platform**
+#### 🚀 BREAKTHROUGH: Unified Security Platform
 
 Scan repositories AND infrastructure in one workflow!
 
@@ -153,6 +153,370 @@ jmo scan --repo ./myapp --image myapp:latest --url https://myapp.com --k8s-conte
 - 🎯 **91% Coverage** - 272/272 tests passing
 
 See [CHANGELOG.md](CHANGELOG.md) for complete details.
+
+---
+
+## 🪟 Windows Users: Start Here
+
+**Windows has three options for running JMo Security. Choose based on your experience level:**
+
+### Option 1: Docker Desktop (Recommended for Beginners)
+
+**Best for:** Complete beginners, no WSL setup required
+
+**Pros:**
+
+- ✅ Zero tool installation (all scanners pre-installed)
+- ✅ Works on Windows 10/11 Home and Pro
+- ✅ No command-line experience needed
+- ✅ Same commands work on Windows/Mac/Linux
+
+**Setup (5 minutes):**
+
+1. **Install Docker Desktop:**
+   - Download: <https://www.docker.com/products/docker-desktop>
+   - Run installer, accept defaults
+   - Restart computer when prompted
+   - Wait for Docker to start (whale icon in system tray)
+
+2. **Verify installation** (PowerShell or Command Prompt):
+
+   ```powershell
+   docker --version
+   ```
+
+   Expected: `Docker version XX.X.X`
+
+3. **Pull JMo Security image** (one-time, ~500MB):
+
+   ```powershell
+   docker pull ghcr.io/jimmy058910/jmo-security:latest
+   ```
+
+4. **Run your first scan** (PowerShell - use this exact syntax):
+
+   ```powershell
+   # Navigate to your project
+   cd C:\Users\YourName\Projects\myapp
+
+   # Run scan (IMPORTANT: Use ${PWD} with curly braces on Windows)
+   docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced --human-logs
+
+   # View results
+   start results\summaries\dashboard.html
+   type results\summaries\SUMMARY.md
+   ```
+
+**Windows-specific Docker notes:**
+
+- ✅ **Always use `${PWD}` (with curly braces)** instead of `$(pwd)` for volume mounts
+- ✅ **Use quotes** around volume paths: `"${PWD}:/scan"`
+- ✅ **Use backslashes** for Windows paths: `start results\summaries\dashboard.html`
+- ✅ **Share drives:** Docker Desktop may ask permission to access C:\ - approve this
+
+**Common Docker issues on Windows:**
+
+#### Issue: "Error response from daemon: invalid mode: /scan"**
+
+**Solution:** Use `${PWD}` with curly braces and quotes:
+
+```powershell
+# ❌ WRONG (Linux/macOS syntax)
+docker run --rm -v $(pwd):/scan ...
+
+# ✅ CORRECT (Windows PowerShell syntax)
+docker run --rm -v "${PWD}:/scan" ...
+```
+
+#### Issue: "Docker daemon is not running"**
+
+**Solution:**
+
+1. Launch Docker Desktop from Start Menu
+2. Wait for whale icon in system tray to turn green
+3. Try command again
+
+#### Issue: Slow performance or file access errors**
+
+**Solution:**
+
+1. Enable WSL 2 backend in Docker Desktop settings
+2. Move project files to WSL filesystem (see WSL option below)
+
+📖 **Complete Docker guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
+
+---
+
+### Option 2: WSL 2 with Native Tools (Recommended for Developers)
+
+**Best for:** Developers comfortable with command line, want maximum performance
+
+**Pros:**
+
+- ✅ **Native Linux performance** (2-3x faster than Docker on Windows)
+- ✅ **Full tool control** (install/upgrade individual scanners)
+- ✅ **Better git integration** (native Linux git performance)
+- ✅ **No Docker overhead** (uses less RAM/CPU)
+
+**Setup (10-15 minutes):**
+
+1. **Install WSL 2 with Ubuntu** (PowerShell as Administrator):
+
+   ```powershell
+   # Install WSL 2 (Windows 10 version 2004+ or Windows 11)
+   wsl --install
+
+   # Restart computer when prompted
+
+   # After restart, set default WSL version to 2
+   wsl --set-default-version 2
+   ```
+
+   This installs Ubuntu 22.04 LTS by default.
+
+2. **Launch Ubuntu** from Start Menu and create a user account when prompted
+
+3. **Update Ubuntu packages:**
+
+   ```bash
+   sudo apt-get update -y && sudo apt-get upgrade -y
+   ```
+
+4. **Install core dependencies:**
+
+   ```bash
+   sudo apt-get install -y build-essential git jq python3 python3-pip curl wget
+   ```
+
+5. **Install JMo Security:**
+
+   ```bash
+   pip install jmo-security
+
+   # Ensure ~/.local/bin is on PATH
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+
+   # Verify installation
+   jmo --help
+   jmotools --help
+   ```
+
+6. **Install security tools** (choose one):
+
+   **Option A: Auto-install (easiest):**
+
+   ```bash
+   # Clone JMo repo for tool installation scripts
+   git clone https://github.com/jimmy058910/jmo-security-repo.git
+   cd jmo-security-repo
+
+   # Auto-install tools via Makefile
+   make tools
+
+   # Verify tools
+   make verify-env
+   ```
+
+   **Option B: Manual install** (see full tool installation section below)
+
+7. **Run your first scan:**
+
+   ```bash
+   # Scan a project (can be in Windows filesystem or WSL filesystem)
+   # Windows path example (slower): /mnt/c/Users/YourName/Projects/myapp
+   # WSL path example (faster): ~/projects/myapp
+
+   jmotools balanced --repos-dir ~/projects
+
+   # View results
+   cat results/summaries/SUMMARY.md
+
+   # Open dashboard (launches Windows browser from WSL)
+   explorer.exe results/summaries/dashboard.html
+   ```
+
+**WSL Performance Tips:**
+
+- ✅ **Use WSL filesystem** (`~` paths) for 2-3x faster performance
+- ✅ **Avoid `/mnt/c/` paths** when possible (Windows filesystem access is slower)
+- ✅ **Clone repos into WSL:** `cd ~ && git clone ...`
+- ✅ **Access WSL files from Windows:** `\\wsl$\Ubuntu\home\username\`
+
+**WSL vs Docker Performance Comparison:**
+
+| Metric | WSL Native | Docker on Windows | Winner |
+|--------|------------|-------------------|--------|
+| **Scan Speed** | Baseline | 30-50% slower | WSL |
+| **Memory Usage** | ~500MB | ~2GB (Docker overhead) | WSL |
+| **Git Operations** | Fast | Slow (cross-filesystem) | WSL |
+| **Setup Complexity** | Medium | Low | Docker |
+| **Tool Control** | Full | Limited | WSL |
+
+**Common WSL issues:**
+
+#### Issue: "command not found: jmo"**
+
+**Solution:** Add `~/.local/bin` to PATH:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Issue: Permission errors accessing Windows files**
+
+**Solution:** WSL mounts Windows drives at `/mnt/c/`. Use WSL filesystem instead:
+
+```bash
+# ❌ SLOW: Windows filesystem
+cd /mnt/c/Users/YourName/Projects
+jmotools balanced --repos-dir .
+
+# ✅ FAST: WSL filesystem
+mkdir -p ~/projects
+cd ~/projects
+git clone https://github.com/user/repo.git
+jmotools balanced --repos-dir ~/projects
+```
+
+#### Issue: "Cannot connect to Docker daemon" (if using Docker within WSL)**
+
+**Solution:** Install Docker Desktop and enable WSL 2 integration:
+
+1. Docker Desktop → Settings → Resources → WSL Integration
+2. Enable integration for Ubuntu distribution
+3. Restart WSL: `wsl --shutdown` (in PowerShell), then relaunch Ubuntu
+
+📖 **WSL troubleshooting:** [docs/index.md — WSL Quick Install](docs/index.md#wsl-quick-install-checklist)
+
+---
+
+### ⚠️ Option 3: Native Windows Tools (NOT RECOMMENDED)
+
+**⚠️ WARNING: This option provides SEVERELY LIMITED security coverage and is NOT recommended.**
+
+**Critical limitations:**
+
+- ❌ **Only 6 out of 11+ tools work** on native Windows
+- ❌ **Missing entire security categories:**
+  - ❌ **No DAST scanning** (OWASP ZAP requires Java/Linux)
+  - ❌ **No runtime security** (Falco requires Linux kernel)
+  - ❌ **No fuzzing** (AFL++ is Linux/macOS only)
+  - ❌ **No Dockerfile linting** (Hadolint unavailable)
+  - ❌ **No Nosey Parker** (high-precision secrets scanning missing)
+- ❌ **Tool compatibility issues** (many tools run poorly on Windows)
+- ❌ **No official support** (most security tools are Linux-first)
+- ❌ **Missing 20-30% of vulnerabilities** that DAST tools would find
+- ❌ **Incomplete coverage** compared to balanced/deep profiles
+
+**You will miss critical security vulnerabilities with this approach.**
+
+**STRONGLY RECOMMENDED ALTERNATIVES:**
+
+1. ✅ **Use Docker Desktop** (Option 1) - Full tool support, zero setup
+2. ✅ **Use WSL 2** (Option 2) - Full tool support, best performance
+
+**Only consider native Windows if:**
+
+- You have specific organizational requirements prohibiting Docker/WSL
+- You understand you're getting 50-60% tool coverage
+- You accept the security risk of missing DAST/runtime/fuzzing findings
+
+**If you must use native Windows (against our recommendation):**
+
+1. **Install Python 3.10+:**
+
+   Download from: <https://www.python.org/downloads/>
+
+   ✅ **Check "Add Python to PATH" during installation**
+
+2. **Install Git for Windows:**
+
+   Download from: <https://git-scm.com/download/win>
+
+3. **Install JMo Security:**
+
+   ```powershell
+   pip install jmo-security
+   jmo --help
+   ```
+
+4. **Install Windows-compatible tools only:**
+
+   **Available tools (6 of 11+):**
+   - Semgrep (SAST): `pip install semgrep`
+   - Bandit (Python SAST): `pip install bandit`
+   - Checkov (IaC): `pip install checkov`
+   - TruffleHog (secrets - verified): Download from <https://github.com/trufflesecurity/trufflehog/releases>
+   - Trivy (vulnerabilities): Download from <https://github.com/aquasecurity/trivy/releases>
+   - Syft (SBOM): Download from <https://github.com/anchore/syft/releases>
+
+   **Missing tools (5 of 11+):**
+   - ❌ Hadolint (Dockerfile linting)
+   - ❌ Nosey Parker (secrets - high precision)
+   - ❌ OWASP ZAP (DAST - web security)
+   - ❌ Falco (runtime security)
+   - ❌ AFL++ (fuzzing)
+
+5. **Create Windows-specific profile (required):**
+
+   Create `jmo.yml` in your project:
+
+   ```yaml
+   default_profile: windows-limited
+   profiles:
+     windows-limited:
+       # ONLY 6 tools available - missing DAST, runtime, fuzzing, hadolint, noseyparker
+       tools: [trufflehog, semgrep, bandit, syft, trivy, checkov]
+       timeout: 600
+       threads: 4
+   ```
+
+6. **Run limited scan:**
+
+   ```powershell
+   jmo scan --repo C:\Users\YourName\Projects\myapp --profile-name windows-limited --human-logs
+   start results\summaries\dashboard.html
+   ```
+
+**Seriously, reconsider:**
+
+Native Windows scanning provides **only 50-60% of the security coverage** you'd get with Docker or WSL. You're missing critical vulnerability classes:
+
+- **Web application vulnerabilities** (no DAST)
+- **Runtime container exploits** (no Falco)
+- **Fuzzing-discovered bugs** (no AFL++)
+- **Dockerfile security issues** (no Hadolint)
+- **High-precision secret detection** (no Nosey Parker)
+
+**Recommendation:** Use Docker Desktop (5-minute setup) or WSL 2 (15-minute setup) for full security coverage.
+
+---
+
+### Windows Option Comparison
+
+| Feature | Docker Desktop | WSL 2 Native | ⚠️ Windows Native |
+|---------|----------------|--------------|-------------------|
+| **Setup Time** | 5 minutes | 10-15 minutes | 20-30 minutes |
+| **Tool Coverage** | ✅ All 11+ tools (100%) | ✅ All 11+ tools (100%) | ❌ Only 6 tools (55%) |
+| **Security Coverage** | ✅ Complete | ✅ Complete | ❌ Severely limited |
+| **DAST Scanning** | ✅ Yes (ZAP) | ✅ Yes (ZAP) | ❌ No |
+| **Runtime Security** | ✅ Yes (Falco) | ✅ Yes (Falco) | ❌ No |
+| **Fuzzing** | ✅ Yes (AFL++) | ✅ Yes (AFL++) | ❌ No |
+| **Performance** | Good | Excellent | Good |
+| **Ease of Use** | Easiest | Medium | Hard |
+| **Recommended** | ✅ Yes | ✅ Yes | ❌ **NO** |
+
+**Our strong recommendation for Windows users:**
+
+1. **Complete beginners:** Docker Desktop (Option 1) - ✅ Full tool support
+2. **Developers:** WSL 2 (Option 2) - ✅ Full tool support, best performance
+3. **CI/CD pipelines:** Docker (Option 1) - ✅ Full tool support
+4. **Maximum performance:** WSL 2 (Option 2) - ✅ Full tool support
+5. **Native Windows:** ❌ **NOT recommended** - Only 55% tool coverage, missing critical security categories
+
+**Bottom line for Windows users:** Choose Docker Desktop or WSL 2. Native Windows scanning is incomplete and will miss critical vulnerabilities.
 
 ---
 
@@ -292,7 +656,7 @@ jmo scan --k8s-context prod --k8s-namespace default --tools trivy
 jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
 ```
 
-### Multi-Target Audit: Scan Everything Together!
+### Multi-Target Audit: Scan Everything Together
 
 ```bash
 # Complete security audit in ONE command

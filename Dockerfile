@@ -36,8 +36,8 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 # Install Python-based tools (bandit, semgrep, checkov)
 RUN python3 -m pip install --no-cache-dir \
     bandit==1.7.10 \
-    semgrep==1.94.0 \
-    checkov==3.2.255 \
+    semgrep==1.99.0 \
+    checkov==3.2.477 \
     ruff==0.14.0
 
 # Install shfmt
@@ -48,7 +48,7 @@ RUN SHFMT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") &&
     chmod +x /usr/local/bin/shfmt
 
 # Install OWASP ZAP (DAST)
-RUN ZAP_VERSION="2.15.0" && \
+RUN ZAP_VERSION="2.16.1" && \
     apt-get update && apt-get install -y --no-install-recommends \
     wget \
     openjdk-11-jre-headless \
@@ -62,7 +62,7 @@ RUN ZAP_VERSION="2.15.0" && \
     rm /tmp/zap.tar.gz
 
 # Install TruffleHog
-RUN TRUFFLEHOG_VERSION="3.84.2" && \
+RUN TRUFFLEHOG_VERSION="3.90.11" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -70,7 +70,7 @@ RUN TRUFFLEHOG_VERSION="3.84.2" && \
     rm /tmp/trufflehog.tar.gz
 
 # Install Syft (SBOM generator)
-RUN SYFT_VERSION="1.18.1" && \
+RUN SYFT_VERSION="1.34.2" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \

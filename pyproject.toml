@@ -20,6 +20,7 @@ dependencies = []
 
 [project.optional-dependencies]
 reporting = ["PyYAML>=6.0", "jsonschema>=4.0"]
+email = ["resend>=2.0"]
 
 [project.scripts]
 jmo = "scripts.cli.jmo:main"

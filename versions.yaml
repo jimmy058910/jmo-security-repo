@@ -1,0 +1,223 @@
+schema_version: '1.0'
+python_tools:
+  bandit:
+    version: 1.7.10
+    pypi_package: bandit
+    description: Python security linter
+    update_check: pip index versions bandit
+    critical: false
+  semgrep:
+    version: 1.99.0
+    pypi_package: semgrep
+    description: Multi-language SAST scanner
+    update_check: pip index versions semgrep
+    critical: true
+  checkov:
+    version: 3.2.477
+    pypi_package: checkov
+    description: IaC security scanner
+    update_check: pip index versions checkov
+    critical: true
+  ruff:
+    version: 0.14.0
+    pypi_package: ruff
+    description: Python linter and formatter
+    update_check: pip index versions ruff
+    critical: false
+binary_tools:
+  trufflehog:
+    version: 3.90.11
+    github_repo: trufflesecurity/trufflehog
+    description: Verified secrets scanner (primary)
+    release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/trufflesecurity/trufflehog/releases/latest
+    critical: true
+  noseyparker:
+    version: 0.24.0
+    github_repo: praetorian-inc/noseyparker
+    description: Deep secrets scanner (optional, deep profile)
+    release_pattern: noseyparker-v{version}-{arch}-unknown-linux-musl.tar.gz
+    architectures:
+      amd64: x86_64
+      arm64: aarch64
+    update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
+    critical: false
+  syft:
+    version: 1.34.2
+    github_repo: anchore/syft
+    description: SBOM generator
+    release_pattern: syft_{version}_linux_{arch}.tar.gz
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/anchore/syft/releases/latest
+    critical: true
+  trivy:
+    version: 0.67.2
+    github_repo: aquasecurity/trivy
+    description: Vulnerability/misconfig/secrets scanner
+    release_pattern: trivy_{version}_Linux-{arch}.tar.gz
+    architectures:
+      amd64: 64bit
+      arm64: ARM64
+    update_check: gh api repos/aquasecurity/trivy/releases/latest
+    critical: true
+    notes: 'CRITICAL: Outdated versions miss CVEs (see ROADMAP.md #14)'
+  hadolint:
+    version: 2.12.0
+    github_repo: hadolint/hadolint
+    description: Dockerfile linter
+    release_pattern: hadolint-Linux-{arch}
+    architectures:
+      amd64: x86_64
+      arm64: arm64
+    update_check: gh api repos/hadolint/hadolint/releases/latest
+    critical: false
+  falcoctl:
+    version: 0.11.0
+    github_repo: falcosecurity/falcoctl
+    description: Falco CLI for static analysis
+    release_pattern: falcoctl_{version}_linux_{arch}.tar.gz
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/falcosecurity/falcoctl/releases/latest
+    critical: false
+  shfmt:
+    version: 3.8.0
+    github_repo: mvdan/sh
+    description: Shell formatter
+    release_pattern: shfmt_v{version}_linux_{arch}
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/mvdan/sh/releases/latest
+    critical: false
+special_tools:
+  zap:
+    version: 2.16.1
+    github_repo: zaproxy/zaproxy
+    description: OWASP ZAP - Dynamic Application Security Testing
+    release_pattern: ZAP_{version}_Linux.tar.gz
+    update_check: gh api repos/zaproxy/zaproxy/releases/latest
+    critical: true
+    installation: tar.gz with Java dependency
+  aflplusplus:
+    version: 4.21c
+    github_repo: AFLplusplus/AFLplusplus
+    description: Coverage-guided fuzzing (optional, deep profile)
+    release_pattern: v{version}.tar.gz
+    update_check: gh api repos/AFLplusplus/AFLplusplus/releases/latest
+    critical: false
+    installation: Source build required
+docker_images:
+  ubuntu:
+    version: '22.04'
+    registry: docker.io
+    image: ubuntu
+    description: Base image for Dockerfile and Dockerfile.slim
+    update_check: docker pull ubuntu:22.04 && docker inspect ubuntu:22.04 | jq -r
+      '.[0].Created'
+  alpine:
+    version: '3.18'
+    registry: docker.io
+    image: alpine
+    description: Base image for Dockerfile.alpine
+    update_check: docker pull alpine:3.18 && docker inspect alpine:3.18 | jq -r '.[0].Created'
+update_policies:
+  critical_tools:
+    tools:
+    - trivy
+    - trufflehog
+    - semgrep
+    - checkov
+    - zap
+    - syft
+    description: Critical tools must be updated within 7 days of new release
+  non_critical_tools:
+    tools:
+    - bandit
+    - ruff
+    - hadolint
+    - shfmt
+    - falcoctl
+    - noseyparker
+    - aflplusplus
+    description: Non-critical tools can be updated monthly
+  automated_check_schedule: Weekly (Sunday 00:00 UTC)
+  manual_review_schedule: First Monday of each month
+version_history:
+- date: '2025-10-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-17'
+  action: Updated zap
+  tools_updated:
+  - tool: zap
+    old_version: 2.15.0
+    new_version: 2.16.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-17'
+  action: Updated syft
+  tools_updated:
+  - tool: syft
+    old_version: 1.18.1
+    new_version: 1.34.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-17'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.84.2
+    new_version: 3.90.11
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-17'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.255
+    new_version: 3.2.477
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-17'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.94.0
+    new_version: 1.99.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-01-16'
+  action: Initial version registry created
+  tools_updated: []
+  updated_by: automation
+  notes: Baseline from Dockerfile analysis - found Trivy inconsistency (0.67.2 vs
+    0.58.1)

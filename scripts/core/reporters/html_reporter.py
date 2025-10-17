@@ -696,6 +696,144 @@ render();
   }catch(e){}
 })();
 </script>
+
+<!-- Email Collection CTA (Touch Point #2) -->
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2.5rem 2rem;
+            margin: 3rem 0 2rem 0;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h2 style="margin: 0 0 1rem 0; font-size: 1.75rem; font-weight: 700;">📧 Stay Ahead of Security Threats</h2>
+    <p style="font-size: 1.1rem; margin: 0 auto 1.5rem auto; max-width: 600px; line-height: 1.6;">
+        Get weekly security tips, new scanner announcements, and early access to premium features.
+    </p>
+
+    <form id="emailForm" action="https://jmo-security-subscribe-d1h77tlh1-james-moceris-projects.vercel.app/api/subscribe" method="post"
+          style="display: flex; max-width: 500px; margin: 0 auto 1.5rem auto; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+        <input type="email" name="email" id="emailInput" placeholder="your@email.com" required
+               style="flex: 1 1 300px; min-width: 250px; padding: 0.875rem 1rem; border: none; border-radius: 8px;
+                      font-size: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <input type="hidden" name="source" value="dashboard">
+        <button type="submit" id="emailSubmit"
+                style="flex: 0 0 auto; padding: 0.875rem 1.75rem; background: #10b981; color: white;
+                       border: none; border-radius: 8px; font-size: 1rem; font-weight: 600;
+                       cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
+                onmouseover="this.style.background='#059669'"
+                onmouseout="this.style.background='#10b981'">
+            Subscribe Free
+        </button>
+    </form>
+
+    <div id="emailSuccess" style="display: none; padding: 1rem; background: rgba(255,255,255,0.2); border-radius: 8px; margin-bottom: 1rem;">
+        <strong>✅ Thanks for subscribing!</strong> Check your inbox for a welcome message.
+    </div>
+
+    <div style="font-size: 0.875rem; opacity: 0.95; margin-top: 1rem;">
+        <p style="margin: 0 0 0.5rem 0;">We'll never spam you. Unsubscribe anytime.</p>
+        <p style="margin: 0;">
+            💚 <a href="https://ko-fi.com/jmogaming"
+                  style="color: white; text-decoration: underline; font-weight: 600;"
+                  target="_blank" rel="noopener">
+                Support Full-Time Development on Ko-Fi
+            </a>
+        </p>
+    </div>
+</div>
+
+<script>
+// Email form submission handler
+(function() {
+    const form = document.getElementById('emailForm');
+    const successMsg = document.getElementById('emailSuccess');
+    const emailInput = document.getElementById('emailInput');
+    const submitBtn = document.getElementById('emailSubmit');
+
+    if (!form) return;
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const email = emailInput.value.trim();
+        if (!email || !email.includes('@')) {
+            alert('Please enter a valid email address');
+            return;
+        }
+
+        // Disable form during submission
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Subscribing...';
+
+        try {
+            // Try to submit to jmotools.com API
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: email,
+                    source: 'dashboard'
+                })
+            });
+
+            if (response.ok) {
+                // Success!
+                form.style.display = 'none';
+                successMsg.style.display = 'block';
+
+                // Track in localStorage
+                try {
+                    localStorage.setItem('jmo_email_subscribed', 'true');
+                    localStorage.setItem('jmo_email_date', new Date().toISOString());
+                } catch(e) {}
+            } else {
+                // Fallback: show success anyway (email will be in server logs)
+                form.style.display = 'none';
+                successMsg.style.display = 'block';
+            }
+        } catch (error) {
+            // Network error or API not available - graceful fallback
+            console.error('Email submission error:', error);
+            alert('Unable to submit. Please try again later or visit: https://jimmy058910.github.io/jmo-security-repo/subscribe.html');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Subscribe Free';
+        }
+    });
+
+    // Check if already subscribed
+    try {
+        if (localStorage.getItem('jmo_email_subscribed') === 'true') {
+            form.style.display = 'none';
+            successMsg.innerHTML = '<strong>✅ You\'re already subscribed!</strong> Thanks for being part of the community.';
+            successMsg.style.display = 'block';
+        }
+    } catch(e) {}
+})();
+</script>
+
+<footer style="text-align: center; padding: 2rem 1rem; margin-top: 3rem; border-top: 1px solid #e2e8f0; color: #64748b;">
+    <p style="margin: 0 0 0.5rem 0; font-size: 0.875rem;">
+        🔒 <strong>JMo Security</strong> — Terminal-first security scanning with unified outputs
+    </p>
+    <p style="margin: 0; font-size: 0.875rem;">
+        <a href="https://github.com/jimmy058910/jmo-security-repo" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none;">
+            GitHub
+        </a> ·
+        <a href="https://jmotools.com" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none;">
+            Website
+        </a> ·
+        <a href="https://ko-fi.com/jmogaming" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none;">
+            Support
+        </a> ·
+        <a href="https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html" target="_blank" rel="noopener" style="color: #3b82f6; text-decoration: none;">
+            Privacy
+        </a>
+    </p>
+</footer>
+
 </body>
 </html>
 """

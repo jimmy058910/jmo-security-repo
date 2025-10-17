@@ -1,0 +1,173 @@
+---
+name: Version Consistency Check
+
+# Automated version management - Layer 2 of 5-layer system (ROADMAP.md #14)
+# Purpose: Weekly checks for outdated tools + automated issue creation
+# Related: Issue #46, Issue #12
+
+on:
+  schedule:
+    # Weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      create_issues:
+        description: 'Create GitHub issues for outdated tools'
+        required: false
+        default: 'true'
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write  # Required for creating issues
+
+jobs:
+  check-versions:
+    name: Check tool versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Check for latest versions
+        id: check
+        run: |
+          python3 scripts/dev/update_versions.py --check-latest || echo "outdated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Generate version report
+        run: |
+          python3 scripts/dev/update_versions.py --report
+
+      - name: Check outdated tools and create issues
+        if: github.event_name == 'schedule' || github.event.inputs.create_issues == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/dev/update_versions.py --check-outdated --create-issues
+
+      - name: Validate version consistency across files
+        run: |
+          # Check Dockerfile versions match versions.yaml
+          python3 scripts/dev/update_versions.py --sync --dry-run || {
+            echo "::error::Dockerfiles are out of sync with versions.yaml"
+            echo "::error::Run: python3 scripts/dev/update_versions.py --sync"
+            exit 1
+          }
+
+      - name: Check for Trivy version mismatch (critical)
+        run: |
+          # Extract Trivy versions from all Dockerfiles
+          TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile || echo "not_found")
+          TRIVY_SLIM=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.slim || echo "not_found")
+          TRIVY_ALPINE=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.alpine || echo "not_found")
+
+          echo "Trivy versions found:"
+          echo "  Dockerfile:        $TRIVY_FULL"
+          echo "  Dockerfile.slim:   $TRIVY_SLIM"
+          echo "  Dockerfile.alpine: $TRIVY_ALPINE"
+
+          # Check for mismatches
+          if [ "$TRIVY_FULL" != "$TRIVY_SLIM" ] || [ "$TRIVY_FULL" != "$TRIVY_ALPINE" ]; then
+            echo "::error::CRITICAL: Trivy version mismatch detected!"
+            echo "::error::This can cause CVE detection discrepancies (see ROADMAP.md #14)"
+            exit 1
+          fi
+
+          echo "✅ All Trivy versions are consistent: $TRIVY_FULL"
+
+  check-dockerfile-consistency:
+    name: Validate Dockerfile consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for hardcoded versions in Dockerfiles
+        run: |
+          # This check ensures versions are parameterized via ARG/ENV variables
+          # and not hardcoded inline
+
+          ISSUES=0
+
+          # Check for inline version patterns that should use variables
+          for dockerfile in Dockerfile Dockerfile.slim Dockerfile.alpine; do
+            echo "Checking $dockerfile for hardcoded versions..."
+
+            # Look for download URLs with hardcoded versions (bad pattern)
+            if grep -P 'github.com/[^/]+/[^/]+/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/' "$dockerfile" | grep -v '\${.*_VERSION}'; then
+              echo "::warning file=$dockerfile::Found hardcoded version in download URL"
+              ISSUES=$((ISSUES + 1))
+            fi
+          done
+
+          if [ $ISSUES -gt 0 ]; then
+            echo "::notice::Found $ISSUES potential hardcoded versions. Review manually."
+          else
+            echo "✅ No hardcoded versions detected"
+          fi
+
+  check-python-deps:
+    name: Check Python dependency freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check PyPI for security tool updates
+        run: |
+          # Check if Python security tools have updates
+          for tool in bandit semgrep checkov ruff; do
+            echo "Checking $tool..."
+            CURRENT=$(grep -oP "${tool}==[0-9.]+" Dockerfile | head -n1 | cut -d'=' -f3 || echo "unknown")
+            LATEST=$(pip index versions "$tool" 2>/dev/null | grep -oP '(?<=Available versions: )[0-9.]+' | head -n1 || echo "unknown")
+
+            echo "  Current: $CURRENT"
+            echo "  Latest:  $LATEST"
+
+            if [ "$CURRENT" != "$LATEST" ] && [ "$CURRENT" != "unknown" ] && [ "$LATEST" != "unknown" ]; then
+              echo "::notice::$tool has update available: $CURRENT → $LATEST"
+            fi
+          done
+
+  # Summary job - fails if any critical issues found
+  version-check-summary:
+    name: Version check summary
+    runs-on: ubuntu-latest
+    needs: [check-versions, check-dockerfile-consistency, check-python-deps]
+    if: always()
+    steps:
+      - name: Check job results
+        run: |
+          if [ "${{ needs.check-versions.result }}" == "failure" ]; then
+            echo "::error::Version check failed - see check-versions job"
+            exit 1
+          fi
+
+          if [ "${{ needs.check-dockerfile-consistency.result }}" == "failure" ]; then
+            echo "::error::Dockerfile consistency check failed"
+            exit 1
+          fi
+
+          echo "✅ All version checks passed"

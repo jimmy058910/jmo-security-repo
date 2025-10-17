@@ -773,6 +773,22 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 
 ---
 
+## 📬 Stay Updated
+
+**Get security tips and updates delivered to your inbox:**
+
+[![Newsletter](https://img.shields.io/badge/📧_Newsletter-Subscribe-667eea)](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)
+[![Ko-fi](https://img.shields.io/badge/💚_Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
+
+- 🚀 New feature announcements
+- 🔒 Weekly security best practices
+- 💡 Real-world security case studies
+- 🎁 Exclusive guides and early access
+
+**[Subscribe to Newsletter](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)** | **[Support Full-Time Development](https://ko-fi.com/jmogaming)**
+
+---
+
 ## Support
 
 - **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
