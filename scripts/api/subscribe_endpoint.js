@@ -29,13 +29,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // CORS configuration - allow GitHub Pages origin
 const corsOptions = {
-  origin: [
-    'https://jimmy058910.github.io',
-    'https://jmotools.com',
-    'http://localhost:3000',
-    'http://localhost:8000'
-  ],
-  methods: ['POST', 'OPTIONS'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or file://)
+    const allowedOrigins = [
+      'https://jimmy058910.github.io',
+      'https://jmotools.com',
+      'http://localhost:3000',
+      'http://localhost:8000'
+    ];
+
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['POST', 'OPTIONS', 'GET'],
   credentials: true,
   optionsSuccessStatus: 200
 };
