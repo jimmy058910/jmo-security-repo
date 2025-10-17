@@ -710,7 +710,7 @@ render();
         Get weekly security tips, new scanner announcements, and early access to premium features.
     </p>
 
-    <form id="emailForm" action="https://jmo-security-subscribe-d1h77tlh1-james-moceris-projects.vercel.app/api/subscribe" method="post"
+    <form id="emailForm" action="https://api.jmotools.com/api/subscribe" method="post"
           style="display: flex; max-width: 500px; margin: 0 auto 1.5rem auto; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
         <input type="email" name="email" id="emailInput" placeholder="your@email.com" required
                style="flex: 1 1 300px; min-width: 250px; padding: 0.875rem 1rem; border: none; border-radius: 8px;
