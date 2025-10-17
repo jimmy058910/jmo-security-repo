@@ -242,6 +242,13 @@ vercel --prod --yes
 - ✅ TLS 1.2+ encryption in transit
 - ✅ AES-256 encryption at rest
 
+### Anti-Bot Protection
+- ✅ Honeypot field (`website`) - Hidden from humans, catches bots
+- ✅ Client-side validation - JavaScript honeypot check
+- ✅ Server-side validation - API rejects submissions with honeypot filled
+- ✅ Rate limiting - 10 requests/hour per IP
+- ⏳ CAPTCHA - Reserved for future if spam persists
+
 ### Data Collection
 **What We Collect:**
 - Email address (if user opts in)
@@ -258,17 +265,24 @@ vercel --prod --yes
 
 ## 🚀 Next Steps
 
+### ✅ Recently Completed
+- [x] Added honeypot anti-bot protection (client-side + server-side)
+- [x] Tested all 3 email touchpoints successfully
+- [x] Sent test welcome email
+
 ### Immediate (This Week)
+- [ ] Set up Vercel error notifications (email alerts)
+- [ ] Configure Resend bounce rate monitoring (target: <5%)
 - [ ] Announce newsletter on GitHub Discussions
 - [ ] Update Docker Hub description with newsletter CTA
 - [ ] Update PyPI long_description with newsletter section
 - [ ] Post on social media (Twitter, LinkedIn)
 
 ### Short-Term (Month 1)
-- [ ] Set up monitoring alerts (Vercel errors, Resend bounces)
 - [ ] Create first newsletter content (Week 1: "Top 5 Python Security Mistakes")
 - [ ] Implement email verification (double opt-in)
 - [ ] Add custom domain: `api.jmotools.com`
+- [ ] Research CAPTCHA solutions (if spam becomes an issue despite honeypot)
 
 ### Long-Term (Month 2-3)
 - [ ] Build automated welcome email sequence (Day 0, 3, 7, 14)
