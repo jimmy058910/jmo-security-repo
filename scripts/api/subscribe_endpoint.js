@@ -21,6 +21,9 @@ const { Resend } = require('resend');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy - required for Vercel/serverless deployments to get real client IP
+app.set('trust proxy', 1);
+
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
 
