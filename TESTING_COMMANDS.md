@@ -8,7 +8,7 @@ Quick reference for testing the email system in WSL Ubuntu.
 
 ```bash
 cd /home/jimmy058910/jmo-security-repo
-./test_email_system.sh
+./scripts/testing/test_email_system.sh
 ```
 
 This interactive script walks you through all 4 tests with prompts.
