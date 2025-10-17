@@ -269,10 +269,13 @@ vercel --prod --yes
 - [x] Added honeypot anti-bot protection (client-side + server-side)
 - [x] Tested all 3 email touchpoints successfully
 - [x] Sent test welcome email
+- [x] Created monitoring setup guide ([docs/MONITORING_SETUP.md](docs/MONITORING_SETUP.md))
+- [x] Documented Vercel error notification configuration
+- [x] Documented Resend bounce rate monitoring process
 
 ### Immediate (This Week)
-- [ ] Set up Vercel error notifications (email alerts)
-- [ ] Configure Resend bounce rate monitoring (target: <5%)
+- [ ] **YOU:** Enable Vercel email notifications (see [docs/MONITORING_SETUP.md](docs/MONITORING_SETUP.md))
+- [ ] **YOU:** Set weekly calendar reminder for bounce rate checks (Mondays)
 - [ ] Announce newsletter on GitHub Discussions
 - [ ] Update Docker Hub description with newsletter CTA
 - [ ] Update PyPI long_description with newsletter section
