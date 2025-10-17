@@ -7,8 +7,7 @@ rules:
   truthy:
     allowed-values: ["true", "false", "yes", "no", "on", "off"]
     level: warning
-  document-start:
-    present: false
+  document-start: disable
   indentation:
     indent-sequences: consistent
   comments:
