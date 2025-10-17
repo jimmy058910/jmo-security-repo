@@ -121,7 +121,7 @@ app.post('/api/subscribe', async (req, res) => {
   <div style="padding: 20px;">
     <p style="font-size: 16px; margin-bottom: 20px;">Hi there!</p>
 
-    <p style="font-size: 16px; margin-bottom: 20px;">Thanks for subscribing to the JMo Security newsletter. You're now part of a community of 5,000+ developers committed to better security practices.</p>
+    <p style="font-size: 16px; margin-bottom: 20px;">Thanks for subscribing to the JMo Security newsletter. Welcome to the community!</p>
 
     <h2 style="color: #667eea; font-size: 22px; margin-top: 30px; margin-bottom: 15px;">🚀 What You'll Receive</h2>
     <ul style="font-size: 16px; line-height: 1.8;">
@@ -175,7 +175,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \\
     const welcomeEmailText = `
 Welcome to JMo Security!
 
-Thanks for subscribing to the JMo Security newsletter. You're now part of a community of 5,000+ developers committed to better security practices.
+Thanks for subscribing to the JMo Security newsletter. Welcome to the community!
 
 What You'll Receive:
 - Weekly Security Tips - Practical advice for securing your code
