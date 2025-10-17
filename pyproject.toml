@@ -54,3 +54,7 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "scripts.core.config"
 disallow_untyped_defs = true
+
+[tool.ruff]
+# Exclude test fixtures that are intentionally vulnerable
+extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]

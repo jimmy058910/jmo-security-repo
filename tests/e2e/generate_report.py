@@ -14,13 +14,13 @@ import sys
 import csv
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 def load_results(csv_path: Path) -> List[Dict[str, str]]:
     """Load test results from CSV file."""
     results = []
-    with open(csv_path, 'r') as f:
+    with open(csv_path, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
             results.append(row)
@@ -30,13 +30,13 @@ def load_results(csv_path: Path) -> List[Dict[str, str]]:
 def calculate_stats(results: List[Dict[str, str]]) -> Dict[str, int]:
     """Calculate test statistics."""
     stats = {
-        'total': len(results),
-        'passed': sum(1 for r in results if r['status'] == 'PASS'),
-        'failed': sum(1 for r in results if r['status'] == 'FAIL'),
-        'skipped': sum(1 for r in results if r['status'] == 'SKIP'),
+        "total": len(results),
+        "passed": sum(1 for r in results if r["status"] == "PASS"),
+        "failed": sum(1 for r in results if r["status"] == "FAIL"),
+        "skipped": sum(1 for r in results if r["status"] == "SKIP"),
     }
-    stats['success_rate'] = (
-        (stats['passed'] / stats['total'] * 100) if stats['total'] > 0 else 0
+    stats["success_rate"] = (
+        (stats["passed"] / stats["total"] * 100) if stats["total"] > 0 else 0
     )
     return stats
 
@@ -62,22 +62,22 @@ def format_duration(seconds_str: str) -> str:
 def categorize_tests(results: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
     """Categorize tests by suite (Ubuntu, macOS, Windows, Advanced)."""
     categories = {
-        'Ubuntu': [],
-        'macOS': [],
-        'Windows': [],
-        'Advanced': [],
+        "Ubuntu": [],
+        "macOS": [],
+        "Windows": [],
+        "Advanced": [],
     }
 
     for result in results:
-        test_id = result['test_id']
-        if test_id.startswith('U'):
-            categories['Ubuntu'].append(result)
-        elif test_id.startswith('M'):
-            categories['macOS'].append(result)
-        elif test_id.startswith('W'):
-            categories['Windows'].append(result)
-        elif test_id.startswith('A'):
-            categories['Advanced'].append(result)
+        test_id = result["test_id"]
+        if test_id.startswith("U"):
+            categories["Ubuntu"].append(result)
+        elif test_id.startswith("M"):
+            categories["macOS"].append(result)
+        elif test_id.startswith("W"):
+            categories["Windows"].append(result)
+        elif test_id.startswith("A"):
+            categories["Advanced"].append(result)
 
     return categories
 
@@ -93,7 +93,9 @@ def generate_markdown_report(
 
     # Header
     report.append("# E2E Comprehensive Test Results\n")
-    report.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n")
+    report.append(
+        f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+    )
     report.append(f"**Results File:** `{csv_path}`\n")
     report.append("")
 
@@ -109,17 +111,17 @@ def generate_markdown_report(
 
     # Total duration
     total_duration = sum(
-        int(r['duration_seconds'])
+        int(r["duration_seconds"])
         for r in results
-        if r['status'] in ('PASS', 'FAIL') and r['duration_seconds'].isdigit()
+        if r["status"] in ("PASS", "FAIL") and r["duration_seconds"].isdigit()
     )
     report.append(f"| Total Duration | {format_duration(str(total_duration))} |")
     report.append("")
 
     # Status indicator
-    if stats['failed'] == 0 and stats['passed'] > 0:
+    if stats["failed"] == 0 and stats["passed"] > 0:
         report.append("### ✅ All Tests Passed!\n")
-    elif stats['failed'] > 0:
+    elif stats["failed"] > 0:
         report.append(f"### ⚠️ {stats['failed']} Test(s) Failed\n")
     else:
         report.append("### ⚠️ No Tests Ran\n")
@@ -132,24 +134,26 @@ def generate_markdown_report(
         if not cat_results:
             continue
 
-        cat_passed = sum(1 for r in cat_results if r['status'] == 'PASS')
-        cat_failed = sum(1 for r in cat_results if r['status'] == 'FAIL')
-        cat_skipped = sum(1 for r in cat_results if r['status'] == 'SKIP')
+        cat_passed = sum(1 for r in cat_results if r["status"] == "PASS")
+        cat_failed = sum(1 for r in cat_results if r["status"] == "FAIL")
+        cat_skipped = sum(1 for r in cat_results if r["status"] == "SKIP")
 
         report.append(f"### {category} Tests ({len(cat_results)} total)\n")
-        report.append(f"**Passed:** {cat_passed} | **Failed:** {cat_failed} | **Skipped:** {cat_skipped}\n")
+        report.append(
+            f"**Passed:** {cat_passed} | **Failed:** {cat_failed} | **Skipped:** {cat_skipped}\n"
+        )
 
         report.append("| Test ID | Status | Duration |")
         report.append("|---------|--------|----------|")
 
         for result in cat_results:
             status_emoji = {
-                'PASS': '✅',
-                'FAIL': '❌',
-                'SKIP': '⏭️',
-            }.get(result['status'], '❓')
+                "PASS": "✅",
+                "FAIL": "❌",
+                "SKIP": "⏭️",
+            }.get(result["status"], "❓")
 
-            duration = format_duration(result['duration_seconds'])
+            duration = format_duration(result["duration_seconds"])
 
             report.append(
                 f"| {result['test_id']} | {status_emoji} {result['status']} | {duration} |"
@@ -158,43 +162,55 @@ def generate_markdown_report(
         report.append("")
 
     # Failed tests details
-    failed_tests = [r for r in results if r['status'] == 'FAIL']
+    failed_tests = [r for r in results if r["status"] == "FAIL"]
     if failed_tests:
         report.append("## Failed Tests Details\n")
         for result in failed_tests:
             report.append(f"### ❌ Test {result['test_id']} Failed\n")
-            report.append(f"**Duration:** {format_duration(result['duration_seconds'])}\n")
+            report.append(
+                f"**Duration:** {format_duration(result['duration_seconds'])}\n"
+            )
             report.append("**Possible Reasons:**")
             report.append("- Tool installation failure")
             report.append("- Timeout (>15 minutes)")
             report.append("- Output validation failure")
             report.append("- Missing test fixtures")
             report.append("")
-            report.append(f"**Check logs:** `{csv_path.parent}/{result['test_id']}/test.log`\n")
+            report.append(
+                f"**Check logs:** `{csv_path.parent}/{result['test_id']}/test.log`\n"
+            )
 
     # Skipped tests
-    skipped_tests = [r for r in results if r['status'] == 'SKIP']
+    skipped_tests = [r for r in results if r["status"] == "SKIP"]
     if skipped_tests:
         report.append("## Skipped Tests\n")
         for result in skipped_tests:
-            report.append(f"- **{result['test_id']}** - Check test script for skip reason\n")
+            report.append(
+                f"- **{result['test_id']}** - Check test script for skip reason\n"
+            )
 
     # Performance analysis
     report.append("## Performance Analysis\n")
 
     # Calculate average duration by status
-    passed_tests = [r for r in results if r['status'] == 'PASS']
+    passed_tests = [r for r in results if r["status"] == "PASS"]
     if passed_tests:
         avg_duration = sum(
-            int(r['duration_seconds']) for r in passed_tests if r['duration_seconds'].isdigit()
+            int(r["duration_seconds"])
+            for r in passed_tests
+            if r["duration_seconds"].isdigit()
         ) / len(passed_tests)
 
-        report.append(f"**Average Test Duration (Passed):** {format_duration(str(int(avg_duration)))}\n")
+        report.append(
+            f"**Average Test Duration (Passed):** {format_duration(str(int(avg_duration)))}\n"
+        )
 
         # Find slowest tests
         sorted_tests = sorted(
             passed_tests,
-            key=lambda r: int(r['duration_seconds']) if r['duration_seconds'].isdigit() else 0,
+            key=lambda r: (
+                int(r["duration_seconds"]) if r["duration_seconds"].isdigit() else 0
+            ),
             reverse=True,
         )
 
@@ -208,14 +224,18 @@ def generate_markdown_report(
     # Recommendations
     report.append("## Recommendations\n")
 
-    if stats['success_rate'] >= 95:
+    if stats["success_rate"] >= 95:
         report.append("✅ **Release Ready** - Test suite shows excellent stability\n")
-    elif stats['success_rate'] >= 80:
-        report.append("⚠️ **Investigate Failures** - Address failing tests before release\n")
+    elif stats["success_rate"] >= 80:
+        report.append(
+            "⚠️ **Investigate Failures** - Address failing tests before release\n"
+        )
     else:
-        report.append("❌ **Not Release Ready** - Critical issues detected, do not release\n")
+        report.append(
+            "❌ **Not Release Ready** - Critical issues detected, do not release\n"
+        )
 
-    if stats['failed'] > 0:
+    if stats["failed"] > 0:
         report.append("**Action Items:**")
         report.append("1. Review failed test logs")
         report.append("2. Verify tool installations")
@@ -230,15 +250,17 @@ def generate_markdown_report(
     return "\n".join(report)
 
 
-def print_console_summary(stats: Dict[str, int], categories: Dict[str, List[Dict[str, str]]]):
+def print_console_summary(
+    stats: Dict[str, int], categories: Dict[str, List[Dict[str, str]]]
+):
     """Print colorful console summary."""
     # ANSI colors
-    GREEN = '\033[0;32m'
-    RED = '\033[0;31m'
-    YELLOW = '\033[1;33m'
-    BLUE = '\033[0;34m'
-    BOLD = '\033[1m'
-    NC = '\033[0m'  # No Color
+    GREEN = "\033[0;32m"
+    RED = "\033[0;31m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[0;34m"
+    BOLD = "\033[1m"
+    NC = "\033[0m"  # No Color
 
     print(f"\n{BLUE}{'=' * 60}{NC}")
     print(f"{BOLD}E2E Test Results Summary{NC}")
@@ -259,9 +281,9 @@ def print_console_summary(stats: Dict[str, int], categories: Dict[str, List[Dict
         if not cat_results:
             continue
 
-        cat_passed = sum(1 for r in cat_results if r['status'] == 'PASS')
-        cat_failed = sum(1 for r in cat_results if r['status'] == 'FAIL')
-        cat_skipped = sum(1 for r in cat_results if r['status'] == 'SKIP')
+        cat_passed = sum(1 for r in cat_results if r["status"] == "PASS")
+        cat_failed = sum(1 for r in cat_results if r["status"] == "FAIL")
+        cat_skipped = sum(1 for r in cat_results if r["status"] == "SKIP")
 
         status_color = GREEN if cat_failed == 0 else RED
         print(
@@ -272,9 +294,9 @@ def print_console_summary(stats: Dict[str, int], categories: Dict[str, List[Dict
     print()
 
     # Release readiness
-    if stats['success_rate'] >= 95:
+    if stats["success_rate"] >= 95:
         print(f"{GREEN}{BOLD}✅ RELEASE READY{NC}")
-    elif stats['success_rate'] >= 80:
+    elif stats["success_rate"] >= 80:
         print(f"{YELLOW}{BOLD}⚠️  INVESTIGATE FAILURES{NC}")
     else:
         print(f"{RED}{BOLD}❌ NOT RELEASE READY{NC}")
@@ -286,7 +308,9 @@ def main():
     """Main entry point."""
     if len(sys.argv) < 2:
         print("Usage: python generate_report.py <test-results.csv>")
-        print("Example: python tests/e2e/generate_report.py /tmp/jmo-e2e-results-123/test-results.csv")
+        print(
+            "Example: python tests/e2e/generate_report.py /tmp/jmo-e2e-results-123/test-results.csv"
+        )
         sys.exit(1)
 
     csv_path = Path(sys.argv[1])
@@ -309,8 +333,8 @@ def main():
     markdown_report = generate_markdown_report(csv_path, results, stats, categories)
 
     # Write report to file
-    report_path = Path('test-report.md')
-    with open(report_path, 'w') as f:
+    report_path = Path("test-report.md")
+    with open(report_path, "w") as f:
         f.write(markdown_report)
 
     print(f"✅ Markdown report written to: {report_path}")
@@ -319,8 +343,8 @@ def main():
     print_console_summary(stats, categories)
 
     # Exit with failure if any tests failed
-    sys.exit(1 if stats['failed'] > 0 else 0)
+    sys.exit(1 if stats["failed"] > 0 else 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

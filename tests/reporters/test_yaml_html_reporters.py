@@ -134,7 +134,7 @@ def test_html_script_tag_escaping(tmp_path: Path):
     data_start = script_content.find("const data = [")
     data_end = script_content.find("];", data_start)
     if data_start != -1 and data_end != -1:
-        data_json = script_content[data_start:data_end+2]
+        data_json = script_content[data_start : data_end + 2]
 
         # Count unescaped </script> (should be 0 or very few, definitely not 4+)
         unescaped_count = data_json.count("</script>")

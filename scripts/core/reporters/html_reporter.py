@@ -31,7 +31,9 @@ def write_html(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     data_json = (
         json.dumps(findings)
         .replace("</script>", "<\\/script>")  # Prevent script tag breakout
-        .replace("<script", "<\\script")  # Prevent script injection (catches <script and <Script)
+        .replace(
+            "<script", "<\\script"
+        )  # Prevent script injection (catches <script and <Script)
         .replace("<!--", "<\\!--")  # Prevent HTML comment injection
         .replace("`", "\\`")  # Prevent template literal breakout
     )
