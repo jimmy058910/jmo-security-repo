@@ -716,6 +716,14 @@ render();
                style="flex: 1 1 300px; min-width: 250px; padding: 0.875rem 1rem; border: none; border-radius: 8px;
                       font-size: 1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         <input type="hidden" name="source" value="dashboard">
+        <!-- Honeypot field - hidden from humans, attracts bots -->
+        <input type="text"
+               name="website"
+               id="website"
+               autocomplete="off"
+               tabindex="-1"
+               style="position: absolute; left: -9999px; width: 1px; height: 1px;"
+               aria-hidden="true">
         <button type="submit" id="emailSubmit"
                 style="flex: 0 0 auto; padding: 0.875rem 1.75rem; background: #10b981; color: white;
                        border: none; border-radius: 8px; font-size: 1rem; font-weight: 600;
@@ -756,6 +764,14 @@ render();
         e.preventDefault();
 
         const email = emailInput.value.trim();
+        const honeypot = document.getElementById('website').value;
+
+        // Honeypot check - if filled, it's likely a bot
+        if (honeypot) {
+            console.log('Bot detected via honeypot');
+            return; // Silently reject
+        }
+
         if (!email || !email.includes('@')) {
             alert('Please enter a valid email address');
             return;

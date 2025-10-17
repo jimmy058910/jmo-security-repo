@@ -78,7 +78,17 @@ function isValidEmail(email) {
 // Main subscription endpoint
 app.post('/api/subscribe', async (req, res) => {
   try {
-    const { email, source = 'website' } = req.body;
+    const { email, source = 'website', website } = req.body;
+
+    // Honeypot check - reject if filled (bots typically auto-fill all fields)
+    if (website) {
+      console.log('Bot detected via honeypot field');
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_request',
+        message: 'Invalid submission detected.'
+      });
+    }
 
     // Validate email format
     if (!email || !isValidEmail(email)) {

@@ -267,6 +267,14 @@
                        required
                        aria-label="Email address">
                 <input type="hidden" name="source" value="subscribe_page">
+                <!-- Honeypot field - hidden from humans, attracts bots -->
+                <input type="text"
+                       name="website"
+                       id="website"
+                       autocomplete="off"
+                       tabindex="-1"
+                       style="position: absolute; left: -9999px; width: 1px; height: 1px;"
+                       aria-hidden="true">
                 <button type="submit" id="submitBtn">Subscribe - It's Free</button>
             </form>
         </div>
@@ -316,6 +324,14 @@
                 e.preventDefault();
 
                 const email = emailInput.value.trim();
+                const honeypot = document.getElementById('website').value;
+
+                // Honeypot check - if filled, it's likely a bot
+                if (honeypot) {
+                    console.log('Bot detected via honeypot');
+                    return; // Silently reject
+                }
+
                 if (!email || !email.includes('@')) {
                     alert('Please enter a valid email address');
                     return;
