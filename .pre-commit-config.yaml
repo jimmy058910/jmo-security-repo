@@ -6,7 +6,11 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-        exclude: ^docs/examples/github-actions-docker\.yml$  # Multi-document examples file
+        # Exclude multi-document YAML files (check-yaml only supports single docs)
+        # - Kubernetes manifests with multiple resources
+        # - Docker Compose files
+        # - GitHub Actions workflow examples
+        exclude: ^(tests/e2e/fixtures/iac/.*\.yaml|docker-compose\.yml|docs/examples/github-actions-docker\.yml)$
       - id: check-json
       - id: check-toml
       - id: mixed-line-ending
