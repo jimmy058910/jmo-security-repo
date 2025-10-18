@@ -19,6 +19,10 @@ from scripts.core.reporters.compliance_reporter import (
 )
 from scripts.core.config import load_config
 from scripts.core.suppress import load_suppressions, filter_suppressed
+from scripts.cli.path_sanitizers import (
+    _sanitize_path_component,
+    _validate_output_path,
+)
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
@@ -678,6 +682,7 @@ def _check_first_run() -> bool:
         return True
     try:
         import yaml
+
         with open(config_path) as f:
             config = yaml.safe_load(f) or {}
         return not config.get("onboarding_completed", False)
@@ -706,7 +711,12 @@ def _collect_email_opt_in(args) -> None:
 
                 # Save to config
                 import yaml
-                config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+
+                config = {
+                    "email": email,
+                    "email_opt_in": True,
+                    "onboarding_completed": True,
+                }
                 with open(config_path, "w") as f:
                     yaml.dump(config, f)
 
@@ -714,11 +724,16 @@ def _collect_email_opt_in(args) -> None:
                     print(f"\n✅ Thanks! Check your inbox for a welcome message.\n")
                 else:
                     print(f"\n✅ Thanks! You're all set.\n")
-                    _log(args, "DEBUG", "Email collection succeeded but welcome email not sent (resend may not be configured)")
+                    _log(
+                        args,
+                        "DEBUG",
+                        "Email collection succeeded but welcome email not sent (resend may not be configured)",
+                    )
             else:
                 print("\n❌ Invalid email address. Skipping...\n")
                 # Mark onboarding complete even if email invalid
                 import yaml
+
                 config = {"onboarding_completed": True}
                 with open(config_path, "w") as f:
                     yaml.dump(config, f)
@@ -726,15 +741,29 @@ def _collect_email_opt_in(args) -> None:
             # email_service module not available (resend not installed)
             print(f"\n✅ Thanks! You're all set.\n")
             import yaml
-            config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+
+            config = {
+                "email": email,
+                "email_opt_in": True,
+                "onboarding_completed": True,
+            }
             with open(config_path, "w") as f:
                 yaml.dump(config, f)
-            _log(args, "DEBUG", "Email recorded but welcome email not sent (install resend: pip install resend)")
+            _log(
+                args,
+                "DEBUG",
+                "Email recorded but welcome email not sent (install resend: pip install resend)",
+            )
         except Exception as e:
             # Any other error - fail gracefully
             print(f"\n✅ Thanks! You're all set.\n")
             import yaml
-            config = {"email": email, "email_opt_in": True, "onboarding_completed": True}
+
+            config = {
+                "email": email,
+                "email_opt_in": True,
+                "onboarding_completed": True,
+            }
             with open(config_path, "w") as f:
                 yaml.dump(config, f)
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
@@ -744,6 +773,7 @@ def _collect_email_opt_in(args) -> None:
 
         # Mark onboarding complete even if skipped
         import yaml
+
         config = {"onboarding_completed": True}
         with open(config_path, "w") as f:
             yaml.dump(config, f)
@@ -763,6 +793,7 @@ def _show_kofi_reminder(args) -> None:
     if config_path.exists():
         try:
             import yaml
+
             with open(config_path) as f:
                 config = yaml.safe_load(f) or {}
         except Exception:
@@ -775,6 +806,7 @@ def _show_kofi_reminder(args) -> None:
     # Save updated config
     try:
         import yaml
+
         with open(config_path, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
     except Exception:
@@ -782,15 +814,20 @@ def _show_kofi_reminder(args) -> None:
 
     # Show Ko-Fi message every 3rd scan
     if scan_count % 3 == 0:
-        print("\n" + "=" * 70 + "\n"
-              + "💚 Enjoying JMo Security? Support full-time development!\n"
-              + "   → https://ko-fi.com/jmogaming\n"
-              + "\n"
-              + "   Your support helps maintain 11+ security tools, add new features,\n"
-              + "   and provide free security scanning for the community.\n"
-              + "\n"
-              + f"   You've run {scan_count} scans - thank you for using JMo Security!\n"
-              + "=" * 70 + "\n")
+        print(
+            "\n"
+            + "=" * 70
+            + "\n"
+            + "💚 Enjoying JMo Security? Support full-time development!\n"
+            + "   → https://ko-fi.com/jmogaming\n"
+            + "\n"
+            + "   Your support helps maintain 11+ security tools, add new features,\n"
+            + "   and provide free security scanning for the community.\n"
+            + "\n"
+            + f"   You've run {scan_count} scans - thank you for using JMo Security!\n"
+            + "=" * 70
+            + "\n"
+        )
 
 
 def cmd_scan(args) -> int:
@@ -906,8 +943,11 @@ def cmd_scan(args) -> int:
     def job(repo: Path) -> tuple[str, dict[str, bool]]:
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
-        name = repo.name
+        # SECURITY: Sanitize repo name to prevent path traversal (MEDIUM-001)
+        name = _sanitize_path_component(repo.name)
         out_dir = indiv_base / name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(indiv_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
@@ -1717,11 +1757,12 @@ def cmd_scan(args) -> int:
         """Scan a container image with trivy and syft."""
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
-        # Sanitize image name for directory (replace special chars with underscores)
-        import re
-
-        safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
-        out_dir = results_dir / "individual-images" / safe_name
+        # SECURITY: Sanitize image name to prevent path traversal (MEDIUM-001)
+        safe_name = _sanitize_path_component(image)
+        images_base = results_dir / "individual-images"
+        out_dir = images_base / safe_name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(images_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
@@ -1859,9 +1900,12 @@ def cmd_scan(args) -> int:
         """Scan an IaC file with checkov and trivy."""
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
-        # Use filename as directory name
-        safe_name = iac_path.stem
-        out_dir = results_dir / "individual-iac" / safe_name
+        # SECURITY: Sanitize filename to prevent path traversal (MEDIUM-001)
+        safe_name = _sanitize_path_component(iac_path.stem)
+        iac_base = results_dir / "individual-iac"
+        out_dir = iac_base / safe_name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(iac_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
@@ -2003,19 +2047,22 @@ def cmd_scan(args) -> int:
         """Scan a live web URL with ZAP."""
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
-        # Sanitize URL for directory name (extract domain)
-        import re
+        # SECURITY: Sanitize URL for directory name to prevent path traversal (MEDIUM-001)
         from urllib.parse import urlparse
 
         parsed = urlparse(url)
         if parsed.scheme == "file":
             # file:// URL - use filename
-            safe_name = Path(parsed.path).stem if parsed.path else "unknown"
+            raw_name = Path(parsed.path).stem if parsed.path else "unknown"
         else:
             # http/https URL - use domain
-            safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
+            raw_name = parsed.netloc or "unknown"
 
-        out_dir = results_dir / "individual-web" / safe_name
+        safe_name = _sanitize_path_component(raw_name)
+        web_base = results_dir / "individual-web"
+        out_dir = web_base / safe_name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(web_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
@@ -2110,8 +2157,12 @@ def cmd_scan(args) -> int:
         statuses: dict[str, bool] = {}
         attempts_map: dict[str, int] = {}
         full_path = gitlab_info["full_path"]
-        safe_name = full_path.replace("/", "_").replace("*", "all")
-        out_dir = results_dir / "individual-gitlab" / safe_name
+        # SECURITY: Sanitize GitLab path to prevent path traversal (MEDIUM-001)
+        safe_name = _sanitize_path_component(full_path)
+        gitlab_base = results_dir / "individual-gitlab"
+        out_dir = gitlab_base / safe_name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(gitlab_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
@@ -2247,8 +2298,13 @@ def cmd_scan(args) -> int:
         namespace = k8s_info["namespace"]
         all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
 
-        safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
-        out_dir = results_dir / "individual-k8s" / safe_name
+        # SECURITY: Sanitize K8s context/namespace to prevent path traversal (MEDIUM-001)
+        raw_name = f"{context}_{namespace}"
+        safe_name = _sanitize_path_component(raw_name)
+        k8s_base = results_dir / "individual-k8s"
+        out_dir = k8s_base / safe_name
+        # SECURITY: Validate output path stays within results directory
+        out_dir = _validate_output_path(k8s_base, out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         to = timeout
         pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
