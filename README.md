@@ -209,7 +209,7 @@ xdg-open results/summaries/dashboard.html  # Linux
 - `alpine` (~150MB) - Minimal footprint
 
 📖 **Complete Docker guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
-📖 **Beginner Docker tutorial:** [docs/DOCKER_QUICKSTART_BEGINNERS.md](docs/DOCKER_QUICKSTART_BEGINNERS.md)
+📖 **Beginner Docker tutorial:** [docs/DOCKER_README.md#quick-start-absolute-beginners](docs/DOCKER_README.md#quick-start-absolute-beginners)
 
 ---
 

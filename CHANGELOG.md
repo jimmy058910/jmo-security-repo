@@ -51,7 +51,7 @@ During comprehensive testing (October 2025), discovered critical version mismatc
   - `check-python-deps` — PyPI update checks
   - `version-check-summary` — Overall status reporting
 
-**Layer 3: Dockerfile Build-Time Variables**
+#### Layer 3: Dockerfile Build-Time Variables
 
 - All Dockerfiles use parameterized versions via ARG variables
 - Single update command affects all 3 Docker variants (full/slim/alpine)
@@ -202,7 +202,7 @@ No action required for users. Version management is automated:
     - `scripts/core/reporters/html_reporter.py` - Added HTML context escaping (lines 31-37)
     - `tests/reporters/test_yaml_html_reporters.py` - Comprehensive escaping test (+109 lines)
     - `docs/DASHBOARD_BUG_FIX_v0.6.0.md` - Complete bug analysis and fix documentation
-  - See: [DASHBOARD_BUG_FIX_v0.6.0.md](docs/DASHBOARD_BUG_FIX_v0.6.0.md) for full technical details
+  - See: [docs/archive/v0.6.0/DASHBOARD_BUG_FIX.md](docs/archive/v0.6.0/DASHBOARD_BUG_FIX.md) for full technical details
 
 **Problem Solved:**
 
@@ -400,8 +400,8 @@ No breaking changes. All new features are additive:
 
 **See Also:**
 
-- [docs/v0.6.0_IMPLEMENTATION_STATUS.md](docs/v0.6.0_IMPLEMENTATION_STATUS.md) - Complete implementation status
-- [docs/follow-up-questions-answers.md](docs/follow-up-questions-answers.md) - Scan target expansion research
+- [docs/archive/v0.6.0/v0.6.0_IMPLEMENTATION_STATUS.md](docs/archive/v0.6.0/v0.6.0_IMPLEMENTATION_STATUS.md) - Complete implementation status
+- [docs/archive/follow-up-questions-answers.md](docs/archive/follow-up-questions-answers.md) - Scan target expansion research
 - [ROADMAP.md](ROADMAP.md) - Tier 1 scan targets planning
 
 ---
@@ -557,7 +557,7 @@ No breaking changes. Compliance enrichment is automatic and backward compatible:
 
 **See Also:**
 
-- [docs/follow-up-questions-answers.md](docs/follow-up-questions-answers.md) - Framework research and analysis
+- [docs/archive/follow-up-questions-answers.md](docs/archive/follow-up-questions-answers.md) - Framework research and analysis
 - [ROADMAP.md](ROADMAP.md) - Compliance framework integration planning
 
 ---

@@ -7,7 +7,7 @@
 Instead, please report security issues privately via:
 
 - **Email:** [security contact - update with your email]
-- **GitHub Security Advisories:** https://github.com/jimmy058910/jmo-security-repo/security/advisories/new
+- **GitHub Security Advisories:** <https://github.com/jimmy058910/jmo-security-repo/security/advisories/new>
 
 We aim to respond to security reports within **48 hours** and provide a fix within **7 days** for critical vulnerabilities.
 
@@ -20,6 +20,7 @@ JMo Security is a **security audit tool suite** that bundles multiple third-part
 ### Current Vulnerability Status (v0.6.0)
 
 As of October 16, 2025, our Docker images show:
+
 - **4 CRITICAL** vulnerabilities
 - **21 HIGH** vulnerabilities
 - **999+ MEDIUM** vulnerabilities
@@ -33,7 +34,7 @@ As of October 16, 2025, our Docker images show:
 
 ### 1. Ubuntu Base Image (4 HIGH)
 
-```
+```text
 Package: linux-libc-dev 5.15.0-157.167
 CVEs: CVE-2022-49390, CVE-2024-35870, CVE-2024-53179, CVE-2025-38118
 Status: NO FIX AVAILABLE (kernel headers from Ubuntu 22.04 LTS)
@@ -42,6 +43,7 @@ Status: NO FIX AVAILABLE (kernel headers from Ubuntu 22.04 LTS)
 **Why this exists:** These are kernel header vulnerabilities in Ubuntu 22.04 LTS. The actual **runtime kernel** is provided by the Docker host, not the container. These CVEs do not affect container security in practice.
 
 **Mitigation:**
+
 - Use `-slim` or `-alpine` variants for minimal base image
 - Plan migration to Ubuntu 24.04 LTS (ROADMAP #14)
 - Runtime kernel security is the host's responsibility
@@ -60,6 +62,7 @@ Our Docker images bundle Go-based security tools that have their own dependencie
 **Why this exists:** We install the **latest released binaries** from upstream projects (TruffleHog, Syft, etc.). When these projects have vulnerable dependencies, those vulnerabilities appear in our images.
 
 **Mitigation:**
+
 - We track upstream releases and update tools regularly (see ROADMAP #14)
 - Users can override tool versions via `jmo.yml` configuration
 - Native installation (`pip install jmo-security`) avoids bundled tool vulnerabilities
@@ -67,7 +70,7 @@ Our Docker images bundle Go-based security tools that have their own dependencie
 
 ### 3. OWASP ZAP (Java Dependencies - 2 HIGH)
 
-```
+```text
 commons-beanutils 1.9.4 → CVE-2025-48734 (fix: 1.11.0)
 delight-nashorn-sandbox 0.1.27 → CVE-2021-40660 (fix: 0.3.1)
 ```
@@ -75,6 +78,7 @@ delight-nashorn-sandbox 0.1.27 → CVE-2021-40660 (fix: 0.3.1)
 **Why this exists:** OWASP ZAP is installed from upstream Docker image (`zaproxy/zap-stable`). ZAP's Java dependencies are controlled by the ZAP project, not JMo Security.
 
 **Mitigation:**
+
 - We track ZAP releases and update when new stable versions are available
 - ZAP runs in **headless API mode** in our Docker images (reduces attack surface)
 - Exclude ZAP from scans using `jmo.yml` if not needed: `tools: [trufflehog, semgrep, trivy]`
@@ -84,6 +88,7 @@ delight-nashorn-sandbox 0.1.27 → CVE-2021-40660 (fix: 0.3.1)
 Falco, AFL++, and other specialized tools have their own dependency chains with occasional vulnerabilities in JWT libraries, crypto libraries, etc.
 
 **Mitigation:**
+
 - Use profile-based configuration to exclude tools you don't need
 - `-slim` variant excludes Falco and AFL++ entirely
 - We update tools weekly via automated dependency management (ROADMAP #14)
@@ -95,6 +100,7 @@ Falco, AFL++, and other specialized tools have their own dependency chains with 
 **JMo Security's Python codebase has ZERO known vulnerabilities.**
 
 Our Python code:
+
 - Uses **minimal runtime dependencies** (none currently in `pyproject.toml`)
 - Optional dependencies (PyYAML, jsonschema) are for output formatting only
 - Development dependencies are locked via `requirements-dev.txt`
@@ -108,18 +114,21 @@ Our Python code:
 We provide **three Docker image variants** with different tool sets and vulnerability profiles:
 
 ### 1. **Full** (`ghcr.io/jimmy058910/jmo-security:0.6.0-full`)
+
 - **Tools:** 11 tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++)
 - **Image Size:** ~2.5 GB
 - **Vulnerabilities:** Highest count (includes all tool dependencies)
 - **Use Case:** Comprehensive security audits, compliance scans, pre-release validation
 
 ### 2. **Slim** (`ghcr.io/jimmy058910/jmo-security:0.6.0-slim`)
+
 - **Tools:** 7 tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap)
 - **Image Size:** ~1.8 GB
 - **Vulnerabilities:** Medium count (excludes Falco, AFL++, noseyparker)
 - **Use Case:** CI/CD pipelines, regular audits, production scans
 
 ### 3. **Alpine** (`ghcr.io/jimmy058910/jmo-security:0.6.0-alpine`)
+
 - **Tools:** 3 tools (trufflehog, semgrep, trivy)
 - **Image Size:** ~800 MB
 - **Vulnerabilities:** Lowest count (minimal attack surface)
@@ -144,11 +153,12 @@ We are actively implementing a **5-layer version management system** to keep all
 | **5. Dependabot** | ✅ Active | Python dependencies (via pip-tools) |
 
 **Timeline:**
+
 - **v0.7.0 (Q1 2026):** Phase 1 - Foundation (`versions.yaml`, CI checker)
 - **v0.8.0 (Q2 2026):** Phase 2 - Automation (update script, Dependabot)
 - **v0.9.0 (Q3 2026):** Phase 3 - Advanced (auto-issue creation, smart updates)
 
-See [ROADMAP.md #14](https://github.com/jimmy058910/jmo-security-repo/blob/main/ROADMAP.md#14-tool-version-consistency--automated-dependency-management) for full details.
+See [ROADMAP.md](ROADMAP.md) for full details on version management.
 
 ---
 
@@ -164,12 +174,14 @@ jmotools wizard  # Installs only the tools you need
 ```
 
 **Pros:**
+
 - No Docker image vulnerabilities
 - Smaller disk footprint
 - Faster startup times
 - Tool versions controlled by you
 
 **Cons:**
+
 - Requires tool installation on host
 - Platform-specific setup (Linux/macOS/WSL)
 
@@ -207,7 +219,7 @@ per_tool:
 
 ### How We Track Vulnerabilities
 
-1. **CI Trivy Scans:** Every release is scanned with Trivy (see `.github/workflows/release.yml`)
+1. **CI Trivy Scans:** Every release is scanned with Trivy (see [.github/workflows/release.yml](.github/workflows/release.yml))
 2. **Docker Hub Scans:** Automated vulnerability scanning on Docker Hub
 3. **GitHub Dependabot:** Tracks Python dependencies and creates PRs
 4. **Weekly Reviews:** Manual review of bundled tool versions (ROADMAP #14)
@@ -282,6 +294,7 @@ docker run ghcr.io/jimmy058910/jmo-security:0.6.0-full scan --repo . --profile-n
 ### Q: Are these vulnerabilities exploitable in my scans?
 
 **A:** Most vulnerabilities in our images are **NOT exploitable** during normal scanning operations:
+
 - Kernel header CVEs don't affect containers (host kernel controls security)
 - Tool vulnerabilities require specific network/input conditions (we run tools in isolated processes)
 - ZAP runs headless without GUI (reduces attack surface)
@@ -289,6 +302,7 @@ docker run ghcr.io/jimmy058910/jmo-security:0.6.0-full scan --repo . --profile-n
 ### Q: Should I use JMo Security if it has 1000+ vulnerabilities?
 
 **A:** **Yes, if you understand the context.** The vulnerabilities are in the security tools we bundle, not our orchestration code. Compare to:
+
 - Running ZAP standalone → same ZAP vulnerabilities
 - Running Trivy standalone → same Trivy vulnerabilities
 - **JMo Security adds no new vulnerabilities** — we just make the existing tools visible in one place
@@ -296,14 +310,16 @@ docker run ghcr.io/jimmy058910/jmo-security:0.6.0-full scan --repo . --profile-n
 ### Q: How can I verify your Python code is secure?
 
 **A:** Inspect our CI pipeline:
-1. View `.github/workflows/ci.yml` — see Bandit/Ruff/Black checks
-2. Check Codecov: https://codecov.io/gh/jimmy058910/jmo-security-repo
+
+1. View [.github/workflows/ci.yml](.github/workflows/ci.yml) — see Bandit/Ruff/Black checks
+2. Check Codecov: <https://codecov.io/gh/jimmy058910/jmo-security-repo>
 3. Review our minimal dependency footprint in `pyproject.toml`
 4. Audit our source code (100% Python, no compiled binaries)
 
 ### Q: When will all vulnerabilities be fixed?
 
 **A:** Our **Python code has zero vulnerabilities.** Bundled tool vulnerabilities will be reduced via:
+
 - **Q1 2026 (v0.7.0):** Automated version management (50% reduction)
 - **Q2 2026 (v0.8.0):** Weekly tool updates (80% reduction)
 - **Q3 2026 (v0.9.0):** Ubuntu 24.04 base (kernel CVEs eliminated)
@@ -327,11 +343,11 @@ We provide security updates for:
 ## Additional Resources
 
 - **Vulnerability Tracking:** [GitHub Security Advisories](https://github.com/jimmy058910/jmo-security-repo/security/advisories)
-- **Dependency Management Roadmap:** [ROADMAP.md #14](https://github.com/jimmy058910/jmo-security-repo/blob/main/ROADMAP.md#14-tool-version-consistency--automated-dependency-management)
+- **Dependency Management Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **GitHub Issue #46:** [Tool Version Consistency](https://github.com/jimmy058910/jmo-security-repo/issues/46)
 - **GitHub Issue #12:** [Dependency Locking](https://github.com/jimmy058910/jmo-security-repo/issues/12)
-- **Release Notes:** [CHANGELOG.md](https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md)
-- **CI/CD Scans:** [GitHub Actions - Release Workflow](https://github.com/jimmy058910/jmo-security-repo/blob/main/.github/workflows/release.yml)
+- **Release Notes:** [CHANGELOG.md](CHANGELOG.md)
+- **CI/CD Scans:** [.github/workflows/release.yml](.github/workflows/release.yml)
 
 ---
 

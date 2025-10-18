@@ -589,3 +589,5 @@ For issues or questions:
 
 **Last Updated:** October 14, 2025
 **Related Docs:** [CLAUDE.md](../CLAUDE.md), [CONTRIBUTING.md](../CONTRIBUTING.md)
+
+**Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

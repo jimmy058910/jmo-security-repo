@@ -24,6 +24,7 @@ JMo Security Suite uses a **5-layer version management system** to ensure Docker
 ### Why This Matters
 
 **Real-world impact:**
+
 - **Before:** Docker Trivy v0.58.1 (9 weeks old) missed 1 CRITICAL + 7 HIGH CVEs
 - **After:** Automated checks prevent version drift across 3 Dockerfiles + install scripts
 
@@ -60,6 +61,7 @@ binary_tools:
 ```
 
 **Fields:**
+
 - `version`: Current pinned version (X.Y.Z format)
 - `critical`: If `true`, updates required within 7 days
 - `github_repo`: For binary releases (e.g., `owner/repo`)
@@ -72,6 +74,7 @@ binary_tools:
 **[.github/workflows/version-check.yml](../.github/workflows/version-check.yml)**
 
 Runs weekly (Sunday 00:00 UTC) to:
+
 - ✅ Check for latest tool versions via GitHub/PyPI APIs
 - ✅ Detect Trivy version mismatches across Dockerfiles (critical)
 - ✅ Create GitHub issues for outdated CRITICAL tools (auto-labeled)
@@ -115,11 +118,13 @@ python3 scripts/dev/update_versions.py --report
 **[.github/dependabot.yml](../.github/dependabot.yml)**
 
 Tracks:
+
 - ✅ Python packages (via `pip` ecosystem)
 - ✅ Docker base images (`ubuntu:22.04`, `alpine:3.18`)
 - ✅ GitHub Actions versions
 
 **Does NOT track:**
+
 - ❌ Binary tools (trivy, trufflehog, syft) — use `update_versions.py` instead
 - ❌ Custom installations (ZAP, AFL++, Falco) — manual updates required
 
@@ -246,10 +251,12 @@ version_history:
 ### Critical vs. Non-Critical Tools
 
 **Critical tools** (update within 7 days):
+
 - Security scanners: trivy, trufflehog, semgrep, checkov, syft, zap
 - Impact: Outdated versions miss vulnerabilities/secrets
 
 **Non-critical tools** (update monthly):
+
 - Linters: bandit, ruff, hadolint, shfmt
 - Optional: noseyparker, falcoctl, aflplusplus
 - Impact: Lower risk if outdated
@@ -297,7 +304,7 @@ python3 scripts/dev/update_versions.py --report
 
 **Output Example:**
 
-```
+```text
 ================================================================================
 JMo Security Suite - Version Consistency Report
 ================================================================================
@@ -469,6 +476,7 @@ pip show checkov  # Check changelog URL
 ```
 
 **Prioritize:**
+
 - 🔴 Security fixes (CVE patches, false positive reductions)
 - 🟡 New detection rules (SAST/secrets/IaC)
 - ⚪ Features (new scan types, performance)
@@ -516,6 +524,7 @@ gh pr create --title "deps(tools): monthly tool updates (Jan 2025)"
 ### Step 5: Monitor CI
 
 Wait for:
+
 - ✅ version-check.yml validates consistency
 - ✅ ci.yml tests pass (Ubuntu/macOS × Python 3.10/3.11/3.12)
 - ✅ Docker builds succeed (multi-arch: amd64, arm64)
@@ -629,3 +638,5 @@ python3 scripts/dev/update_versions.py --check-outdated --create-issues  # Auto-
 **Last updated:** 2025-01-16
 **Maintainer:** jimmy058910
 **Status:** Production-ready
+
+**Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

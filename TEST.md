@@ -79,6 +79,7 @@ python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.
 The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
 
 **Target Types:**
+
 - Repository scanning (existing functionality)
 - Container image scanning (v0.6.0)
 - IaC file scanning (v0.6.0)
@@ -87,11 +88,13 @@ The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
 - Kubernetes cluster scanning (v0.6.0)
 
 **Operating Systems:**
+
 - Ubuntu 22.04 (12 tests)
 - macOS 14 Sonoma (6 tests)
 - Windows 11 WSL2 (4 tests)
 
 **Execution Methods:**
+
 - Native CLI (`jmo` command)
 - Wizard (`jmotools wizard`)
 - Docker containers (full/slim variants)
@@ -154,7 +157,7 @@ The comprehensive test suite runs automatically in CI:
 - **Nightly:** Full test suite on Ubuntu + macOS (2-3 hours)
 - **On Demand:** Manual workflow with specific test selection
 
-See [.github/workflows/e2e-comprehensive-tests.yml](.github/workflows/e2e-comprehensive-tests.yml) for details.
+See [.github/workflows/ci.yml](.github/workflows/ci.yml) for test execution details.
 
 ### Test Results
 
@@ -239,14 +242,14 @@ ls -la tests/e2e/fixtures/iac/
 ls -la tests/e2e/fixtures/python/
 ```
 
-For comprehensive test plan details, see [docs/COMPREHENSIVE_TEST_PLAN.md](docs/COMPREHENSIVE_TEST_PLAN.md).
+For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST_PLAN.md](docs/archive/v0.6.0/COMPREHENSIVE_TEST_PLAN.md).
 
 ## CI
 
 - GitHub Actions workflow `.github/workflows/tests.yml` enforces coverage ≥85%.
 - The workflow installs dev dependencies and runs `pytest` with coverage.
 
-## Troubleshooting
+## General Troubleshooting
 
 - Missing tools: run `make verify-env` and `make tools`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.

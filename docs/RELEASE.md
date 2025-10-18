@@ -131,3 +131,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    - Watch GitHub issues for bug reports
    - Check PyPI download stats
    - Monitor Codecov for coverage trends
+
+---
+
+**Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

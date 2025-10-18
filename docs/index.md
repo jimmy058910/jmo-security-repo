@@ -132,6 +132,12 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | [CommonFinding Schema](schemas/common_finding.v1.json) | Data schema spec | Developers |
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
 | [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |
+| [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
+| [CAPTCHA Setup](CAPTCHA.md) | Cloudflare Turnstile integration | Developers |
+| [Compliance Framework Analysis](COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail | Advanced |
+| [Email Telemetry Setup](EMAIL_TELEMETRY_SETUP.md) | User feedback collection | Maintainers |
+| [Newsletter Content](NEWSLETTER_CONTENT.md) | Marketing content templates | Maintainers |
+| [Context7 Usage](CONTEXT7_USAGE.md) | MCP Context7 integration | Advanced |
 
 ---
 

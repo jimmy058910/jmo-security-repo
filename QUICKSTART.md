@@ -996,7 +996,7 @@ If a failure isn’t listed here, click into the failed step logs in GitHub Acti
 For more advanced features and customization options, see:
 
 - [README.md](README.md) - Comprehensive documentation
-- [Tool Comparison Report](tool-comparisons/comparison.md) - Understanding tool capabilities
+- [User Guide — Tool Overview](docs/USER_GUIDE.md) - Understanding tool capabilities
 - Individual tool documentation for detailed configuration
 
 ### Profiling and Performance
