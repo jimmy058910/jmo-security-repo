@@ -46,6 +46,17 @@ def write_html(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- SECURITY: Meta tags for browser security (MEDIUM-002 fix) -->
+<!-- Content Security Policy: Prevents XSS attacks by restricting resource loading -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.jmotools.com; form-action 'self' https://api.jmotools.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none';" />
+<!-- X-Frame-Options: Prevents clickjacking by blocking iframe embedding -->
+<meta http-equiv="X-Frame-Options" content="DENY" />
+<!-- X-Content-Type-Options: Prevents MIME sniffing attacks -->
+<meta http-equiv="X-Content-Type-Options" content="nosniff" />
+<!-- Referrer-Policy: Prevents information leakage via HTTP Referer header -->
+<meta name="referrer" content="no-referrer" />
+<!-- Robots: Prevent search engine indexing of security reports -->
+<meta name="robots" content="noindex, nofollow" />
 <title>Security Dashboard v2</title>
 <style>
 body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; font-size: 14px;}
@@ -57,9 +68,15 @@ h1,h2{margin: 0 0 12px 0}
 .sev-MEDIUM{color:#fbc02d}
 .sev-LOW{color:#7cb342}
 .sev-INFO{color:#757575}
-.filters{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:#f5f5f5;border-radius:6px}
+.filters{margin-bottom:12px;padding:16px;background:#f5f5f5;border-radius:6px}
 .filters label{display:flex;align-items:center;gap:6px;font-size:13px}
-.filters select,.filters input{padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px}
+.filters select,.filters input[type="text"],.filters input[type="email"]{padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px}
+.sev-checkbox{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500;transition:background 0.2s,opacity 0.2s}
+.sev-checkbox input{cursor:pointer;margin:0}
+.sev-checkbox:hover{background:rgba(0,0,0,0.05)}
+.sev-checkbox.unchecked{opacity:0.5}
+#activeFilters{font-size:12px;line-height:1.6}
+#activeFiltersList .filter-tag{display:inline-block;padding:2px 8px;margin:0 4px 4px 0;background:#1976d2;color:#fff;border-radius:12px;font-size:11px}
 .actions{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
 .btn{display:inline-block;padding:6px 12px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;cursor:pointer;font-size:13px;transition:background 0.2s}
 .btn:hover{background:#e8e8e8}
@@ -101,6 +118,21 @@ h1,h2{margin: 0 0 12px 0}
 .triage-select{padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px}
 #profile{display:none; margin-top:12px; padding:12px; border:1px dashed #ccc; border-radius:6px;background:#fafafa}
 #profile summary{cursor:pointer;font-weight:600}
+@media (max-width: 768px) {
+  .header{flex-direction:column;align-items:flex-start;gap:12px}
+  .filters > div{flex-direction:column;align-items:flex-start}
+  .filters label{width:100%}
+  .filters select,.filters input{width:100%!important;max-width:100%!important}
+  #sevCheckboxes{flex-wrap:wrap}
+  .table{font-size:12px}
+  .table th,.table td{padding:6px;word-break:break-word}
+  .actions{flex-direction:column}
+  .btn{width:100%}
+}
+.kbd-hint{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:1000}
+.kbd-hint.visible{opacity:0.9}
+kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;font-family:monospace;font-size:10px;box-shadow:0 1px 2px rgba(0,0,0,0.1)}
+#resultCount{display:flex;align-items:center;gap:8px}
 </style>
 </head>
 <body>
@@ -116,58 +148,57 @@ h1,h2{margin: 0 0 12px 0}
 </div>
 
 <div class="filters">
-  <label>Severity:
-    <select id="sev" multiple size="1" style="width:120px">
-      __SEV_OPTIONS__
-    </select>
-  </label>
-  <label>Tool:
-    <select id="tool">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>OWASP Top 10:
-    <select id="owaspFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>CWE Top 25:
-    <select id="cweFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>CIS Controls:
-    <select id="cisFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>NIST CSF:
-    <select id="nistFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>PCI DSS:
-    <select id="pciFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>MITRE ATT&CK:
-    <select id="attackFilter">
-      <option value="">All</option>
-    </select>
-  </label>
-  <label>Path Pattern:
-    <input id="pathPattern" placeholder="src/, *.py" style="width:120px"/>
-  </label>
-  <label>Exclude Pattern:
-    <input id="excludePattern" placeholder="test/, node_modules" style="width:140px"/>
-  </label>
-  <label>Search:
-    <input id="q" placeholder="rule/message" style="width:150px"/>
-  </label>
-  <label>
-    <input type="checkbox" id="hideTriaged"/> Hide Triaged
-  </label>
+  <!-- Row 1: Primary Filters -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%;align-items:center">
+    <label style="flex:0 0 auto">Severity:
+      <div id="sevCheckboxes" style="display:inline-flex;gap:4px;margin-left:6px;border:1px solid #ccc;border-radius:6px;padding:4px;background:#fff">
+        <!-- Populated by JS -->
+      </div>
+    </label>
+    <label style="flex:0 0 auto">Tool:
+      <select id="tool" style="min-width:120px">
+        <option value="">All</option>
+      </select>
+    </label>
+    <label style="flex:0 0 auto">Compliance Framework:
+      <select id="complianceFramework" style="min-width:160px">
+        <option value="">All Frameworks</option>
+        <option value="owasp">OWASP Top 10 2021</option>
+        <option value="cwe">CWE Top 25 2024</option>
+        <option value="cis">CIS Controls v8.1</option>
+        <option value="nist">NIST CSF 2.0</option>
+        <option value="pci">PCI DSS 4.0</option>
+        <option value="attack">MITRE ATT&CK</option>
+      </select>
+    </label>
+    <label id="complianceValueWrapper" style="flex:0 0 auto;display:none">
+      <select id="complianceValue" style="min-width:180px">
+        <option value="">All Values</option>
+      </select>
+    </label>
+    <label style="flex:0 0 auto">
+      <input type="checkbox" id="hideTriaged"/> Hide Triaged
+    </label>
+  </div>
+
+  <!-- Row 2: Search and Path Filters -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%;margin-top:8px;align-items:center">
+    <label style="flex:1 1 200px">Search:
+      <input id="q" placeholder="rule/message/path" style="width:100%;max-width:300px"/>
+    </label>
+    <label style="flex:1 1 150px">Path Pattern:
+      <input id="pathPattern" placeholder="src/, *.py" style="width:100%;max-width:200px"/>
+    </label>
+    <label style="flex:1 1 150px">Exclude Pattern:
+      <input id="excludePattern" placeholder="test/, node_modules" style="width:100%;max-width:200px"/>
+    </label>
+    <button class="btn" id="clearFilters" style="flex:0 0 auto;font-size:12px;padding:4px 10px">Clear All Filters</button>
+  </div>
+
+  <!-- Active Filters Display -->
+  <div id="activeFilters" style="display:none;margin-top:8px;padding:8px;background:#e3f2fd;border-radius:4px;font-size:12px">
+    <strong>Active Filters:</strong> <span id="activeFiltersList"></span>
+  </div>
 </div>
 
 <div class="actions">
@@ -212,6 +243,14 @@ h1,h2{margin: 0 0 12px 0}
 </div>
 
 <div id="groupedContainer" style="display:none"></div>
+
+<div id="resultCount" style="margin:12px 0;padding:8px 12px;background:#e8f5e9;border-left:3px solid #4caf50;border-radius:4px;font-size:13px;font-weight:500">
+  Showing <span id="visibleCount">0</span> of <span id="totalCount">0</span> findings
+</div>
+
+<div class="kbd-hint" id="kbdHint">
+  Press <kbd>Ctrl+K</kbd> to search, <kbd>Ctrl+/</kbd> to clear filters
+</div>
 
 <script>
 const data = __DATA_JSON__;
@@ -267,9 +306,9 @@ function severityRank(s){
 }
 
 function matchesFilter(f){
-  const sevSel = document.getElementById('sev');
-  const selectedSevs = Array.from(sevSel.selectedOptions).map(o => o.value);
-  if(selectedSevs.length > 0 && !selectedSevs.includes(f.severity)) return false;
+  // Severity filter - checkbox-based
+  const checkedSevs = Array.from(document.querySelectorAll('#sevCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
+  if(checkedSevs.length > 0 && checkedSevs.length < SEV_ORDER.length && !checkedSevs.includes(f.severity)) return false;
 
   const tool = document.getElementById('tool').value;
   if(tool && (f.tool?.name||'') !== tool) return false;
@@ -277,24 +316,21 @@ function matchesFilter(f){
   const q = document.getElementById('q').value.toLowerCase();
   if(q && !(f.ruleId||'').toLowerCase().includes(q) && !(f.message||'').toLowerCase().includes(q) && !(f.location?.path||'').toLowerCase().includes(q)) return false;
 
-  // Compliance framework filters
-  const owaspFilter = document.getElementById('owaspFilter').value;
-  if(owaspFilter && !(f.compliance?.owasp_top_10_2021||[]).includes(owaspFilter)) return false;
-
-  const cweFilter = document.getElementById('cweFilter').value;
-  if(cweFilter && !(f.compliance?.cwe_top_25_2024||[]).includes(cweFilter)) return false;
-
-  const cisFilter = document.getElementById('cisFilter').value;
-  if(cisFilter && !(f.compliance?.cis_controls_v8_1||[]).includes(cisFilter)) return false;
-
-  const nistFilter = document.getElementById('nistFilter').value;
-  if(nistFilter && !(f.compliance?.nist_csf_2_0||[]).includes(nistFilter)) return false;
-
-  const pciFilter = document.getElementById('pciFilter').value;
-  if(pciFilter && !(f.compliance?.pci_dss_4_0||[]).includes(pciFilter)) return false;
-
-  const attackFilter = document.getElementById('attackFilter').value;
-  if(attackFilter && !(f.compliance?.mitre_attack_v16_1||[]).includes(attackFilter)) return false;
+  // Unified compliance framework filter
+  const framework = document.getElementById('complianceFramework').value;
+  const frameworkValue = document.getElementById('complianceValue').value;
+  if(framework && frameworkValue){
+    const fieldMap = {
+      'owasp': 'owasp_top_10_2021',
+      'cwe': 'cwe_top_25_2024',
+      'cis': 'cis_controls_v8_1',
+      'nist': 'nist_csf_2_0',
+      'pci': 'pci_dss_4_0',
+      'attack': 'mitre_attack_v16_1'
+    };
+    const field = fieldMap[framework];
+    if(field && !(f.compliance?.[field]||[]).includes(frameworkValue)) return false;
+  }
 
   const pathPattern = document.getElementById('pathPattern').value.toLowerCase();
   if(pathPattern && !(f.location?.path||'').toLowerCase().includes(pathPattern)) return false;
@@ -427,6 +463,10 @@ function render(){
   const rows = sortRows(filtered());
   groupBy = document.getElementById('groupBy').value;
 
+  // Update result count
+  document.getElementById('visibleCount').textContent = rows.length;
+  document.getElementById('totalCount').textContent = data.length;
+
   if(groupBy){
     renderGrouped(rows);
   } else {
@@ -551,36 +591,116 @@ function populateToolFilter(){
   tools.forEach(t => { const o = document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
 }
 
+function populateSeverityCheckboxes(){
+  const container = document.getElementById('sevCheckboxes');
+  SEV_ORDER.forEach(sev => {
+    const label = document.createElement('label');
+    label.className = 'sev-checkbox';
+    label.innerHTML = `<input type="checkbox" value="${sev}" checked /> <span class="sev-${sev}">${sev}</span>`;
+    const checkbox = label.querySelector('input');
+    checkbox.addEventListener('change', function(){
+      label.classList.toggle('unchecked', !this.checked);
+      render();
+      updateActiveFilters();
+    });
+    container.appendChild(label);
+  });
+}
+
 function populateComplianceFilters(){
-  // Populate OWASP Top 10
-  const owasps = Array.from(new Set(data.flatMap(f => f.compliance?.owasp_top_10_2021||[]))).sort();
-  const owaspSel = document.getElementById('owaspFilter');
-  owasps.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; owaspSel.appendChild(o); });
+  // Build lookup map for all frameworks
+  const frameworkData = {
+    'owasp': Array.from(new Set(data.flatMap(f => f.compliance?.owasp_top_10_2021||[]))).sort(),
+    'cwe': Array.from(new Set(data.flatMap(f => f.compliance?.cwe_top_25_2024||[]))).sort(),
+    'cis': Array.from(new Set(data.flatMap(f => f.compliance?.cis_controls_v8_1||[]))).sort(),
+    'nist': Array.from(new Set(data.flatMap(f => f.compliance?.nist_csf_2_0||[]))).sort(),
+    'pci': Array.from(new Set(data.flatMap(f => f.compliance?.pci_dss_4_0||[]))).sort(),
+    'attack': Array.from(new Set(data.flatMap(f => f.compliance?.mitre_attack_v16_1||[]))).sort()
+  };
 
-  // Populate CWE Top 25
-  const cwes = Array.from(new Set(data.flatMap(f => f.compliance?.cwe_top_25_2024||[]))).sort();
-  const cweSel = document.getElementById('cweFilter');
-  cwes.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; cweSel.appendChild(o); });
+  // Handle framework selection
+  const frameworkSel = document.getElementById('complianceFramework');
+  const valueSel = document.getElementById('complianceValue');
+  const valueWrapper = document.getElementById('complianceValueWrapper');
 
-  // Populate CIS Controls
-  const cis = Array.from(new Set(data.flatMap(f => f.compliance?.cis_controls_v8_1||[]))).sort();
-  const cisSel = document.getElementById('cisFilter');
-  cis.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; cisSel.appendChild(o); });
+  frameworkSel.addEventListener('change', function(){
+    const framework = this.value;
+    valueSel.innerHTML = '<option value="">All Values</option>';
 
-  // Populate NIST CSF
-  const nist = Array.from(new Set(data.flatMap(f => f.compliance?.nist_csf_2_0||[]))).sort();
-  const nistSel = document.getElementById('nistFilter');
-  nist.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; nistSel.appendChild(o); });
+    if(framework && frameworkData[framework]){
+      valueWrapper.style.display = 'flex';
+      frameworkData[framework].forEach(v => {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = v;
+        valueSel.appendChild(o);
+      });
+    } else {
+      valueWrapper.style.display = 'none';
+    }
+    render();
+    updateActiveFilters();
+  });
 
-  // Populate PCI DSS
-  const pci = Array.from(new Set(data.flatMap(f => f.compliance?.pci_dss_4_0||[]))).sort();
-  const pciSel = document.getElementById('pciFilter');
-  pci.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; pciSel.appendChild(o); });
+  valueSel.addEventListener('change', function(){
+    try{
+      localStorage.setItem('jmo_complianceValue', this.value);
+    }catch(e){}
+    render();
+    updateActiveFilters();
+  });
+}
 
-  // Populate MITRE ATT&CK
-  const attack = Array.from(new Set(data.flatMap(f => f.compliance?.mitre_attack_v16_1||[]))).sort();
-  const attackSel = document.getElementById('attackFilter');
-  attack.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; attackSel.appendChild(o); });
+function updateActiveFilters(){
+  const activeFiltersDiv = document.getElementById('activeFilters');
+  const activeFiltersList = document.getElementById('activeFiltersList');
+  const filters = [];
+
+  // Check severity
+  const checkedSevs = Array.from(document.querySelectorAll('#sevCheckboxes input:checked')).map(cb => cb.value);
+  if(checkedSevs.length > 0 && checkedSevs.length < SEV_ORDER.length){
+    filters.push(`Severity: ${checkedSevs.join(', ')}`);
+  }
+
+  // Check tool
+  const tool = document.getElementById('tool').value;
+  if(tool) filters.push(`Tool: ${tool}`);
+
+  // Check compliance
+  const framework = document.getElementById('complianceFramework').value;
+  const frameworkValue = document.getElementById('complianceValue').value;
+  if(framework){
+    const frameworkLabels = {
+      'owasp': 'OWASP Top 10',
+      'cwe': 'CWE Top 25',
+      'cis': 'CIS Controls',
+      'nist': 'NIST CSF',
+      'pci': 'PCI DSS',
+      'attack': 'MITRE ATT&CK'
+    };
+    const label = frameworkLabels[framework] || framework;
+    filters.push(frameworkValue ? `${label}: ${frameworkValue}` : label);
+  }
+
+  // Check search/path
+  const q = document.getElementById('q').value;
+  if(q) filters.push(`Search: ${q}`);
+
+  const pathPattern = document.getElementById('pathPattern').value;
+  if(pathPattern) filters.push(`Path: ${pathPattern}`);
+
+  const excludePattern = document.getElementById('excludePattern').value;
+  if(excludePattern) filters.push(`Exclude: ${excludePattern}`);
+
+  const hideTriaged = document.getElementById('hideTriaged').checked;
+  if(hideTriaged) filters.push('Hide Triaged');
+
+  if(filters.length > 0){
+    activeFiltersList.innerHTML = filters.map(f => `<span class="filter-tag">${escapeHtml(f)}</span>`).join('');
+    activeFiltersDiv.style.display = 'block';
+  } else {
+    activeFiltersDiv.style.display = 'none';
+  }
 }
 
 function setSort(key){
@@ -641,7 +761,7 @@ document.getElementById('bulkTriage').addEventListener('click', ()=>{
 });
 
 // Wire filters with persistence
-['sev','q','tool','owaspFilter','cweFilter','cisFilter','nistFilter','pciFilter','attackFilter','pathPattern','excludePattern','hideTriaged','groupBy'].forEach(id => {
+['q','tool','complianceFramework','pathPattern','excludePattern','hideTriaged','groupBy'].forEach(id => {
   const el = document.getElementById(id);
   if(!el) return;
   el.addEventListener(id === 'hideTriaged' ? 'change' : 'input', ()=>{
@@ -649,7 +769,37 @@ document.getElementById('bulkTriage').addEventListener('click', ()=>{
       localStorage.setItem('jmo_'+id, id === 'hideTriaged' ? el.checked : el.value);
     }catch(e){}
     render();
+    updateActiveFilters();
   });
+});
+
+// Clear filters button
+document.getElementById('clearFilters').addEventListener('click', ()=>{
+  // Reset all severity checkboxes to checked
+  document.querySelectorAll('#sevCheckboxes input').forEach(cb => {
+    cb.checked = true;
+    cb.parentElement.classList.remove('unchecked');
+  });
+
+  // Reset all filter inputs
+  document.getElementById('tool').value = '';
+  document.getElementById('complianceFramework').value = '';
+  document.getElementById('complianceValue').value = '';
+  document.getElementById('complianceValueWrapper').style.display = 'none';
+  document.getElementById('q').value = '';
+  document.getElementById('pathPattern').value = '';
+  document.getElementById('excludePattern').value = '';
+  document.getElementById('hideTriaged').checked = false;
+
+  // Clear localStorage
+  try{
+    ['tool','complianceFramework','complianceValue','q','pathPattern','excludePattern','hideTriaged'].forEach(id => {
+      localStorage.removeItem('jmo_'+id);
+    });
+  }catch(e){}
+
+  render();
+  updateActiveFilters();
 });
 
 // Wire sorting
@@ -657,16 +807,30 @@ document.querySelectorAll('#tbl thead th').forEach(th => {
   if(th.dataset.key) th.addEventListener('click', ()=> setSort(th.dataset.key));
 });
 
+populateSeverityCheckboxes();
 populateToolFilter();
 populateComplianceFilters();
 // Restore persisted state
 try{
   const savedTheme = localStorage.getItem('jmo_theme')||'light';
   setTheme(savedTheme);
-  ['sev','q','tool','owaspFilter','cweFilter','cisFilter','nistFilter','pciFilter','attackFilter','pathPattern','excludePattern','groupBy'].forEach(id => {
+  ['q','tool','complianceFramework','pathPattern','excludePattern','groupBy'].forEach(id => {
     const val = localStorage.getItem('jmo_'+id);
-    if(val) document.getElementById(id).value = val;
+    if(val && document.getElementById(id)) document.getElementById(id).value = val;
   });
+
+  // Restore compliance value if framework is set
+  const savedFramework = localStorage.getItem('jmo_complianceFramework');
+  if(savedFramework){
+    // Trigger change event to populate values dropdown
+    const frameworkEvent = new Event('change');
+    document.getElementById('complianceFramework').dispatchEvent(frameworkEvent);
+    const savedValue = localStorage.getItem('jmo_complianceValue');
+    if(savedValue && document.getElementById('complianceValue')){
+      document.getElementById('complianceValue').value = savedValue;
+    }
+  }
+
   const hideTriaged = localStorage.getItem('jmo_hideTriaged');
   if(hideTriaged) document.getElementById('hideTriaged').checked = (hideTriaged === 'true');
   const sKey = localStorage.getItem('jmo_sortKey')||'';
@@ -674,6 +838,35 @@ try{
   sortKey = sKey; sortDir = sDir;
 }catch(e){}
 render();
+updateActiveFilters();
+
+// Show keyboard hint briefly on first load
+setTimeout(function(){
+  const kbdHint = document.getElementById('kbdHint');
+  kbdHint.classList.add('visible');
+  setTimeout(function(){ kbdHint.classList.remove('visible'); }, 5000);
+}, 1000);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e){
+  // Ctrl/Cmd + K: Focus search
+  if((e.ctrlKey || e.metaKey) && e.key === 'k'){
+    e.preventDefault();
+    document.getElementById('q').focus();
+  }
+  // Ctrl/Cmd + /: Clear filters
+  if((e.ctrlKey || e.metaKey) && e.key === '/'){
+    e.preventDefault();
+    document.getElementById('clearFilters').click();
+  }
+  // Esc: Clear search if focused
+  if(e.key === 'Escape'){
+    if(document.activeElement.id === 'q'){
+      document.getElementById('q').value = '';
+      document.getElementById('q').dispatchEvent(new Event('input'));
+    }
+  }
+});
 
 // Optional: load timings.json
 (function(){
