@@ -24,7 +24,7 @@ This guide covers the **complete implementation** of privacy-first email collect
 
 ## Phase 1: CLI Email Collection (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 1 Implementation Details
 
 1. **Email Service Module** ([scripts/core/email_service.py](../scripts/core/email_service.py))
    - Resend API integration
@@ -53,11 +53,11 @@ This guide covers the **complete implementation** of privacy-first email collect
 
 #### Step 2: Verify Your Sending Domain
 
-**Option A: Use Resend's Free Domain (Testing)**
+##### Option A: Use Resend's Free Domain (Testing)
 
 For testing, Resend provides `onboarding@resend.dev` which works immediately.
 
-**Option B: Verify Your Custom Domain (Production)**
+##### Option B: Verify Your Custom Domain (Production)
 
 1. Go to [https://resend.com/domains](https://resend.com/domains)
 2. Click **"Add Domain"**
@@ -99,7 +99,7 @@ python3 scripts/core/email_service.py your@email.com
 
 **Expected Output:**
 
-```
+```text
 Sending test welcome email to: your@email.com
 ✅ Email sent successfully!
 
@@ -118,7 +118,7 @@ jmo scan --repo . --profile fast --results-dir results-test
 
 **Expected Prompt:**
 
-```
+```text
 🎉 Welcome to JMo Security!
 
 📧 Get notified about new features, updates, and security tips?
@@ -131,7 +131,7 @@ jmo scan --repo . --profile fast --results-dir results-test
 
 ## Phase 2: Dashboard Email Form (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 2 Implementation Details
 
 **Location:** [scripts/core/reporters/html_reporter.py](../scripts/core/reporters/html_reporter.py) (lines 700-835)
 
@@ -185,7 +185,7 @@ open results/summaries/dashboard.html
 
 ## Phase 3: Subscribe Landing Page (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 3 Implementation Details
 
 **Location:** [docs/subscribe.html](subscribe.html)
 
@@ -246,7 +246,7 @@ open docs/subscribe.html
 
 ## Phase 4: README Newsletter Section (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 4 Implementation Details
 
 **Location:** [README.md](../README.md) (lines 18-32)
 
@@ -279,7 +279,7 @@ open docs/subscribe.html
 
 ## Phase 5: Ko-Fi Periodic Reminders (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 5 Implementation Details
 
 **Location:** [scripts/cli/jmo.py](../scripts/cli/jmo.py) (lines 752-793)
 
@@ -299,7 +299,7 @@ open docs/subscribe.html
 
 3. **Message Content**
    - "Enjoying JMo Security? Support full-time development!"
-   - Ko-Fi link: https://ko-fi.com/jmogaming
+   - Ko-Fi link: <https://ko-fi.com/jmogaming>
    - Value proposition (maintains 11+ tools, adds features)
    - Personal thank you: "You've run X scans - thank you!"
 
@@ -310,10 +310,10 @@ open docs/subscribe.html
 
 **Example Output:**
 
-```
+```text
 ======================================================================
 💚 Enjoying JMo Security? Support full-time development!
-   → https://ko-fi.com/jmogaming
+   → <https://ko-fi.com/jmogaming>
 
    Your support helps maintain 11+ security tools, add new features,
    and provide free security scanning for the community.
@@ -336,7 +336,7 @@ cat ~/.jmo/config.yml | grep scan_count
 
 ## Phase 6: Privacy Policy (COMPLETE ✅)
 
-### What Was Implemented
+### Phase 6 Implementation Details
 
 **Location:** [docs/PRIVACY.html](PRIVACY.html)
 
@@ -790,7 +790,7 @@ jmo scan --no-telemetry
 
 **Core Infrastructure:**
 
-- ✅ Resend API integration with verified domain (hello@jmotools.com)
+- ✅ Resend API integration with verified domain (`hello@jmotools.com`)
 - ✅ Welcome email templates (HTML + plain text)
 - ✅ Local config storage (~/.jmo/config.yml)
 - ✅ Source tracking (CLI, dashboard, website)
@@ -875,6 +875,6 @@ jmo scan --no-telemetry
 **Last Updated:** October 16, 2025
 **Status:** Phase 1 Complete ✅ - 6/6 Touch Points Implemented
 **Owner:** James Moceri
-**Contact:** hello@jmotools.com
+**Contact:** `hello@jmotools.com`
 
 **Next Review:** October 23, 2025 (1 week post-launch)

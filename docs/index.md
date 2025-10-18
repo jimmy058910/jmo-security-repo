@@ -136,6 +136,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | [CAPTCHA Setup](CAPTCHA.md) | Cloudflare Turnstile integration | Developers |
 | [Compliance Framework Analysis](COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail | Advanced |
 | [Email Telemetry Setup](EMAIL_TELEMETRY_SETUP.md) | User feedback collection | Maintainers |
+| [Email Testing Guide](EMAIL_TESTING_GUIDE.md) | Email system testing workflows | Maintainers |
 | [Newsletter Content](NEWSLETTER_CONTENT.md) | Marketing content templates | Maintainers |
 | [Context7 Usage](CONTEXT7_USAGE.md) | MCP Context7 integration | Advanced |
 

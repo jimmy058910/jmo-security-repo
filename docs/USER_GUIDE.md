@@ -293,6 +293,7 @@ jmo scan --gitlab-group mygroup --gitlab-token "glpat-xxxxxxxxxxxxxxxxxxxx"
 **Tools used:** Trivy (K8s cluster vulnerabilities, misconfigurations)
 
 **Prerequisites:**
+
 - `kubectl` installed and configured
 - Valid kubeconfig with cluster access
 - Appropriate RBAC permissions (read-only sufficient)
@@ -313,7 +314,7 @@ jmo scan --k8s-namespace kube-system --tools trivy
 
 Multi-target scanning creates separate directories for each target type:
 
-```
+```text
 results/
 ├── individual-repos/          # Repository scans (existing)
 │   └── myapp/
@@ -348,6 +349,7 @@ results/
 ```
 
 **Key points:**
+
 - Each target type has its own `individual-{type}/` directory
 - Target names are sanitized (special characters replaced with `_`)
 - `summaries/` contains unified reports across all target types
@@ -521,26 +523,31 @@ done
 ### Troubleshooting Multi-Target Scans
 
 **No targets found:**
+
 - Verify file paths exist (IaC files, image lists, URL lists)
 - Check GitLab token has correct permissions
 - Ensure kubectl is configured for K8s scanning
 
 **Image scan fails:**
+
 - Verify Docker/Podman is running for local images
 - Check registry authentication for private images
 - Use `docker login` before scanning private registries
 
 **ZAP scan timeout:**
+
 - Increase timeout: `--timeout 1200` or in `jmo.yml` per_tool override
 - Reduce spider duration: `zap.flags: ["-config", "spider.maxDuration=3"]`
 - Use targeted scanning with `--api-spec` instead of full crawl
 
 **GitLab scan fails:**
+
 - Verify token: `curl -H "PRIVATE-TOKEN: $GITLAB_TOKEN" https://gitlab.com/api/v4/user`
 - Check group/repo name format: `group/repo` or `group/subgroup/repo`
 - Ensure token has `read_api` and `read_repository` scopes
 
 **K8s scan fails:**
+
 - Test kubectl access: `kubectl --context prod get pods -n default`
 - Check RBAC permissions: `kubectl auth can-i list pods --all-namespaces`
 - Verify Trivy supports your K8s version: `trivy k8s --help`

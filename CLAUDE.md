@@ -78,6 +78,7 @@ python3 scripts/dev/update_versions.py --sync --dry-run
 ```
 
 **Key Files:**
+
 - **[versions.yaml](versions.yaml)** — Single source of truth for all tool versions
 - **[scripts/dev/update_versions.py](scripts/dev/update_versions.py)** — Automation script
 - **[.github/workflows/version-check.yml](.github/workflows/version-check.yml)** — Weekly CI checks
@@ -85,6 +86,7 @@ python3 scripts/dev/update_versions.py --sync --dry-run
 - **[docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** — Complete guide
 
 **Critical Rules:**
+
 1. **NEVER manually edit tool versions in Dockerfiles** — Always use `update_versions.py`
 2. **ALWAYS sync after updating versions.yaml** — Run `update_versions.py --sync`
 3. **CRITICAL: Trivy versions MUST match** — Mismatches cause CVE detection gaps (see ROADMAP #14)
@@ -827,6 +829,130 @@ results/
 - CommonFinding Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
 - Copilot Instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
 - Project Homepage: [jmotools.com](https://jmotools.com)
+
+## Document Creation Policy
+
+**CRITICAL: Limit document creation and summaries unless they provide long-term project value.**
+
+### When NOT to Create Documents
+
+**Do NOT create markdown documents for:**
+
+1. ❌ **Session summaries or task reports** — These are ephemeral and clutter the repository
+2. ❌ **Temporary analysis notes** — Use conversation context instead
+3. ❌ **Quick reference guides** — Information should go into existing docs
+4. ❌ **One-off troubleshooting** — Document patterns in USER_GUIDE.md, not standalone files
+5. ❌ **Work-in-progress drafts** — Keep in `.claude/` or `dev-only/` (gitignored)
+6. ❌ **Review artifacts** — Use GitHub PR reviews, not committed files
+
+**IMPORTANT .gitignore locations for temporary work:**
+
+- **`.claude/`** — Claude Code user-specific configuration (gitignored in line 84)
+- **`dev-only/`** — Private local scripts and outputs (gitignored in line 78)
+- **`/tmp/`** — Test results and temporary files (gitignored in line 51)
+
+**When temporary documents ARE needed:**
+
+```bash
+# Store drafts and analysis in gitignored locations
+echo "analysis notes" > .claude/draft-analysis.md
+echo "temp script" > dev-only/test-script.sh
+echo "results" > /tmp/scan-output.json
+
+# These files NEVER appear in git status
+git status  # Clean working tree
+```
+
+### When to Create Documents
+
+**ONLY create markdown documents when:**
+
+1. ✅ **Long-term project value** — Information needed for >6 months
+2. ✅ **User-facing documentation** — Guides, tutorials, references (see Perfect Documentation Structure below)
+3. ✅ **Contributor onboarding** — CONTRIBUTING.md, TEST.md, RELEASE.md
+4. ✅ **Architectural decisions** — Major design changes (CLAUDE.md, ROADMAP.md)
+5. ✅ **Compliance/auditing** — Security policies, license info
+
+**Examples of valid document creation:**
+
+- Adding new section to USER_GUIDE.md for new CLI flag
+- Creating docs/examples/new-workflow.md for reusable pattern
+- Updating CHANGELOG.md for release notes
+- Adding troubleshooting section to existing doc
+
+### Document Management Workflow
+
+**When documents ARE created, use the jmo-documentation-updater skill to manage them:**
+
+```bash
+# After creating or modifying documentation
+# The skill will:
+# 1. Check for duplicates and consolidate
+# 2. Verify against Perfect Documentation Structure
+# 3. Update docs/index.md with new links
+# 4. Run markdownlint and fix ALL issues
+# 5. Organize into appropriate locations
+# 6. Archive or delete obsolete docs
+```
+
+**Invoke the skill:**
+
+```text
+Use the jmo-documentation-updater skill to:
+- Organize new documentation about [topic]
+- Check for duplicate content in [docs]
+- Consolidate fragmented documentation
+- Archive outdated [doc-name].md
+```
+
+**The skill ensures:**
+
+- No duplicate content across files
+- Proper linking in docs/index.md
+- Compliance with Perfect Documentation Structure
+- Markdownlint validation passes
+- Proper .gitignore handling for drafts
+
+### Prefer Editing Over Creating
+
+**ALWAYS prefer editing existing files to creating new ones:**
+
+```markdown
+# ❌ WRONG: Create new SNYK_SETUP.md
+echo "# Snyk Setup" > docs/SNYK_SETUP.md
+
+# ✅ CORRECT: Add section to existing USER_GUIDE.md
+# Edit docs/USER_GUIDE.md:
+## Tool-Specific Configuration
+
+### Snyk (SCA)
+...
+```
+
+**Rationale:**
+
+- **Reduced navigation:** Users know where to look (USER_GUIDE.md)
+- **Easier maintenance:** One file to update, not scattered docs
+- **Better search:** Ctrl+F finds everything in one place
+- **No link rot:** Fewer files = fewer broken links
+
+### Summary Guidelines
+
+**Limit AI-generated summaries unless explicitly requested:**
+
+- ❌ Don't create "SESSION_SUMMARY.md" after completing tasks
+- ❌ Don't create "WORK_LOG.md" tracking daily progress
+- ❌ Don't create "ANALYSIS_REPORT.md" for every investigation
+- ✅ DO update CHANGELOG.md with user-facing changes
+- ✅ DO add troubleshooting sections to USER_GUIDE.md
+- ✅ DO document new patterns in docs/examples/
+
+**If user requests a summary:**
+
+1. **Provide in conversation** — Don't create a file unless explicitly requested
+2. **Ask before creating** — "Should I add this to CHANGELOG.md or create a new doc?"
+3. **Use .claude/ for drafts** — If unsure, put in `.claude/draft-summary.md` first
+4. **Invoke jmo-documentation-updater** — After user approves, use skill to organize
 
 ## Perfect Documentation Structure
 
