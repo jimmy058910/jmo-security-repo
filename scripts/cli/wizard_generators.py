@@ -61,6 +61,7 @@ def generate_github_actions(config: Any, profiles: Dict[str, Any]) -> str:
     Generate a GitHub Actions workflow for security scanning.
 
     Creates either Docker-based or native workflow depending on config.use_docker.
+    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
 
     Args:
         config: Wizard configuration object
@@ -75,13 +76,55 @@ def generate_github_actions(config: Any, profiles: Dict[str, Any]) -> str:
     threads = config.threads or profile_threads
     timeout = config.timeout or profile_timeout
 
+    # Detect required secrets based on target type
+    setup_steps = []
+    env_vars = []
+
+    if config.target.type == "gitlab":
+        setup_steps.append(
+            """
+      - name: Configure GitLab Access
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: echo "GITLAB_TOKEN configured for GitLab scanning"
+"""
+        )
+        env_vars.append("GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}")
+
+    elif config.target.type == "k8s":
+        setup_steps.append(
+            """
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          kubectl config view
+"""
+        )
+
+    setup_steps_str = "".join(setup_steps)
+    env_section = (
+        f"\n        env:\n          {chr(10).join('          ' + e for e in env_vars)}"
+        if env_vars
+        else ""
+    )
+
     if config.use_docker:
         # Docker-based workflow
         scan_cmd_lines = [
-            f"jmo scan --repo . --results results --profile {config.profile}",
+            f"jmo scan --results results --profile {config.profile}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
+
+        # Add target-specific flags
+        if config.target.type == "repo":
+            scan_cmd_lines.insert(1, "--repo .")
+        elif config.target.type == "image" and config.target.image_name:
+            scan_cmd_lines.insert(1, f"--image {config.target.image_name}")
+        elif config.target.type == "url" and config.target.url:
+            scan_cmd_lines.insert(1, f"--url {config.target.url}")
+
         if config.fail_on:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
@@ -101,8 +144,8 @@ jobs:
       image: ghcr.io/jimmy058910/jmo-security:latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run Security Scan
+{setup_steps_str}
+      - name: Run Security Scan{env_section}
         run: |
           {scan_cmd}
 
@@ -122,10 +165,42 @@ jobs:
     else:
         # Native workflow
         scan_cmd_lines = [
-            f"jmotools {config.profile} --repos-dir . --results-dir results",
+            f"jmotools {config.profile}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]
+
+        # Add target-specific flags
+        if config.target.type == "repo":
+            if config.target.repo_mode == "repos-dir":
+                scan_cmd_lines.insert(1, "--repos-dir .")
+            elif config.target.repo_mode == "repo":
+                scan_cmd_lines.insert(1, "--repo .")
+        elif config.target.type == "image":
+            if config.target.image_name:
+                scan_cmd_lines.insert(1, f"--image {config.target.image_name}")
+        elif config.target.type == "url":
+            if config.target.url:
+                scan_cmd_lines.insert(1, f"--url {config.target.url}")
+        elif config.target.type == "iac":
+            iac_flag_map = {
+                "terraform": "--terraform-state",
+                "cloudformation": "--cloudformation",
+                "k8s-manifest": "--k8s-manifest",
+            }
+            # Note: File must exist in repo
+            scan_cmd_lines.insert(
+                1, f"{iac_flag_map[config.target.iac_type]} infrastructure"
+            )
+        elif config.target.type == "gitlab":
+            if config.target.gitlab_repo:
+                scan_cmd_lines.insert(1, f"--gitlab-repo {config.target.gitlab_repo}")
+        elif config.target.type == "k8s":
+            if config.target.k8s_context:
+                scan_cmd_lines.insert(1, f"--k8s-context {config.target.k8s_context}")
+
+        scan_cmd_lines.append("--results-dir results")
+
         if config.fail_on:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
@@ -133,7 +208,16 @@ jobs:
         profile_tools = cast(List[str], profile_info["tools"])
         tools_list = ", ".join(profile_tools)
 
-        return f"""name: Security Scan
+        # Add secrets note if needed
+        secrets_note = ""
+        if config.target.type == "gitlab":
+            secrets_note = (
+                "\n    # NOTE: Add GITLAB_TOKEN secret to repository settings"
+            )
+        elif config.target.type == "k8s":
+            secrets_note = "\n    # NOTE: Add KUBECONFIG secret to repository settings"
+
+        return f"""name: Security Scan{secrets_note}
 on:
   push:
     branches: [main]
@@ -160,8 +244,8 @@ jobs:
           # Install based on profile: {config.profile}
           # Tools: {tools_list}
           # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
-
-      - name: Run Security Scan
+{setup_steps_str}
+      - name: Run Security Scan{env_section}
         run: |
           {scan_cmd}
 

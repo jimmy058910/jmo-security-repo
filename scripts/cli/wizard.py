@@ -222,6 +222,111 @@ def _detect_repos_in_dir(path: Path) -> List[Path]:
     return repos
 
 
+def _validate_url(url: str) -> bool:
+    """
+    Validate URL is reachable with a quick HEAD request.
+
+    Args:
+        url: URL to validate
+
+    Returns:
+        True if URL is reachable, False otherwise
+    """
+    import urllib.request
+    import urllib.error
+
+    try:
+        # Quick HEAD request with 2s timeout
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(
+            req, timeout=2
+        ) as response:  # nosec B310 - user-provided URL, validated
+            return response.status == 200
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, Exception):
+        # Any error means URL is not reachable
+        return False
+
+
+def _detect_iac_type(file_path: Path) -> str:
+    """
+    Auto-detect IaC type from file extension and content.
+
+    Args:
+        file_path: Path to IaC file
+
+    Returns:
+        Detected type: terraform, cloudformation, or k8s-manifest
+    """
+    # Check extension first
+    suffix = file_path.suffix.lower()
+    name = file_path.name.lower()
+
+    if ".tfstate" in name or suffix == ".tfstate":
+        return "terraform"
+
+    if "cloudformation" in name or "cfn" in name:
+        return "cloudformation"
+
+    # For YAML files, check content
+    if suffix in (".yaml", ".yml"):
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            # K8s manifests have apiVersion and kind
+            if "apiVersion:" in content and "kind:" in content:
+                return "k8s-manifest"
+            # CloudFormation templates have AWSTemplateFormatVersion or Resources
+            if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
+                return "cloudformation"
+        except Exception:
+            pass
+
+    # Default to k8s-manifest for YAML files
+    if suffix in (".yaml", ".yml"):
+        return "k8s-manifest"
+
+    # Default
+    return "terraform"
+
+
+def _validate_k8s_context(context: str) -> bool:
+    """
+    Validate Kubernetes context exists.
+
+    Args:
+        context: K8s context name or 'current' for current context
+
+    Returns:
+        True if context exists, False otherwise
+    """
+    try:
+        # Check if kubectl is available
+        if not shutil.which("kubectl"):
+            return False
+
+        # Get contexts list
+        result = subprocess.run(  # nosec B603 - controlled command
+            ["kubectl", "config", "get-contexts", "-o", "name"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return False
+
+        # If "current" requested, any context is fine
+        if context == "current":
+            return len(result.stdout.strip()) > 0
+
+        # Check if specific context exists
+        contexts = result.stdout.strip().split("\n")
+        return context in contexts
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return False
+
+
 def _validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
     """Validate and expand a path."""
     try:
@@ -236,16 +341,74 @@ def _validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
         return None
 
 
+class TargetConfig:
+    """Target-specific configuration for a single scan target."""
+
+    def __init__(self) -> None:
+        self.type: str = "repo"  # repo, image, iac, url, gitlab, k8s
+
+        # Repository targets (existing)
+        self.repo_mode: str = ""  # repo, repos-dir, targets, tsv
+        self.repo_path: str = ""
+        self.tsv_path: str = ""
+        self.tsv_dest: str = "repos-tsv"
+
+        # Container image targets (v0.6.0+)
+        self.image_name: str = ""
+        self.images_file: str = ""
+
+        # IaC targets (v0.6.0+)
+        self.iac_type: str = ""  # terraform, cloudformation, k8s-manifest
+        self.iac_path: str = ""
+
+        # Web URL targets (v0.6.0+)
+        self.url: str = ""
+        self.urls_file: str = ""
+        self.api_spec: str = ""
+
+        # GitLab targets (v0.6.0+)
+        self.gitlab_url: str = "https://gitlab.com"
+        self.gitlab_token: str = ""  # Prefer GITLAB_TOKEN env var
+        self.gitlab_repo: str = ""  # group/repo format
+        self.gitlab_group: str = ""
+
+        # Kubernetes targets (v0.6.0+)
+        self.k8s_context: str = ""
+        self.k8s_namespace: str = ""
+        self.k8s_all_namespaces: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "type": self.type,
+            "repo_mode": self.repo_mode,
+            "repo_path": self.repo_path,
+            "tsv_path": self.tsv_path,
+            "tsv_dest": self.tsv_dest,
+            "image_name": self.image_name,
+            "images_file": self.images_file,
+            "iac_type": self.iac_type,
+            "iac_path": self.iac_path,
+            "url": self.url,
+            "urls_file": self.urls_file,
+            "api_spec": self.api_spec,
+            "gitlab_url": self.gitlab_url,
+            "gitlab_token": "***" if self.gitlab_token else "",  # Redact token
+            "gitlab_repo": self.gitlab_repo,
+            "gitlab_group": self.gitlab_group,
+            "k8s_context": self.k8s_context,
+            "k8s_namespace": self.k8s_namespace,
+            "k8s_all_namespaces": self.k8s_all_namespaces,
+        }
+
+
 class WizardConfig:
     """Configuration collected by the wizard."""
 
     def __init__(self) -> None:
         self.profile: str = "balanced"
         self.use_docker: bool = False
-        self.target_mode: str = ""  # repo, repos-dir, targets, tsv
-        self.target_path: str = ""
-        self.tsv_path: str = ""
-        self.tsv_dest: str = "repos-tsv"
+        self.target: TargetConfig = TargetConfig()
         self.results_dir: str = "results"
         self.threads: Optional[int] = None
         self.timeout: Optional[int] = None
@@ -258,10 +421,7 @@ class WizardConfig:
         return {
             "profile": self.profile,
             "use_docker": self.use_docker,
-            "target_mode": self.target_mode,
-            "target_path": self.target_path,
-            "tsv_path": self.tsv_path,
-            "tsv_dest": self.tsv_dest,
+            "target": self.target.to_dict(),
             "results_dir": self.results_dir,
             "threads": self.threads,
             "timeout": self.timeout,
@@ -331,20 +491,52 @@ def select_execution_mode(force_docker: bool = False) -> bool:
     return use_docker
 
 
-def select_target() -> Tuple[str, str, str, str]:
+def select_target_type() -> str:
     """
-    Step 3: Select scan target.
+    Step 3a: Select target TYPE (repo, image, iac, url, gitlab, k8s).
 
     Returns:
-        Tuple of (mode, path, tsv_path, tsv_dest)
+        Target type string
     """
-    _print_step(3, 6, "Select Scan Target")
+    _print_step(3, 7, "Select Scan Target Type")
 
-    print("\nTarget options:")
+    print("\nTarget types:")
+    print("  [repo]    Repositories (local Git repos)")
+    print("  [image]   Container images (Docker/OCI)")
+    print("  [iac]     Infrastructure as Code (Terraform/CloudFormation/K8s)")
+    print("  [url]     Web applications and APIs (DAST)")
+    print("  [gitlab]  GitLab repositories (remote)")
+    print("  [k8s]     Kubernetes clusters (live)")
+
+    choices = [
+        ("repo", "Repositories"),
+        ("image", "Container images"),
+        ("iac", "Infrastructure as Code"),
+        ("url", "Web applications/APIs"),
+        ("gitlab", "GitLab integration"),
+        ("k8s", "Kubernetes clusters"),
+    ]
+    # Default to repo (most common use case)
+    return _prompt_choice("\nSelect target type:", choices, default="repo")
+
+
+def configure_repo_target() -> TargetConfig:
+    """
+    Step 3b-repo: Configure repository scanning.
+
+    Returns:
+        TargetConfig for repository targets
+    """
+    _print_step(4, 7, "Configure Repository Target")
+
+    config = TargetConfig()
+    config.type = "repo"
+
+    print("\nRepository modes:")
     print("  [repo]      Single repository")
-    print("  [repos-dir] Directory containing multiple repos")
+    print("  [repos-dir] Directory with multiple repos (most common)")
     print("  [targets]   File listing repo paths")
-    print("  [tsv]       Clone repos from TSV file")
+    print("  [tsv]       Clone from TSV file")
 
     choices = [
         ("repo", "Single repository"),
@@ -352,12 +544,13 @@ def select_target() -> Tuple[str, str, str, str]:
         ("targets", "Targets file"),
         ("tsv", "Clone from TSV"),
     ]
-    mode = _prompt_choice("\nSelect target type:", choices, default="repos-dir")
+    mode = _prompt_choice("\nSelect mode:", choices, default="repos-dir")
+    config.repo_mode = mode
 
     if mode == "tsv":
-        tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
-        tsv_dest = _prompt_text("Clone destination", default="repos-tsv")
-        return mode, "", tsv_path, tsv_dest
+        config.tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
+        config.tsv_dest = _prompt_text("Clone destination", default="repos-tsv")
+        return config
 
     # For other modes, prompt for path
     prompts = {
@@ -367,12 +560,12 @@ def select_target() -> Tuple[str, str, str, str]:
     }
 
     while True:
-        path = _prompt_text(prompts[mode])
+        path = _prompt_text(prompts[mode], default="." if mode == "repos-dir" else "")
         if not path:
             print(_colorize("Path cannot be empty", "red"))
             continue
 
-        validated = _validate_path(path, must_exist=(mode != "tsv"))
+        validated = _validate_path(path, must_exist=True)
         if validated:
             # For repos-dir, show detected repos
             if mode == "repos-dir":
@@ -390,19 +583,331 @@ def select_target() -> Tuple[str, str, str, str]:
                     if not _prompt_yes_no("Continue anyway?", default=False):
                         continue
 
-            return mode, str(validated), "", ""
+            config.repo_path = str(validated)
+            return config
 
         print(_colorize(f"Path not found: {path}", "red"))
 
 
+def configure_image_target() -> TargetConfig:
+    """
+    Step 3b-image: Configure container image scanning.
+
+    Returns:
+        TargetConfig for container image targets
+    """
+    _print_step(4, 7, "Configure Container Image Target")
+
+    config = TargetConfig()
+    config.type = "image"
+
+    print("\nContainer image modes:")
+    print("  [single] Scan a single image")
+    print("  [batch]  Scan images from file")
+
+    mode = _prompt_choice(
+        "\nSelect mode:",
+        [("single", "Single image"), ("batch", "Batch file")],
+        default="single",
+    )
+
+    if mode == "single":
+        config.image_name = _prompt_text(
+            "Container image (e.g., nginx:latest, myregistry.io/app:v1.0)",
+            default="nginx:latest",
+        )
+        print(_colorize(f"Will scan: {config.image_name}", "green"))
+    else:
+        while True:
+            path = _prompt_text("Path to images file", default="./images.txt")
+            validated = _validate_path(path, must_exist=True)
+            if validated:
+                config.images_file = str(validated)
+                # Show preview
+                lines = validated.read_text(encoding="utf-8").splitlines()
+                images = [
+                    line.strip()
+                    for line in lines
+                    if line.strip() and not line.startswith("#")
+                ]
+                print(f"\n{_colorize(f'Found {len(images)} images:', 'green')}")
+                for img in images[:5]:
+                    print(f"  - {img}")
+                if len(images) > 5:
+                    print(f"  ... and {len(images) - 5} more")
+                break
+            print(_colorize(f"File not found: {path}", "red"))
+
+    return config
+
+
+def configure_iac_target() -> TargetConfig:
+    """
+    Step 3b-iac: Configure IaC file scanning.
+
+    Returns:
+        TargetConfig for IaC targets
+    """
+    _print_step(4, 7, "Configure Infrastructure as Code Target")
+
+    config = TargetConfig()
+    config.type = "iac"
+
+    # Prompt for file path first
+    while True:
+        path = _prompt_text(
+            "Path to IaC file (.tfstate, .yaml, .json)",
+            default="./infrastructure.tfstate",
+        )
+        validated = _validate_path(path, must_exist=True)
+        if validated:
+            config.iac_path = str(validated)
+
+            # Auto-detect type
+            detected_type = _detect_iac_type(validated)
+            print(
+                f"\n{_colorize(f'Detected type: {detected_type}', 'green')} (based on file)"
+            )
+
+            # Confirm or override
+            print("\nIaC file types:")
+            print("  [terraform]      Terraform state file (.tfstate)")
+            print("  [cloudformation] CloudFormation template (.yaml/.json)")
+            print("  [k8s-manifest]   Kubernetes manifest (.yaml)")
+
+            choices = [
+                ("terraform", "Terraform state"),
+                ("cloudformation", "CloudFormation"),
+                ("k8s-manifest", "Kubernetes manifest"),
+            ]
+            iac_type = _prompt_choice(
+                "\nConfirm or override type:", choices, default=detected_type
+            )
+            config.iac_type = iac_type
+
+            return config
+
+        print(_colorize(f"File not found: {path}", "red"))
+
+
+def configure_url_target() -> TargetConfig:
+    """
+    Step 3b-url: Configure web URL scanning.
+
+    Returns:
+        TargetConfig for web URL targets
+    """
+    _print_step(4, 7, "Configure Web Application/API Target")
+
+    config = TargetConfig()
+    config.type = "url"
+
+    print("\nWeb application modes:")
+    print("  [single] Scan a single URL")
+    print("  [batch]  Scan URLs from file")
+    print("  [api]    Scan API from OpenAPI spec")
+
+    mode = _prompt_choice(
+        "\nSelect mode:",
+        [("single", "Single URL"), ("batch", "Batch file"), ("api", "API spec")],
+        default="single",
+    )
+
+    if mode == "single":
+        while True:
+            url = _prompt_text("Web application URL", default="https://example.com")
+            # Validate URL is reachable
+            print(_colorize("Validating URL...", "blue"))
+            if _validate_url(url):
+                print(_colorize(f"URL is reachable: {url}", "green"))
+                config.url = url
+                break
+            else:
+                print(
+                    _colorize(
+                        f"Warning: URL not reachable (timeout or error): {url}",
+                        "yellow",
+                    )
+                )
+                if _prompt_yes_no("Use this URL anyway?", default=False):
+                    config.url = url
+                    break
+
+    elif mode == "batch":
+        while True:
+            path = _prompt_text("Path to URLs file", default="./urls.txt")
+            validated = _validate_path(path, must_exist=True)
+            if validated:
+                config.urls_file = str(validated)
+                # Show preview
+                lines = validated.read_text(encoding="utf-8").splitlines()
+                urls = [
+                    line.strip()
+                    for line in lines
+                    if line.strip() and not line.startswith("#")
+                ]
+                print(f"\n{_colorize(f'Found {len(urls)} URLs:', 'green')}")
+                for url in urls[:5]:
+                    print(f"  - {url}")
+                if len(urls) > 5:
+                    print(f"  ... and {len(urls) - 5} more")
+                break
+            print(_colorize(f"File not found: {path}", "red"))
+
+    else:  # api
+        config.api_spec = _prompt_text(
+            "OpenAPI spec URL or file path", default="./openapi.yaml"
+        )
+        print(_colorize(f"Will scan API spec: {config.api_spec}", "green"))
+
+    return config
+
+
+def configure_gitlab_target() -> TargetConfig:
+    """
+    Step 3b-gitlab: Configure GitLab scanning.
+
+    Returns:
+        TargetConfig for GitLab targets
+    """
+    _print_step(4, 7, "Configure GitLab Target")
+
+    config = TargetConfig()
+    config.type = "gitlab"
+
+    # GitLab URL
+    config.gitlab_url = _prompt_text("GitLab URL", default="https://gitlab.com")
+
+    # GitLab token (check env first)
+    env_token = os.getenv("GITLAB_TOKEN")
+    if env_token:
+        print(f"\n{_colorize('GitLab token found in GITLAB_TOKEN env var', 'green')}")
+        config.gitlab_token = env_token
+    else:
+        print(_colorize("\nWarning: GITLAB_TOKEN env var not set", "yellow"))
+        print("For security, it's recommended to set GITLAB_TOKEN env var")
+        token = _prompt_text("GitLab access token (or press Enter to skip)")
+        if token:
+            config.gitlab_token = token
+        else:
+            print(
+                _colorize(
+                    "Note: Scan will fail without token. Set GITLAB_TOKEN before running.",
+                    "yellow",
+                )
+            )
+
+    # Repo or group
+    print("\nGitLab scope:")
+    print("  [repo]  Single repository (group/repo)")
+    print("  [group] Entire group (all repos)")
+
+    mode = _prompt_choice(
+        "\nSelect scope:",
+        [("repo", "Single repo"), ("group", "Entire group")],
+        default="repo",
+    )
+
+    if mode == "repo":
+        config.gitlab_repo = _prompt_text(
+            "Repository (format: group/repo)", default="mygroup/myrepo"
+        )
+        print(
+            _colorize(
+                f"Will scan GitLab repo: {config.gitlab_url}/{config.gitlab_repo}",
+                "green",
+            )
+        )
+    else:
+        config.gitlab_group = _prompt_text("Group name", default="mygroup")
+        print(
+            _colorize(
+                f"Will scan all repos in group: {config.gitlab_url}/{config.gitlab_group}",
+                "green",
+            )
+        )
+
+    return config
+
+
+def configure_k8s_target() -> TargetConfig:
+    """
+    Step 3b-k8s: Configure Kubernetes scanning.
+
+    Returns:
+        TargetConfig for Kubernetes targets
+    """
+    _print_step(4, 7, "Configure Kubernetes Target")
+
+    config = TargetConfig()
+    config.type = "k8s"
+
+    # Check if kubectl is available
+    if not shutil.which("kubectl"):
+        print(
+            _colorize(
+                "Warning: kubectl not found. Install kubectl to scan K8s clusters.",
+                "yellow",
+            )
+        )
+        config.k8s_context = "current"
+        config.k8s_namespace = "default"
+        return config
+
+    # Context
+    while True:
+        context = _prompt_text(
+            "Kubernetes context (or 'current' for default)", default="current"
+        )
+        # Validate context
+        if _validate_k8s_context(context):
+            print(_colorize(f"Context validated: {context}", "green"))
+            config.k8s_context = context
+            break
+        else:
+            print(_colorize(f"Warning: Context not found: {context}", "yellow"))
+            if _prompt_yes_no("Use this context anyway?", default=False):
+                config.k8s_context = context
+                break
+
+    # Namespace
+    print("\nNamespace scope:")
+    print("  [single] Single namespace")
+    print("  [all]    All namespaces")
+
+    mode = _prompt_choice(
+        "\nSelect scope:",
+        [("single", "Single namespace"), ("all", "All namespaces")],
+        default="single",
+    )
+
+    if mode == "single":
+        config.k8s_namespace = _prompt_text("Namespace name", default="default")
+        print(
+            _colorize(
+                f"Will scan namespace: {config.k8s_context}/{config.k8s_namespace}",
+                "green",
+            )
+        )
+    else:
+        config.k8s_all_namespaces = True
+        print(
+            _colorize(
+                f"Will scan all namespaces in context: {config.k8s_context}", "green"
+            )
+        )
+
+    return config
+
+
 def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]:
     """
-    Step 4: Configure advanced options.
+    Step 5: Configure advanced options.
 
     Returns:
         Tuple of (threads, timeout, fail_on)
     """
-    _print_step(4, 6, "Advanced Configuration")
+    _print_step(5, 7, "Advanced Configuration")
 
     profile_info = PROFILES[profile]
     cpu_count = _get_cpu_count()
@@ -454,12 +959,12 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
 
 def review_and_confirm(config: WizardConfig) -> bool:
     """
-    Step 5: Review configuration and confirm.
+    Step 6: Review configuration and confirm.
 
     Returns:
         True if user confirms, False otherwise
     """
-    _print_step(5, 6, "Review Configuration")
+    _print_step(6, 7, "Review Configuration")
 
     profile_info = PROFILES[config.profile]
     profile_name = cast(str, profile_info["name"])
@@ -471,13 +976,49 @@ def review_and_confirm(config: WizardConfig) -> bool:
     print("\n" + _colorize("Configuration Summary:", "bold"))
     print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
     print(f"  Mode: {_colorize('Docker' if config.use_docker else 'Native', 'green')}")
-    print(f"  Target: {_colorize(config.target_mode, 'green')}")
+    print(f"  Target Type: {_colorize(config.target.type, 'green')}")
 
-    if config.target_mode == "tsv":
-        print(f"    TSV: {config.tsv_path}")
-        print(f"    Dest: {config.tsv_dest}")
-    else:
-        print(f"    Path: {config.target_path}")
+    # Target-specific details
+    if config.target.type == "repo":
+        print(f"    Mode: {config.target.repo_mode}")
+        if config.target.repo_mode == "tsv":
+            print(f"    TSV: {config.target.tsv_path}")
+            print(f"    Dest: {config.target.tsv_dest}")
+        else:
+            print(f"    Path: {config.target.repo_path}")
+
+    elif config.target.type == "image":
+        if config.target.image_name:
+            print(f"    Image: {config.target.image_name}")
+        elif config.target.images_file:
+            print(f"    Images file: {config.target.images_file}")
+
+    elif config.target.type == "iac":
+        print(f"    Type: {config.target.iac_type}")
+        print(f"    File: {config.target.iac_path}")
+
+    elif config.target.type == "url":
+        if config.target.url:
+            print(f"    URL: {config.target.url}")
+        elif config.target.urls_file:
+            print(f"    URLs file: {config.target.urls_file}")
+        elif config.target.api_spec:
+            print(f"    API spec: {config.target.api_spec}")
+
+    elif config.target.type == "gitlab":
+        print(f"    GitLab URL: {config.target.gitlab_url}")
+        print(f"    Token: {'***' if config.target.gitlab_token else 'NOT SET'}")
+        if config.target.gitlab_repo:
+            print(f"    Repo: {config.target.gitlab_repo}")
+        elif config.target.gitlab_group:
+            print(f"    Group: {config.target.gitlab_group}")
+
+    elif config.target.type == "k8s":
+        print(f"    Context: {config.target.k8s_context}")
+        if config.target.k8s_all_namespaces:
+            print(f"    Namespaces: ALL")
+        else:
+            print(f"    Namespace: {config.target.k8s_namespace}")
 
     print(f"  Results: {config.results_dir}")
 
@@ -496,46 +1037,110 @@ def review_and_confirm(config: WizardConfig) -> bool:
 
 
 def generate_command(config: WizardConfig) -> str:
-    """Generate the jmotools command from config (for display/export)."""
+    """
+    Generate the jmotools/jmo command from config (for display/export).
+
+    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
+    """
     profile_info = PROFILES[config.profile]
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
 
     if config.use_docker:
-        # Docker command
-        target_mount = ""
-        if config.target_mode == "repo":
-            target_mount = f"-v {config.target_path}:/scan"
-        elif config.target_mode == "repos-dir":
-            target_mount = f"-v {config.target_path}:/scan"
+        # Docker command (limited support for non-repo targets)
+        cmd_parts = ["docker run --rm"]
 
-        results_mount = f"-v $(pwd)/{config.results_dir}:/results"
+        # Volume mounts (only for file-based targets)
+        if config.target.type == "repo":
+            if config.target.repo_path:
+                cmd_parts.append(f"-v {config.target.repo_path}:/scan")
+        elif config.target.type == "iac":
+            if config.target.iac_path:
+                cmd_parts.append(f"-v {config.target.iac_path}:/scan/iac-file")
 
-        cmd_parts = [
-            "docker run --rm",
-            target_mount,
-            results_mount,
-            "ghcr.io/jimmy058910/jmo-security:latest",
-            "scan",
-        ]
+        # Results mount
+        cmd_parts.append(f"-v $(pwd)/{config.results_dir}:/results")
 
-        if config.target_mode in ("repo", "repos-dir"):
-            cmd_parts.append("--repos-dir /scan")
+        # Image and base command
+        cmd_parts.append("ghcr.io/jimmy058910/jmo-security:latest")
+        cmd_parts.append("scan")
+
+        # Target-specific flags
+        if config.target.type == "repo":
+            if config.target.repo_mode in ("repo", "repos-dir"):
+                cmd_parts.append("--repos-dir /scan")
+        elif config.target.type == "image":
+            if config.target.image_name:
+                cmd_parts.append(f"--image {config.target.image_name}")
+        elif config.target.type == "iac":
+            cmd_parts.append(
+                f"--{config.target.iac_type.replace('-', '-')} /scan/iac-file"
+            )
+        # URL, GitLab, K8s work without mounts
+
         cmd_parts.append("--results /results")
         cmd_parts.append(f"--profile {config.profile}")
 
     else:
-        # Native command
+        # Native command (full support for all targets)
         cmd_parts = ["jmotools", config.profile]
 
-        if config.target_mode == "repo":
-            cmd_parts.extend(["--repo", config.target_path])
-        elif config.target_mode == "repos-dir":
-            cmd_parts.extend(["--repos-dir", config.target_path])
-        elif config.target_mode == "targets":
-            cmd_parts.extend(["--targets", config.target_path])
-        elif config.target_mode == "tsv":
-            cmd_parts.extend(["--tsv", config.tsv_path, "--dest", config.tsv_dest])
+        # Target-specific flags
+        if config.target.type == "repo":
+            if config.target.repo_mode == "repo":
+                cmd_parts.extend(["--repo", config.target.repo_path])
+            elif config.target.repo_mode == "repos-dir":
+                cmd_parts.extend(["--repos-dir", config.target.repo_path])
+            elif config.target.repo_mode == "targets":
+                cmd_parts.extend(["--targets", config.target.repo_path])
+            elif config.target.repo_mode == "tsv":
+                cmd_parts.extend(
+                    [
+                        "--tsv",
+                        config.target.tsv_path,
+                        "--dest",
+                        config.target.tsv_dest,
+                    ]
+                )
+
+        elif config.target.type == "image":
+            if config.target.image_name:
+                cmd_parts.extend(["--image", config.target.image_name])
+            elif config.target.images_file:
+                cmd_parts.extend(["--images-file", config.target.images_file])
+
+        elif config.target.type == "iac":
+            if config.target.iac_type == "terraform":
+                cmd_parts.extend(["--terraform-state", config.target.iac_path])
+            elif config.target.iac_type == "cloudformation":
+                cmd_parts.extend(["--cloudformation", config.target.iac_path])
+            elif config.target.iac_type == "k8s-manifest":
+                cmd_parts.extend(["--k8s-manifest", config.target.iac_path])
+
+        elif config.target.type == "url":
+            if config.target.url:
+                cmd_parts.extend(["--url", config.target.url])
+            elif config.target.urls_file:
+                cmd_parts.extend(["--urls-file", config.target.urls_file])
+            elif config.target.api_spec:
+                cmd_parts.extend(["--api-spec", config.target.api_spec])
+
+        elif config.target.type == "gitlab":
+            cmd_parts.extend(["--gitlab-url", config.target.gitlab_url])
+            if config.target.gitlab_token:
+                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
+            if config.target.gitlab_repo:
+                cmd_parts.extend(["--gitlab-repo", config.target.gitlab_repo])
+            elif config.target.gitlab_group:
+                cmd_parts.extend(["--gitlab-group", config.target.gitlab_group])
+
+        elif config.target.type == "k8s":
+            if config.target.k8s_context:
+                cmd_parts.extend(["--k8s-context", config.target.k8s_context])
+            if config.target.k8s_all_namespaces:
+                cmd_parts.append("--k8s-all-namespaces")
+            elif config.target.k8s_namespace:
+                cmd_parts.extend(["--k8s-namespace", config.target.k8s_namespace])
 
         cmd_parts.extend(["--results-dir", config.results_dir])
 
@@ -549,9 +1154,6 @@ def generate_command(config: WizardConfig) -> str:
     if config.fail_on:
         cmd_parts.extend(["--fail-on", config.fail_on])
 
-    # Note: --allow-missing-tools is implicitly enabled for jmotools wrapper
-    # No need to add it explicitly as it's not exposed in jmotools interface
-
     if config.human_logs:
         cmd_parts.append("--human-logs")
 
@@ -564,9 +1166,9 @@ def generate_command_list(config: WizardConfig) -> list[str]:
 
     This function builds the command as a list of arguments to avoid shell injection.
     Use this for actual execution, not generate_command() which is for display only.
-    """
-    import os
 
+    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
+    """
     profile_info = PROFILES[config.profile]
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
@@ -575,37 +1177,101 @@ def generate_command_list(config: WizardConfig) -> list[str]:
         # Docker command - build as list to avoid shell=True
         cmd_list = ["docker", "run", "--rm"]
 
-        # Add volume mounts
-        if config.target_mode in ("repo", "repos-dir"):
+        # Add volume mounts (only for file-based targets)
+        if config.target.type == "repo" and config.target.repo_path:
             # Resolve absolute path to avoid injection
-            target_abs = os.path.abspath(config.target_path)
+            target_abs = os.path.abspath(config.target.repo_path)
             cmd_list.extend(["-v", f"{target_abs}:/scan"])
+        elif config.target.type == "iac" and config.target.iac_path:
+            iac_abs = os.path.abspath(config.target.iac_path)
+            cmd_list.extend(["-v", f"{iac_abs}:/scan/iac-file"])
 
-        # Results mount - resolve $(pwd) to actual path
+        # Results mount - resolve to actual path
         results_abs = os.path.abspath(config.results_dir)
         cmd_list.extend(["-v", f"{results_abs}:/results"])
 
         # Image and command
         cmd_list.extend(["ghcr.io/jimmy058910/jmo-security:latest", "scan"])
 
-        # Scan arguments
-        if config.target_mode in ("repo", "repos-dir"):
-            cmd_list.extend(["--repos-dir", "/scan"])
+        # Target-specific arguments
+        if config.target.type == "repo":
+            if config.target.repo_mode in ("repo", "repos-dir"):
+                cmd_list.extend(["--repos-dir", "/scan"])
+        elif config.target.type == "image":
+            if config.target.image_name:
+                cmd_list.extend(["--image", config.target.image_name])
+        elif config.target.type == "iac":
+            iac_flag_map = {
+                "terraform": "--terraform-state",
+                "cloudformation": "--cloudformation",
+                "k8s-manifest": "--k8s-manifest",
+            }
+            cmd_list.extend([iac_flag_map[config.target.iac_type], "/scan/iac-file"])
+        # URL, GitLab, K8s work without mounts
+
         cmd_list.extend(["--results", "/results"])
         cmd_list.extend(["--profile", config.profile])
 
     else:
-        # Native command
+        # Native command (full support for all targets)
         cmd_list = ["jmotools", config.profile]
 
-        if config.target_mode == "repo":
-            cmd_list.extend(["--repo", config.target_path])
-        elif config.target_mode == "repos-dir":
-            cmd_list.extend(["--repos-dir", config.target_path])
-        elif config.target_mode == "targets":
-            cmd_list.extend(["--targets", config.target_path])
-        elif config.target_mode == "tsv":
-            cmd_list.extend(["--tsv", config.tsv_path, "--dest", config.tsv_dest])
+        # Target-specific flags
+        if config.target.type == "repo":
+            if config.target.repo_mode == "repo":
+                cmd_list.extend(["--repo", config.target.repo_path])
+            elif config.target.repo_mode == "repos-dir":
+                cmd_list.extend(["--repos-dir", config.target.repo_path])
+            elif config.target.repo_mode == "targets":
+                cmd_list.extend(["--targets", config.target.repo_path])
+            elif config.target.repo_mode == "tsv":
+                cmd_list.extend(
+                    [
+                        "--tsv",
+                        config.target.tsv_path,
+                        "--dest",
+                        config.target.tsv_dest,
+                    ]
+                )
+
+        elif config.target.type == "image":
+            if config.target.image_name:
+                cmd_list.extend(["--image", config.target.image_name])
+            elif config.target.images_file:
+                cmd_list.extend(["--images-file", config.target.images_file])
+
+        elif config.target.type == "iac":
+            if config.target.iac_type == "terraform":
+                cmd_list.extend(["--terraform-state", config.target.iac_path])
+            elif config.target.iac_type == "cloudformation":
+                cmd_list.extend(["--cloudformation", config.target.iac_path])
+            elif config.target.iac_type == "k8s-manifest":
+                cmd_list.extend(["--k8s-manifest", config.target.iac_path])
+
+        elif config.target.type == "url":
+            if config.target.url:
+                cmd_list.extend(["--url", config.target.url])
+            elif config.target.urls_file:
+                cmd_list.extend(["--urls-file", config.target.urls_file])
+            elif config.target.api_spec:
+                cmd_list.extend(["--api-spec", config.target.api_spec])
+
+        elif config.target.type == "gitlab":
+            cmd_list.extend(["--gitlab-url", config.target.gitlab_url])
+            if config.target.gitlab_token:
+                cmd_list.extend(["--gitlab-token", config.target.gitlab_token])
+            if config.target.gitlab_repo:
+                cmd_list.extend(["--gitlab-repo", config.target.gitlab_repo])
+            elif config.target.gitlab_group:
+                cmd_list.extend(["--gitlab-group", config.target.gitlab_group])
+
+        elif config.target.type == "k8s":
+            if config.target.k8s_context:
+                cmd_list.extend(["--k8s-context", config.target.k8s_context])
+            if config.target.k8s_all_namespaces:
+                cmd_list.append("--k8s-all-namespaces")
+            elif config.target.k8s_namespace:
+                cmd_list.extend(["--k8s-namespace", config.target.k8s_namespace])
 
         cmd_list.extend(["--results-dir", config.results_dir])
 
@@ -627,12 +1293,12 @@ def generate_command_list(config: WizardConfig) -> list[str]:
 
 def execute_scan(config: WizardConfig) -> int:
     """
-    Step 6: Execute the scan.
+    Step 7: Execute the scan.
 
     Returns:
         Exit code from scan
     """
-    _print_step(6, 6, "Execute Scan")
+    _print_step(7, 7, "Execute Scan")
 
     command = generate_command(config)
 
@@ -718,24 +1384,38 @@ def run_wizard(
 
     try:
         if yes:
-            # Non-interactive mode: use defaults
+            # Non-interactive mode: use defaults (repo scanning)
             print("\n" + _colorize("Non-interactive mode: using defaults", "yellow"))
             config.profile = "balanced"
             config.use_docker = (
                 force_docker and _detect_docker() and _check_docker_running()
             )
-            config.target_mode = "repos-dir"
-            config.target_path = str(Path.cwd())
+            # Default to repo scanning with current directory
+            config.target.type = "repo"
+            config.target.repo_mode = "repos-dir"
+            config.target.repo_path = str(Path.cwd())
             config.results_dir = "results"
         else:
-            # Interactive mode
+            # Interactive mode with new multi-target selection
             config.profile = select_profile()
             config.use_docker = select_execution_mode(force_docker)
-            mode, path, tsv, tsv_dest = select_target()
-            config.target_mode = mode
-            config.target_path = path
-            config.tsv_path = tsv
-            config.tsv_dest = tsv_dest
+
+            # Step 3a: Select target type
+            target_type = select_target_type()
+
+            # Step 3b: Configure target (dispatch to appropriate function)
+            if target_type == "repo":
+                config.target = configure_repo_target()
+            elif target_type == "image":
+                config.target = configure_image_target()
+            elif target_type == "iac":
+                config.target = configure_iac_target()
+            elif target_type == "url":
+                config.target = configure_url_target()
+            elif target_type == "gitlab":
+                config.target = configure_gitlab_target()
+            elif target_type == "k8s":
+                config.target = configure_k8s_target()
 
             threads, timeout, fail_on = configure_advanced(config.profile)
             config.threads = threads
