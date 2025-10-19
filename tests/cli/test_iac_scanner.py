@@ -146,9 +146,10 @@ class TestIacScanner:
             args, kwargs = MockRunner.call_args
 
             # Check that tool definitions have correct timeout
-            tool_defs = kwargs["tools"]
+            # ToolRunner is called with positional arg: ToolRunner(tools=tool_defs)
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
             trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
-            assert trivy_def is not None
+            assert trivy_def is not None, "trivy tool definition not found"
             assert trivy_def.timeout == 900
             assert "--severity" in trivy_def.command
             assert "HIGH" in trivy_def.command
