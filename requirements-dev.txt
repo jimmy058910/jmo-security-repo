@@ -9,7 +9,7 @@ attrs==25.3.0
     #   hypothesis
     #   jsonschema
     #   referencing
-bandit==1.7.10
+bandit==1.8.6
     # via -r requirements-dev.in
 black==24.8.0
     # via -r requirements-dev.in
