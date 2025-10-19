@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
 
@@ -94,7 +94,7 @@ RUN AFL_VERSION="4.21c" && \
 #
 # Stage 2: Runtime - Minimal runtime environment
 #
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite"
 LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 11 pre-installed scanners + multi-target scanning (v0.6.1 optimized)"
