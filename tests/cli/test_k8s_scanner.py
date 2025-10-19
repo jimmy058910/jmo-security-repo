@@ -151,6 +151,10 @@ class TestK8sScanner:
 
     def test_scan_k8s_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
+        # Mock tool_exists to return True for trivy
+        def mock_tool_exists(tool_name):
+            return tool_name == "trivy"
+
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -178,12 +182,14 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
             )
 
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
-            tool_defs = kwargs["tools"]
-            trivy_def = next(t for t in tool_defs if t.name == "trivy")
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None, "trivy tool definition not found"
             assert trivy_def.timeout == 1200
             assert "--severity" in trivy_def.command
             assert "CRITICAL" in trivy_def.command

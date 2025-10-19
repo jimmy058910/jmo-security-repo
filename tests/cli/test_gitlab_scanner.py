@@ -126,6 +126,10 @@ class TestGitlabScanner:
 
     def test_scan_gitlab_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
+        # Mock tool_exists to return True for trufflehog
+        def mock_tool_exists(tool_name):
+            return tool_name == "trufflehog"
+
         with patch("scripts.cli.scan_jobs.gitlab_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -156,12 +160,14 @@ class TestGitlabScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
             )
 
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
-            tool_defs = kwargs["tools"]
-            trufflehog_def = next(t for t in tool_defs if t.name == "trufflehog")
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trufflehog_def = next((t for t in tool_defs if t.name == "trufflehog"), None)
+            assert trufflehog_def is not None, "trufflehog tool definition not found"
             assert trufflehog_def.timeout == 900
             assert "--concurrency" in trufflehog_def.command
             assert "4" in trufflehog_def.command

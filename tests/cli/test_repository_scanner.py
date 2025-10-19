@@ -55,6 +55,10 @@ class TestRepositoryScanner:
         repo = tmp_path / "my-app"
         repo.mkdir()
 
+        # Mock tool_exists to return True for trivy
+        def mock_tool_exists(tool_name):
+            return tool_name == "trivy"
+
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -77,12 +81,14 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
             )
 
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
-            tool_defs = kwargs["tools"]
-            trivy_def = next(t for t in tool_defs if t.name == "trivy")
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None, "trivy tool definition not found"
             assert trivy_def.timeout == 1200
             assert "--severity" in trivy_def.command
 
