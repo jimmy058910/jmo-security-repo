@@ -3,13 +3,13 @@
 Normalize and report: load tool outputs from a results directory, convert to CommonFinding,
 dedupe by fingerprint, and emit JSON + Markdown summaries.
 
-Expected structure (flexible):
+Expected structure (flexible, supports 6 target types):
 results_dir/
   individual-repos/
-    <repo>/gitleaks.json
     <repo>/trufflehog.json
     <repo>/semgrep.json
-    <repo>/noseyparker.json
+    <repo>/trivy.json
+    <repo>/... (11 active tools total)
 
 Usage:
   python3 scripts/core/normalize_and_report.py <results_dir> [--out <out_dir>]
@@ -18,28 +18,32 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 import os
 import time
 from typing import Any, Dict, List
 
-from scripts.core.adapters.gitleaks_adapter import load_gitleaks
+from scripts.core.exceptions import AdapterParseException
+
+# Active tool adapters (11 tools)
 from scripts.core.adapters.trufflehog_adapter import load_trufflehog
 from scripts.core.adapters.semgrep_adapter import load_semgrep
 from scripts.core.adapters.noseyparker_adapter import load_noseyparker
 from scripts.core.adapters.syft_adapter import load_syft
 from scripts.core.adapters.hadolint_adapter import load_hadolint
 from scripts.core.adapters.checkov_adapter import load_checkov
-from scripts.core.adapters.tfsec_adapter import load_tfsec
 from scripts.core.adapters.trivy_adapter import load_trivy
 from scripts.core.adapters.bandit_adapter import load_bandit
-from scripts.core.adapters.osv_adapter import load_osv
 from scripts.core.adapters.zap_adapter import load_zap
 from scripts.core.adapters.falco_adapter import load_falco
 from scripts.core.adapters.aflplusplus_adapter import load_aflplusplus
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # When profiling is enabled (env JMO_PROFILE=1), this will be populated with per-job timings
 PROFILE_TIMINGS: Dict[str, Any] = {
@@ -60,17 +64,22 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
         else:
             cpu = os.cpu_count() or 4
             max_workers = min(8, max(2, cpu))
-    except Exception:
-        # Fall back to default workers if environment inspection fails
+    except ValueError as e:
+        # Invalid JMO_THREADS value (e.g., non-numeric string)
+        logger.debug(f"Invalid JMO_THREADS value, using default workers: {e}")
+        max_workers = 8
+    except (OSError, RuntimeError) as e:
+        # Environment or CPU inspection failed (cpu_count() can raise RuntimeError)
+        logger.debug(f"Failed to determine CPU count, using default workers: {e}")
         max_workers = 8
 
     profiling = os.getenv("JMO_PROFILE") == "1"
     if profiling:
         try:
             PROFILE_TIMINGS["meta"]["max_workers"] = max_workers
-        except Exception:
-            # profiling metadata update is best-effort
-            ...
+        except (KeyError, TypeError) as e:
+            # Profiling metadata update is best-effort; PROFILE_TIMINGS may be modified
+            logger.debug(f"Failed to update profiling metadata: {e}")
 
     # Scan all target type directories: repos, images, IaC, web, gitlab, k8s
     target_dirs = [
@@ -88,7 +97,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 continue
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-                gl = target / "gitleaks.json"
+                # Active tools only (11 tools)
                 th = target / "trufflehog.json"
                 sg = target / "semgrep.json"
                 np = target / "noseyparker.json"
@@ -96,14 +105,11 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 hd = target / "hadolint.json"
                 ck = target / "checkov.json"
                 bd = target / "bandit.json"
-                tf = target / "tfsec.json"
                 tv = target / "trivy.json"
-                osv_file = target / "osv-scanner.json"
                 zap_file = target / "zap.json"
                 falco_file = target / "falco.json"
                 afl_file = target / "afl++.json"
                 for path, loader in (
-                    (gl, load_gitleaks),
                     (th, load_trufflehog),
                     (sg, load_semgrep),
                     (np, load_noseyparker),
@@ -111,9 +117,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                     (hd, load_hadolint),
                     (ck, load_checkov),
                     (bd, load_bandit),
-                    (tf, load_tfsec),
                     (tv, load_trivy),
-                    (osv_file, load_osv),
                     (zap_file, load_zap),
                     (falco_file, load_falco),
                     (afl_file, load_aflplusplus),
@@ -122,9 +126,15 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
         for fut in as_completed(jobs):
             try:
                 findings.extend(fut.result())
-            except Exception:
-                # Individual loader failures should not break aggregation
-                ...
+            except AdapterParseException as e:
+                # Adapter parsing failed - log but continue with other tools
+                logger.debug(f"Adapter parse failed: {e.tool} on {e.path}: {e.reason}")
+            except FileNotFoundError as e:
+                # Tool output missing (expected when using --allow-missing-tools)
+                logger.debug(f"Tool output file not found: {e.filename}")
+            except Exception as e:
+                # Unexpected error - log with traceback for debugging
+                logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
     # Dedupe by id (fingerprint)
     seen = {}
     for f in findings:
@@ -134,17 +144,27 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
     # Enrich Trivy findings with Syft SBOM context when available
     try:
         _enrich_trivy_with_syft(deduped)
-    except Exception:
-        # best-effort enrichment; ignore failures
-        # leave silent to avoid noisy logs at import-time context
-        ...
+    except (KeyError, ValueError, TypeError) as e:
+        # Best-effort enrichment - missing SBOM data or malformed findings
+        logger.debug(f"Trivy-Syft enrichment skipped: {e}")
+    except Exception as e:
+        # Unexpected enrichment failure
+        logger.debug(f"Unexpected error during Trivy-Syft enrichment: {e}")
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
     try:
         deduped = enrich_findings_with_compliance(deduped)
-    except Exception:
-        # best-effort enrichment; ignore failures
-        ...
+    except FileNotFoundError as e:
+        # Compliance mapping data files missing
+        logger.debug(
+            f"Compliance enrichment skipped: mapping data not found: {e.filename}"
+        )
+    except (KeyError, ValueError, TypeError) as e:
+        # Malformed compliance data or findings
+        logger.debug(f"Compliance enrichment skipped: {e}")
+    except Exception as e:
+        # Unexpected enrichment failure
+        logger.debug(f"Unexpected error during compliance enrichment: {e}")
 
     return deduped
 
@@ -164,15 +184,28 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
                         "count": len(res) if isinstance(res, list) else 0,
                     }
                 )
-            except Exception:
-                # If profiling dict is mutated concurrently or missing, ignore
-                ...
+            except (KeyError, TypeError, AttributeError) as e:
+                # Profiling dict mutation or attribute access failed
+                logger.debug(f"Failed to record profiling timing: {e}")
             return res
         else:
             result: List[Dict[str, Any]] = loader(path)
             return result
-    except Exception:
-        # If any adapter throws, return an empty list for resilience
+    except FileNotFoundError:
+        # Tool output file missing (expected with --allow-missing-tools)
+        logger.debug(f"Tool output not found: {path}")
+        return []
+    except AdapterParseException as e:
+        # Adapter explicitly raised parse exception with context
+        logger.debug(f"Adapter parse failed: {e}")
+        return []
+    except (OSError, PermissionError) as e:
+        # File system errors (permissions, I/O errors, etc.)
+        logger.debug(f"Failed to read tool output {path}: {e}")
+        return []
+    except Exception as e:
+        # Unexpected adapter error - log with traceback
+        logger.error(f"Unexpected error loading {path}: {e}", exc_info=True)
         return []
 
 
