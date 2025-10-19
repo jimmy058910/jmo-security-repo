@@ -10,7 +10,7 @@ def test_cmd_report_yaml_missing_debug_path(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(
+    (indiv / "trufflehog.json").write_text(
         json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
     )
 
@@ -51,7 +51,7 @@ def test_cmd_report_suppression_report(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(
+    (indiv / "trufflehog.json").write_text(
         json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
     )
 

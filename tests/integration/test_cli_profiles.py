@@ -21,11 +21,12 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     (repos_dir / "skipme").mkdir(parents=True)
 
     # Config with profile controlling include/exclude and tools
+    # Updated to use trufflehog (gitleaks removed in v0.5.0)
     cfg = {
         "default_profile": "fast",
         "profiles": {
             "fast": {
-                "tools": ["gitleaks"],
+                "tools": ["trufflehog"],
                 "include": ["a*", "b"],
                 "exclude": ["skip*"],
                 "timeout": 60,
@@ -59,8 +60,8 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     assert rc == 0
 
     indiv = Path(args.results_dir) / "individual-repos"
-    assert (indiv / "a" / "gitleaks.json").exists()
-    assert (indiv / "b" / "gitleaks.json").exists()
+    assert (indiv / "a" / "trufflehog.json").exists()
+    assert (indiv / "b" / "trufflehog.json").exists()
     assert not (indiv / "skipme").exists()
 
 
@@ -96,8 +97,15 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
             self.stdout = stdout
             self.stderr = stderr
 
-    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: D401
+    def fake_run(cmd, *args, **kwargs):  # noqa: D401
+        """Mock subprocess.run - accepts all args/kwargs to match real signature."""
         calls.append(cmd)
+        # semgrep writes to --output path
+        if isinstance(cmd, list) and "--output" in cmd:
+            output_idx = cmd.index("--output") + 1
+            output_path = Path(cmd[output_idx])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text('{"results": []}', encoding="utf-8")
         return FakeCP(0, "", "")
 
     import subprocess
@@ -161,12 +169,15 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
             self.stdout = stdout
             self.stderr = stderr
 
-    def fake_run(cmd, stdout=None, stderr=None, text=None, timeout=None):  # noqa: D401
+    def fake_run(cmd, *args, **kwargs):  # noqa: D401
+        """Mock subprocess.run - accepts all args/kwargs to match real signature."""
         # Fail first time, succeed second
         attempt["n"] += 1
         if attempt["n"] < 2:
             return FakeCP(1, "", "fail")
-        return FakeCP(0, "", "ok")
+        # Write output file on success (syft uses capture_stdout=True)
+        # ToolRunner will write stdout to file
+        return FakeCP(0, '{"artifacts": []}', "ok")
 
     import subprocess
 

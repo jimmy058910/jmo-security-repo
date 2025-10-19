@@ -13,7 +13,7 @@ def test_safe_load_adapter_failure_isolated(tmp_path: Path, monkeypatch):
     # Create minimal results dir with a repo and one tool JSON
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
-    _write(repo / "gitleaks.json", [])
+    _write(repo / "trufflehog.json", [])
 
     # Monkeypatch one loader to raise
     def boom(_path):

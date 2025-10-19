@@ -14,7 +14,6 @@ Tests cover:
 
 import pytest
 import re
-from pathlib import Path
 from scripts.core.reporters.html_reporter import write_html
 
 

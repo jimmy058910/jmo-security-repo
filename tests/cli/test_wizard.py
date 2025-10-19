@@ -15,10 +15,12 @@ from wizard import (
     PROFILES,
     WizardConfig,
     generate_command,
+    run_wizard,
+)
+from wizard_generators import (
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
-    run_wizard,
 )
 
 
@@ -145,7 +147,8 @@ def test_generate_makefile_target():
     config.target_mode = "repos-dir"
     config.target_path = "/home/user/repos"
 
-    makefile = generate_makefile_target(config)
+    command = generate_command(config)
+    makefile = generate_makefile_target(config, command)
 
     assert ".PHONY: security-scan" in makefile
     assert "security-scan:" in makefile
@@ -160,7 +163,8 @@ def test_generate_shell_script():
     config.target_mode = "repo"
     config.target_path = "/home/user/myrepo"
 
-    script = generate_shell_script(config)
+    command = generate_command(config)
+    script = generate_shell_script(config, command)
 
     assert "#!/usr/bin/env bash" in script
     assert "set -euo pipefail" in script
@@ -179,7 +183,7 @@ def test_generate_github_actions_native():
     config.timeout = 600
     config.fail_on = "HIGH"
 
-    workflow = generate_github_actions(config)
+    workflow = generate_github_actions(config, PROFILES)
 
     assert "name: Security Scan" in workflow
     assert "on:" in workflow
@@ -202,7 +206,7 @@ def test_generate_github_actions_docker():
     config.threads = 2
     config.timeout = 900
 
-    workflow = generate_github_actions(config)
+    workflow = generate_github_actions(config, PROFILES)
 
     assert "name: Security Scan" in workflow
     assert "container:" in workflow
@@ -299,7 +303,7 @@ def test_run_wizard_emit_gha_docker():
     config.timeout = 600
     config.fail_on = "HIGH"
 
-    workflow = generate_github_actions(config)
+    workflow = generate_github_actions(config, PROFILES)
 
     # Docker-specific assertions
     assert "container:" in workflow
@@ -867,8 +871,12 @@ def test_execute_scan_docker_mode(mock_run, mock_yes_no):
     exit_code = execute_scan(config)
     assert exit_code == 0
     mock_run.assert_called_once()
-    # Verify shell=True for Docker
-    assert mock_run.call_args[1]["shell"] is True
+    # Verify shell=False for security (prevents command injection)
+    assert mock_run.call_args[1]["shell"] is False
+    # Verify command is passed as list (secure)
+    command = mock_run.call_args[0][0]
+    assert isinstance(command, list)
+    assert command[0] == "docker"
 
 
 @patch("wizard._prompt_yes_no", return_value=True)

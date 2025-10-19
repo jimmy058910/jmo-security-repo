@@ -15,7 +15,7 @@ echo "Setting up test fixtures in $SCRIPT_DIR"
 mkdir -p "$SCRIPT_DIR/iac"
 
 # AWS S3 public bucket (CIS AWS Foundations Benchmark violations)
-cat > "$SCRIPT_DIR/iac/aws-s3-public.tf" <<'EOF'
+cat >"$SCRIPT_DIR/iac/aws-s3-public.tf" <<'EOF'
 # Terraform configuration with known security issues
 # Used for testing IaC scanning capabilities
 
@@ -102,7 +102,7 @@ resource "aws_iam_policy" "overly_permissive" {
 EOF
 
 # Kubernetes privileged pod (CIS Kubernetes Benchmark violations)
-cat > "$SCRIPT_DIR/iac/k8s-privileged-pod.yaml" <<'EOF'
+cat >"$SCRIPT_DIR/iac/k8s-privileged-pod.yaml" <<'EOF'
 # Kubernetes manifest with known security issues
 # Used for testing K8s security scanning
 
@@ -161,7 +161,7 @@ spec:
 EOF
 
 # Docker bad practices
-cat > "$SCRIPT_DIR/iac/Dockerfile.bad" <<'EOF'
+cat >"$SCRIPT_DIR/iac/Dockerfile.bad" <<'EOF'
 # Dockerfile with known security issues
 # Used for testing Hadolint scanning
 
@@ -202,7 +202,7 @@ EXPOSE 8080
 EOF
 
 # Docker Compose with issues
-cat > "$SCRIPT_DIR/iac/docker-compose.insecure.yml" <<'EOF'
+cat >"$SCRIPT_DIR/iac/docker-compose.insecure.yml" <<'EOF'
 version: '3.8'
 
 services:
@@ -234,7 +234,7 @@ echo "✓ Created IaC fixtures"
 
 mkdir -p "$SCRIPT_DIR/python"
 
-cat > "$SCRIPT_DIR/python/vulnerable_app.py" <<'EOF'
+cat >"$SCRIPT_DIR/python/vulnerable_app.py" <<'EOF'
 # Python application with known security vulnerabilities
 # Used for testing Bandit and Semgrep
 
@@ -336,7 +336,7 @@ echo "✓ Created Python fixtures"
 
 mkdir -p "$SCRIPT_DIR/javascript"
 
-cat > "$SCRIPT_DIR/javascript/package.json" <<'EOF'
+cat >"$SCRIPT_DIR/javascript/package.json" <<'EOF'
 {
   "name": "vulnerable-app",
   "version": "1.0.0",
@@ -351,7 +351,7 @@ cat > "$SCRIPT_DIR/javascript/package.json" <<'EOF'
 }
 EOF
 
-cat > "$SCRIPT_DIR/javascript/vulnerable_app.js" <<'EOF'
+cat >"$SCRIPT_DIR/javascript/vulnerable_app.js" <<'EOF'
 // Node.js application with known security vulnerabilities
 const express = require('express');
 const exec = require('child_process').exec;
@@ -418,7 +418,7 @@ echo "✓ Created JavaScript fixtures"
 
 mkdir -p "$SCRIPT_DIR/configs"
 
-cat > "$SCRIPT_DIR/configs/.env.example" <<'EOF'
+cat >"$SCRIPT_DIR/configs/.env.example" <<'EOF'
 # Example .env file with hardcoded secrets (for testing detection)
 API_KEY=sk-1234567890abcdefghijklmnopqrstuvwxyz
 DATABASE_URL=postgresql://admin:SuperSecret123!@localhost:5432/mydb
@@ -429,7 +429,7 @@ GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz
 SLACK_WEBHOOK=https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX
 EOF
 
-cat > "$SCRIPT_DIR/configs/secrets.yaml" <<'EOF'
+cat >"$SCRIPT_DIR/configs/secrets.yaml" <<'EOF'
 # YAML config with secrets (for testing detection)
 database:
   host: localhost

@@ -17,36 +17,32 @@ def test_scan_writes_stubs_when_missing_tools(tmp_path: Path, monkeypatch):
         targets = None
         results_dir = str(tmp_path / "results")
         config = str(tmp_path / "no.yml")
+        # Test only tools currently implemented in repository_scanner.py
+        # Removed: gitleaks (v0.5.0), noseyparker (not implemented), tfsec (deprecated), hadolint (needs Dockerfile)
         tools = [
-            "gitleaks",
             "trufflehog",
             "semgrep",
-            "noseyparker",
             "syft",
             "trivy",
-            "hadolint",
             "checkov",
-            "tfsec",
+            "bandit",
         ]
-        timeout = 5
+        timeout = 10  # Increased from 5 - semgrep takes ~5s on empty dirs
         threads = 2
         allow_missing_tools = True
 
     rc = cmd_scan(Args())
     assert rc == 0
 
-    # Verify stub files exist
+    # Verify stub/output files exist for all requested tools
     for repo in (r1, r2):
         outdir = Path(Args.results_dir) / "individual-repos" / repo.name
-        assert (outdir / "gitleaks.json").exists()
         assert (outdir / "trufflehog.json").exists()
         assert (outdir / "semgrep.json").exists()
-        assert (outdir / "noseyparker.json").exists()
         assert (outdir / "syft.json").exists()
         assert (outdir / "trivy.json").exists()
-        assert (outdir / "hadolint.json").exists()
         assert (outdir / "checkov.json").exists()
-        assert (outdir / "tfsec.json").exists()
+        assert (outdir / "bandit.json").exists()
 
 
 def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
@@ -61,7 +57,7 @@ def test_ci_composes_scan_and_report(tmp_path: Path, monkeypatch):
             self.targets = None
             self.results_dir = str(tmp_path / "results")
             self.config = str(tmp_path / "no.yml")
-            self.tools = ["gitleaks"]
+            self.tools = ["trufflehog"]  # Updated from gitleaks (removed in v0.5.0)
             self.timeout = 5
             self.threads = 1
             self.allow_missing_tools = True

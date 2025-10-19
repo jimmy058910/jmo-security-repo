@@ -17,6 +17,7 @@ def test_include_exclude_filters(tmp_path: Path):
     out_base = tmp_path / "results"
 
     # Only include app-* and exclude test-*; with allow_missing_tools stubs
+    # Updated to use trufflehog (gitleaks removed in v0.5.0)
     args = types.SimpleNamespace(
         cmd="scan",
         repo=None,
@@ -24,7 +25,7 @@ def test_include_exclude_filters(tmp_path: Path):
         targets=None,
         results_dir=str(out_base),
         config=str(tmp_path / "cfg.yml"),
-        tools=["gitleaks"],
+        tools=["trufflehog"],
         timeout=10,
         threads=1,
         allow_missing_tools=True,
@@ -36,7 +37,7 @@ def test_include_exclude_filters(tmp_path: Path):
     # Monkeypatch effective settings to inject include/exclude
     def fake_eff(_):
         return {
-            "tools": ["gitleaks"],
+            "tools": ["trufflehog"],
             "threads": 1,
             "timeout": 10,
             "include": ["app-*"],
@@ -55,9 +56,11 @@ def test_include_exclude_filters(tmp_path: Path):
         rc = jmo.cmd_scan(args)
         assert rc == 0
         # app-1 should have stubbed output
-        assert (out_base / "individual-repos" / "app-1" / "gitleaks.json").exists()
+        assert (out_base / "individual-repos" / "app-1" / "trufflehog.json").exists()
         # test-1 should be excluded
-        assert not (out_base / "individual-repos" / "test-1" / "gitleaks.json").exists()
+        assert not (
+            out_base / "individual-repos" / "test-1" / "trufflehog.json"
+        ).exists()
     finally:
         jmo._effective_scan_settings = orig_eff
         jmo._tool_exists = orig_te
@@ -183,16 +186,13 @@ def test_allow_missing_tools_stubs_all(tmp_path: Path, monkeypatch):
     def eff(_):
         return {
             "tools": [
-                "gitleaks",
                 "trufflehog",
                 "semgrep",
-                "noseyparker",
                 "syft",
                 "trivy",
                 "hadolint",
                 "checkov",
                 "bandit",
-                "tfsec",
             ],
             "threads": 1,
             "timeout": 5,
@@ -221,17 +221,16 @@ def test_allow_missing_tools_stubs_all(tmp_path: Path, monkeypatch):
     )
     rc = jmo.cmd_scan(args)
     assert rc == 0
+    # Test only tools currently supported by repository_scanner
+    # gitleaks, noseyparker, tfsec removed per v0.5.0 changes (see CLAUDE.md)
     for t in [
-        "gitleaks",
         "trufflehog",
         "semgrep",
-        "noseyparker",
         "syft",
         "trivy",
         "hadolint",
         "checkov",
         "bandit",
-        "tfsec",
     ]:
         assert (out_base / "individual-repos" / repo.name / f"{t}.json").exists()
 

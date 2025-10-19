@@ -1,6 +1,7 @@
 import json
 import types
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from scripts.cli import jmo
 
@@ -25,19 +26,28 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
 
     seen = {"cmd": None}
 
-    def run_cmd(
-        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
-    ):  # noqa: ARG001
+    # Mock subprocess.run to capture command (used by ToolRunner)
+    import subprocess
+
+    original_run = subprocess.run
+
+    def mock_run(cmd, *args, **kwargs):
         seen["cmd"] = cmd
         # semgrep writes to --output path
-        p = Path(cmd[cmd.index("--output") + 1])
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"results": []}), encoding="utf-8")
-        return 0, "", "", 1
+        if "--output" in cmd:
+            p = Path(cmd[cmd.index("--output") + 1])
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps({"results": []}), encoding="utf-8")
+        # Return successful result
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
     monkeypatch.setattr(jmo, "_tool_exists", lambda n: n == "semgrep")
-    monkeypatch.setattr(jmo, "_run_cmd", run_cmd)
+    monkeypatch.setattr(subprocess, "run", mock_run)
 
     args = types.SimpleNamespace(
         cmd="scan",
@@ -59,7 +69,7 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
     assert rc == 0
     # Ensure flags are present in command
     cmd = seen["cmd"]
-    assert cmd is not None
+    assert cmd is not None, "No command was captured"
     assert "--severity" in cmd and "ERROR" in cmd and "--timeout" in cmd and "5" in cmd
 
 
@@ -136,7 +146,7 @@ def test_cmd_ci_wiring_and_threshold(tmp_path: Path, monkeypatch):
     results = tmp_path / "results"
     indiv = results / "individual-repos" / "r1"
     indiv.mkdir(parents=True, exist_ok=True)
-    (indiv / "gitleaks.json").write_text(
+    (indiv / "trufflehog.json").write_text(
         json.dumps([{"RuleID": "R", "File": "a", "StartLine": 1}]), encoding="utf-8"
     )
 

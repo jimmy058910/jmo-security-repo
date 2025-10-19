@@ -59,7 +59,9 @@ def test_cmd_report_profile_and_outputs(tmp_path: Path):
     # Create a minimal results dir with one finding (gitleaks)
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
-    _write(repo / "gitleaks.json", [{"RuleID": "R1", "File": "a.txt", "StartLine": 1}])
+    _write(
+        repo / "trufflehog.json", [{"RuleID": "R1", "File": "a.txt", "StartLine": 1}]
+    )
 
     args = types.SimpleNamespace(
         cmd="report",

@@ -31,7 +31,7 @@ DOCKER_IMAGE_BASE="${DOCKER_IMAGE_BASE:-ghcr.io/jimmy058910/jmo-security}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 
 # Test execution settings
-TIMEOUT_SECONDS=900  # 15 minutes per test
+TIMEOUT_SECONDS=900 # 15 minutes per test
 SPECIFIC_TEST=""
 
 # Color output
@@ -100,23 +100,23 @@ EOF
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case $1 in
-      --test)
-        SPECIFIC_TEST="$2"
-        shift 2
-        ;;
-      --results)
-        RESULTS_BASE="$2"
-        shift 2
-        ;;
-      --help)
-        show_help
-        exit 0
-        ;;
-      *)
-        log_error "Unknown option: $1"
-        show_help
-        exit 1
-        ;;
+    --test)
+      SPECIFIC_TEST="$2"
+      shift 2
+      ;;
+    --results)
+      RESULTS_BASE="$2"
+      shift 2
+      ;;
+    --help)
+      show_help
+      exit 0
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      show_help
+      exit 1
+      ;;
     esac
   done
 }
@@ -126,24 +126,24 @@ check_prerequisites() {
   log_info "Checking prerequisites..."
 
   # Check jmo CLI
-  if ! command -v jmo &> /dev/null && ! command -v jmotools &> /dev/null; then
+  if ! command -v jmo &>/dev/null && ! command -v jmotools &>/dev/null; then
     log_error "jmo CLI not found. Install with: pip install -e ."
     return 1
   fi
 
   # Check jq for JSON validation
-  if ! command -v jq &> /dev/null; then
+  if ! command -v jq &>/dev/null; then
     log_warning "jq not found. JSON validation will be skipped."
     log_warning "Install with: apt install jq (Ubuntu) or brew install jq (macOS)"
   fi
 
   # Check Docker (optional)
-  if ! command -v docker &> /dev/null; then
+  if ! command -v docker &>/dev/null; then
     log_warning "Docker not found. Docker tests will be skipped."
   fi
 
   # Check git
-  if ! command -v git &> /dev/null; then
+  if ! command -v git &>/dev/null; then
     log_error "git not found. Required for repository scanning."
     return 1
   fi
@@ -167,7 +167,7 @@ setup_fixtures() {
   fi
 
   # Verify critical fixtures exist
-  if [[ ! -f "$TEST_TF_FILE" ]]; then
+  if [[ ! -f $TEST_TF_FILE ]]; then
     log_warning "IaC fixture not found: $TEST_TF_FILE"
   fi
 
@@ -196,24 +196,24 @@ validate_basic_scan() {
   local summary_md="$results_dir/summaries/SUMMARY.md"
   local dashboard_html="$results_dir/summaries/dashboard.html"
 
-  if [[ ! -f "$findings_json" ]]; then
+  if [[ ! -f $findings_json ]]; then
     log_error "[$test_id] Missing findings.json"
     return 1
   fi
 
-  if [[ ! -f "$summary_md" ]]; then
+  if [[ ! -f $summary_md ]]; then
     log_error "[$test_id] Missing SUMMARY.md"
     return 1
   fi
 
-  if [[ ! -f "$dashboard_html" ]]; then
+  if [[ ! -f $dashboard_html ]]; then
     log_error "[$test_id] Missing dashboard.html"
     return 1
   fi
 
   # Validate JSON structure if jq available
-  if command -v jq &> /dev/null; then
-    if ! jq -e 'type == "array"' "$findings_json" > /dev/null 2>&1; then
+  if command -v jq &>/dev/null; then
+    if ! jq -e 'type == "array"' "$findings_json" >/dev/null 2>&1; then
       log_error "[$test_id] findings.json is not a valid array"
       return 1
     fi
@@ -221,7 +221,7 @@ validate_basic_scan() {
     # Check if findings have required fields (if any findings exist)
     local finding_count=$(jq 'length' "$findings_json")
     if [[ $finding_count -gt 0 ]]; then
-      if ! jq -e '.[0] | has("id") and has("ruleId") and has("severity") and has("tool") and has("location") and has("message")' "$findings_json" > /dev/null 2>&1; then
+      if ! jq -e '.[0] | has("id") and has("ruleId") and has("severity") and has("tool") and has("location") and has("message")' "$findings_json" >/dev/null 2>&1; then
         log_error "[$test_id] Finding missing required fields"
         return 1
       fi
@@ -281,14 +281,14 @@ validate_ci_gating() {
 
   # Check findings.json exists
   local findings_json="$results_dir/summaries/findings.json"
-  if [[ ! -f "$findings_json" ]]; then
+  if [[ ! -f $findings_json ]]; then
     log_error "[$test_id] Missing findings.json"
     return 1
   fi
 
   # If exit code is 1, verify HIGH or CRITICAL findings exist
-  if [[ $exit_code -eq 1 ]] && command -v jq &> /dev/null; then
-    if ! jq -e '.[] | select(.severity == "HIGH" or .severity == "CRITICAL")' "$findings_json" > /dev/null 2>&1; then
+  if [[ $exit_code -eq 1 ]] && command -v jq &>/dev/null; then
+    if ! jq -e '.[] | select(.severity == "HIGH" or .severity == "CRITICAL")' "$findings_json" >/dev/null 2>&1; then
       log_warning "[$test_id] Exit code 1 but no HIGH/CRITICAL findings found"
     fi
   fi
@@ -316,7 +316,7 @@ validate_docker_scan() {
   fi
 
   # Validate findings have correct paths (not container internal paths)
-  if command -v jq &> /dev/null; then
+  if command -v jq &>/dev/null; then
     local findings_json="$results_dir/summaries/findings.json"
     local finding_count=$(jq 'length' "$findings_json")
     if [[ $finding_count -gt 0 ]]; then
@@ -346,7 +346,7 @@ validate_wizard_scan() {
   fi
 
   # Check if artifact was generated (if specified)
-  if [[ -n "$artifact_path" && ! -f "$artifact_path" ]]; then
+  if [[ -n $artifact_path && ! -f $artifact_path ]]; then
     log_error "[$test_id] Wizard artifact not generated: $artifact_path"
     return 1
   fi
@@ -368,7 +368,7 @@ run_test() {
   local validation_args=("$@")
 
   # Skip if specific test requested and this isn't it
-  if [[ -n "$SPECIFIC_TEST" && "$test_id" != "$SPECIFIC_TEST" ]]; then
+  if [[ -n $SPECIFIC_TEST && $test_id != "$SPECIFIC_TEST" ]]; then
     return 0
   fi
 
@@ -390,7 +390,7 @@ run_test() {
   # Replace {results_dir} placeholder in command
   test_cmd="${test_cmd//\{results_dir\}/$results_dir}"
 
-  if timeout "$TIMEOUT_SECONDS" bash -c "$test_cmd" > "$results_dir/test.log" 2>&1; then
+  if timeout "$TIMEOUT_SECONDS" bash -c "$test_cmd" >"$results_dir/test.log" 2>&1; then
     exit_code=$?
   else
     exit_code=$?
@@ -409,10 +409,10 @@ run_test() {
   # Validate results
   if $validation_fn "$results_dir" "$exit_code" "$test_id" "${validation_args[@]}"; then
     log_success "✅ PASS: $test_id (${duration}s)"
-    echo "$test_id,PASS,$duration" >> "$RESULTS_BASE/test-results.csv"
+    echo "$test_id,PASS,$duration" >>"$RESULTS_BASE/test-results.csv"
   else
     log_error "❌ FAIL: $test_id (${duration}s)"
-    echo "$test_id,FAIL,$duration" >> "$RESULTS_BASE/test-results.csv"
+    echo "$test_id,FAIL,$duration" >>"$RESULTS_BASE/test-results.csv"
 
     # Show validation failure details
     log_error "[$test_id] See full output: $results_dir/test.log"
@@ -424,13 +424,13 @@ skip_test() {
   local reason="$2"
 
   # Skip if specific test requested and this isn't it
-  if [[ -n "$SPECIFIC_TEST" && "$test_id" != "$SPECIFIC_TEST" ]]; then
+  if [[ -n $SPECIFIC_TEST && $test_id != "$SPECIFIC_TEST" ]]; then
     return 0
   fi
 
   echo ""
   log_warning "⏭️  SKIP: $test_id ($reason)"
-  echo "$test_id,SKIP,0" >> "$RESULTS_BASE/test-results.csv"
+  echo "$test_id,SKIP,0" >>"$RESULTS_BASE/test-results.csv"
 }
 
 # ============================================================================
@@ -454,7 +454,7 @@ run_ubuntu_tests() {
     validate_basic_scan
 
   # U3: IaC file scan (native CLI) - use ci command for scan+report
-  if [[ -f "$TEST_TF_FILE" ]]; then
+  if [[ -f $TEST_TF_FILE ]]; then
     run_test "U3" "IaC file - Native CLI" \
       "jmo ci --terraform-state $TEST_TF_FILE --results-dir {results_dir} --tools checkov,trivy --human-logs --allow-missing-tools" \
       validate_basic_scan
@@ -468,7 +468,7 @@ run_ubuntu_tests() {
     validate_basic_scan
 
   # U5: Multi-target scan (native CLI) - use ci command for scan+report
-  if [[ -f "$TEST_TF_FILE" ]]; then
+  if [[ -f $TEST_TF_FILE ]]; then
     run_test "U5" "Multi-target - Native CLI" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-u5 && jmo ci --repo /tmp/test-repo-u5 --image $TEST_IMAGE --terraform-state $TEST_TF_FILE --results-dir {results_dir} --profile-name balanced --human-logs --allow-missing-tools" \
       validate_multi_target
@@ -477,9 +477,9 @@ run_ubuntu_tests() {
   fi
 
   # U6: Batch images scan (native CLI) - use ci command for scan+report
-  echo "$TEST_IMAGE" > /tmp/images-u6.txt
-  echo "nginx:alpine" >> /tmp/images-u6.txt
-  echo "redis:alpine" >> /tmp/images-u6.txt
+  echo "$TEST_IMAGE" >/tmp/images-u6.txt
+  echo "nginx:alpine" >>/tmp/images-u6.txt
+  echo "redis:alpine" >>/tmp/images-u6.txt
   run_test "U6" "Batch images - Native CLI" \
     "jmo ci --images-file /tmp/images-u6.txt --results-dir {results_dir} --tools trivy,syft --human-logs --allow-missing-tools" \
     validate_basic_scan
@@ -493,7 +493,7 @@ run_ubuntu_tests() {
   skip_test "U8" "interactive wizard - manual testing only"
 
   # U9: Single repo scan (Docker full)
-  if command -v docker &> /dev/null; then
+  if command -v docker &>/dev/null; then
     run_test "U9" "Single repo - Docker full" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-u9 && docker run --rm -v /tmp/test-repo-u9:/scan -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-full ci --repo /scan --results-dir /results --profile-name balanced --allow-missing-tools" \
       validate_docker_scan
@@ -502,7 +502,7 @@ run_ubuntu_tests() {
   fi
 
   # U10: Single image scan (Docker full)
-  if command -v docker &> /dev/null; then
+  if command -v docker &>/dev/null; then
     run_test "U10" "Single image - Docker full" \
       "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-full ci --image $TEST_IMAGE --results-dir /results --tools trivy,syft --allow-missing-tools" \
       validate_docker_scan
@@ -511,7 +511,7 @@ run_ubuntu_tests() {
   fi
 
   # U11: Multi-target scan (Docker slim)
-  if command -v docker &> /dev/null && [[ -f "$TEST_TF_FILE" ]]; then
+  if command -v docker &>/dev/null && [[ -f $TEST_TF_FILE ]]; then
     run_test "U11" "Multi-target - Docker slim" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-u11 && docker run --rm -v /tmp/test-repo-u11:/scan -v $TEST_TF_FILE:/iac/test.tf -v /var/run/docker.sock:/var/run/docker.sock -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-slim ci --repo /scan --image $TEST_IMAGE --terraform-state /iac/test.tf --results-dir /results --profile-name fast --allow-missing-tools" \
       validate_multi_target
@@ -542,7 +542,7 @@ run_macos_tests() {
     validate_basic_scan
 
   # M3: IaC file scan (native CLI)
-  if [[ -f "$TEST_TF_FILE" ]]; then
+  if [[ -f $TEST_TF_FILE ]]; then
     run_test "M3" "IaC file - Native CLI" \
       "jmo ci --terraform-state $TEST_TF_FILE --results-dir {results_dir} --tools checkov,trivy --human-logs --allow-missing-tools" \
       validate_basic_scan
@@ -551,7 +551,7 @@ run_macos_tests() {
   fi
 
   # M4: Single repo scan (wizard --yes)
-  if command -v jmotools &> /dev/null; then
+  if command -v jmotools &>/dev/null; then
     run_test "M4" "Single repo - Wizard --yes" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-m4 && jmotools wizard --yes --repos-dir /tmp/test-repo-m4 --profile balanced --results-dir {results_dir} --emit-script /tmp/wizard-m4.sh && bash /tmp/wizard-m4.sh" \
       validate_wizard_scan "/tmp/wizard-m4.sh"
@@ -560,7 +560,7 @@ run_macos_tests() {
   fi
 
   # M5: Single repo scan (Docker full)
-  if command -v docker &> /dev/null; then
+  if command -v docker &>/dev/null; then
     run_test "M5" "Single repo - Docker full" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-m5 && docker run --rm -v /tmp/test-repo-m5:/scan -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-full scan --repo /scan --results-dir /results --profile-name balanced --allow-missing-tools" \
       validate_docker_scan
@@ -569,7 +569,7 @@ run_macos_tests() {
   fi
 
   # M6: Multi-target scan (Docker slim)
-  if command -v docker &> /dev/null && [[ -f "$TEST_TF_FILE" ]]; then
+  if command -v docker &>/dev/null && [[ -f $TEST_TF_FILE ]]; then
     run_test "M6" "Multi-target - Docker slim" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-m6 && docker run --rm -v /tmp/test-repo-m6:/scan -v $TEST_TF_FILE:/iac/test.tf -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-slim scan --repo /scan --image $TEST_IMAGE --terraform-state /iac/test.tf --results-dir /results --profile-name fast --allow-missing-tools" \
       validate_multi_target
@@ -590,7 +590,7 @@ run_windows_tests() {
     validate_basic_scan
 
   # W2: Single repo scan (wizard --yes)
-  if command -v jmotools &> /dev/null; then
+  if command -v jmotools &>/dev/null; then
     run_test "W2" "Single repo - Wizard --yes" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-w2 && jmotools wizard --yes --repos-dir /tmp/test-repo-w2 --profile balanced --results-dir {results_dir} --emit-script /tmp/wizard-w2.sh && bash /tmp/wizard-w2.sh" \
       validate_wizard_scan "/tmp/wizard-w2.sh"
@@ -599,7 +599,7 @@ run_windows_tests() {
   fi
 
   # W3: Single repo scan (Docker full)
-  if command -v docker &> /dev/null; then
+  if command -v docker &>/dev/null; then
     run_test "W3" "Single repo - Docker full" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-w3 && docker run --rm -v /tmp/test-repo-w3:/scan -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-full scan --repo /scan --results-dir /results --profile-name balanced --allow-missing-tools" \
       validate_docker_scan
@@ -608,7 +608,7 @@ run_windows_tests() {
   fi
 
   # W4: Multi-target scan (Docker slim)
-  if command -v docker &> /dev/null && [[ -f "$TEST_TF_FILE" ]]; then
+  if command -v docker &>/dev/null && [[ -f $TEST_TF_FILE ]]; then
     run_test "W4" "Multi-target - Docker slim" \
       "cd /tmp && git clone --depth 1 $TEST_REPO test-repo-w4 && docker run --rm -v /tmp/test-repo-w4:/scan -v $TEST_TF_FILE:/iac/test.tf -v {results_dir}:/results $DOCKER_IMAGE_BASE:$DOCKER_TAG-slim scan --repo /scan --image $TEST_IMAGE --terraform-state /iac/test.tf --results-dir /results --profile-name fast --allow-missing-tools" \
       validate_multi_target
@@ -624,7 +624,7 @@ run_advanced_tests() {
   echo "=========================================="
 
   # A1: GitLab repo scan
-  if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+  if [[ -n ${GITLAB_TOKEN-} ]]; then
     run_test "A1" "GitLab repo scan" \
       "jmo ci --gitlab-repo https://gitlab.com/gitlab-org/gitlab-foss --results-dir {results_dir} --profile-name balanced --human-logs --allow-missing-tools" \
       validate_basic_scan
@@ -633,7 +633,7 @@ run_advanced_tests() {
   fi
 
   # A2: K8s cluster scan
-  if command -v kubectl &> /dev/null && kubectl cluster-info &> /dev/null 2>&1; then
+  if command -v kubectl &>/dev/null && kubectl cluster-info &>/dev/null 2>&1; then
     run_test "A2" "K8s cluster scan" \
       "jmo ci --k8s-context $(kubectl config current-context) --k8s-namespace default --results-dir {results_dir} --tools trivy,falco --human-logs --allow-missing-tools" \
       validate_basic_scan
@@ -675,33 +675,33 @@ main() {
 
   # Initialize results CSV
   mkdir -p "$RESULTS_BASE"
-  echo "test_id,status,duration_seconds" > "$RESULTS_BASE/test-results.csv"
+  echo "test_id,status,duration_seconds" >"$RESULTS_BASE/test-results.csv"
 
   # Detect OS and run appropriate test suite
   case "$(uname -s)" in
-    Linux*)
-      if [[ -n "$SPECIFIC_TEST" ]]; then
-        # Run specific test regardless of prefix
-        run_ubuntu_tests
-        run_advanced_tests
-      else
-        log_info "Detected Linux, running Ubuntu + Advanced test suites"
-        run_ubuntu_tests
-        run_advanced_tests
-      fi
-      ;;
-    Darwin*)
-      log_info "Detected macOS, running macOS test suite"
-      run_macos_tests
-      ;;
-    MINGW*|CYGWIN*|MSYS*)
-      log_info "Detected Windows, running Windows WSL2 test suite"
-      run_windows_tests
-      ;;
-    *)
-      log_error "Unsupported OS: $(uname -s)"
-      exit 1
-      ;;
+  Linux*)
+    if [[ -n $SPECIFIC_TEST ]]; then
+      # Run specific test regardless of prefix
+      run_ubuntu_tests
+      run_advanced_tests
+    else
+      log_info "Detected Linux, running Ubuntu + Advanced test suites"
+      run_ubuntu_tests
+      run_advanced_tests
+    fi
+    ;;
+  Darwin*)
+    log_info "Detected macOS, running macOS test suite"
+    run_macos_tests
+    ;;
+  MINGW* | CYGWIN* | MSYS*)
+    log_info "Detected Windows, running Windows WSL2 test suite"
+    run_windows_tests
+    ;;
+  *)
+    log_error "Unsupported OS: $(uname -s)"
+    exit 1
+    ;;
   esac
 
   # Generate summary report
@@ -710,7 +710,7 @@ main() {
   echo "Test Summary"
   echo "=========================================="
 
-  local total_tests=$(($(wc -l < "$RESULTS_BASE/test-results.csv") - 1))
+  local total_tests=$(($(wc -l <"$RESULTS_BASE/test-results.csv") - 1))
   local passed_tests
   passed_tests=$(grep -c ",PASS," "$RESULTS_BASE/test-results.csv" 2>/dev/null) || passed_tests=0
   local failed_tests
@@ -724,18 +724,18 @@ main() {
   echo "Skipped: $skipped_tests"
   echo ""
 
-  if [[ "$passed_tests" -gt 0 ]]; then
+  if [[ $passed_tests -gt 0 ]]; then
     log_success "✅ $passed_tests tests passed"
   fi
 
-  if [[ "$failed_tests" -gt 0 ]]; then
+  if [[ $failed_tests -gt 0 ]]; then
     log_error "❌ $failed_tests tests failed"
     echo ""
     echo "Failed tests:"
     grep ",FAIL," "$RESULTS_BASE/test-results.csv" 2>/dev/null | cut -d',' -f1 | sed 's/^/  - /'
   fi
 
-  if [[ "$skipped_tests" -gt 0 ]]; then
+  if [[ $skipped_tests -gt 0 ]]; then
     log_warning "⏭️  $skipped_tests tests skipped"
   fi
 
@@ -744,7 +744,7 @@ main() {
   echo "Individual test logs: $RESULTS_BASE/*/test.log"
 
   # Exit with failure if any tests failed
-  [[ "$failed_tests" -eq 0 ]] && exit 0 || exit 1
+  [[ $failed_tests -eq 0 ]] && exit 0 || exit 1
 }
 
 # Run main function

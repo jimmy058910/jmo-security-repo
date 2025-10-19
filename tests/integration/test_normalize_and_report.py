@@ -17,12 +17,27 @@ def test_gather_results_merges_and_dedupes(tmp_path: Path):
 
     # Minimal valid JSONs for each tool
     write(
-        r1 / "gitleaks.json",
-        json.dumps([{"RuleID": "k1", "File": "a.txt", "StartLine": 1}]),
+        r1 / "trufflehog.json",
+        json.dumps([{"DetectorName": "AWS", "Verified": True, "Line": 2}]),
     )
     write(
-        r1 / "trufflehog.json",
-        json.dumps({"DetectorName": "AWS", "Verified": True, "Line": 2}),
+        r1 / "trivy.json",
+        json.dumps(
+            {
+                "Results": [
+                    {
+                        "Type": "secret",
+                        "Vulnerabilities": [
+                            {
+                                "VulnerabilityID": "SECRET-001",
+                                "Severity": "HIGH",
+                                "PkgName": "test",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
     )
     write(
         r2 / "semgrep.json",
