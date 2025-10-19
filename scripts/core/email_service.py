@@ -39,6 +39,7 @@ try:
 
     RESEND_AVAILABLE = True
 except ImportError:
+    resend = None  # type: ignore  # Set to None for test mocking
     RESEND_AVAILABLE = False
 
 # Configuration
