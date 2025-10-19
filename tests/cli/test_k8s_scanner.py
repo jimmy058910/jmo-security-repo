@@ -151,6 +151,7 @@ class TestK8sScanner:
 
     def test_scan_k8s_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
+
         # Mock tool_exists to return True for trivy
         def mock_tool_exists(tool_name):
             return tool_name == "trivy"
