@@ -17,8 +17,6 @@ from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
 
 
-
-
 def scan_iac_file(
     iac_type: str,
     iac_path: Path,
@@ -86,28 +84,27 @@ def scan_iac_file(
         if _tool_exists("checkov"):
             checkov_flags = get_tool_flags("checkov")
             checkov_cmd = [
-            "checkov",
-            "-f",
-            str(iac_path),
-            "-o",
-            "json",
-            *checkov_flags,
+                "checkov",
+                "-f",
+                str(iac_path),
+                "-o",
+                "json",
+                *checkov_flags,
             ]
             tool_defs.append(
-            ToolDefinition(
-                name="checkov",
-                command=checkov_cmd,
-                output_file=checkov_out,
-                timeout=get_tool_timeout("checkov", timeout),
-                retries=retries,
-                ok_return_codes=(0, 1),  # 0=clean, 1=findings
-                capture_stdout=True,  # Checkov writes to stdout
-            )
+                ToolDefinition(
+                    name="checkov",
+                    command=checkov_cmd,
+                    output_file=checkov_out,
+                    timeout=get_tool_timeout("checkov", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=findings
+                    capture_stdout=True,  # Checkov writes to stdout
+                )
             )
         elif allow_missing_tools:
             _write_stub("checkov", checkov_out)
             statuses["checkov"] = True
-
 
     # Trivy config scan for IaC files
     if "trivy" in tools:
@@ -115,31 +112,30 @@ def scan_iac_file(
         if _tool_exists("trivy"):
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-            "trivy",
-            "config",
-            "-q",
-            "-f",
-            "json",
-            *trivy_flags,
-            str(iac_path),
-            "-o",
-            str(trivy_out),
+                "trivy",
+                "config",
+                "-q",
+                "-f",
+                "json",
+                *trivy_flags,
+                str(iac_path),
+                "-o",
+                str(trivy_out),
             ]
             tool_defs.append(
-            ToolDefinition(
-                name="trivy",
-                command=trivy_cmd,
-                output_file=trivy_out,
-                timeout=get_tool_timeout("trivy", timeout),
-                retries=retries,
-                ok_return_codes=(0, 1),  # 0=clean, 1=findings
-                capture_stdout=False,
-            )
+                ToolDefinition(
+                    name="trivy",
+                    command=trivy_cmd,
+                    output_file=trivy_out,
+                    timeout=get_tool_timeout("trivy", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=findings
+                    capture_stdout=False,
+                )
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
             statuses["trivy"] = True
-
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

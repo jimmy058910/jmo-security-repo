@@ -18,8 +18,6 @@ from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
 
 
-
-
 def scan_image(
     image: str,
     results_dir: Path,
@@ -85,33 +83,32 @@ def scan_image(
         if _tool_exists("trivy"):
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-            "trivy",
-            "image",
-            "-q",
-            "-f",
-            "json",
-            "--scanners",
-            "vuln,secret,misconfig",
-            *trivy_flags,
-            image,
-            "-o",
-            str(trivy_out),
+                "trivy",
+                "image",
+                "-q",
+                "-f",
+                "json",
+                "--scanners",
+                "vuln,secret,misconfig",
+                *trivy_flags,
+                image,
+                "-o",
+                str(trivy_out),
             ]
             tool_defs.append(
-            ToolDefinition(
-                name="trivy",
-                command=trivy_cmd,
-                output_file=trivy_out,
-                timeout=get_tool_timeout("trivy", timeout),
-                retries=retries,
-                ok_return_codes=(0, 1),  # 0=clean, 1=findings
-                capture_stdout=False,
-            )
+                ToolDefinition(
+                    name="trivy",
+                    command=trivy_cmd,
+                    output_file=trivy_out,
+                    timeout=get_tool_timeout("trivy", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=findings
+                    capture_stdout=False,
+                )
             )
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
             statuses["trivy"] = True
-
 
     # Syft SBOM generation
     if "syft" in tools:
@@ -119,27 +116,26 @@ def scan_image(
         if _tool_exists("syft"):
             syft_flags = get_tool_flags("syft")
             syft_cmd = [
-            "syft",
-            image,
-            "-o",
-            "json",
-            *syft_flags,
+                "syft",
+                image,
+                "-o",
+                "json",
+                *syft_flags,
             ]
             tool_defs.append(
-            ToolDefinition(
-                name="syft",
-                command=syft_cmd,
-                output_file=syft_out,
-                timeout=get_tool_timeout("syft", timeout),
-                retries=retries,
-                ok_return_codes=(0,),
-                capture_stdout=True,  # Syft writes to stdout
-            )
+                ToolDefinition(
+                    name="syft",
+                    command=syft_cmd,
+                    output_file=syft_out,
+                    timeout=get_tool_timeout("syft", timeout),
+                    retries=retries,
+                    ok_return_codes=(0,),
+                    capture_stdout=True,  # Syft writes to stdout
+                )
             )
         elif allow_missing_tools:
             _write_stub("syft", syft_out)
             statuses["syft"] = True
-
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

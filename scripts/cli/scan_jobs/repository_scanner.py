@@ -140,7 +140,6 @@ def scan_repository(
             _write_stub("semgrep", semgrep_out)
             statuses["semgrep"] = True
 
-
     # Trivy: Vulnerability and secrets scanning
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
@@ -174,7 +173,6 @@ def scan_repository(
             _write_stub("trivy", trivy_out)
             statuses["trivy"] = True
 
-
     # Syft: SBOM generation
     if "syft" in tools:
         syft_out = out_dir / "syft.json"
@@ -201,7 +199,6 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("syft", syft_out)
             statuses["syft"] = True
-
 
     # Checkov: IaC policy checks
     if "checkov" in tools:
@@ -230,7 +227,6 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("checkov", checkov_out)
             statuses["checkov"] = True
-
 
     # Hadolint: Dockerfile linting
     if "hadolint" in tools:
@@ -294,7 +290,6 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("bandit", bandit_out)
             statuses["bandit"] = True
-
 
     # NOTE: Nosey Parker, ZAP, Falco, AFL++ are complex tools with special requirements
     # These will be handled separately if needed in the integration phase

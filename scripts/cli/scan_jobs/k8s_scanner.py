@@ -16,8 +16,6 @@ from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
 
 
-
-
 def scan_k8s_resource(
     k8s_info: Dict[str, str],
     results_dir: Path,
@@ -87,12 +85,12 @@ def scan_k8s_resource(
             trivy_flags = get_tool_flags("trivy")
 
             trivy_cmd = [
-            "trivy",
-            "k8s",
-            "-q",
-            "-f",
-            "json",
-            *trivy_flags,
+                "trivy",
+                "k8s",
+                "-q",
+                "-f",
+                "json",
+                *trivy_flags,
             ]
 
             # Add context if not current
@@ -122,7 +120,6 @@ def scan_k8s_resource(
         elif allow_missing_tools:
             _write_stub("trivy", trivy_out)
             statuses["trivy"] = True
-
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

@@ -18,12 +18,23 @@ Examples:
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
+
+from scripts.core.exceptions import ToolExecutionException
+from scripts.cli.wizard_generators import (
+    generate_github_actions,
+    generate_makefile_target,
+    generate_shell_script,
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Profile definitions with resource estimates (v0.5.0)
 PROFILES = {
@@ -191,7 +202,9 @@ def _get_cpu_count() -> int:
     """Get CPU count for thread recommendations."""
     try:
         return os.cpu_count() or 4
-    except Exception:
+    except (OSError, RuntimeError) as e:
+        # CPU count detection can fail on some systems or be mocked in tests
+        logger.debug(f"Failed to detect CPU count: {e}")
         return 4
 
 
@@ -216,7 +229,10 @@ def _validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
         if must_exist and not path.exists():
             return None
         return path
-    except Exception:
+    except Exception as e:
+        # Path expansion/resolution can fail (permissions, invalid paths, type errors, etc.)
+        # Catch all exceptions to be maximally defensive
+        logger.debug(f"Failed to resolve path '{path_str}': {e}")
         return None
 
 
@@ -480,7 +496,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
 
 
 def generate_command(config: WizardConfig) -> str:
-    """Generate the jmotools command from config."""
+    """Generate the jmotools command from config (for display/export)."""
     profile_info = PROFILES[config.profile]
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
@@ -542,6 +558,73 @@ def generate_command(config: WizardConfig) -> str:
     return " ".join(cmd_parts)
 
 
+def generate_command_list(config: WizardConfig) -> list[str]:
+    """
+    Generate the command as a list for secure subprocess execution.
+
+    This function builds the command as a list of arguments to avoid shell injection.
+    Use this for actual execution, not generate_command() which is for display only.
+    """
+    import os
+
+    profile_info = PROFILES[config.profile]
+    profile_threads = cast(int, profile_info["threads"])
+    profile_timeout = cast(int, profile_info["timeout"])
+
+    if config.use_docker:
+        # Docker command - build as list to avoid shell=True
+        cmd_list = ["docker", "run", "--rm"]
+
+        # Add volume mounts
+        if config.target_mode in ("repo", "repos-dir"):
+            # Resolve absolute path to avoid injection
+            target_abs = os.path.abspath(config.target_path)
+            cmd_list.extend(["-v", f"{target_abs}:/scan"])
+
+        # Results mount - resolve $(pwd) to actual path
+        results_abs = os.path.abspath(config.results_dir)
+        cmd_list.extend(["-v", f"{results_abs}:/results"])
+
+        # Image and command
+        cmd_list.extend(["ghcr.io/jimmy058910/jmo-security:latest", "scan"])
+
+        # Scan arguments
+        if config.target_mode in ("repo", "repos-dir"):
+            cmd_list.extend(["--repos-dir", "/scan"])
+        cmd_list.extend(["--results", "/results"])
+        cmd_list.extend(["--profile", config.profile])
+
+    else:
+        # Native command
+        cmd_list = ["jmotools", config.profile]
+
+        if config.target_mode == "repo":
+            cmd_list.extend(["--repo", config.target_path])
+        elif config.target_mode == "repos-dir":
+            cmd_list.extend(["--repos-dir", config.target_path])
+        elif config.target_mode == "targets":
+            cmd_list.extend(["--targets", config.target_path])
+        elif config.target_mode == "tsv":
+            cmd_list.extend(["--tsv", config.tsv_path, "--dest", config.tsv_dest])
+
+        cmd_list.extend(["--results-dir", config.results_dir])
+
+    # Common options
+    threads = config.threads or profile_threads
+    timeout = config.timeout or profile_timeout
+
+    cmd_list.extend(["--threads", str(threads)])
+    cmd_list.extend(["--timeout", str(timeout)])
+
+    if config.fail_on:
+        cmd_list.extend(["--fail-on", config.fail_on])
+
+    if config.human_logs:
+        cmd_list.append("--human-logs")
+
+    return cmd_list
+
+
 def execute_scan(config: WizardConfig) -> int:
     """
     Step 6: Execute the scan.
@@ -568,10 +651,11 @@ def execute_scan(config: WizardConfig) -> int:
     # Execute via subprocess
     try:
         if config.use_docker:
-            # Docker execution
-            result = subprocess.run(  # nosec B603 - controlled command
-                command,
-                shell=True,  # nosec B602 - command built from controlled inputs
+            # Docker execution - use list for security (no shell=True)
+            command_list = generate_command_list(config)
+            result = subprocess.run(
+                command_list,
+                shell=False,  # IMPORTANT: shell=False prevents command injection
                 check=False,
             )
             return result.returncode
@@ -580,154 +664,30 @@ def execute_scan(config: WizardConfig) -> int:
             sys.path.insert(0, str(Path(__file__).parent))
             from jmotools import main as jmotools_main
 
-            # Build argv
-            argv = command.split()[1:]  # Skip 'jmotools'
+            # Build argv from secure list
+            command_list = generate_command_list(config)
+            argv = command_list[1:]  # Skip 'jmotools'
             exit_code: int = jmotools_main(argv)
             return exit_code
 
     except KeyboardInterrupt:
         print(_colorize("\n\nScan cancelled by user", "yellow"))
         return 130
-    except Exception as e:
+    except ToolExecutionException as e:
+        # Tool execution failed (exit code, timeout, etc.)
+        print(_colorize(f"\n\nTool execution failed: {e.tool}", "red"))
+        logger.error(f"Tool execution failed: {e}")
+        return e.return_code if hasattr(e, "return_code") else 1
+    except (OSError, subprocess.CalledProcessError) as e:
+        # System errors (permissions, missing files, subprocess failures)
         print(_colorize(f"\n\nScan failed: {e}", "red"))
+        logger.error(f"Scan execution error: {e}", exc_info=True)
         return 1
-
-
-def generate_makefile_target(config: WizardConfig) -> str:
-    """Generate a Makefile target."""
-    command = generate_command(config)
-
-    return f"""
-# JMo Security Scan Target (generated by wizard)
-.PHONY: security-scan
-security-scan:
-\t{command}
-"""
-
-
-def generate_shell_script(config: WizardConfig) -> str:
-    """Generate a shell script."""
-    command = generate_command(config)
-
-    return f"""#!/usr/bin/env bash
-# JMo Security Scan Script (generated by wizard)
-set -euo pipefail
-
-{command}
-"""
-
-
-def generate_github_actions(config: WizardConfig) -> str:
-    """Generate a GitHub Actions workflow."""
-    profile_info = PROFILES[config.profile]
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
-    threads = config.threads or profile_threads
-    timeout = config.timeout or profile_timeout
-
-    if config.use_docker:
-        # Docker-based workflow
-        scan_cmd_lines = [
-            f"jmo scan --repo . --results results --profile {config.profile}",
-            f"--threads {threads}",
-            f"--timeout {timeout}",
-        ]
-        if config.fail_on:
-            scan_cmd_lines.append(f"--fail-on {config.fail_on}")
-        scan_cmd = " \\\n            ".join(scan_cmd_lines)
-
-        return f"""name: Security Scan
-on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly
-
-jobs:
-  security-scan:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/jimmy058910/jmo-security:latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run Security Scan
-        run: |
-          {scan_cmd}
-
-      - name: Upload Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-results
-          path: results/
-
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results/summaries/findings.sarif
-"""
-    else:
-        # Native workflow
-        scan_cmd_lines = [
-            f"jmotools {config.profile} --repos-dir . --results-dir results",
-            f"--threads {threads}",
-            f"--timeout {timeout}",
-        ]
-        if config.fail_on:
-            scan_cmd_lines.append(f"--fail-on {config.fail_on}")
-        scan_cmd = " \\\n            ".join(scan_cmd_lines)
-
-        profile_tools = cast(List[str], profile_info["tools"])
-        tools_list = ", ".join(profile_tools)
-
-        return f"""name: Security Scan
-on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly
-
-jobs:
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install JMo Security
-        run: pip install jmo-security
-
-      - name: Install Security Tools
-        run: |
-          # Install based on profile: {config.profile}
-          # Tools: {tools_list}
-          # See: https://github.com/jimmy058910/jmo-security-repo#tool-installation
-
-      - name: Run Security Scan
-        run: |
-          {scan_cmd}
-
-      - name: Upload Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-results
-          path: results/
-
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results/summaries/findings.sarif
-"""
+    except Exception as e:
+        # Unexpected errors - log with full traceback
+        print(_colorize(f"\n\nScan failed: {e}", "red"))
+        logger.error(f"Unexpected scan failure: {e}", exc_info=True)
+        return 1
 
 
 def run_wizard(
@@ -788,13 +748,15 @@ def run_wizard(
 
         # Handle artifact generation
         if emit_make:
-            content = generate_makefile_target(config)
+            command = generate_command(config)
+            content = generate_makefile_target(config, command)
             Path(emit_make).write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
             return 0
 
         if emit_script:
-            content = generate_shell_script(config)
+            command = generate_command(config)
+            content = generate_shell_script(config, command)
             script_path = Path(emit_script)
             script_path.write_text(content)
             script_path.chmod(0o755)
@@ -802,7 +764,7 @@ def run_wizard(
             return 0
 
         if emit_gha:
-            content = generate_github_actions(config)
+            content = generate_github_actions(config, PROFILES)
             gha_path = Path(emit_gha)
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content)
@@ -815,8 +777,15 @@ def run_wizard(
     except KeyboardInterrupt:
         print(_colorize("\n\nWizard cancelled", "yellow"))
         return 130
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
+        # System/configuration errors (file I/O, invalid inputs, etc.)
         print(_colorize(f"\n\nWizard error: {e}", "red"))
+        logger.error(f"Wizard configuration error: {e}", exc_info=True)
+        return 1
+    except Exception as e:
+        # Unexpected errors - log with full traceback
+        print(_colorize(f"\n\nWizard error: {e}", "red"))
+        logger.error(f"Unexpected wizard failure: {e}", exc_info=True)
         return 1
 
 

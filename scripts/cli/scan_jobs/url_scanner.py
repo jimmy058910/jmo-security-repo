@@ -18,8 +18,6 @@ from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
 
 
-
-
 def scan_url(
     url: str,
     results_dir: Path,
@@ -94,33 +92,33 @@ def scan_url(
 
             # Determine ZAP command (zap.sh on Linux/macOS, zap on Windows)
             import shutil
+
             zap_cmd = "zap.sh" if shutil.which("zap.sh") else "zap"
 
             zap_cmd_list = [
-            zap_cmd,
-            "-cmd",
-            "-quickurl",
-            url,
-            "-quickout",
-            str(zap_out),
-            "-quickprogress",
-            *zap_flags,
+                zap_cmd,
+                "-cmd",
+                "-quickurl",
+                url,
+                "-quickout",
+                str(zap_out),
+                "-quickprogress",
+                *zap_flags,
             ]
             tool_defs.append(
-            ToolDefinition(
-                name="zap",
-                command=zap_cmd_list,
-                output_file=zap_out,
-                timeout=get_tool_timeout("zap", timeout),
-                retries=retries,
-                ok_return_codes=(0, 1, 2),  # ZAP may return 1 or 2 for findings
-                capture_stdout=False,
-            )
+                ToolDefinition(
+                    name="zap",
+                    command=zap_cmd_list,
+                    output_file=zap_out,
+                    timeout=get_tool_timeout("zap", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1, 2),  # ZAP may return 1 or 2 for findings
+                    capture_stdout=False,
+                )
             )
         elif allow_missing_tools:
             _write_stub("zap", zap_out)
             statuses["zap"] = True
-
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(
