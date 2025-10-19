@@ -70,7 +70,6 @@ class TestCAPTCHAProtection:
             "error-codes": ["timeout-or-duplicate"],
         }
 
-
         assert expected_turnstile_response["success"] is False
         assert "timeout-or-duplicate" in expected_turnstile_response["error-codes"]
 
