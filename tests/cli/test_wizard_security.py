@@ -29,7 +29,9 @@ class TestCommandInjectionPrevention:
     def test_no_shell_true_in_execution(self):
         """Verify that subprocess execution does NOT use shell=True"""
         # Read wizard.py source code
-        wizard_path = Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        wizard_path = (
+            Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        )
         content = wizard_path.read_text()
 
         # Check that shell=False is used (and shell=True is removed)
@@ -37,17 +39,19 @@ class TestCommandInjectionPrevention:
 
         # shell=True should NOT appear except in comments or nosec suppressions
         lines_with_shell_true = [
-            line for line in content.split("\n")
+            line
+            for line in content.split("\n")
             if "shell=True" in line and "shell=False" not in line
         ]
 
         # Filter out comment-only lines
         code_lines = [
-            line for line in lines_with_shell_true
-            if not line.strip().startswith("#")
+            line for line in lines_with_shell_true if not line.strip().startswith("#")
         ]
 
-        assert len(code_lines) == 0, f"shell=True should not be used in wizard.py. Found: {code_lines}"
+        assert (
+            len(code_lines) == 0
+        ), f"shell=True should not be used in wizard.py. Found: {code_lines}"
 
     def test_malicious_repo_path_sanitized(self):
         """Test that malicious repo paths are sanitized"""
@@ -55,7 +59,7 @@ class TestCommandInjectionPrevention:
             profile="fast",
             target_mode="repo",
             target_path="/tmp/repo; rm -rf /",  # Injection attempt
-            use_docker=False
+            use_docker=False,
         )
 
         cmd_list = generate_command_list(config)
@@ -73,7 +77,7 @@ class TestCommandInjectionPrevention:
             profile="fast",
             target_mode="repo",
             target_path="/tmp/repo",
-            use_docker=False
+            use_docker=False,
         )
 
         cmd_list = generate_command_list(config)
@@ -89,7 +93,7 @@ class TestCommandInjectionPrevention:
             profile="fast",
             target_mode="repo",
             target_path="../../etc/passwd",  # Path traversal attempt
-            use_docker=False
+            use_docker=False,
         )
 
         cmd_list = generate_command_list(config)
@@ -105,7 +109,7 @@ class TestCommandInjectionPrevention:
             profile="fast",
             target_mode="repo",
             target_path="/tmp/$(whoami)",  # Command substitution attempt
-            use_docker=False
+            use_docker=False,
         )
 
         cmd_list = generate_command_list(config)
@@ -124,7 +128,7 @@ class TestCommandInjectionPrevention:
             profile="fast",
             target_mode="repo",
             target_path="/tmp/`whoami`",  # Backtick injection attempt
-            use_docker=False
+            use_docker=False,
         )
 
         cmd_list = generate_command_list(config)
@@ -146,7 +150,7 @@ class TestCommandListStructure:
             profile="fast",
             target_mode="repo",
             target_path="/tmp/test-repo",
-            use_docker=True
+            use_docker=True,
         )
 
         cmd_list = generate_command_list(config)
@@ -171,7 +175,7 @@ class TestCommandListStructure:
             target_path="/tmp/repos",
             use_docker=False,
             fail_on="HIGH",
-            human_logs=True
+            human_logs=True,
         )
 
         cmd_list = generate_command_list(config)
@@ -196,8 +200,8 @@ class TestCommandListStructure:
             profile="fast",
             target_mode="repo",
             target_path="./relative/path",  # Relative path
-            results_dir="./results",        # Relative results
-            use_docker=True
+            results_dir="./results",  # Relative results
+            use_docker=True,
         )
 
         cmd_list = generate_command_list(config)
@@ -220,23 +224,20 @@ class TestInputSanitization:
     def test_special_characters_in_path(self):
         """Test that special characters are handled safely"""
         special_chars_paths = [
-            "/tmp/test repo",      # Space
-            "/tmp/test&repo",      # Ampersand
-            "/tmp/test|repo",      # Pipe
-            "/tmp/test>repo",      # Redirect
-            "/tmp/test<repo",      # Redirect
-            "/tmp/test;repo",      # Semicolon
-            "/tmp/test'repo",      # Single quote
-            '/tmp/test"repo',      # Double quote
-            "/tmp/test$repo",      # Dollar sign
+            "/tmp/test repo",  # Space
+            "/tmp/test&repo",  # Ampersand
+            "/tmp/test|repo",  # Pipe
+            "/tmp/test>repo",  # Redirect
+            "/tmp/test<repo",  # Redirect
+            "/tmp/test;repo",  # Semicolon
+            "/tmp/test'repo",  # Single quote
+            '/tmp/test"repo',  # Double quote
+            "/tmp/test$repo",  # Dollar sign
         ]
 
         for path in special_chars_paths:
             config = create_test_config(
-                profile="fast",
-                target_mode="repo",
-                target_path=path,
-                use_docker=False
+                profile="fast", target_mode="repo", target_path=path, use_docker=False
             )
 
             cmd_list = generate_command_list(config)
@@ -254,12 +255,15 @@ class TestRegressionTests:
 
     def test_bandit_b602_resolved(self):
         """Verify Bandit B602 (shell=True) is resolved"""
-        wizard_path = Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        wizard_path = (
+            Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        )
         content = wizard_path.read_text()
 
         # Count instances of shell=True in actual code (not comments)
         code_lines = [
-            line for line in content.split("\n")
+            line
+            for line in content.split("\n")
             if "shell=True" in line and not line.strip().startswith("#")
         ]
 
@@ -269,7 +273,9 @@ class TestRegressionTests:
 
     def test_bandit_b603_reduced(self):
         """Verify Bandit B603 (subprocess without shell=True) is acceptable"""
-        wizard_path = Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        wizard_path = (
+            Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
+        )
         content = wizard_path.read_text()
 
         # subprocess.run with shell=False is safe (no B602/B603 HIGH findings)

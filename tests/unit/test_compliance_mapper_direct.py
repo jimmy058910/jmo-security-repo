@@ -16,7 +16,6 @@ This test suite achieves 100% coverage by testing:
 from typing import Any, Dict, List, Optional
 
 
-
 def create_finding(
     tool_name: str = "test-tool",
     rule_id: str = "test-rule",

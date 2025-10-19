@@ -9,9 +9,14 @@ from pathlib import Path
 import json
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
-from scripts.core.adapters.base_adapter import BaseAdapter, CURRENT_SCHEMA_VERSION, load_json_file
+from scripts.core.adapters.base_adapter import (
+    BaseAdapter,
+    CURRENT_SCHEMA_VERSION,
+    load_json_file,
+)
 
 
 # Concrete implementation for testing

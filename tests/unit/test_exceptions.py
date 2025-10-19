@@ -151,7 +151,9 @@ class TestComplianceMappingException:
 
     def test_creates_with_framework_and_cwe(self):
         """Exception stores framework, CWE, and reason."""
-        exc = ComplianceMappingException("OWASP Top 10", "CWE-79", "Not in mapping data")
+        exc = ComplianceMappingException(
+            "OWASP Top 10", "CWE-79", "Not in mapping data"
+        )
 
         assert exc.framework == "OWASP Top 10"
         assert exc.cwe == "CWE-79"
@@ -159,7 +161,9 @@ class TestComplianceMappingException:
 
     def test_message_format(self):
         """Exception message has expected format."""
-        exc = ComplianceMappingException("CWE Top 25", "CWE-20", "Invalid data structure")
+        exc = ComplianceMappingException(
+            "CWE Top 25", "CWE-20", "Invalid data structure"
+        )
 
         msg = str(exc)
         assert msg == "Failed to map CWE-20 to CWE Top 25: Invalid data structure"

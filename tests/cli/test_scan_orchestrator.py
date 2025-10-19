@@ -32,9 +32,7 @@ class TestScanTargets:
 
     def test_targets_with_repos(self):
         """Test ScanTargets with repositories"""
-        targets = ScanTargets(
-            repos=[Path("/repo1"), Path("/repo2"), Path("/repo3")]
-        )
+        targets = ScanTargets(repos=[Path("/repo1"), Path("/repo2"), Path("/repo3")])
 
         assert len(targets.repos) == 3
         assert targets.total_count() == 3
@@ -281,10 +279,7 @@ class TestScanOrchestrator:
         # Create images file
         images_file = tmp_path / "images.txt"
         images_file.write_text(
-            "nginx:latest\n"
-            "# Comment\n"
-            "redis:alpine\n"
-            "postgres:14\n"
+            "nginx:latest\n" "# Comment\n" "redis:alpine\n" "postgres:14\n"
         )
 
         args = MagicMock()

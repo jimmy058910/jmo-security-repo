@@ -192,7 +192,10 @@ class TestToolRunner:
 
         assert result.is_success() is False
         assert result.status in ("error", "retry_exhausted")
-        assert "timeout" in result.error_message.lower() or "Timeout" in result.error_message
+        assert (
+            "timeout" in result.error_message.lower()
+            or "Timeout" in result.error_message
+        )
 
     def test_run_tool_not_found(self):
         """Test tool not found error"""
