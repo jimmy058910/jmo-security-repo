@@ -52,6 +52,7 @@ def scan_gitlab_repo(
     retries: int,
     per_tool_config: Dict,
     allow_missing_tools: bool,
+    tool_exists_func=None,
 ) -> Tuple[str, Dict[str, bool]]:
     """
     Scan a GitLab repo with trufflehog.
@@ -64,6 +65,7 @@ def scan_gitlab_repo(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
+        tool_exists_func: Optional function to check tool existence (for testing)
 
     Returns:
         Tuple of (full_path, statuses_dict)
