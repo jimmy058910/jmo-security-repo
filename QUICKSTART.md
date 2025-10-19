@@ -18,7 +18,9 @@ jmotools wizard
 
 - Guides profile selection (fast/balanced/deep with time estimates)
 - Detects Docker availability (zero-installation path!)
+- **NEW (v0.6.2+):** Supports 6 target types (repos, images, IaC, URLs, GitLab, K8s)
 - Auto-discovers repositories in directories
+- Validates URLs and Kubernetes contexts
 - Configures threads and timeouts
 - Shows command preview before execution
 - Auto-opens results when complete

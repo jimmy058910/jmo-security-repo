@@ -162,7 +162,8 @@ The wizard provides:
 - ✅ **Step-by-step guidance** through all configuration options
 - ✅ **Profile selection** (fast/balanced/deep) with time estimates
 - ✅ **Docker vs native mode** - zero-installation Docker option!
-- ✅ **Smart target detection** - auto-discovers repositories
+- ✅ **Multi-target support (v0.6.2+)** - scan repos, images, IaC, URLs, GitLab, K8s
+- ✅ **Smart detection** - auto-discovers repos, validates URLs/K8s contexts
 - ✅ **Command preview** - see what will run before executing
 - ✅ **Auto-open results** - dashboard and summary automatically displayed
 

@@ -9,7 +9,7 @@
 
 ## 🎉 Latest Updates (October 2025)
 
-- 🧙 **Interactive Wizard** - Beginner-friendly guided scanning
+- 🧙 **Interactive Wizard (v0.6.2)** - Now supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
 - 🐳 **Docker Images** - Zero-installation security scanning (3 variants)
 - 🔒 **XSS Patched** - HTML dashboard security hardened
 - 🛡️ **OSV Scanner** - Open-source vulnerability detection
@@ -133,12 +133,11 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
 | [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |
 | [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
-| [CAPTCHA Setup](CAPTCHA.md) | Cloudflare Turnstile integration | Developers |
 | [Compliance Framework Analysis](COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail | Advanced |
-| [Email Telemetry Setup](EMAIL_TELEMETRY_SETUP.md) | User feedback collection | Maintainers |
-| [Email Testing Guide](EMAIL_TESTING_GUIDE.md) | Email system testing workflows | Maintainers |
-| [Newsletter Content](NEWSLETTER_CONTENT.md) | Marketing content templates | Maintainers |
 | [Context7 Usage](CONTEXT7_USAGE.md) | MCP Context7 integration | Advanced |
+| [Telemetry](TELEMETRY.md) | Privacy-first usage tracking (v0.7.0+) | Everyone |
+
+> **Note:** Infrastructure and business documentation (CAPTCHA setup, email telemetry, newsletter templates) is maintained separately in `dev-only/` (gitignored). These are maintainer-only resources not needed for general development or usage.
 
 ---
 

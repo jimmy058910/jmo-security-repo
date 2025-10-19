@@ -4,6 +4,28 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+### Added
+
+- **Wizard multi-target support (v0.6.2)**: Interactive wizard now supports all 6 target types introduced in v0.6.0+
+  - **Target types:** Repositories, container images, IaC files, web URLs, GitLab repos, Kubernetes clusters
+  - **Architecture changes:**
+    - New `TargetConfig` class: Unified configuration for all 6 target types
+    - Two-step target selection: Step 3a (select type) → Step 3b (configure type-specific details)
+    - Updated wizard flow: 6 steps → 7 steps (added target type selection)
+  - **Smart features:**
+    - **Auto-detection:** IaC type from file extension/content (Terraform, CloudFormation, K8s)
+    - **Validation:** URL reachability checks (HEAD request, 2s timeout)
+    - **K8s context validation:** kubectl verification before scanning
+    - **Token security:** GitLab tokens prefer `GITLAB_TOKEN` env var, auto-redacted in output
+  - **Artifact generation:**
+    - GitHub Actions workflows auto-detect secrets requirements (GitLab/K8s)
+    - Target-specific command generation for Makefile, shell scripts, GHA workflows
+  - **Backward compatibility:** Existing repo-based workflows unchanged, non-interactive mode defaults to repo scanning
+  - **Files modified:**
+    - `scripts/cli/wizard.py`: +600 lines (TargetConfig class, 6 configure functions, validation helpers)
+    - `scripts/cli/wizard_generators.py`: +100 lines (secrets detection, target-specific generation)
+  - See [docs/examples/wizard-examples.md#multi-target-scanning-v062](docs/examples/wizard-examples.md#multi-target-scanning-v062) for complete guide
+
 ### Changed
 
 - **Docker Image Optimization (ROADMAP #1)**: Implemented multi-stage builds and layer caching optimizations

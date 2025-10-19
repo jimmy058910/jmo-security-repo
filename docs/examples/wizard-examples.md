@@ -7,6 +7,7 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
 - [Docker Mode](#docker-mode)
+- [Multi-Target Scanning (v0.6.2+)](#multi-target-scanning-v062)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
 
@@ -28,7 +29,7 @@ jmotools wizard
 
 Choose from three profiles based on your needs:
 
-- **fast** (2-5 minutes): Quick scan with core tools (gitleaks, semgrep)
+- **fast** (2-5 minutes): Quick scan with core tools (trufflehog, semgrep, trivy)
 - **balanced** (5-15 minutes): Comprehensive scan with all recommended tools
 - **deep** (15-45 minutes): Exhaustive scan with all tools
 
@@ -41,18 +42,51 @@ Choose how to run the scan:
 
 The wizard automatically detects if Docker is installed and running.
 
-#### Step 3: Select Scan Target
+#### Step 3a: Select Target Type (v0.6.2+)
 
-Choose what to scan:
+Choose what type of asset to scan:
+
+- **repo**: Repositories (local Git repos)
+- **image**: Container images (Docker/OCI)
+- **iac**: Infrastructure as Code (Terraform/CloudFormation/K8s)
+- **url**: Web applications/APIs (DAST scanning)
+- **gitlab**: GitLab repositories (with token)
+- **k8s**: Kubernetes clusters (live clusters)
+
+#### Step 3b: Configure Target
+
+Based on the target type selected, configure specific details:
+
+**For Repositories:**
 
 - **repo**: Single repository
 - **repos-dir**: Directory containing multiple repos
 - **targets**: File listing repo paths
 - **tsv**: Clone repos from TSV file
 
-For `repos-dir`, the wizard shows detected repositories and their count.
+**For Container Images:**
 
-#### Step 4: Advanced Configuration
+- Single image name or batch file with image list
+
+**For IaC Files:**
+
+- File path (auto-detects Terraform/CloudFormation/K8s)
+
+**For Web URLs:**
+
+- Single URL or batch file with URL list
+- URL validation with reachability check
+
+**For GitLab:**
+
+- GitLab URL, token, and repo/group selection
+
+**For Kubernetes:**
+
+- Context, namespace, or all namespaces
+- Context validation with kubectl
+
+#### Step 5: Advanced Configuration
 
 Optionally customize:
 
@@ -60,11 +94,11 @@ Optionally customize:
 - **Timeout**: Per-tool timeout in seconds
 - **Fail-on**: Severity threshold for CI/CD (CRITICAL, HIGH, MEDIUM)
 
-#### Step 5: Review Configuration
+#### Step 6: Review Configuration
 
 Review your choices and confirm before execution.
 
-#### Step 6: Execute Scan
+#### Step 7: Execute Scan
 
 The wizard generates and displays the command, then prompts for execution.
 
@@ -127,6 +161,233 @@ This skips the execution mode prompt and uses Docker directly (if available).
 - Consistent tool versions
 - Portable across systems
 - Immediate scanning capability
+
+---
+
+## Multi-Target Scanning (v0.6.2+)
+
+The wizard now supports scanning 6 different target types beyond repositories.
+
+### Container Image Scanning
+
+Scan Docker/OCI container images for vulnerabilities:
+
+```bash
+jmotools wizard
+```
+
+**Steps:**
+
+1. Choose **balanced** profile
+2. Choose **docker** or **native** mode
+3. Select target type: **image**
+4. Enter image name: `nginx:latest` (or provide `images.txt` file)
+5. Accept defaults for threads/timeout
+6. Review and execute
+
+**Generated Command:**
+
+```bash
+jmo scan --image nginx:latest --results-dir results --profile-name balanced --threads 4 --timeout 600
+```
+
+**Results:**
+
+- Trivy vulnerability scan
+- Syft SBOM generation
+- Findings in `results/individual-images/nginx_latest/`
+
+### Infrastructure as Code Scanning
+
+Scan Terraform state files, CloudFormation templates, or K8s manifests:
+
+```bash
+jmotools wizard
+```
+
+**Steps:**
+
+1. Choose **balanced** profile
+2. Choose **native** mode (Checkov requires local install)
+3. Select target type: **iac**
+4. Enter file path: `./infrastructure.tfstate`
+5. Wizard auto-detects: **Terraform** (from extension/content)
+6. Review and execute
+
+**Generated Command:**
+
+```bash
+jmo scan --terraform-state ./infrastructure.tfstate --results-dir results --profile-name balanced
+```
+
+**Supported IaC Types:**
+
+- **Terraform**: `*.tf`, `*.tfstate`, `*.tfvars`
+- **CloudFormation**: `*.yaml`, `*.yml`, `*.json` (with AWS resources)
+- **Kubernetes**: `*.yaml`, `*.yml` (with K8s resources)
+
+**Auto-Detection:**
+
+The wizard automatically detects IaC type from:
+
+- File extension (`.tfstate` → Terraform)
+- File content (scans for `"terraform_version"`, `AWSTemplateFormatVersion`, `apiVersion: v1`)
+
+### Web Application Scanning (DAST)
+
+Scan live web applications and APIs:
+
+```bash
+jmotools wizard
+```
+
+**Steps:**
+
+1. Choose **balanced** profile
+2. Choose **docker** mode (ZAP works best in Docker)
+3. Select target type: **url**
+4. Enter URL: `https://example.com`
+5. Wizard validates URL (HEAD request, 2s timeout)
+6. Review and execute
+
+**Generated Command:**
+
+```bash
+docker run --rm -v "$(pwd)/results:/results" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --url https://example.com --results /results --profile balanced
+```
+
+**URL Validation:**
+
+The wizard checks if URLs are reachable before scanning:
+
+- ✅ Reachable: Proceeds with scan
+- ❌ Unreachable: Shows warning, allows override
+
+**Batch URL Scanning:**
+
+Create `urls.txt`:
+
+```text
+https://app.example.com
+https://api.example.com
+https://admin.example.com
+```
+
+Run wizard and select **file** option when prompted.
+
+### GitLab Repository Scanning
+
+Scan GitLab-hosted repositories with full tool suite:
+
+```bash
+jmotools wizard
+```
+
+**Steps:**
+
+1. Choose **balanced** profile
+2. Choose **native** or **docker** mode
+3. Select target type: **gitlab**
+4. GitLab URL: `https://gitlab.com` (default)
+5. Token: Uses `$GITLAB_TOKEN` env var (or prompts)
+6. Repo: `mygroup/myrepo` (or group: `mygroup`)
+7. Review and execute
+
+**Generated Command:**
+
+```bash
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+jmo scan --gitlab-repo mygroup/myrepo --gitlab-token $GITLAB_TOKEN --results-dir results
+```
+
+**Token Security:**
+
+- Wizard prefers `GITLAB_TOKEN` environment variable
+- Never stores tokens in config files
+- Token auto-redacted in logs/output
+
+**GitLab Group Scanning:**
+
+Scan all repos in a GitLab group:
+
+```bash
+# Set token
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+
+# Run wizard, select gitlab → group
+jmotools wizard
+
+# Enter group: myorg
+```
+
+Wizard discovers all repos in `myorg` and scans them.
+
+### Kubernetes Cluster Scanning
+
+Scan live Kubernetes clusters for security issues:
+
+```bash
+jmotools wizard
+```
+
+**Steps:**
+
+1. Choose **balanced** profile
+2. Choose **native** mode (requires kubectl)
+3. Select target type: **k8s**
+4. Enter context: `prod` (or use current context)
+5. Namespace: `default` (or `--all-namespaces`)
+6. Wizard validates context with kubectl
+7. Review and execute
+
+**Generated Command:**
+
+```bash
+jmo scan --k8s-context prod --k8s-namespace default --results-dir results
+```
+
+**Context Validation:**
+
+The wizard validates Kubernetes context before scanning:
+
+```bash
+kubectl config get-contexts
+kubectl config use-context prod
+```
+
+- ✅ Valid context: Proceeds
+- ❌ Invalid context: Shows error, prompts to choose from available contexts
+
+**Scanning All Namespaces:**
+
+```bash
+jmo scan --k8s-context prod --k8s-all-namespaces --results-dir results
+```
+
+Trivy scans all workloads across all namespaces.
+
+### Multi-Target Combined Scanning
+
+The wizard can configure scans across multiple target types in one command:
+
+#### Example: Full Infrastructure Audit
+
+Run wizard 6 times (once per target type), then combine commands:
+
+```bash
+# From wizard-generated commands
+jmo scan \
+  --repo ./backend \
+  --image myapp:latest \
+  --terraform-state infrastructure.tfstate \
+  --url https://myapp.com \
+  --gitlab-repo myorg/frontend \
+  --k8s-context prod --k8s-namespace myapp \
+  --results-dir ./comprehensive-audit
+```
+
+All findings deduplicated and aggregated to `comprehensive-audit/summaries/`.
 
 ---
 
