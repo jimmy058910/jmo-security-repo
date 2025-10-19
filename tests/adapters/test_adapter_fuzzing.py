@@ -14,7 +14,7 @@ from hypothesis import HealthCheck, given, settings, strategies as st
 
 from scripts.core.adapters.bandit_adapter import load_bandit
 from scripts.core.adapters.checkov_adapter import load_checkov
-from scripts.core.adapters.gitleaks_adapter import load_gitleaks
+from scripts.core.adapters.trufflehog_adapter import load_trufflehog
 from scripts.core.adapters.semgrep_adapter import load_semgrep
 from scripts.core.adapters.trivy_adapter import load_trivy
 
@@ -48,13 +48,13 @@ def malformed_json(draw):
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(content=malformed_json())
-def test_gitleaks_handles_malformed_json(tmp_path: Path, content: str):
-    """Gitleaks adapter should not crash on malformed input."""
-    test_file = tmp_path / "gitleaks.json"
+def test_trufflehog_handles_malformed_json(tmp_path: Path, content: str):
+    """Trufflehog adapter should not crash on malformed input."""
+    test_file = tmp_path / "trufflehog.json"
     test_file.write_text(content, encoding="utf-8")
 
     # Should return a list, not crash (may be empty or have stub findings)
-    result = load_gitleaks(test_file)
+    result = load_trufflehog(test_file)
     assert isinstance(result, list)
 
 
@@ -146,7 +146,7 @@ def test_adapters_handle_deep_nesting(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should complete without recursion errors
-    load_gitleaks(test_file)
+    load_trufflehog(test_file)
     load_semgrep(test_file)
     load_trivy(test_file)
     load_checkov(test_file)
@@ -174,7 +174,7 @@ def test_adapters_handle_large_outputs(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should complete without OOM
-    result = load_gitleaks(test_file)
+    result = load_trufflehog(test_file)
     assert isinstance(result, list)
 
 
@@ -208,7 +208,7 @@ def test_adapters_handle_special_characters(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should not crash or corrupt data
-    result = load_gitleaks(test_file)
+    result = load_trufflehog(test_file)
     assert isinstance(result, list)
 
     result = load_semgrep(test_file)
@@ -224,7 +224,7 @@ def test_concurrent_adapter_failures(tmp_path: Path):
     indiv = tmp_path / "individual-repos" / "test-repo"
     indiv.mkdir(parents=True)
 
-    for tool in ["gitleaks", "semgrep", "trivy", "checkov", "bandit"]:
+    for tool in ["trufflehog", "semgrep", "trivy", "checkov", "bandit"]:
         (indiv / f"{tool}.json").write_text("INVALID JSON{", encoding="utf-8")
 
     # Should return empty list, not crash
@@ -238,7 +238,7 @@ def test_adapters_handle_missing_files(tmp_path: Path):
     """Adapters should gracefully handle nonexistent files."""
     missing_file = tmp_path / "nonexistent.json"
 
-    result = load_gitleaks(missing_file)
+    result = load_trufflehog(missing_file)
     assert result == []
 
     result = load_semgrep(missing_file)
@@ -260,7 +260,7 @@ def test_adapters_handle_empty_files(tmp_path: Path):
     empty_file = tmp_path / "empty.json"
     empty_file.write_text("", encoding="utf-8")
 
-    result = load_gitleaks(empty_file)
+    result = load_trufflehog(empty_file)
     assert result == []
 
     result = load_semgrep(empty_file)
@@ -282,7 +282,7 @@ def test_adapters_handle_binary_data(tmp_path: Path):
     binary_file = tmp_path / "binary.json"
     binary_file.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")  # PNG header
 
-    result = load_gitleaks(binary_file)
+    result = load_trufflehog(binary_file)
     assert result == []
 
     result = load_semgrep(binary_file)
@@ -298,7 +298,7 @@ def test_adapters_handle_long_strings(tmp_path: Path):
     long_file = tmp_path / "long.json"
     long_file.write_text(content, encoding="utf-8")
 
-    result = load_gitleaks(long_file)
+    result = load_trufflehog(long_file)
     assert isinstance(result, list)
 
     result = load_semgrep(long_file)
@@ -318,7 +318,7 @@ def test_adapters_handle_unicode(tmp_path: Path):
     unicode_file = tmp_path / "unicode.json"
     unicode_file.write_text(content, encoding="utf-8")
 
-    result = load_gitleaks(unicode_file)
+    result = load_trufflehog(unicode_file)
     assert isinstance(result, list)
 
     result = load_semgrep(unicode_file)
@@ -341,7 +341,7 @@ def test_adapters_skip_invalid_entries(tmp_path: Path):
     mixed_file = tmp_path / "mixed.json"
     mixed_file.write_text(mixed_content, encoding="utf-8")
 
-    result = load_gitleaks(mixed_file)
+    result = load_trufflehog(mixed_file)
     assert isinstance(result, list)
 
 
@@ -360,7 +360,7 @@ def test_adapters_handle_permission_errors(tmp_path: Path):
         os.chmod(restricted_file, 0o000)
 
         # Should return empty list or handle gracefully
-        result = load_gitleaks(restricted_file)
+        result = load_trufflehog(restricted_file)
         assert isinstance(result, list)
 
         # Restore permissions for cleanup

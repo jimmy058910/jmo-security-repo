@@ -36,6 +36,7 @@ from typing import Optional, Literal
 # Check if resend is available
 try:
     import resend
+
     RESEND_AVAILABLE = True
 except ImportError:
     RESEND_AVAILABLE = False
@@ -193,8 +194,7 @@ Questions? Reply to this email or open an issue on GitHub.
 
 
 def send_welcome_email(
-    email: str,
-    source: Literal["cli", "dashboard", "website"] = "cli"
+    email: str, source: Literal["cli", "dashboard", "website"] = "cli"
 ) -> bool:
     """Send welcome email to new subscriber.
 
@@ -230,14 +230,21 @@ def send_welcome_email(
             "text": WELCOME_EMAIL_TEXT,
             "tags": [
                 {"name": "source", "value": source},
-                {"name": "type", "value": "welcome"}
-            ]
+                {"name": "type", "value": "welcome"},
+            ],
         }
 
         response = resend.Emails.send(params)
 
         # Resend returns a dict with 'id' on success
-        return bool(response and (isinstance(response, dict) and 'id' in response or hasattr(response, 'id')))
+        return bool(
+            response
+            and (
+                isinstance(response, dict)
+                and "id" in response
+                or hasattr(response, "id")
+            )
+        )
 
     except Exception as e:
         # Fail silently - don't block CLI workflow
@@ -245,6 +252,7 @@ def send_welcome_email(
         # Always print error in test mode for debugging
         print(f"[ERROR] Email send failed: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return False
 

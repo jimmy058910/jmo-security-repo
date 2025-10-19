@@ -3,7 +3,6 @@ from pathlib import Path
 
 from scripts.core.adapters.hadolint_adapter import load_hadolint
 from scripts.core.adapters.noseyparker_adapter import load_noseyparker
-from scripts.core.adapters.tfsec_adapter import load_tfsec
 from scripts.core.adapters.checkov_adapter import load_checkov
 
 
@@ -84,62 +83,6 @@ def test_noseyparker_alt_keys(tmp_path: Path):
         and out[0]["ruleId"] == "Slack Token"
         and out[0]["location"]["startLine"] == 42
     )
-
-
-def test_tfsec_alt_keys(tmp_path: Path):
-    # Use top-level id/filename/start_line instead of location.*
-    data = {
-        "results": [
-            {
-                "id": "AWS002",
-                "filename": "main.tf",
-                "start_line": 9,
-                "description": "desc",
-                "severity": "LOW",
-            }
-        ]
-    }
-    f = tmp_path / "tfsec.json"
-    _write(f, data)
-    out = load_tfsec(f)
-    assert out and out[0]["ruleId"] == "AWS002" and out[0]["severity"] == "LOW"
-
-
-def test_tfsec_resolution_and_missing_location(tmp_path: Path):
-    # has resolution and location missing -> startLine defaults to 0
-    data = {
-        "results": [
-            {
-                "rule_id": "AWS003",
-                "description": "d",
-                "resolution": "fix",
-                "severity": "HIGH",
-            }
-        ]
-    }
-    f = tmp_path / "tfsec2.json"
-    _write(f, data)
-    out = load_tfsec(f)
-    assert (
-        out and out[0]["remediation"] == "fix" and out[0]["location"]["startLine"] == 0
-    )
-
-
-def test_tfsec_description_over_impact(tmp_path: Path):
-    data = {
-        "results": [
-            {
-                "rule_id": "AWS004",
-                "description": "desc-priority",
-                "impact": "impact-fallback",
-                "severity": "MEDIUM",
-            }
-        ]
-    }
-    f = tmp_path / "tfsec3.json"
-    _write(f, data)
-    out = load_tfsec(f)
-    assert out and out[0]["message"] == "desc-priority"
 
 
 def test_checkov_alt_keys(tmp_path: Path):

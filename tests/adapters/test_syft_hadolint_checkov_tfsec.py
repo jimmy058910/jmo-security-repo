@@ -4,7 +4,6 @@ from pathlib import Path
 from scripts.core.adapters.syft_adapter import load_syft
 from scripts.core.adapters.hadolint_adapter import load_hadolint
 from scripts.core.adapters.checkov_adapter import load_checkov
-from scripts.core.adapters.tfsec_adapter import load_tfsec
 
 
 def write(p: Path, obj):
@@ -78,18 +77,4 @@ def test_checkov_adapter(tmp_path: Path):
     )
 
 
-def test_tfsec_adapter(tmp_path: Path):
-    data = {
-        "results": [
-            {
-                "rule_id": "AWS001",
-                "location": {"filename": "main.tf", "start_line": 5},
-                "description": "desc",
-                "severity": "MEDIUM",
-            }
-        ]
-    }
-    f = tmp_path / "tfsec.json"
-    write(f, data)
-    items = load_tfsec(f)
-    assert items and items[0]["ruleId"] == "AWS001"
+# tfsec removed in v0.6.0+ (replaced by trivy IaC scanning)
