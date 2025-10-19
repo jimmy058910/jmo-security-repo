@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
@@ -29,6 +30,7 @@ class TestRepositoryScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trufflehog", status="success", attempts=1),
                 ToolResult(tool="semgrep", status="success", attempts=1),
@@ -58,6 +60,7 @@ class TestRepositoryScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -93,6 +96,7 @@ class TestRepositoryScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trufflehog", status="success", attempts=1),
                 ToolResult(tool="semgrep", status="success", attempts=1),
@@ -111,7 +115,9 @@ class TestRepositoryScanner:
             )
 
             assert len(statuses) == 4
-            assert all(statuses[tool] for tool in ["trufflehog", "semgrep", "trivy", "syft"])
+            assert all(
+                statuses[tool] for tool in ["trufflehog", "semgrep", "trivy", "syft"]
+            )
 
     def test_scan_repository_with_retries(self, tmp_path):
         """Test repository scanning with retries"""
@@ -123,6 +129,7 @@ class TestRepositoryScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="semgrep", status="success", attempts=3),
             ]
@@ -151,6 +158,7 @@ class TestRepositoryScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trufflehog", status="success", attempts=1),
             ]

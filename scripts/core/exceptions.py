@@ -29,6 +29,7 @@ class JmoSecurityException(Exception):
     all JMo-specific errors while allowing standard library exceptions to
     propagate normally.
     """
+
     pass
 
 
@@ -95,16 +96,18 @@ class FingerprintCollisionException(JmoSecurityException):
         ...     )
     """
 
-    def __init__(self, fingerprint: str, finding1: Dict[str, Any], finding2: Dict[str, Any]):
+    def __init__(
+        self, fingerprint: str, finding1: Dict[str, Any], finding2: Dict[str, Any]
+    ):
         self.fingerprint = fingerprint
         self.finding1 = finding1
         self.finding2 = finding2
 
         # Extract key info for error message
-        rule1 = finding1.get('ruleId', 'UNKNOWN')
-        path1 = finding1.get('location', {}).get('path', 'UNKNOWN')
-        rule2 = finding2.get('ruleId', 'UNKNOWN')
-        path2 = finding2.get('location', {}).get('path', 'UNKNOWN')
+        rule1 = finding1.get("ruleId", "UNKNOWN")
+        path1 = finding1.get("location", {}).get("path", "UNKNOWN")
+        rule2 = finding2.get("ruleId", "UNKNOWN")
+        path2 = finding2.get("location", {}).get("path", "UNKNOWN")
 
         super().__init__(
             f"Fingerprint collision detected: {fingerprint}\n"
@@ -197,7 +200,7 @@ class ToolExecutionException(JmoSecurityException):
         tool: str,
         command: List[str],
         return_code: int,
-        stderr: Optional[str] = None
+        stderr: Optional[str] = None,
     ):
         self.tool = tool
         self.command = command

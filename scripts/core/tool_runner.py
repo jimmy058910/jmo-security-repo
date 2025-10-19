@@ -165,7 +165,9 @@ class ToolRunner:
             try:
                 result = subprocess.run(
                     tool.command,
-                    stdout=subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL,
+                    stdout=(
+                        subprocess.PIPE if tool.capture_stdout else subprocess.DEVNULL
+                    ),
                     stderr=subprocess.PIPE,
                     text=True,
                     timeout=tool.timeout,
@@ -188,7 +190,9 @@ class ToolRunner:
                     )
                 else:
                     # Unacceptable return code
-                    last_error = f"Return code {result.returncode} not in {tool.ok_return_codes}"
+                    last_error = (
+                        f"Return code {result.returncode} not in {tool.ok_return_codes}"
+                    )
 
                     # Don't retry for findings exit codes (1 usually means findings found)
                     if result.returncode == 1 and 1 in tool.ok_return_codes:
@@ -235,7 +239,9 @@ class ToolRunner:
             except Exception as e:
                 # Unexpected errors - log with traceback
                 last_error = str(e)
-                logger.error(f"Unexpected error running {tool.name}: {e}", exc_info=True)
+                logger.error(
+                    f"Unexpected error running {tool.name}: {e}", exc_info=True
+                )
                 if attempt < attempts:
                     time.sleep(1)
                     continue
@@ -291,7 +297,10 @@ class ToolRunner:
                 except Exception as e:
                     # Unexpected exception from future (should rarely happen)
                     tool = future_to_tool[future]
-                    logger.error(f"Unexpected exception from future for {tool.name}: {e}", exc_info=True)
+                    logger.error(
+                        f"Unexpected exception from future for {tool.name}: {e}",
+                        exc_info=True,
+                    )
                     results.append(
                         ToolResult(
                             tool=tool.name,

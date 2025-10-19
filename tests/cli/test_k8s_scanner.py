@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.k8s_scanner import scan_k8s_resource
@@ -24,6 +25,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -53,6 +55,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -87,6 +90,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -121,6 +125,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -151,6 +156,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -189,6 +195,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="error", returncode=1, attempts=1),
             ]
@@ -217,6 +224,7 @@ class TestK8sScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=2),
             ]

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.url_scanner import scan_url
@@ -24,6 +25,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=1),
             ]
@@ -49,6 +51,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=2),  # Retried
             ]
@@ -74,6 +77,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=1),
             ]
@@ -103,6 +107,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=1),
             ]
@@ -123,21 +128,20 @@ class TestUrlScanner:
 
     def test_scan_url_with_tool_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, \
-             patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
+            "scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True
+        ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=1),
             ]
 
             per_tool_config = {
-                "zap": {
-                    "timeout": 1200,
-                    "flags": ["-config", "api.disablekey=true"]
-                }
+                "zap": {"timeout": 1200, "flags": ["-config", "api.disablekey=true"]}
             }
 
             scan_url(
@@ -169,6 +173,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="timeout", returncode=124, attempts=1),
             ]
@@ -192,6 +197,7 @@ class TestUrlScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="zap", status="success", attempts=1),
             ]

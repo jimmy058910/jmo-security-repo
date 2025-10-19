@@ -313,28 +313,32 @@ class ScanOrchestrator:
             group = parts[0] if len(parts) > 1 else ""
             repo = parts[1] if len(parts) > 1 else full_path
 
-            gitlab_repos.append({
-                "full_path": full_path,
-                "url": getattr(args, "gitlab_url", "https://gitlab.com"),
-                "token": getattr(args, "gitlab_token", ""),
-                "repo": repo,
-                "group": group,
-                "name": full_path.replace("/", "_"),
-            })
+            gitlab_repos.append(
+                {
+                    "full_path": full_path,
+                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "token": getattr(args, "gitlab_token", ""),
+                    "repo": repo,
+                    "group": group,
+                    "name": full_path.replace("/", "_"),
+                }
+            )
 
         # GitLab group (would need API call to enumerate)
         if getattr(args, "gitlab_group", None):
             # Note: Actual implementation would query GitLab API
             # For now, create a placeholder entry
             group = args.gitlab_group
-            gitlab_repos.append({
-                "full_path": f"group:{group}",
-                "url": getattr(args, "gitlab_url", "https://gitlab.com"),
-                "token": getattr(args, "gitlab_token", ""),
-                "repo": "",
-                "group": group,
-                "name": f"group_{group}",
-            })
+            gitlab_repos.append(
+                {
+                    "full_path": f"group:{group}",
+                    "url": getattr(args, "gitlab_url", "https://gitlab.com"),
+                    "token": getattr(args, "gitlab_token", ""),
+                    "repo": "",
+                    "group": group,
+                    "name": f"group_{group}",
+                }
+            )
 
         return gitlab_repos
 
@@ -358,23 +362,29 @@ class ScanOrchestrator:
             all_namespaces = getattr(args, "k8s_all_namespaces", False)
 
             if all_namespaces:
-                k8s_resources.append({
-                    "context": context,
-                    "namespace": "*",
-                    "name": f"{context}_all-namespaces",
-                })
+                k8s_resources.append(
+                    {
+                        "context": context,
+                        "namespace": "*",
+                        "name": f"{context}_all-namespaces",
+                    }
+                )
             elif namespace:
-                k8s_resources.append({
-                    "context": context,
-                    "namespace": namespace,
-                    "name": f"{context}_{namespace}",
-                })
+                k8s_resources.append(
+                    {
+                        "context": context,
+                        "namespace": namespace,
+                        "name": f"{context}_{namespace}",
+                    }
+                )
             else:
-                k8s_resources.append({
-                    "context": context,
-                    "namespace": "default",
-                    "name": f"{context}_default",
-                })
+                k8s_resources.append(
+                    {
+                        "context": context,
+                        "namespace": "default",
+                        "name": f"{context}_default",
+                    }
+                )
 
         return k8s_resources
 
@@ -393,7 +403,9 @@ class ScanOrchestrator:
             repos = [
                 r
                 for r in repos
-                if any(fnmatch.fnmatch(r.name, pat) for pat in self.config.include_patterns)
+                if any(
+                    fnmatch.fnmatch(r.name, pat) for pat in self.config.include_patterns
+                )
             ]
 
         # Apply exclude patterns
@@ -401,7 +413,9 @@ class ScanOrchestrator:
             repos = [
                 r
                 for r in repos
-                if not any(fnmatch.fnmatch(r.name, pat) for pat in self.config.exclude_patterns)
+                if not any(
+                    fnmatch.fnmatch(r.name, pat) for pat in self.config.exclude_patterns
+                )
             ]
 
         return repos

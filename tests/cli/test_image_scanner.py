@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.image_scanner import scan_image
@@ -26,6 +27,7 @@ class TestImageScanner:
 
             # Mock successful results
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
                 ToolResult(tool="syft", status="success", attempts=1),
@@ -53,6 +55,7 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=2),  # Retried
                 ToolResult(tool="syft", status="success", attempts=1),
@@ -79,6 +82,7 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -95,7 +99,11 @@ class TestImageScanner:
             )
 
             # Check that directory was created with sanitized name
-            expected_dir = tmp_path / "individual-images" / "registry.example.com_5000_my-app_v1.2.3"
+            expected_dir = (
+                tmp_path
+                / "individual-images"
+                / "registry.example.com_5000_my-app_v1.2.3"
+            )
             assert expected_dir.exists()
 
     def test_scan_image_with_tool_timeout_override(self, tmp_path):
@@ -105,13 +113,12 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
 
-            per_tool_config = {
-                "trivy": {"timeout": 1200, "flags": ["--no-progress"]}
-            }
+            per_tool_config = {"trivy": {"timeout": 1200, "flags": ["--no-progress"]}}
 
             scan_image(
                 image="nginx:latest",
@@ -140,6 +147,7 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="error", returncode=1, attempts=1),
                 ToolResult(tool="syft", status="success", attempts=1),
@@ -156,7 +164,7 @@ class TestImageScanner:
             )
 
             assert statuses["trivy"] is False  # Failed
-            assert statuses["syft"] is True   # Succeeded
+            assert statuses["syft"] is True  # Succeeded
 
     def test_scan_image_only_trivy(self, tmp_path):
         """Test scanning with only trivy (no syft)"""
@@ -165,6 +173,7 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -189,6 +198,7 @@ class TestImageScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
 from scripts.cli.scan_jobs.iac_scanner import scan_iac_file
@@ -20,13 +21,14 @@ class TestIacScanner:
     def test_scan_iac_basic(self, tmp_path):
         """Test basic IaC scanning with checkov and trivy"""
         iac_file = tmp_path / "infrastructure.tf"
-        iac_file.write_text("resource \"aws_instance\" \"example\" {}")
+        iac_file.write_text('resource "aws_instance" "example" {}')
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="success", attempts=1),
                 ToolResult(tool="trivy", status="success", attempts=1),
@@ -58,6 +60,7 @@ class TestIacScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="success", attempts=2),  # Retried
                 ToolResult(tool="trivy", status="success", attempts=1),
@@ -81,13 +84,14 @@ class TestIacScanner:
     def test_scan_iac_uses_filename_as_dirname(self, tmp_path):
         """Test that IaC file stem is used for directory name"""
         iac_file = tmp_path / "my-infrastructure.tf"
-        iac_file.write_text("resource \"null_resource\" \"test\" {}")
+        iac_file.write_text('resource "null_resource" "test" {}')
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="success", attempts=1),
             ]
@@ -117,6 +121,7 @@ class TestIacScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="trivy", status="success", attempts=1),
             ]
@@ -157,6 +162,7 @@ class TestIacScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="error", returncode=2, attempts=1),
                 ToolResult(tool="trivy", status="success", attempts=1),
@@ -174,7 +180,7 @@ class TestIacScanner:
             )
 
             assert statuses["checkov"] is False  # Failed
-            assert statuses["trivy"] is True   # Succeeded
+            assert statuses["trivy"] is True  # Succeeded
 
     def test_scan_iac_only_checkov(self, tmp_path):
         """Test scanning with only checkov (no trivy)"""
@@ -186,6 +192,7 @@ class TestIacScanner:
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="success", attempts=1),
             ]
@@ -207,13 +214,14 @@ class TestIacScanner:
     def test_scan_iac_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
         iac_file = tmp_path / "network.tf"
-        iac_file.write_text("resource \"aws_vpc\" \"main\" {}")
+        iac_file.write_text('resource "aws_vpc" "main" {}')
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
             from scripts.core.tool_runner import ToolResult
+
             mock_runner.run_all_parallel.return_value = [
                 ToolResult(tool="checkov", status="success", attempts=1),
             ]

@@ -23,16 +23,13 @@ class TestCAPTCHAProtection:
     def test_missing_captcha_token_rejected(self):
         """Test that submissions without CAPTCHA token are rejected with 403"""
         # Mock request payload without cf-turnstile-response
-        payload = {
-            "email": "test@example.com",
-            "source": "website"
-        }
+        payload = {"email": "test@example.com", "source": "website"}
 
         # Expected response: 403 Forbidden with captcha_required error
         expected_response = {
             "success": False,
             "error": "captcha_required",
-            "message": "Please complete the CAPTCHA verification."
+            "message": "Please complete the CAPTCHA verification.",
         }
 
         # This test documents the expected behavior
@@ -46,20 +43,20 @@ class TestCAPTCHAProtection:
         payload = {
             "email": "test@example.com",
             "source": "website",
-            "cf-turnstile-response": "invalid_token_12345"
+            "cf-turnstile-response": "invalid_token_12345",
         }
 
         # Expected Cloudflare Turnstile API response for invalid token
         expected_turnstile_response = {
             "success": False,
-            "error-codes": ["invalid-input-response"]
+            "error-codes": ["invalid-input-response"],
         }
 
         # Expected API response to client
         expected_api_response = {
             "success": False,
             "error": "captcha_failed",
-            "message": "CAPTCHA verification failed. Please try again."
+            "message": "CAPTCHA verification failed. Please try again.",
         }
 
         assert payload["cf-turnstile-response"] == "invalid_token_12345"
@@ -71,19 +68,19 @@ class TestCAPTCHAProtection:
         payload = {
             "email": "test@example.com",
             "source": "website",
-            "cf-turnstile-response": "expired_token"
+            "cf-turnstile-response": "expired_token",
         }
 
         # Cloudflare returns timeout-or-duplicate for expired tokens
         expected_turnstile_response = {
             "success": False,
-            "error-codes": ["timeout-or-duplicate"]
+            "error-codes": ["timeout-or-duplicate"],
         }
 
         expected_api_response = {
             "success": False,
             "error": "captcha_failed",
-            "message": "CAPTCHA verification failed. Please try again."
+            "message": "CAPTCHA verification failed. Please try again.",
         }
 
         assert expected_turnstile_response["success"] is False
@@ -94,14 +91,14 @@ class TestCAPTCHAProtection:
         payload = {
             "email": "test@example.com",
             "source": "website",
-            "cf-turnstile-response": "valid_token_from_widget"
+            "cf-turnstile-response": "valid_token_from_widget",
         }
 
         # Expected Cloudflare Turnstile API response for valid token
         expected_turnstile_response = {
             "success": True,
             "challenge_ts": "2025-10-18T12:00:00Z",
-            "hostname": "jmotools.com"
+            "hostname": "jmotools.com",
         }
 
         # Submission should proceed to email validation and sending
@@ -118,14 +115,14 @@ class TestHoneypotAndCAPTCHA:
             "email": "test@example.com",
             "source": "website",
             "website": "http://spam.com",  # Honeypot field filled (bot detected)
-            "cf-turnstile-response": "valid_token"
+            "cf-turnstile-response": "valid_token",
         }
 
         # Expected: Honeypot rejection (400) before CAPTCHA check
         expected_response = {
             "success": False,
             "error": "invalid_request",
-            "message": "Invalid submission detected."
+            "message": "Invalid submission detected.",
         }
 
         # Honeypot should catch bots before CAPTCHA verification
@@ -139,14 +136,14 @@ class TestHoneypotAndCAPTCHA:
             "email": "test@example.com",
             "source": "website",
             "website": "",  # Empty honeypot (human)
-            "cf-turnstile-response": "valid_token"
+            "cf-turnstile-response": "valid_token",
         }
 
         # Invalid: no honeypot but missing CAPTCHA
         missing_captcha = {
             "email": "test@example.com",
             "source": "website",
-            "website": ""
+            "website": "",
         }
 
         assert valid_payload.get("website") == ""
@@ -162,7 +159,7 @@ class TestCAPTCHAErrorHandling:
         payload = {
             "email": "test@example.com",
             "source": "website",
-            "cf-turnstile-response": "valid_token"
+            "cf-turnstile-response": "valid_token",
         }
 
         # Expected response when Turnstile API times out or is unavailable
@@ -170,7 +167,7 @@ class TestCAPTCHAErrorHandling:
         expected_response = {
             "success": False,
             "error": "captcha_unavailable",
-            "message": "CAPTCHA verification service temporarily unavailable. Please try again later."
+            "message": "CAPTCHA verification service temporarily unavailable. Please try again later.",
         }
 
         assert expected_response["error"] == "captcha_unavailable"
@@ -218,7 +215,7 @@ class TestCAPTCHAIntegration:
             "email": "user@example.com",
             "source": "subscribe_page",
             "website": "",  # Empty honeypot
-            "cf-turnstile-response": "0.AAAA..."  # Real token format
+            "cf-turnstile-response": "0.AAAA...",  # Real token format
         }
 
         # Expected flow:
@@ -232,8 +229,12 @@ class TestCAPTCHAIntegration:
         assert complete_payload["cf-turnstile-response"] is not None
         assert "@" in complete_payload["email"]
         assert complete_payload["source"] in [
-            "cli", "cli_onboarding", "dashboard",
-            "website", "subscribe_page", "github_readme"
+            "cli",
+            "cli_onboarding",
+            "dashboard",
+            "website",
+            "subscribe_page",
+            "github_readme",
         ]
 
 
@@ -252,7 +253,12 @@ class TestCAPTCHADocumentation:
 
     def test_implementation_matches_docs(self):
         """Verify implementation follows docs/CAPTCHA.md guide"""
-        endpoint_file = Path(__file__).parent.parent.parent / "scripts" / "api" / "subscribe_endpoint.js"
+        endpoint_file = (
+            Path(__file__).parent.parent.parent
+            / "scripts"
+            / "api"
+            / "subscribe_endpoint.js"
+        )
         assert endpoint_file.exists()
 
         content = endpoint_file.read_text()
@@ -271,12 +277,12 @@ class TestCAPTCHADocumentation:
 @pytest.fixture
 def mock_turnstile_api():
     """Mock Cloudflare Turnstile API responses"""
-    with patch('requests.post') as mock_post:
+    with patch("requests.post") as mock_post:
         mock_response = Mock()
         mock_response.json.return_value = {
             "success": True,
             "challenge_ts": "2025-10-18T12:00:00Z",
-            "hostname": "jmotools.com"
+            "hostname": "jmotools.com",
         }
         mock_post.return_value = mock_response
         yield mock_post
@@ -290,25 +296,25 @@ def sample_payloads():
             "email": "test@example.com",
             "source": "website",
             "website": "",
-            "cf-turnstile-response": "valid_token"
+            "cf-turnstile-response": "valid_token",
         },
         "missing_captcha": {
             "email": "test@example.com",
             "source": "website",
-            "website": ""
+            "website": "",
         },
         "honeypot_triggered": {
             "email": "bot@spam.com",
             "source": "website",
             "website": "http://malicious.com",
-            "cf-turnstile-response": "valid_token"
+            "cf-turnstile-response": "valid_token",
         },
         "invalid_email": {
             "email": "invalid-email",
             "source": "website",
             "website": "",
-            "cf-turnstile-response": "valid_token"
-        }
+            "cf-turnstile-response": "valid_token",
+        },
     }
 
 
