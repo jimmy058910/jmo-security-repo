@@ -295,6 +295,58 @@ Before pushing Docker images:
 - Open a PR and fill out the template (if present). Link related issues.
   - CI runs on a matrix (OS/Python). Workflows use concurrency to cancel redundant runs and set 20-minute timeouts per job.
 
+### Commit guidelines and pre-push validation
+
+**CRITICAL:** Before pushing to `main`, ensure all new Python modules are tracked in git. Untracked modules cause Dependabot PRs to fail with `ModuleNotFoundError`.
+
+#### Pre-push hook (automatic validation)
+
+A pre-push git hook is installed in `.git/hooks/pre-push` that automatically checks for:
+
+1. **Untracked Python files** in `scripts/` directory
+2. **Missing critical modules** (compliance_frameworks, exceptions, tool_runner, etc.)
+3. **Out-of-sync requirements files** (requirements-dev.in vs requirements-dev.txt)
+
+The hook runs automatically before every push and takes ~5 seconds. To bypass in emergencies:
+
+```bash
+git push --no-verify  # Use sparingly - skips validation
+```
+
+#### Manual validation (before committing)
+
+If you're adding new Python modules, verify they're tracked:
+
+```bash
+# Check for untracked files in scripts/
+git status scripts/
+
+# Add all new modules
+git add scripts/
+
+# Verify imports work
+python3 -c "import scripts.core.your_new_module"
+```
+
+#### Why this matters
+
+**Scenario:** You create `scripts/core/new_feature.py` but forget to `git add` it. You commit and push to `main`. Later, Dependabot creates 13 PRs to update dependencies. **All 13 PRs fail** because they're based on `main`, which is missing `new_feature.py`.
+
+**Solution:** The pre-push hook catches this before it breaks Dependabot, preventing cascading failures.
+
+#### Requirements file synchronization
+
+When modifying `requirements-dev.in`:
+
+```bash
+# After editing requirements-dev.in
+make deps-compile  # Regenerate requirements-dev.txt
+git add requirements-dev.in requirements-dev.txt
+git commit -m "deps: update development dependencies"
+```
+
+**CI validation:** Pull requests automatically check that `requirements-dev.txt` matches `requirements-dev.in`. If the check fails, run `make deps-compile` and commit the updated file.
+
 ## Coding standards
 
 - Python: Ruff for linting (`ruff check`) and `ruff format`/`black` for formatting.

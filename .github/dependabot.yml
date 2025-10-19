@@ -1,6 +1,10 @@
 # Dependabot configuration for JMo Security Suite
 # Part of 5-layer version management system (ROADMAP.md #14, Issue #46)
 # Handles: Python packages, Docker base images, GitHub Actions
+#
+# Schedule: Weekly on Monday at 9 AM UTC (after weekend development settles)
+# Rationale: Prevents race conditions where Dependabot creates PRs before
+#            critical commits (e.g., new modules) are merged to main branch
 
 version: 2
 
