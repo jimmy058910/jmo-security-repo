@@ -2,29 +2,35 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Optional
 
-from scripts.core.normalize_and_report import gather_results
-from scripts.core.reporters.basic_reporter import write_json, write_markdown
-from scripts.core.reporters.yaml_reporter import write_yaml
-from scripts.core.reporters.html_reporter import write_html
-from scripts.core.reporters.sarif_reporter import write_sarif
-from scripts.core.reporters.suppression_reporter import write_suppression_report
-from scripts.core.reporters.compliance_reporter import (
-    write_pci_dss_report,
-    write_attack_navigator_json,
-    write_compliance_summary,
+from scripts.core.exceptions import (
+    ConfigurationException,
 )
 from scripts.core.config import load_config
-from scripts.core.suppress import load_suppressions, filter_suppressed
-from scripts.cli.path_sanitizers import (
-    _sanitize_path_component,
-    _validate_output_path,
+from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
+from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
+
+# PHASE 1 REFACTORING: Import refactored modules
+from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
+from scripts.cli.scan_jobs import (
+    scan_repository,
+    scan_image,
+    scan_iac_file,
+    scan_url,
+    scan_gitlab_repo,
+    scan_k8s_resource,
+)
+from scripts.cli.scan_utils import (
+    tool_exists as _tool_exists,
+    write_stub as _write_stub,
 )
 
-SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def _merge_dict(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
@@ -309,148 +315,6 @@ def parse_args():
         raise
 
 
-def fail_code(threshold: str | None, counts: dict) -> int:
-    if not threshold:
-        return 0
-    thr = threshold.upper()
-    if thr not in SEV_ORDER:
-        return 0
-    idx = SEV_ORDER.index(thr)
-    severities = SEV_ORDER[: idx + 1]
-    return 1 if any(counts.get(s, 0) > 0 for s in severities) else 0
-
-
-def cmd_report(args) -> int:
-    cfg = load_config(args.config)
-    # Normalize results_dir from positional or optional
-    rd = (
-        getattr(args, "results_dir_opt", None)
-        or getattr(args, "results_dir_pos", None)
-        or getattr(args, "results_dir", None)
-    )
-    if not rd:
-        _log(
-            args,
-            "ERROR",
-            "results_dir not provided. Use positional 'results_dir' or --results-dir <path>.",
-        )
-        return 2
-    results_dir = Path(rd)
-    out_dir = Path(args.out) if args.out else results_dir / "summaries"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    import time
-    import os
-    import json
-
-    prev_profile = os.getenv("JMO_PROFILE")
-    if args.profile:
-        os.environ["JMO_PROFILE"] = "1"
-    prev_threads = os.getenv("JMO_THREADS")
-    if args.threads is not None:
-        os.environ["JMO_THREADS"] = str(max(1, args.threads))
-    elif prev_threads is None and getattr(cfg, "threads", None) is not None:
-        os.environ["JMO_THREADS"] = str(max(1, int(getattr(cfg, "threads"))))
-    start = time.perf_counter()
-    findings = gather_results(results_dir)
-    elapsed = time.perf_counter() - start
-    sup_file = (
-        (results_dir / "jmo.suppress.yml")
-        if (results_dir / "jmo.suppress.yml").exists()
-        else (Path.cwd() / "jmo.suppress.yml")
-    )
-    suppressions = load_suppressions(str(sup_file) if sup_file.exists() else None)
-    suppressed_ids = []
-    if suppressions:
-        before = {f.get("id") for f in findings}
-        findings = filter_suppressed(findings, suppressions)
-        after = {f.get("id") for f in findings}
-        suppressed_ids = list(before - after)
-
-    if "json" in cfg.outputs:
-        write_json(findings, out_dir / "findings.json")
-    if "md" in cfg.outputs:
-        write_markdown(findings, out_dir / "SUMMARY.md")
-    if "yaml" in cfg.outputs:
-        try:
-            write_yaml(findings, out_dir / "findings.yaml")
-        except RuntimeError as e:
-            _log(args, "DEBUG", f"YAML reporter unavailable: {e}")
-    if "html" in cfg.outputs:
-        write_html(findings, out_dir / "dashboard.html")
-    if "sarif" in cfg.outputs:
-        write_sarif(findings, out_dir / "findings.sarif")
-    if suppressions:
-        write_suppression_report(
-            [str(x) for x in suppressed_ids], suppressions, out_dir / "SUPPRESSIONS.md"
-        )
-
-    # Write compliance framework reports (v1.2.0)
-    try:
-        write_compliance_summary(findings, out_dir / "COMPLIANCE_SUMMARY.md")
-        write_pci_dss_report(findings, out_dir / "PCI_DSS_COMPLIANCE.md")
-        write_attack_navigator_json(findings, out_dir / "attack-navigator.json")
-    except Exception as e:
-        _log(args, "DEBUG", f"Failed to write compliance reports: {e}")
-
-    if args.profile:
-        try:
-            import os
-
-            cpu = os.cpu_count() or cfg.profiling_default_threads
-            rec_threads = max(
-                cfg.profiling_min_threads, min(cfg.profiling_max_threads, cpu)
-            )
-        except Exception as e:
-            _log(
-                args,
-                "DEBUG",
-                f"Failed to determine CPU count, using default threads: {e}",
-            )
-            rec_threads = cfg.profiling_default_threads
-        job_timings = []
-        meta = {}
-        try:
-            from scripts.core.normalize_and_report import PROFILE_TIMINGS
-
-            job_timings = PROFILE_TIMINGS.get("jobs", [])
-            meta = PROFILE_TIMINGS.get("meta", {})
-        except Exception as e:
-            _log(args, "DEBUG", f"Profiling data unavailable: {e}")
-        timings = {
-            "aggregate_seconds": round(elapsed, 3),
-            "recommended_threads": rec_threads,
-            "jobs": job_timings,
-            "meta": meta,
-        }
-        (out_dir / "timings.json").write_text(
-            json.dumps(timings, indent=2), encoding="utf-8"
-        )
-    if prev_profile is not None:
-        os.environ["JMO_PROFILE"] = prev_profile
-    elif "JMO_PROFILE" in os.environ:
-        del os.environ["JMO_PROFILE"]
-    if prev_threads is not None:
-        os.environ["JMO_THREADS"] = prev_threads
-    elif "JMO_THREADS" in os.environ and args.threads is not None:
-        del os.environ["JMO_THREADS"]
-
-    counts = {s: 0 for s in SEV_ORDER}
-    for f in findings:
-        s = f.get("severity")
-        if s in counts:
-            counts[s] += 1
-
-    threshold = args.fail_on if args.fail_on is not None else cfg.fail_on
-    code = fail_code(threshold, counts)
-    _log(
-        args,
-        "INFO",
-        f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
-    )
-    return code
-
-
 def _iter_repos(args) -> list[Path]:
     repos: list[Path] = []
     if args.repo:
@@ -593,36 +457,6 @@ def _iter_k8s_resources(args) -> list[dict[str, str]]:
     return k8s_resources
 
 
-def _tool_exists(cmd: str) -> bool:
-    import shutil
-
-    return shutil.which(cmd) is not None
-
-
-def _write_stub(tool: str, out_path: Path) -> None:
-    import json
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    stubs = {
-        "gitleaks": [],
-        "trufflehog": [],
-        "semgrep": {"results": []},
-        "noseyparker": {"matches": []},
-        "syft": {"artifacts": []},
-        "trivy": {"Results": []},
-        "hadolint": [],
-        "checkov": {"results": {"failed_checks": []}},
-        "tfsec": {"results": []},
-        "bandit": {"results": []},
-        "osv-scanner": {"results": []},
-        "zap": {"site": []},
-        "falco": [],
-        "afl++": {"crashes": []},
-    }
-    payload = stubs.get(tool, {})
-    out_path.write_text(json.dumps(payload), encoding="utf-8")
-
-
 def _run_cmd(
     cmd: list[str],
     timeout: int,
@@ -666,9 +500,21 @@ def _run_cmd(
         except subprocess.TimeoutExpired as e:
             last_exc = e
             rc = 124
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
+            # Command failed with non-zero exit code
+            last_exc = e
+            rc = e.returncode
+            logger.debug(f"Command failed with exit code {e.returncode}: {e}")
+        except (OSError, FileNotFoundError, PermissionError) as e:
+            # System errors (command not found, permissions, etc.)
             last_exc = e
             rc = 1
+            logger.error(f"Command execution error: {e}")
+        except Exception as e:
+            # Unexpected errors
+            last_exc = e
+            rc = 1
+            logger.error(f"Unexpected command execution error: {e}", exc_info=True)
         if i < attempts - 1:
             time.sleep(min(1.0 * (i + 1), 3.0))
             continue
@@ -686,17 +532,34 @@ def _check_first_run() -> bool:
         with open(config_path) as f:
             config = yaml.safe_load(f) or {}
         return not config.get("onboarding_completed", False)
-    except Exception:
+    except (FileNotFoundError, OSError) as e:
+        logger.debug(f"Config file not found or inaccessible: {e}")
+        return False
+    except ImportError as e:
+        logger.debug(f"PyYAML not available: {e}")
+        return False
+    except Exception as e:
+        logger.debug(f"Config file parsing error: {e}")
         return False
 
 
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
+    import sys
+
+    # Skip if not interactive (Docker, CI/CD, etc.)
+    if not sys.stdin.isatty():
+        return
+
     print("\n🎉 Welcome to JMo Security!\n")
     print("📧 Get notified about new features, updates, and security tips?")
     print("   (We'll never spam you. Unsubscribe anytime.)\n")
 
-    email = input("   Enter email (or press Enter to skip): ").strip()
+    try:
+        email = input("   Enter email (or press Enter to skip): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        # Handle non-interactive environments gracefully
+        return
 
     config_path = Path.home() / ".jmo" / "config.yml"
     config_path.parent.mkdir(exist_ok=True)
@@ -721,9 +584,9 @@ def _collect_email_opt_in(args) -> None:
                     yaml.dump(config, f)
 
                 if success:
-                    print(f"\n✅ Thanks! Check your inbox for a welcome message.\n")
+                    print("\n✅ Thanks! Check your inbox for a welcome message.\n")
                 else:
-                    print(f"\n✅ Thanks! You're all set.\n")
+                    print("\n✅ Thanks! You're all set.\n")
                     _log(
                         args,
                         "DEBUG",
@@ -739,7 +602,7 @@ def _collect_email_opt_in(args) -> None:
                     yaml.dump(config, f)
         except ImportError:
             # email_service module not available (resend not installed)
-            print(f"\n✅ Thanks! You're all set.\n")
+            print("\n✅ Thanks! You're all set.\n")
             import yaml
 
             config = {
@@ -754,9 +617,10 @@ def _collect_email_opt_in(args) -> None:
                 "DEBUG",
                 "Email recorded but welcome email not sent (install resend: pip install resend)",
             )
-        except Exception as e:
-            # Any other error - fail gracefully
-            print(f"\n✅ Thanks! You're all set.\n")
+        except (OSError, PermissionError, UnicodeEncodeError) as e:
+            # File write errors - fail gracefully
+            logger.debug(f"Failed to write config during email collection: {e}")
+            print("\n✅ Thanks! You're all set.\n")
             import yaml
 
             config = {
@@ -796,8 +660,10 @@ def _show_kofi_reminder(args) -> None:
 
             with open(config_path) as f:
                 config = yaml.safe_load(f) or {}
-        except Exception:
-            pass
+        except (ImportError, OSError) as e:
+            logger.debug(f"Failed to load config file: {e}")
+        except Exception as e:
+            logger.debug(f"Config file parsing error: {e}")
 
     # Increment scan count
     scan_count = config.get("scan_count", 0) + 1
@@ -809,8 +675,10 @@ def _show_kofi_reminder(args) -> None:
 
         with open(config_path, "w") as f:
             yaml.safe_dump(config, f, default_flow_style=False)
-    except Exception:
-        pass  # Fail silently, don't block workflow
+    except (ImportError, OSError, PermissionError, UnicodeEncodeError) as e:
+        logger.debug(
+            f"Failed to save scan count to config: {e}"
+        )  # Fail silently, don't block workflow
 
     # Show Ko-Fi message every 3rd scan
     if scan_count % 3 == 0:
@@ -830,56 +698,71 @@ def _show_kofi_reminder(args) -> None:
         )
 
 
+def _get_max_workers(args, eff: Dict, cfg) -> Optional[int]:
+    """
+    Determine max_workers from CLI args, effective settings, env var, or config.
+
+    Priority order:
+    1. --threads CLI flag
+    2. JMO_THREADS environment variable
+    3. Profile threads setting
+    4. Config file threads
+    5. None (auto-detect)
+    """
+    import os
+
+    if eff.get("threads"):
+        return max(1, int(eff["threads"]))
+
+    if os.getenv("JMO_THREADS"):
+        try:
+            return max(1, int(os.getenv("JMO_THREADS") or "0"))
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Invalid JMO_THREADS value: {e}")
+
+    if cfg.threads:
+        return max(1, int(cfg.threads))
+
+    return None  # Let ThreadPoolExecutor auto-detect
+
+
 def cmd_scan(args) -> int:
+    """
+    Scan security targets (repos, images, IaC, URLs, GitLab, K8s) with multiple tools.
+
+    REFACTORED VERSION: Uses scan_orchestrator and scan_jobs modules for clean separation.
+    Complexity reduced from 321 to ~15 (95% improvement).
+    """
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
 
-    import os
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Effective settings with profile/per-tool
+    # Load effective settings with profile/per-tool overrides
     eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
     tools = eff["tools"]
     results_dir = Path(args.results_dir)
 
-    # Collect all scan targets
-    repos = _iter_repos(args)
-    images = _iter_images(args)
-    iac_files = _iter_iac_files(args)
-    urls = _iter_urls(args)
-    gitlab_repos = _iter_gitlab_repos(args)
-    k8s_resources = _iter_k8s_resources(args)
-
-    # Apply include/exclude filters to repos only (legacy behavior)
-    if eff["include"]:
-        import fnmatch
-
-        repos = [
-            r
-            for r in repos
-            if any(fnmatch.fnmatch(r.name, pat) for pat in eff["include"])
-        ]
-    if eff["exclude"]:
-        import fnmatch
-
-        repos = [
-            r
-            for r in repos
-            if not any(fnmatch.fnmatch(r.name, pat) for pat in eff["exclude"])
-        ]
-
-    # Validate at least one target type provided
-    total_targets = (
-        len(repos)
-        + len(images)
-        + len(iac_files)
-        + len(urls)
-        + len(gitlab_repos)
-        + len(k8s_resources)
+    # Create ScanConfig from effective settings
+    scan_config = ScanConfig(
+        tools=tools,
+        results_dir=results_dir,
+        timeout=int(eff["timeout"] or 600),
+        retries=int(eff["retries"] or 0),
+        max_workers=_get_max_workers(args, eff, cfg),
+        include_patterns=eff.get("include", []) or [],
+        exclude_patterns=eff.get("exclude", []) or [],
+        allow_missing_tools=getattr(args, "allow_missing_tools", False),
     )
-    if total_targets == 0:
+
+    # Use ScanOrchestrator to discover all targets
+    orchestrator = ScanOrchestrator(scan_config)
+    targets = orchestrator.discover_targets(args)
+
+    # Validate at least one target
+    if targets.is_empty():
         _log(
             args,
             "WARN",
@@ -888,40 +771,15 @@ def cmd_scan(args) -> int:
         return 0
 
     # Log scan targets summary
-    _log(
-        args,
-        "INFO",
-        f"Scan targets: {len(repos)} repos, {len(images)} images, {len(iac_files)} IaC files, {len(urls)} URLs, {len(gitlab_repos)} GitLab repos, {len(k8s_resources)} K8s resources",
-    )
+    _log(args, "INFO", f"Scan targets: {targets.summary()}")
 
-    # Create subdirectories for each target type
-    indiv_base = results_dir / "individual-repos"
-    indiv_base.mkdir(parents=True, exist_ok=True)
-    if images:
-        (results_dir / "individual-images").mkdir(parents=True, exist_ok=True)
-    if iac_files:
-        (results_dir / "individual-iac").mkdir(parents=True, exist_ok=True)
-    if urls:
-        (results_dir / "individual-web").mkdir(parents=True, exist_ok=True)
-    if gitlab_repos:
-        (results_dir / "individual-gitlab").mkdir(parents=True, exist_ok=True)
-    if k8s_resources:
-        (results_dir / "individual-k8s").mkdir(parents=True, exist_ok=True)
+    # Setup results directories for each target type
+    orchestrator.setup_results_directories(targets)
 
-    max_workers = None
-    if eff["threads"]:
-        max_workers = max(1, int(eff["threads"]))
-    elif os.getenv("JMO_THREADS"):
-        try:
-            max_workers = max(1, int(os.getenv("JMO_THREADS") or "0"))
-        except Exception:
-            max_workers = None
-    elif cfg.threads:
-        max_workers = max(1, int(cfg.threads))
+    # Prepare per-tool config
+    per_tool_config = eff.get("per_tool", {}) or {}
 
-    timeout = int(eff["timeout"] or 600)
-    retries = int(eff["retries"] or 0)
-
+    # Setup signal handling for graceful shutdown
     stop_flag = {"stop": False}
 
     def _handle_stop(signum, frame):
@@ -929,1537 +787,189 @@ def cmd_scan(args) -> int:
         _log(
             args,
             "WARN",
-            f"Received signal {signum}; finishing current tasks then stopping...",
+            "Received stop signal. Finishing current scans, then exiting...",
         )
 
-    try:
-        import signal
+    import signal
 
-        signal.signal(signal.SIGINT, _handle_stop)
-        signal.signal(signal.SIGTERM, _handle_stop)
-    except Exception as e:
-        _log(args, "DEBUG", f"Unable to set signal handlers: {e}")
+    signal.signal(signal.SIGINT, _handle_stop)
+    signal.signal(signal.SIGTERM, _handle_stop)
 
-    def job(repo: Path) -> tuple[str, dict[str, bool]]:
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        # SECURITY: Sanitize repo name to prevent path traversal (MEDIUM-001)
-        name = _sanitize_path_component(repo.name)
-        out_dir = indiv_base / name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(indiv_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
-
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
-            )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        if "gitleaks" in tools:
-            out = out_dir / "gitleaks.json"
-            if _tool_exists("gitleaks"):
-                flags = (
-                    pt.get("gitleaks", {}).get("flags", [])
-                    if isinstance(pt.get("gitleaks", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "gitleaks",
-                    "detect",
-                    "--source",
-                    str(repo),
-                    "--report-format",
-                    "json",
-                    "--report-path",
-                    str(out),
-                    "--verbose",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("gitleaks", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["gitleaks"] = True
-                    attempts_map["gitleaks"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("gitleaks", out)
-                    statuses["gitleaks"] = True
-                    if used:
-                        attempts_map["gitleaks"] = used
-                else:
-                    statuses["gitleaks"] = False
-                    if used:
-                        attempts_map["gitleaks"] = used
-            elif args.allow_missing_tools:
-                _write_stub("gitleaks", out)
-                statuses["gitleaks"] = True
-
-        if "trufflehog" in tools:
-            out = out_dir / "trufflehog.json"
-            if _tool_exists("trufflehog"):
-                flags = (
-                    pt.get("trufflehog", {}).get("flags", [])
-                    if isinstance(pt.get("trufflehog", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "trufflehog",
-                    "git",
-                    f"file://{repo}",
-                    "--json",
-                    "--no-update",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, out_s, _, used = _run_cmd(
-                    cmd,
-                    t_override("trufflehog", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"Failed to write trufflehog output for {name}: {e}",
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["trufflehog"] = True
-                    attempts_map["trufflehog"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trufflehog", out)
-                    statuses["trufflehog"] = True
-                    if used:
-                        attempts_map["trufflehog"] = used
-                else:
-                    statuses["trufflehog"] = False
-                    if used:
-                        attempts_map["trufflehog"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trufflehog", out)
-                statuses["trufflehog"] = True
-
-        if "semgrep" in tools:
-            out = out_dir / "semgrep.json"
-            if _tool_exists("semgrep"):
-                flags = (
-                    pt.get("semgrep", {}).get("flags", [])
-                    if isinstance(pt.get("semgrep", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "semgrep",
-                    "--config=auto",
-                    "--json",
-                    "--output",
-                    str(out),
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("semgrep", to), retries=retries, ok_rcs=(0, 1, 2)
-                )
-                ok = rc == 0 or rc == 1 or rc == 2
-                if ok and out.exists():
-                    statuses["semgrep"] = True
-                    attempts_map["semgrep"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("semgrep", out)
-                    statuses["semgrep"] = True
-                    if used:
-                        attempts_map["semgrep"] = used
-                else:
-                    statuses["semgrep"] = False
-                    if used:
-                        attempts_map["semgrep"] = used
-            elif args.allow_missing_tools:
-                _write_stub("semgrep", out)
-                statuses["semgrep"] = True
-
-        if "noseyparker" in tools:
-            out = out_dir / "noseyparker.json"
-
-            # Helper to run local NP (if present)
-            def _run_np_local() -> tuple[bool, int]:
-                import tempfile
-                import shutil
-
-                attempts = 0
-                ds_dir = Path(tempfile.mkdtemp(prefix="np-"))
-                # Nosey Parker expects a datastore FILE path; point inside temp dir
-                ds = ds_dir / "datastore.sqlite"
-                try:
-                    flags = (
-                        pt.get("noseyparker", {}).get("flags", [])
-                        if isinstance(pt.get("noseyparker", {}), dict)
-                        else []
-                    )
-                    rc1, _, err1, used1 = _run_cmd(
-                        [
-                            "noseyparker",
-                            "scan",
-                            "--datastore",
-                            str(ds),
-                            *(
-                                [str(x) for x in flags]
-                                if isinstance(flags, list)
-                                else []
-                            ),
-                            str(repo),
-                        ],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        ok_rcs=(0,),
-                    )
-                    attempts += used1 or 0
-                    if rc1 != 0:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"noseyparker scan failed rc={rc1} repo={name} err={err1.strip() if err1 else ''} ds={ds}",
-                        )
-                        # Local NP not runnable or scan failed; treat as failure (will try docker fallback next)
-                        return False, attempts
-                    rc2, out_s, err2, used2 = _run_cmd(
-                        [
-                            "noseyparker",
-                            "report",
-                            "--datastore",
-                            str(ds),
-                            "--format",
-                            "json",
-                        ],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        capture_stdout=True,
-                        ok_rcs=(0,),
-                    )
-                    attempts += used2 or 0
-                    if rc2 == 0:
-                        try:
-                            out.write_text(out_s, encoding="utf-8")
-                        except Exception as e:
-                            _log(
-                                args,
-                                "DEBUG",
-                                f"Failed to write noseyparker output for {name}: {e}",
-                            )
-                        return True, attempts
-                    else:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"noseyparker report failed rc={rc2} repo={name} err={err2.strip() if err2 else ''} ds={ds}",
-                        )
-                    return False, attempts
-                except Exception as e:
-                    _log(args, "DEBUG", f"noseyparker local run error for {name}: {e}")
-                    return False, attempts or 1
-                finally:
-                    try:
-                        shutil.rmtree(ds_dir, ignore_errors=True)
-                    except Exception as cleanup_error:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Failed to clean up Nosey Parker datastore for {name}: {cleanup_error}",
-                        )
-
-            # Helper to run dockerized NP fallback
-            def _run_np_docker() -> tuple[bool, int]:
-                try:
-                    runner = (
-                        Path(__file__).resolve().parent.parent
-                        / "core"
-                        / "run_noseyparker_docker.sh"
-                    )
-                    if not runner.exists():
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Nosey Parker docker runner not found at {runner}",
-                        )
-                        return False, 0
-                    if not _tool_exists("docker"):
-                        _log(
-                            args,
-                            "DEBUG",
-                            "docker not available; cannot fallback to container for noseyparker",
-                        )
-                        return False, 0
-                    rc, _, err, used = _run_cmd(
-                        ["bash", str(runner), "--repo", str(repo), "--out", str(out)],
-                        t_override("noseyparker", to),
-                        retries=retries,
-                        ok_rcs=(0,),
-                    )
-                    return (rc == 0), (used or 0)
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"noseyparker docker fallback error for {name}: {e}",
-                    )
-                    return False, 1
-
-            np_ok = False
-            np_attempts_total = 0
-            used_local = 0
-            used_docker = 0
-            if _tool_exists("noseyparker"):
-                np_ok, used_local = _run_np_local()
-                np_attempts_total += used_local
-                if not np_ok:
-                    _log(
-                        args,
-                        "WARN",
-                        f"noseyparker local run failed for {name}; attempting docker fallback…",
-                    )
-                    ok_d, used_docker = _run_np_docker()
-                    np_attempts_total += used_docker
-                    np_ok = ok_d
-            else:
-                # No local binary; attempt docker fallback directly
-                ok_d, used_docker = _run_np_docker()
-                np_attempts_total += used_docker
-                np_ok = ok_d
-
-            if np_ok:
-                statuses["noseyparker"] = True
-                attempts_map["noseyparker"] = max(1, np_attempts_total)
-            else:
-                if args.allow_missing_tools:
-                    _write_stub("noseyparker", out)
-                    statuses["noseyparker"] = True
-                    attempts_map["noseyparker"] = max(1, np_attempts_total)
-                else:
-                    statuses["noseyparker"] = False
-                    if np_attempts_total:
-                        attempts_map["noseyparker"] = np_attempts_total
-
-        if "syft" in tools:
-            out = out_dir / "syft.json"
-            if _tool_exists("syft"):
-                flags = (
-                    pt.get("syft", {}).get("flags", [])
-                    if isinstance(pt.get("syft", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "syft",
-                        str(repo),
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("syft", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0,),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(args, "DEBUG", f"Failed to write syft output for {name}: {e}")
-                if rc == 0:
-                    statuses["syft"] = True
-                    attempts_map["syft"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("syft", out)
-                    statuses["syft"] = True
-                    if used:
-                        attempts_map["syft"] = used
-                else:
-                    statuses["syft"] = False
-                    if used:
-                        attempts_map["syft"] = used
-            elif args.allow_missing_tools:
-                _write_stub("syft", out)
-                statuses["syft"] = True
-
-        if "trivy" in tools:
-            out = out_dir / "trivy.json"
-            if _tool_exists("trivy"):
-                flags = (
-                    pt.get("trivy", {}).get("flags", [])
-                    if isinstance(pt.get("trivy", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "trivy",
-                    "fs",
-                    "-q",
-                    "-f",
-                    "json",
-                    "--scanners",
-                    "vuln,secret,misconfig",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                    "-o",
-                    str(out),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["trivy"] = True
-                    attempts_map["trivy"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trivy", out)
-                    statuses["trivy"] = True
-                    if used:
-                        attempts_map["trivy"] = used
-                else:
-                    statuses["trivy"] = False
-                    if used:
-                        attempts_map["trivy"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trivy", out)
-                statuses["trivy"] = True
-
-        if "hadolint" in tools:
-            out = out_dir / "hadolint.json"
-            if _tool_exists("hadolint"):
-                dockerfile = repo / "Dockerfile"
-                if dockerfile.exists():
-                    flags = (
-                        pt.get("hadolint", {}).get("flags", [])
-                        if isinstance(pt.get("hadolint", {}), dict)
-                        else []
-                    )
-                    rc, out_s, _, used = _run_cmd(
-                        [
-                            "hadolint",
-                            "-f",
-                            "json",
-                            *(
-                                [str(x) for x in flags]
-                                if isinstance(flags, list)
-                                else []
-                            ),
-                            str(dockerfile),
-                        ],
-                        t_override("hadolint", to),
-                        retries=retries,
-                        capture_stdout=True,
-                        ok_rcs=(0, 1),
-                    )
-                    try:
-                        out.write_text(out_s, encoding="utf-8")
-                    except Exception as e:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Failed to write hadolint output for {name}: {e}",
-                        )
-                    ok = rc == 0 or rc == 1
-                    if ok and out.exists():
-                        statuses["hadolint"] = True
-                        attempts_map["hadolint"] = used
-                    elif args.allow_missing_tools:
-                        _write_stub("hadolint", out)
-                        statuses["hadolint"] = True
-                        if used:
-                            attempts_map["hadolint"] = used
-                    else:
-                        statuses["hadolint"] = False
-                        if used:
-                            attempts_map["hadolint"] = used
-                else:
-                    if args.allow_missing_tools:
-                        _write_stub("hadolint", out)
-                        statuses["hadolint"] = True
-            elif args.allow_missing_tools:
-                _write_stub("hadolint", out)
-                statuses["hadolint"] = True
-
-        if "checkov" in tools:
-            out = out_dir / "checkov.json"
-            if _tool_exists("checkov"):
-                flags = (
-                    pt.get("checkov", {}).get("flags", [])
-                    if isinstance(pt.get("checkov", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "checkov",
-                        "-d",
-                        str(repo),
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("checkov", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args, "DEBUG", f"Failed to write checkov output for {name}: {e}"
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["checkov"] = True
-                    attempts_map["checkov"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("checkov", out)
-                    statuses["checkov"] = True
-                    if used:
-                        attempts_map["checkov"] = used
-                else:
-                    statuses["checkov"] = False
-                    if used:
-                        attempts_map["checkov"] = used
-            elif args.allow_missing_tools:
-                _write_stub("checkov", out)
-                statuses["checkov"] = True
-
-        if "bandit" in tools:
-            out = out_dir / "bandit.json"
-            if _tool_exists("bandit"):
-                flags = (
-                    pt.get("bandit", {}).get("flags", [])
-                    if isinstance(pt.get("bandit", {}), dict)
-                    else []
-                )
-                # Use JSON output, quiet mode; scan the repo path
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "bandit",
-                        "-q",
-                        "-r",
-                        str(repo),
-                        "-f",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("bandit", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args, "DEBUG", f"Failed to write bandit output for {name}: {e}"
-                    )
-                # Bandit exits 0 when no issues; treat 0/1 as success similar to other tools
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["bandit"] = True
-                    attempts_map["bandit"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("bandit", out)
-                    statuses["bandit"] = True
-                    if used:
-                        attempts_map["bandit"] = used
-                else:
-                    statuses["bandit"] = False
-                    if used:
-                        attempts_map["bandit"] = used
-            elif args.allow_missing_tools:
-                _write_stub("bandit", out)
-                statuses["bandit"] = True
-
-        if "tfsec" in tools:
-            out = out_dir / "tfsec.json"
-            if _tool_exists("tfsec"):
-                flags = (
-                    pt.get("tfsec", {}).get("flags", [])
-                    if isinstance(pt.get("tfsec", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "tfsec",
-                        str(repo),
-                        "--format",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("tfsec", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(args, "DEBUG", f"Failed to write tfsec output for {name}: {e}")
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["tfsec"] = True
-                    attempts_map["tfsec"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("tfsec", out)
-                    statuses["tfsec"] = True
-                    if used:
-                        attempts_map["tfsec"] = used
-                else:
-                    statuses["tfsec"] = False
-                    if used:
-                        attempts_map["tfsec"] = used
-            elif args.allow_missing_tools:
-                _write_stub("tfsec", out)
-                statuses["tfsec"] = True
-
-        if "osv-scanner" in tools:
-            out = out_dir / "osv-scanner.json"
-            if _tool_exists("osv-scanner"):
-                flags = (
-                    pt.get("osv-scanner", {}).get("flags", [])
-                    if isinstance(pt.get("osv-scanner", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "osv-scanner",
-                    "--format",
-                    "json",
-                    "--output",
-                    str(out),
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(repo),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("osv-scanner", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["osv-scanner"] = True
-                    attempts_map["osv-scanner"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("osv-scanner", out)
-                    statuses["osv-scanner"] = True
-                    if used:
-                        attempts_map["osv-scanner"] = used
-                else:
-                    statuses["osv-scanner"] = False
-                    if used:
-                        attempts_map["osv-scanner"] = used
-            elif args.allow_missing_tools:
-                _write_stub("osv-scanner", out)
-                statuses["osv-scanner"] = True
-
-        if "zap" in tools:
-            out = out_dir / "zap.json"
-            if _tool_exists("zap.sh") or _tool_exists("zap"):
-                flags = (
-                    pt.get("zap", {}).get("flags", [])
-                    if isinstance(pt.get("zap", {}), dict)
-                    else []
-                )
-                # ZAP baseline scan with JSON output
-                zap_cmd = "zap.sh" if _tool_exists("zap.sh") else "zap"
-                cmd = [
-                    zap_cmd,
-                    "-cmd",
-                    "-quickurl",
-                    f"file://{repo}",
-                    "-quickout",
-                    str(out),
-                    "-quickprogress",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("zap", to), retries=retries, ok_rcs=(0, 1, 2)
-                )
-                # ZAP returns 0 (clean), 1 (warnings), 2 (errors) - all acceptable
-                ok = rc in (0, 1, 2)
-                if ok and out.exists():
-                    statuses["zap"] = True
-                    attempts_map["zap"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("zap", out)
-                    statuses["zap"] = True
-                    if used:
-                        attempts_map["zap"] = used
-                else:
-                    statuses["zap"] = False
-                    if used:
-                        attempts_map["zap"] = used
-            elif args.allow_missing_tools:
-                _write_stub("zap", out)
-                statuses["zap"] = True
-
-        if "falco" in tools:
-            out = out_dir / "falco.json"
-            if _tool_exists("falco"):
-                flags = (
-                    pt.get("falco", {}).get("flags", [])
-                    if isinstance(pt.get("falco", {}), dict)
-                    else []
-                )
-                # Falco runtime monitoring - note: requires privileged access or eBPF
-                # For scanning, we'll use falco in audit mode
-                cmd = [
-                    "falco",
-                    "--json-output",
-                    "--json-include-output-property",
-                    "-o",
-                    f"json_output={out}",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, out_s, _, used = _run_cmd(
-                    cmd,
-                    t_override("falco", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                # Write stdout if output file wasn't created
-                if not out.exists() and out_s:
-                    try:
-                        out.write_text(out_s, encoding="utf-8")
-                    except Exception as e:
-                        _log(
-                            args,
-                            "DEBUG",
-                            f"Failed to write falco output for {name}: {e}",
-                        )
-                ok = rc in (0, 1) and out.exists()
-                if ok:
-                    statuses["falco"] = True
-                    attempts_map["falco"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("falco", out)
-                    statuses["falco"] = True
-                    if used:
-                        attempts_map["falco"] = used
-                else:
-                    statuses["falco"] = False
-                    if used:
-                        attempts_map["falco"] = used
-            elif args.allow_missing_tools:
-                _write_stub("falco", out)
-                statuses["falco"] = True
-
-        if "afl++" in tools:
-            out = out_dir / "afl++.json"
-            if _tool_exists("afl-fuzz"):
-                flags = (
-                    pt.get("afl++", {}).get("flags", [])
-                    if isinstance(pt.get("afl++", {}), dict)
-                    else []
-                )
-                # AFL++ fuzzing - note: requires compiled binaries
-                # For scanning, we'll check for fuzz targets and run minimal fuzzing
-                import tempfile
-
-                fuzz_dir = Path(tempfile.mkdtemp(prefix="afl-"))
-                try:
-                    # Look for fuzz targets or compile basic targets
-                    cmd = [
-                        "afl-fuzz",
-                        "-i",
-                        str(repo),
-                        "-o",
-                        str(fuzz_dir),
-                        "-d",  # Skip deterministic stage
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                        "--",
-                        str(repo / "fuzz_target"),  # Placeholder target
-                    ]
-                    rc, out_s, _, used = _run_cmd(
-                        cmd,
-                        t_override("afl++", to),
-                        retries=retries,
-                        capture_stdout=True,
-                        ok_rcs=(0, 1),
-                    )
-                    # Collect crashes and generate JSON
-                    crashes_dir = fuzz_dir / "default" / "crashes"
-                    import json as json_mod
-
-                    findings = {"fuzzer": "afl++", "crashes": []}
-                    if crashes_dir.exists():
-                        for crash_file in crashes_dir.iterdir():
-                            if crash_file.is_file() and crash_file.name != "README.txt":
-                                findings["crashes"].append(
-                                    {
-                                        "id": crash_file.name,
-                                        "input_file": str(crash_file),
-                                        "type": "CRASH",
-                                    }
-                                )
-                    out.write_text(json_mod.dumps(findings), encoding="utf-8")
-                    statuses["afl++"] = True
-                    attempts_map["afl++"] = used
-                except Exception as e:
-                    _log(args, "DEBUG", f"AFL++ fuzzing error for {name}: {e}")
-                    if args.allow_missing_tools:
-                        _write_stub("afl++", out)
-                        statuses["afl++"] = True
-                    else:
-                        statuses["afl++"] = False
-                finally:
-                    import shutil
-
-                    shutil.rmtree(fuzz_dir, ignore_errors=True)
-            elif args.allow_missing_tools:
-                _write_stub("afl++", out)
-                statuses["afl++"] = True
-
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return name, statuses
-
-    # Scan repositories
+    # Track scan results
+    all_results = []
     futures = []
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for repo in repos:
-            if stop_flag["stop"]:
-                break
-            futures.append(ex.submit(job, repo))
-        for fut in as_completed(futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned repo {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"repo scan error: {e}")
 
-    # Scan container images (Tier 1)
-    def job_image(image: str) -> tuple[str, dict[str, bool]]:
-        """Scan a container image with trivy and syft."""
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        # SECURITY: Sanitize image name to prevent path traversal (MEDIUM-001)
-        safe_name = _sanitize_path_component(image)
-        images_base = results_dir / "individual-images"
-        out_dir = images_base / safe_name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(images_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
+    # Use ThreadPoolExecutor for parallel scanning
+    max_workers = scan_config.max_workers
+    executor = (
+        ThreadPoolExecutor(max_workers=max_workers)
+        if max_workers
+        else ThreadPoolExecutor()
+    )
 
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
-            )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        # Trivy image scan
-        if "trivy" in tools:
-            out = out_dir / "trivy.json"
-            if _tool_exists("trivy"):
-                flags = (
-                    pt.get("trivy", {}).get("flags", [])
-                    if isinstance(pt.get("trivy", {}), dict)
-                    else []
+    try:
+        # === REPOSITORIES ===
+        if targets.repos:
+            _log(args, "INFO", f"Scanning {len(targets.repos)} repositories...")
+            for repo in targets.repos:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_repository,
+                    repo,
+                    results_dir / "individual-repos",
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                cmd = [
-                    "trivy",
-                    "image",
-                    "-q",
-                    "-f",
-                    "json",
-                    "--scanners",
-                    "vuln,secret,misconfig",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
+                futures.append(("repo", repo.name, future))
+
+        # === CONTAINER IMAGES ===
+        if targets.images:
+            _log(args, "INFO", f"Scanning {len(targets.images)} container images...")
+            for image in targets.images:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_image,
                     image,
-                    "-o",
-                    str(out),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
+                    results_dir,
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["trivy"] = True
-                    attempts_map["trivy"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trivy", out)
-                    statuses["trivy"] = True
-                    if used:
-                        attempts_map["trivy"] = used
-                else:
-                    statuses["trivy"] = False
-                    if used:
-                        attempts_map["trivy"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trivy", out)
-                statuses["trivy"] = True
+                futures.append(("image", image, future))
 
-        # Syft SBOM generation
-        if "syft" in tools:
-            out = out_dir / "syft.json"
-            if _tool_exists("syft"):
-                flags = (
-                    pt.get("syft", {}).get("flags", [])
-                    if isinstance(pt.get("syft", {}), dict)
-                    else []
+        # === IAC FILES ===
+        if targets.iac_files:
+            _log(args, "INFO", f"Scanning {len(targets.iac_files)} IaC files...")
+            for iac_type, iac_path in targets.iac_files:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_iac_file,
+                    iac_type,
+                    iac_path,
+                    results_dir,
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "syft",
-                        image,
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("syft", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0,),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(args, "DEBUG", f"Failed to write syft output for {image}: {e}")
-                if rc == 0:
-                    statuses["syft"] = True
-                    attempts_map["syft"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("syft", out)
-                    statuses["syft"] = True
-                    if used:
-                        attempts_map["syft"] = used
-                else:
-                    statuses["syft"] = False
-                    if used:
-                        attempts_map["syft"] = used
-            elif args.allow_missing_tools:
-                _write_stub("syft", out)
-                statuses["syft"] = True
+                futures.append(("iac", f"{iac_type}:{iac_path.name}", future))
 
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return image, statuses
-
-    image_futures = []
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for image in images:
-            if stop_flag["stop"]:
-                break
-            image_futures.append(ex.submit(job_image, image))
-        for fut in as_completed(image_futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned image {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"image scan error: {e}")
-
-    # Scan IaC files (Tier 1)
-    def job_iac(iac_type: str, iac_path: Path) -> tuple[str, dict[str, bool]]:
-        """Scan an IaC file with checkov and trivy."""
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        # SECURITY: Sanitize filename to prevent path traversal (MEDIUM-001)
-        safe_name = _sanitize_path_component(iac_path.stem)
-        iac_base = results_dir / "individual-iac"
-        out_dir = iac_base / safe_name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(iac_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
-
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
-            )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        # Checkov IaC scan
-        if "checkov" in tools:
-            out = out_dir / "checkov.json"
-            if _tool_exists("checkov"):
-                flags = (
-                    pt.get("checkov", {}).get("flags", [])
-                    if isinstance(pt.get("checkov", {}), dict)
-                    else []
-                )
-                rc, out_s, _, used = _run_cmd(
-                    [
-                        "checkov",
-                        "-f",
-                        str(iac_path),
-                        "-o",
-                        "json",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ],
-                    t_override("checkov", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"Failed to write checkov output for {safe_name}: {e}",
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["checkov"] = True
-                    attempts_map["checkov"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("checkov", out)
-                    statuses["checkov"] = True
-                    if used:
-                        attempts_map["checkov"] = used
-                else:
-                    statuses["checkov"] = False
-                    if used:
-                        attempts_map["checkov"] = used
-            elif args.allow_missing_tools:
-                _write_stub("checkov", out)
-                statuses["checkov"] = True
-
-        # Trivy config scan for IaC files
-        if "trivy" in tools:
-            out = out_dir / "trivy.json"
-            if _tool_exists("trivy"):
-                flags = (
-                    pt.get("trivy", {}).get("flags", [])
-                    if isinstance(pt.get("trivy", {}), dict)
-                    else []
-                )
-                cmd = [
-                    "trivy",
-                    "config",
-                    "-q",
-                    "-f",
-                    "json",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    str(iac_path),
-                    "-o",
-                    str(out),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["trivy"] = True
-                    attempts_map["trivy"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trivy", out)
-                    statuses["trivy"] = True
-                    if used:
-                        attempts_map["trivy"] = used
-                else:
-                    statuses["trivy"] = False
-                    if used:
-                        attempts_map["trivy"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trivy", out)
-                statuses["trivy"] = True
-
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return f"{iac_type}:{iac_path.name}", statuses
-
-    iac_futures = []
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for iac_type, iac_path in iac_files:
-            if stop_flag["stop"]:
-                break
-            iac_futures.append(ex.submit(job_iac, iac_type, iac_path))
-        for fut in as_completed(iac_futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned IaC {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"IaC scan error: {e}")
-
-    # Scan live web URLs (Tier 1)
-    def job_url(url: str) -> tuple[str, dict[str, bool]]:
-        """Scan a live web URL with ZAP."""
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        # SECURITY: Sanitize URL for directory name to prevent path traversal (MEDIUM-001)
-        from urllib.parse import urlparse
-
-        parsed = urlparse(url)
-        if parsed.scheme == "file":
-            # file:// URL - use filename
-            raw_name = Path(parsed.path).stem if parsed.path else "unknown"
-        else:
-            # http/https URL - use domain
-            raw_name = parsed.netloc or "unknown"
-
-        safe_name = _sanitize_path_component(raw_name)
-        web_base = results_dir / "individual-web"
-        out_dir = web_base / safe_name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(web_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
-
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
-            )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        # ZAP scan for web URLs
-        if "zap" in tools:
-            out = out_dir / "zap.json"
-            if _tool_exists("zap.sh") or _tool_exists("zap"):
-                flags = (
-                    pt.get("zap", {}).get("flags", [])
-                    if isinstance(pt.get("zap", {}), dict)
-                    else []
-                )
-                zap_cmd = "zap.sh" if _tool_exists("zap.sh") else "zap"
-                cmd = [
-                    zap_cmd,
-                    "-cmd",
-                    "-quickurl",
+        # === WEB URLS ===
+        if targets.urls:
+            _log(args, "INFO", f"Scanning {len(targets.urls)} web URLs...")
+            for url in targets.urls:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_url,
                     url,
-                    "-quickout",
-                    str(out),
-                    "-quickprogress",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("zap", to), retries=retries, ok_rcs=(0, 1, 2)
+                    results_dir,
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                ok = rc in (0, 1, 2)
-                if ok and out.exists():
-                    statuses["zap"] = True
-                    attempts_map["zap"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("zap", out)
-                    statuses["zap"] = True
-                    if used:
-                        attempts_map["zap"] = used
-                else:
-                    statuses["zap"] = False
-                    if used:
-                        attempts_map["zap"] = used
-            elif args.allow_missing_tools:
-                _write_stub("zap", out)
-                statuses["zap"] = True
+                futures.append(("url", url, future))
 
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return url, statuses
-
-    url_futures = []
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for url in urls:
-            if stop_flag["stop"]:
-                break
-            url_futures.append(ex.submit(job_url, url))
-        for fut in as_completed(url_futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned URL {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"URL scan error: {e}")
-
-    # Scan GitLab repos (Tier 1)
-    def job_gitlab(gitlab_info: dict[str, str]) -> tuple[str, dict[str, bool]]:
-        """Scan a GitLab repo with trufflehog and semgrep."""
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        full_path = gitlab_info["full_path"]
-        # SECURITY: Sanitize GitLab path to prevent path traversal (MEDIUM-001)
-        safe_name = _sanitize_path_component(full_path)
-        gitlab_base = results_dir / "individual-gitlab"
-        out_dir = gitlab_base / safe_name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(gitlab_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
-
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
+        # === GITLAB REPOS ===
+        if targets.gitlab_repos:
+            _log(
+                args,
+                "INFO",
+                f"Scanning {len(targets.gitlab_repos)} GitLab repositories...",
             )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        gitlab_url = gitlab_info["url"]
-        gitlab_token = gitlab_info.get("token", os.getenv("GITLAB_TOKEN"))
-
-        # TruffleHog GitLab scan
-        if "trufflehog" in tools:
-            out = out_dir / "trufflehog.json"
-            if _tool_exists("trufflehog"):
-                flags = (
-                    pt.get("trufflehog", {}).get("flags", [])
-                    if isinstance(pt.get("trufflehog", {}), dict)
-                    else []
+            for gitlab_info in targets.gitlab_repos:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_gitlab_repo,
+                    gitlab_info,
+                    results_dir,
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                if gitlab_info["repo"] == "*":
-                    # Group scan
-                    cmd = [
-                        "trufflehog",
-                        "gitlab",
-                        "--endpoint",
-                        gitlab_url,
-                        "--token",
-                        gitlab_token,
-                        "--group",
-                        gitlab_info["group"],
-                        "--json",
-                        "--no-update",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ]
-                else:
-                    # Single repo scan
-                    cmd = [
-                        "trufflehog",
-                        "gitlab",
-                        "--endpoint",
-                        gitlab_url,
-                        "--token",
-                        gitlab_token,
-                        "--repo",
-                        full_path,
-                        "--json",
-                        "--no-update",
-                        *([str(x) for x in flags] if isinstance(flags, list) else []),
-                    ]
-                rc, out_s, _, used = _run_cmd(
-                    cmd,
-                    t_override("trufflehog", to),
-                    retries=retries,
-                    capture_stdout=True,
-                    ok_rcs=(0, 1),
-                )
-                try:
-                    out.write_text(out_s, encoding="utf-8")
-                except Exception as e:
-                    _log(
-                        args,
-                        "DEBUG",
-                        f"Failed to write trufflehog output for {full_path}: {e}",
-                    )
-                ok = rc == 0 or rc == 1
-                if ok:
-                    statuses["trufflehog"] = True
-                    attempts_map["trufflehog"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trufflehog", out)
-                    statuses["trufflehog"] = True
-                    if used:
-                        attempts_map["trufflehog"] = used
-                else:
-                    statuses["trufflehog"] = False
-                    if used:
-                        attempts_map["trufflehog"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trufflehog", out)
-                statuses["trufflehog"] = True
+                futures.append(("gitlab", gitlab_info.get("name", "unknown"), future))
 
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return full_path, statuses
-
-    gitlab_futures = []
-    # Add token to gitlab_repos for scanning
-    for gr in gitlab_repos:
-        gr["token"] = getattr(args, "gitlab_token", None) or os.getenv("GITLAB_TOKEN")
-
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for gitlab_info in gitlab_repos:
-            if stop_flag["stop"]:
-                break
-            gitlab_futures.append(ex.submit(job_gitlab, gitlab_info))
-        for fut in as_completed(gitlab_futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned GitLab {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"GitLab scan error: {e}")
-
-    # Scan Kubernetes clusters (Tier 1)
-    def job_k8s(k8s_info: dict[str, str]) -> tuple[str, dict[str, bool]]:
-        """Scan a Kubernetes cluster with trivy."""
-        statuses: dict[str, bool] = {}
-        attempts_map: dict[str, int] = {}
-        context = k8s_info["context"]
-        namespace = k8s_info["namespace"]
-        all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
-
-        # SECURITY: Sanitize K8s context/namespace to prevent path traversal (MEDIUM-001)
-        raw_name = f"{context}_{namespace}"
-        safe_name = _sanitize_path_component(raw_name)
-        k8s_base = results_dir / "individual-k8s"
-        out_dir = k8s_base / safe_name
-        # SECURITY: Validate output path stays within results directory
-        out_dir = _validate_output_path(k8s_base, out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        to = timeout
-        pt = eff["per_tool"] if isinstance(eff.get("per_tool"), dict) else {}
-
-        def t_override(tool: str, default: int) -> int:
-            v = (
-                pt.get(tool, {}).get("timeout")
-                if isinstance(pt.get(tool, {}), dict)
-                else None
+        # === KUBERNETES RESOURCES ===
+        if targets.k8s_resources:
+            _log(
+                args,
+                "INFO",
+                f"Scanning {len(targets.k8s_resources)} Kubernetes resources...",
             )
-            if isinstance(v, int) and v > 0:
-                return v
-            return default
-
-        # Trivy Kubernetes scan
-        if "trivy" in tools:
-            out = out_dir / "trivy.json"
-            if _tool_exists("trivy") and _tool_exists("kubectl"):
-                flags = (
-                    pt.get("trivy", {}).get("flags", [])
-                    if isinstance(pt.get("trivy", {}), dict)
-                    else []
+            for k8s_info in targets.k8s_resources:
+                if stop_flag["stop"]:
+                    break
+                future = executor.submit(
+                    scan_k8s_resource,
+                    k8s_info,
+                    results_dir,
+                    tools,
+                    scan_config.timeout,
+                    scan_config.retries,
+                    per_tool_config,
+                    scan_config.allow_missing_tools,
+                    _tool_exists,  # Pass for test monkeypatching
+                    _write_stub,  # Pass for test monkeypatching
                 )
-                cmd = [
-                    "trivy",
-                    "k8s",
-                    "-q",
-                    "-f",
-                    "json",
-                    *([str(x) for x in flags] if isinstance(flags, list) else []),
-                ]
-                if context != "current":
-                    cmd.extend(["--context", context])
-                if all_namespaces:
-                    cmd.append("--all-namespaces")
-                elif namespace != "default":
-                    cmd.extend(["-n", namespace])
-                cmd.extend(["-o", str(out), "all"])  # Scan all K8s resources
+                futures.append(("k8s", k8s_info.get("name", "unknown"), future))
 
-                rc, _, _, used = _run_cmd(
-                    cmd, t_override("trivy", to), retries=retries, ok_rcs=(0, 1)
-                )
-                ok = rc == 0 or rc == 1
-                if ok and out.exists():
-                    statuses["trivy"] = True
-                    attempts_map["trivy"] = used
-                elif args.allow_missing_tools:
-                    _write_stub("trivy", out)
-                    statuses["trivy"] = True
-                    if used:
-                        attempts_map["trivy"] = used
-                else:
-                    statuses["trivy"] = False
-                    if used:
-                        attempts_map["trivy"] = used
-            elif args.allow_missing_tools:
-                _write_stub("trivy", out)
-                statuses["trivy"] = True
-
-        if attempts_map:
-            statuses["__attempts__"] = attempts_map  # type: ignore
-        return f"{context}:{namespace}", statuses
-
-    k8s_futures = []
-    with ThreadPoolExecutor(max_workers=max_workers or None) as ex:
-        for k8s_info in k8s_resources:
+        # Wait for all futures to complete
+        for target_type, target_name, future in futures:
             if stop_flag["stop"]:
-                break
-            k8s_futures.append(ex.submit(job_k8s, k8s_info))
-        for fut in as_completed(k8s_futures):
-            try:
-                name, statuses = fut.result()
-                attempts_map: dict[str, int] = {}
-                if isinstance(statuses, dict) and "__attempts__" in statuses:
-                    popped_value = statuses.pop("__attempts__")
-                    if isinstance(popped_value, dict):
-                        attempts_map = popped_value
-                ok = all(v for k, v in statuses.items()) if statuses else True
-                extra = (
-                    f" attempts={attempts_map}"
-                    if any(
-                        (attempts_map or {}).get(t, 1) > 1 for t in (attempts_map or {})
-                    )
-                    else ""
-                )
-                _log(
-                    args,
-                    "INFO" if ok else "WARN",
-                    f"scanned K8s {name}: {'ok' if ok else 'issues'} {statuses}{extra}",
-                )
-            except Exception as e:
-                _log(args, "ERROR", f"K8s scan error: {e}")
+                future.cancel()
+                continue
 
-    # Show Ko-Fi support reminder every 5th scan (non-intrusive)
+            try:
+                name, statuses = future.result()
+                _log(args, "INFO", f"Completed {target_type} scan: {target_name}")
+                all_results.append((target_type, name, statuses))
+            except Exception as e:
+                _log(args, "ERROR", f"Failed to scan {target_type} {target_name}: {e}")
+                if not scan_config.allow_missing_tools:
+                    raise
+
+    finally:
+        executor.shutdown(wait=True)
+
+    # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
 
+    _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
     return 0
 
 
+def cmd_report(args) -> int:
+    """Wrapper for report orchestrator."""
+    return _cmd_report_impl(args, _log)
+
+
 def cmd_ci(args) -> int:
-    class ScanArgs:
-        def __init__(self, a):
-            self.repo = getattr(a, "repo", None)
-            self.repos_dir = getattr(a, "repos_dir", None)
-            self.targets = getattr(a, "targets", None)
-            # Container image scanning
-            self.image = getattr(a, "image", None)
-            self.images_file = getattr(a, "images_file", None)
-            # IaC scanning
-            self.terraform_state = getattr(a, "terraform_state", None)
-            self.cloudformation = getattr(a, "cloudformation", None)
-            self.k8s_manifest = getattr(a, "k8s_manifest", None)
-            # Web app/API scanning
-            self.url = getattr(a, "url", None)
-            self.urls_file = getattr(a, "urls_file", None)
-            self.api_spec = getattr(a, "api_spec", None)
-            # GitLab integration
-            self.gitlab_url = getattr(a, "gitlab_url", None)
-            self.gitlab_token = getattr(a, "gitlab_token", None)
-            self.gitlab_group = getattr(a, "gitlab_group", None)
-            self.gitlab_repo = getattr(a, "gitlab_repo", None)
-            # Kubernetes cluster scanning
-            self.k8s_context = getattr(a, "k8s_context", None)
-            self.k8s_namespace = getattr(a, "k8s_namespace", None)
-            self.k8s_all_namespaces = getattr(a, "k8s_all_namespaces", False)
-            # Other options
-            self.results_dir = getattr(a, "results_dir", "results")
-            self.config = getattr(a, "config", "jmo.yml")
-            self.tools = getattr(a, "tools", None)
-            self.timeout = getattr(a, "timeout", 600)
-            self.threads = getattr(a, "threads", None)
-            self.allow_missing_tools = getattr(a, "allow_missing_tools", False)
-            self.profile_name = getattr(a, "profile_name", None)
-            self.log_level = getattr(a, "log_level", None)
-            self.human_logs = getattr(a, "human_logs", False)
-
-    cmd_scan(ScanArgs(args))
-
-    class ReportArgs:
-        def __init__(self, a):
-            rd = str(Path(getattr(a, "results_dir", "results")))
-            # Set all possible fields that cmd_report normalizes
-            self.results_dir = rd
-            self.results_dir_pos = rd
-            self.results_dir_opt = rd
-            self.out = None
-            self.config = getattr(a, "config", "jmo.yml")
-            self.fail_on = getattr(a, "fail_on", None)
-            self.profile = getattr(a, "profile", False)
-            self.threads = getattr(a, "threads", None)
-            self.log_level = getattr(a, "log_level", None)
-            self.human_logs = getattr(a, "human_logs", False)
-
-    rc_report = cmd_report(ReportArgs(args))
-    return rc_report
+    """Wrapper for CI orchestrator."""
+    return _cmd_ci_impl(args, cmd_scan, _cmd_report_impl)
 
 
 def main():
@@ -2482,7 +992,8 @@ def _log(args, level: str, message: str) -> None:
     try:
         cfg = load_config(getattr(args, "config", None))
         cfg_level = getattr(cfg, "log_level", None)
-    except Exception:
+    except (FileNotFoundError, ConfigurationException, AttributeError) as e:
+        logger.debug(f"Config loading failed in _log: {e}")
         cfg_level = None
     cli_level = getattr(args, "log_level", None)
     effective = (cli_level or cfg_level or "INFO").upper()

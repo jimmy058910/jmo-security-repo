@@ -74,8 +74,8 @@ BUSINESS_PLAN.md
 docs/archive/*
 !docs/archive/v0.6.0/
 
-# Private local scripts and outputs (ignored)
-/ai-search
+# Private local scripts and outputs (developer-only workspace)
+/dev-only
 
 # MCP configuration with sensitive tokens (keep .mcp.json.example in repo)
 .mcp.json
@@ -88,3 +88,9 @@ samples/fixtures/infra-demo/docker-test-results/
 node_modules/
 scripts/api/node_modules/
 scripts/api/.vercel/
+.vercel
+
+# Environment variable files
+.env
+.env.local
+.env.*.local
