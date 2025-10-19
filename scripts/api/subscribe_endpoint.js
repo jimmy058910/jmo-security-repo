@@ -79,6 +79,7 @@ function isValidEmail(email) {
 app.post('/api/subscribe', async (req, res) => {
   try {
     const { email, source = 'website', website } = req.body;
+    const cfTurnstileResponse = req.body['cf-turnstile-response'];
 
     // Honeypot check - reject if filled (bots typically auto-fill all fields)
     if (website) {
@@ -87,6 +88,49 @@ app.post('/api/subscribe', async (req, res) => {
         success: false,
         error: 'invalid_request',
         message: 'Invalid submission detected.'
+      });
+    }
+
+    // CAPTCHA check - verify Turnstile response (CSRF protection)
+    if (!cfTurnstileResponse) {
+      console.log('CAPTCHA verification failed: missing token');
+      return res.status(403).json({
+        success: false,
+        error: 'captcha_required',
+        message: 'Please complete the CAPTCHA verification.'
+      });
+    }
+
+    // Verify Turnstile response with Cloudflare
+    try {
+      const turnstileVerify = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          secret: process.env.TURNSTILE_SECRET_KEY,
+          response: cfTurnstileResponse
+        })
+      });
+
+      const turnstileResult = await turnstileVerify.json();
+
+      if (!turnstileResult.success) {
+        console.log('Turnstile verification failed:', turnstileResult['error-codes']);
+        return res.status(403).json({
+          success: false,
+          error: 'captcha_failed',
+          message: 'CAPTCHA verification failed. Please try again.'
+        });
+      }
+
+      console.log('Turnstile verification passed');
+    } catch (error) {
+      console.error('Turnstile API error:', error);
+      // Fail closed - reject if CAPTCHA verification fails
+      return res.status(503).json({
+        success: false,
+        error: 'captcha_unavailable',
+        message: 'CAPTCHA verification service temporarily unavailable. Please try again later.'
       });
     }
 
