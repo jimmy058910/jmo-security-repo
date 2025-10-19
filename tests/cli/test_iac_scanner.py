@@ -147,7 +147,8 @@ class TestIacScanner:
 
             # Check that tool definitions have correct timeout
             tool_defs = kwargs["tools"]
-            trivy_def = next(t for t in tool_defs if t.name == "trivy")
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
             assert trivy_def.timeout == 900
             assert "--severity" in trivy_def.command
             assert "HIGH" in trivy_def.command
