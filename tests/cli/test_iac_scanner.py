@@ -116,6 +116,10 @@ class TestIacScanner:
         iac_file = tmp_path / "deployment.yaml"
         iac_file.write_text("apiVersion: v1\nkind: Pod")
 
+        # Mock tool_exists to return True for trivy
+        def mock_tool_exists(tool_name):
+            return tool_name == "trivy"
+
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -139,6 +143,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,  # Inject mock
             )
 
             # Verify ToolRunner was called
