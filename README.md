@@ -149,6 +149,8 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
 ## 🚀 Three Ways to Get Started
 
+> **🪟 Windows Users:** Use **Option 2 (Docker)** for the best experience. WSL2 with Docker Desktop provides zero-installation scanning with full tool compatibility. Native Windows support is limited due to tool availability. See [Docker for Windows Setup](#windows-docker-setup) below.
+
 ### Option 1: 🧙 Interactive Wizard (Recommended for Beginners)
 
 **Never used security scanners before?** Start with the guided wizard:
@@ -186,9 +188,16 @@ jmotools wizard --emit-gha .github/workflows/security.yml  # GitHub Actions
 
 ---
 
-### Option 2: 🐳 Docker (Zero Installation)
+### Option 2: 🐳 Docker (Zero Installation) ⭐ Recommended for Windows
 
-**Want to start scanning immediately with no tool installation?**
+**✨ Start scanning in 60 seconds with ZERO tool installation!**
+
+Perfect for:
+
+- 🪟 **Windows users** (WSL2 + Docker Desktop)
+- 🚀 **Quick trials** (no commitment, no setup)
+- 🔒 **CI/CD pipelines** (consistent environments)
+- 🌍 **Any platform** (Linux, macOS, Windows)
 
 ```bash
 # Pull the image (one-time, ~500MB)
@@ -201,13 +210,22 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 # View results
 open results/summaries/dashboard.html  # macOS
 xdg-open results/summaries/dashboard.html  # Linux
+start results/summaries/dashboard.html  # Windows (WSL2)
 ```
 
 **Three image variants available:**
 
-- `latest` (~500MB) - All 11+ scanners included
+- `latest` (~500MB) - All 12 scanners included
 - `slim` (~200MB) - Core 6 scanners for CI/CD
 - `alpine` (~150MB) - Minimal footprint
+
+**Why Docker?**
+
+- ✅ No Python/tool installation required
+- ✅ Works identically on all platforms
+- ✅ Automatic tool version management
+- ✅ Isolated from your host system
+- ✅ Perfect for Windows (native tools often unavailable)
 
 📖 **Complete Docker guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
 📖 **Beginner Docker tutorial:** [docs/DOCKER_README.md#quick-start-absolute-beginners](docs/DOCKER_README.md#quick-start-absolute-beginners)
@@ -252,6 +270,69 @@ make full DIR=~/repos
 ```
 
 Note: Under the hood, wrapper commands verify your OS/tools, optionally clone from TSV, run `jmo ci` with the appropriate profile, and auto-open results.
+
+---
+
+### Windows Docker Setup
+
+**Recommended Setup for Windows Users:**
+
+1. **Install WSL2** (Windows Subsystem for Linux 2)
+   ```powershell
+   # Run in PowerShell as Administrator
+   wsl --install
+   ```
+
+2. **Install Docker Desktop for Windows**
+   - Download: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
+   - Enable WSL2 backend in Docker Desktop settings
+   - Ensure "Use the WSL 2 based engine" is checked
+
+3. **Run JMo Security in WSL2**
+   ```bash
+   # Open WSL2 terminal (Ubuntu)
+   wsl
+
+   # Pull JMo Security Docker image
+   docker pull ghcr.io/jimmy058910/jmo-security:latest
+
+   # Scan a repository
+   docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+     scan --repo /scan --results /scan/results --profile balanced
+
+   # View results (opens in Windows browser)
+   explorer.exe results/summaries/dashboard.html
+   ```
+
+#### Alternative: Use the Wizard in Docker mode
+
+```bash
+# Clone this repo in WSL2
+git clone https://github.com/jimmy058910/jmo-security-repo.git
+cd jmo-security-repo
+
+# Run wizard (auto-detects Docker)
+pip install -e .
+jmotools wizard --docker
+
+# Follow the prompts - wizard handles everything!
+```
+
+**Why WSL2 + Docker?**
+
+- ✅ **Best compatibility:** All 12 security tools work perfectly
+- ✅ **Zero native Windows tools:** No Python/git/tool installation on Windows
+- ✅ **Linux performance:** Scans run 2-3x faster than native Windows
+- ✅ **Easy file access:** Access Windows files via `/mnt/c/Users/...`
+- ✅ **Seamless integration:** Results open in Windows browser automatically
+
+**Troubleshooting:**
+
+- **Docker not found:** Ensure Docker Desktop is running and WSL2 integration is enabled
+- **Slow scans:** Clone repos to WSL2 filesystem (`~/repos`), not Windows mount (`/mnt/c/`)
+- **Permission denied:** Add your user to docker group: `sudo usermod -aG docker $USER`
+
+📖 **Complete Windows guide:** [docs/DOCKER_README.md#windows-wsl2-setup](docs/DOCKER_README.md#windows-wsl2-setup)
 
 ---
 

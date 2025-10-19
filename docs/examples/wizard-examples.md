@@ -2,11 +2,14 @@
 
 The JMo Security Wizard provides a guided, interactive experience for beginners to perform security scans without needing to know command-line flags.
 
+> **🪟 Windows Users:** The wizard automatically detects Docker and recommends Docker mode for the best experience. WSL2 + Docker Desktop provides zero-installation scanning with full tool compatibility. See [Windows Setup](#windows-docker-mode) below.
+
 ## Table of Contents
 
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
-- [Docker Mode](#docker-mode)
+- [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
+- [Windows Docker Mode](#windows-docker-mode)
 - [Multi-Target Scanning (v0.6.2+)](#multi-target-scanning-v062)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
@@ -135,9 +138,17 @@ jmotools wizard --yes
 
 ---
 
-## Docker Mode
+## Docker Mode (Zero Installation)
 
-The wizard can use Docker to avoid installing 10+ security tools locally.
+**✨ The wizard can use Docker for ZERO tool installation - perfect for Windows users!**
+
+Benefits:
+
+- ✅ **Zero setup:** No Python, git, or security tool installation required
+- ✅ **Cross-platform:** Works identically on Linux, macOS, and Windows (WSL2)
+- ✅ **Consistent results:** Same tool versions everywhere
+- ✅ **Isolated:** Doesn't affect your host system
+- ✅ **Beginner-friendly:** Wizard auto-detects Docker and recommends it
 
 ### Interactive Docker Mode
 
@@ -161,6 +172,116 @@ This skips the execution mode prompt and uses Docker directly (if available).
 - Consistent tool versions
 - Portable across systems
 - Immediate scanning capability
+
+---
+
+## Windows Docker Mode
+
+**Recommended workflow for Windows users using WSL2 + Docker Desktop.**
+
+### Prerequisites
+
+1. **Install WSL2**
+   ```powershell
+   # Run in PowerShell as Administrator
+   wsl --install
+   ```
+
+2. **Install Docker Desktop**
+   - Download: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
+   - Enable WSL2 backend in settings
+   - Ensure Docker is running
+
+### Running the Wizard on Windows
+
+```bash
+# Open WSL2 terminal (Ubuntu)
+wsl
+
+# Install JMo Security (if not already installed)
+git clone https://github.com/jimmy058910/jmo-security-repo.git
+cd jmo-security-repo
+pip install -e .
+
+# Run wizard with Docker auto-detection
+jmotools wizard --docker
+
+# Wizard will:
+# 1. Detect Docker is available
+# 2. Pull ghcr.io/jimmy058910/jmo-security:latest
+# 3. Guide you through target selection
+# 4. Run scan in Docker container
+# 5. Auto-open results in Windows browser
+```
+
+### Windows-Specific Tips
+
+**Scanning Windows Files:**
+
+```bash
+# Access Windows drives via /mnt/
+cd /mnt/c/Users/YourName/Projects/my-repo
+jmotools wizard --docker
+```
+
+**Opening Results:**
+
+```bash
+# After scan completes, open in Windows browser
+explorer.exe results/summaries/dashboard.html
+
+# Or use WSL default browser
+wslview results/summaries/dashboard.html
+```
+
+**Performance Optimization:**
+
+```bash
+# Clone repos to WSL filesystem (2-3x faster)
+cd ~
+git clone https://github.com/your-org/your-repo.git
+cd your-repo
+jmotools wizard --docker
+
+# AVOID: /mnt/c/ (Windows mount) - much slower
+```
+
+### Troubleshooting Windows
+
+**"Docker not found" error:**
+
+```bash
+# Ensure Docker Desktop is running
+# Check Docker is accessible from WSL2
+docker --version
+
+# If not working, enable WSL2 integration:
+# Docker Desktop → Settings → Resources → WSL Integration
+# Enable integration for your WSL2 distro
+```
+
+**"Permission denied" error:**
+
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Log out and back in, or:
+newgrp docker
+```
+
+**Slow scans on Windows:**
+
+- ✅ **DO:** Clone repos to WSL2 filesystem (`~/repos`)
+- ❌ **DON'T:** Scan Windows filesystem (`/mnt/c/`) - 2-3x slower
+
+### Why WSL2 + Docker for Windows?
+
+- ✅ **Full compatibility:** All 12 tools work (many don't on native Windows)
+- ✅ **Zero native installs:** No Python/git/tools on Windows required
+- ✅ **Linux performance:** Scans run at native Linux speed
+- ✅ **Easy file access:** Access Windows files via `/mnt/c/Users/...`
+- ✅ **Wizard integration:** Auto-detects Docker, one-click scanning
 
 ---
 
