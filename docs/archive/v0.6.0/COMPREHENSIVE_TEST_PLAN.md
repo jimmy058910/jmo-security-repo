@@ -23,15 +23,18 @@
 ### 1.1 Target Type Priority Tiers
 
 **Tier 1 (Critical - Must test on all OS):**
+
 - **Repository scanning** — Core functionality, backward compatibility critical
 - **Container image scanning** — High adoption, Docker/Podman variations
 - **Multi-target combined** — Real-world use case (repo + image + IaC)
 
 **Tier 2 (Important - Test on Linux + one other OS):**
+
 - **IaC file scanning** — Terraform/K8s manifests common in CI/CD
 - **URL scanning (DAST)** — Requires ZAP, network dependencies
 
 **Tier 3 (Optional - Test on Linux only):**
+
 - **GitLab scanning** — Requires GitLab token, less common
 - **K8s scanning** — Requires cluster access, advanced use case
 
@@ -44,6 +47,7 @@
 | **Windows 11 (WSL2)** | ✅ Tier 1 | ✅ Tier 1 | ✅ Tier 1+2 | TERTIARY |
 
 **Rationale:**
+
 - Ubuntu: Primary CI/CD environment, most users
 - macOS: Developer workstations, Docker Desktop variations
 - Windows WSL2: Growing adoption, path handling edge cases
@@ -51,16 +55,19 @@
 ### 1.3 Execution Method Coverage
 
 **Native CLI (Direct Binary):**
+
 - Profile: `balanced` (7 tools)
 - Validates: Tool installation, PATH resolution, file permissions
 - Priority: Tier 1 targets on all OS
 
 **Wizard (Interactive/Non-interactive):**
+
 - Modes: `--yes` (CI mode) and interactive
 - Validates: User onboarding, smart defaults, artifact generation
 - Priority: Tier 1 targets on all OS (non-interactive), interactive on Ubuntu only
 
 **Docker (Zero-installation):**
+
 - Variants: `full`, `slim`, `alpine`
 - Validates: Volume mounts, container networking, image distribution
 - Priority: All targets on Ubuntu (full variant), Tier 1 on macOS/Windows
@@ -576,7 +583,7 @@ EOF
 
 ### 5.1 Pre-Release Testing Workflow
 
-**Phase 1: Local Development Testing (Week 1)**
+#### Phase 1: Local Development Testing (Week 1)
 
 - [ ] Developer runs full Ubuntu test suite (12 tests)
 - [ ] Developer runs macOS test suite (6 tests) on local machine
@@ -584,28 +591,28 @@ EOF
 - [ ] All tests pass with 100% success rate
 - [ ] Performance benchmarks recorded in `test-results.csv`
 
-**Phase 2: CI/CD Integration (Week 1)**
+#### Phase 2: CI/CD Integration (Week 1)
 
 - [ ] Add Ubuntu test suite to GitHub Actions workflow
 - [ ] Run on every PR (fast profile only to save CI time)
 - [ ] Full test suite runs nightly
 - [ ] Test results uploaded as workflow artifacts
 
-**Phase 3: Community Beta Testing (Week 2)**
+#### Phase 3: Community Beta Testing (Week 2)
 
 - [ ] Release v0.6.0-beta1 with test script in `tests/e2e/`
 - [ ] Call for beta testers on GitHub Discussions
 - [ ] Collect test results from community (macOS, Windows, various Linux distros)
 - [ ] Fix any platform-specific issues discovered
 
-**Phase 4: Release Candidate (Week 3)**
+#### Phase 4: Release Candidate (Week 3)
 
 - [ ] Release v0.6.0-rc1 after all critical issues fixed
 - [ ] Final validation on all 3 primary OS
 - [ ] Document known limitations (if any)
 - [ ] Prepare release notes
 
-**Phase 5: General Availability (Week 3-4)**
+#### Phase 5: General Availability (Week 3-4)
 
 - [ ] Tag v0.6.0 release
 - [ ] Publish to PyPI
@@ -851,16 +858,19 @@ jobs:
 ### 7.1 Test Suite Maintenance Plan
 
 **Quarterly Reviews:**
+
 - Update test fixtures for new vulnerability patterns
 - Add tests for newly supported tools
 - Refresh vulnerable test targets (Juice Shop, test fixtures)
 
 **Per-Release Updates:**
+
 - Add tests for new features (target types, compliance frameworks)
 - Update validation functions for schema changes
 - Benchmark performance improvements
 
 **Continuous Monitoring:**
+
 - CI/CD test results tracked over time
 - Flaky test detection and remediation
 - Performance regression detection
@@ -868,16 +878,19 @@ jobs:
 ### 7.2 Future Test Enhancements
 
 **Short-term (v0.7.0):**
+
 - Add snapshot testing for dashboard HTML
 - Add compliance filter interaction tests (Playwright/Puppeteer)
 - Add parallel execution for faster test runs
 
 **Medium-term (v0.8.0):**
+
 - Add performance benchmarking suite
 - Add load testing (100+ repos, 1000+ images)
 - Add stress testing (memory limits, disk space limits)
 
 **Long-term (v1.0.0):**
+
 - Add integration tests with CI/CD platforms (GitHub Actions, GitLab CI, Jenkins)
 - Add security testing (penetration testing, fuzzing)
 - Add accessibility testing (dashboard WCAG compliance)
@@ -918,16 +931,19 @@ bash tests/e2e/fixtures/setup_fixtures.sh --validate
 ### 8.3 Test Result Interpretation
 
 **Exit Codes:**
+
 - `0` - All tests passed
 - `1` - One or more tests failed (see CSV for details)
 - `2` - Test framework error (setup failed)
 
 **CSV Columns:**
+
 - `test_id` - Unique test identifier (U1, M2, etc.)
 - `status` - PASS/FAIL/SKIP
 - `duration_seconds` - Execution time in seconds
 
 **Pass Criteria:**
+
 - ≥95% success rate (24/25 tests) for release
 - All Tier 1 tests (repos, images, multi-target) must pass
 - Zero CRITICAL issues found in test suite
@@ -955,16 +971,19 @@ tests/e2e/fixtures/
 ## Appendix B: Platform-Specific Considerations
 
 ### Ubuntu/Linux
+
 - **Package Managers:** apt, snap, Homebrew (Linuxbrew)
 - **Tool Installation:** Native binaries, AppImages
 - **Edge Cases:** SELinux, AppArmor, non-standard shells
 
 ### macOS
+
 - **Package Managers:** Homebrew (primary), MacPorts
 - **Tool Installation:** Homebrew formulae, .pkg installers
 - **Edge Cases:** System Integrity Protection (SIP), Gatekeeper, Rosetta 2 (M1/M2)
 
 ### Windows WSL2
+
 - **Package Managers:** apt (Ubuntu on WSL), winget (Windows)
 - **Tool Installation:** WSL native, Windows binaries via wsl.exe
 - **Edge Cases:** Path translation (`/mnt/c/`), CRLF line endings, case-insensitive filesystems

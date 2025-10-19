@@ -254,24 +254,28 @@ jobs:
 
       - name: Aggregate results
         run: |
-          echo "## E2E Test Summary" > summary.md
-          echo "" >> summary.md
+          {
+            echo "## E2E Test Summary"
+            echo ""
+          } > summary.md
 
           for results_file in test-results/*/test-results.csv; do
             if [[ -f "$results_file" ]]; then
               os=$(dirname "$results_file" | xargs basename | cut -d'-' -f4)
-              echo "### $os Results" >> summary.md
 
               total=$(($(wc -l < "$results_file") - 1))
               passed=$(grep -c ",PASS," "$results_file" || echo 0)
               failed=$(grep -c ",FAIL," "$results_file" || echo 0)
               skipped=$(grep -c ",SKIP," "$results_file" || echo 0)
 
-              echo "- Total: $total" >> summary.md
-              echo "- Passed: $passed ✅" >> summary.md
-              echo "- Failed: $failed ❌" >> summary.md
-              echo "- Skipped: $skipped ⏭️" >> summary.md
-              echo "" >> summary.md
+              {
+                echo "### $os Results"
+                echo "- Total: $total"
+                echo "- Passed: $passed ✅"
+                echo "- Failed: $failed ❌"
+                echo "- Skipped: $skipped ⏭️"
+                echo ""
+              } >> summary.md
             fi
           done
 

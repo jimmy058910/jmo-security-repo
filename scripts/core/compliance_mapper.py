@@ -1212,7 +1212,7 @@ def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
     cwes = risk.get("cwe", []) if isinstance(risk, dict) else []
 
     # Initialize compliance dict
-    compliance = {}
+    compliance: Dict[str, Any] = {}
 
     # OWASP Top 10 2021
     owasp_categories = set()
