@@ -13,7 +13,7 @@ python_tools:
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.477
+    version: 3.2.255
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -150,6 +150,19 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2025-10-18'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-18'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.477
+    new_version: 3.2.255
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-10-17'
   action: Automated version update
   tools_updated: []

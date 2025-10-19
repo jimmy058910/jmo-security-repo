@@ -8,8 +8,12 @@ with code snippets, fix suggestions, and taxonomy mappings where available.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 SARIF_VERSION = "2.1.0"
 
@@ -132,8 +136,12 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
             with open(pyproject_path, "rb") as fp:
                 pyproject = tomli.load(fp)
                 version = pyproject.get("project", {}).get("version", version)
-    except Exception:
-        pass
+    except FileNotFoundError:
+        # pyproject.toml missing - use default version
+        logger.debug(f"pyproject.toml not found at {pyproject_path}")
+    except (ImportError, KeyError, ValueError) as e:
+        # tomli not available, or pyproject.toml invalid/missing version field
+        logger.debug(f"Failed to parse version from pyproject.toml: {e}")
 
     tool = {
         "driver": {

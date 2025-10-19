@@ -7,7 +7,7 @@ with timeout, retry, and status tracking capabilities.
 Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_scan().
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -15,7 +15,7 @@ import logging
 import subprocess
 import time
 
-from scripts.core.exceptions import ToolExecutionException, ToolNotFoundException
+from scripts.core.exceptions import ToolExecutionException
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -204,7 +204,7 @@ class ToolRunner:
                         time.sleep(1)  # Brief delay before retry
                         continue
 
-            except subprocess.TimeoutExpired as e:
+            except subprocess.TimeoutExpired:
                 last_error = f"Timeout after {tool.timeout}s"
                 if attempt < attempts:
                     time.sleep(2)  # Longer delay after timeout
@@ -222,9 +222,9 @@ class ToolRunner:
                     error_message=f"Tool not found: {tool.command[0]}",
                 )
 
-            except subprocess.TimeoutExpired as e:
+            except subprocess.TimeoutExpired:
                 # Tool timed out - log and retry if attempts remain
-                last_error = f"Timeout after {timeout}s"
+                last_error = f"Timeout after {tool.timeout}s"
                 logger.debug(f"{tool.name} timed out (attempt {attempt}/{attempts})")
                 if attempt < attempts:
                     time.sleep(1)

@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 try:
     import yaml
-except Exception:
+except ImportError as e:
+    logger.debug(f"Suppression support unavailable: {e}")
     yaml = None  # type: ignore[assignment]
 
 
@@ -16,14 +21,26 @@ except Exception:
 class Suppression:
     id: str
     reason: str = ""
-    expires: Optional[str] = None  # ISO date
+    expires: Optional[str] = None  # ISO date or date object (YAML auto-parses dates)
 
     def is_active(self, now: Optional[dt.date] = None) -> bool:
         if not self.expires:
             return True
         try:
-            exp = dt.date.fromisoformat(self.expires)
-        except Exception:
+            # Handle both string and date object (YAML auto-parses dates like "2999-01-01")
+            if isinstance(self.expires, dt.date):
+                exp = self.expires
+            elif isinstance(self.expires, str):
+                exp = dt.date.fromisoformat(self.expires)
+            else:
+                # Unexpected type - treat as never expires
+                logger.debug(
+                    f"Unexpected expiration type '{type(self.expires)}': {self.expires}"
+                )
+                return True
+        except (ValueError, TypeError) as e:
+            # Invalid date format - treat as never expires
+            logger.debug(f"Invalid expiration date '{self.expires}': {e}")
             return True
         today = now or dt.date.today()
         return today <= exp

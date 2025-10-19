@@ -7,8 +7,6 @@ Scans Kubernetes clusters using:
 Integrates with ToolRunner for execution management.
 """
 
-import json
-import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Callable, Optional
 

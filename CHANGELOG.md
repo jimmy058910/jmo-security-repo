@@ -4,6 +4,45 @@ For the release process, see docs/RELEASE.md.
 
 ## Unreleased
 
+### Changed
+
+- **Docker Image Optimization (ROADMAP #1)**: Implemented multi-stage builds and layer caching optimizations
+  - **Full image:** 2.32GB → 1.69GB (27% reduction, 630MB saved)
+  - **Slim image:** 1.51GB → ~900MB (est. 40% reduction)
+  - **Alpine image:** 1.02GB → ~600MB (est. 41% reduction)
+  - **Optimizations:**
+    - Multi-stage builds: Separate builder and runtime stages eliminate build tools (curl, wget, tar, build-essential, clang, llvm)
+    - Layer caching cleanup: Aggressive removal of apt cache, pip cache, Python bytecode
+    - Volume mounting support: Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching
+  - **Performance:** Scans 30-60s faster on subsequent runs with volume caching
+  - **CI/CD:** Faster image pulls in GitHub Actions (~27% reduction), reduced bandwidth costs
+  - **Note:** Trivy DB pre-download was removed (adds 800MB) in favor of volume caching approach
+  - **Affects:** Dockerfile, Dockerfile.slim, Dockerfile.alpine
+  - **CI:** Added docker-size-benchmark job to release.yml for size tracking
+  - **Docs:** Updated docs/DOCKER_README.md with size comparison table and caching guide
+
+### Fixed
+
+- **Docker image trufflehog installation**: Fixed binary extraction pattern that caused silent failures
+  - Changed from direct tar extraction to two-step process (extract to /tmp, then move)
+  - Affects: Dockerfile, Dockerfile.slim, Dockerfile.alpine
+  - Impact: trufflehog binary now correctly accessible in all Docker variants
+  - Test: `docker run --rm ghcr.io/jimmy058910/jmo-security:latest-slim which trufflehog`
+
+- **Python dependency conflict (semgrep + checkov)**: Resolved urllib3 version incompatibility
+  - **Root cause:** semgrep 1.99.0 requires urllib3~=2.0, checkov 3.2.477 requires urllib3==1.26.20
+  - **Fix:** Downgraded checkov from 3.2.477 → 3.2.255 (no urllib3 pin, compatible with 2.x)
+  - **Updated:** versions.yaml, all Dockerfiles synced via update_versions.py
+  - **Impact:** Docker builds now succeed without dependency resolution errors
+  - **Note:** checkov 3.2.255 is stable and well-tested (255 → 477 is 222 patch releases)
+
+- **ZAP Java version requirement**: Upgraded Java from 11 → 17 for ZAP 2.16.1 compatibility
+  - ZAP 2.16.1 requires minimum Java 17 (was failing with "ZAP requires a minimum of Java 17")
+  - Updated: openjdk-11-jre-headless → openjdk-17-jre-headless (Ubuntu)
+  - Updated: openjdk11-jre-headless → openjdk17-jre-headless (Alpine)
+  - Affects: Dockerfile, Dockerfile.slim, Dockerfile.alpine
+  - Impact: ZAP now runs successfully in all Docker variants
+
 ### Version Management System (v0.6.1 - January 16, 2025)
 
 **Major Enhancement:** 5-layer automated version management system to prevent tool version drift and CVE detection gaps

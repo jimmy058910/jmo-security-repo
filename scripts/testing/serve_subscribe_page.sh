@@ -22,12 +22,12 @@ SERVER_PID=$!
 sleep 2
 
 # Open in Windows browser
-if command -v wslview &> /dev/null; then
-    wslview "http://localhost:8000/subscribe.html"
-elif command -v explorer.exe &> /dev/null; then
-    # Create a temporary HTML redirect file for explorer
-    echo '<html><head><meta http-equiv="refresh" content="0; url=http://localhost:8000/subscribe.html"></head></html>' > /tmp/redirect.html
-    explorer.exe "$(wslpath -w /tmp/redirect.html)"
+if command -v wslview &>/dev/null; then
+  wslview "http://localhost:8000/subscribe.html"
+elif command -v explorer.exe &>/dev/null; then
+  # Create a temporary HTML redirect file for explorer
+  echo '<html><head><meta http-equiv="refresh" content="0; url=http://localhost:8000/subscribe.html"></head></html>' >/tmp/redirect.html
+  explorer.exe "$(wslpath -w /tmp/redirect.html)"
 fi
 
 echo "✅ Server started on http://localhost:8000"

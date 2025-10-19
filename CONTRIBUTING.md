@@ -29,6 +29,10 @@ make fmt && make lint
 
 This repo keeps Python runtime deps minimal (declared in `pyproject.toml`; optional extras under `[project.optional-dependencies]`) and relies on a few external security tools installed on your system. Here's the recommended way to install and update everything.
 
+### Packaging Note (PEP 621)
+
+This project uses modern **PEP 621** packaging via `pyproject.toml`. Legacy `setup.py`/`setup.cfg` fields like `long_description_content_type` are not needed—setuptools 61.0+ automatically detects `README.md` as Markdown. When contributing, all metadata changes should be made in `pyproject.toml` under the `[project]` section.
+
 ### Python environment
 
 - Create and use a local virtualenv (the Makefile auto-detects `.venv`):

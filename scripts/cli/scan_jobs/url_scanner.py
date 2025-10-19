@@ -7,9 +7,7 @@ Scans live web applications and APIs using:
 Integrates with ToolRunner for execution management.
 """
 
-import json
 import re
-import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Dict, List, Tuple, Callable, Optional

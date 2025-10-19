@@ -7,11 +7,15 @@ Expected input may include a top-level results dictionary with "failed_checks" e
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 def load_checkov(path: str | Path) -> List[Dict[str, Any]]:
@@ -46,7 +50,9 @@ def load_checkov(path: str | Path) -> List[Dict[str, Any]]:
                     line = int(line_val)
                 else:
                     line = 0
-            except Exception:
+            except (ValueError, TypeError) as e:
+                # Line number parsing failed - default to 0
+                logger.debug(f"Failed to parse line number in checkov output: {e}")
                 line = 0
             msg = str(it.get("check_name") or it.get("check_id") or "Policy failure")
             sev = normalize_severity(it.get("severity") or "MEDIUM")

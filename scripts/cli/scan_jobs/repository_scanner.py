@@ -17,7 +17,6 @@ Scans local Git repositories using multiple security tools:
 Integrates with ToolRunner for execution management.
 """
 
-import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Callable, Optional
 

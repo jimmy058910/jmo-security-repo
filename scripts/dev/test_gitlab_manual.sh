@@ -10,7 +10,7 @@ echo "=========================================="
 echo ""
 
 # Check if GITLAB_TOKEN is set
-if [[ -z "$GITLAB_TOKEN" ]]; then
+if [[ -z $GITLAB_TOKEN ]]; then
   echo "❌ ERROR: GITLAB_TOKEN not set"
   echo ""
   echo "Please set your GitLab personal access token:"
@@ -25,7 +25,7 @@ echo "✅ GITLAB_TOKEN detected (${#GITLAB_TOKEN} chars)"
 echo ""
 
 # Prompt for GitLab repo
-if [[ -z "$GITLAB_REPO" ]]; then
+if [[ -z $GITLAB_REPO ]]; then
   echo "Enter GitLab repository (format: username/repo-name):"
   echo "Example: jimmy058910/test-repo"
   read -r GITLAB_REPO
@@ -33,7 +33,7 @@ if [[ -z "$GITLAB_REPO" ]]; then
 fi
 
 # Validate input
-if [[ ! "$GITLAB_REPO" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$ ]]; then
+if [[ ! $GITLAB_REPO =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$ ]]; then
   echo "❌ ERROR: Invalid GitLab repo format"
   echo "Expected: username/repo-name"
   echo "Got: $GITLAB_REPO"

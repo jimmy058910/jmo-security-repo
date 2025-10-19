@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 try:
     import yaml
-except Exception:  # optional dependency
+except ImportError as e:  # optional dependency
+    logger.debug(f"YAML reporter unavailable: {e}")
     yaml = None  # type: ignore[assignment]
 
 

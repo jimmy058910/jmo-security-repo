@@ -8,9 +8,7 @@ This addresses finding HIGH-001 (CSRF Vulnerability)
 """
 
 import pytest
-import json
-from unittest.mock import Mock, patch, MagicMock
-import sys
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 # Note: This is a Python test for a Node.js endpoint
@@ -65,11 +63,6 @@ class TestCAPTCHAProtection:
 
     def test_expired_captcha_token_rejected(self):
         """Test that expired CAPTCHA tokens are rejected"""
-        payload = {
-            "email": "test@example.com",
-            "source": "website",
-            "cf-turnstile-response": "expired_token",
-        }
 
         # Cloudflare returns timeout-or-duplicate for expired tokens
         expected_turnstile_response = {
@@ -77,11 +70,6 @@ class TestCAPTCHAProtection:
             "error-codes": ["timeout-or-duplicate"],
         }
 
-        expected_api_response = {
-            "success": False,
-            "error": "captcha_failed",
-            "message": "CAPTCHA verification failed. Please try again.",
-        }
 
         assert expected_turnstile_response["success"] is False
         assert "timeout-or-duplicate" in expected_turnstile_response["error-codes"]
@@ -156,11 +144,6 @@ class TestCAPTCHAErrorHandling:
 
     def test_turnstile_api_unavailable(self):
         """Test graceful handling when Turnstile API is down"""
-        payload = {
-            "email": "test@example.com",
-            "source": "website",
-            "cf-turnstile-response": "valid_token",
-        }
 
         # Expected response when Turnstile API times out or is unavailable
         # Implementation uses fail-closed approach (reject rather than allow)

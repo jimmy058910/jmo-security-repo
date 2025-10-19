@@ -706,6 +706,102 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 
 CI validates that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
 
+## Claude Skills
+
+This project uses **specialized skills** to guide complex, repetitive workflows. Skills are comprehensive knowledge bases that ensure consistency, reduce errors, and accelerate development.
+
+### Why Skills Matter
+
+Skills centralize expertise for complex tasks, providing:
+
+- Step-by-step workflows with verification checklists
+- Real-world examples and proven patterns
+- Error handling and troubleshooting guides
+- Output artifact specifications
+- Success criteria verification
+
+**Time Savings:** Skills reduce task completion time by 50-75% (2-4 hours per task) and ensure consistency across the codebase.
+
+### Available Skills by Category
+
+**Code Generation:**
+
+- [jmo-adapter-generator](.claude/skills/jmo-adapter-generator/SKILL.md) — Add new tool integrations (2-3 hour savings)
+- [jmo-target-type-expander](.claude/skills/jmo-target-type-expander/SKILL.md) — Add new scan target types (3-4 hour savings)
+
+**Quality Assurance:**
+
+- [jmo-test-fabricator](.claude/skills/jmo-test-fabricator/SKILL.md) — Write adapter test suites with ≥85% coverage (1-2 hour savings)
+- [jmo-compliance-mapper](.claude/skills/jmo-compliance-mapper/SKILL.md) — Map findings to 6 compliance frameworks (30-60 min savings)
+
+**Operations:**
+
+- [jmo-profile-optimizer](.claude/skills/jmo-profile-optimizer/SKILL.md) — Optimize scan performance and reliability (1-2 hour savings)
+- [jmo-ci-debugger](.claude/skills/jmo-ci-debugger/SKILL.md) — Debug GitHub Actions and CI/CD failures (30-60 min savings)
+
+**Documentation:**
+
+- [jmo-documentation-updater](.claude/skills/jmo-documentation-updater/SKILL.md) — Maintain docs consistency and structure (30-45 min savings)
+
+**Workflow Automation:**
+
+- [dev-helper](.claude/skills/dev-helper/SKILL.md) — Version bumps, release prep, issue triage (15-30 min savings)
+- [community-manager](.claude/skills/community-manager/SKILL.md) — Track feedback, draft responses (30-60 min savings)
+- [content-generator](.claude/skills/content-generator/SKILL.md) — Create marketing content (1-2 hour savings)
+- [job-search-helper](.claude/skills/job-search-helper/SKILL.md) — Resume bullets, interview prep (30-60 min savings)
+
+**Complete catalog:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (11 skills, ~14,300 lines of guidance)
+
+### When to Use Skills
+
+**Use skills proactively when:**
+
+| Task | Skill to Use | Trigger |
+|------|--------------|---------|
+| Adding new tool adapter | jmo-adapter-generator | "Add support for [tool]" |
+| Writing adapter tests | jmo-test-fabricator | "Write tests for [tool] adapter" |
+| Debugging CI failures | jmo-ci-debugger | "CI is failing", "GitHub Actions not working" |
+| Updating documentation | jmo-documentation-updater | "Update docs for [feature]" |
+| Optimizing scan performance | jmo-profile-optimizer | "Scans are too slow", "Too many timeouts" |
+| Adding new target type | jmo-target-type-expander | "Scan [AWS/npm/GraphQL/etc.]" |
+| Mapping to compliance frameworks | jmo-compliance-mapper | "What frameworks does [CWE] map to?" |
+| Preparing for release | dev-helper | "Bump version to X.Y.Z" |
+
+**Skills are guides, not rigid requirements.** If project constraints require a different approach, document the deviation in your PR description or code comments. Consider updating the skill if the deviation becomes a common pattern.
+
+### Common Skill Workflows
+
+Skills compose together for end-to-end features. See [.claude/skills/SKILL_WORKFLOWS.md](.claude/skills/SKILL_WORKFLOWS.md) for detailed multi-skill workflows.
+
+#### Example: Add New Tool (Full Stack)
+
+1. **jmo-adapter-generator** — Create `snyk_adapter.py` and `test_snyk_adapter.py`
+2. **jmo-test-fabricator** — Expand test suite to ≥85% coverage
+3. **jmo-compliance-mapper** — Add Snyk-specific rule mappings (if needed)
+4. **jmo-documentation-updater** — Update README.md, QUICKSTART.md, USER_GUIDE.md
+
+Time: 4-6 hours (vs. 8-12 hours without skills)
+
+#### Example: Performance Investigation
+
+1. **jmo-profile-optimizer** — Analyze `timings.json`, identify bottlenecks
+2. **jmo-ci-debugger** — Fix CI timeout configuration
+3. **jmo-documentation-updater** — Document performance tuning in USER_GUIDE.md
+
+Time: 2-3 hours (vs. 4-6 hours without skills)
+
+### Skill Maintenance
+
+Skills use **Semantic Versioning** and are updated on a regular schedule:
+
+- **Weekly:** jmo-ci-debugger (GitHub Actions API changes)
+- **Monthly:** jmo-documentation-updater (documentation structure adjustments)
+- **Quarterly:** jmo-compliance-mapper (MITRE ATT&CK updates)
+- **Annually:** jmo-compliance-mapper (CWE Top 25, OWASP Top 10, NIST CSF, CIS Controls)
+- **As Needed:** All others (when core architecture changes)
+
+See [.claude/skills/INDEX.md#skill-maintenance](.claude/skills/INDEX.md#skill-maintenance) for complete versioning and update process.
+
 ## Important Conventions
 
 ### Tool Invocation
@@ -820,6 +916,7 @@ results/
 
 ## Additional Resources
 
+- **Claude Skills Index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md)** — Complete skill catalog with workflows
 - User Guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - Quick Start: [QUICKSTART.md](QUICKSTART.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)

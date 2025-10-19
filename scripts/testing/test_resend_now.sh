@@ -9,11 +9,11 @@ echo ""
 
 # Check if API key is set
 if [ -z "$RESEND_API_KEY" ]; then
-    echo "Setting your API key from the chat..."
-    export RESEND_API_KEY="re_iDAQB1Gt_LL9goU5s7zKuBXejJVARuacp"
-    echo "✅ API key set"
+  echo "Setting your API key from the chat..."
+  export RESEND_API_KEY="re_iDAQB1Gt_LL9goU5s7zKuBXejJVARuacp"
+  echo "✅ API key set"
 else
-    echo "✅ API key already set"
+  echo "✅ API key already set"
 fi
 
 echo ""

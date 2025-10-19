@@ -204,13 +204,21 @@ results/
 
 ## Image Variants
 
-Three optimized images for different needs:
+Three optimized images for different needs (v0.6.1+ with multi-stage builds):
 
-| Variant | Size | Tools | Best For |
-|---------|------|-------|----------|
-| **`:latest`** | ~500MB | 11+ scanners | Complete scanning, local development |
-| **`:slim`** | ~200MB | 6 core scanners | CI/CD pipelines, faster pulls |
-| **`:alpine`** | ~150MB | 6 core scanners | Minimal footprint, resource-constrained |
+| Variant | Size (v0.6.1) | Size (v0.6.0) | Reduction | Tools | Best For |
+|---------|---------------|---------------|-----------|-------|----------|
+| **`:latest`** | ~1.7GB | ~2.3GB | 27% | 11+ scanners | Complete scanning, local development |
+| **`:slim`** | ~900MB | ~1.5GB | 40% | 7 core scanners | CI/CD pipelines, faster pulls |
+| **`:alpine`** | ~600MB | ~1.0GB | 41% | 7 core scanners | Minimal footprint, resource-constrained |
+
+**v0.6.1 Optimizations (ROADMAP #1):**
+
+- **Multi-stage builds:** Separate builder and runtime stages eliminate build tools (curl, wget, tar, build-essential, clang, llvm)
+- **Layer caching cleanup:** Aggressive removal of apt cache, pip cache, and Python bytecode
+- **Volume mounting support:** Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching (first scan downloads DB ~30-60s, subsequent scans use cached DB)
+
+**Note:** Trivy database pre-download was intentionally removed (adds 800MB to image) in favor of volume caching approach for better size/performance trade-off.
 
 ### Tools Included
 
@@ -470,6 +478,59 @@ EOF
 # Run with custom profile
 docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile-name custom --human-logs
+```
+
+### Trivy Database Caching (v0.6.1+)
+
+**Optimize scan performance with persistent Trivy vulnerability database caching:**
+
+```bash
+# First scan: Downloads Trivy DB to named volume (~30-60s for initial download)
+docker run --rm \
+  -v $(pwd):/scan \
+  -v trivy-cache:/root/.cache/trivy \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --profile balanced
+
+# Subsequent scans: Reuses cached DB (30-60s faster - no download!)
+docker run --rm \
+  -v $(pwd):/scan \
+  -v trivy-cache:/root/.cache/trivy \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --profile balanced
+```
+
+**Benefits:**
+
+- **First scan:** Downloads Trivy DB (~30-60s one-time cost per volume)
+- **Subsequent scans:** Cached DB persists across containers (30-60s faster, no download)
+- **CI/CD:** Reuse cache across pipeline runs for consistent performance
+- **Multi-project scans:** Share cache across different projects
+- **Image size:** Keeps images smaller (Trivy DB adds 800MB if pre-downloaded)
+
+**Cache Management:**
+
+```bash
+# List all Docker volumes
+docker volume ls
+
+# Inspect Trivy cache volume
+docker volume inspect trivy-cache
+
+# Remove cache to force fresh download (e.g., after long periods)
+docker volume rm trivy-cache
+```
+
+**CI/CD Example (GitHub Actions):**
+
+```yaml
+- name: Run security scan with caching
+  run: |
+    docker run --rm \
+      -v ${{ github.workspace }}:/scan \
+      -v trivy-cache:/root/.cache/trivy \
+      ghcr.io/jimmy058910/jmo-security:latest \
+      ci --repo /scan --fail-on HIGH
 ```
 
 ### Suppression File

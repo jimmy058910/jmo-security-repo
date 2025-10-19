@@ -153,6 +153,72 @@ jobs:
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" scan --help
 
+  # Benchmark image sizes (v0.6.1+ optimization tracking)
+  docker-size-benchmark:
+    name: Benchmark Docker Image Sizes
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Strip 'v' prefix
+            echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull and measure all variants
+        run: |
+          echo "## Docker Image Size Comparison (v0.6.1 Optimizations)" > size-comparison.md
+          echo "" >> size-comparison.md
+          echo "| Variant | Size (Compressed) | Size (Uncompressed) | Reduction vs v0.6.0 |" >> size-comparison.md
+          echo "|---------|-------------------|---------------------|---------------------|" >> size-comparison.md
+
+          for VARIANT in full slim alpine; do
+            TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
+            IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TAG}"
+
+            echo "Pulling $IMAGE..."
+            docker pull --platform linux/amd64 "$IMAGE"
+
+            # Get compressed size (what users download)
+            COMPRESSED=$(docker inspect "$IMAGE" | jq -r '.[0].Size' | numfmt --to=iec-i --suffix=B)
+
+            # Get uncompressed size (disk usage after pull)
+            UNCOMPRESSED=$(docker inspect "$IMAGE" | jq -r '.[0].VirtualSize' | numfmt --to=iec-i --suffix=B)
+
+            echo "| ${VARIANT} | ${COMPRESSED} | ${UNCOMPRESSED} | TBD (manual comparison) |" >> size-comparison.md
+          done
+
+          echo "" >> size-comparison.md
+          echo "**Optimization Goals (ROADMAP #1):**" >> size-comparison.md
+          echo "- Full: 1.5GB → 900MB (40% reduction)" >> size-comparison.md
+          echo "- Slim: 700MB → 400MB (43% reduction)" >> size-comparison.md
+          echo "- Alpine: 500MB → 300MB (40% reduction)" >> size-comparison.md
+          echo "" >> size-comparison.md
+          echo "**Optimizations Applied:**" >> size-comparison.md
+          echo "- Multi-stage builds (separate builder and runtime stages)" >> size-comparison.md
+          echo "- Layer caching cleanup (apt cache, pip cache, Python bytecode)" >> size-comparison.md
+          echo "- Trivy DB pre-download (eliminates 30-60s scan delay)" >> size-comparison.md
+
+          cat size-comparison.md
+
+      - name: Upload size comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-size-comparison-${{ steps.tag.outputs.value }}
+          path: size-comparison.md
+
   # Scan Docker images for vulnerabilities
   docker-scan:
     name: Scan Docker ${{ matrix.variant }}

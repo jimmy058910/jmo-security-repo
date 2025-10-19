@@ -29,7 +29,6 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
     # Mock subprocess.run to capture command (used by ToolRunner)
     import subprocess
 
-    original_run = subprocess.run
 
     def mock_run(cmd, *args, **kwargs):
         seen["cmd"] = cmd

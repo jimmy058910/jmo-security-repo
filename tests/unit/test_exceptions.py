@@ -299,7 +299,7 @@ class TestExceptionHierarchy:
 
     def test_specific_catch_works(self):
         """Can catch specific exception types."""
-        with pytest.raises(ToolNotFoundException) as exc_info:
+        with pytest.raises(ToolNotFoundException):
             raise ToolNotFoundException("trivy")
 
         # Should not catch as different exception type

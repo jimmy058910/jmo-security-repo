@@ -33,13 +33,13 @@ echo "Path: ${SUBSCRIBE_PAGE}"
 echo ""
 
 # WSL method to open in Windows browser
-if command -v wslview &> /dev/null; then
-    wslview "${SUBSCRIBE_PAGE}"
-elif command -v explorer.exe &> /dev/null; then
-    explorer.exe "$(wslpath -w "${SUBSCRIBE_PAGE}")"
+if command -v wslview &>/dev/null; then
+  wslview "${SUBSCRIBE_PAGE}"
+elif command -v explorer.exe &>/dev/null; then
+  explorer.exe "$(wslpath -w "${SUBSCRIBE_PAGE}")"
 else
-    echo "⚠️  Could not auto-open browser. Please manually open:"
-    echo "   Windows path: $(wslpath -w "${SUBSCRIBE_PAGE}")"
+  echo "⚠️  Could not auto-open browser. Please manually open:"
+  echo "   Windows path: $(wslpath -w "${SUBSCRIBE_PAGE}")"
 fi
 
 echo ""
@@ -58,21 +58,21 @@ echo "-------------------------------------------"
 
 # Check if results directory exists
 if [ -d "${REPO_ROOT}/results" ] && [ -f "${REPO_ROOT}/results/summaries/dashboard.html" ]; then
-    echo "Found existing dashboard, opening..."
-    DASHBOARD="${REPO_ROOT}/results/summaries/dashboard.html"
+  echo "Found existing dashboard, opening..."
+  DASHBOARD="${REPO_ROOT}/results/summaries/dashboard.html"
 
-    if command -v wslview &> /dev/null; then
-        wslview "${DASHBOARD}"
-    elif command -v explorer.exe &> /dev/null; then
-        explorer.exe "$(wslpath -w "${DASHBOARD}")"
-    else
-        echo "⚠️  Could not auto-open browser. Please manually open:"
-        echo "   Windows path: $(wslpath -w "${DASHBOARD}")"
-    fi
+  if command -v wslview &>/dev/null; then
+    wslview "${DASHBOARD}"
+  elif command -v explorer.exe &>/dev/null; then
+    explorer.exe "$(wslpath -w "${DASHBOARD}")"
+  else
+    echo "⚠️  Could not auto-open browser. Please manually open:"
+    echo "   Windows path: $(wslpath -w "${DASHBOARD}")"
+  fi
 else
-    echo "⚠️  No dashboard found. Let's generate one..."
-    echo "Run this command: jmo report ./results"
-    echo "Then run: ./test_email_system.sh and skip to this section"
+  echo "⚠️  No dashboard found. Let's generate one..."
+  echo "Run this command: jmo report ./results"
+  echo "Then run: ./test_email_system.sh and skip to this section"
 fi
 
 echo ""
@@ -94,9 +94,9 @@ read -p "Press ENTER to continue (or Ctrl+C to skip)..."
 
 # Backup existing config if it exists
 if [ -f ~/.jmo/config.yml ]; then
-    echo "Backing up existing config to ~/.jmo/config.yml.bak"
-    cp ~/.jmo/config.yml ~/.jmo/config.yml.bak
-    rm ~/.jmo/config.yml
+  echo "Backing up existing config to ~/.jmo/config.yml.bak"
+  cp ~/.jmo/config.yml ~/.jmo/config.yml.bak
+  rm ~/.jmo/config.yml
 fi
 
 echo ""
@@ -104,12 +104,12 @@ echo "Running first scan (this will trigger the welcome prompt)..."
 echo ""
 
 # Check if jmo command exists
-if ! command -v jmo &> /dev/null; then
-    echo "⚠️  'jmo' command not found. You may need to:"
-    echo "   1. Install: pip install -e ."
-    echo "   2. Or use: python3 scripts/cli/jmo.py scan --repo . --profile fast --results-dir /tmp/test-results"
+if ! command -v jmo &>/dev/null; then
+  echo "⚠️  'jmo' command not found. You may need to:"
+  echo "   1. Install: pip install -e ."
+  echo "   2. Or use: python3 scripts/cli/jmo.py scan --repo . --profile fast --results-dir /tmp/test-results"
 else
-    jmo scan --repo . --profile fast --results-dir /tmp/test-results --human-logs
+  jmo scan --repo . --profile fast --results-dir /tmp/test-results --human-logs
 fi
 
 echo ""
@@ -118,14 +118,14 @@ echo ""
 
 # Test 5: Verify Config Saved
 if [ -f ~/.jmo/config.yml ]; then
-    echo "📁 Test 5: Config File Check"
-    echo "-------------------------------------------"
-    echo "Config file exists at: ~/.jmo/config.yml"
-    echo ""
-    echo "Contents:"
-    cat ~/.jmo/config.yml
+  echo "📁 Test 5: Config File Check"
+  echo "-------------------------------------------"
+  echo "Config file exists at: ~/.jmo/config.yml"
+  echo ""
+  echo "Contents:"
+  cat ~/.jmo/config.yml
 else
-    echo "⚠️  No config file found. Did the scan complete?"
+  echo "⚠️  No config file found. Did the scan complete?"
 fi
 
 echo ""

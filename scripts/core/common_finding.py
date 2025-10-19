@@ -6,7 +6,11 @@ CommonFinding helpers: severity mapping and fingerprinting.
 from __future__ import annotations
 
 import hashlib
+import logging
 from enum import Enum
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Fingerprinting constants
 FINGERPRINT_LENGTH = 16  # Hex chars for stable, readable IDs
@@ -197,5 +201,13 @@ def extract_code_snippet(
             "endLine": snippet_end,  # 1-indexed (exclusive)
             "language": language,
         }
-    except Exception:
+    except (OSError, UnicodeDecodeError, IndexError) as e:
+        # File read errors, encoding issues, or line indexing errors
+        logger.debug(f"Failed to read code snippet from {file_path}:{start_line}: {e}")
+        return None
+    except Exception as e:
+        # Unexpected errors
+        logger.debug(
+            f"Unexpected error reading code snippet from {file_path}:{start_line}: {e}"
+        )
         return None
