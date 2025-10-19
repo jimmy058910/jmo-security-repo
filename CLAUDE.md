@@ -333,14 +333,14 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 4. Generate stable fingerprint ID
 5. Return list of findings
 
-**Supported Tools (v0.5.0):**
+**Supported Tools (v0.6.2):**
 
 - **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
 - **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
 - **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
 - **IaC:** checkov (policy-as-code)
 - **Dockerfile:** hadolint (best practices)
-- **DAST:** OWASP ZAP (web security, runtime vulnerabilities)
+- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), Nuclei (fast vulnerability scanner with 4000+ templates, API security)
 - **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
 - **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
 
@@ -706,7 +706,9 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 
 CI validates that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
 
-## Claude Skills
+## Claude Skills (Dev-Only, Not Committed)
+
+**IMPORTANT: The `.claude/skills/` directory is gitignored and NOT part of the committed codebase.** Skills are local development aids for contributors using Claude Code. They are referenced in this file to help Claude understand when to use them during local development.
 
 This project uses **specialized skills** to guide complex, repetitive workflows. Skills are comprehensive knowledge bases that ensure consistency, reduce errors, and accelerate development.
 
