@@ -5,7 +5,6 @@ from pathlib import Path
 from scripts.core.adapters.bandit_adapter import load_bandit
 from scripts.core.adapters.semgrep_adapter import load_semgrep
 from scripts.core.adapters.syft_adapter import load_syft
-from scripts.core.adapters.tfsec_adapter import load_tfsec
 from scripts.core.adapters.checkov_adapter import load_checkov
 from scripts.core.adapters.hadolint_adapter import load_hadolint
 
@@ -20,7 +19,6 @@ def test_empty_and_malformed_inputs(tmp_path: Path):
         "bandit.json": load_bandit,
         "semgrep.json": load_semgrep,
         "syft.json": load_syft,
-        "tfsec.json": load_tfsec,
         "checkov.json": load_checkov,
         "hadolint.json": load_hadolint,
     }
@@ -72,12 +70,12 @@ def test_severity_translation_paths(tmp_path: Path):
 
 
 def test_adapter_missing_arrays_handled(tmp_path: Path):
-    # tfsec with unexpected shape
-    p = tmp_path / "tfsec.json"
-    _write(p, {"results": None})
-    assert load_tfsec(p) == []
-
-    # checkov with unexpected shape
+    # checkov with unexpected shape (null failed_checks)
     p = tmp_path / "checkov.json"
     _write(p, {"results": {"failed_checks": None}})
+    assert load_checkov(p) == []
+
+    # checkov with missing results entirely
+    p = tmp_path / "checkov2.json"
+    _write(p, {})
     assert load_checkov(p) == []
