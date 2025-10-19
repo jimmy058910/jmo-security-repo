@@ -50,6 +50,11 @@ class TestK8sScanner:
 
     def test_scan_k8s_all_namespaces(self, tmp_path):
         """Test K8s scanning with all namespaces"""
+
+        # Mock tool_exists to return True for trivy
+        def mock_tool_exists(tool_name):
+            return tool_name == "trivy"
+
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -74,17 +79,24 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
             )
 
             # Verify --all-namespaces flag is used
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
-            tool_defs = kwargs["tools"]
-            trivy_def = tool_defs[0]
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None, "trivy tool definition not found"
             assert "--all-namespaces" in trivy_def.command
 
     def test_scan_k8s_custom_context(self, tmp_path):
         """Test K8s scanning with custom context"""
+
+        # Mock tool_exists to return True for trivy
+        def mock_tool_exists(tool_name):
+            return tool_name == "trivy"
+
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -108,13 +120,15 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
             )
 
             # Verify --context flag is used
             MockRunner.assert_called_once()
             args, kwargs = MockRunner.call_args
-            tool_defs = kwargs["tools"]
-            trivy_def = tool_defs[0]
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None, "trivy tool definition not found"
             assert "--context" in trivy_def.command
             assert "production" in trivy_def.command
 
