@@ -13,6 +13,7 @@
 ## Newsletter Template Structure
 
 ```markdown
+
 # 📬 JMo Security Weekly - [Title]
 
 **[Date] | Issue #[N]**
@@ -52,8 +53,7 @@
 **💬 Discuss:** [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)
 
 [Unsubscribe]({{unsubscribe_url}}) | [Privacy Policy](https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html)
-```
-
+```text
 ---
 
 ## Week 1: "Top 5 Security Mistakes in Python Projects"
@@ -64,10 +64,11 @@
 
 ### Content Outline
 
-**Hook:**
+### Hook:
+
 "Last week, I audited 50 Python projects on GitHub. Every single one had at least one of these 5 critical security issues..."
 
-**Main Content:**
+### Main Content:
 
 1. **Hardcoded Secrets in Code**
    - Example: `API_KEY = "sk_live_abc123"` in `config.py`
@@ -99,17 +100,17 @@
    - Fix: Use `bcrypt`, `scrypt`, or `Argon2`
    - Tool: Bandit rule B303/B324
 
-**Case Study:**
+### Case Study:
 
 "Real-world example: A Django app exposed 10,000 user records because of SQL injection in the search feature. The fix? One line of code changed from f-string to parameterized query."
 
-**Action Items:**
+### Action Items:
 
 - [ ] Run `jmotools fast` on your Python projects
 - [ ] Review all database queries for parameterization
 - [ ] Check for hardcoded secrets with `git log -S "api_key"`
 
-**Call-to-Action:**
+### Call-to-Action:
 
 "Found security issues in your project? Reply to this email with the most interesting vulnerability you discovered. I'll feature the best one in next week's newsletter!"
 
@@ -123,12 +124,13 @@
 
 ### Content Outline
 
-**Hook:**
+### Hook:
+
 "Yesterday, I scanned 100 popular Docker images on Docker Hub. 89% had HIGH or CRITICAL vulnerabilities. Here's what they're missing..."
 
-**Main Content:**
+### Main Content:
 
-**Phase 1: Build-Time Security**
+### Phase 1: Build-Time Security
 
 1. **Use Official Base Images**
    - ✅ `FROM python:3.11-slim-bookworm`
@@ -141,6 +143,7 @@
    - Why: Reproducible builds, predictable security posture
 
 3. **Run as Non-Root User**
+
    ```dockerfile
    RUN addgroup -S appgroup && adduser -S appuser -G appgroup
    USER appuser
@@ -151,31 +154,38 @@
    - Reduces attack surface by 70%
 
 5. **Scan Images in CI/CD**
+
    ```yaml
+
    - name: Trivy Scan
+
      run: docker run --rm aquasec/trivy image myapp:latest
    ```
 
-**Phase 2: Runtime Security**
+### Phase 2: Runtime Security
 
 6. **Read-Only Filesystem**
+
    ```bash
    docker run --read-only -v /tmp:/tmp:rw myapp
    ```
 
 7. **Drop Unnecessary Capabilities**
+
    ```bash
    docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE myapp
    ```
 
 8. **Resource Limits**
+
    ```bash
    docker run --memory="512m" --cpus="1.0" myapp
    ```
 
-**Phase 3: Orchestration Security**
+### Phase 3: Orchestration Security
 
 9. **Kubernetes Security Context**
+
    ```yaml
    securityContext:
      runAsNonRoot: true
@@ -195,21 +205,23 @@
     - Rebuild images weekly
     - Automate with Dependabot or Renovate
 
-**Case Study:**
+### Case Study:
 
 "A fintech startup reduced their Docker image vulnerabilities from 47 CRITICAL to 0 in 2 weeks using this checklist. Their images went from 1.2GB to 180MB, and security scans went from 15 minutes to 30 seconds."
 
-**Checklist:**
+### Checklist:
 
 ```bash
+
 # Scan your images now
+
 docker run --rm aquasec/trivy image your-image:tag
 
 # Or use JMo Security
-jmo scan --image your-image:tag --tools trivy syft
-```
 
-**Action Items:**
+jmo scan --image your-image:tag --tools trivy syft
+```text
+### Action Items:
 
 - [ ] Scan all production images with Trivy
 - [ ] Update Dockerfiles to use non-root user
@@ -225,39 +237,49 @@ jmo scan --image your-image:tag --tools trivy syft
 
 ### Content Outline
 
-**Hook:**
+### Hook:
+
 "I found 127 AWS keys in a single repository's git history. All of them still valid. The developer thought deleting the file was enough. It wasn't."
 
-**Main Content:**
+### Main Content:
 
-**Part 1: Detection**
+### Part 1: Detection
 
 1. **TruffleHog Verified Secrets**
+
    ```bash
    jmo scan --repo . --tools trufflehog --profile fast
    ```
+
    - Only reports verified active credentials
    - 95% fewer false positives than regex-based tools
 
 2. **Nosey Parker for Historical Secrets**
+
    ```bash
    jmo scan --repo . --profile deep  # Includes noseyparker
    ```
+
    - Scans entire git history
    - Finds secrets deleted years ago
 
 3. **Pre-Commit Hook Prevention**
+
    ```yaml
    # .pre-commit-config.yaml
    repos:
+
      - repo: https://github.com/trufflesecurity/trufflehog
+
        rev: v3.63.0
        hooks:
+
          - id: trufflehog
+
            args: ['--only-verified']
    ```
 
-**Part 2: Impact Assessment**
+### Part 2: Impact Assessment
 
 When you find a leaked secret, ask:
 
@@ -266,104 +288,117 @@ When you find a leaked secret, ask:
 3. **Is the repo public?** (Higher risk)
 4. **Has anyone forked/cloned?** (Check GitHub network graph)
 
-**Part 3: Remediation (Critical Steps)**
+### Part 3: Remediation (Critical Steps)
 
-**Step 1: Rotate Immediately**
+### Step 1: Rotate Immediately
 
 ```bash
+
 # AWS
+
 aws iam update-access-key --access-key-id AKIA... --status Inactive
 
 # GitHub
+
 # Settings → Developer settings → Personal access tokens → Delete
 
 # Database
-ALTER USER myuser WITH PASSWORD 'new-secure-password';
-```
 
+ALTER USER myuser WITH PASSWORD 'new-secure-password';
+```text
 **Step 2: Remove from Git History** (Choose One)
 
-**Option A: BFG Repo-Cleaner (Recommended)**
+### Option A: BFG Repo-Cleaner (Recommended)
 
 ```bash
+
 # Download BFG
+
 wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar
 
 # Create secrets.txt with all leaked secrets
+
 echo "AKIA1234567890ABCDEF" > secrets.txt
 
 # Clean history
+
 java -jar bfg-1.14.0.jar --replace-text secrets.txt .git
 
 # Force push
+
 git reflog expire --expire=now --all && git gc --prune=now --aggressive
 git push --force --all origin
-```
-
-**Option B: git-filter-repo**
+```text
+### Option B: git-filter-repo
 
 ```bash
 pip install git-filter-repo
 
 # Remove file from history
+
 git filter-repo --path secrets.env --invert-paths
 
 # Force push
-git push --force --all origin
-```
 
-**Step 3: Notify Affected Parties**
+git push --force --all origin
+```text
+### Step 3: Notify Affected Parties
 
 - Security team
 - DevOps/SRE
 - Compliance (if regulated industry)
 - Customers (if data breach)
 
-**Step 4: Implement Prevention**
+### Step 4: Implement Prevention
 
 1. **Pre-commit hooks** (as shown above)
 2. **CI/CD gates** (fail build on secrets)
 3. **Developer training** (quarterly)
 4. **Secrets management** (Vault, AWS Secrets Manager)
 
-**Part 4: Migration to Proper Secrets Management**
+### Part 4: Migration to Proper Secrets Management
 
-**Before:**
+### Before:
 
 ```python
+
 # config.py
+
 API_KEY = "sk_live_abc123"  # ❌ NEVER DO THIS
-```
-
-**After:**
+```text
+### After:
 
 ```python
+
 # config.py
+
 import os
 API_KEY = os.getenv("API_KEY")  # ✅ Load from environment
 
 if not API_KEY:
     raise ValueError("API_KEY environment variable not set")
-```
-
-**Production Deployment:**
+```text
+### Production Deployment:
 
 ```bash
+
 # Local development (.env file in .gitignore)
+
 API_KEY=sk_test_xyz789
 
 # Production (Kubernetes Secret)
+
 kubectl create secret generic app-secrets --from-literal=API_KEY=sk_live_abc123
 
 # Or AWS Secrets Manager
-aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc123
-```
 
-**Case Study:**
+aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc123
+```text
+### Case Study:
 
 "A SaaS company leaked their Stripe secret key in a public repo. Within 2 hours, attackers charged $47,000 to test credit cards. Total cost after chargebacks, fines, and remediation: $180,000. The commit was made by an intern who didn't know about `.gitignore`."
 
-**Checklist:**
+### Checklist:
 
 - [ ] Scan for secrets: `jmo scan --repo . --profile deep`
 - [ ] Rotate any found secrets within 1 hour
@@ -381,12 +416,13 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 
 ### Content Outline
 
-**Hook:**
+### Hook:
+
 "Last month, I offered free security audits to 10 open-source projects. Every single one accepted. The results were shocking..."
 
-**Main Content:**
+### Main Content:
 
-**The Projects:**
+### The Projects:
 
 - 3 Python web apps (Django/Flask)
 - 2 Node.js APIs (Express)
@@ -394,7 +430,7 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 - 2 Docker-based microservices
 - 1 Go CLI tool
 
-**Aggregate Statistics:**
+### Aggregate Statistics:
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
@@ -406,7 +442,7 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 
 **Time to Fix:** 30 days average (2 hours/week per project)
 
-**Most Common Issues:**
+### Most Common Issues:
 
 1. **Outdated Dependencies (67% of projects)**
    - Average: 23 CVEs per project
@@ -433,27 +469,35 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
    - Root cause: Running as root, outdated base images
    - Fix: Non-root user, multi-stage builds, regular patching
 
-**Deep Dive: Python Web App Case Study**
+### Deep Dive: Python Web App Case Study
 
 **Project:** Django e-commerce site (15K users)
 
-**Initial Scan Results:**
+### Initial Scan Results:
 
 ```bash
 jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 
 # Output:
-# ❌ CI FAILED - Findings above threshold detected
-#
-# CRITICAL: 5
-# HIGH: 18
-# MEDIUM: 34
-# LOW: 12
-#
-# Total: 69 findings
-```
 
-**Top 5 Findings:**
+# ❌ CI FAILED - Findings above threshold detected
+
+#
+
+# CRITICAL: 5
+
+# HIGH: 18
+
+# MEDIUM: 34
+
+# LOW: 12
+
+#
+
+# Total: 69 findings
+
+```text
+### Top 5 Findings:
 
 1. **CRITICAL: Hardcoded Stripe Secret Key**
    - File: `payments/config.py`
@@ -480,48 +524,53 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
    - Risk: Passwords crackable in minutes with rainbow tables
    - Fix time: 1 hour (migrate to bcrypt)
 
-**Remediation Process:**
+### Remediation Process:
 
-**Week 1: Critical + High (6 hours)**
+### Week 1: Critical + High (6 hours)
 
 - Day 1: Rotated Stripe key, moved to environment variable
 - Day 2: Fixed SQL injection in search + admin panel
 - Day 3: Upgraded Django 3.1 → 4.2 (ran test suite)
 - Day 4: Added CSRF tokens to all forms
 
-**Week 2: Medium + Dependencies (4 hours)**
+### Week 2: Medium + Dependencies (4 hours)
 
 - Day 1: Migrated password hashing to bcrypt
 - Day 2: Updated all npm dependencies
 - Day 3: Scanned Docker images, switched to non-root user
 - Day 4: Added pre-commit hooks to prevent future issues
 
-**Week 3: Verification (2 hours)**
+### Week 3: Verification (2 hours)
 
 - Ran full audit again: 69 → 9 findings
 - Remaining 9 = LOW severity (code quality, not security)
 - Set up weekly automated scans in CI/CD
 
-**Final Scan:**
+### Final Scan:
 
 ```bash
 jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 
 # Output:
-# ✅ CI PASSED - No findings above threshold
-#
-# LOW: 9
-#
-# Total: 9 findings (all informational)
-```
 
-**Developer Testimonial:**
+# ✅ CI PASSED - No findings above threshold
+
+#
+
+# LOW: 9
+
+#
+
+# Total: 9 findings (all informational)
+
+```text
+### Developer Testimonial:
 
 > "I thought our app was secure because we didn't have any data breaches. JMo Security found 69 issues in 5 minutes. The fixes were straightforward once we knew what to look for. Now our security scans run automatically on every PR."
 >
 > — Alex Chen, Lead Developer
 
-**Key Takeaways:**
+### Key Takeaways:
 
 1. **Most vulnerabilities are easy to fix** (5-15 minutes each)
 2. **Automated scanning catches 95% of issues** (manual review for the rest)
@@ -529,17 +578,20 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 4. **Regular updates matter** (outdated dependencies = easiest target)
 5. **CI/CD integration is critical** (gate merges on security scan results)
 
-**Your Turn:**
+### Your Turn:
 
 ```bash
+
 # Run the same scan on your projects
+
 jmo ci --repos-dir ~/projects --profile balanced --fail-on HIGH
 
 # Expected time: 5-15 minutes per project
-# Expected findings: 10-50 per project (based on 10-project average)
-```
 
-**Action Items:**
+# Expected findings: 10-50 per project (based on 10-project average)
+
+```text
+### Action Items:
 
 - [ ] Audit your top 3 projects this week
 - [ ] Fix all CRITICAL and HIGH findings

@@ -22,18 +22,18 @@
 
 ### 1.1 Target Type Priority Tiers
 
-**Tier 1 (Critical - Must test on all OS):**
+### Tier 1 (Critical - Must test on all OS):
 
 - **Repository scanning** — Core functionality, backward compatibility critical
 - **Container image scanning** — High adoption, Docker/Podman variations
 - **Multi-target combined** — Real-world use case (repo + image + IaC)
 
-**Tier 2 (Important - Test on Linux + one other OS):**
+### Tier 2 (Important - Test on Linux + one other OS):
 
 - **IaC file scanning** — Terraform/K8s manifests common in CI/CD
 - **URL scanning (DAST)** — Requires ZAP, network dependencies
 
-**Tier 3 (Optional - Test on Linux only):**
+### Tier 3 (Optional - Test on Linux only):
 
 - **GitLab scanning** — Requires GitLab token, less common
 - **K8s scanning** — Requires cluster access, advanced use case
@@ -46,7 +46,7 @@
 | **macOS 14 (Sonoma)** | ✅ Tier 1+2 | ✅ Tier 1 | ✅ Tier 1+2 | SECONDARY |
 | **Windows 11 (WSL2)** | ✅ Tier 1 | ✅ Tier 1 | ✅ Tier 1+2 | TERTIARY |
 
-**Rationale:**
+### Rationale:
 
 - Ubuntu: Primary CI/CD environment, most users
 - macOS: Developer workstations, Docker Desktop variations
@@ -54,19 +54,19 @@
 
 ### 1.3 Execution Method Coverage
 
-**Native CLI (Direct Binary):**
+### Native CLI (Direct Binary):
 
 - Profile: `balanced` (7 tools)
 - Validates: Tool installation, PATH resolution, file permissions
 - Priority: Tier 1 targets on all OS
 
-**Wizard (Interactive/Non-interactive):**
+### Wizard (Interactive/Non-interactive):
 
 - Modes: `--yes` (CI mode) and interactive
 - Validates: User onboarding, smart defaults, artifact generation
 - Priority: Tier 1 targets on all OS (non-interactive), interactive on Ubuntu only
 
-**Docker (Zero-installation):**
+### Docker (Zero-installation):
 
 - Variants: `full`, `slim`, `alpine`
 - Validates: Volume mounts, container networking, image distribution
@@ -130,12 +130,15 @@
 ### 3.1 Automated Test Script Structure
 
 ```bash
+
 #!/usr/bin/env bash
+
 # tests/e2e/run_comprehensive_tests.sh
 
 set -euo pipefail
 
 # Configuration
+
 RESULTS_BASE="/tmp/jmo-comprehensive-tests-$(date +%s)"
 TEST_REPO="https://github.com/juice-shop/juice-shop.git"  # Known vulnerable repo
 TEST_IMAGE="alpine:3.19"  # Small, fast to scan
@@ -143,6 +146,7 @@ TEST_TF_FILE="test-fixtures/aws-s3-public.tf"  # Known misconfig
 TEST_URL="http://testphp.vulnweb.com"  # OWASP test site
 
 # Test runner function
+
 run_test() {
   local test_id="$1"
   local test_name="$2"
@@ -179,6 +183,7 @@ run_test() {
 }
 
 # Validation functions
+
 validate_basic_scan() {
   local results_dir="$1"
   local exit_code="$2"
@@ -256,6 +261,7 @@ validate_docker_scan() {
 }
 
 # Ubuntu Tests
+
 run_ubuntu_tests() {
   echo "=========================================="
   echo "Ubuntu 22.04 Test Suite (12 tests)"
@@ -324,6 +330,7 @@ run_ubuntu_tests() {
 }
 
 # macOS Tests
+
 run_macos_tests() {
   echo "=========================================="
   echo "macOS 14 Test Suite (6 tests)"
@@ -335,6 +342,7 @@ run_macos_tests() {
 }
 
 # Windows WSL2 Tests
+
 run_windows_tests() {
   echo "=========================================="
   echo "Windows 11 WSL2 Test Suite (4 tests)"
@@ -345,6 +353,7 @@ run_windows_tests() {
 }
 
 # Advanced Tests
+
 run_advanced_tests() {
   echo "=========================================="
   echo "Advanced Scenarios (3 tests)"
@@ -375,6 +384,7 @@ run_advanced_tests() {
 }
 
 # Main execution
+
 main() {
   echo "JMo Security Comprehensive Test Suite v0.6.0"
   echo "=============================================="
@@ -421,19 +431,21 @@ main() {
 }
 
 main "$@"
-```
-
+```text
 ### 3.2 Test Fixtures
 
 Create realistic test fixtures for consistent testing:
 
 ```bash
+
 # tests/e2e/fixtures/setup_fixtures.sh
 
 # Clone known vulnerable repository (small, fast)
+
 git clone --depth 1 https://github.com/juice-shop/juice-shop.git /tmp/test-repo
 
 # Create IaC test file with known misconfiguration
+
 cat > /tmp/test-fixtures/aws-s3-public.tf <<'EOF'
 resource "aws_s3_bucket" "public_bucket" {
   bucket = "my-public-bucket"
@@ -457,6 +469,7 @@ resource "aws_security_group" "allow_all" {
 EOF
 
 # Create Kubernetes manifest with known issues
+
 cat > /tmp/test-fixtures/k8s-privileged-pod.yaml <<'EOF'
 apiVersion: v1
 kind: Pod
@@ -464,7 +477,9 @@ metadata:
   name: privileged-pod
 spec:
   containers:
+
   - name: app
+
     image: nginx:latest
     securityContext:
       privileged: true  # CIS 5.2.1: Should not run privileged
@@ -472,27 +487,30 @@ spec:
 EOF
 
 # Create Dockerfile with known issues
+
 cat > /tmp/test-fixtures/Dockerfile.bad <<'EOF'
 FROM ubuntu:latest
 
 # DL3008: Pin versions in apt-get install
+
 RUN apt-get update && apt-get install -y curl
 
 # DL3025: Use JSON for ENTRYPOINT
+
 ENTRYPOINT curl http://example.com
 
 # DL3020: Use COPY instead of ADD
+
 ADD http://example.com/file.tar.gz /tmp/
 EOF
-```
-
+```text
 ---
 
 ## 4. Success Criteria & Validation
 
 ### 4.1 Per-Test Success Criteria
 
-**All tests must meet these criteria:**
+### All tests must meet these criteria:
 
 1. **Exit Code Validation:**
    - Scan commands: Exit 0 (no findings) or 1 (findings found)
@@ -522,7 +540,7 @@ EOF
 
 ### 4.2 Multi-Target Specific Criteria
 
-**Additional checks for multi-target tests (U5, U11, M6, W4):**
+### Additional checks for multi-target tests (U5, U11, M6, W4):
 
 1. **Directory Structure:**
    - At least 2 of these directories must exist:
@@ -544,7 +562,7 @@ EOF
 
 ### 4.3 Docker-Specific Criteria
 
-**Additional checks for Docker tests (U9-U11, M5-M6, W3-W4):**
+### Additional checks for Docker tests (U9-U11, M5-M6, W3-W4):
 
 1. **Volume Mounts:**
    - Results written to host filesystem (not inside container)
@@ -561,7 +579,7 @@ EOF
 
 ### 4.4 Wizard-Specific Criteria
 
-**Additional checks for wizard tests (U7, U8, M4, W2):**
+### Additional checks for wizard tests (U7, U8, M4, W2):
 
 1. **Non-Interactive Mode (`--yes`):**
    - Smart defaults applied (profile, tools, results-dir)
@@ -622,17 +640,23 @@ EOF
 ### 5.2 CI/CD Integration Example
 
 ```yaml
+
 # .github/workflows/e2e-comprehensive-tests.yml
+
 name: End-to-End Comprehensive Tests
 
 on:
   pull_request:
     paths:
+
       - 'scripts/**'
       - 'tests/**'
       - 'pyproject.toml'
+
   schedule:
+
     - cron: '0 6 * * *'  # Nightly at 6 AM UTC
+
   workflow_dispatch:
 
 jobs:
@@ -642,31 +666,38 @@ jobs:
     timeout-minutes: 120
 
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
+
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install JMo Security
+
         run: |
           pip install -e .
           make tools  # Install external security tools
 
       - name: Set up Docker
+
         uses: docker/setup-buildx-action@v3
 
       - name: Pull Docker images
+
         run: |
           docker pull ghcr.io/jimmy058910/jmo-security:0.6.0-full
           docker pull ghcr.io/jimmy058910/jmo-security:0.6.0-slim
 
       - name: Run Ubuntu test suite
+
         run: |
           bash tests/e2e/run_comprehensive_tests.sh
 
       - name: Upload test results
+
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -674,11 +705,13 @@ jobs:
           path: /tmp/jmo-comprehensive-tests-*/
 
       - name: Generate test report
+
         if: always()
         run: |
           python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.csv
 
       - name: Comment PR with results
+
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
@@ -698,31 +731,35 @@ jobs:
     timeout-minutes: 90
 
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
+
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install JMo Security
+
         run: |
           pip install -e .
           brew install semgrep trivy syft checkov hadolint
           # Install other tools via Homebrew
 
       - name: Run macOS test suite
+
         run: |
           bash tests/e2e/run_comprehensive_tests.sh
 
       - name: Upload test results
+
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-test-results
           path: /tmp/jmo-comprehensive-tests-*/
-```
-
+```text
 ---
 
 ## 6. Test Results Documentation
@@ -730,6 +767,7 @@ jobs:
 ### 6.1 Test Report Template
 
 ```markdown
+
 # Comprehensive Test Results - v0.6.0
 
 **Test Date:** 2025-10-XX
@@ -849,27 +887,26 @@ jobs:
 ## Conclusion
 
 [Overall assessment of test results and release readiness]
-```
-
+```text
 ---
 
 ## 7. Maintenance & Future Enhancements
 
 ### 7.1 Test Suite Maintenance Plan
 
-**Quarterly Reviews:**
+### Quarterly Reviews:
 
 - Update test fixtures for new vulnerability patterns
 - Add tests for newly supported tools
 - Refresh vulnerable test targets (Juice Shop, test fixtures)
 
-**Per-Release Updates:**
+### Per-Release Updates:
 
 - Add tests for new features (target types, compliance frameworks)
 - Update validation functions for schema changes
 - Benchmark performance improvements
 
-**Continuous Monitoring:**
+### Continuous Monitoring:
 
 - CI/CD test results tracked over time
 - Flaky test detection and remediation
@@ -877,19 +914,19 @@ jobs:
 
 ### 7.2 Future Test Enhancements
 
-**Short-term (v0.7.0):**
+### Short-term (v0.7.0):
 
 - Add snapshot testing for dashboard HTML
 - Add compliance filter interaction tests (Playwright/Puppeteer)
 - Add parallel execution for faster test runs
 
-**Medium-term (v0.8.0):**
+### Medium-term (v0.8.0):
 
 - Add performance benchmarking suite
 - Add load testing (100+ repos, 1000+ images)
 - Add stress testing (memory limits, disk space limits)
 
-**Long-term (v1.0.0):**
+### Long-term (v1.0.0):
 
 - Add integration tests with CI/CD platforms (GitHub Actions, GitLab CI, Jenkins)
 - Add security testing (penetration testing, fuzzing)
@@ -902,22 +939,27 @@ jobs:
 ### 8.1 Test Execution Commands
 
 ```bash
+
 # Run full Ubuntu test suite
+
 bash tests/e2e/run_comprehensive_tests.sh
 
 # Run specific test
+
 bash tests/e2e/run_comprehensive_tests.sh --test U1
 
 # Run tests with custom fixtures
+
 TEST_REPO=/path/to/repo bash tests/e2e/run_comprehensive_tests.sh
 
 # Generate test report from CSV
+
 python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.csv
 
 # Validate test fixtures
-bash tests/e2e/fixtures/setup_fixtures.sh --validate
-```
 
+bash tests/e2e/fixtures/setup_fixtures.sh --validate
+```text
 ### 8.2 Troubleshooting Test Failures
 
 | Error | Cause | Fix |
@@ -930,19 +972,19 @@ bash tests/e2e/fixtures/setup_fixtures.sh --validate
 
 ### 8.3 Test Result Interpretation
 
-**Exit Codes:**
+### Exit Codes:
 
 - `0` - All tests passed
 - `1` - One or more tests failed (see CSV for details)
 - `2` - Test framework error (setup failed)
 
-**CSV Columns:**
+### CSV Columns:
 
 - `test_id` - Unique test identifier (U1, M2, etc.)
 - `status` - PASS/FAIL/SKIP
 - `duration_seconds` - Execution time in seconds
 
-**Pass Criteria:**
+### Pass Criteria:
 
 - ≥95% success rate (24/25 tests) for release
 - All Tier 1 tests (repos, images, multi-target) must pass
@@ -966,8 +1008,7 @@ tests/e2e/fixtures/
 │   └── docker-bad-practices/    # Dockerfile issues
 ├── images.txt                # List of test container images
 └── urls.txt                  # List of test URLs (OWASP test sites)
-```
-
+```text
 ## Appendix B: Platform-Specific Considerations
 
 ### Ubuntu/Linux
@@ -993,23 +1034,30 @@ tests/e2e/fixtures/
 Before running Docker tests, verify images are available:
 
 ```bash
+
 # Check image existence
+
 docker images | grep jmo-security
 
 # Verify image variants
+
 docker run --rm ghcr.io/jimmy058910/jmo-security:0.6.0-full --help
 docker run --rm ghcr.io/jimmy058910/jmo-security:0.6.0-slim --help
 docker run --rm ghcr.io/jimmy058910/jmo-security:0.6.0-alpine --help
 
 # Check image sizes
+
 docker images --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" | grep jmo-security
 
 # Expected sizes:
-# full:   ~2.5GB (all 11 tools)
-# slim:   ~800MB (3 core tools)
-# alpine: ~500MB (3 core tools, minimal base)
-```
 
+# full:   ~2.5GB (all 11 tools)
+
+# slim:   ~800MB (3 core tools)
+
+# alpine: ~500MB (3 core tools, minimal base)
+
+```text
 ---
 
 **Document Version:** 1.0

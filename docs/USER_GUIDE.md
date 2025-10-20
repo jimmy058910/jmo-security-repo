@@ -825,7 +825,7 @@ rm ~/.jmo-security/telemetry-id
 
 Full privacy policy and data handling details:
 
-- [docs/TELEMETRY_IMPLEMENTATION_GUIDE.md](TELEMETRY_IMPLEMENTATION_GUIDE.md) — Implementation details
+- [docs/TELEMETRY.md](TELEMETRY.md) — Complete telemetry documentation
 - [jmotools.com/privacy](https://jmotools.com/privacy) — Privacy policy (future)
 
 **Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)

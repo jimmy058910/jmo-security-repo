@@ -19,9 +19,9 @@ The HTML reporter embedded findings JSON directly into a `<script>` tag:
 <script>
 const data = [...176 findings with </script> strings...];
 // ^ This would break out of the script tag prematurely
-```
-
+```text
 When findings contained `</script>` in their compliance data, the browser would interpret these as script closing tags, resulting in:
+
 - **11 `<script>` tags** but **17 `</script>` tags** (unbalanced!)
 - JavaScript never executed (data variable undefined)
 - Dashboard showed empty table (0 findings instead of 176)
@@ -36,12 +36,13 @@ The compliance-aware findings (v0.5.1+) include rich metadata from frameworks li
 
 **File:** `scripts/core/reporters/html_reporter.py`
 
-**Before (Line 25):**
+### Before (Line 25):
+
 ```python
 data_json = json.dumps(findings).replace("`", "\\`")
-```
+```text
+### After (Lines 31-37):
 
-**After (Lines 31-37):**
 ```python
 data_json = (
     json.dumps(findings)
@@ -50,8 +51,7 @@ data_json = (
     .replace("<!--", "<\\!--")            # Prevent HTML comment injection
     .replace("`", "\\`")                  # Prevent template literal breakout
 )
-```
-
+```text
 ### Test Coverage
 
 Added comprehensive test in `tests/reporters/test_yaml_html_reporters.py::test_html_script_tag_escaping()`:
@@ -67,25 +67,26 @@ Added comprehensive test in `tests/reporters/test_yaml_html_reporters.py::test_h
 ## Verification
 
 ### Before Fix
-```
+
+```text
 Script tags: 11 opens, 17 closes (UNBALANCED)
 Data variable: undefined
 Table rows: 2 (broken rendering)
 Dashboard: NON-FUNCTIONAL
-```
-
+```text
 ### After Fix
-```
+
+```text
 Script tags: 1 open, 1 close (BALANCED ✅)
 Escaped count: 16 <\/script> strings properly escaped
 Data variable: defined with 176 findings
 Table rows: 176 (all findings rendered)
 Dashboard: FULLY FUNCTIONAL ✅
-```
-
+```text
 ### Puppeteer Validation
 
 Verified with Puppeteer MCP that the dashboard:
+
 - ✅ Data array loads correctly (176 findings)
 - ✅ All JavaScript functions are defined
 - ✅ Table renders all 176 rows
@@ -110,6 +111,7 @@ The HTML reporter now properly escapes all dangerous characters:
 ### Dynamic Content Escaping
 
 All dynamic content in the dashboard template uses `escapeHtml()` function:
+
 - Finding messages, paths, rule IDs
 - Compliance framework values
 - Tool names and versions
@@ -133,12 +135,14 @@ All dynamic content in the dashboard template uses `escapeHtml()` function:
 ## Impact Assessment
 
 ### Pre-Fix Impact
+
 - **Severity:** CRITICAL
 - **Affected:** ALL scans that find packages/dependencies with `</script>` in metadata
 - **Frequency:** Common (Syft SBOM findings, compliance data)
 - **User Experience:** Dashboard completely broken, appears empty
 
 ### Post-Fix Impact
+
 - **Dashboard:** Fully functional ✅
 - **Performance:** No degradation (string replacement is O(n))
 - **Compatibility:** 100% backward compatible
@@ -146,9 +150,10 @@ All dynamic content in the dashboard template uses `escapeHtml()` function:
 
 ## Release Recommendation
 
-**RELEASE BLOCKER STATUS: RESOLVED**
+### RELEASE BLOCKER STATUS: RESOLVED
 
 This was a **critical release blocker** for v0.6.0. The fix:
+
 - ✅ Resolves the issue completely
 - ✅ Has comprehensive test coverage
 - ✅ Has been verified with Puppeteer
