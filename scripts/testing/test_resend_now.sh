@@ -9,11 +9,17 @@ echo ""
 
 # Check if API key is set
 if [ -z "$RESEND_API_KEY" ]; then
-  echo "Setting your API key from the chat..."
-  export RESEND_API_KEY="re_iDAQB1Gt_LL9goU5s7zKuBXejJVARuacp"
-  echo "✅ API key set"
+  echo "❌ ERROR: RESEND_API_KEY environment variable not set"
+  echo ""
+  echo "Please set your Resend API key:"
+  echo "  export RESEND_API_KEY='your-api-key-here'"
+  echo ""
+  echo "Or add to .env file:"
+  echo "  echo 'RESEND_API_KEY=your-api-key-here' >> .env"
+  echo "  source .env"
+  exit 1
 else
-  echo "✅ API key already set"
+  echo "✅ API key found in environment"
 fi
 
 echo ""
