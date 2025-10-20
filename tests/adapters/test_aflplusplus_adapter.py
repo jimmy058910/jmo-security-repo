@@ -157,3 +157,119 @@ def test_aflplusplus_stack_trace_truncation(tmp_path: Path):
     assert len(out) == 1
     # Stack trace in context should be truncated to 500 chars
     assert len(out[0]["context"]["stack_trace"]) <= 500
+
+
+def test_aflplusplus_malformed_json(tmp_path: Path):
+    """Test handling of malformed JSON."""
+    path = write_tmp(tmp_path, "bad.json", "{not valid json}")
+    assert load_aflplusplus(path) == []
+
+
+def test_aflplusplus_non_dict_root(tmp_path: Path):
+    """Test handling non-dict root JSON."""
+    path = write_tmp(tmp_path, "array.json", json.dumps(["not", "a", "dict"]))
+    assert load_aflplusplus(path) == []
+
+
+def test_aflplusplus_non_dict_crashes(tmp_path: Path):
+    """Test handling non-dict items in crashes array."""
+    sample = {
+        "crashes": [
+            "not a dict",  # Invalid
+            123,  # Invalid
+            {
+                "id": "valid",
+                "type": "SEGV",
+                "target": "test",
+                "input_file": "crash",
+            },  # Valid
+        ]
+    }
+
+    path = write_tmp(tmp_path, "afl_mixed.json", json.dumps(sample))
+    out = load_aflplusplus(path)
+
+    # Should skip invalid items and process valid one
+    assert len(out) == 1
+    assert out[0]["context"]["crash_id"] == "valid"
+
+
+def test_aflplusplus_missing_optional_fields(tmp_path: Path):
+    """Test handling missing optional fields."""
+    sample = {
+        "crashes": [
+            {
+                "id": "minimal",
+                "type": "SEGV",
+                # Missing: target, input_file, timestamp, stack_trace, classification
+            }
+        ]
+    }
+
+    path = write_tmp(tmp_path, "afl_minimal.json", json.dumps(sample))
+    out = load_aflplusplus(path)
+
+    assert len(out) == 1
+    item = out[0]
+
+    # Should have defaults
+    assert item["tool"]["version"] == "unknown"
+    assert item["context"]["timestamp"] == ""
+    assert item["context"]["stack_trace"] == ""
+    assert item["context"]["classification"] == "unknown"
+
+
+def test_aflplusplus_raw_payload_preserved(tmp_path: Path):
+    """Test that raw AFL++ crash data is preserved."""
+    sample = {
+        "crashes": [
+            {
+                "id": "test",
+                "type": "SEGV",
+                "target": "test",
+                "input_file": "crash",
+                "custom_field": "custom_value",
+                "custom_metadata": {"key": "value"},
+            }
+        ]
+    }
+
+    path = write_tmp(tmp_path, "afl_raw.json", json.dumps(sample))
+    out = load_aflplusplus(path)
+
+    assert len(out) == 1
+    item = out[0]
+
+    # Verify raw payload is fully preserved
+    assert "raw" in item
+    assert item["raw"]["custom_field"] == "custom_value"
+    assert item["raw"]["custom_metadata"]["key"] == "value"
+
+
+def test_aflplusplus_tags_based_on_crash_type(tmp_path: Path):
+    """Test tags are correctly generated based on crash type."""
+    sample = {
+        "crashes": [
+            {
+                "id": "overflow",
+                "type": "heap-buffer-overflow",
+                "target": "test",
+                "input_file": "crash",
+                "classification": "exploitable",
+            }
+        ]
+    }
+
+    path = write_tmp(tmp_path, "afl_tags.json", json.dumps(sample))
+    out = load_aflplusplus(path)
+
+    assert len(out) == 1
+    item = out[0]
+
+    # Check tags
+    tags = item["tags"]
+    assert "fuzzing" in tags
+    assert "afl++" in tags
+    assert "heap-buffer-overflow" in tags
+    assert "classification:exploitable" in tags
+    assert "memory-safety" in tags  # Because of 'overflow' in crash type

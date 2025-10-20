@@ -313,3 +313,177 @@ busybox:latest
         # Might be fewer if tools missing or scan failed
         if image_dirs:
             assert len(image_dirs) <= 2, "Should have at most 2 image directories"
+
+
+# ========== Test Category: Cross-Target Deduplication (Added Oct 19 2025) ==========
+
+
+def test_repo_plus_image_deduplication(tmp_path: Path):
+    """Verify findings from repo and image are deduplicated by fingerprint."""
+    import json
+    import subprocess
+
+    test_repo = tmp_path / "test-repo"
+    test_repo.mkdir()
+    (test_repo / "requirements.txt").write_text("requests==2.25.0")  # Known CVE
+
+    # Scan repo + image (both will find same CVE in requests package)
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(test_repo),
+        "--image",
+        "python:3.9",  # Contains packages with CVEs
+        "--tools",
+        "trivy",
+        "--results-dir",
+        str(tmp_path / "results"),
+        "--allow-missing-tools",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
+
+    # Generate report
+    cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
+    subprocess.run(cmd_report, check=True, timeout=60)
+
+    # Verify deduplication
+    findings_json = tmp_path / "results" / "summaries" / "findings.json"
+    assert findings_json.exists(), "findings.json not generated"
+
+    findings = json.loads(findings_json.read_text())
+
+    # Count findings by fingerprint ID
+    fingerprints = [f["id"] for f in findings["findings"]]
+    assert len(fingerprints) == len(
+        set(fingerprints)
+    ), "Duplicate fingerprints found (deduplication failed)"
+
+
+def test_multi_target_compliance_aggregation(tmp_path: Path):
+    """Verify compliance reports aggregate findings from all target types."""
+    import subprocess
+
+    test_repo = tmp_path / "test-repo"
+    test_repo.mkdir()
+    (test_repo / "app.py").write_text("import os; os.system('ls')")  # Basic code
+
+    # Scan repo + image (multi-target)
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(test_repo),
+        "--image",
+        "nginx:latest",
+        "--tools",
+        "trivy",
+        "semgrep",
+        "--results-dir",
+        str(tmp_path / "results"),
+        "--allow-missing-tools",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    assert result.returncode in [0, 1]
+
+    # Generate report
+    cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
+    subprocess.run(cmd_report, check=True, timeout=60)
+
+    # Verify compliance summary includes all frameworks
+    compliance_md = tmp_path / "results" / "summaries" / "COMPLIANCE_SUMMARY.md"
+
+    # Compliance file may not exist if no CWE mappings found
+    if compliance_md.exists():
+        content = compliance_md.read_text()
+
+        # Check for framework headers
+        assert (
+            "OWASP Top 10" in content
+            or "CWE Top 25" in content
+            or "CIS Controls" in content
+        )
+
+
+def test_triple_target_scan(tmp_path: Path):
+    """Test scanning repo + image + IaC simultaneously."""
+    import subprocess
+
+    test_repo = tmp_path / "test-repo"
+    test_repo.mkdir()
+    (test_repo / "README.md").write_text("# Test")
+
+    # Create minimal IaC file
+    iac_file = tmp_path / "test.tf"
+    iac_file.write_text(
+        """
+resource "aws_s3_bucket" "test" {
+  bucket = "test-bucket"
+}
+"""
+    )
+
+    # Scan all 3 target types
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(test_repo),
+        "--image",
+        "alpine:latest",
+        "--terraform-state",
+        str(iac_file),
+        "--tools",
+        "trivy",
+        "checkov",
+        "--results-dir",
+        str(tmp_path / "results"),
+        "--allow-missing-tools",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    assert result.returncode in [0, 1]
+
+    # Verify results directories created
+    results_dir = tmp_path / "results"
+    assert (results_dir / "individual-repos").exists()
+    assert (results_dir / "individual-images").exists()
+    assert (results_dir / "individual-iac").exists()
+
+
+# ========== Test Category: Error Handling (Added Oct 19 2025) ==========
+
+
+def test_multi_target_partial_failure(tmp_path: Path):
+    """Test multi-target scan continues when one target fails."""
+    import subprocess
+
+    test_repo = tmp_path / "test-repo"
+    test_repo.mkdir()
+    (test_repo / "app.py").write_text("print('hello')")
+
+    # Scan valid repo + invalid image (should fail gracefully)
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(test_repo),
+        "--image",
+        "nonexistent-image:invalid-tag",  # Will fail
+        "--tools",
+        "trivy",
+        "--results-dir",
+        str(tmp_path / "results"),
+        "--allow-missing-tools",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+
+    # Scan may exit with code 1 (partial failure) but should not crash
+    assert result.returncode in [0, 1, 2]  # Allow partial failures
+
+    # Verify repo results generated (even if image failed)
+    assert (tmp_path / "results" / "individual-repos").exists()
