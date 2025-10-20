@@ -1,0 +1,122 @@
+# GitLab CI/CD Example for JMo Security
+# This example demonstrates how to integrate JMo Security into GitLab pipelines
+# using Docker images for zero-installation scanning.
+
+variables:
+  # Default profile for all scans (can override per-stage)
+  JMO_PROFILE: "balanced"
+
+  # Fail pipeline on HIGH or CRITICAL findings
+  JMO_FAIL_ON: "HIGH"
+
+  # Docker image variants
+  JMO_IMAGE_FULL: "jimmy058910/jmo-security:latest"
+  JMO_IMAGE_SLIM: "jimmy058910/jmo-security:slim"
+  JMO_IMAGE_ALPINE: "jimmy058910/jmo-security:alpine"
+
+stages:
+  - security
+  - compliance
+
+# Template for JMo Security scans
+.jmo_scan_template:
+  image: ${JMO_IMAGE_SLIM}
+  before_script:
+    - echo "Starting JMo Security scan with profile=${JMO_PROFILE}"
+  artifacts:
+    when: always
+    paths:
+      - results/
+    reports:
+      sast: results/summaries/findings.sarif
+    expire_in: 30 days
+  cache:
+    key: jmo-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .jmo-cache/
+
+# Fast scan for all branches (pre-merge validation)
+security:fast-scan:
+  extends: .jmo_scan_template
+  stage: security
+  variables:
+    JMO_PROFILE: "fast"
+    JMO_FAIL_ON: ""  # Don't fail pipeline, just report
+  script:
+    - jmo scan --repo . --profile-name fast --results-dir results --human-logs
+    - jmo report results --profile --human-logs
+  only:
+    - branches
+  except:
+    - main
+    - master
+    - tags
+
+# Balanced scan for main/master branches
+security:balanced-scan:
+  extends: .jmo_scan_template
+  stage: security
+  variables:
+    JMO_PROFILE: "balanced"
+  script:
+    - jmo scan --repo . --profile-name balanced --results-dir results --human-logs
+    - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
+  only:
+    - main
+    - master
+
+# Deep scan for release tags (comprehensive audit)
+security:deep-scan:
+  extends: .jmo_scan_template
+  image: ${JMO_IMAGE_FULL}  # Use full image for deep profile
+  stage: security
+  variables:
+    JMO_PROFILE: "deep"
+    JMO_FAIL_ON: "MEDIUM"  # Stricter threshold for releases
+  script:
+    - jmo scan --repo . --profile-name deep --results-dir results --human-logs
+    - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
+  only:
+    - tags
+  timeout: 2h
+
+# Multi-target scan (repositories + containers + IaC)
+security:multi-target-scan:
+  extends: .jmo_scan_template
+  stage: security
+  script:
+    - |
+      jmo scan \
+        --repo . \
+        --image ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA} \
+        --terraform-state infrastructure/terraform.tfstate \
+        --profile-name balanced \
+        --results-dir results \
+        --human-logs
+    - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
+  only:
+    - schedules
+
+# Compliance reporting (generate framework mappings)
+compliance:report:
+  extends: .jmo_scan_template
+  stage: compliance
+  dependencies:
+    - security:balanced-scan
+  script:
+    - jmo report results --profile --human-logs
+    - echo "Compliance reports generated:"
+    - ls -lh results/summaries/COMPLIANCE_SUMMARY.md
+    - ls -lh results/summaries/PCI_DSS_COMPLIANCE.md
+    - ls -lh results/summaries/attack-navigator.json
+  artifacts:
+    when: always
+    paths:
+      - results/summaries/COMPLIANCE_SUMMARY.md
+      - results/summaries/PCI_DSS_COMPLIANCE.md
+      - results/summaries/attack-navigator.json
+    expire_in: 90 days
+  only:
+    - main
+    - master
+    - tags

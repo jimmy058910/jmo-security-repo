@@ -34,7 +34,7 @@ profiles:
       trivy:
         flags: ["--no-progress"]
   deep:
-    tools: [gitleaks, noseyparker, trufflehog, semgrep, syft, trivy, checkov, tfsec, hadolint, bandit, osv-scanner]
+    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
 ```
 
 ## 5) Timings and threads

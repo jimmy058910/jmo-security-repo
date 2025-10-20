@@ -67,13 +67,17 @@ These frameworks provide maximum coverage with minimal redundancy, strong indust
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   owasp_top_10_2021:
+
     - id: "A02"
+
       category: "Cryptographic Failures"
       cwe_mappings: ["CWE-259", "CWE-798", "CWE-327"]
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -208,14 +212,18 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   cis_controls_v8_1:
+
     - control: "16.2"
+
       safeguard: "16.2.1"
       title: "SAST Application Security Testing"
       implementation_group: "IG2"
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -266,16 +274,22 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   nist_csf_2_0:
+
     - function: "Protect"
+
       category: "PR.DS-1"
       subcategory: "Data-at-rest is protected"
       informative_references:
+
         - "NIST SP 800-53 Rev 5: SC-28"
         - "CIS Controls v8: 3.11"
-```
+
+```yaml
 
 **Redundancy Analysis:**
 
@@ -340,13 +354,17 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   nist_sp_800_53_rev5:
+
     - control: "SA-11(1)"
+
       family: "System and Services Acquisition"
       title: "Developer Testing and Evaluation | Static Code Analysis"
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -415,7 +433,9 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding schema (already implemented in JMo)
+
 {
   "ruleId": "CWE-89",  # SQL Injection
   "tags": ["security", "cwe-top-25-2024", "owasp-a03-injection"],
@@ -427,7 +447,7 @@ compliance:
     }
   }
 }
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -482,14 +502,18 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 risk:
   mitre_attack:
+
     - tactic: "Initial Access"
+
       technique: "T1190"
       name: "Exploit Public-Facing Application"
       detection: "Web application vulnerability scanner"
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -574,15 +598,21 @@ risk:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   pci_dss_4_0:
+
     - requirement: "6.2.4"
+
       objective: "Software and applications are free of coding vulnerabilities"
       testing_procedure: "6.2.4.a Examine documented procedures to verify..."
+
     - requirement: "6.3.1"
+
       cvss_threshold: "All vulnerabilities" # v4.0 change
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -637,13 +667,17 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   soc_2:
+
     - criterion: "CC7.1"
+
       principle: "Security"
       description: "Identifies and responds to risks associated with vulnerabilities"
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -708,14 +742,18 @@ compliance:
 **Practical Implementation:**
 
 ```yaml
+
 # CommonFinding risk metadata example
+
 compliance:
   iso_27001_2022:
+
     - control: "A.8.28"
+
       theme: "Technological"
       title: "Secure coding"
       objective: "Prevent coding vulnerabilities"
-```
+```yaml
 
 **Redundancy Analysis:**
 
@@ -839,17 +877,23 @@ compliance:
 **Implementation:**
 
 ```yaml
+
 # CommonFinding schema extension
+
 compliance:
   owasp_top_10_2021:
+
     - id: "A02"
+
       category: "Cryptographic Failures"
       cwe_mappings: ["CWE-259", "CWE-798", "CWE-327", "CWE-321"]
   cwe_top_25_2024:
+
     - id: "CWE-798"
+
       rank: 16
       name: "Use of Hard-coded Credentials"
-```
+```yaml
 
 **Coverage:** Trufflehog, Semgrep, Trivy, Bandit, ZAP
 
@@ -868,15 +912,19 @@ compliance:
 **Implementation:**
 
 ```yaml
+
 # CommonFinding schema extension
+
 compliance:
   cis_controls_v8_1:
+
     - control: "16.2"
+
       safeguard: "16.2.1"
       title: "Establish and Maintain a Secure Application Development Process"
       implementation_group: "IG2"
       description: "SAST scanning of application source code"
-```
+```yaml
 
 **Coverage:** All JMo scanners map to CIS Controls 7, 16, or 4
 
@@ -895,20 +943,30 @@ compliance:
 **Implementation:**
 
 ```yaml
+
 # CommonFinding schema extension
+
 compliance:
   nist_csf_2_0:
+
     - function: "Protect"
+
       category: "PR.DS-1"
       subcategory: "Data-at-rest is protected"
       informative_references:
+
         - framework: "NIST SP 800-53 Rev 5"
+
           control: "SC-28"
+
         - framework: "CIS Controls v8"
+
           control: "3.11"
+
         - framework: "ISO 27001:2022"
+
           control: "A.8.24"
-```
+```yaml
 
 **Coverage:** Strategic framework - all JMo findings map to CSF categories
 
@@ -928,16 +986,22 @@ compliance:
 **Implementation:**
 
 ```yaml
+
 # CommonFinding schema extension
+
 compliance:
   pci_dss_4_0:
+
     - requirement: "6.2.4"
+
       objective: "Address common coding vulnerabilities in software-development processes"
       testing_procedure: "6.2.4.a Examine documented procedures and interview personnel"
+
     - requirement: "11.3.1.2"
+
       objective: "Internal vulnerability scans are performed via authenticated scanning"
       effective_date: "2025-03-31"  # Mandatory after this date
-```
+```yaml
 
 **Coverage:** Trufflehog, Semgrep, Trivy, Checkov (Req 6, 11)
 
@@ -957,19 +1021,25 @@ compliance:
 **Implementation:**
 
 ```yaml
+
 # CommonFinding schema extension
+
 risk:
   mitre_attack:
+
     - tactic: "Initial Access"
+
       technique: "T1190"
       name: "Exploit Public-Facing Application"
       subtechnique: null
       detection: "Web application vulnerability scanner detected exploitable flaw"
+
     - tactic: "Credential Access"
+
       technique: "T1552"
       name: "Unsecured Credentials"
       subtechnique: "T1552.001"  # Credentials In Files
-```
+```yaml
 
 **Coverage:** Trufflehog (T1552), Semgrep (T1059, T1190), Trivy (T1195), ZAP (T1190)
 
@@ -977,7 +1047,7 @@ risk:
 
 ## 4. Deferred Frameworks (Not Recommended for v0.5.0)
 
-### Deferred with Rationale:
+### Deferred with Rationale
 
 | Framework | Reason for Deferral |
 |-----------|---------------------|
@@ -1133,7 +1203,7 @@ risk:
 
 ## 7. Practical Recommendations
 
-### For JMo v0.5.0 Implementation:
+### For JMo v0.5.0 Implementation
 
 1. **Update CommonFinding Schema (v1.1):**
 
@@ -1216,15 +1286,19 @@ risk:
    compliance:
      enabled: true
      frameworks:
+
        - owasp_top_10_2021
        - cwe_top_25_2024
        - cis_controls_v8_1
        - nist_csf_2_0
        - pci_dss_4_0  # optional, enable for payment industry
+
      output_formats:
+
        - json  # findings.json with compliance metadata
        - md    # COMPLIANCE_SUMMARY.md
        - html  # dashboard.html with compliance filters
+
    ```
 
 5. **Documentation:**
@@ -1385,23 +1459,23 @@ risk:
 
 ### Official Framework Sources
 
-1. **OWASP Top 10 2021:** https://owasp.org/Top10/
-2. **OWASP ASVS 4.0.3:** https://github.com/OWASP/ASVS
-3. **OWASP SAMM 2.0:** https://owaspsamm.org/
-4. **CWE Top 25 2024:** https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html
-5. **CIS Controls v8.1:** https://www.cisecurity.org/controls/v8
-6. **NIST CSF 2.0:** https://www.nist.gov/cyberframework
-7. **NIST SP 800-53 Rev 5:** https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
-8. **MITRE ATT&CK v16.1:** https://attack.mitre.org/
-9. **PCI DSS 4.0:** https://www.pcisecuritystandards.org/document_library/
-10. **ISO 27001:2022:** https://www.iso.org/standard/27001
-11. **SARIF 2.1.0:** https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
+1. **OWASP Top 10 2021:** <https://owasp.org/Top10/>
+2. **OWASP ASVS 4.0.3:** <https://github.com/OWASP/ASVS>
+3. **OWASP SAMM 2.0:** <https://owaspsamm.org/>
+4. **CWE Top 25 2024:** <https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html>
+5. **CIS Controls v8.1:** <https://www.cisecurity.org/controls/v8>
+6. **NIST CSF 2.0:** <https://www.nist.gov/cyberframework>
+7. **NIST SP 800-53 Rev 5:** <https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final>
+8. **MITRE ATT&CK v16.1:** <https://attack.mitre.org/>
+9. **PCI DSS 4.0:** <https://www.pcisecuritystandards.org/document_library/>
+10. **ISO 27001:2022:** <https://www.iso.org/standard/27001>
+11. **SARIF 2.1.0:** <https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html>
 
 ### Mapping Resources
 
-- **OpenCRE (Open Common Requirement Enumeration):** https://www.opencre.org/
-- **CIS Controls → NIST CSF Mapping:** https://www.cisecurity.org/insights/white-papers/cis-controls-v8-mapping-to-nist-csf-2-0
-- **OWASP Top 10 → CWE Mapping:** https://github.com/OWASP/Top10/blob/master/2021/Data/CWE-Guidance.md
+- **OpenCRE (Open Common Requirement Enumeration):** <https://www.opencre.org/>
+- **CIS Controls → NIST CSF Mapping:** <https://www.cisecurity.org/insights/white-papers/cis-controls-v8-mapping-to-nist-csf-2-0>
+- **OWASP Top 10 → CWE Mapping:** <https://github.com/OWASP/Top10/blob/master/2021/Data/CWE-Guidance.md>
 
 ---
 
@@ -1452,6 +1526,7 @@ risk:
 ### Example 1: OWASP Top 10 Summary
 
 ```markdown
+
 # OWASP Top 10 2021 Compliance Report
 
 **Scan Date:** 2025-10-16
@@ -1484,11 +1559,13 @@ risk:
 2. **This Sprint (MEDIUM):**
    - Address 6 misconfigurations (A05)
    - Update 8 vulnerable dependencies (A06)
-```
+
+```markdown
 
 ### Example 2: CIS Controls Implementation Group Report
 
 ```markdown
+
 # CIS Controls v8.1 Implementation Group Report
 
 **Scan Date:** 2025-10-16
@@ -1519,7 +1596,8 @@ risk:
 1. Remediate all 10 hardcoded secrets (Control 3.11)
 2. Document code review process (Control 16.4)
 3. Implement quarterly vulnerability rescans (Control 7.1)
-```
+
+```yaml
 
 ---
 

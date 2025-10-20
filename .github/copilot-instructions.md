@@ -6,7 +6,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Terminal-first security audit toolkit with a Python CLI (`scripts/cli/jmo.py`) and supporting modules under `scripts/core/`.
 - Two main phases:
-  1) scan: invoke external scanners (semgrep, trivy, checkov, tfsec, bandit, noseyparker, syft, trufflehog, optional gitleaks) and write raw JSON per repo under `results/individual-repos/<repo>/`.
+  1) scan: invoke external scanners (semgrep, trivy, checkov, bandit, noseyparker, syft, trufflehog, hadolint, zap, falco, afl++) and write raw JSON per repo under `results/individual-repos/<repo>/`.
   2) report: normalize + dedupe into a CommonFinding shape and emit summaries (`findings.json`, `SUMMARY.md`, `dashboard.html`, optional SARIF) under `results/summaries/`.
 - Goals: unified outputs, stable fingerprints for dedupe, resilient to missing tools, and fast local iteration.
 
@@ -27,7 +27,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 - Results layout:
   - Base dir default: `results/`
-  - Raw per-repo: `results/individual-repos/<repo>/{semgrep,trivy,checkov,tfsec,bandit,noseyparker,syft,trufflehog,gitleaks}.json`
+  - Raw per-repo: `results/individual-repos/<repo>/{semgrep,trivy,checkov,bandit,noseyparker,syft,trufflehog,hadolint,zap,falco,afl++}.json`
   - Summaries: `results/summaries/`
 - Config: `jmo.yml`
   - Keys: `tools`, `outputs`, `fail_on`, `threads`, `profiles`, `per_tool`, `retries`.
@@ -59,7 +59,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 
 ## External tools & integration
 
-- Tools invoked via subprocess without shell: semgrep, trivy, checkov, tfsec, bandit, noseyparker (local or docker fallback), syft, trufflehog. Gitleaks is supported but samples were removed; treat as optional.
+- Tools invoked via subprocess without shell: semgrep, trivy, checkov, bandit, noseyparker (local or docker fallback), syft, trufflehog, hadolint, zap, falco, afl++.
 - Respect tool-specific return codes: semgrep (0/1/2), trivy (0/1), checkov (0/1), bandit (0/1). The CLI treats these as success when outputs are produced.
 - Nosey Parker: if local binary fails or missing, attempts docker via `scripts/core/run_noseyparker_docker.sh`.
 
@@ -88,14 +88,14 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 ### Profiles in `jmo.yml` (default_profile: balanced)
 
 - fast
-  - tools: [gitleaks, semgrep]
-  - threads: 4
+  - tools: [trufflehog, semgrep, trivy]
+  - threads: 8
   - timeout: 300
   - per_tool:
     - semgrep.flags: ["--exclude", "node_modules", "--exclude", ".git"]
 
 - balanced (default)
-  - tools: [gitleaks, noseyparker, semgrep, syft, trivy, checkov, hadolint]
+  - tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
   - threads: 4
   - timeout: 600
   - per_tool:
@@ -103,8 +103,8 @@ These guidelines help AI coding agents work effectively in this repository. Focu
     - trivy.flags: ["--no-progress"]
 
 - deep
-  - tools: [gitleaks, noseyparker, trufflehog, semgrep, syft, trivy, checkov, tfsec, hadolint, bandit, osv-scanner]
-  - threads: 4
+  - tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
+  - threads: 2
   - timeout: 900
   - retries: 1
   - per_tool:

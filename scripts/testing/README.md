@@ -8,12 +8,14 @@ Helper scripts for testing JMo Security email collection and newsletter system.
 
 Interactive testing script that walks through all email collection touchpoints.
 
-**Usage:**
+### Usage
+
 ```bash
 ./scripts/testing/test_email_system.sh
-```
+```markdown
 
 **Tests:**
+
 1. API health check
 2. Subscribe landing page (browser)
 3. Dashboard email form (browser)
@@ -23,12 +25,13 @@ Interactive testing script that walks through all email collection touchpoints.
 
 Starts a local HTTP server to test the subscribe page without CORS issues.
 
-**Usage:**
+### Usage
+
 ```bash
 ./scripts/testing/serve_subscribe_page.sh
-```
+```markdown
 
-Opens `http://localhost:8000/subscribe.html` in your browser.
+Opens `<http://localhost:8000/subscribe.html`> in your browser.
 
 Press `Ctrl+C` to stop the server when done.
 
@@ -36,17 +39,19 @@ Press `Ctrl+C` to stop the server when done.
 
 Quick test script for Resend API email sending.
 
-**Usage:**
+### Usage
+
 ```bash
 export RESEND_API_KEY="your_key_here"
 ./scripts/testing/test_resend_now.sh
-```
+```markdown
 
 Tests direct email sending via Resend API (bypasses Vercel).
 
 ## Testing Documentation
 
 For complete testing instructions, see:
+
 - [TESTING_COMMANDS.md](../../TESTING_COMMANDS.md) - WSL-friendly commands
 - [DEPLOYMENT_SUMMARY.md](../../DEPLOYMENT_SUMMARY.md) - Full deployment status
 

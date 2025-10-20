@@ -21,7 +21,7 @@ Optional but recommended to install dev tools and Python deps:
 make dev-deps
 ```
 
-Install external scanners as needed (Semgrep, Trivy, Checkov, tfsec, Bandit, Syft, TruffleHog, Gitleaks, Hadolint, Nosey Parker). You can use:
+Install external scanners as needed (Semgrep, Trivy, Checkov, Bandit, Syft, TruffleHog, Hadolint, Nosey Parker, ZAP, Falco, AFL++). You can use:
 
 ```bash
 # See what's installed/missing and how to install
@@ -65,7 +65,7 @@ This will:
 
 ### 3) Run the full scan with all tools
 
-Pick the profile that covers all tools. The repository ships with `deep` including: gitleaks, noseyparker, trufflehog, semgrep, syft, trivy, checkov, tfsec, hadolint, bandit.
+Pick the profile that covers all tools. The repository ships with `deep` including: trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++.
 
 Run a CI-like end-to-end flow (scan + report) with human-readable logs:
 

@@ -1,0 +1,105 @@
+// Jenkins Pipeline Example for JMo Security
+// This example demonstrates how to integrate JMo Security into Jenkins pipelines
+// using Docker images for zero-installation scanning.
+
+pipeline {
+    agent any
+
+    environment {
+        // Docker image variants
+        JMO_IMAGE_FULL = 'jimmy058910/jmo-security:latest'
+        JMO_IMAGE_SLIM = 'jimmy058910/jmo-security:slim'
+        JMO_IMAGE_ALPINE = 'jimmy058910/jmo-security:alpine'
+
+        // Scan configuration
+        JMO_PROFILE = 'balanced'
+        JMO_FAIL_ON = 'HIGH'
+        RESULTS_DIR = 'results'
+    }
+
+    stages {
+        stage('Security Scan') {
+            agent {
+                docker {
+                    image "${JMO_IMAGE_SLIM}"
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
+            }
+            steps {
+                script {
+                    // Run scan based on branch
+                    def profile = env.BRANCH_NAME == 'main' ? 'balanced' : 'fast'
+                    sh """
+                        jmo scan \
+                            --repo . \
+                            --profile-name ${profile} \
+                            --results-dir ${RESULTS_DIR} \
+                            --human-logs
+                    """
+                }
+            }
+        }
+
+        stage('Generate Reports') {
+            agent {
+                docker {
+                    image "${JMO_IMAGE_SLIM}"
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
+            }
+            steps {
+                sh """
+                    jmo report ${RESULTS_DIR} \
+                        --fail-on ${JMO_FAIL_ON} \
+                        --profile \
+                        --human-logs
+                """
+            }
+        }
+
+        stage('Compliance Check') {
+            when {
+                anyOf {
+                    branch 'main'
+                    tag pattern: 'v*', comparator: 'REGEXP'
+                }
+            }
+            agent {
+                docker {
+                    image "${JMO_IMAGE_SLIM}"
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
+            }
+            steps {
+                sh """
+                    echo 'Compliance reports generated:'
+                    ls -lh ${RESULTS_DIR}/summaries/COMPLIANCE_SUMMARY.md
+                    ls -lh ${RESULTS_DIR}/summaries/PCI_DSS_COMPLIANCE.md
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            // Archive scan results
+            archiveArtifacts artifacts: "${RESULTS_DIR}/**/*", allowEmptyArchive: true
+
+            // Publish HTML dashboard
+            publishHTML([
+                allowMissing: false,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: "${RESULTS_DIR}/summaries",
+                reportFiles: 'dashboard.html',
+                reportName: 'JMo Security Dashboard'
+            ])
+        }
+        failure {
+            echo 'Security scan failed! Review findings in dashboard.'
+        }
+        success {
+            echo 'Security scan passed successfully.'
+        }
+    }
+}

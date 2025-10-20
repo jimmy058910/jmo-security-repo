@@ -1,6 +1,8 @@
 # JMo Security - Email Subscription API
 
-**Simple API endpoint for email newsletter subscriptions**
+## Overview
+
+Simple API endpoint for email newsletter subscriptions
 
 This API endpoint powers email collection for the JMo Security newsletter across multiple touch points (CLI, Dashboard, Subscribe page, etc.).
 
@@ -22,41 +24,56 @@ This API endpoint powers email collection for the JMo Security newsletter across
 
 **Prerequisites:**
 
-- Vercel account (free): https://vercel.com/signup
-- Resend API key: https://resend.com/api-keys
+- Vercel account (free): <https://vercel.com/signup>
+- Resend API key: <https://resend.com/api-keys>
 
 **Steps:**
 
 ```bash
+
 # 1. Install Vercel CLI
+
 npm install -g vercel
 
 # 2. Navigate to API directory
+
 cd scripts/api
 
 # 3. Install dependencies
+
 npm install
 
 # 4. Deploy to Vercel
+
 vercel
 
 # Follow prompts:
+
 # - Set up and deploy? Yes
+
 # - Which scope? (Your Vercel account)
+
 # - Link to existing project? No
+
 # - Project name? jmo-security-subscribe-api
+
 # - Directory? ./
+
 # - Want to override settings? No
 
 # 5. Add Resend API key as environment variable
+
 vercel env add RESEND_API_KEY
+
 # Paste your Resend API key: re_...
+
 # Select environment: Production
-```
+
+```yaml
 
 **Your API will be live at:**
 
-`https://jmo-security-subscribe-api.vercel.app/api/subscribe`
+`<https://jmo-security-subscribe-api.vercel.app/api/subscribe`>
 
 ---
 
@@ -65,10 +82,13 @@ vercel env add RESEND_API_KEY
 ### Netlify Functions
 
 ```bash
+
 # 1. Install Netlify CLI
+
 npm install -g netlify-cli
 
 # 2. Create netlify.toml
+
 cat > netlify.toml <<EOF
 [build]
   functions = "."
@@ -80,19 +100,24 @@ cat > netlify.toml <<EOF
 EOF
 
 # 3. Deploy
+
 netlify deploy --prod
 
 # 4. Set environment variable
+
 netlify env:set RESEND_API_KEY re_your_key_here
-```
+```bash
 
 ### AWS Lambda (via Serverless Framework)
 
 ```bash
+
 # 1. Install Serverless
+
 npm install -g serverless
 
 # 2. Create serverless.yml
+
 cat > serverless.yml <<EOF
 service: jmo-subscribe-api
 
@@ -106,20 +131,25 @@ functions:
   api:
     handler: subscribe_endpoint.handler
     events:
+
       - http:
+
           path: /api/{proxy+}
           method: ANY
           cors: true
 EOF
 
 # 3. Deploy
+
 serverless deploy
-```
+```markdown
 
 ### Docker Deployment
 
 ```bash
+
 # 1. Create Dockerfile
+
 cat > Dockerfile <<EOF
 FROM node:18-alpine
 WORKDIR /app
@@ -131,64 +161,87 @@ CMD ["node", "subscribe_endpoint.js"]
 EOF
 
 # 2. Build image
+
 docker build -t jmo-subscribe-api .
 
 # 3. Run container
+
 docker run -d -p 3000:3000 \
   -e RESEND_API_KEY=re_your_key_here \
   --name jmo-subscribe-api \
   jmo-subscribe-api
-```
+```bash
 
 ---
 
 ## Local Testing
 
 ```bash
+
 # 1. Install dependencies
+
 npm install
 
 # 2. Set environment variable
+
 export RESEND_API_KEY="re_your_key_here"
 
 # 3. Start server
+
 npm start
 
-# Server runs on http://localhost:3000
-```
+# Server runs on <http://localhost:3000>
+
+```yaml
 
 **Test subscription:**
 
 ```bash
+
 # Using curl
-curl -X POST http://localhost:3000/api/subscribe \
+
+curl -X POST <http://localhost:3000/api/subscribe> \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","source":"test"}'
 
 # Using HTTPie
+
 http POST localhost:3000/api/subscribe email=test@example.com source=test
 
 # Expected response:
+
 # {
+
 #   "success": true,
+
 #   "message": "✅ Thanks! Check your inbox for a welcome email.",
+
 #   "email_id": "re_abc123xyz..."
+
 # }
-```
+
+```markdown
 
 **Test health check:**
 
 ```bash
-curl http://localhost:3000/api/health
+curl <http://localhost:3000/api/health>
 
 # Expected:
+
 # {
+
 #   "status": "ok",
+
 #   "service": "jmo-security-subscribe-api",
+
 #   "version": "1.0.0",
+
 #   "timestamp": "2025-10-16T..."
+
 # }
-```
+
+```yaml
 
 ---
 
@@ -205,7 +258,7 @@ Subscribe an email to the newsletter.
   "email": "user@example.com",
   "source": "cli|dashboard|website|subscribe_page|github_readme"
 }
-```
+```markdown
 
 **Success Response (200):**
 
@@ -215,7 +268,7 @@ Subscribe an email to the newsletter.
   "message": "✅ Thanks! Check your inbox for a welcome email.",
   "email_id": "re_abc123xyz..."
 }
-```
+```markdown
 
 **Error Responses:**
 
@@ -240,7 +293,7 @@ Subscribe an email to the newsletter.
   "error": "server_error",
   "message": "Failed to process subscription. Please try again later."
 }
-```
+```markdown
 
 ### GET /api/health
 
@@ -255,7 +308,7 @@ Health check endpoint for monitoring.
   "version": "1.0.0",
   "timestamp": "2025-10-16T12:34:56.789Z"
 }
-```
+```yaml
 
 ---
 
@@ -280,13 +333,17 @@ Health check endpoint for monitoring.
 **Example:**
 
 ```bash
-curl -i http://localhost:3000/api/subscribe ...
+curl -i <http://localhost:3000/api/subscribe> ...
 
 # Response headers:
+
 # RateLimit-Limit: 10
+
 # RateLimit-Remaining: 9
+
 # RateLimit-Reset: 1697468400
-```
+
+```yaml
 
 ---
 
@@ -294,10 +351,10 @@ curl -i http://localhost:3000/api/subscribe ...
 
 **Allowed Origins:**
 
-- `https://jimmy058910.github.io` (GitHub Pages)
-- `https://jmotools.com` (Main website)
-- `http://localhost:3000` (Local testing)
-- `http://localhost:8000` (Alternative local port)
+- `<https://jimmy058910.github.io`> (GitHub Pages)
+- `<https://jmotools.com`> (Main website)
+- `<http://localhost:3000`> (Local testing)
+- `<http://localhost:8000`> (Alternative local port)
 
 **Allowed Methods:**
 
@@ -310,8 +367,8 @@ curl -i http://localhost:3000/api/subscribe ...
 
 ### Vercel (Built-in)
 
-- **Logs:** https://vercel.com/dashboard/logs
-- **Analytics:** https://vercel.com/dashboard/analytics
+- **Logs:** <https://vercel.com/dashboard/logs>
+- **Analytics:** <https://vercel.com/dashboard/analytics>
 - **Errors:** Automatic error tracking
 
 ### Custom Monitoring (Optional)
@@ -325,7 +382,7 @@ Sentry.init({ dsn: process.env.SENTRY_DSN });
 
 // Add error handler
 app.use(Sentry.Handlers.errorHandler());
-```
+```yaml
 
 ---
 
@@ -361,23 +418,27 @@ app.use(Sentry.Handlers.errorHandler());
 **Fix:**
 
 ```bash
+
 # Local
+
 export RESEND_API_KEY="re_your_key_here"
 
 # Vercel
+
 vercel env add RESEND_API_KEY
 
 # Netlify
+
 netlify env:set RESEND_API_KEY re_your_key_here
-```
+```yaml
 
 ### "Email sent successfully but no email received"
 
 **Check:**
 
 1. Spam folder
-2. Resend dashboard: https://resend.com/emails
-3. Domain verification: https://resend.com/domains
+2. Resend dashboard: <https://resend.com/emails>
+3. Domain verification: <https://resend.com/domains>
 4. FROM email matches verified domain (`hello@jmotools.com`)
 
 ### Rate limit errors in production
@@ -385,6 +446,7 @@ netlify env:set RESEND_API_KEY re_your_key_here
 **Solutions:**
 
 1. Increase limit in `subscribe_endpoint.js`:
+
    ```javascript
    max: 20, // Increase from 10 to 20
    ```
@@ -410,18 +472,18 @@ Update all frontend forms to use your deployed API URL:
 **Dashboard Form** (`scripts/core/reporters/html_reporter.py`):
 
 ```html
-<form action="https://jmo-security-subscribe-api.vercel.app/api/subscribe" method="post">
-```
+<form action="<https://jmo-security-subscribe-api.vercel.app/api/subscribe"> method="post">
+```javascript
 
 **Subscribe Page** (`docs/subscribe.html`):
 
 ```javascript
-const response = await fetch('https://jmo-security-subscribe-api.vercel.app/api/subscribe', {
+const response = await fetch('<https://jmo-security-subscribe-api.vercel.app/api/subscribe',> {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ email, source: 'subscribe_page' })
 });
-```
+```yaml
 
 ---
 
@@ -447,9 +509,9 @@ const response = await fetch('https://jmo-security-subscribe-api.vercel.app/api/
 
 ## Support
 
-- **Issues:** https://github.com/jimmy058910/jmo-security-repo/issues
+- **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
 - **Email:** general@jmogaming.com
-- **Resend Support:** https://resend.com/support
+- **Resend Support:** <https://resend.com/support>
 
 ---
 

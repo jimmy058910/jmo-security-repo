@@ -303,13 +303,13 @@ Configuration via `jmo.yml` supports named profiles for different scan depths:
   - Use case: Pre-commit checks, quick validation, CI/CD gate
   - Coverage: Verified secrets, SAST, SCA, containers, IaC, backup secrets scanning
 
-- **balanced:** 7 production-ready tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap), 600s timeout, 4 threads, 15-20 minutes
+- **balanced:** 8 production-ready tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei), 600s timeout, 4 threads, 15-20 minutes
   - Use case: CI/CD pipelines, regular audits, production scans
-  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
+  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST, API security
 
-- **deep:** 11 comprehensive tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++), 900s timeout, 2 threads, 30-60 minutes, retries enabled
+- **deep:** 12 comprehensive tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++), 900s timeout, 2 threads, 30-60 minutes, retries enabled
   - Use case: Security audits, compliance scans, pre-release validation
-  - Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, runtime security, fuzzing
+  - Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, API security, runtime security, fuzzing
 
 Profiles can override tools, timeouts, threads, and per-tool flags. Use `--profile-name <name>` to apply.
 
@@ -418,16 +418,22 @@ with ThreadPoolExecutor(max_workers=max_workers) as ex:
 - **Error resilience:** `--allow-missing-tools` writes empty stubs, allowing partial results
 - **Unified reporting:** `normalize_and_report.py` scans all 6 directories and deduplicates across targets
 
-**Tool Assignments by Target Type:**
+**Tool Assignments by Target Type (v0.6.2):**
 
 | Target Type | Primary Tools | Secondary Tools |
 |-------------|---------------|-----------------|
-| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit |
+| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit, syft, checkov, hadolint, falco, afl++ |
 | Container Images | trivy, syft | - |
 | IaC Files | checkov, trivy | - |
-| Web URLs | zap | - |
-| GitLab Repos | trufflehog | - |
+| Web URLs | zap, nuclei | - |
+| GitLab Repos | Full repository scanner | trufflehog, semgrep, bandit, trivy, syft, checkov, hadolint, noseyparker, falco, afl++ |
 | Kubernetes | trivy | - |
+
+**Key Changes (v0.6.2):**
+
+- **GitLab Repos:** Now run full repository scanner (10/12 tools) instead of trufflehog-only
+- **Web URLs:** Added Nuclei for fast API security scanning alongside ZAP
+- **GitLab Container Discovery:** Auto-discovers and scans container images found in Dockerfiles, docker-compose.yml, K8s manifests
 
 **CLI Argument Design:**
 

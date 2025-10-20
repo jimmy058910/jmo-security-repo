@@ -19,7 +19,7 @@
 # - tfsec: Deprecated since 2021, functionality merged into trivy
 # - osv-scanner: Trivy provides superior container/dependency scanning
 
-tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
 outputs: [json, md, yaml, html, sarif]
 fail_on: ""
 
@@ -39,11 +39,11 @@ profiles:
       trivy:
         flags: ["--no-progress", "--scanners", "vuln,secret,misconfig"]
 
-  # Balanced Profile: 7 production-ready tools (15-20 minutes)
-  # Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
+  # Balanced Profile: 8 production-ready tools (15-20 minutes)
+  # Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST, API security
   # Use Case: CI/CD pipelines, regular audits, production scans
   balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
     threads: 4
     timeout: 600
     per_tool:
@@ -53,12 +53,15 @@ profiles:
         flags: ["--no-progress"]
       zap:
         flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
+      nuclei:
+        timeout: 600
+        flags: ["-severity", "critical,high,medium"]
 
-  # Deep Profile: 11 comprehensive tools (30-60 minutes)
-  # Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, runtime, fuzzing
+  # Deep Profile: 12 comprehensive tools (30-60 minutes)
+  # Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, API security, runtime, fuzzing
   # Use Case: Security audits, compliance scans, pre-release validation
   deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
+    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
     threads: 2
     timeout: 900
     retries: 1
@@ -69,6 +72,9 @@ profiles:
         flags: ["--no-progress"]
       zap:
         flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=10"]
+      nuclei:
+        timeout: 900
+        flags: ["-severity", "critical,high,medium,low"]
       noseyparker:
         timeout: 1200
       afl++:
