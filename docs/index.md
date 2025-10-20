@@ -136,6 +136,8 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | [Compliance Framework Analysis](COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail | Advanced |
 | [Context7 Usage](CONTEXT7_USAGE.md) | MCP Context7 integration | Advanced |
 | [Telemetry](TELEMETRY.md) | Privacy-first usage tracking (v0.7.0+) | Everyone |
+| [Testing Matrix](TESTING_MATRIX.md) | Test coverage dimensions | Contributors |
+| [Usage Matrix](USAGE_MATRIX.md) | Use case configurations | Everyone |
 
 > **Note:** Infrastructure and business documentation (CAPTCHA setup, email telemetry, newsletter templates) is maintained separately in `dev-only/` (gitignored). These are maintainer-only resources not needed for general development or usage.
 
