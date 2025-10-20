@@ -3,6 +3,7 @@ Web URL Scanner (DAST)
 
 Scans live web applications and APIs using:
 - OWASP ZAP: Dynamic Application Security Testing (DAST)
+- Nuclei: Fast vulnerability scanner with 4000+ templates (CVEs, misconfigs, exposures)
 
 Integrates with ToolRunner for execution management.
 """
@@ -28,12 +29,12 @@ def scan_url(
     write_stub_func: Optional[Callable[[str, Path], None]] = None,
 ) -> Tuple[str, Dict[str, bool]]:
     """
-    Scan a live web URL with OWASP ZAP.
+    Scan a live web URL with DAST tools (ZAP and Nuclei).
 
     Args:
         url: Web application URL (http:// or https://)
         results_dir: Base results directory
-        tools: List of tools to run (must include 'zap')
+        tools: List of tools to run ('zap' and/or 'nuclei')
         timeout: Default timeout in seconds
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
@@ -117,6 +118,39 @@ def scan_url(
         elif allow_missing_tools:
             _write_stub("zap", zap_out)
             statuses["zap"] = True
+
+    # Nuclei scan for web URLs (CVEs, misconfigurations, exposures)
+    if "nuclei" in tools:
+        nuclei_out = out_dir / "nuclei.json"
+        if _tool_exists("nuclei"):
+            nuclei_flags = get_tool_flags("nuclei")
+
+            # Nuclei command for URL scanning
+            nuclei_cmd_list = [
+                "nuclei",
+                "-u",
+                url,
+                "-json",  # NDJSON output format
+                "-o",
+                str(nuclei_out),
+                "-silent",  # Reduce console noise
+                "-no-color",
+                *nuclei_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="nuclei",
+                    command=nuclei_cmd_list,
+                    output_file=nuclei_out,
+                    timeout=get_tool_timeout("nuclei", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=findings
+                    capture_stdout=False,  # Nuclei writes to file
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("nuclei", nuclei_out)
+            statuses["nuclei"] = True
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

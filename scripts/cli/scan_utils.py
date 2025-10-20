@@ -30,8 +30,14 @@ def write_stub(tool: str, out_path: Path) -> None:
         "bandit": {"results": []},
         "osv-scanner": {"results": []},
         "zap": {"site": []},
+        "nuclei": "",  # NDJSON format - empty string for empty file
         "falco": [],
         "afl++": {"crashes": []},
     }
     payload = stubs.get(tool, {})
-    out_path.write_text(json.dumps(payload), encoding="utf-8")
+    if isinstance(payload, str):
+        # For NDJSON tools like nuclei, write empty string
+        out_path.write_text(payload, encoding="utf-8")
+    else:
+        # For JSON tools, write JSON-encoded stub
+        out_path.write_text(json.dumps(payload), encoding="utf-8")

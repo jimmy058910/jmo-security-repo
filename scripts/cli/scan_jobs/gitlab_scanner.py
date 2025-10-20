@@ -1,47 +1,136 @@
 """
 GitLab Repository Scanner
 
-Scans GitLab repositories using:
-- TruffleHog: Verified secrets scanning for GitLab
+Scans GitLab repositories by cloning them and running the full repository scanner.
 
-Integrates with ToolRunner for execution management.
+Architecture (v0.6.1+):
+1. Clone GitLab repo to temporary directory
+2. Run scan_repository() with all configured tools
+3. Discover container images referenced in Dockerfiles, docker-compose.yml, K8s manifests
+4. Run scan_image() for each discovered image
+5. Move results to individual-gitlab/<group>_<repo>/
+6. Clean up temporary clone
+
+This provides GitLab repos with the same tool coverage as local repositories:
+- TruffleHog: Verified secrets scanning
+- Nosey Parker: Deep secrets detection
+- Semgrep: Static analysis (SAST)
+- Bandit: Python security analysis
+- Syft: SBOM generation
+- Trivy: Vulnerability and secrets scanning
+- Checkov: IaC policy checks
+- Hadolint: Dockerfile linting
+- ZAP: Web vulnerability scanning
+- Falco: Runtime security monitoring
+- AFL++: Coverage-guided fuzzing
+
+Plus container image discovery and scanning:
+- Scans Dockerfile, docker-compose.yml, *.k8s.yaml for image references
+- Automatically scans discovered images with trivy + syft
+- Stores results in individual-images/<image>/ directory
+
+Integrates with repository_scanner and image_scanner for comprehensive coverage.
 """
 
 import os
-import json
+import re
+import subprocess
 import shutil
+import tempfile
+import yaml
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Set
 
-from ...core.tool_runner import ToolRunner, ToolDefinition
-
-
-def _tool_exists(cmd: str) -> bool:
-    """Check if a command exists in PATH."""
-    return shutil.which(cmd) is not None
+from .repository_scanner import scan_repository
+from .image_scanner import scan_image
 
 
-def _write_stub(tool: str, out_path: Path) -> None:
-    """Write empty JSON stub for missing tool."""
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    stubs = {
-        "gitleaks": [],
-        "trufflehog": [],
-        "semgrep": {"results": []},
-        "noseyparker": {"matches": []},
-        "syft": {"artifacts": []},
-        "trivy": {"Results": []},
-        "hadolint": [],
-        "checkov": {"results": {"failed_checks": []}},
-        "tfsec": {"results": []},
-        "bandit": {"results": []},
-        "osv-scanner": {"results": []},
-        "zap": {"site": []},
-        "falco": [],
-        "afl++": {"crashes": []},
-    }
-    payload = stubs.get(tool, {})
-    out_path.write_text(json.dumps(payload), encoding="utf-8")
+def _discover_container_images(repo_path: Path) -> Set[str]:
+    """
+    Discover container images referenced in repository files.
+
+    Scans for:
+    - Dockerfile FROM lines
+    - docker-compose.yml service images
+    - Kubernetes manifests (*.k8s.yaml, *.k8s.yml) image references
+
+    Args:
+        repo_path: Path to cloned repository
+
+    Returns:
+        Set of discovered image names (e.g., 'nginx:latest', 'python:3.11-slim')
+    """
+    images: Set[str] = set()
+
+    # Pattern 1: Dockerfile FROM lines
+    # FROM nginx:latest
+    # FROM python:3.11-slim AS builder
+    dockerfile_pattern = re.compile(r"^\s*FROM\s+([^\s]+)", re.IGNORECASE)
+    for dockerfile in repo_path.rglob("*Dockerfile*"):
+        try:
+            content = dockerfile.read_text(encoding="utf-8", errors="ignore")
+            for line in content.splitlines():
+                match = dockerfile_pattern.match(line)
+                if match:
+                    image = match.group(1)
+                    # Skip build stages (AS keyword)
+                    if " AS " not in line.upper():
+                        # Skip scratch images
+                        if image.lower() != "scratch":
+                            images.add(image)
+        except Exception:
+            continue  # Skip files that can't be read
+
+    # Pattern 2: docker-compose.yml images
+    # services:
+    #   web:
+    #     image: nginx:latest
+    for compose_file in repo_path.rglob("docker-compose*.y*ml"):
+        try:
+            with open(compose_file, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict) and "services" in data:
+                services = data["services"]
+                if isinstance(services, dict):
+                    for service_name, service_config in services.items():
+                        if (
+                            isinstance(service_config, dict)
+                            and "image" in service_config
+                        ):
+                            image = str(service_config["image"])
+                            if image and image.lower() != "scratch":
+                                images.add(image)
+        except Exception:
+            continue  # Skip files that can't be parsed
+
+    # Pattern 3: Kubernetes manifests
+    # spec:
+    #   containers:
+    #   - image: nginx:latest
+    for k8s_file in list(repo_path.rglob("*.k8s.yaml")) + list(
+        repo_path.rglob("*.k8s.yml")
+    ):
+        try:
+            with open(k8s_file, "r", encoding="utf-8") as f:
+                # K8s manifests can contain multiple documents
+                docs = yaml.safe_load_all(f)
+                for doc in docs:
+                    if not isinstance(doc, dict):
+                        continue
+                    # Look for containers in pod specs
+                    spec = doc.get("spec", {})
+                    if isinstance(spec, dict):
+                        containers = spec.get("containers", [])
+                        if isinstance(containers, list):
+                            for container in containers:
+                                if isinstance(container, dict) and "image" in container:
+                                    image = str(container["image"])
+                                    if image and image.lower() != "scratch":
+                                        images.add(image)
+        except Exception:
+            continue  # Skip files that can't be parsed
+
+    return images
 
 
 def scan_gitlab_repo(
@@ -53,133 +142,155 @@ def scan_gitlab_repo(
     per_tool_config: Dict,
     allow_missing_tools: bool,
     tool_exists_func=None,
+    write_stub_func=None,
 ) -> Tuple[str, Dict[str, bool]]:
     """
-    Scan a GitLab repo with trufflehog.
+    Scan a GitLab repo by cloning it and running the full repository scanner.
 
     Args:
         gitlab_info: Dict with keys: full_path, url, token, repo, group
         results_dir: Base results directory
-        tools: List of tools to run (must include 'trufflehog')
+        tools: List of tools to run (all repository tools supported)
         timeout: Default timeout in seconds
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
         tool_exists_func: Optional function to check tool existence (for testing)
+        write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
         Tuple of (full_path, statuses_dict)
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
-    statuses: Dict[str, bool] = {}
-    tool_defs = []
-
     full_path = gitlab_info["full_path"]
-    safe_name = full_path.replace("/", "_").replace("*", "all")
-    out_dir = results_dir / "individual-gitlab" / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
-
     gitlab_url = gitlab_info["url"]
     gitlab_token = gitlab_info.get("token", os.getenv("GITLAB_TOKEN"))
 
-    def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout override for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            override = tool_cfg.get("timeout")
-            if isinstance(override, int) and override > 0:
-                return override
-        return default
+    if not gitlab_token:
+        # No token - cannot clone, return failure for all tools
+        statuses = {tool: False for tool in tools}
+        return full_path, statuses
 
-    def get_tool_flags(tool: str) -> List[str]:
-        """Get additional flags for specific tool."""
-        tool_cfg = per_tool_config.get(tool, {})
-        if isinstance(tool_cfg, dict):
-            flags = tool_cfg.get("flags", [])
-            if isinstance(flags, list):
-                return [str(f) for f in flags]
-        return []
+    # Create temporary directory for clone
+    temp_dir = Path(tempfile.mkdtemp(prefix="jmo-gitlab-"))
 
-    # TruffleHog GitLab scan
-    if "trufflehog" in tools:
-        trufflehog_out = out_dir / "trufflehog.json"
-        trufflehog_flags = get_tool_flags("trufflehog")
+    try:
+        # Construct clone URL with embedded token for authentication
+        # Format: https://oauth2:TOKEN@gitlab.com/group/repo.git
+        clone_url = gitlab_url.rstrip("/")
+        if not clone_url.startswith("http"):
+            clone_url = "https://gitlab.com"
 
-        if gitlab_info.get("repo") == "*":
-            # Group scan
-            trufflehog_cmd = [
-                "trufflehog",
-                "gitlab",
-                "--endpoint",
-                gitlab_url,
-                "--token",
-                gitlab_token,
-                "--group",
-                gitlab_info["group"],
-                "--json",
-                "--no-update",
-                *trufflehog_flags,
-            ]
+        # Build authenticated URL
+        if clone_url.startswith("https://"):
+            auth_url = clone_url.replace("https://", f"https://oauth2:{gitlab_token}@")
+        elif clone_url.startswith("http://"):
+            auth_url = clone_url.replace("http://", f"http://oauth2:{gitlab_token}@")
         else:
-            # Single repo scan
-            trufflehog_cmd = [
-                "trufflehog",
-                "gitlab",
-                "--endpoint",
-                gitlab_url,
-                "--token",
-                gitlab_token,
-                "--repo",
-                full_path,
-                "--json",
-                "--no-update",
-                *trufflehog_flags,
-            ]
+            auth_url = f"https://oauth2:{gitlab_token}@gitlab.com"
 
-        tool_defs.append(
-            ToolDefinition(
-                name="trufflehog",
-                command=trufflehog_cmd,
-                output_file=trufflehog_out,
-                timeout=get_tool_timeout("trufflehog", timeout),
-                retries=retries,
-                ok_return_codes=(0, 1),  # 0=clean, 1=findings
-                capture_stdout=True,  # TruffleHog writes to stdout
-            )
+        repo_url = f"{auth_url}/{full_path}.git"
+        clone_path = temp_dir / full_path.split("/")[-1]
+
+        # Clone the repository (shallow clone for speed)
+        clone_cmd = [
+            "git",
+            "clone",
+            "--depth",
+            "1",  # Shallow clone
+            "--single-branch",  # Only default branch
+            "--quiet",
+            repo_url,
+            str(clone_path),
+        ]
+
+        # Run clone with timeout
+        result = subprocess.run(
+            clone_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
         )
 
-    # Execute all tools with ToolRunner
-    runner = ToolRunner(
-        tools=tool_defs,
-    )
-    results = runner.run_all_parallel()
+        if result.returncode != 0:
+            # Clone failed - return failure for all tools
+            statuses = {tool: False for tool in tools}
+            return full_path, statuses
 
-    # Process results
-    attempts_map: Dict[str, int] = {}
-    for result in results:
-        if result.status == "success":
-            # Write stdout to file ONLY if we captured it (capture_stdout=True)
-            if result.output_file and result.capture_stdout:
-                result.output_file.write_text(result.stdout or "", encoding="utf-8")
-            statuses[result.tool] = True
-            if result.attempts > 1:
-                attempts_map[result.tool] = result.attempts
-        elif result.status == "error" and "Tool not found" in result.error_message:
-            # Tool doesn't exist - write stub if allow_missing_tools
-            if allow_missing_tools:
-                tool_out = out_dir / f"{result.tool}.json"
-                _write_stub(result.tool, tool_out)
-                statuses[result.tool] = True
-            else:
-                statuses[result.tool] = False
-        else:
-            # Other errors (timeout, non-zero exit, etc.)
-            statuses[result.tool] = False
-            if result.attempts > 0:
-                attempts_map[result.tool] = result.attempts
+        # Create temporary results directory
+        temp_results = temp_dir / "results"
+        temp_results.mkdir(parents=True, exist_ok=True)
 
-    # Include attempts metadata if any retries occurred
-    if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        # Run full repository scanner on cloned repo
+        repo_name, statuses = scan_repository(
+            repo=clone_path,
+            results_dir=temp_results,
+            tools=tools,
+            timeout=timeout,
+            retries=retries,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=allow_missing_tools,
+            tool_exists_func=tool_exists_func,
+            write_stub_func=write_stub_func,
+        )
 
-    return gitlab_info["full_path"], statuses
+        # Discover container images in cloned repo
+        discovered_images = _discover_container_images(clone_path)
+
+        # Scan discovered container images (if trivy or syft in tools)
+        image_tools = [t for t in tools if t in ["trivy", "syft"]]
+        if discovered_images and image_tools:
+            # Create temp directory for image results
+            temp_image_results = temp_dir / "image-results"
+            temp_image_results.mkdir(parents=True, exist_ok=True)
+
+            for image in discovered_images:
+                try:
+                    _, image_statuses = scan_image(
+                        image=image,
+                        results_dir=temp_image_results,
+                        tools=image_tools,
+                        timeout=timeout,
+                        retries=retries,
+                        per_tool_config=per_tool_config,
+                        allow_missing_tools=allow_missing_tools,
+                        tool_exists_func=tool_exists_func,
+                        write_stub_func=write_stub_func,
+                    )
+                    # Merge image statuses into main statuses
+                    for tool, status in image_statuses.items():
+                        if tool not in statuses or not statuses[tool]:
+                            # Only update if tool wasn't already successful
+                            statuses[f"image:{image}:{tool}"] = status
+                except Exception:
+                    # Image scan failed - continue with other images
+                    continue
+
+        # Move results from temp location to final GitLab results directory
+        safe_name = full_path.replace("/", "_").replace("*", "all")
+        final_out_dir = results_dir / "individual-gitlab" / safe_name
+        final_out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy all tool output files from temp to final location
+        temp_repo_results = temp_results / repo_name
+        if temp_repo_results.exists():
+            for tool_file in temp_repo_results.glob("*.json"):
+                shutil.copy2(tool_file, final_out_dir / tool_file.name)
+
+        return full_path, statuses
+
+    except subprocess.TimeoutExpired:
+        # Clone timeout - return failure for all tools
+        statuses = {tool: False for tool in tools}
+        return full_path, statuses
+    except Exception:
+        # Any other error - return failure for all tools
+        statuses = {tool: False for tool in tools}
+        return full_path, statuses
+    finally:
+        # Always clean up temporary directory
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass  # Ignore cleanup errors

@@ -26,7 +26,7 @@ from typing import Any, Dict, List
 
 from scripts.core.exceptions import AdapterParseException
 
-# Active tool adapters (11 tools)
+# Active tool adapters (12 tools)
 from scripts.core.adapters.trufflehog_adapter import load_trufflehog
 from scripts.core.adapters.semgrep_adapter import load_semgrep
 from scripts.core.adapters.noseyparker_adapter import load_noseyparker
@@ -36,6 +36,7 @@ from scripts.core.adapters.checkov_adapter import load_checkov
 from scripts.core.adapters.trivy_adapter import load_trivy
 from scripts.core.adapters.bandit_adapter import load_bandit
 from scripts.core.adapters.zap_adapter import load_zap
+from scripts.core.adapters.nuclei_adapter import load_nuclei
 from scripts.core.adapters.falco_adapter import load_falco
 from scripts.core.adapters.aflplusplus_adapter import load_aflplusplus
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -97,7 +98,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 continue
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-                # Active tools only (11 tools)
+                # Active tools only (12 tools)
                 th = target / "trufflehog.json"
                 sg = target / "semgrep.json"
                 np = target / "noseyparker.json"
@@ -107,6 +108,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 bd = target / "bandit.json"
                 tv = target / "trivy.json"
                 zap_file = target / "zap.json"
+                nuclei_file = target / "nuclei.json"
                 falco_file = target / "falco.json"
                 afl_file = target / "afl++.json"
                 for path, loader in (
@@ -119,6 +121,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                     (bd, load_bandit),
                     (tv, load_trivy),
                     (zap_file, load_zap),
+                    (nuclei_file, load_nuclei),
                     (falco_file, load_falco),
                     (afl_file, load_aflplusplus),
                 ):

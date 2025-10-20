@@ -100,7 +100,9 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
         #   "type": "http"
         # }
 
-        template_id = str(item.get("template-id") or item.get("templateID") or "UNKNOWN")
+        template_id = str(
+            item.get("template-id") or item.get("templateID") or "UNKNOWN"
+        )
         info = item.get("info", {})
         if not isinstance(info, dict):
             info = {}
@@ -151,7 +153,9 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
         if remediation:
             finding["remediation"] = remediation
         else:
-            finding["remediation"] = "Review finding and apply vendor-recommended fixes."
+            finding["remediation"] = (
+                "Review finding and apply vendor-recommended fixes."
+            )
 
         # Extract CWE IDs from classification
         risk = {}
