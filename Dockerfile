@@ -107,7 +107,8 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Prevent interactive prompts during apt installation
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    PATH="/root/.local/bin:${PATH}"
+    PATH="/root/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
 
 # Install ONLY runtime dependencies (no curl, wget, tar, build-essential - those were in builder stage)
 # Combined in single RUN to reduce layers, with aggressive cache cleanup

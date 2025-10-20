@@ -66,7 +66,8 @@ LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-securi
 LABEL org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/root/.local/bin:${PATH}"
+    PATH="/root/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
 
 # Install ONLY runtime dependencies (Alpine packages are smaller)
 # No build tools in runtime stage

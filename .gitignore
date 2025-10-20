@@ -20,6 +20,10 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Python distribution artifacts (wheel files should not be committed)
+*.whl
+*.egg
 # Review tracking artifacts
 REVIEW.md
 # Python

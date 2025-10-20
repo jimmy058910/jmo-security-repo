@@ -259,9 +259,18 @@ https://admin.example.com/login
 https://staging.example.com
 ```
 
-**Tools used:** OWASP ZAP (dynamic application security testing)
+**Tools used (v0.6.2):**
+
+- **OWASP ZAP:** Dynamic application security testing (DAST) with spider, active scanner
+- **Nuclei:** Fast vulnerability scanner with 4000+ community templates (CVEs, misconfigurations, API security)
 
 **URL schemes supported:** `http://`, `https://`, `file://` (for local HTML files)
+
+**Tool Selection:**
+
+- Use `--tools zap` for comprehensive DAST with active scanning (slower, thorough)
+- Use `--tools nuclei` for fast template-based scanning (CVEs, known issues)
+- Use `--tools zap,nuclei` for both comprehensive + fast scanning (recommended for balanced/deep profiles)
 
 #### GitLab Integration
 
@@ -270,7 +279,9 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used:** TruffleHog (GitLab-native secrets scanning with verification)
+**Tools used (v0.6.2):** Full repository scanner (TruffleHog, Semgrep, Bandit, Trivy, Syft, Checkov, Hadolint, Noseyparker, Falco, AFL++)
+
+**Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
 **Authentication:**
 ```bash
@@ -493,7 +504,7 @@ jmo scan --repo ./app1 --image app1:latest --results-dir ./results
 # Fast profile for quick feedback (3 tools, 300s timeout)
 jmo scan --image nginx:latest --profile-name fast
 
-# Deep profile for comprehensive audits (11 tools, 900s timeout)
+# Deep profile for comprehensive audits (12 tools, 900s timeout)
 jmo scan --k8s-context prod --k8s-all-namespaces --profile-name deep
 ```
 
@@ -514,11 +525,16 @@ done
 | Repositories | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Container Images | ✓ | ✓ | - | - | - | - |
 | IaC Files | ✓ | - | ✓ | - | - | - |
-| Web URLs | - | - | - | ✓ | - | - |
-| GitLab Repos | - | - | - | - | ✓ | - |
+| Web URLs | - | - | - | ✓ | ✓ | - |
+| GitLab Repos | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Kubernetes | ✓ | - | - | - | - | - |
 
-**Note:** Tool selection is automatic based on target type. Use `--tools` to override defaults.
+**Note (v0.6.2):**
+
+- **GitLab Repos** now run full repository scanner (10/12 tools) instead of TruffleHog-only
+- **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
+- GitLab repos also auto-discover and scan container images found in Dockerfiles, docker-compose.yml, and K8s manifests
+- Tool selection is automatic based on target type. Use `--tools` to override defaults.
 
 ### Troubleshooting Multi-Target Scans
 
@@ -539,6 +555,13 @@ done
 - Increase timeout: `--timeout 1200` or in `jmo.yml` per_tool override
 - Reduce spider duration: `zap.flags: ["-config", "spider.maxDuration=3"]`
 - Use targeted scanning with `--api-spec` instead of full crawl
+
+**Nuclei scan issues:**
+
+- Ensure Nuclei templates are up to date: `nuclei -update-templates`
+- For private/internal apps, use: `nuclei.flags: ["-rl", "150"]` to limit request rate
+- Filter by severity: `nuclei.flags: ["-severity", "critical,high"]`
+- Exclude specific templates: `nuclei.flags: ["-exclude-tags", "fuzzing,dos"]`
 
 **GitLab scan fails:**
 
@@ -623,7 +646,8 @@ Data model: Aggregated findings conform to a CommonFinding shape used by all rep
 
 `jmo.yml` controls what runs and how results are emitted. Top‑level fields supported by the CLI include:
 
-- tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, falco, afl++, bandit]
+- tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++, bandit]
+  - Note (v0.6.2): Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
   - Note (v0.5.0): Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
 - outputs: [json, md, yaml, html, sarif]
 - fail_on: "CRITICAL|HIGH|MEDIUM|LOW|INFO" (empty means do not gate)
@@ -639,7 +663,7 @@ Data model: Aggregated findings conform to a CommonFinding shape used by all rep
 Example:
 
 ```yaml
-tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
 outputs: [json, md, yaml, html, sarif]
 fail_on: ""
 default_profile: balanced
@@ -657,7 +681,7 @@ profiles:
       semgrep:
         flags: ["--exclude", "node_modules", "--exclude", ".git"]
   balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
     threads: 4
     timeout: 600
     per_tool:
@@ -666,7 +690,7 @@ profiles:
       zap:
         flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
   deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
+    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
     threads: 2
     timeout: 900
     retries: 1
@@ -691,6 +715,120 @@ Notes and precedence:
 - Severity order is CRITICAL > HIGH > MEDIUM > LOW > INFO. Thresholds gate at and above the chosen level.
 - Threads/timeout/tool lists are merged from config + profile; CLI flags override config/profile where provided.
 - Per‑tool overrides are merged with root config; values set in a profile win over root.
+
+### Telemetry Configuration (v0.7.0+)
+
+JMo Security can collect anonymous usage statistics to help prioritize features and improve the tool. Telemetry is **disabled by default** (opt-in only) and fully respects your privacy with a privacy-first, opt-in design.
+
+#### What We Collect (Anonymous Only)
+
+✅ **What we collect:**
+
+- Tool usage (which tools ran)
+- Scan duration (bucketed: <5min, 5-15min, etc.)
+- Execution mode (CLI/Docker/Wizard)
+- Platform (Linux/macOS/Windows)
+- Profile selected (fast/balanced/deep)
+- Target count (bucketed: 1, 2-5, 6-10, etc.)
+- CI detection (running in CI/CD environment)
+
+❌ **What we DON'T collect:**
+
+- Repository names or paths
+- Finding details or secrets
+- IP addresses or user info
+- File contents or code snippets
+- Tool output or vulnerability details
+
+#### Privacy Guarantees
+
+- **Anonymous UUID:** Randomly generated, stored locally in `~/.jmo-security/telemetry-id`
+- **No PII:** No personally identifiable information ever collected
+- **Privacy Bucketing:** All metrics bucketed (duration, findings count, target count)
+- **Secure Storage:** Events sent to private GitHub Gist (not public database)
+- **GDPR/CCPA Compliant:** Opt-in only, anonymous data, right to be forgotten
+
+#### Enabling Telemetry
+
+##### Option 1: Wizard Prompt (Interactive)
+
+The wizard will ask on first run:
+
+```bash
+jmotools wizard
+
+# Prompted:
+# 📊 Help Improve JMo Security
+# Enable anonymous telemetry? [y/N]:
+```
+
+##### Option 2: Manual Configuration
+
+Add to `jmo.yml`:
+
+```yaml
+telemetry:
+  enabled: true  # Default: false (opt-in only)
+```
+
+##### Option 3: Environment Variable (CI/CD)
+
+Disable for CI/CD environments:
+
+```bash
+export JMO_TELEMETRY_DISABLE=1  # Force disable
+jmo scan --repo ./myapp
+```
+
+#### What Events Are Sent
+
+1. **scan.started** — When scan begins (profile, tools, target types, CI detection)
+2. **scan.completed** — When scan finishes (duration, tools succeeded/failed)
+3. **tool.failed** — When individual tool fails (tool name, error type)
+4. **wizard.completed** — When wizard finishes (profile selected, execution mode)
+5. **report.generated** — When report completes (output formats, findings count)
+
+#### Telemetry Backend
+
+- **MVP (v0.7.0):** GitHub Gist (private, append-only JSONL)
+- **Future (v0.8.0+):** Cloudflare Workers for scale (when >10k users)
+
+#### Transparency Reports
+
+Aggregated, anonymized statistics published quarterly at:
+
+- [jmotools.com/telemetry](https://jmotools.com/telemetry) (future)
+- GitHub Discussions (community feedback)
+
+#### Disabling Telemetry
+
+##### Option 1: Config File
+
+```yaml
+telemetry:
+  enabled: false  # Explicitly disable
+```
+
+##### Option 2: Environment Variable
+
+```bash
+export JMO_TELEMETRY_DISABLE=1
+```
+
+##### Option 3: Delete Anonymous ID
+
+```bash
+rm ~/.jmo-security/telemetry-id
+```
+
+#### Privacy Policy
+
+Full privacy policy and data handling details:
+
+- [docs/TELEMETRY_IMPLEMENTATION_GUIDE.md](TELEMETRY_IMPLEMENTATION_GUIDE.md) — Implementation details
+- [jmotools.com/privacy](https://jmotools.com/privacy) — Privacy policy (future)
+
+**Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
 ## Key CLI commands and flags
 
@@ -1103,7 +1241,7 @@ jobs:
 
 **Goal:** Complete coverage for merge/release using **balanced profile**
 
-**Profile:** `balanced` (7 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap)
+**Profile:** `balanced` (8 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei)
 
 **Configuration:**
 
@@ -1111,7 +1249,7 @@ jobs:
 # jmo.yml - balanced profile
 profiles:
   balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
+    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
     threads: 4
     timeout: 600
     per_tool:
@@ -1182,7 +1320,7 @@ jobs:
 
 **Goal:** Maximum coverage with **deep profile** for compliance/audits
 
-**Profile:** `deep` (11 tools: full suite including noseyparker, bandit, zap, falco, afl++)
+**Profile:** `deep` (12 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
 
 **Configuration:**
 
@@ -1190,7 +1328,7 @@ jobs:
 # jmo.yml - deep profile
 profiles:
   deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
+    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
     threads: 2
     timeout: 900
     retries: 1
@@ -1373,11 +1511,102 @@ jobs:
 |-------|---------|-------|---------|---------|------------|
 | **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
 | **Commit/PR** | fast | 3 tools | 5-8 min | Push, PR | HIGH+ |
-| **Build** | balanced | 7 tools | 15-20 min | Main branch, PR | HIGH+ |
-| **Deep Audit** | deep | 11 tools | 30-60 min | Weekly, manual | MEDIUM+ |
+| **Build** | balanced | 8 tools | 15-20 min | Main branch, PR | HIGH+ |
+| **Deep Audit** | deep | 12 tools | 30-60 min | Weekly, manual | MEDIUM+ |
 | **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
 
 **Key Principle:** Fail fast with fast profile in PR stage, comprehensive coverage in build stage, exhaustive audits weekly.
+
+---
+
+#### GitLab CI Quick Start
+
+**See [docs/examples/.gitlab-ci.yml](examples/.gitlab-ci.yml) for complete configuration.**
+
+Quick example for GitLab CI:
+
+```yaml
+# .gitlab-ci.yml
+variables:
+  JMO_PROFILE: "balanced"
+  JMO_FAIL_ON: "HIGH"
+
+security:scan:
+  image: jimmy058910/jmo-security:slim
+  stage: security
+  script:
+    - jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results --human-logs
+    - jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
+  artifacts:
+    when: always
+    paths:
+      - results/
+    reports:
+      sast: results/summaries/findings.sarif
+    expire_in: 30 days
+```
+
+**Key features:**
+
+- Docker-based scanning (zero installation)
+- Profile-based configuration (fast, balanced, deep)
+- SARIF upload for GitLab Security Dashboard
+- Multi-target support (repositories, containers, IaC, URLs)
+
+---
+
+#### Jenkins Quick Start
+
+**See [docs/examples/Jenkinsfile](examples/Jenkinsfile) for complete configuration.**
+
+Quick example for Jenkins:
+
+```groovy
+// Jenkinsfile
+pipeline {
+    agent any
+    environment {
+        JMO_IMAGE = 'jimmy058910/jmo-security:slim'
+        JMO_PROFILE = 'balanced'
+        JMO_FAIL_ON = 'HIGH'
+    }
+    stages {
+        stage('Security Scan') {
+            agent {
+                docker {
+                    image "${JMO_IMAGE}"
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
+            }
+            steps {
+                sh """
+                    jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results --human-logs
+                    jmo report results --fail-on ${JMO_FAIL_ON} --profile --human-logs
+                """
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'results/**/*', allowEmptyArchive: true
+            publishHTML([
+                reportDir: 'results/summaries',
+                reportFiles: 'dashboard.html',
+                reportName: 'JMo Security Dashboard'
+            ])
+        }
+    }
+}
+```
+
+**Key features:**
+
+- Docker-based execution for zero-installation
+- HTML dashboard publishing in Jenkins UI
+- Artifact archiving with 30-day retention
+- Multi-target scanning support
+
+---
 
 ### Interpreting CI failures (deeper guide)
 

@@ -6,6 +6,21 @@ For the release process, see docs/RELEASE.md.
 
 ### Added
 
+- **Privacy-first telemetry system (v0.7.0)**: Optional anonymous usage analytics to help prioritize features
+  - **Opt-in only:** Disabled by default, requires explicit enablement via config or wizard prompt
+  - **Anonymous UUID:** Randomly generated, stored locally in `~/.jmo-security/telemetry-id`
+  - **Privacy bucketing:** All metrics bucketed (duration: `<5min`, findings: `1-10`, targets: `2-5`, etc.)
+  - **5 core events:** scan.started, scan.completed, tool.failed, wizard.completed, report.generated
+  - **Business metrics:** CI detection, multi-target usage, compliance feature usage, scan frequency
+  - **GitHub Gist backend:** Private append-only JSONL for MVP (Cloudflare Workers planned for scale)
+  - **Non-blocking:** Fire-and-forget background threads, 2-second timeout, network errors never interrupt scans
+  - **GDPR/CCPA compliant:** No PII, opt-in model, right to be forgotten
+  - **Environment override:** `JMO_TELEMETRY_DISABLE=1` forces disable for CI/CD
+  - **Wizard integration:** First-run prompt with clear privacy explanation
+  - **99% test coverage:** Comprehensive test suite with mocked Gist API
+  - See [docs/USER_GUIDE.md — Telemetry](docs/USER_GUIDE.md#telemetry-configuration-v070) for complete guide
+  - See [docs/TELEMETRY_IMPLEMENTATION_GUIDE.md](docs/TELEMETRY_IMPLEMENTATION_GUIDE.md) for implementation details
+
 - **Wizard multi-target support (v0.6.2)**: Interactive wizard now supports all 6 target types introduced in v0.6.0+
   - **Target types:** Repositories, container images, IaC files, web URLs, GitLab repos, Kubernetes clusters
   - **Architecture changes:**

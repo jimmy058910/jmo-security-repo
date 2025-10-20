@@ -22,8 +22,12 @@ from scripts.core.reporters.sarif_reporter import write_sarif
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.suppress import filter_suppressed, load_suppressions
+from scripts.core.telemetry import send_event, bucket_findings
 
 logger = logging.getLogger(__name__)
+
+# Version (from pyproject.toml)
+__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
@@ -197,6 +201,27 @@ def cmd_report(args, _log_fn) -> int:
     # Determine exit code
     threshold = args.fail_on if args.fail_on is not None else cfg.fail_on
     code = fail_code(threshold, counts)
+
+    # Send report.generated telemetry event
+    output_formats = []
+    if args.json or cfg.outputs.get("json", True):
+        output_formats.append("json")
+    if args.md or cfg.outputs.get("md", True):
+        output_formats.append("md")
+    if args.html or cfg.outputs.get("html", True):
+        output_formats.append("html")
+    if args.sarif or cfg.outputs.get("sarif", False):
+        output_formats.append("sarif")
+    if args.yaml or cfg.outputs.get("yaml", False):
+        output_formats.append("yaml")
+
+    send_event("report.generated", {
+        "output_formats": output_formats,
+        "findings_bucket": bucket_findings(len(findings)),
+        "suppressions_used": sup_file is not None and sup_file.exists(),
+        "compliance_enabled": True,  # Always enabled in v0.5.1+
+    }, cfg.raw, version=__version__)
+
     _log_fn(
         args,
         "INFO",

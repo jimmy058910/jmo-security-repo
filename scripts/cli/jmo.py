@@ -29,8 +29,21 @@ from scripts.cli.scan_utils import (
     write_stub as _write_stub,
 )
 
+# Telemetry
+from scripts.core.telemetry import (
+    send_event,
+    bucket_duration,
+    bucket_findings,
+    bucket_targets,
+    detect_ci_environment,
+    infer_scan_frequency,
+)
+
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Version (from pyproject.toml)
+__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
 
 
 def _merge_dict(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
@@ -733,6 +746,10 @@ def cmd_scan(args) -> int:
     REFACTORED VERSION: Uses scan_orchestrator and scan_jobs modules for clean separation.
     Complexity reduced from 321 to ~15 (95% improvement).
     """
+    # Track scan start time for telemetry
+    import time
+    scan_start_time = time.time()
+
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
@@ -772,6 +789,46 @@ def cmd_scan(args) -> int:
 
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
+
+    # Send scan.started telemetry event
+    import os
+    mode = "wizard" if getattr(args, "from_wizard", False) else "cli"
+    if os.environ.get("DOCKER_CONTAINER") == "1":
+        mode = "docker"
+
+    profile_name = getattr(args, "profile_name", None) or cfg.default_profile or "custom"
+    total_targets = (
+        len(targets.repos) + len(targets.images) + len(targets.iac_files) +
+        len(targets.urls) + len(targets.gitlab_repos) + len(targets.k8s_contexts)
+    )
+    num_target_types = sum([
+        len(targets.repos) > 0,
+        len(targets.images) > 0,
+        len(targets.iac_files) > 0,
+        len(targets.urls) > 0,
+        len(targets.gitlab_repos) > 0,
+        len(targets.k8s_contexts) > 0,
+    ])
+
+    send_event("scan.started", {
+        "mode": mode,
+        "profile": profile_name,
+        "tools": tools,
+        "target_types": {
+            "repos": len(targets.repos),
+            "images": len(targets.images),
+            "urls": len(targets.urls),
+            "iac": len(targets.iac_files),
+            "gitlab": len(targets.gitlab_repos),
+            "k8s": len(targets.k8s_contexts),
+        },
+        # Business metrics
+        "ci_detected": detect_ci_environment(),
+        "multi_target_scan": num_target_types > 1,
+        "compliance_usage": True,  # Always enabled in v0.5.1+
+        "total_targets_bucket": bucket_targets(total_targets),
+        "scan_frequency_hint": infer_scan_frequency(),
+    }, cfg.raw, version=__version__)
 
     # Setup results directories for each target type
     orchestrator.setup_results_directories(targets)
@@ -957,6 +1014,20 @@ def cmd_scan(args) -> int:
 
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
+
+    # Send scan.completed telemetry event
+    scan_duration = time.time() - scan_start_time
+    tools_succeeded = sum(1 for _, _, statuses in all_results if any(statuses.values()))
+    tools_failed = sum(1 for _, _, statuses in all_results if not all(statuses.values()))
+
+    send_event("scan.completed", {
+        "mode": mode,
+        "profile": profile_name,
+        "duration_bucket": bucket_duration(scan_duration),
+        "tools_succeeded": tools_succeeded,
+        "tools_failed": tools_failed,
+        "total_findings_bucket": bucket_findings(0),  # Will be counted in report phase
+    }, cfg.raw, version=__version__)
 
     _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
     return 0

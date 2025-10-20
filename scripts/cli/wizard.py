@@ -27,14 +27,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from scripts.core.exceptions import ToolExecutionException
+from scripts.core.config import load_config
 from scripts.cli.wizard_generators import (
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
 )
+from scripts.core.telemetry import send_event
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Version (from pyproject.toml)
+__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
 
 # Profile definitions with resource estimates (v0.5.0)
 PROFILES = {
@@ -1356,6 +1361,100 @@ def execute_scan(config: WizardConfig) -> int:
         return 1
 
 
+def _save_telemetry_preference(config_path: Path, enabled: bool) -> None:
+    """
+    Save telemetry preference to jmo.yml.
+
+    Args:
+        config_path: Path to jmo.yml
+        enabled: Whether telemetry is enabled
+    """
+    import yaml
+
+    # Load existing config or create new one
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config_data = yaml.safe_load(f) or {}
+        except Exception:
+            config_data = {}
+    else:
+        config_data = {}
+
+    # Update telemetry section
+    config_data["telemetry"] = {"enabled": enabled}
+
+    # Write back to file
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+
+    status = "enabled" if enabled else "disabled"
+    print(f"\n✅ Telemetry {status}. You can change this later in {config_path}\n")
+
+
+def _send_wizard_telemetry(
+    wizard_start_time: float,
+    config: Any,
+    artifact_type: Optional[str] = None
+) -> None:
+    """
+    Send wizard.completed telemetry event.
+
+    Args:
+        wizard_start_time: Time when wizard started (from time.time())
+        config: WizardConfig object
+        artifact_type: Type of artifact generated ("makefile", "shell", "gha", or None)
+    """
+    import time
+    try:
+        cfg = load_config("jmo.yml") if Path("jmo.yml").exists() else None
+        if cfg:
+            wizard_duration = int(time.time() - wizard_start_time)
+            execution_mode = "docker" if config.use_docker else "native"
+
+            send_event("wizard.completed", {
+                "profile_selected": config.profile,
+                "execution_mode": execution_mode,
+                "artifact_generated": artifact_type,
+                "duration_seconds": wizard_duration,
+            }, cfg.raw, version=__version__)
+    except Exception as e:
+        # Never let telemetry errors break the wizard
+        logger.debug(f"Telemetry send failed: {e}")
+
+
+def prompt_telemetry_opt_in() -> bool:
+    """
+    Prompt user to enable telemetry on first run.
+
+    Returns:
+        True if user opts in, False otherwise
+    """
+    print("\n" + "=" * 70)
+    print("📊 Help Improve JMo Security")
+    print("=" * 70)
+    print("We'd like to collect anonymous usage stats to prioritize features.")
+    print()
+    print("✅ What we collect:")
+    print("   • Tool usage (which tools ran)")
+    print("   • Scan duration (fast/slow)")
+    print("   • Execution mode (CLI/Docker/Wizard)")
+    print("   • Platform (Linux/macOS/Windows)")
+    print()
+    print("❌ What we DON'T collect:")
+    print("   • Repository names or paths")
+    print("   • Finding details or secrets")
+    print("   • IP addresses or user info")
+    print()
+    print("📄 Privacy policy: https://jmotools.com/privacy")
+    print("📖 Full details: docs/TELEMETRY_IMPLEMENTATION_GUIDE.md")
+    print("💡 You can change this later in jmo.yml")
+    print()
+
+    response = input("Enable anonymous telemetry? [y/N]: ").strip().lower()
+    return response == "y"
+
+
 def run_wizard(
     yes: bool = False,
     force_docker: bool = False,
@@ -1376,9 +1475,32 @@ def run_wizard(
     Returns:
         Exit code
     """
+    import time
+    wizard_start_time = time.time()
+
     _print_header("JMo Security Wizard")
     print("Welcome! This wizard will guide you through your first security scan.")
     print("Press Ctrl+C at any time to cancel.")
+
+    # Check if telemetry preference already set
+    config_path = Path("jmo.yml")
+    telemetry_enabled = False
+    if config_path.exists():
+        try:
+            cfg = load_config(str(config_path))
+            telemetry_set = hasattr(cfg, 'telemetry') and hasattr(cfg.telemetry, 'enabled')
+            if not telemetry_set and not yes:
+                # First run: prompt for telemetry
+                telemetry_enabled = prompt_telemetry_opt_in()
+                # Save preference to jmo.yml
+                _save_telemetry_preference(config_path, telemetry_enabled)
+        except Exception as e:
+            logger.debug(f"Config loading failed during telemetry check: {e}")
+    elif not yes:
+        # No config file exists, prompt for telemetry
+        telemetry_enabled = prompt_telemetry_opt_in()
+        # Create minimal jmo.yml with telemetry preference
+        _save_telemetry_preference(config_path, telemetry_enabled)
 
     config = WizardConfig()
 
@@ -1432,6 +1554,7 @@ def run_wizard(
             content = generate_makefile_target(config, command)
             Path(emit_make).write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
+            _send_wizard_telemetry(wizard_start_time, config, artifact_type="makefile")
             return 0
 
         if emit_script:
@@ -1441,6 +1564,7 @@ def run_wizard(
             script_path.write_text(content)
             script_path.chmod(0o755)
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
+            _send_wizard_telemetry(wizard_start_time, config, artifact_type="shell")
             return 0
 
         if emit_gha:
@@ -1449,10 +1573,13 @@ def run_wizard(
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
+            _send_wizard_telemetry(wizard_start_time, config, artifact_type="gha")
             return 0
 
         # Execute scan
-        return execute_scan(config)
+        result = execute_scan(config)
+        _send_wizard_telemetry(wizard_start_time, config, artifact_type=None)
+        return result
 
     except KeyboardInterrupt:
         print(_colorize("\n\nWizard cancelled", "yellow"))
