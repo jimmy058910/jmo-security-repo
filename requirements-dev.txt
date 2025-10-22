@@ -11,7 +11,7 @@ attrs==25.3.0
     #   referencing
 bandit==1.8.6
     # via -r requirements-dev.in
-black==24.8.0
+black==25.9.0
     # via -r requirements-dev.in
 cfgv==3.4.0
     # via pre-commit
@@ -81,6 +81,8 @@ pytest-cov==7.0.0
     # via -r requirements-dev.in
 pytest-rerunfailures==14.0
     # via -r requirements-dev.in
+pytokens==0.2.0
+    # via black
 pyyaml==6.0.3
     # via
     #   -r requirements-dev.in
