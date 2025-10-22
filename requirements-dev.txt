@@ -41,7 +41,7 @@ markdown-it-py==3.0.0
     # via rich
 mdurl==0.1.2
     # via markdown-it-py
-mypy==1.14.1
+mypy==1.18.2
     # via -r requirements-dev.in
 mypy-extensions==1.1.0
     # via
@@ -55,7 +55,9 @@ packaging==25.0
     #   pytest
     #   pytest-rerunfailures
 pathspec==0.12.1
-    # via black
+    # via
+    #   black
+    #   mypy
 pbr==7.0.1
     # via stevedore
 platformdirs==4.3.6
