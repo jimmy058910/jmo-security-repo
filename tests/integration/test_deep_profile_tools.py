@@ -17,9 +17,7 @@ Related:
 
 import json
 import subprocess
-from pathlib import Path
 
-import pytest
 
 
 def test_deep_profile_includes_all_tools(tmp_path):

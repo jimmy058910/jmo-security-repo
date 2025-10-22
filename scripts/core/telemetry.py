@@ -80,7 +80,7 @@ def send_event(
     event_type: str,
     metadata: Dict[str, Any],
     config: Dict[str, Any],
-    version: str = "0.7.0"
+    version: str = "0.7.0",
 ) -> None:
     """
     Send telemetry event (non-blocking, fire-and-forget).
@@ -104,9 +104,7 @@ def send_event(
 
     # Fire-and-forget in background thread
     threading.Thread(
-        target=_send_event_async,
-        args=(event_type, metadata, version),
-        daemon=True
+        target=_send_event_async, args=(event_type, metadata, version), daemon=True
     ).start()
 
 
@@ -131,7 +129,7 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
             "python_version": f"{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}",
             "anonymous_id": get_anonymous_id(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "metadata": metadata
+            "metadata": metadata,
         }
 
         # Read current Gist content (to append, not overwrite)
@@ -141,13 +139,9 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
         new_content = current_content + json.dumps(event) + "\n"
 
         # Update Gist via PATCH request
-        data = json.dumps({
-            "files": {
-                TELEMETRY_FILE: {
-                    "content": new_content
-                }
-            }
-        }).encode("utf-8")
+        data = json.dumps({"files": {TELEMETRY_FILE: {"content": new_content}}}).encode(
+            "utf-8"
+        )
 
         req = request.Request(
             TELEMETRY_ENDPOINT,
@@ -155,9 +149,9 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
             headers={
                 "Authorization": f"token {GITHUB_TOKEN}",
                 "Content-Type": "application/json",
-                "User-Agent": f"JMo-Security/{version}"
+                "User-Agent": f"JMo-Security/{version}",
             },
-            method="PATCH"
+            method="PATCH",
         )
 
         # Send request with 2-second timeout (don't block scans)
@@ -184,8 +178,8 @@ def _get_gist_content() -> str:
             TELEMETRY_ENDPOINT,
             headers={
                 "Authorization": f"token {GITHUB_TOKEN}",
-                "User-Agent": "JMo-Security"
-            }
+                "User-Agent": "JMo-Security",
+            },
         )
 
         with request.urlopen(req, timeout=2) as response:
@@ -287,7 +281,7 @@ def detect_ci_environment() -> bool:
         "CIRCLECI",
         "TRAVIS",
         "TF_BUILD",
-        "BITBUCKET_PIPELINE_UUID"
+        "BITBUCKET_PIPELINE_UUID",
     ]
 
     return any(os.environ.get(var) for var in ci_vars)
@@ -348,14 +342,16 @@ if __name__ == "__main__":
             "test.event",
             {"message": "Test telemetry event from CLI"},
             config,
-            version="0.7.0-dev"
+            version="0.7.0-dev",
         )
         print("✅ Event sent (check Gist in a few seconds)")
 
     elif command == "check":
         # Check telemetry configuration
         print(f"GIST_ID: {GIST_ID or '(not set)'}")
-        print(f"GITHUB_TOKEN: {'***' + GITHUB_TOKEN[-4:] if GITHUB_TOKEN else '(not set)'}")
+        print(
+            f"GITHUB_TOKEN: {'***' + GITHUB_TOKEN[-4:] if GITHUB_TOKEN else '(not set)'}"
+        )
         print(f"TELEMETRY_ENDPOINT: {TELEMETRY_ENDPOINT or '(not configured)'}")
         print(f"Anonymous ID: {get_anonymous_id()}")
         print(f"CI Detected: {detect_ci_environment()}")

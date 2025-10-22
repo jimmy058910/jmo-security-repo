@@ -327,7 +327,6 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-            from scripts.core.tool_runner import ToolResult
 
             mock_runner.run_all_parallel.return_value = []
 
@@ -413,7 +412,6 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-            from scripts.core.tool_runner import ToolResult
 
             mock_runner.run_all_parallel.return_value = []
 
@@ -490,7 +488,6 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-            from scripts.core.tool_runner import ToolResult
 
             mock_runner.run_all_parallel.return_value = []
 

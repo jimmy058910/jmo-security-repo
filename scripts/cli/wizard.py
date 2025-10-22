@@ -1021,7 +1021,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
     elif config.target.type == "k8s":
         print(f"    Context: {config.target.k8s_context}")
         if config.target.k8s_all_namespaces:
-            print(f"    Namespaces: ALL")
+            print("    Namespaces: ALL")
         else:
             print(f"    Namespace: {config.target.k8s_namespace}")
 
@@ -1393,9 +1393,7 @@ def _save_telemetry_preference(config_path: Path, enabled: bool) -> None:
 
 
 def _send_wizard_telemetry(
-    wizard_start_time: float,
-    config: Any,
-    artifact_type: Optional[str] = None
+    wizard_start_time: float, config: Any, artifact_type: Optional[str] = None
 ) -> None:
     """
     Send wizard.completed telemetry event.
@@ -1406,18 +1404,24 @@ def _send_wizard_telemetry(
         artifact_type: Type of artifact generated ("makefile", "shell", "gha", or None)
     """
     import time
+
     try:
         cfg = load_config("jmo.yml") if Path("jmo.yml").exists() else None
         if cfg:
             wizard_duration = int(time.time() - wizard_start_time)
             execution_mode = "docker" if config.use_docker else "native"
 
-            send_event("wizard.completed", {
-                "profile_selected": config.profile,
-                "execution_mode": execution_mode,
-                "artifact_generated": artifact_type,
-                "duration_seconds": wizard_duration,
-            }, cfg.raw, version=__version__)
+            send_event(
+                "wizard.completed",
+                {
+                    "profile_selected": config.profile,
+                    "execution_mode": execution_mode,
+                    "artifact_generated": artifact_type,
+                    "duration_seconds": wizard_duration,
+                },
+                cfg.raw,
+                version=__version__,
+            )
     except Exception as e:
         # Never let telemetry errors break the wizard
         logger.debug(f"Telemetry send failed: {e}")
@@ -1476,6 +1480,7 @@ def run_wizard(
         Exit code
     """
     import time
+
     wizard_start_time = time.time()
 
     _print_header("JMo Security Wizard")
@@ -1488,7 +1493,9 @@ def run_wizard(
     if config_path.exists():
         try:
             cfg = load_config(str(config_path))
-            telemetry_set = hasattr(cfg, 'telemetry') and hasattr(cfg.telemetry, 'enabled')
+            telemetry_set = hasattr(cfg, "telemetry") and hasattr(
+                cfg.telemetry, "enabled"
+            )
             if not telemetry_set and not yes:
                 # First run: prompt for telemetry
                 telemetry_enabled = prompt_telemetry_opt_in()

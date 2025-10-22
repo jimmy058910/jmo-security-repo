@@ -39,7 +39,7 @@ import shutil
 import tempfile
 import yaml
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Set
 
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image

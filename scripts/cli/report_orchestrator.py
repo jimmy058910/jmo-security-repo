@@ -215,12 +215,17 @@ def cmd_report(args, _log_fn) -> int:
     if args.yaml or cfg.outputs.get("yaml", False):
         output_formats.append("yaml")
 
-    send_event("report.generated", {
-        "output_formats": output_formats,
-        "findings_bucket": bucket_findings(len(findings)),
-        "suppressions_used": sup_file is not None and sup_file.exists(),
-        "compliance_enabled": True,  # Always enabled in v0.5.1+
-    }, cfg.raw, version=__version__)
+    send_event(
+        "report.generated",
+        {
+            "output_formats": output_formats,
+            "findings_bucket": bucket_findings(len(findings)),
+            "suppressions_used": sup_file is not None and sup_file.exists(),
+            "compliance_enabled": True,  # Always enabled in v0.5.1+
+        },
+        cfg.raw,
+        version=__version__,
+    )
 
     _log_fn(
         args,

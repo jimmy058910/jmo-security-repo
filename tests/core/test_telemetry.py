@@ -20,12 +20,9 @@ Related:
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.core.telemetry import (
     bucket_duration,
@@ -38,12 +35,11 @@ from scripts.core.telemetry import (
     send_event,
     _send_event_async,
     _get_gist_content,
-    TELEMETRY_ID_FILE,
-    SCAN_COUNT_FILE,
 )
 
 
 # ========== Test Category 1: Anonymous ID Management ==========
+
 
 def test_get_anonymous_id_generates_new_uuid(tmp_path: Path, monkeypatch):
     """Test get_anonymous_id() generates and persists new UUID."""
@@ -99,6 +95,7 @@ def test_get_anonymous_id_creates_parent_directory(tmp_path: Path, monkeypatch):
 
 # ========== Test Category 2: Telemetry Enablement Logic ==========
 
+
 def test_is_telemetry_enabled_when_config_enabled(monkeypatch):
     """Test is_telemetry_enabled() returns True when config enabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
@@ -147,6 +144,7 @@ def test_is_telemetry_enabled_env_var_no_override_when_not_1(monkeypatch):
 
 # ========== Test Category 3: Event Sending (Mocked Gist API) ==========
 
+
 def test_send_event_disabled_when_config_disabled(monkeypatch):
     """Test send_event() skips when telemetry disabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
@@ -166,7 +164,9 @@ def test_send_event_disabled_when_config_disabled(monkeypatch):
 def test_send_event_skips_when_gist_not_configured(monkeypatch):
     """Test send_event() skips when GIST_ID or GITHUB_TOKEN missing."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "")  # Not configured
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT", ""
+    )  # Not configured
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "")
 
     config = {"telemetry": {"enabled": True}}
@@ -184,7 +184,10 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
 def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
     """Test send_event() spawns daemon background thread."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
 
     config = {"telemetry": {"enabled": True}}
@@ -200,7 +203,9 @@ def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
 
 @patch("scripts.core.telemetry.request.urlopen")
 @patch("scripts.core.telemetry._get_gist_content")
-def test_send_event_async_builds_correct_payload(mock_get_content, mock_urlopen, tmp_path: Path, monkeypatch):
+def test_send_event_async_builds_correct_payload(
+    mock_get_content, mock_urlopen, tmp_path: Path, monkeypatch
+):
     """Test _send_event_async() builds correct event payload."""
     mock_get_content.return_value = ""  # Empty Gist content
     mock_response = MagicMock()
@@ -211,7 +216,10 @@ def test_send_event_async_builds_correct_payload(mock_get_content, mock_urlopen,
     test_id_file.parent.mkdir(parents=True, exist_ok=True)
     test_id_file.write_text("test-uuid-1234")
     monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ID_FILE", test_id_file)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
 
     # Call _send_event_async directly
@@ -245,12 +253,16 @@ def test_send_event_async_builds_correct_payload(mock_get_content, mock_urlopen,
 
 
 @patch("scripts.core.telemetry.request.urlopen")
-def test_send_event_async_appends_to_existing_content(mock_urlopen, tmp_path: Path, monkeypatch):
+def test_send_event_async_appends_to_existing_content(
+    mock_urlopen, tmp_path: Path, monkeypatch
+):
     """Test _send_event_async() appends to existing Gist content (JSONL)."""
     # Mock _get_gist_content to return existing content
     existing_content = '{"event": "old.event", "timestamp": "2024-01-01T00:00:00Z"}\n'
 
-    with patch("scripts.core.telemetry._get_gist_content", return_value=existing_content):
+    with patch(
+        "scripts.core.telemetry._get_gist_content", return_value=existing_content
+    ):
         mock_response = MagicMock()
         mock_response.status = 200
         mock_urlopen.return_value.__enter__.return_value = mock_response
@@ -259,7 +271,10 @@ def test_send_event_async_appends_to_existing_content(mock_urlopen, tmp_path: Pa
         test_id_file.parent.mkdir(parents=True, exist_ok=True)
         test_id_file.write_text("test-uuid")
         monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ID_FILE", test_id_file)
-        monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+        monkeypatch.setattr(
+            "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+            "https://api.github.com/gists/test123",
+        )
         monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
         _send_event_async("scan.completed", {"duration": 120}, "0.7.0")
@@ -277,7 +292,9 @@ def test_send_event_async_appends_to_existing_content(mock_urlopen, tmp_path: Pa
 
 
 @patch("scripts.core.telemetry.request.urlopen")
-def test_send_event_async_handles_network_errors_silently(mock_urlopen, tmp_path: Path, monkeypatch):
+def test_send_event_async_handles_network_errors_silently(
+    mock_urlopen, tmp_path: Path, monkeypatch
+):
     """Test _send_event_async() fails silently on network errors."""
     from urllib.error import URLError
 
@@ -287,7 +304,10 @@ def test_send_event_async_handles_network_errors_silently(mock_urlopen, tmp_path
     test_id_file.parent.mkdir(parents=True, exist_ok=True)
     test_id_file.write_text("test-uuid")
     monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ID_FILE", test_id_file)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     # Should NOT raise exception
@@ -296,7 +316,9 @@ def test_send_event_async_handles_network_errors_silently(mock_urlopen, tmp_path
 
 
 @patch("scripts.core.telemetry.request.urlopen")
-def test_send_event_async_handles_timeout_silently(mock_urlopen, tmp_path: Path, monkeypatch):
+def test_send_event_async_handles_timeout_silently(
+    mock_urlopen, tmp_path: Path, monkeypatch
+):
     """Test _send_event_async() fails silently on timeout."""
     mock_urlopen.side_effect = TimeoutError("Request timeout")
 
@@ -304,7 +326,10 @@ def test_send_event_async_handles_timeout_silently(mock_urlopen, tmp_path: Path,
     test_id_file.parent.mkdir(parents=True, exist_ok=True)
     test_id_file.write_text("test-uuid")
     monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ID_FILE", test_id_file)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     # Should NOT raise exception
@@ -315,16 +340,21 @@ def test_send_event_async_handles_timeout_silently(mock_urlopen, tmp_path: Path,
 def test_get_gist_content_returns_existing_content(mock_urlopen, monkeypatch):
     """Test _get_gist_content() returns existing Gist content."""
     mock_response = MagicMock()
-    mock_response.read.return_value = json.dumps({
-        "files": {
-            "jmo-telemetry-events.jsonl": {
-                "content": "existing line 1\nexisting line 2\n"
+    mock_response.read.return_value = json.dumps(
+        {
+            "files": {
+                "jmo-telemetry-events.jsonl": {
+                    "content": "existing line 1\nexisting line 2\n"
+                }
             }
         }
-    }).encode("utf-8")
+    ).encode("utf-8")
     mock_urlopen.return_value.__enter__.return_value = mock_response
 
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     content = _get_gist_content()
@@ -339,7 +369,10 @@ def test_get_gist_content_returns_empty_on_error(mock_urlopen, monkeypatch):
 
     mock_urlopen.side_effect = URLError("Network error")
 
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     content = _get_gist_content()
@@ -349,6 +382,7 @@ def test_get_gist_content_returns_empty_on_error(mock_urlopen, monkeypatch):
 
 
 # ========== Test Category 4: Privacy Bucketing Functions ==========
+
 
 def test_bucket_duration_all_ranges():
     """Test bucket_duration() for all time ranges."""
@@ -426,11 +460,21 @@ def test_bucket_targets_all_ranges():
 
 # ========== Test Category 5: CI Environment Detection ==========
 
+
 def test_detect_ci_environment_github_actions(monkeypatch):
     """Test detect_ci_environment() detects GitHub Actions."""
     # Clear all CI vars first
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     # Set GitHub Actions var
@@ -440,8 +484,17 @@ def test_detect_ci_environment_github_actions(monkeypatch):
 
 def test_detect_ci_environment_gitlab_ci(monkeypatch):
     """Test detect_ci_environment() detects GitLab CI."""
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     monkeypatch.setenv("GITLAB_CI", "true")
@@ -450,8 +503,17 @@ def test_detect_ci_environment_gitlab_ci(monkeypatch):
 
 def test_detect_ci_environment_jenkins(monkeypatch):
     """Test detect_ci_environment() detects Jenkins."""
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     monkeypatch.setenv("JENKINS_URL", "http://jenkins.example.com")
@@ -460,8 +522,17 @@ def test_detect_ci_environment_jenkins(monkeypatch):
 
 def test_detect_ci_environment_generic_ci(monkeypatch):
     """Test detect_ci_environment() detects generic CI=true."""
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     monkeypatch.setenv("CI", "true")
@@ -470,8 +541,17 @@ def test_detect_ci_environment_generic_ci(monkeypatch):
 
 def test_detect_ci_environment_no_ci(monkeypatch):
     """Test detect_ci_environment() returns False when no CI vars set."""
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     assert detect_ci_environment() is False
@@ -479,8 +559,17 @@ def test_detect_ci_environment_no_ci(monkeypatch):
 
 def test_detect_ci_environment_multiple_ci_vars(monkeypatch):
     """Test detect_ci_environment() with multiple CI vars set."""
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     # Set multiple CI vars (e.g., GitHub Actions)
@@ -490,6 +579,7 @@ def test_detect_ci_environment_multiple_ci_vars(monkeypatch):
 
 
 # ========== Test Category 6: Scan Frequency Inference ==========
+
 
 def test_infer_scan_frequency_first_time(tmp_path: Path, monkeypatch):
     """Test infer_scan_frequency() returns 'first_time' on first scan."""
@@ -556,6 +646,7 @@ def test_infer_scan_frequency_returns_none_on_error(tmp_path: Path, monkeypatch)
 
     # Make parent directory read-only (simulate permission error)
     import stat
+
     test_count_file.parent.chmod(stat.S_IRUSR | stat.S_IXUSR)
 
     monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
@@ -570,6 +661,7 @@ def test_infer_scan_frequency_returns_none_on_error(tmp_path: Path, monkeypatch)
 
 
 # ========== Test Category 7: Business Metrics Integration ==========
+
 
 def test_business_metrics_in_event_payload(tmp_path: Path, monkeypatch):
     """Test business metrics (CI, multi-target, compliance) are included in event."""
@@ -600,10 +692,14 @@ def test_business_metrics_in_event_payload(tmp_path: Path, monkeypatch):
 
 # ========== Test Category 8: Edge Cases and Error Handling ==========
 
+
 def test_send_event_with_empty_metadata(monkeypatch):
     """Test send_event() handles empty metadata dict."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     config = {"telemetry": {"enabled": True}}
@@ -622,7 +718,10 @@ def test_send_event_with_unicode_metadata(tmp_path: Path, monkeypatch):
     test_id_file.parent.mkdir(parents=True, exist_ok=True)
     test_id_file.write_text("test-uuid")
     monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ID_FILE", test_id_file)
-    monkeypatch.setattr("scripts.core.telemetry.TELEMETRY_ENDPOINT", "https://api.github.com/gists/test123")
+    monkeypatch.setattr(
+        "scripts.core.telemetry.TELEMETRY_ENDPOINT",
+        "https://api.github.com/gists/test123",
+    )
     monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
 
     metadata = {
@@ -642,7 +741,9 @@ def test_send_event_with_unicode_metadata(tmp_path: Path, monkeypatch):
             # Verify request data is valid JSON
             request_obj = mock_urlopen.call_args[0][0]
             request_data = json.loads(request_obj.data.decode("utf-8"))
-            jsonl_content = request_data["files"]["jmo-telemetry-events.jsonl"]["content"]
+            jsonl_content = request_data["files"]["jmo-telemetry-events.jsonl"][
+                "content"
+            ]
             event = json.loads(jsonl_content.strip())
 
             # Verify Unicode preserved

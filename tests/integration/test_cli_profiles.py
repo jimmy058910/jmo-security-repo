@@ -304,8 +304,8 @@ profiles:
     assert result.returncode in [0, 1]
 
     # Verify tests directory excluded (check logs)
-    output = result.stdout + result.stderr
-    # Exact verification depends on semgrep log format
+    # Note: Exact verification depends on semgrep log format
+    # Output captured in result.stdout/result.stderr for future checks
 
 
 def test_per_tool_retries_override(tmp_path: Path):
