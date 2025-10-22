@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-FROM alpine:3.18 AS builder
+FROM alpine:3.22 AS builder
 
 ARG TARGETARCH
 
@@ -56,7 +56,7 @@ RUN ZAP_VERSION="2.16.1" && \
 #
 # Stage 2: Runtime - Minimal Alpine runtime environment
 #
-FROM alpine:3.18 AS runtime
+FROM alpine:3.22 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Alpine)"
 LABEL org.opencontainers.image.description="Ultra-lightweight security toolkit with 7 core scanners + multi-target scanning (v0.6.1 optimized) based on Alpine Linux"
