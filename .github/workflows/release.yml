@@ -277,7 +277,7 @@ jobs:
         # Create PAT at: https://hub.docker.com/settings/security
         # Add secrets at: https://github.com/${{ github.repository }}/settings/secrets/actions
         if: vars.DOCKERHUB_ENABLED == 'true'
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
