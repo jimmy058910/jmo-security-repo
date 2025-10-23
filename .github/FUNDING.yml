@@ -1,6 +1,11 @@
 # Sponsor links shown on the repo sidebar
-# Uncomment and set your handle(s) when ready
-# github: [ your-github-username ]
+# GitHub Sponsors: Monthly recurring support (preferred - 0% fees)
+github: jimmy058910
+
+# Ko-Fi: One-time donations and monthly support
 ko_fi: jmogaming
+
+# Other platforms (uncomment if you use them):
 # open_collective: your-collective
+# patreon: your-patreon-username
 # custom: ["https://your-donation-link.example.com"]

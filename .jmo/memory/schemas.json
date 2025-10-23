@@ -1,0 +1,448 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JMo Security Memory System Schemas",
+  "description": "JSON schemas for all memory namespaces in .jmo/memory/",
+  "definitions": {
+    "adapters": {
+      "$id": "#/definitions/adapters",
+      "type": "object",
+      "title": "Adapter Memory Schema",
+      "description": "Schema for tool adapter patterns stored in .jmo/memory/adapters/",
+      "required": ["tool", "version", "output_format", "exit_codes", "last_updated"],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool name (e.g., snyk, trivy, semgrep)",
+          "examples": ["snyk", "trivy", "semgrep"]
+        },
+        "version": {
+          "type": "string",
+          "description": "Tool version tested (semantic versioning)",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "examples": ["1.1290.0", "0.68.0"]
+        },
+        "output_format": {
+          "type": "string",
+          "description": "JSON structure pattern (e.g., 'results[].vulnerabilities[]')",
+          "examples": [
+            "results[].vulnerabilities[] with {id, severity, title}",
+            "runs[].results[] (SARIF format)",
+            "{vulnerabilities: [], dependencies: []}"
+          ]
+        },
+        "exit_codes": {
+          "type": "object",
+          "description": "Exit code meanings for this tool",
+          "properties": {
+            "0": { "type": "string", "description": "Meaning of exit code 0" },
+            "1": { "type": "string", "description": "Meaning of exit code 1" },
+            "2": { "type": "string", "description": "Meaning of exit code 2" }
+          },
+          "required": ["0", "1"],
+          "examples": [
+            {"0": "clean", "1": "findings", "2": "error"}
+          ]
+        },
+        "common_pitfalls": {
+          "type": "array",
+          "description": "Known issues, gotchas, and troubleshooting tips",
+          "items": { "type": "string" },
+          "examples": [
+            ["Requires SNYK_TOKEN environment variable", "Large repos timeout (increase to 600s)"]
+          ]
+        },
+        "test_fixtures": {
+          "type": "array",
+          "description": "Fabricated JSON fixture patterns for testing",
+          "items": { "type": "string" },
+          "examples": [
+            ["{\"results\": [{\"vulnerabilities\": [{\"id\": \"SNYK-001\"}]}]}"]
+          ]
+        },
+        "performance_notes": {
+          "type": "object",
+          "description": "Performance characteristics of the tool",
+          "properties": {
+            "avg_duration_seconds": { "type": "number" },
+            "timeout_recommended": { "type": "number" },
+            "memory_usage_mb": { "type": "number" }
+          }
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date",
+          "description": "Date pattern was last verified (YYYY-MM-DD)"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "compliance": {
+      "$id": "#/definitions/compliance",
+      "type": "object",
+      "title": "Compliance Mapping Schema",
+      "description": "Schema for CWE → compliance framework mappings in .jmo/memory/compliance/",
+      "required": ["cwe", "frameworks", "last_updated"],
+      "properties": {
+        "cwe": {
+          "type": "string",
+          "pattern": "^CWE-[0-9]+$",
+          "description": "CWE identifier (e.g., CWE-79)",
+          "examples": ["CWE-79", "CWE-89", "CWE-352"]
+        },
+        "frameworks": {
+          "type": "object",
+          "description": "Mappings to 6 compliance frameworks",
+          "properties": {
+            "owasp": {
+              "type": "array",
+              "description": "OWASP Top 10 2021 categories",
+              "items": {
+                "type": "string",
+                "pattern": "^A[0-9]{2}:2021$"
+              },
+              "examples": [["A03:2021", "A06:2021"]]
+            },
+            "cwe_top_25": {
+              "type": "object",
+              "description": "CWE Top 25 2024 ranking",
+              "properties": {
+                "rank": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 25
+                },
+                "category": {
+                  "type": "string",
+                  "enum": ["Injection", "Cryptographic", "Access Control", "Information Exposure"]
+                }
+              }
+            },
+            "cis_controls_v8": {
+              "type": "array",
+              "description": "CIS Controls v8.1 mappings",
+              "items": { "type": "string" },
+              "examples": [["16.11", "18.5"]]
+            },
+            "nist_csf_2_0": {
+              "type": "array",
+              "description": "NIST CSF 2.0 subcategories",
+              "items": { "type": "string" },
+              "examples": [["PR.DS-5", "DE.CM-1"]]
+            },
+            "pci_dss_4_0": {
+              "type": "array",
+              "description": "PCI DSS 4.0 requirements",
+              "items": { "type": "string" },
+              "examples": [["6.5.7", "11.3.2"]]
+            },
+            "mitre_attack": {
+              "type": "array",
+              "description": "MITRE ATT&CK techniques",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tactic": { "type": "string" },
+                  "technique": { "type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$" },
+                  "subtechnique": { "type": "string" }
+                },
+                "required": ["tactic", "technique"]
+              }
+            }
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why these framework mappings are appropriate",
+          "examples": ["XSS enables malicious script execution, compromising data confidentiality"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+          "description": "Typical severity for this CWE"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "profiles": {
+      "$id": "#/definitions/profiles",
+      "type": "object",
+      "title": "Profile Optimization Schema",
+      "description": "Schema for performance optimization history in .jmo/memory/profiles/",
+      "required": ["profile_name", "bottlenecks", "recommendations", "last_updated"],
+      "properties": {
+        "profile_name": {
+          "type": "string",
+          "enum": ["fast", "balanced", "deep"],
+          "description": "JMo Security profile name"
+        },
+        "bottlenecks": {
+          "type": "array",
+          "description": "Identified performance bottlenecks",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool": { "type": "string" },
+              "avg_duration": {
+                "type": "number",
+                "description": "Average duration in seconds"
+              },
+              "failure_rate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Failure rate (0.0 = 0%, 1.0 = 100%)"
+              },
+              "timeout_count": { "type": "integer" }
+            },
+            "required": ["tool", "avg_duration"]
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "description": "Optimization recommendations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "recommendation": { "type": "string" },
+              "expected_impact": {
+                "type": "string",
+                "description": "Expected speedup or reliability improvement"
+              },
+              "trade_off": {
+                "type": "string",
+                "description": "Any trade-offs (e.g., reduced coverage)"
+              }
+            },
+            "required": ["recommendation"]
+          }
+        },
+        "expected_speedup": {
+          "type": "string",
+          "description": "Expected speedup percentage (e.g., '35-40%')"
+        },
+        "applied": {
+          "type": "boolean",
+          "description": "Whether recommendations were applied"
+        },
+        "actual_speedup": {
+          "type": "string",
+          "description": "Measured speedup if recommendations were applied"
+        },
+        "baseline_metrics": {
+          "type": "object",
+          "description": "Baseline performance before optimizations",
+          "properties": {
+            "total_duration": { "type": "number" },
+            "tool_count": { "type": "integer" },
+            "success_rate": { "type": "number" }
+          }
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "target_types": {
+      "$id": "#/definitions/target_types",
+      "type": "object",
+      "title": "Target Type Schema",
+      "description": "Schema for multi-target scanning patterns in .jmo/memory/target-types/",
+      "required": ["target_type", "tools", "auth_pattern", "last_updated"],
+      "properties": {
+        "target_type": {
+          "type": "string",
+          "description": "Type of scan target",
+          "examples": ["AWS Account", "npm Package", "GraphQL API"]
+        },
+        "tools": {
+          "type": "array",
+          "description": "Tools used for this target type",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "auth_pattern": {
+          "type": "string",
+          "enum": ["env_vars", "cli_args", "credential_file", "none"],
+          "description": "Authentication mechanism"
+        },
+        "env_vars_required": {
+          "type": "array",
+          "description": "Required environment variables if auth_pattern = env_vars",
+          "items": { "type": "string" }
+        },
+        "cli_args_required": {
+          "type": "array",
+          "description": "Required CLI arguments if auth_pattern = cli_args",
+          "items": { "type": "string" }
+        },
+        "common_issues": {
+          "type": "array",
+          "description": "Known issues and troubleshooting tips",
+          "items": { "type": "string" }
+        },
+        "example_target": {
+          "type": "string",
+          "description": "Example target identifier for testing"
+        },
+        "output_size_estimate": {
+          "type": "string",
+          "description": "Typical output size (e.g., '100MB for prod accounts')"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "refactoring": {
+      "$id": "#/definitions/refactoring",
+      "type": "object",
+      "title": "Refactoring Decision Schema",
+      "description": "Schema for code refactoring decisions in .jmo/memory/refactoring/",
+      "required": ["target", "refactoring_type", "decisions", "last_updated"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "File or function refactored (e.g., 'scripts/cli/jmo.py::cmd_scan()')"
+        },
+        "refactoring_type": {
+          "type": "string",
+          "enum": ["decompose", "extract", "split", "migrate", "rename"],
+          "description": "Type of refactoring performed"
+        },
+        "decisions": {
+          "type": "array",
+          "description": "Refactoring decisions made",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision": { "type": "string" },
+              "rationale": { "type": "string" }
+            },
+            "required": ["decision", "rationale"]
+          }
+        },
+        "dependency_graph": {
+          "type": "object",
+          "description": "What depends on what (for impact analysis)",
+          "patternProperties": {
+            ".*": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "circular_imports_avoided": {
+          "type": "array",
+          "description": "Circular import patterns avoided",
+          "items": { "type": "string" }
+        },
+        "test_coverage_before": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Test coverage percentage before refactoring"
+        },
+        "test_coverage_after": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Test coverage percentage after refactoring"
+        },
+        "cyclomatic_complexity_before": {
+          "type": "integer",
+          "description": "CC before refactoring"
+        },
+        "cyclomatic_complexity_after": {
+          "type": "integer",
+          "description": "CC after refactoring"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "security": {
+      "$id": "#/definitions/security",
+      "type": "object",
+      "title": "Security Fix Pattern Schema",
+      "description": "Schema for security fix patterns in .jmo/memory/security/",
+      "required": ["vulnerability", "cwe", "fix_pattern", "last_updated"],
+      "properties": {
+        "vulnerability": {
+          "type": "string",
+          "description": "Human-readable vulnerability description",
+          "examples": ["CSRF in Express API", "Path Traversal in file upload"]
+        },
+        "cwe": {
+          "type": "string",
+          "pattern": "^CWE-[0-9]+$"
+        },
+        "fix_pattern": {
+          "type": "string",
+          "description": "High-level fix approach",
+          "examples": ["CAPTCHA + CSRF token validation", "Input sanitization + path validation"]
+        },
+        "owasp_control": {
+          "type": "string",
+          "description": "Relevant OWASP ASVS control",
+          "examples": ["ASVS 4.0.3 V13.1.1"]
+        },
+        "implementation": {
+          "type": "object",
+          "description": "Implementation details",
+          "properties": {
+            "validation_function": { "type": "string" },
+            "sanitization_function": { "type": "string" },
+            "test_count": {
+              "type": "integer",
+              "description": "Total number of tests written"
+            }
+          }
+        },
+        "test_categories": {
+          "type": "object",
+          "description": "Breakdown of security tests by category",
+          "properties": {
+            "fuzzing": { "type": "integer" },
+            "unit": { "type": "integer" },
+            "integration": { "type": "integer" },
+            "regression": { "type": "integer" }
+          }
+        },
+        "exploitation_poc": {
+          "type": "string",
+          "description": "Proof-of-concept that no longer works after fix"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/definitions/adapters" },
+    { "$ref": "#/definitions/compliance" },
+    { "$ref": "#/definitions/profiles" },
+    { "$ref": "#/definitions/target_types" },
+    { "$ref": "#/definitions/refactoring" },
+    { "$ref": "#/definitions/security" }
+  ]
+}

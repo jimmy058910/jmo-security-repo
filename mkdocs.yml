@@ -1,0 +1,93 @@
+# MkDocs configuration for JMo Security documentation
+site_name: JMo Security Documentation
+site_url: https://docs.jmotools.com
+site_description: Unified security scanning platform - SAST, DAST, SCA, secrets detection, compliance automation
+site_author: JMo Gaming LLC
+
+# Repository
+repo_name: jimmy058910/jmo-security-repo
+repo_url: https://github.com/jimmy058910/jmo-security-repo
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024-2025 JMo Gaming LLC
+
+# Theme
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - Quick Start: ../QUICKSTART.md
+  - User Guide: USER_GUIDE.md
+  - Docker Guide: DOCKER_README.md
+  - Examples:
+      - Overview: examples/README.md
+      - Wizard Examples: examples/wizard-examples.md
+      - GitHub Actions: examples/github-actions-docker.yml
+  - Sample Outputs: ../SAMPLE_OUTPUTS.md
+  - Version Management: VERSION_MANAGEMENT.md
+  - Contributing: ../CONTRIBUTING.md
+  - Testing: ../TEST.md
+  - Release Process: RELEASE.md
+  - Changelog: ../CHANGELOG.md
+  - Roadmap: ../ROADMAP.md
+
+# Plugins
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jimmy058910
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/jmosecurity
+    - icon: fontawesome/solid/paper-plane
+      link: https://jmotools.com/subscribe.html
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
