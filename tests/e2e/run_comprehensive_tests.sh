@@ -61,6 +61,25 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $*"
 }
 
+# Cross-platform timeout function
+# macOS doesn't have GNU timeout, so we implement our own
+run_with_timeout() {
+  local timeout_duration=$1
+  shift
+  local command=("$@")
+
+  if command -v timeout &>/dev/null; then
+    # Linux: use GNU timeout
+    timeout "$timeout_duration" "${command[@]}"
+  else
+    # macOS: use perl-based timeout
+    perl -e '
+      alarm shift @ARGV;
+      exec @ARGV;
+    ' "$timeout_duration" "${command[@]}"
+  fi
+}
+
 show_help() {
   cat <<EOF
 JMo Security Comprehensive Test Suite
@@ -390,7 +409,7 @@ run_test() {
   # Replace {results_dir} placeholder in command
   test_cmd="${test_cmd//\{results_dir\}/$results_dir}"
 
-  if timeout "$TIMEOUT_SECONDS" bash -c "$test_cmd" >"$results_dir/test.log" 2>&1; then
+  if run_with_timeout "$TIMEOUT_SECONDS" bash -c "$test_cmd" >"$results_dir/test.log" 2>&1; then
     exit_code=$?
   else
     exit_code=$?
@@ -407,7 +426,8 @@ run_test() {
   fi
 
   # Validate results
-  if $validation_fn "$results_dir" "$exit_code" "$test_id" "${validation_args[@]}"; then
+  # Use ${validation_args[@]+"${validation_args[@]}"} to handle empty array with set -u
+  if $validation_fn "$results_dir" "$exit_code" "$test_id" ${validation_args[@]+"${validation_args[@]}"}; then
     log_success "✅ PASS: $test_id (${duration}s)"
     echo "$test_id,PASS,$duration" >>"$RESULTS_BASE/test-results.csv"
   else
