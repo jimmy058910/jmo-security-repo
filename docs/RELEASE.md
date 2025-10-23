@@ -350,10 +350,10 @@ cp results/summaries/dashboard.html /mnt/c/Users/$(whoami)/Desktop/
 
 ```bash
 # Pull jmo-security image
-docker pull jimmy058910/jmo-security:latest
+docker pull jmogaming/jmo-security:latest
 
 # Test basic help command
-docker run --rm jimmy058910/jmo-security:latest --help
+docker run --rm jmogaming/jmo-security:latest --help
 
 # Expected: jmo CLI help output
 ```
@@ -377,7 +377,7 @@ echo "# Test" > README.md
 # Run scan with volume mount
 docker run --rm \
   -v $(pwd):/repo \
-  jimmy058910/jmo-security:latest \
+  jmogaming/jmo-security:latest \
   scan --repo /repo --profile-name fast --allow-missing-tools
 
 # Verify results created
@@ -420,7 +420,7 @@ docker run --rm jimmy058910/jmo-security:latest bash -c "curl -I https://github.
 # Time a fast scan
 time docker run --rm \
   -v $(pwd):/repo \
-  jimmy058910/jmo-security:latest \
+  jmogaming/jmo-security:latest \
   scan --repo /repo --profile-name fast --allow-missing-tools
 
 # Expected: Within 30% of Linux Docker performance
@@ -442,13 +442,13 @@ time docker run --rm \
 
 ```bash
 # Test full variant
-docker run --rm jimmy058910/jmo-security:latest --help
+docker run --rm jmogaming/jmo-security:latest --help
 
 # Test slim variant
-docker run --rm jimmy058910/jmo-security:slim --help
+docker run --rm jmogaming/jmo-security:slim --help
 
 # Test alpine variant
-docker run --rm jimmy058910/jmo-security:alpine --help
+docker run --rm jmogaming/jmo-security:alpine --help
 ```
 
 **Success Criteria:**
@@ -487,7 +487,7 @@ docker run --rm jimmy058910/jmo-security:alpine --help
 **Solution:** Docker image may not support Apple Silicon, use Rosetta:
 
 ```bash
-docker run --rm --platform linux/amd64 jimmy058910/jmo-security:latest --help
+docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 ```
 
 **Problem:** Permission denied on volume mounts

@@ -10,9 +10,9 @@ variables:
   JMO_FAIL_ON: "HIGH"
 
   # Docker image variants
-  JMO_IMAGE_FULL: "jimmy058910/jmo-security:latest"
-  JMO_IMAGE_SLIM: "jimmy058910/jmo-security:slim"
-  JMO_IMAGE_ALPINE: "jimmy058910/jmo-security:alpine"
+  JMO_IMAGE_FULL: "jmogaming/jmo-security:latest"
+  JMO_IMAGE_SLIM: "jmogaming/jmo-security:slim"
+  JMO_IMAGE_ALPINE: "jmogaming/jmo-security:alpine"
 
 stages:
   - security

@@ -1532,7 +1532,7 @@ variables:
   JMO_FAIL_ON: "HIGH"
 
 security:scan:
-  image: jimmy058910/jmo-security:slim
+  image: jmogaming/jmo-security:slim
   stage: security
   script:
     - jmo scan --repo . --profile-name ${JMO_PROFILE} --results-dir results --human-logs
@@ -1566,7 +1566,7 @@ Quick example for Jenkins:
 pipeline {
     agent any
     environment {
-        JMO_IMAGE = 'jimmy058910/jmo-security:slim'
+        JMO_IMAGE = 'jmogaming/jmo-security:slim'
         JMO_PROFILE = 'balanced'
         JMO_FAIL_ON = 'HIGH'
     }

@@ -9,7 +9,7 @@
 [![PyPI version](https://badge.fury.io/py/jmo-security.svg)](https://badge.fury.io/py/jmo-security)
 [![Python Versions](https://img.shields.io/pypi/pyversions/jmo-security.svg)](https://pypi.org/project/jmo-security/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker Pulls](https://img.shields.io/docker/pulls/jimmy058910/jmo-security)](https://hub.docker.com/r/jimmy058910/jmo-security)
+[![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 [![Documentation](https://img.shields.io/badge/docs-ReadTheDocs-blue.svg)](https://docs.jmotools.com)
 [![Blog](https://img.shields.io/badge/blog-Hashnode-2962FF.svg)](https://blog.jmotools.com)
