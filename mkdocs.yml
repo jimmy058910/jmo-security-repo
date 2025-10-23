@@ -58,26 +58,17 @@ markdown_extensions:
 # Navigation structure
 nav:
   - Home: index.md
-  - Quick Start: ../QUICKSTART.md
   - User Guide: USER_GUIDE.md
   - Docker Guide: DOCKER_README.md
   - Examples:
       - Overview: examples/README.md
       - Wizard Examples: examples/wizard-examples.md
-      - GitHub Actions: examples/github-actions-docker.yml
-  - Sample Outputs: ../SAMPLE_OUTPUTS.md
   - Version Management: VERSION_MANAGEMENT.md
-  - Contributing: ../CONTRIBUTING.md
-  - Testing: ../TEST.md
   - Release Process: RELEASE.md
-  - Changelog: ../CHANGELOG.md
-  - Roadmap: ../ROADMAP.md
 
 # Plugins
 plugins:
   - search
-  - git-revision-date-localized:
-      enable_creation_date: true
 
 # Extra
 extra:
