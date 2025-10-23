@@ -7,16 +7,19 @@
 
 ---
 
-## 🎉 Latest Updates (October 2025)
+## 🎉 Latest Updates (v0.7.0 - October 2025)
 
+- 📚 **NEW: ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
+- 📝 **NEW: Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
+- 💰 **NEW: GitHub Sponsors** - Support ongoing development
+- 📊 **Privacy-First Telemetry (v0.7.0)** - Optional anonymous usage analytics (opt-in only, GDPR/CCPA compliant)
+- 🧠 **Memory System (v0.7.0)** - Lightweight JSON-based caching for faster repeated analysis
 - 🧙 **Interactive Wizard (v0.6.2)** - Now supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
-- 🐳 **Docker Images** - Zero-installation security scanning (3 variants)
+- 🐳 **Docker Optimized (27% smaller)** - Multi-stage builds, layer caching, persistent Trivy DB
 - 🔒 **XSS Patched** - HTML dashboard security hardened
-- 🛡️ **OSV Scanner** - Open-source vulnerability detection
 - 📊 **Enriched SARIF 2.1.0** - CWE/OWASP/CVE taxonomies
-- ⚙️ **Type-Safe Severity** - Cleaner code with comparison operators
-- 🎯 **88% Test Coverage** - 100/100 tests passing
-- 📚 **Documentation Consolidation** - Streamlined structure
+- 🎯 **1036 Tests Passing** - Comprehensive test coverage
+- 📚 **Documentation Unified** - Zero markdownlint violations
 
 See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 
@@ -133,8 +136,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
 | [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |
 | [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
-| [Compliance Framework Analysis](COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail | Advanced |
-| [Context7 Usage](CONTEXT7_USAGE.md) | MCP Context7 integration | Advanced |
+| [Compliance Framework Analysis](archive/COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail (archived) | Advanced |
 | [Telemetry](TELEMETRY.md) | Privacy-first usage tracking (v0.7.0+) | Everyone |
 | [Testing Matrix](TESTING_MATRIX.md) | Test coverage dimensions | Contributors |
 | [Usage Matrix](USAGE_MATRIX.md) | Use case configurations | Everyone |
