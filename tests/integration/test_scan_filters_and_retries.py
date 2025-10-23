@@ -236,13 +236,19 @@ tools: [trufflehog]
         "--allow-missing-tools",
     ]
 
-    # Set JMO_THREADS to invalid value
+    # Set JMO_THREADS to invalid value (merge with os.environ to preserve installed packages)
+    import os
+
+    test_env = os.environ.copy()
+    test_env["JMO_THREADS"] = "not-an-int"
+    test_env["PYTHONPATH"] = "."
+
     result = subprocess.run(
         cmd,
         timeout=30,
         capture_output=True,
         text=True,
-        env={"JMO_THREADS": "not-an-int", "PYTHONPATH": "."},
+        env=test_env,
     )
 
     # Should succeed (fall back to default threads=1)
