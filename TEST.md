@@ -225,7 +225,7 @@ docker ps
 
 # Pull required images
 docker pull alpine:3.19
-docker pull ghcr.io/jimmy058910/jmo-security:latest-full
+docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 # Verify volume mounts work
 docker run --rm -v $(pwd):/test alpine:3.19 ls /test

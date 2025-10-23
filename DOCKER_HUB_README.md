@@ -6,11 +6,11 @@ A terminal-first, cross-platform security audit toolkit that orchestrates multip
 
 ```bash
 # Run full security scan on current directory
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jmogaming/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results
 
 # Interactive wizard (easiest for beginners)
-docker run --rm -it -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -it -v "$(pwd):/scan" ghcr.io/jmogaming/jmo-security:latest \
   wizard
 
 # View results
@@ -21,14 +21,14 @@ open results/summaries/dashboard.html
 
 | Tag | Size | Tools | Use Case |
 |-----|------|-------|----------|
-| `latest`, `X.Y.Z-full` | ~2.5 GB | 14 tools | Complete scanning |
+| `latest`, `X.Y.Z-full` | ~2.5 GB | 12 tools | Complete scanning |
 | `slim` | ~800 MB | 8 core tools | CI/CD pipelines |
 | `alpine` | ~400 MB | 6 essential tools | Minimal footprint |
 
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab (v0.6.0+)
-- 🔐 **14 Security Tools**: TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++
+- 🔐 **12 Security Tools**: TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously
 - 🎨 **3 Profiles**: Fast (5-8 min), Balanced (15-20 min), Deep (30-60 min)
@@ -40,7 +40,7 @@ Scan repositories AND infrastructure in one unified workflow:
 
 ```bash
 # Comprehensive security audit in one command
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jmogaming/jmo-security:latest \
   scan \
     --repo /scan/myapp \
     --image myapp:latest \
@@ -73,7 +73,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 - name: Security Scan
   run: |
     docker run --rm -v "${{ github.workspace }}:/scan" \
-      ghcr.io/jimmy058910/jmo-security:slim \
+      ghcr.io/jmogaming/jmo-security:slim \
       scan --repo /scan --fail-on HIGH --results-dir /scan/results
 ```
 

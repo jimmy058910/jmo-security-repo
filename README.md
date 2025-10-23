@@ -8,6 +8,7 @@
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
 [![PyPI version](https://badge.fury.io/py/jmo-security.svg)](https://badge.fury.io/py/jmo-security)
 [![Python Versions](https://img.shields.io/pypi/pyversions/jmo-security.svg)](https://pypi.org/project/jmo-security/)
+[![Docker](https://img.shields.io/badge/Docker-latest-blue?logo=docker)](https://ghcr.io/jimmy058910/jmo-security)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
@@ -224,7 +225,7 @@ Perfect for:
 - 🌍 **Any platform** (Linux, macOS, Windows)
 
 ```bash
-# Pull the image (one-time, ~500MB)
+# Pull the recommended image (full variant, ~500MB)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 # Scan current directory
@@ -239,9 +240,11 @@ start results/summaries/dashboard.html  # Windows (WSL2)
 
 **Three image variants available:**
 
-- `latest` (~500MB) - All 12 scanners included
-- `slim` (~200MB) - Core 6 scanners for CI/CD
-- `alpine` (~150MB) - Minimal footprint
+- `latest` or `latest-full` (~500MB) - **Recommended:** All 12 scanners included
+- `latest-slim` (~200MB) - Core 6 scanners for CI/CD
+- `latest-alpine` (~150MB) - Minimal footprint
+
+> **Note:** The `latest` tag (no suffix) points to the full variant for the best out-of-box experience.
 
 **Why Docker?**
 
