@@ -255,7 +255,9 @@ profiles:
 
     # Verify semgrep ran (check logs for tool execution OR stub file created)
     output = result.stdout + result.stderr
-    semgrep_stub = tmp_path / "results" / "individual-repos" / "test-repo" / "semgrep.json"
+    semgrep_stub = (
+        tmp_path / "results" / "individual-repos" / "test-repo" / "semgrep.json"
+    )
 
     # Either semgrep logged (tool installed) OR stub file exists (tool missing)
     assert (

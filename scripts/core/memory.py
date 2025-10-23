@@ -188,7 +188,9 @@ def _validate_data(namespace: str, data: Dict[str, Any]) -> None:
 
     schemas = _load_schemas()
     if namespace not in schemas:
-        logger.debug(f"No schema defined for namespace '{namespace}', skipping validation")
+        logger.debug(
+            f"No schema defined for namespace '{namespace}', skipping validation"
+        )
         return
 
     schema = schemas[namespace]
@@ -252,7 +254,11 @@ def query_memory(
 
 
 def store_memory(
-    namespace: str, key: str, data: Dict[str, Any], overwrite: bool = True, validate: bool = False
+    namespace: str,
+    key: str,
+    data: Dict[str, Any],
+    overwrite: bool = True,
+    validate: bool = False,
 ) -> bool:
     """
     Store analysis patterns in memory.
@@ -320,7 +326,11 @@ def store_memory(
 
 
 def update_memory(
-    namespace: str, key: str, updates: Dict[str, Any], create_if_missing: bool = False, validate: bool = False
+    namespace: str,
+    key: str,
+    updates: Dict[str, Any],
+    create_if_missing: bool = False,
+    validate: bool = False,
 ) -> bool:
     """
     Update existing memory entry (merge updates with existing data).

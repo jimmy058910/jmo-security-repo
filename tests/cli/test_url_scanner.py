@@ -226,19 +226,21 @@ class TestUrlScanner:
             assert (tmp_path / "individual-web").exists()
             assert (tmp_path / "individual-web" / "secure.example.com").exists()
 
-
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
+
         def mock_tool_exists(tool_name):
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists", side_effect=mock_tool_exists
+            "scripts.cli.scan_jobs.url_scanner.tool_exists",
+            side_effect=mock_tool_exists,
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner

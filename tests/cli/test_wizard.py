@@ -860,7 +860,9 @@ def test_run_wizard_exception():
     """Test run_wizard with exception."""
     from scripts.cli.wizard import run_wizard
 
-    with patch("scripts.cli.wizard.select_profile", side_effect=Exception("Test error")):
+    with patch(
+        "scripts.cli.wizard.select_profile", side_effect=Exception("Test error")
+    ):
         exit_code = run_wizard(yes=False)
 
     assert exit_code == 1

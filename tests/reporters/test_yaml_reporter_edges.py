@@ -50,18 +50,19 @@ def test_yaml_import_error_handling():
     """Test that ImportError during yaml import is handled gracefully."""
     # This test covers lines 13-15 (ImportError exception handler)
     # Save original yaml module
-    original_yaml = sys.modules.get('yaml')
+    original_yaml = sys.modules.get("yaml")
 
     # Remove yaml from sys.modules to force ImportError
-    if 'yaml' in sys.modules:
-        del sys.modules['yaml']
+    if "yaml" in sys.modules:
+        del sys.modules["yaml"]
 
     # Mock yaml import to raise ImportError
     import builtins
+
     original_import = builtins.__import__
 
     def mock_import(name, *args, **kwargs):
-        if name == 'yaml':
+        if name == "yaml":
             raise ImportError("No module named 'yaml'")
         return original_import(name, *args, **kwargs)
 
@@ -71,6 +72,7 @@ def test_yaml_import_error_handling():
         # Force reimport of yaml_reporter to trigger ImportError handler
         import scripts.core.reporters.yaml_reporter as ymod
         import importlib
+
         importlib.reload(ymod)
 
         # Verify that yaml is None after ImportError
@@ -79,4 +81,4 @@ def test_yaml_import_error_handling():
         # Restore original import and yaml module
         builtins.__import__ = original_import
         if original_yaml is not None:
-            sys.modules['yaml'] = original_yaml
+            sys.modules["yaml"] = original_yaml

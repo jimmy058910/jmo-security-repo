@@ -74,6 +74,7 @@ def test_trufflehog_verified_vs_unverified():
         },
     ]
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         json.dump(sample, f)
         path = Path(f.name)
@@ -108,6 +109,7 @@ def test_trufflehog_verification_endpoints():
         }
     ]
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         json.dump(sample, f)
         path = Path(f.name)
@@ -137,6 +139,7 @@ def test_trufflehog_raw_field_preservation():
         }
     ]
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         json.dump(sample, f)
         path = Path(f.name)
@@ -159,12 +162,29 @@ def test_trufflehog_raw_field_preservation():
 def test_trufflehog_multiple_verification_statuses():
     """Test handling of multiple secrets with different verification statuses."""
     sample = [
-        {"DetectorName": "Stripe", "Verified": True, "SourceMetadata": {"Data": {"Filesystem": {"file": "payments.py"}}}},
-        {"DetectorName": "Twilio", "Verified": False, "SourceMetadata": {"Data": {"Filesystem": {"file": "sms.js"}}}},
-        {"DetectorName": "SendGrid", "Verified": True, "SourceMetadata": {"Data": {"Filesystem": {"file": "email.rb"}}}},
-        {"DetectorName": "Mailchimp", "Verified": False, "SourceMetadata": {"Data": {"Filesystem": {"file": "marketing.go"}}}},
+        {
+            "DetectorName": "Stripe",
+            "Verified": True,
+            "SourceMetadata": {"Data": {"Filesystem": {"file": "payments.py"}}},
+        },
+        {
+            "DetectorName": "Twilio",
+            "Verified": False,
+            "SourceMetadata": {"Data": {"Filesystem": {"file": "sms.js"}}},
+        },
+        {
+            "DetectorName": "SendGrid",
+            "Verified": True,
+            "SourceMetadata": {"Data": {"Filesystem": {"file": "email.rb"}}},
+        },
+        {
+            "DetectorName": "Mailchimp",
+            "Verified": False,
+            "SourceMetadata": {"Data": {"Filesystem": {"file": "marketing.go"}}},
+        },
     ]
     import tempfile
+
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
         json.dump(sample, f)
         path = Path(f.name)

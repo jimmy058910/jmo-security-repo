@@ -327,7 +327,6 @@ class TestGitlabScanner:
         assert full_path == "notoken/repo"
         assert statuses["trufflehog"] is False
 
-
     def test_discover_container_images_dockerfile(self, tmp_path):
         """Test discovering images from Dockerfiles"""
         from scripts.cli.scan_jobs.gitlab_scanner import _discover_container_images
@@ -345,7 +344,8 @@ FROM python:3.11-slim AS builder
 COPY . /app
 FROM postgres:14
 FROM scratch
-        """, encoding="utf-8"
+        """,
+            encoding="utf-8",
         )
 
         images = _discover_container_images(repo)
@@ -376,7 +376,8 @@ services:
     image: postgres:14
   app:
     build: .
-        """, encoding="utf-8"
+        """,
+            encoding="utf-8",
         )
 
         images = _discover_container_images(repo)
@@ -406,7 +407,8 @@ spec:
     image: myapp:v1.0
   - name: sidecar
     image: nginx:1.21
-        """, encoding="utf-8"
+        """,
+            encoding="utf-8",
         )
 
         images = _discover_container_images(repo)
@@ -437,6 +439,7 @@ spec:
     def test_scan_gitlab_timeout_expired(self, tmp_path):
         """Test GitLab scan when git clone times out"""
         import subprocess
+
         with patch(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
         ) as mock_subprocess:
@@ -511,9 +514,15 @@ spec:
                         "scripts.cli.scan_jobs.gitlab_scanner.scan_image"
                     ) as mock_scan_image:
                         mock_subprocess.return_value = MagicMock(returncode=0)
-                        mock_scan_repo.return_value = ("repo", {"trivy": True, "syft": True})
+                        mock_scan_repo.return_value = (
+                            "repo",
+                            {"trivy": True, "syft": True},
+                        )
                         mock_discover.return_value = {"nginx:latest", "python:3.11"}
-                        mock_scan_image.return_value = ("nginx:latest", {"trivy": True, "syft": True})
+                        mock_scan_image.return_value = (
+                            "nginx:latest",
+                            {"trivy": True, "syft": True},
+                        )
 
                         gitlab_info = {
                             "full_path": "devops/app",

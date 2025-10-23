@@ -32,10 +32,20 @@ def test_invalid_jmo_threads_env(tmp_path: Path, monkeypatch):
     """Test ValueError handler when JMO_THREADS is invalid (lines 70-71)."""
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r1"
-    _write(repo / "trufflehog.json", [{"schemaVersion": "1.0.0", "id": "x", "ruleId": "R1",
-                                        "message": "m", "severity": "LOW",
-                                        "tool": {"name": "trufflehog", "version": "1"},
-                                        "location": {"path": "a.txt", "startLine": 1}}])
+    _write(
+        repo / "trufflehog.json",
+        [
+            {
+                "schemaVersion": "1.0.0",
+                "id": "x",
+                "ruleId": "R1",
+                "message": "m",
+                "severity": "LOW",
+                "tool": {"name": "trufflehog", "version": "1"},
+                "location": {"path": "a.txt", "startLine": 1},
+            }
+        ],
+    )
 
     # Set invalid JMO_THREADS value
     monkeypatch.setenv("JMO_THREADS", "invalid_number")
@@ -54,7 +64,9 @@ def test_adapter_parse_exception_in_gather(tmp_path: Path, monkeypatch):
 
     # Monkeypatch loader to raise AdapterParseException
     def raise_adapter_error(path):
-        raise AdapterParseException(tool="semgrep", path=str(path), reason="malformed JSON")
+        raise AdapterParseException(
+            tool="semgrep", path=str(path), reason="malformed JSON"
+        )
 
     monkeypatch.setattr(nr, "load_semgrep", raise_adapter_error)
 
@@ -89,11 +101,16 @@ def test_trivy_syft_enrichment_error(tmp_path: Path, monkeypatch):
 
     # Create valid trivy findings
     trivy_findings = [
-        {"schemaVersion": "1.0.0", "id": "t1", "ruleId": "CVE-2021-1234",
-         "message": "vuln", "severity": "HIGH",
-         "tool": {"name": "trivy", "version": "1"},
-         "location": {"path": "package.json", "startLine": 1},
-         "raw": {"PkgName": "lodash", "PkgPath": "package.json"}}
+        {
+            "schemaVersion": "1.0.0",
+            "id": "t1",
+            "ruleId": "CVE-2021-1234",
+            "message": "vuln",
+            "severity": "HIGH",
+            "tool": {"name": "trivy", "version": "1"},
+            "location": {"path": "package.json", "startLine": 1},
+            "raw": {"PkgName": "lodash", "PkgPath": "package.json"},
+        }
     ]
 
     # Mock load_trivy to return findings
@@ -131,10 +148,15 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     repo = root / "individual-repos" / "r1"
 
     semgrep_findings = [
-        {"schemaVersion": "1.0.0", "id": "f1", "ruleId": "R1",
-         "message": "m", "severity": "LOW",
-         "tool": {"name": "semgrep", "version": "1"},
-         "location": {"path": "a.py", "startLine": 1}}
+        {
+            "schemaVersion": "1.0.0",
+            "id": "f1",
+            "ruleId": "R1",
+            "message": "m",
+            "severity": "LOW",
+            "tool": {"name": "semgrep", "version": "1"},
+            "location": {"path": "a.py", "startLine": 1},
+        }
     ]
 
     # Mock load_semgrep to return findings
@@ -149,7 +171,9 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     def raise_file_not_found(findings_list):
         raise FileNotFoundError("mapping_data.json")
 
-    monkeypatch.setattr(compliance_mapper, "enrich_findings_with_compliance", raise_file_not_found)
+    monkeypatch.setattr(
+        compliance_mapper, "enrich_findings_with_compliance", raise_file_not_found
+    )
 
     # Need to create the file for gather_results to iterate
     _write(repo / "semgrep.json", semgrep_findings)
@@ -163,7 +187,9 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     def raise_key_error(findings_list):
         raise KeyError("missing compliance field")
 
-    monkeypatch.setattr(compliance_mapper, "enrich_findings_with_compliance", raise_key_error)
+    monkeypatch.setattr(
+        compliance_mapper, "enrich_findings_with_compliance", raise_key_error
+    )
     out = nr.gather_results(root)
     assert isinstance(out, list)
 

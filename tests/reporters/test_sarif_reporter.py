@@ -32,7 +32,15 @@ def test_write_sarif_with_file_error(tmp_path: Path):
     """Test SARIF writer handles file write errors gracefully."""
     import pytest
 
-    findings = [{"tool": {"name": "test"}, "ruleId": "TEST-001", "severity": "HIGH", "location": {"path": "test.py"}, "message": "test"}]
+    findings = [
+        {
+            "tool": {"name": "test"},
+            "ruleId": "TEST-001",
+            "severity": "HIGH",
+            "location": {"path": "test.py"},
+            "message": "test",
+        }
+    ]
 
     # Try to write to read-only directory
     ro_dir = tmp_path / "readonly"

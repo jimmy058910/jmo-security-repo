@@ -291,7 +291,9 @@ def test_configure_iac_target_k8s_manifest(
 @patch("scripts.cli.wizard._validate_url")
 @patch("scripts.cli.wizard._prompt_text")
 @patch("scripts.cli.wizard._prompt_choice")
-def test_configure_url_target_single_reachable(mock_choice, mock_text, mock_validate_url):
+def test_configure_url_target_single_reachable(
+    mock_choice, mock_text, mock_validate_url
+):
     """Test configuring single URL that is reachable."""
     mock_choice.return_value = "single"
     mock_text.return_value = "https://example.com"

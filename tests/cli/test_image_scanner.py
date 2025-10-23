@@ -224,16 +224,17 @@ class TestImageScanner:
             assert (tmp_path / "individual-images").exists()
             assert (tmp_path / "individual-images" / "alpine_latest").exists()
 
-
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
+
         def mock_tool_exists(tool_name):
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -261,6 +262,7 @@ class TestImageScanner:
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
+
         def mock_tool_exists(tool_name):
             return tool_name in ["trivy", "syft"]
 

@@ -123,7 +123,9 @@ class TestThreadCalculationLogic:
         for cpu_count in [22, 32, 64, 128]:
             with patch("scripts.cli.cpu_utils.get_cpu_count", return_value=cpu_count):
                 threads = auto_detect_threads()
-                assert threads == 16, f"Expected 16 threads for {cpu_count} cores, got {threads}"
+                assert (
+                    threads == 16
+                ), f"Expected 16 threads for {cpu_count} cores, got {threads}"
 
 
 if __name__ == "__main__":

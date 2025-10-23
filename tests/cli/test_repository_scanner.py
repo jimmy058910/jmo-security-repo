@@ -592,7 +592,6 @@ class TestRepositoryScanner:
             for tool in deep_profile_tools:
                 assert statuses.get(tool) is True, f"Tool {tool} failed or not executed"
 
-
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for all missing tools"""
         repo = tmp_path / "missing-tools-repo"
@@ -604,6 +603,7 @@ class TestRepositoryScanner:
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, output_path))
             output_path.write_text('{"results": []}')
@@ -645,9 +645,10 @@ class TestRepositoryScanner:
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -686,8 +687,9 @@ class TestRepositoryScanner:
                 assert statuses[tool] is True, f"{tool} should be marked True"
                 # For afl++, check for "aflplusplus" in path (++ is sanitized)
                 search_term = "aflplusplus" if tool == "afl++" else tool
-                assert any(search_term in path for _, path in stub_calls), \
-                    f"Stub should be written for {tool} (searched for '{search_term}')"
+                assert any(
+                    search_term in path for _, path in stub_calls
+                ), f"Stub should be written for {tool} (searched for '{search_term}')"
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
@@ -712,9 +714,7 @@ class TestRepositoryScanner:
                 "semgrep": {
                     "flags": ["--exclude", "node_modules", "--exclude", ".git"]
                 },
-                "trivy": {
-                    "flags": ["--severity", "HIGH,CRITICAL", "--no-progress"]
-                },
+                "trivy": {"flags": ["--severity", "HIGH,CRITICAL", "--no-progress"]},
             }
 
             scan_repository(
@@ -786,7 +786,9 @@ class TestRepositoryScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
 
             # Verify each tool has its override timeout
-            trufflehog_def = next((t for t in tool_defs if t.name == "trufflehog"), None)
+            trufflehog_def = next(
+                (t for t in tool_defs if t.name == "trufflehog"), None
+            )
             assert trufflehog_def.timeout == 300
 
             semgrep_def = next((t for t in tool_defs if t.name == "semgrep"), None)
@@ -805,9 +807,10 @@ class TestRepositoryScanner:
             return tool_name in ["trufflehog", "trivy"]
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append(tool_name)
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()

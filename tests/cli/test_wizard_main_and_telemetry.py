@@ -34,6 +34,8 @@ from scripts.cli.wizard import (
     WizardConfig,
     TargetConfig,
 )
+
+
 # ============================================================================
 # MAIN FUNCTION TESTS - INTERACTIVE MODE (lines 1528-1558)
 # ============================================================================
@@ -90,6 +92,8 @@ def test_main_interactive_repo_target_success(
     mock_repo.assert_called_once()
     mock_review.assert_called_once()
     mock_exec.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
@@ -136,6 +140,8 @@ def test_main_interactive_image_target(
 
     assert result == 0
     mock_image.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
@@ -183,6 +189,8 @@ def test_main_interactive_iac_target(
 
     assert result == 0
     mock_iac.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
@@ -228,6 +236,8 @@ def test_main_interactive_url_target(
 
     assert result == 0
     mock_url.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
@@ -275,6 +285,8 @@ def test_main_interactive_gitlab_target(
 
     assert result == 0
     mock_gitlab.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
@@ -322,6 +334,8 @@ def test_main_interactive_k8s_target(
 
     assert result == 0
     mock_k8s.assert_called_once()
+
+
 @patch("scripts.cli.wizard.review_and_confirm")
 @patch("scripts.cli.wizard.configure_advanced")
 @patch("scripts.cli.wizard.configure_repo_target")
@@ -367,6 +381,8 @@ def test_main_interactive_user_cancels_at_review(
     # Verify cancellation message printed
     cancel_calls = [str(call) for call in mock_print.call_args_list]
     assert any("cancelled" in call.lower() for call in cancel_calls)
+
+
 # ============================================================================
 # MAIN FUNCTION TESTS - NON-INTERACTIVE MODE (lines 1516-1527)
 # ============================================================================
@@ -397,6 +413,8 @@ def test_main_non_interactive_yes_flag(
 
     assert result == 0
     mock_exec.assert_called_once()
+
+
 @patch("scripts.cli.wizard.execute_scan")
 @patch("scripts.cli.wizard._check_docker_running")
 @patch("scripts.cli.wizard._detect_docker")
@@ -423,6 +441,8 @@ def test_main_non_interactive_scan_failure(
         result = main()
 
     assert result == 1
+
+
 # ============================================================================
 # TELEMETRY TESTS (line 1460, lines 1502-1504, 1509-1511)
 # ============================================================================
@@ -432,30 +452,40 @@ def test_prompt_telemetry_opt_in_accepts_y(mock_input):
     mock_input.return_value = "y"
     result = prompt_telemetry_opt_in()
     assert result is True
+
+
 @patch("builtins.input")
 def test_prompt_telemetry_opt_in_accepts_uppercase_Y(mock_input):
     """Test prompt_telemetry_opt_in() with 'Y'."""
     mock_input.return_value = "Y"
     result = prompt_telemetry_opt_in()
     assert result is True
+
+
 @patch("builtins.input")
 def test_prompt_telemetry_opt_in_declines_n(mock_input):
     """Test prompt_telemetry_opt_in() when user enters 'n'."""
     mock_input.return_value = "n"
     result = prompt_telemetry_opt_in()
     assert result is False
+
+
 @patch("builtins.input")
 def test_prompt_telemetry_opt_in_declines_empty(mock_input):
     """Test prompt_telemetry_opt_in() with empty input (default no)."""
     mock_input.return_value = ""
     result = prompt_telemetry_opt_in()
     assert result is False
+
+
 @patch("builtins.input")
 def test_prompt_telemetry_opt_in_garbage_input(mock_input):
     """Test prompt_telemetry_opt_in() with non-y/n input defaults to no."""
     mock_input.return_value = "maybe"
     result = prompt_telemetry_opt_in()
     assert result is False
+
+
 # ============================================================================
 # _SAVE_TELEMETRY_PREFERENCE TESTS (lines 1373-1393)
 # ============================================================================
@@ -481,6 +511,8 @@ def test_save_telemetry_creates_new_file(
 
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("enabled" in call.lower() for call in print_calls)
+
+
 @patch("builtins.print")
 @patch("builtins.open", new_callable=mock_open, read_data="existing: config\n")
 @patch("yaml.dump")
@@ -502,6 +534,8 @@ def test_save_telemetry_updates_existing_file(
     mock_yaml_dump.assert_called_once()
     dumped_config = mock_yaml_dump.call_args[0][0]
     assert dumped_config == {"existing": "config", "telemetry": {"enabled": False}}
+
+
 @patch("builtins.print")
 @patch("builtins.open", new_callable=mock_open)
 @patch("yaml.dump")
@@ -522,6 +556,8 @@ def test_save_telemetry_handles_yaml_exception(
     # Should create new config despite error
     dumped_config = mock_yaml_dump.call_args[0][0]
     assert dumped_config == {"telemetry": {"enabled": True}}
+
+
 @patch("builtins.print")
 @patch("builtins.open", new_callable=mock_open)
 @patch("yaml.dump")
@@ -541,6 +577,8 @@ def test_save_telemetry_handles_none_yaml(
 
     dumped_config = mock_yaml_dump.call_args[0][0]
     assert dumped_config == {"telemetry": {"enabled": True}}
+
+
 # ============================================================================
 # REVIEW_AND_CONFIRM TARGET TYPE DISPLAY TESTS (lines 996-1027)
 # ============================================================================
@@ -566,6 +604,8 @@ def test_review_confirms_image_single(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("nginx:latest" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_image_file(mock_print, mock_input):
@@ -588,6 +628,8 @@ def test_review_confirms_image_file(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("images.txt" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_iac(mock_print, mock_input):
@@ -612,6 +654,8 @@ def test_review_confirms_iac(mock_print, mock_input):
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("terraform" in call.lower() for call in print_calls)
     assert any("main.tf" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_url_single(mock_print, mock_input):
@@ -634,6 +678,8 @@ def test_review_confirms_url_single(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("example.com" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_url_file(mock_print, mock_input):
@@ -656,6 +702,8 @@ def test_review_confirms_url_file(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("urls.txt" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_url_api_spec(mock_print, mock_input):
@@ -678,6 +726,8 @@ def test_review_confirms_url_api_spec(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("openapi.yaml" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_gitlab_repo(mock_print, mock_input):
@@ -704,6 +754,8 @@ def test_review_confirms_gitlab_repo(mock_print, mock_input):
     assert any("gitlab.com" in call for call in print_calls)
     assert any("***" in call for call in print_calls)  # Token masked
     assert any("mygroup/myrepo" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_gitlab_group(mock_print, mock_input):
@@ -728,6 +780,8 @@ def test_review_confirms_gitlab_group(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("engineering" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_gitlab_no_token(mock_print, mock_input):
@@ -752,6 +806,8 @@ def test_review_confirms_gitlab_no_token(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("NOT SET" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_k8s_namespace(mock_print, mock_input):
@@ -777,6 +833,8 @@ def test_review_confirms_k8s_namespace(mock_print, mock_input):
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("minikube" in call for call in print_calls)
     assert any("production" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_confirms_k8s_all_namespaces(mock_print, mock_input):
@@ -800,6 +858,8 @@ def test_review_confirms_k8s_all_namespaces(mock_print, mock_input):
     assert result is True
     print_calls = [str(call) for call in mock_print.call_args_list]
     assert any("ALL" in call for call in print_calls)
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_user_rejects_n(mock_print, mock_input):
@@ -820,6 +880,8 @@ def test_review_user_rejects_n(mock_print, mock_input):
     result = review_and_confirm(config)
 
     assert result is False
+
+
 @patch("builtins.input")
 @patch("builtins.print")
 def test_review_user_accepts_empty_default(mock_print, mock_input):

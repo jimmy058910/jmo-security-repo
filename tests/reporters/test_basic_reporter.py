@@ -487,7 +487,10 @@ def test_get_category_summary_with_eslint():
     # ESLint should be categorized as Code Quality
     assert categories.get("🔧 Code Quality", 0) >= 1
     # Semgrep should also be categorized appropriately
-    assert categories.get("🛡️ Security", 0) >= 1 or categories.get("🔧 Code Quality", 0) >= 1
+    assert (
+        categories.get("🛡️ Security", 0) >= 1
+        or categories.get("🔧 Code Quality", 0) >= 1
+    )
 
 
 def test_get_category_summary_with_bandit():

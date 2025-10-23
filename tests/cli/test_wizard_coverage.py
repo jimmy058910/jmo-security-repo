@@ -61,6 +61,7 @@ def create_wizard_config(**kwargs: Any) -> MagicMock:
 
 # ========== Test Category 1: GitLab Target Type ==========
 
+
 def test_github_actions_gitlab_docker():
     """Test GitHub Actions generation for GitLab target with Docker."""
     config = create_wizard_config(
@@ -109,6 +110,7 @@ def test_github_actions_gitlab_native():
 
 # ========== Test Category 2: K8s Target Type ==========
 
+
 def test_github_actions_k8s_docker():
     """Test GitHub Actions generation for K8s target with Docker."""
     config = create_wizard_config(
@@ -145,6 +147,7 @@ def test_github_actions_k8s_native():
 
 
 # ========== Test Category 3: Image Target Type ==========
+
 
 def test_github_actions_image_docker():
     """Test GitHub Actions generation for container image with Docker."""
@@ -202,6 +205,7 @@ def test_github_actions_image_native_no_name():
 
 # ========== Test Category 4: URL Target Type ==========
 
+
 def test_github_actions_url_docker():
     """Test GitHub Actions generation for URL target with Docker."""
     config = create_wizard_config(
@@ -248,6 +252,7 @@ def test_github_actions_url_native_no_url():
 
 
 # ========== Test Category 5: IaC Target Type ==========
+
 
 def test_github_actions_iac_terraform():
     """Test GitHub Actions generation for Terraform IaC."""
@@ -296,6 +301,7 @@ def test_github_actions_iac_k8s_manifest():
 
 # ========== Test Category 6: Repo Mode Variations ==========
 
+
 def test_github_actions_repos_dir_mode():
     """Test GitHub Actions generation with repos-dir mode."""
     config = create_wizard_config(
@@ -327,6 +333,7 @@ def test_github_actions_repo_mode():
 
 
 # ========== Test Category 7: Thread and Timeout Overrides ==========
+
 
 def test_github_actions_thread_override():
     """Test GitHub Actions with explicit thread override."""
@@ -365,6 +372,7 @@ def test_github_actions_use_profile_defaults():
 
 
 # ========== Test Category 8: Fail-On Threshold Variations ==========
+
 
 def test_github_actions_fail_on_critical():
     """Test GitHub Actions with CRITICAL fail-on threshold."""
@@ -413,6 +421,7 @@ def test_github_actions_no_fail_on():
 
 # ========== Test Category 9: Profile Coverage ==========
 
+
 def test_github_actions_deep_profile():
     """Test GitHub Actions generation with deep profile."""
     config = create_wizard_config(
@@ -431,6 +440,7 @@ def test_github_actions_deep_profile():
 
 
 # ========== Test Category 10: Environment Variables ==========
+
 
 def test_github_actions_gitlab_env_vars():
     """Test that GitLab target includes environment variables in scan step."""
@@ -467,7 +477,7 @@ def test_github_actions_no_env_vars_for_repo():
         if "Run Security Scan" in line:
             scan_step_found = True
             # Check next 5 lines for env:
-            for j in range(i+1, min(i+6, len(lines))):
+            for j in range(i + 1, min(i + 6, len(lines))):
                 if "env:" in lines[j] and "run:" not in lines[j]:
                     env_after_scan = True
 
@@ -477,6 +487,7 @@ def test_github_actions_no_env_vars_for_repo():
 
 
 # ========== Test Category 11: Makefile and Shell Script Coverage ==========
+
 
 def test_makefile_generation_with_config():
     """Test Makefile target generation with config object."""
@@ -522,6 +533,7 @@ def test_shell_script_multiline_command():
 
 
 # ========== Test Category 12: Edge Cases and Error Handling ==========
+
 
 def test_github_actions_unknown_target_type():
     """Test GitHub Actions generation gracefully handles unknown target type."""
@@ -569,6 +581,7 @@ def test_github_actions_k8s_without_context():
 
 
 # ========== Test Category 13: YAML Structure Verification ==========
+
 
 def test_github_actions_valid_yaml_structure_docker():
     """Test that generated Docker workflow has valid YAML structure."""
@@ -619,6 +632,7 @@ def test_github_actions_valid_yaml_structure_native():
 
 
 # ========== Test Category 14: Comments and Metadata ==========
+
 
 def test_github_actions_includes_tool_comments():
     """Test that native workflow includes tool installation comments."""

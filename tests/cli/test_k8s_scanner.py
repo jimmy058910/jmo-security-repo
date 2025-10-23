@@ -269,16 +269,17 @@ class TestK8sScanner:
             assert "__attempts__" in statuses
             assert statuses["__attempts__"]["trivy"] == 2
 
-
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
+
         def mock_tool_exists(tool_name):
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -309,6 +310,7 @@ class TestK8sScanner:
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
+
         def mock_tool_exists(tool_name):
             return tool_name == "trivy"
 
@@ -323,7 +325,9 @@ class TestK8sScanner:
             ]
 
             per_tool_config = {
-                "trivy": {"flags": ["--severity", "CRITICAL", "--scanners", "config,secret"]}
+                "trivy": {
+                    "flags": ["--severity", "CRITICAL", "--scanners", "config,secret"]
+                }
             }
 
             k8s_info = {

@@ -248,7 +248,6 @@ class TestIacScanner:
             assert (tmp_path / "individual-iac").exists()
             assert (tmp_path / "individual-iac" / "network").exists()
 
-
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
         iac_file = tmp_path / "main.tf"
@@ -258,9 +257,10 @@ class TestIacScanner:
             return False
 
         stub_calls = []
+
         def mock_write_stub(tool_name, output_path):
             stub_calls.append((tool_name, str(output_path)))
-            output_path.write_text('{}')
+            output_path.write_text("{}")
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()

@@ -201,7 +201,9 @@ def test_check_docker_running_success(mock_run):
 @patch("subprocess.run")
 def test_check_docker_running_not_running(mock_run):
     """Test _check_docker_running() when daemon is not running."""
-    mock_run.return_value = MagicMock(returncode=1, stderr="Cannot connect to Docker daemon")
+    mock_run.return_value = MagicMock(
+        returncode=1, stderr="Cannot connect to Docker daemon"
+    )
     result = _check_docker_running()
     assert result is False
 
@@ -212,7 +214,6 @@ def test_check_docker_running_filenotfound(mock_run):
     mock_run.side_effect = FileNotFoundError()
     result = _check_docker_running()
     assert result is False
-
 
 
 # ============================================================================
@@ -380,6 +381,7 @@ def test_validate_url_reachable(mock_urlopen):
 def test_validate_url_unreachable(mock_urlopen):
     """Test _validate_url() with unreachable URL."""
     import urllib.error
+
     mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
 
     result = _validate_url("https://nonexistent.example.com")
@@ -399,6 +401,7 @@ def test_validate_url_timeout(mock_urlopen):
 def test_validate_url_http_error(mock_urlopen):
     """Test _validate_url() with HTTP error (404, 500, etc.)."""
     import urllib.error
+
     mock_urlopen.side_effect = urllib.error.HTTPError(
         "https://example.com", 404, "Not Found", {}, None
     )
@@ -447,7 +450,7 @@ def test_detect_iac_type_cloudformation_json(tmp_path):
 def test_detect_iac_type_kubernetes_yaml(tmp_path):
     """Test _detect_iac_type() detects Kubernetes YAML."""
     k8s_file = tmp_path / "deployment.yaml"
-    k8s_file.write_text('apiVersion: apps/v1\nkind: Deployment')
+    k8s_file.write_text("apiVersion: apps/v1\nkind: Deployment")
     result = _detect_iac_type(k8s_file)
     assert result == "k8s-manifest"  # Actual return value
 
@@ -455,7 +458,7 @@ def test_detect_iac_type_kubernetes_yaml(tmp_path):
 def test_detect_iac_type_kubernetes_yml(tmp_path):
     """Test _detect_iac_type() detects K8s .yml files."""
     k8s_file = tmp_path / "service.yml"
-    k8s_file.write_text('apiVersion: v1\nkind: Service')
+    k8s_file.write_text("apiVersion: v1\nkind: Service")
     result = _detect_iac_type(k8s_file)
     assert result == "k8s-manifest"
 
@@ -463,7 +466,7 @@ def test_detect_iac_type_kubernetes_yml(tmp_path):
 def test_detect_iac_type_unknown_extension(tmp_path):
     """Test _detect_iac_type() defaults to terraform for unknown files."""
     unknown_file = tmp_path / "config.txt"
-    unknown_file.write_text('some content')
+    unknown_file.write_text("some content")
     result = _detect_iac_type(unknown_file)
     assert result == "terraform"  # Default
 
@@ -471,7 +474,7 @@ def test_detect_iac_type_unknown_extension(tmp_path):
 def test_detect_iac_type_empty_yaml(tmp_path):
     """Test _detect_iac_type() handles empty YAML (defaults to k8s-manifest)."""
     empty_file = tmp_path / "empty.yaml"
-    empty_file.write_text('')
+    empty_file.write_text("")
     result = _detect_iac_type(empty_file)
     assert result == "k8s-manifest"  # Default for YAML
 
@@ -487,7 +490,7 @@ def test_detect_iac_type_tfstate_file(tmp_path):
 def test_detect_iac_type_cloudformation_in_name(tmp_path):
     """Test _detect_iac_type() detects cloudformation in filename."""
     cf_file = tmp_path / "cloudformation-template.yaml"
-    cf_file.write_text('Resources:\n  Bucket: {}')
+    cf_file.write_text("Resources:\n  Bucket: {}")
     result = _detect_iac_type(cf_file)
     assert result == "cloudformation"
 
@@ -504,7 +507,7 @@ def test_detect_iac_type_yaml_read_error(tmp_path):
     """Test _detect_iac_type() handles file read errors gracefully."""
     # Create a file and make it unreadable
     yaml_file = tmp_path / "unreadable.yaml"
-    yaml_file.write_text('content')
+    yaml_file.write_text("content")
     yaml_file.chmod(0o000)  # Remove all permissions
 
     try:
@@ -536,10 +539,7 @@ def test_validate_k8s_context_valid(mock_run, mock_which):
 @patch("subprocess.run")
 def test_validate_k8s_context_invalid(mock_run):
     """Test _validate_k8s_context() with invalid context."""
-    mock_run.return_value = MagicMock(
-        returncode=0,
-        stdout="minikube\nproduction\n"
-    )
+    mock_run.return_value = MagicMock(returncode=0, stdout="minikube\nproduction\n")
     result = _validate_k8s_context("nonexistent")
     assert result is False
 
@@ -587,6 +587,7 @@ def test_validate_k8s_context_timeout(mock_run, mock_which):
     """Test _validate_k8s_context() handles timeout."""
     mock_which.return_value = "/usr/bin/kubectl"
     import subprocess
+
     mock_run.side_effect = subprocess.TimeoutExpired("kubectl", 5)
     result = _validate_k8s_context("minikube")
     assert result is False
@@ -656,7 +657,6 @@ def test_validate_path_whitespace_only():
     result = _validate_path("   ", must_exist=False)
     # Whitespace path is still a valid path object
     assert result is not None
-
 
 
 def test_validate_path_parent_doesnt_exist(tmp_path):
