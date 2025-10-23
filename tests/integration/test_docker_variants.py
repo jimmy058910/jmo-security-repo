@@ -31,6 +31,21 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _docker_image_exists(image: str) -> bool:
+    """Check if a Docker image exists locally."""
+    if not shutil.which("docker"):
+        return False
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", image],
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 # ========== Configuration ==========
 
 DOCKER_VARIANTS: List[Tuple[str, str, List[str]]] = [
@@ -93,6 +108,9 @@ IMAGE_SIZE_RANGES = {
 )
 def test_docker_variant_help(image: str, _: str, __: List[str]):
     """Test all variants support --help command."""
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     cmd = ["docker", "run", "--rm", image, "--help"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
@@ -108,6 +126,9 @@ def test_docker_variant_help(image: str, _: str, __: List[str]):
 )
 def test_docker_variant_scan_help(image: str, _: str, __: List[str]):
     """Test all variants support scan --help command."""
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     cmd = ["docker", "run", "--rm", image, "scan", "--help"]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
@@ -128,6 +149,9 @@ def test_docker_variant_tools_present(
     image: str, profile: str, expected_tools: List[str]
 ):
     """Test each variant has tools for its profile."""
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     # Alpine uses sh, others use bash
     shell = "sh" if "alpine" in image else "bash"
 
@@ -158,6 +182,10 @@ def test_docker_variant_tools_present(
 
 def test_docker_full_has_all_tools():
     """Test full variant has all 11 tools (comprehensive check)."""
+    image = "jmo-security:latest"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     all_tools = [
         "trufflehog",
         "noseyparker",
@@ -172,7 +200,6 @@ def test_docker_full_has_all_tools():
         "afl-fuzz",
     ]
 
-    image = "jmo-security:latest"
     missing = []
 
     for tool in all_tools:
@@ -196,9 +223,12 @@ def test_docker_full_has_all_tools():
 
 def test_docker_slim_excludes_deep_tools():
     """Test slim variant does NOT include deep-profile-only tools."""
+    image = "jmo-security:slim"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     deep_only_tools = ["noseyparker", "bandit", "falcoctl", "afl-fuzz"]
 
-    image = "jmo-security:slim"
     found = []
 
     for tool in deep_only_tools:
@@ -224,11 +254,14 @@ def test_docker_slim_excludes_deep_tools():
 
 def test_docker_alpine_excludes_deep_only_tools():
     """Test alpine variant does NOT include deep-profile-only tools."""
+    image = "jmo-security:alpine"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     # Alpine (fast profile) excludes: noseyparker, bandit, falcoctl, afl-fuzz
     # Note: With TARGETARCH=amd64, alpine now includes semgrep+checkov
     deep_only_tools = ["noseyparker", "bandit", "falcoctl", "afl-fuzz"]
 
-    image = "jmo-security:alpine"
     found = []
 
     for tool in deep_only_tools:
@@ -265,6 +298,9 @@ def test_docker_alpine_excludes_deep_only_tools():
 )
 def test_docker_variant_size(image: str, size_range: Tuple[int, int]):
     """Test image sizes are within expected ranges."""
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     min_mb, max_mb = size_range
 
     cmd = ["docker", "image", "inspect", image, "--format={{.Size}}"]
@@ -286,6 +322,10 @@ def test_docker_variant_size(image: str, size_range: Tuple[int, int]):
 
 def test_docker_full_basic_scan(tmp_path):
     """Test full variant can perform basic repository scan."""
+    image = "jmo-security:latest"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     # Create minimal test repo
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -299,7 +339,7 @@ def test_docker_full_basic_scan(tmp_path):
         "--rm",
         "-v",
         f"{test_repo}:/repo",
-        "jmo-security:latest",
+        image,
         "scan",
         "--repo",
         "/repo",
@@ -318,6 +358,10 @@ def test_docker_full_basic_scan(tmp_path):
 
 def test_docker_slim_basic_scan(tmp_path):
     """Test slim variant can perform basic repository scan."""
+    image = "jmo-security:slim"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "app.py").write_text("print('hello')")
@@ -328,7 +372,7 @@ def test_docker_slim_basic_scan(tmp_path):
         "--rm",
         "-v",
         f"{test_repo}:/repo",
-        "jmo-security:slim",
+        image,
         "scan",
         "--repo",
         "/repo",
@@ -343,6 +387,10 @@ def test_docker_slim_basic_scan(tmp_path):
 
 def test_docker_alpine_basic_scan(tmp_path):
     """Test alpine variant can perform basic repository scan."""
+    image = "jmo-security:alpine"
+    if not _docker_image_exists(image):
+        pytest.skip(f"Docker image {image} not available locally")
+
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "test.py").write_text("x = 1")
@@ -353,7 +401,7 @@ def test_docker_alpine_basic_scan(tmp_path):
         "--rm",
         "-v",
         f"{test_repo}:/repo",
-        "jmo-security:alpine",
+        image,
         "scan",
         "--repo",
         "/repo",
@@ -372,6 +420,9 @@ def test_docker_alpine_basic_scan(tmp_path):
 def test_docker_variants_same_cli_interface():
     """Test all variants have consistent CLI interface."""
     for image, _, _ in DOCKER_VARIANTS:
+        if not _docker_image_exists(image):
+            pytest.skip(f"Docker image {image} not available locally")
+
         # Check scan command accepts same flags
         cmd = ["docker", "run", "--rm", image, "scan", "--help"]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -388,6 +439,9 @@ def test_docker_variants_version_consistency():
     versions = {}
 
     for image, _, _ in DOCKER_VARIANTS:
+        if not _docker_image_exists(image):
+            pytest.skip(f"Docker image {image} not available locally")
+
         shell = "sh" if "alpine" in image else "bash"
         # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
         cmd = [
