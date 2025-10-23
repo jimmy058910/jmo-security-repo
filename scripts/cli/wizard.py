@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 from scripts.core.exceptions import ToolExecutionException
 from scripts.core.config import load_config
+from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_generators import (
     generate_github_actions,
     generate_makefile_target,
@@ -204,13 +205,13 @@ def _check_docker_running() -> bool:
 
 
 def _get_cpu_count() -> int:
-    """Get CPU count for thread recommendations."""
-    try:
-        return os.cpu_count() or 4
-    except (OSError, RuntimeError) as e:
-        # CPU count detection can fail on some systems or be mocked in tests
-        logger.debug(f"Failed to detect CPU count: {e}")
-        return 4
+    """
+    Get CPU count for thread recommendations.
+
+    DEPRECATED: Use scripts.cli.cpu_utils.get_cpu_count() instead.
+    This function is kept for backward compatibility in tests.
+    """
+    return get_cpu_count()
 
 
 def _detect_repos_in_dir(path: Path) -> List[Path]:
@@ -246,7 +247,8 @@ def _validate_url(url: str) -> bool:
         with urllib.request.urlopen(
             req, timeout=2
         ) as response:  # nosec B310 - user-provided URL, validated
-            return response.status == 200
+            is_ok: bool = response.status == 200
+            return is_ok
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, Exception):
         # Any error means URL is not reachable
         return False
@@ -282,7 +284,8 @@ def _detect_iac_type(file_path: Path) -> str:
             # CloudFormation templates have AWSTemplateFormatVersion or Resources
             if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
                 return "cloudformation"
-        except Exception:
+        except (IOError, OSError, UnicodeDecodeError):
+            # File read can fail: permissions, encoding issues, I/O errors
             pass
 
     # Default to k8s-manifest for YAML files
@@ -339,9 +342,13 @@ def _validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
         if must_exist and not path.exists():
             return None
         return path
-    except Exception as e:
-        # Path expansion/resolution can fail (permissions, invalid paths, type errors, etc.)
-        # Catch all exceptions to be maximally defensive
+    except (OSError, ValueError, TypeError, RuntimeError, Exception) as e:
+        # Path expansion/resolution can fail:
+        # - OSError: permissions, invalid paths, symlink loops
+        # - ValueError: invalid characters, empty path
+        # - TypeError: non-string input
+        # - RuntimeError: infinite symlink recursion
+        # - Exception: catch-all for unexpected errors (defensive)
         logger.debug(f"Failed to resolve path '{path_str}': {e}")
         return None
 
@@ -1041,30 +1048,29 @@ def review_and_confirm(config: WizardConfig) -> bool:
     return _prompt_yes_no("\nProceed with scan?", default=True)
 
 
-def generate_command(config: WizardConfig) -> str:
+def _build_command_parts(config: WizardConfig) -> list[str]:
     """
-    Generate the jmotools/jmo command from config (for display/export).
+    Build command parts as a list (shared by generate_command and generate_command_list).
 
-    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
+    Returns list of command components for both string and list representations.
     """
-    profile_info = PROFILES[config.profile]
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
+    # Load profile info (threads/timeout may be overridden below)
+    profile_info = PROFILES[config.profile]  # noqa: F841 - used for reference
 
     if config.use_docker:
-        # Docker command (limited support for non-repo targets)
-        cmd_parts = ["docker run --rm"]
+        # Docker command
+        cmd_parts = ["docker", "run", "--rm"]
 
         # Volume mounts (only for file-based targets)
         if config.target.type == "repo":
             if config.target.repo_path:
-                cmd_parts.append(f"-v {config.target.repo_path}:/scan")
+                cmd_parts.extend(["-v", f"{config.target.repo_path}:/scan"])
         elif config.target.type == "iac":
             if config.target.iac_path:
-                cmd_parts.append(f"-v {config.target.iac_path}:/scan/iac-file")
+                cmd_parts.extend(["-v", f"{config.target.iac_path}:/scan/iac-file"])
 
         # Results mount
-        cmd_parts.append(f"-v $(pwd)/{config.results_dir}:/results")
+        cmd_parts.extend(["-v", f"$(pwd)/{config.results_dir}:/results"])
 
         # Image and base command
         cmd_parts.append("ghcr.io/jimmy058910/jmo-security:latest")
@@ -1073,21 +1079,32 @@ def generate_command(config: WizardConfig) -> str:
         # Target-specific flags
         if config.target.type == "repo":
             if config.target.repo_mode in ("repo", "repos-dir"):
-                cmd_parts.append("--repos-dir /scan")
+                cmd_parts.extend(["--repos-dir", "/scan"])
         elif config.target.type == "image":
             if config.target.image_name:
-                cmd_parts.append(f"--image {config.target.image_name}")
+                cmd_parts.extend(["--image", config.target.image_name])
         elif config.target.type == "iac":
-            cmd_parts.append(
-                f"--{config.target.iac_type.replace('-', '-')} /scan/iac-file"
-            )
-        # URL, GitLab, K8s work without mounts
+            cmd_parts.append(f"--{config.target.iac_type.replace('-', '-')}")
+            cmd_parts.append("/scan/iac-file")
+        elif config.target.type == "url":
+            if config.target.url:
+                cmd_parts.extend(["--url", config.target.url])
+        elif config.target.type == "gitlab":
+            if config.target.gitlab_repo:
+                cmd_parts.extend(["--gitlab-repo", config.target.gitlab_repo])
+            if config.target.gitlab_token:
+                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
+        elif config.target.type == "k8s":
+            if config.target.k8s_context:
+                cmd_parts.extend(["--k8s-context", config.target.k8s_context])
+            if config.target.k8s_namespace:
+                cmd_parts.extend(["--k8s-namespace", config.target.k8s_namespace])
 
-        cmd_parts.append("--results /results")
-        cmd_parts.append(f"--profile {config.profile}")
+        cmd_parts.extend(["--results", "/results"])
+        cmd_parts.extend(["--profile", config.profile])
 
     else:
-        # Native command (full support for all targets)
+        # Native command
         cmd_parts = ["jmotools", config.profile]
 
         # Target-specific flags
@@ -1099,70 +1116,73 @@ def generate_command(config: WizardConfig) -> str:
             elif config.target.repo_mode == "targets":
                 cmd_parts.extend(["--targets", config.target.repo_path])
             elif config.target.repo_mode == "tsv":
-                cmd_parts.extend(
-                    [
-                        "--tsv",
-                        config.target.tsv_path,
-                        "--dest",
-                        config.target.tsv_dest,
-                    ]
-                )
-
+                cmd_parts.extend(["--tsv", config.target.tsv_path])
+                if hasattr(config.target, "tsv_dest") and config.target.tsv_dest:
+                    cmd_parts.extend(["--dest", config.target.tsv_dest])
         elif config.target.type == "image":
             if config.target.image_name:
                 cmd_parts.extend(["--image", config.target.image_name])
-            elif config.target.images_file:
-                cmd_parts.extend(["--images-file", config.target.images_file])
-
         elif config.target.type == "iac":
-            if config.target.iac_type == "terraform":
-                cmd_parts.extend(["--terraform-state", config.target.iac_path])
-            elif config.target.iac_type == "cloudformation":
-                cmd_parts.extend(["--cloudformation", config.target.iac_path])
-            elif config.target.iac_type == "k8s-manifest":
-                cmd_parts.extend(["--k8s-manifest", config.target.iac_path])
-
+            cmd_parts.append(f"--{config.target.iac_type}")
+            cmd_parts.append(config.target.iac_path)
         elif config.target.type == "url":
             if config.target.url:
                 cmd_parts.extend(["--url", config.target.url])
-            elif config.target.urls_file:
-                cmd_parts.extend(["--urls-file", config.target.urls_file])
-            elif config.target.api_spec:
-                cmd_parts.extend(["--api-spec", config.target.api_spec])
-
         elif config.target.type == "gitlab":
-            cmd_parts.extend(["--gitlab-url", config.target.gitlab_url])
-            if config.target.gitlab_token:
-                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
             if config.target.gitlab_repo:
                 cmd_parts.extend(["--gitlab-repo", config.target.gitlab_repo])
-            elif config.target.gitlab_group:
-                cmd_parts.extend(["--gitlab-group", config.target.gitlab_group])
-
+            if config.target.gitlab_token:
+                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
         elif config.target.type == "k8s":
             if config.target.k8s_context:
                 cmd_parts.extend(["--k8s-context", config.target.k8s_context])
-            if config.target.k8s_all_namespaces:
-                cmd_parts.append("--k8s-all-namespaces")
-            elif config.target.k8s_namespace:
+            if config.target.k8s_namespace:
                 cmd_parts.extend(["--k8s-namespace", config.target.k8s_namespace])
 
-        cmd_parts.extend(["--results-dir", config.results_dir])
+        # Advanced options (check both config.advanced and direct attributes for backward compat)
+        threads = (
+            getattr(config.advanced, "threads", None)
+            if hasattr(config, "advanced") and config.advanced
+            else getattr(config, "threads", None)
+        )
+        timeout = (
+            getattr(config.advanced, "timeout", None)
+            if hasattr(config, "advanced") and config.advanced
+            else getattr(config, "timeout", None)
+        )
+        fail_on = (
+            getattr(config.advanced, "fail_on", None)
+            if hasattr(config, "advanced") and config.advanced
+            else getattr(config, "fail_on", None)
+        )
+        results_dir = getattr(config, "results_dir", "results")
+        allow_missing_tools = getattr(config, "allow_missing_tools", False)
+        human_logs = getattr(config, "human_logs", False)
 
-    # Common options
-    threads = config.threads or profile_threads
-    timeout = config.timeout or profile_timeout
+        if results_dir:
+            cmd_parts.extend(["--results-dir", results_dir])
+        # Include threads/timeout if explicitly set (non-None)
+        if threads is not None:
+            cmd_parts.extend(["--threads", str(threads)])
+        if timeout is not None:
+            cmd_parts.extend(["--timeout", str(timeout)])
+        if fail_on:
+            cmd_parts.extend(["--fail-on", fail_on.upper()])
+        if allow_missing_tools:
+            cmd_parts.append("--allow-missing-tools")
+        if human_logs:
+            cmd_parts.append("--human-logs")
 
-    cmd_parts.extend(["--threads", str(threads)])
-    cmd_parts.extend(["--timeout", str(timeout)])
+    return cmd_parts
 
-    if config.fail_on:
-        cmd_parts.extend(["--fail-on", config.fail_on])
 
-    if config.human_logs:
-        cmd_parts.append("--human-logs")
+def generate_command(config: WizardConfig) -> str:
+    """
+    Generate the jmotools/jmo command from config (for display/export).
 
-    return " ".join(cmd_parts)
+    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
+    """
+    return " ".join(_build_command_parts(config))
 
 
 def generate_command_list(config: WizardConfig) -> list[str]:
@@ -1171,129 +1191,8 @@ def generate_command_list(config: WizardConfig) -> list[str]:
 
     This function builds the command as a list of arguments to avoid shell injection.
     Use this for actual execution, not generate_command() which is for display only.
-
-    Supports all 6 target types: repo, image, iac, url, gitlab, k8s.
     """
-    profile_info = PROFILES[config.profile]
-    profile_threads = cast(int, profile_info["threads"])
-    profile_timeout = cast(int, profile_info["timeout"])
-
-    if config.use_docker:
-        # Docker command - build as list to avoid shell=True
-        cmd_list = ["docker", "run", "--rm"]
-
-        # Add volume mounts (only for file-based targets)
-        if config.target.type == "repo" and config.target.repo_path:
-            # Resolve absolute path to avoid injection
-            target_abs = os.path.abspath(config.target.repo_path)
-            cmd_list.extend(["-v", f"{target_abs}:/scan"])
-        elif config.target.type == "iac" and config.target.iac_path:
-            iac_abs = os.path.abspath(config.target.iac_path)
-            cmd_list.extend(["-v", f"{iac_abs}:/scan/iac-file"])
-
-        # Results mount - resolve to actual path
-        results_abs = os.path.abspath(config.results_dir)
-        cmd_list.extend(["-v", f"{results_abs}:/results"])
-
-        # Image and command
-        cmd_list.extend(["ghcr.io/jimmy058910/jmo-security:latest", "scan"])
-
-        # Target-specific arguments
-        if config.target.type == "repo":
-            if config.target.repo_mode in ("repo", "repos-dir"):
-                cmd_list.extend(["--repos-dir", "/scan"])
-        elif config.target.type == "image":
-            if config.target.image_name:
-                cmd_list.extend(["--image", config.target.image_name])
-        elif config.target.type == "iac":
-            iac_flag_map = {
-                "terraform": "--terraform-state",
-                "cloudformation": "--cloudformation",
-                "k8s-manifest": "--k8s-manifest",
-            }
-            cmd_list.extend([iac_flag_map[config.target.iac_type], "/scan/iac-file"])
-        # URL, GitLab, K8s work without mounts
-
-        cmd_list.extend(["--results", "/results"])
-        cmd_list.extend(["--profile", config.profile])
-
-    else:
-        # Native command (full support for all targets)
-        cmd_list = ["jmotools", config.profile]
-
-        # Target-specific flags
-        if config.target.type == "repo":
-            if config.target.repo_mode == "repo":
-                cmd_list.extend(["--repo", config.target.repo_path])
-            elif config.target.repo_mode == "repos-dir":
-                cmd_list.extend(["--repos-dir", config.target.repo_path])
-            elif config.target.repo_mode == "targets":
-                cmd_list.extend(["--targets", config.target.repo_path])
-            elif config.target.repo_mode == "tsv":
-                cmd_list.extend(
-                    [
-                        "--tsv",
-                        config.target.tsv_path,
-                        "--dest",
-                        config.target.tsv_dest,
-                    ]
-                )
-
-        elif config.target.type == "image":
-            if config.target.image_name:
-                cmd_list.extend(["--image", config.target.image_name])
-            elif config.target.images_file:
-                cmd_list.extend(["--images-file", config.target.images_file])
-
-        elif config.target.type == "iac":
-            if config.target.iac_type == "terraform":
-                cmd_list.extend(["--terraform-state", config.target.iac_path])
-            elif config.target.iac_type == "cloudformation":
-                cmd_list.extend(["--cloudformation", config.target.iac_path])
-            elif config.target.iac_type == "k8s-manifest":
-                cmd_list.extend(["--k8s-manifest", config.target.iac_path])
-
-        elif config.target.type == "url":
-            if config.target.url:
-                cmd_list.extend(["--url", config.target.url])
-            elif config.target.urls_file:
-                cmd_list.extend(["--urls-file", config.target.urls_file])
-            elif config.target.api_spec:
-                cmd_list.extend(["--api-spec", config.target.api_spec])
-
-        elif config.target.type == "gitlab":
-            cmd_list.extend(["--gitlab-url", config.target.gitlab_url])
-            if config.target.gitlab_token:
-                cmd_list.extend(["--gitlab-token", config.target.gitlab_token])
-            if config.target.gitlab_repo:
-                cmd_list.extend(["--gitlab-repo", config.target.gitlab_repo])
-            elif config.target.gitlab_group:
-                cmd_list.extend(["--gitlab-group", config.target.gitlab_group])
-
-        elif config.target.type == "k8s":
-            if config.target.k8s_context:
-                cmd_list.extend(["--k8s-context", config.target.k8s_context])
-            if config.target.k8s_all_namespaces:
-                cmd_list.append("--k8s-all-namespaces")
-            elif config.target.k8s_namespace:
-                cmd_list.extend(["--k8s-namespace", config.target.k8s_namespace])
-
-        cmd_list.extend(["--results-dir", config.results_dir])
-
-    # Common options
-    threads = config.threads or profile_threads
-    timeout = config.timeout or profile_timeout
-
-    cmd_list.extend(["--threads", str(threads)])
-    cmd_list.extend(["--timeout", str(timeout)])
-
-    if config.fail_on:
-        cmd_list.extend(["--fail-on", config.fail_on])
-
-    if config.human_logs:
-        cmd_list.append("--human-logs")
-
-    return cmd_list
+    return _build_command_parts(config)
 
 
 def execute_scan(config: WizardConfig) -> int:
@@ -1419,7 +1318,7 @@ def _send_wizard_telemetry(
                     "artifact_generated": artifact_type,
                     "duration_seconds": wizard_duration,
                 },
-                cfg.raw,
+                {},
                 version=__version__,
             )
     except Exception as e:

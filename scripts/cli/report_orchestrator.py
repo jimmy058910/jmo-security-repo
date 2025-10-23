@@ -204,15 +204,15 @@ def cmd_report(args, _log_fn) -> int:
 
     # Send report.generated telemetry event
     output_formats = []
-    if args.json or cfg.outputs.get("json", True):
+    if getattr(args, "json", False) or "json" in cfg.outputs:
         output_formats.append("json")
-    if args.md or cfg.outputs.get("md", True):
+    if getattr(args, "md", False) or "md" in cfg.outputs:
         output_formats.append("md")
-    if args.html or cfg.outputs.get("html", True):
+    if getattr(args, "html", False) or "html" in cfg.outputs:
         output_formats.append("html")
-    if args.sarif or cfg.outputs.get("sarif", False):
+    if getattr(args, "sarif", False) or "sarif" in cfg.outputs:
         output_formats.append("sarif")
-    if args.yaml or cfg.outputs.get("yaml", False):
+    if getattr(args, "yaml", False) or "yaml" in cfg.outputs:
         output_formats.append("yaml")
 
     send_event(
@@ -223,7 +223,7 @@ def cmd_report(args, _log_fn) -> int:
             "suppressions_used": sup_file is not None and sup_file.exists(),
             "compliance_enabled": True,  # Always enabled in v0.5.1+
         },
-        cfg.raw,
+        {},
         version=__version__,
     )
 

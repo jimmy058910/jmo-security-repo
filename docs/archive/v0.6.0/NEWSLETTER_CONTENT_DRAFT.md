@@ -48,11 +48,11 @@
 
 ---
 
-**💚 Support:** [Ko-Fi](https://ko-fi.com/jmogaming)
-**📖 Docs:** [jmotools.com](https://jmotools.com)
-**💬 Discuss:** [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)
+**💚 Support:** [Ko-Fi](<https://ko-fi.com/jmogaming>)
+**📖 Docs:** [jmotools.com](<https://jmotools.com>)
+**💬 Discuss:** [GitHub Discussions](<https://github.com/jimmy058910/jmo-security-repo/discussions>)
 
-[Unsubscribe]({{unsubscribe_url}}) | [Privacy Policy](https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html)
+[Unsubscribe]({{unsubscribe_url}}) | [Privacy Policy](<https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html>)
 ```text
 ---
 
@@ -64,53 +64,53 @@
 
 ### Content Outline
 
-### Hook:
+### Hook
 
 "Last week, I audited 50 Python projects on GitHub. Every single one had at least one of these 5 critical security issues..."
 
-### Main Content:
+### Main Content
 
 1. **Hardcoded Secrets in Code**
-   - Example: `API_KEY = "sk_live_abc123"` in `config.py`
-   - Impact: Credentials exposed in git history, even after deletion
-   - Fix: Use environment variables + `.env` file with `.gitignore`
-   - Tool: TruffleHog verified secrets scanning
+- Example: `API_KEY = "sk_live_abc123"` in `config.py`
+- Impact: Credentials exposed in git history, even after deletion
+- Fix: Use environment variables + `.env` file with `.gitignore`
+- Tool: TruffleHog verified secrets scanning
 
 2. **SQL Injection via String Formatting**
-   - Example: `cursor.execute(f"SELECT * FROM users WHERE id={user_id}")`
-   - Impact: Attacker can read/modify/delete database
-   - Fix: Use parameterized queries or ORM
-   - Tool: Semgrep rule `python.lang.security.audit.sqli`
+- Example: `cursor.execute(f"SELECT * FROM users WHERE id={user_id}")`
+- Impact: Attacker can read/modify/delete database
+- Fix: Use parameterized queries or ORM
+- Tool: Semgrep rule `python.lang.security.audit.sqli`
 
 3. **Insecure Deserialization (pickle)**
-   - Example: `pickle.loads(user_input)`
-   - Impact: Remote code execution
-   - Fix: Use JSON for untrusted data, or validate pickle sources
-   - Tool: Bandit rule B301
+- Example: `pickle.loads(user_input)`
+- Impact: Remote code execution
+- Fix: Use JSON for untrusted data, or validate pickle sources
+- Tool: Bandit rule B301
 
 4. **Missing Input Validation (Flask/Django)**
-   - Example: Accepting user input without sanitization
-   - Impact: XSS, command injection
-   - Fix: Use framework validators, escape HTML output
-   - Tool: Semgrep XSS rules
+- Example: Accepting user input without sanitization
+- Impact: XSS, command injection
+- Fix: Use framework validators, escape HTML output
+- Tool: Semgrep XSS rules
 
 5. **Weak Cryptographic Functions**
-   - Example: `hashlib.md5(password)` for password hashing
-   - Impact: Easy to crack with rainbow tables
-   - Fix: Use `bcrypt`, `scrypt`, or `Argon2`
-   - Tool: Bandit rule B303/B324
+- Example: `hashlib.md5(password)` for password hashing
+- Impact: Easy to crack with rainbow tables
+- Fix: Use `bcrypt`, `scrypt`, or `Argon2`
+- Tool: Bandit rule B303/B324
 
-### Case Study:
+### Case Study
 
 "Real-world example: A Django app exposed 10,000 user records because of SQL injection in the search feature. The fix? One line of code changed from f-string to parameterized query."
 
-### Action Items:
+### Action Items
 
 - [ ] Run `jmotools fast` on your Python projects
 - [ ] Review all database queries for parameterization
 - [ ] Check for hardcoded secrets with `git log -S "api_key"`
 
-### Call-to-Action:
+### Call-to-Action
 
 "Found security issues in your project? Reply to this email with the most interesting vulnerability you discovered. I'll feature the best one in next week's newsletter!"
 
@@ -122,25 +122,25 @@
 
 **Preview Text:** 12 Docker security must-haves for production
 
-### Content Outline
+### Content Outline (2)
 
-### Hook:
+### Hook (2)
 
 "Yesterday, I scanned 100 popular Docker images on Docker Hub. 89% had HIGH or CRITICAL vulnerabilities. Here's what they're missing..."
 
-### Main Content:
+### Main Content (2)
 
 ### Phase 1: Build-Time Security
 
 1. **Use Official Base Images**
-   - ✅ `FROM python:3.11-slim-bookworm`
-   - ❌ `FROM random-user/python-custom`
-   - Why: Official images are maintained and scanned
+- ✅ `FROM python:3.11-slim-bookworm`
+- ❌ `FROM random-user/python-custom`
+- Why: Official images are maintained and scanned
 
 2. **Pin Specific Versions**
-   - ✅ `FROM node:18.19.0-alpine3.18`
-   - ❌ `FROM node:latest`
-   - Why: Reproducible builds, predictable security posture
+- ✅ `FROM node:18.19.0-alpine3.18`
+- ❌ `FROM node:latest`
+- Why: Reproducible builds, predictable security posture
 
 3. **Run as Non-Root User**
 
@@ -150,15 +150,14 @@
    ```
 
 4. **Multi-Stage Builds**
+
    - Separate build dependencies from runtime
    - Reduces attack surface by 70%
 
 5. **Scan Images in CI/CD**
 
    ```yaml
-
    - name: Trivy Scan
-
      run: docker run --rm aquasec/trivy image myapp:latest
    ```
 
@@ -194,22 +193,25 @@
    ```
 
 10. **Network Policies**
+
     - Restrict pod-to-pod communication
     - Deny all by default, allow specific
 
 11. **Secrets Management**
+
     - Use Kubernetes Secrets or Vault
     - Never `ENV API_KEY=...` in Dockerfile
 
 12. **Regular Patching**
+
     - Rebuild images weekly
     - Automate with Dependabot or Renovate
 
-### Case Study:
+### Case Study (2)
 
 "A fintech startup reduced their Docker image vulnerabilities from 47 CRITICAL to 0 in 2 weeks using this checklist. Their images went from 1.2GB to 180MB, and security scans went from 15 minutes to 30 seconds."
 
-### Checklist:
+### Checklist
 
 ```bash
 
@@ -221,7 +223,7 @@ docker run --rm aquasec/trivy image your-image:tag
 
 jmo scan --image your-image:tag --tools trivy syft
 ```text
-### Action Items:
+### Action Items (2)
 
 - [ ] Scan all production images with Trivy
 - [ ] Update Dockerfiles to use non-root user
@@ -235,13 +237,13 @@ jmo scan --image your-image:tag --tools trivy syft
 
 **Preview Text:** Detection is easy. Removal is hard. Here's the complete guide.
 
-### Content Outline
+### Content Outline (3)
 
-### Hook:
+### Hook (3)
 
 "I found 127 AWS keys in a single repository's git history. All of them still valid. The developer thought deleting the file was enough. It wasn't."
 
-### Main Content:
+### Main Content (3)
 
 ### Part 1: Detection
 
@@ -251,8 +253,8 @@ jmo scan --image your-image:tag --tools trivy syft
    jmo scan --repo . --tools trufflehog --profile fast
    ```
 
-   - Only reports verified active credentials
-   - 95% fewer false positives than regex-based tools
+- Only reports verified active credentials
+- 95% fewer false positives than regex-based tools
 
 2. **Nosey Parker for Historical Secrets**
 
@@ -260,8 +262,8 @@ jmo scan --image your-image:tag --tools trivy syft
    jmo scan --repo . --profile deep  # Includes noseyparker
    ```
 
-   - Scans entire git history
-   - Finds secrets deleted years ago
+- Scans entire git history
+- Finds secrets deleted years ago
 
 3. **Pre-Commit Hook Prevention**
 
@@ -269,15 +271,13 @@ jmo scan --image your-image:tag --tools trivy syft
    # .pre-commit-config.yaml
    repos:
 
-     - repo: https://github.com/trufflesecurity/trufflehog
-
-       rev: v3.63.0
-       hooks:
-
-         - id: trufflehog
-
-           args: ['--only-verified']
-   ```
+```yaml
+- repo: <https://github.com/trufflesecurity/trufflehog>
+  rev: v3.63.0
+  hooks:
+    - id: trufflehog
+      args: ['--only-verified']
+```
 
 ### Part 2: Impact Assessment
 
@@ -314,7 +314,7 @@ ALTER USER myuser WITH PASSWORD 'new-secure-password';
 
 # Download BFG
 
-wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar
+wget <https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar>
 
 # Create secrets.txt with all leaked secrets
 
@@ -338,7 +338,7 @@ pip install git-filter-repo
 
 git filter-repo --path secrets.env --invert-paths
 
-# Force push
+# Force push (2)
 
 git push --force --all origin
 ```text
@@ -358,7 +358,7 @@ git push --force --all origin
 
 ### Part 4: Migration to Proper Secrets Management
 
-### Before:
+### Before
 
 ```python
 
@@ -366,11 +366,11 @@ git push --force --all origin
 
 API_KEY = "sk_live_abc123"  # ❌ NEVER DO THIS
 ```text
-### After:
+### After
 
 ```python
 
-# config.py
+# config.py (2)
 
 import os
 API_KEY = os.getenv("API_KEY")  # ✅ Load from environment
@@ -378,7 +378,7 @@ API_KEY = os.getenv("API_KEY")  # ✅ Load from environment
 if not API_KEY:
     raise ValueError("API_KEY environment variable not set")
 ```text
-### Production Deployment:
+### Production Deployment
 
 ```bash
 
@@ -394,11 +394,11 @@ kubectl create secret generic app-secrets --from-literal=API_KEY=sk_live_abc123
 
 aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc123
 ```text
-### Case Study:
+### Case Study (3)
 
 "A SaaS company leaked their Stripe secret key in a public repo. Within 2 hours, attackers charged $47,000 to test credit cards. Total cost after chargebacks, fines, and remediation: $180,000. The commit was made by an intern who didn't know about `.gitignore`."
 
-### Checklist:
+### Checklist (2)
 
 - [ ] Scan for secrets: `jmo scan --repo . --profile deep`
 - [ ] Rotate any found secrets within 1 hour
@@ -414,15 +414,15 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 
 **Preview Text:** Real findings, real fixes, real numbers. From 284 vulnerabilities to 12 in 30 days.
 
-### Content Outline
+### Content Outline (4)
 
-### Hook:
+### Hook (4)
 
 "Last month, I offered free security audits to 10 open-source projects. Every single one accepted. The results were shocking..."
 
-### Main Content:
+### Main Content (4)
 
-### The Projects:
+### The Projects
 
 - 3 Python web apps (Django/Flask)
 - 2 Node.js APIs (Express)
@@ -430,7 +430,7 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 - 2 Docker-based microservices
 - 1 Go CLI tool
 
-### Aggregate Statistics:
+### Aggregate Statistics
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
@@ -442,43 +442,43 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 
 **Time to Fix:** 30 days average (2 hours/week per project)
 
-### Most Common Issues:
+### Most Common Issues
 
 1. **Outdated Dependencies (67% of projects)**
-   - Average: 23 CVEs per project
-   - Worst case: Django app with 89 CVEs (dependencies not updated in 2 years)
-   - Fix: `npm audit fix`, `pip list --outdated`, Dependabot
+- Average: 23 CVEs per project
+- Worst case: Django app with 89 CVEs (dependencies not updated in 2 years)
+- Fix: `npm audit fix`, `pip list --outdated`, Dependabot
 
 2. **Hardcoded Secrets (40% of projects)**
-   - Found in: `config.py`, `.env` committed to git, Dockerfiles
-   - Most dangerous: AWS key with full admin access
-   - Fix: Environment variables, AWS Secrets Manager
+- Found in: `config.py`, `.env` committed to git, Dockerfiles
+- Most dangerous: AWS key with full admin access
+- Fix: Environment variables, AWS Secrets Manager
 
 3. **SQL Injection (30% of projects)**
-   - Found in: Custom search features, admin panels
-   - Impact: Full database read/write access
-   - Fix: Parameterized queries, ORM usage
+- Found in: Custom search features, admin panels
+- Impact: Full database read/write access
+- Fix: Parameterized queries, ORM usage
 
 4. **Missing Input Validation (50% of projects)**
-   - Found in: API endpoints, form handlers
-   - Impact: XSS, command injection
-   - Fix: Framework validators, sanitization libraries
+- Found in: API endpoints, form handlers
+- Impact: XSS, command injection
+- Fix: Framework validators, sanitization libraries
 
 5. **Insecure Docker Images (100% of projects using Docker)**
-   - Average: 47 vulnerabilities per image
-   - Root cause: Running as root, outdated base images
-   - Fix: Non-root user, multi-stage builds, regular patching
+- Average: 47 vulnerabilities per image
+- Root cause: Running as root, outdated base images
+- Fix: Non-root user, multi-stage builds, regular patching
 
 ### Deep Dive: Python Web App Case Study
 
 **Project:** Django e-commerce site (15K users)
 
-### Initial Scan Results:
+### Initial Scan Results
 
 ```bash
 jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 
-# Output:
+# Output
 
 # ❌ CI FAILED - Findings above threshold detected
 
@@ -497,34 +497,34 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 # Total: 69 findings
 
 ```text
-### Top 5 Findings:
+### Top 5 Findings
 
 1. **CRITICAL: Hardcoded Stripe Secret Key**
-   - File: `payments/config.py`
-   - Risk: Anyone with repo access can charge cards
-   - Fix time: 5 minutes (move to environment variable)
+- File: `payments/config.py`
+- Risk: Anyone with repo access can charge cards
+- Fix time: 5 minutes (move to environment variable)
 
 2. **HIGH: SQL Injection in Search**
-   - File: `products/views.py`
-   - Code: `cursor.execute(f"SELECT * FROM products WHERE name LIKE '%{query}%'")`
-   - Risk: Read all customer data, modify orders
-   - Fix time: 10 minutes (use Django ORM)
+- File: `products/views.py`
+- Code: `cursor.execute(f"SELECT * FROM products WHERE name LIKE '%{query}%'")`
+- Risk: Read all customer data, modify orders
+- Fix time: 10 minutes (use Django ORM)
 
 3. **HIGH: Outdated Django (3.1 → 4.2)**
-   - Risk: 23 known CVEs, including RCE
-   - Fix time: 2 hours (upgrade + test)
+- Risk: 23 known CVEs, including RCE
+- Fix time: 2 hours (upgrade + test)
 
 4. **MEDIUM: Missing CSRF Protection**
-   - Files: 8 forms without `{% csrf_token %}`
-   - Risk: Attackers can trigger actions as logged-in users
-   - Fix time: 20 minutes (add token to all forms)
+- Files: 8 forms without `{% csrf_token %}`
+- Risk: Attackers can trigger actions as logged-in users
+- Fix time: 20 minutes (add token to all forms)
 
 5. **MEDIUM: Weak Password Hashing (MD5)**
-   - File: `users/auth.py`
-   - Risk: Passwords crackable in minutes with rainbow tables
-   - Fix time: 1 hour (migrate to bcrypt)
+- File: `users/auth.py`
+- Risk: Passwords crackable in minutes with rainbow tables
+- Fix time: 1 hour (migrate to bcrypt)
 
-### Remediation Process:
+### Remediation Process
 
 ### Week 1: Critical + High (6 hours)
 
@@ -546,12 +546,12 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 - Remaining 9 = LOW severity (code quality, not security)
 - Set up weekly automated scans in CI/CD
 
-### Final Scan:
+### Final Scan
 
 ```bash
 jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 
-# Output:
+# Output (2)
 
 # ✅ CI PASSED - No findings above threshold
 
@@ -564,13 +564,13 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 # Total: 9 findings (all informational)
 
 ```text
-### Developer Testimonial:
+### Developer Testimonial
 
 > "I thought our app was secure because we didn't have any data breaches. JMo Security found 69 issues in 5 minutes. The fixes were straightforward once we knew what to look for. Now our security scans run automatically on every PR."
 >
 > — Alex Chen, Lead Developer
 
-### Key Takeaways:
+### Key Takeaways
 
 1. **Most vulnerabilities are easy to fix** (5-15 minutes each)
 2. **Automated scanning catches 95% of issues** (manual review for the rest)
@@ -578,7 +578,7 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 4. **Regular updates matter** (outdated dependencies = easiest target)
 5. **CI/CD integration is critical** (gate merges on security scan results)
 
-### Your Turn:
+### Your Turn
 
 ```bash
 
@@ -591,7 +591,7 @@ jmo ci --repos-dir ~/projects --profile balanced --fail-on HIGH
 # Expected findings: 10-50 per project (based on 10-project average)
 
 ```text
-### Action Items:
+### Action Items (3)
 
 - [ ] Audit your top 3 projects this week
 - [ ] Fix all CRITICAL and HIGH findings
@@ -640,17 +640,17 @@ jmo ci --repos-dir ~/projects --profile balanced --fail-on HIGH
 ### A/B Testing Ideas
 
 1. **Subject Lines:**
-   - Emoji vs no emoji
-   - Question vs statement
-   - Number-based vs curiosity-based
+- Emoji vs no emoji
+- Question vs statement
+- Number-based vs curiosity-based
 
 2. **Content Length:**
-   - Short (500 words) vs Long (1,200 words)
-   - Single topic vs multiple sections
+- Short (500 words) vs Long (1,200 words)
+- Single topic vs multiple sections
 
 3. **CTAs:**
-   - "Try JMo Security" vs "Scan Your Project Now"
-   - Button vs text link
+- "Try JMo Security" vs "Scan Your Project Now"
+- Button vs text link
 
 ---
 

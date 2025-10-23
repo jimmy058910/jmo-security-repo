@@ -31,7 +31,7 @@ class Config:
     )
     outputs: List[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
     fail_on: str = ""
-    threads: Optional[int] = None
+    threads: Optional[int | str] = None  # int for explicit count, 'auto' for detection
     include: List[str] = field(default_factory=list)
     exclude: List[str] = field(default_factory=list)
     timeout: Optional[int] = None
@@ -63,9 +63,12 @@ def load_config(path: Optional[str]) -> Config:
         cfg.outputs = [str(x) for x in data["outputs"]]
     if isinstance(data.get("fail_on"), str):
         cfg.fail_on = data["fail_on"].upper()
-    # threads: optional positive int; <=0 or missing -> None (auto)
+    # threads: optional positive int, 'auto' string, or None
+    # <=0 or missing -> None (auto-detect)
     tval = data.get("threads")
-    if isinstance(tval, int) and tval > 0:
+    if isinstance(tval, str) and tval.lower() == "auto":
+        cfg.threads = "auto"
+    elif isinstance(tval, int) and tval > 0:
         cfg.threads = tval
     # include/exclude
     if isinstance(data.get("include"), list):

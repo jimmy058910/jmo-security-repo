@@ -13,6 +13,7 @@ The `.jmo/memory/` system is JMo Security's persistent learning layer - a hybrid
 ### Automated (80% of Usage)
 
 Claude Code automatically:
+
 - ✅ **Queries memory before re-analyzing** ("Have I seen this pattern before?")
 - ✅ **Stores findings after skill completion** (tool patterns, compliance mappings, etc.)
 - ✅ **Updates namespace-scoped data** (adapters, profiles, compliance)
@@ -23,6 +24,7 @@ Claude Code automatically:
 ### Manual (20% of Usage)
 
 You manually interact when:
+
 - 📝 **Reviewing memory contents:** `cat .jmo/memory/adapters/snyk.json`
 - 🗑️ **Pruning outdated entries:** `rm .jmo/memory/adapters/deprecated-tool.json`
 - 🔧 **Overriding cached data:** Edit JSON if Claude's analysis was wrong
@@ -138,12 +140,14 @@ jmotools memory prune --older-than 180d
 ### What's Stored
 
 ✅ **Safe to Store:**
+
 - Tool output patterns (e.g., "Snyk uses `vulnerabilities[]` array")
 - Common pitfalls (e.g., "Trivy exits with code 1 on findings, treat as success")
 - Performance metrics (e.g., "Semgrep averages 45s on 10k LOC repos")
 - Compliance mappings (e.g., "CWE-79 → OWASP A03:2021")
 
 ❌ **NOT Stored:**
+
 - Actual security findings (those go in `results/`)
 - Secrets or credentials
 - Repository names or code snippets
@@ -179,11 +183,13 @@ jmotools memory prune --older-than 180d
 **Symptom:** Skill completes but no `.jmo/memory/<namespace>/<item>.json` created
 
 **Causes:**
+
 1. Directory doesn't exist: `mkdir -p .jmo/memory/<namespace>`
 2. Permission denied: `chmod 755 .jmo/memory`
 3. Skill doesn't have memory integration yet (see Files 16-18 for updated skills)
 
 **Fix:**
+
 ```bash
 mkdir -p .jmo/memory/{adapters,compliance,profiles,target-types,refactoring,security}
 ```
@@ -193,10 +199,12 @@ mkdir -p .jmo/memory/{adapters,compliance,profiles,target-types,refactoring,secu
 **Symptom:** Claude uses outdated pattern from memory
 
 **Causes:**
+
 1. Tool version changed but memory not updated
 2. JMo codebase patterns changed
 
 **Fix:**
+
 ```bash
 # Delete stale entry
 rm .jmo/memory/adapters/tool.json
@@ -209,10 +217,12 @@ rm .jmo/memory/adapters/tool.json
 **Symptom:** `.jmo/memory/` consuming excessive disk space
 
 **Causes:**
+
 1. Too many old patterns accumulated
 2. JSON files contain large data (e.g., full tool outputs instead of patterns)
 
 **Fix:**
+
 ```bash
 # Prune old files (>6 months)
 find .jmo/memory -name "*.json" -mtime +180 -delete

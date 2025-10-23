@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from scripts.core.exceptions import AdapterParseException
 
@@ -212,23 +212,29 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
         return []
 
 
-def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
-    """Best-effort enrichment: attach SBOM package context from Syft to Trivy findings.
+def _build_syft_indexes(
+    findings: List[Dict[str, Any]]
+) -> tuple[Dict[str, List[Dict[str, str]]], Dict[str, List[Dict[str, str]]]]:
+    """Build indexes of Syft packages by file path and lowercase package name.
 
-    Strategy:
-    - Build indexes of Syft packages by file path and by lowercase package name.
-    - For each Trivy finding, try to match by location.path and/or raw.PkgName/PkgPath.
-    - When matched, attach context.sbom = {name, version, path} and add a tag 'pkg:name@version'.
+    Args:
+        findings: All findings from all tools
+
+    Returns:
+        Tuple of (by_path, by_name) indexes where:
+        - by_path: Dict mapping file paths to list of package dicts
+        - by_name: Dict mapping lowercase package names to list of package dicts
     """
-    # Build indexes from Syft package entries (INFO-level with tags include 'sbom'/'package')
     by_path: Dict[str, List[Dict[str, str]]] = {}
     by_name: Dict[str, List[Dict[str, str]]] = {}
+
     for f in findings:
         if not isinstance(f, dict):
             continue
         tool_info = f.get("tool") or {}
         tool = tool_info.get("name") if isinstance(tool_info, dict) else None
         tags = f.get("tags") or []
+
         if tool == "syft" and ("package" in tags or "sbom" in tags):
             raw = f.get("raw") or {}
             if not isinstance(raw, dict):
@@ -237,6 +243,7 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
             version = str(raw.get("version") or "").strip()
             loc = f.get("location") or {}
             path = str(loc.get("path") if isinstance(loc, dict) else "" or "")
+
             if path:
                 by_path.setdefault(path, []).append(
                     {"name": name, "version": version, "path": path}
@@ -246,6 +253,86 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
                     {"name": name, "version": version, "path": path}
                 )
 
+    return by_path, by_name
+
+
+def _find_sbom_match(
+    trivy_finding: Dict[str, Any],
+    by_path: Dict[str, List[Dict[str, str]]],
+    by_name: Dict[str, List[Dict[str, str]]],
+) -> Optional[Dict[str, str]]:
+    """Find matching SBOM package for a Trivy finding.
+
+    Args:
+        trivy_finding: Trivy finding dict
+        by_path: Index of packages by file path
+        by_name: Index of packages by lowercase name
+
+    Returns:
+        Best matching package dict, or None if no match found
+    """
+    loc = trivy_finding.get("location") or {}
+    loc_path = str(loc.get("path") if isinstance(loc, dict) else "" or "")
+    raw = trivy_finding.get("raw") or {}
+    if not isinstance(raw, dict):
+        raw = {}
+    pkg_name = str(raw.get("PkgName") or "").strip()
+    pkg_path = str(raw.get("PkgPath") or "").strip()
+
+    # Collect all candidates
+    candidates = []
+    if loc_path and loc_path in by_path:
+        candidates.extend(by_path.get(loc_path, []))
+    if pkg_path and pkg_path in by_path:
+        candidates.extend(by_path.get(pkg_path, []))
+    if pkg_name and pkg_name.lower() in by_name:
+        candidates.extend(by_name.get(pkg_name.lower(), []))
+
+    if not candidates:
+        return None
+
+    # Prefer exact path match, then first by name
+    if loc_path and loc_path in by_path:
+        return by_path[loc_path][0]
+    elif pkg_path and pkg_path in by_path:
+        return by_path[pkg_path][0]
+    else:
+        return candidates[0]
+
+
+def _attach_sbom_context(finding: Dict[str, Any], match: Dict[str, str]) -> None:
+    """Attach SBOM context and package tag to a finding.
+
+    Args:
+        finding: Finding dict to enrich (modified in-place)
+        match: Matched package dict with name, version, path
+    """
+    # Attach context
+    ctx = finding.setdefault("context", {})
+    ctx["sbom"] = {k: v for k, v in match.items() if v}
+
+    # Add package tag
+    tags = finding.setdefault("tags", [])
+    tag_val = (
+        "pkg:"
+        + match["name"]
+        + ("@" + match["version"] if match.get("version") else "")
+    )
+    if tag_val not in tags:
+        tags.append(tag_val)
+
+
+def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
+    """Best-effort enrichment: attach SBOM package context from Syft to Trivy findings.
+
+    Strategy:
+    - Build indexes of Syft packages by file path and by lowercase package name.
+    - For each Trivy finding, try to match by location.path and/or raw.PkgName/PkgPath.
+    - When matched, attach context.sbom = {name, version, path} and add a tag 'pkg:name@version'.
+    """
+    # Build indexes from Syft package entries
+    by_path, by_name = _build_syft_indexes(findings)
+
     # Enrich Trivy findings
     for f in findings:
         if not isinstance(f, dict):
@@ -254,42 +341,10 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
         tool = tool_info.get("name") if isinstance(tool_info, dict) else None
         if tool != "trivy":
             continue
-        loc = f.get("location") or {}
-        loc_path = str(loc.get("path") if isinstance(loc, dict) else "" or "")
-        raw = f.get("raw") or {}
-        if not isinstance(raw, dict):
-            raw = {}
-        pkg_name = str(raw.get("PkgName") or "").strip()
-        pkg_path = str(raw.get("PkgPath") or "").strip()
 
-        candidates = []
-        if loc_path and loc_path in by_path:
-            candidates.extend(by_path.get(loc_path, []))
-        if pkg_path and pkg_path in by_path:
-            candidates.extend(by_path.get(pkg_path, []))
-        if pkg_name and pkg_name.lower() in by_name:
-            candidates.extend(by_name.get(pkg_name.lower(), []))
-        if not candidates:
-            continue
-        # Prefer exact path match, then first by name
-        if loc_path and loc_path in by_path:
-            match = by_path[loc_path][0]
-        elif pkg_path and pkg_path in by_path:
-            match = by_path[pkg_path][0]
-        else:
-            match = candidates[0]
-
-        # Attach context and tag
-        ctx = f.setdefault("context", {})
-        ctx["sbom"] = {k: v for k, v in match.items() if v}
-        tags = f.setdefault("tags", [])
-        tag_val = (
-            "pkg:"
-            + match["name"]
-            + ("@" + match["version"] if match.get("version") else "")
-        )
-        if tag_val not in tags:
-            tags.append(tag_val)
+        match = _find_sbom_match(f, by_path, by_name)
+        if match:
+            _attach_sbom_context(f, match)
 
 
 def main() -> int:

@@ -91,6 +91,8 @@ def test_threads_env_then_config(tmp_path: Path, monkeypatch):
     # pretend config.threads = 3 by monkeypatching load_config return object
     class Cfg:
         threads = 3
+        default_profile = None  # Required by cmd_scan telemetry
+        profiling_default_threads = 4  # Required by report profiling
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
     monkeypatch.setattr(jmo, "load_config", lambda p: Cfg())

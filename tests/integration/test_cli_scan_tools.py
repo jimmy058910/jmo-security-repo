@@ -106,18 +106,55 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         assert out.exists(), f"expected output for {t} to exist: {out}"
 
 
-def test_noseyparker_docker_fallback(tmp_path: Path, monkeypatch):
+def test_noseyparker_docker_fallback(tmp_path: Path):
     """
-    Test noseyparker Docker fallback mechanism.
+    Test noseyparker stub creation when binary and Docker are unavailable.
 
-    NOTE: Skipped until noseyparker is implemented in repository_scanner.py
-    (see repository_scanner.py:299-300 comment). Noseyparker is in the deep profile
-    but not yet integrated into the refactored scanner modules.
+    Noseyparker has two strategies:
+    1. Local binary execution (3-phase: init, scan, report)
+    2. Docker fallback (via run_noseyparker_docker.sh)
+    3. Stub generation when both are unavailable
 
-    TODO: Re-enable this test after implementing noseyparker in repository_scanner.py
+    This test verifies strategy #3 by hiding both noseyparker binary and docker.
     """
-    import pytest
+    import subprocess
+    import sys
+    import os
 
-    pytest.skip(
-        "Noseyparker not yet implemented in repository_scanner.py (see line 299-300)"
+    # Create minimal PATH with ONLY python3 (exclude bash/docker/noseyparker)
+    minimal_bin = tmp_path / "minimal-bin"
+    minimal_bin.mkdir()
+    os.symlink(sys.executable, str(minimal_bin / "python3"))
+
+    # Create test repo
+    repo = tmp_path / "test-repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("password = 'hardcoded123'", encoding="utf-8")
+
+    # Run scan with noseyparker (should create stub)
+    out_base = tmp_path / "results"
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(repo),
+        "--results-dir",
+        str(out_base),
+        "--tools",
+        "noseyparker",
+        "--allow-missing-tools",  # Creates stub when tool unavailable
+    ]
+
+    result = subprocess.run(
+        cmd,
+        timeout=120,
+        capture_output=True,
+        text=True,
+        env={"PATH": str(minimal_bin), "PYTHONPATH": "."},
     )
+    assert result.returncode == 0, f"Scan failed: {result.stderr}"
+
+    # Verify stub file exists
+    noseyparker_out = out_base / "individual-repos" / repo.name / "noseyparker.json"
+    assert noseyparker_out.exists(), "Stub should be created when tool unavailable"

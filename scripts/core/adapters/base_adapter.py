@@ -263,4 +263,5 @@ def load_json_file(path: Path) -> Dict[str, Any]:
         json.JSONDecodeError: If file is not valid JSON
     """
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data: Dict[str, Any] = json.load(f)
+        return data

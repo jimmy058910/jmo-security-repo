@@ -29,7 +29,7 @@ class ToolDefinition:
     Attributes:
         name: Tool name (e.g., "trufflehog", "semgrep", "trivy")
         command: Command to execute as list of arguments (no shell expansion)
-        output_file: Path where tool writes JSON output
+        output_file: Path where tool writes JSON output (None for tools that don't write files)
         timeout: Maximum execution time in seconds (default: 600)
         retries: Number of retry attempts on failure (default: 0)
         ok_return_codes: Tuple of acceptable return codes (default: (0, 1))
@@ -38,7 +38,7 @@ class ToolDefinition:
 
     name: str
     command: List[str]
-    output_file: Path
+    output_file: Optional[Path]
     timeout: int = 600
     retries: int = 0
     ok_return_codes: Tuple[int, ...] = (0, 1)

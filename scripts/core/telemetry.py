@@ -73,7 +73,8 @@ def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
         return False
 
     # Config check (default: False, opt-in only)
-    return config.get("telemetry", {}).get("enabled", False)
+    enabled: bool = bool(config.get("telemetry", {}).get("enabled", False))
+    return enabled
 
 
 def send_event(
@@ -155,7 +156,9 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
         )
 
         # Send request with 2-second timeout (don't block scans)
-        with request.urlopen(req, timeout=2) as response:
+        with request.urlopen(
+            req, timeout=2
+        ) as response:  # nosec B310 - hardcoded GitHub Gist API URL
             if response.status not in (200, 201):
                 # Gist API returned error, but don't crash (fail silently)
                 pass
@@ -182,9 +185,14 @@ def _get_gist_content() -> str:
             },
         )
 
-        with request.urlopen(req, timeout=2) as response:
+        with request.urlopen(
+            req, timeout=2
+        ) as response:  # nosec B310 - hardcoded GitHub Gist API URL
             gist_data = json.loads(response.read().decode("utf-8"))
-            return gist_data.get("files", {}).get(TELEMETRY_FILE, {}).get("content", "")
+            content: str = str(
+                gist_data.get("files", {}).get(TELEMETRY_FILE, {}).get("content", "")
+            )
+            return content
 
     except Exception:
         # If fetch fails, return empty string (will create new content)

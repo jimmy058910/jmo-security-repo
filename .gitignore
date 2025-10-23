@@ -88,6 +88,14 @@ docs/archive/*
 .claude/
 samples/fixtures/infra-demo/docker-test-results/
 
+# JMo Memory System (persistent learning, local only)
+.jmo/memory/*
+!.jmo/memory/.gitkeep
+!.jmo/memory/README.md
+!.jmo/memory/schemas.json
+!.jmo/memory/*/
+!.jmo/memory/*/.gitkeep
+
 # Node.js dependencies (API)
 node_modules/
 scripts/api/node_modules/

@@ -385,7 +385,7 @@ This matrix shows the recommended execution mode for each use case.
 
 **Execution Mode Decision Tree:**
 
-```
+```text
 1. Is this a first-time user or demo?
    YES → Wizard (interactive, guided)
    NO → Continue to 2
@@ -437,7 +437,7 @@ This matrix shows tailored configurations for different industries.
 | **Government/Defense** | Zero Trust Architecture | All 6 types | All 11 tools | deep | CRITICAL | NIST CSF, CIS Controls, MITRE ATT&CK |
 | **Startups** | Fast Iteration, Low Friction | Repositories | trufflehog, semgrep, trivy | fast | CRITICAL | OWASP, CWE |
 
-**Example: Financial Services (Payment API Security)**
+### Example: Financial Services (Payment API Security)
 
 ```yaml
 # jmo.yml
@@ -486,7 +486,7 @@ This matrix shows optimal workflows for different team structures.
 | **Large Team (20-50)** | Multi-stage gates | Docker (full) | fast → balanced → deep | PR → merge → nightly | Automated + compliance dashboard |
 | **Enterprise (50+)** | Centralized security team | Docker (full) | custom profiles | Continuous | Automated + quarterly audits |
 
-**Example: Mid-Sized Team (6-20 Developers)**
+### Example: Mid-Sized Team (6-20 Developers)
 
 **Workflow:**
 
@@ -557,7 +557,7 @@ This matrix shows recommended `--fail-on` thresholds for different use cases.
 
 **Threshold Decision Tree:**
 
-```
+```text
 1. Is this blocking a deployment/release?
    YES → Use HIGH or CRITICAL
    NO → Continue to 2

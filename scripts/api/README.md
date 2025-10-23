@@ -439,7 +439,7 @@ netlify env:set RESEND_API_KEY re_your_key_here
 1. Spam folder
 2. Resend dashboard: <https://resend.com/emails>
 3. Domain verification: <https://resend.com/domains>
-4. FROM email matches verified domain (`hello@jmotools.com`)
+4. FROM email matches verified domain (`marketing@jmotools.com`)
 
 ### Rate limit errors in production
 

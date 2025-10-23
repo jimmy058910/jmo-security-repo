@@ -222,6 +222,9 @@ jobs:
         env:
           PRE_COMMIT_HOME: ~/.cache/pre-commit
           # Skip bandit (already covered by make lint)
-          SKIP: bandit
+          # Skip yamllint to avoid validating external pre-commit cache files
+          SKIP: bandit,yamllint
         run: |
           pre-commit run --all-files --show-diff-on-failure
+          # Run yamllint separately on our repo files only
+          yamllint -c .yamllint.yaml .

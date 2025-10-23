@@ -36,12 +36,12 @@ The compliance-aware findings (v0.5.1+) include rich metadata from frameworks li
 
 **File:** `scripts/core/reporters/html_reporter.py`
 
-### Before (Line 25):
+### Before (Line 25)
 
 ```python
 data_json = json.dumps(findings).replace("`", "\\`")
 ```text
-### After (Lines 31-37):
+### After (Lines 31-37)
 
 ```python
 data_json = (
@@ -123,14 +123,14 @@ All dynamic content in the dashboard template uses `escapeHtml()` function:
 ## Files Changed
 
 1. `scripts/core/reporters/html_reporter.py` (lines 23-37)
-   - Added comprehensive escape logic for HTML <script> context
-   - Added detailed comments explaining each escape
+- Added comprehensive escape logic for HTML <script> context
+- Added detailed comments explaining each escape
 
 2. `tests/reporters/test_yaml_html_reporters.py` (lines 43-151)
-   - Added `test_html_script_tag_escaping()` with 4 dangerous test cases
-   - Validates balanced script tags
-   - Checks for proper escaping
-   - Ensures JavaScript execution
+- Added `test_html_script_tag_escaping()` with 4 dangerous test cases
+- Validates balanced script tags
+- Checks for proper escaping
+- Ensures JavaScript execution
 
 ## Impact Assessment
 
@@ -177,6 +177,6 @@ This was a **critical release blocker** for v0.6.0. The fix:
 
 ## References
 
-- OWASP: [XSS Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
-- MDN: [script element](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
+- OWASP: [XSS Prevention Cheat Sheet](<https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html>)
+- MDN: [script element](<https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script>)
 - CommonFinding schema: `docs/schemas/common_finding.v1.json`

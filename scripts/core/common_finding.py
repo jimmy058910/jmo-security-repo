@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from enum import Enum
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -134,7 +135,7 @@ def extract_code_snippet(
     file_path: str,
     start_line: int,
     context_lines: int = 2,
-) -> dict[str, any] | None:
+) -> dict[str, Any] | None:
     """Extract code snippet around a specific line for context.
 
     Args:

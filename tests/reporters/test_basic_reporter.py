@@ -463,3 +463,45 @@ def test_markdown_backward_compatibility():
     assert "## Top Risks by File" in md
     assert "## By Tool" in md
     assert "## By Category" in md
+
+
+def test_get_category_summary_with_eslint():
+    """Test category summary includes Code Quality for eslint findings."""
+    findings = [
+        {
+            "tool": {"name": "eslint"},
+            "ruleId": "no-unused-vars",
+            "severity": "MEDIUM",
+            "location": {"path": "test.js"},
+        },
+        {
+            "tool": {"name": "semgrep"},
+            "ruleId": "python.lang.correctness.useless-eqeq.python-useless-eq-check",
+            "severity": "HIGH",
+            "location": {"path": "app.py"},
+        },
+    ]
+
+    categories = _get_category_summary(findings)
+
+    # ESLint should be categorized as Code Quality
+    assert categories.get("🔧 Code Quality", 0) >= 1
+    # Semgrep should also be categorized appropriately
+    assert categories.get("🛡️ Security", 0) >= 1 or categories.get("🔧 Code Quality", 0) >= 1
+
+
+def test_get_category_summary_with_bandit():
+    """Test category summary with bandit (Python security) findings."""
+    findings = [
+        {
+            "tool": {"name": "bandit"},
+            "ruleId": "B101",
+            "severity": "LOW",
+            "location": {"path": "test.py"},
+        }
+    ]
+
+    categories = _get_category_summary(findings)
+
+    # Bandit should be categorized as Code Quality
+    assert categories.get("🔧 Code Quality", 0) == 1

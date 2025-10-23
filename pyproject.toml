@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmo-security"
-version = "0.6.0"
+version = "0.7.0"
 description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs, multi-target scanning)"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -16,10 +16,12 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
 ]
-dependencies = []
+dependencies = [
+    "PyYAML>=6.0",  # Required for config file loading (jmo.yml)
+]
 
 [project.optional-dependencies]
-reporting = ["PyYAML>=6.0", "jsonschema>=4.0"]
+reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 
 [project.scripts]
@@ -55,6 +57,11 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "scripts.core.config"
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [tool.ruff]
 # Exclude test fixtures that are intentionally vulnerable

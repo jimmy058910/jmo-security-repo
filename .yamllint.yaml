@@ -19,3 +19,4 @@ ignore: |
   dist/
   .venv/
   results/
+  scripts/api/node_modules/

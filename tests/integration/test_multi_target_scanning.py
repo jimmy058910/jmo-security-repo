@@ -356,7 +356,8 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     findings = json.loads(findings_json.read_text())
 
     # Count findings by fingerprint ID
-    fingerprints = [f["id"] for f in findings["findings"]]
+    # findings.json is now a list of findings directly (not wrapped in {"findings": [...]})
+    fingerprints = [f["id"] for f in findings]
     assert len(fingerprints) == len(
         set(fingerprints)
     ), "Duplicate fingerprints found (deduplication failed)"

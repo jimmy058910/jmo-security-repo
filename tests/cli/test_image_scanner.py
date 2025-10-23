@@ -225,5 +225,86 @@ class TestImageScanner:
             assert (tmp_path / "individual-images" / "alpine_latest").exists()
 
 
+    def test_allow_missing_tools_writes_stubs(self, tmp_path):
+        """Test that allow_missing_tools writes stubs for missing tools"""
+        def mock_tool_exists(tool_name):
+            return False
+
+        stub_calls = []
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append((tool_name, str(output_path)))
+            output_path.write_text('{}')
+
+        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            image, statuses = scan_image(
+                image="nginx:latest",
+                results_dir=tmp_path,
+                tools=["trivy", "syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # Both tools should have stubs written
+            assert len(stub_calls) == 2
+            assert any("trivy" in path for _, path in stub_calls)
+            assert any("syft" in path for _, path in stub_calls)
+            assert statuses["trivy"] is True
+            assert statuses["syft"] is True
+
+    def test_per_tool_flags_applied(self, tmp_path):
+        """Test that per_tool_config flags are correctly applied"""
+        def mock_tool_exists(tool_name):
+            return tool_name in ["trivy", "syft"]
+
+        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+                ToolResult(tool="syft", status="success", attempts=1),
+            ]
+
+            per_tool_config = {
+                "trivy": {"flags": ["--severity", "CRITICAL,HIGH"]},
+                "syft": {"flags": ["-o", "cyclonedx-json"]},
+            }
+
+            scan_image(
+                image="alpine:3.18",
+                results_dir=tmp_path,
+                tools=["trivy", "syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config=per_tool_config,
+                allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
+            )
+
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+            # Verify trivy flags
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
+            assert "--severity" in trivy_def.command
+
+            # Verify syft flags
+            syft_def = next((t for t in tool_defs if t.name == "syft"), None)
+            assert syft_def is not None
+            assert "-o" in syft_def.command
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

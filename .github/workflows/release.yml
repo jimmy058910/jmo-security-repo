@@ -113,7 +113,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
           flavor: |
             suffix=-${{ matrix.variant }},onlatest=true
             latest=false
@@ -179,10 +179,12 @@ jobs:
 
       - name: Pull and measure all variants
         run: |
-          echo "## Docker Image Size Comparison (v0.6.1 Optimizations)" > size-comparison.md
-          echo "" >> size-comparison.md
-          echo "| Variant | Size (Compressed) | Size (Uncompressed) | Reduction vs v0.6.0 |" >> size-comparison.md
-          echo "|---------|-------------------|---------------------|---------------------|" >> size-comparison.md
+          {
+            echo "## Docker Image Size Comparison (v0.6.1 Optimizations)"
+            echo ""
+            echo "| Variant | Size (Compressed) | Size (Uncompressed) | Reduction vs v0.6.0 |"
+            echo "|---------|-------------------|---------------------|---------------------|"
+          } > size-comparison.md
 
           for VARIANT in full slim alpine; do
             TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
@@ -282,8 +284,8 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "JMo Security Suite - Terminal-first security audit toolkit"
-          readme-filepath: ./docs/DOCKER_README.md
+          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 14 tools, multi-target scanning"
+          readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped
         if: vars.DOCKERHUB_ENABLED != 'true'

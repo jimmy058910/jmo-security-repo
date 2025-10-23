@@ -14,7 +14,11 @@ exclude_dirs:
 # Do not globally skip tests; we handle targeted skips via Makefile for tests/ only.
 skips:
   - B404  # import subprocess is expected in CLI wrappers
+  - B603  # subprocess without shell=True is SECURE (we use list args, not strings)
   - B606  # os.startfile usage is guarded and platform-specific
+  - B607  # start_process_with_partial_path - we use well-known tools (git, docker, etc.)
+  - B110  # try_except_pass - intentional for cleanup/optional operations
+  - B112  # try_except_continue - intentional for parsing/iteration resilience
 
 # Set minimum severity/confidence thresholds for reporting (default is LOW/HIGH)
 # Keep defaults by commenting these out; uncomment to raise thresholds if needed.

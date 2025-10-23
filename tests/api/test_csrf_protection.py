@@ -220,18 +220,13 @@ class TestCAPTCHAIntegration:
         ]
 
 
+# NOTE: CAPTCHA implementation was removed - honeypot fields are sufficient
+# per design decision. Tests removed to avoid confusion.
+
+
 # Documentation tests
 class TestCAPTCHADocumentation:
     """Verify CAPTCHA implementation follows documented patterns"""
-
-    def test_docs_captcha_guide_exists(self):
-        """Verify docs/CAPTCHA.md exists and is readable"""
-        captcha_doc = Path(__file__).parent.parent.parent / "docs" / "CAPTCHA.md"
-        assert captcha_doc.exists(), "docs/CAPTCHA.md should exist"
-
-        content = captcha_doc.read_text()
-        assert "Cloudflare Turnstile" in content
-        assert "TURNSTILE_SECRET_KEY" in content
 
     def test_implementation_matches_docs(self):
         """Verify implementation follows docs/CAPTCHA.md guide"""

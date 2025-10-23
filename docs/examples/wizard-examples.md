@@ -11,6 +11,7 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 - [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
 - [Windows Docker Mode](#windows-docker-mode)
 - [Multi-Target Scanning (v0.6.2+)](#multi-target-scanning-v062)
+- [Privacy-First Telemetry (v0.7.0+)](#privacy-first-telemetry-v070)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
 
@@ -509,6 +510,135 @@ jmo scan \
 ```
 
 All findings deduplicated and aggregated to `comprehensive-audit/summaries/`.
+
+---
+
+## Privacy-First Telemetry (v0.7.0+)
+
+JMo Security includes optional, anonymous usage analytics to help improve the tool. The wizard provides clear opt-in/opt-out prompts.
+
+### Telemetry Opt-In Prompt
+
+During first run, the wizard asks for telemetry consent:
+
+```text
+📊 Help improve JMo Security with anonymous usage analytics
+
+We collect:
+✅ Tool usage counts (which scanners you use)
+✅ Scan durations and success rates
+✅ Error types (no error messages)
+✅ Profile selection (fast/balanced/deep)
+
+We NEVER collect:
+❌ Code content or file paths
+❌ Findings or security issues
+❌ IP addresses or hostnames
+❌ Repository names or URLs
+
+Full transparency: See docs/TELEMETRY.md
+
+Enable telemetry? (y/N):
+```
+
+### Managing Telemetry
+
+**Enable telemetry:**
+
+```bash
+jmo telemetry --enable
+```
+
+**Disable telemetry:**
+
+```bash
+jmo telemetry --disable
+```
+
+**Check current status:**
+
+```bash
+jmo telemetry --status
+```
+
+**View what's collected:**
+
+```bash
+# See complete transparency doc
+cat docs/TELEMETRY.md
+
+# View telemetry data before sending
+cat ~/.jmo/telemetry/pending/*.json
+```
+
+### Newsletter Integration
+
+The wizard may prompt for newsletter signup (optional, separate from telemetry):
+
+```text
+📬 Get security tips and updates (optional)
+
+Subscribe to newsletter for:
+🚀 New feature announcements
+💡 Real-world security case studies & exclusive guides
+
+Email (or press Enter to skip):
+```
+
+**Newsletter features:**
+
+- 100% optional (completely separate from telemetry)
+- No spam guarantee (announcements only)
+- Unsubscribe anytime via email link
+- Privacy-first (email never shared)
+
+**Subscribe later:**
+
+Visit [https://jmotools.com/subscribe.html](https://jmotools.com/subscribe.html)
+
+### Non-Interactive Telemetry Handling
+
+**Respect existing telemetry settings:**
+
+```bash
+# If user already opted in/out, wizard respects choice
+jmotools wizard --yes
+```
+
+**Explicitly disable telemetry for automated workflows:**
+
+```bash
+jmo telemetry --disable
+jmotools wizard --yes
+```
+
+**CI/CD environment (telemetry auto-disabled):**
+
+Telemetry is automatically disabled when running in CI/CD environments:
+
+- `CI=true` environment variable
+- Running in Docker container
+- Non-interactive terminal (no TTY)
+
+```yaml
+# GitHub Actions - telemetry auto-disabled
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - run: jmotools balanced --repos-dir .
+        # Telemetry automatically disabled in CI
+```
+
+### Privacy Guarantees
+
+1. **Anonymous**: No personally identifiable information
+2. **Transparent**: Full documentation in [docs/TELEMETRY.md](../TELEMETRY.md)
+3. **Optional**: Easy opt-out, disabled by default in CI
+4. **Local control**: Data stored locally until sent
+5. **No tracking**: No cookies, IP logging, or fingerprinting
+
+For complete details, see [docs/TELEMETRY.md](../TELEMETRY.md).
 
 ---
 

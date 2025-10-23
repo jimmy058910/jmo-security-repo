@@ -7,19 +7,25 @@ This addresses finding HIGH-002 (Command Injection)
 
 import pytest
 from pathlib import Path
-import sys
 
-# Add scripts/cli to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts" / "cli"))
-
-from wizard import generate_command_list, WizardConfig
+from scripts.cli.wizard import generate_command_list, WizardConfig
 
 
 def create_test_config(**overrides):
     """Helper to create WizardConfig with overrides"""
     config = WizardConfig()
     for key, value in overrides.items():
-        setattr(config, key, value)
+        # Handle nested target config (v0.6.0+ structure)
+        if key == "target_mode":
+            config.target.repo_mode = value
+        elif key == "target_path":
+            config.target.repo_path = value
+        elif key.startswith("target_"):
+            # Other target.* attributes
+            attr = key.replace("target_", "")
+            setattr(config.target, attr, value)
+        else:
+            setattr(config, key, value)
     return config
 
 

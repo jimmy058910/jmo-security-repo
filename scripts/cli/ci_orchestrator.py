@@ -75,10 +75,16 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.threads = getattr(a, "threads", None)
             self.log_level = getattr(a, "log_level", None)
             self.human_logs = getattr(a, "human_logs", False)
+            # Output format flags (used by report_orchestrator)
+            self.json = getattr(a, "json", False)
+            self.md = getattr(a, "md", False)
+            self.html = getattr(a, "html", False)
+            self.sarif = getattr(a, "sarif", False)
+            self.yaml = getattr(a, "yaml", False)
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log
 
     # Run report phase and return its exit code
-    rc_report = cmd_report_fn(ReportArgs(args), _log)
+    rc_report: int = int(cmd_report_fn(ReportArgs(args), _log))
     return rc_report

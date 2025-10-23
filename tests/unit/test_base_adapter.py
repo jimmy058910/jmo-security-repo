@@ -20,7 +20,8 @@ from scripts.core.adapters.base_adapter import (
 
 
 # Concrete implementation for testing
-class TestToolAdapter(BaseAdapter):
+# Note: Named DummyToolAdapter (not TestToolAdapter) to avoid pytest collection warning
+class DummyToolAdapter(BaseAdapter):
     """Minimal adapter implementation for testing"""
 
     def _parse_output(self, output_file: Path):
@@ -45,13 +46,13 @@ class TestBaseAdapter:
 
     def test_adapter_initialization(self):
         """Test adapter can be initialized with tool metadata"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
         assert adapter.tool_name == "testtool"
         assert adapter.tool_version == "1.0.0"
 
     def test_load_nonexistent_file(self, tmp_path):
         """Test loading nonexistent file returns empty list"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
         result = adapter.load(tmp_path / "nonexistent.json")
         assert result == []
 
@@ -73,7 +74,7 @@ class TestBaseAdapter:
         test_file.write_text(json.dumps(test_data))
 
         # Load findings
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
         findings = adapter.load(test_file)
 
         assert len(findings) == 1
@@ -114,7 +115,7 @@ class TestBaseAdapter:
         }
         test_file.write_text(json.dumps(test_data))
 
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
 
         # Load twice
         findings1 = adapter.load(test_file)
@@ -146,7 +147,7 @@ class TestBaseAdapter:
         }
         test_file.write_text(json.dumps(test_data))
 
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
         findings = adapter.load(test_file)
 
         assert len(findings) == 2
@@ -154,7 +155,7 @@ class TestBaseAdapter:
 
     def test_map_severity_direct_match(self):
         """Test severity mapping with direct matches"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
 
         assert adapter._map_severity("CRITICAL") == "CRITICAL"
         assert adapter._map_severity("HIGH") == "HIGH"
@@ -164,7 +165,7 @@ class TestBaseAdapter:
 
     def test_map_severity_aliases(self):
         """Test severity mapping with common aliases"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
 
         assert adapter._map_severity("ERROR") == "HIGH"
         assert adapter._map_severity("WARNING") == "MEDIUM"
@@ -174,7 +175,7 @@ class TestBaseAdapter:
 
     def test_map_severity_case_insensitive(self):
         """Test severity mapping is case-insensitive"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
 
         assert adapter._map_severity("critical") == "CRITICAL"
         assert adapter._map_severity("High") == "HIGH"
@@ -182,7 +183,7 @@ class TestBaseAdapter:
 
     def test_map_severity_unknown(self):
         """Test unknown severity defaults to INFO"""
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
 
         assert adapter._map_severity("UNKNOWN") == "INFO"
         assert adapter._map_severity("CUSTOM_LEVEL") == "INFO"
@@ -204,7 +205,7 @@ class TestBaseAdapter:
         }
         test_file.write_text(json.dumps(test_data))
 
-        adapter = TestToolAdapter("testtool", "1.0.0")
+        adapter = DummyToolAdapter("testtool", "1.0.0")
         findings = adapter.load(test_file)
 
         assert len(findings) == 1

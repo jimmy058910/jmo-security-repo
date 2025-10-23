@@ -22,18 +22,18 @@
 
 ### 1.1 Target Type Priority Tiers
 
-### Tier 1 (Critical - Must test on all OS):
+### Tier 1 (Critical - Must test on all OS)
 
 - **Repository scanning** — Core functionality, backward compatibility critical
 - **Container image scanning** — High adoption, Docker/Podman variations
 - **Multi-target combined** — Real-world use case (repo + image + IaC)
 
-### Tier 2 (Important - Test on Linux + one other OS):
+### Tier 2 (Important - Test on Linux + one other OS)
 
 - **IaC file scanning** — Terraform/K8s manifests common in CI/CD
 - **URL scanning (DAST)** — Requires ZAP, network dependencies
 
-### Tier 3 (Optional - Test on Linux only):
+### Tier 3 (Optional - Test on Linux only)
 
 - **GitLab scanning** — Requires GitLab token, less common
 - **K8s scanning** — Requires cluster access, advanced use case
@@ -46,7 +46,7 @@
 | **macOS 14 (Sonoma)** | ✅ Tier 1+2 | ✅ Tier 1 | ✅ Tier 1+2 | SECONDARY |
 | **Windows 11 (WSL2)** | ✅ Tier 1 | ✅ Tier 1 | ✅ Tier 1+2 | TERTIARY |
 
-### Rationale:
+### Rationale
 
 - Ubuntu: Primary CI/CD environment, most users
 - macOS: Developer workstations, Docker Desktop variations
@@ -54,19 +54,19 @@
 
 ### 1.3 Execution Method Coverage
 
-### Native CLI (Direct Binary):
+### Native CLI (Direct Binary)
 
 - Profile: `balanced` (7 tools)
 - Validates: Tool installation, PATH resolution, file permissions
 - Priority: Tier 1 targets on all OS
 
-### Wizard (Interactive/Non-interactive):
+### Wizard (Interactive/Non-interactive)
 
 - Modes: `--yes` (CI mode) and interactive
 - Validates: User onboarding, smart defaults, artifact generation
 - Priority: Tier 1 targets on all OS (non-interactive), interactive on Ubuntu only
 
-### Docker (Zero-installation):
+### Docker (Zero-installation)
 
 - Variants: `full`, `slim`, `alpine`
 - Validates: Volume mounts, container networking, image distribution
@@ -140,10 +140,10 @@ set -euo pipefail
 # Configuration
 
 RESULTS_BASE="/tmp/jmo-comprehensive-tests-$(date +%s)"
-TEST_REPO="https://github.com/juice-shop/juice-shop.git"  # Known vulnerable repo
+TEST_REPO="<https://github.com/juice-shop/juice-shop.git">  # Known vulnerable repo
 TEST_IMAGE="alpine:3.19"  # Small, fast to scan
 TEST_TF_FILE="test-fixtures/aws-s3-public.tf"  # Known misconfig
-TEST_URL="http://testphp.vulnweb.com"  # OWASP test site
+TEST_URL="<http://testphp.vulnweb.com">  # OWASP test site
 
 # Test runner function
 
@@ -362,7 +362,7 @@ run_advanced_tests() {
   # A1: GitLab repo scan
   if [[ -n "${GITLAB_TOKEN:-}" ]]; then
     run_test "A1" "GitLab repo scan" \
-      "jmo scan --gitlab-repo https://gitlab.com/test/repo --results-dir $RESULTS_BASE/A1 --profile-name balanced --human-logs" \
+      "jmo scan --gitlab-repo <https://gitlab.com/test/repo> --results-dir $RESULTS_BASE/A1 --profile-name balanced --human-logs" \
       validate_basic_scan
   else
     echo "⏭️  SKIP: A1 (GitLab token not set)"
@@ -442,7 +442,7 @@ Create realistic test fixtures for consistent testing:
 
 # Clone known vulnerable repository (small, fast)
 
-git clone --depth 1 https://github.com/juice-shop/juice-shop.git /tmp/test-repo
+git clone --depth 1 <https://github.com/juice-shop/juice-shop.git> /tmp/test-repo
 
 # Create IaC test file with known misconfiguration
 
@@ -478,7 +478,7 @@ metadata:
 spec:
   containers:
 
-  - name: app
+- name: app
 
     image: nginx:latest
     securityContext:
@@ -497,11 +497,11 @@ RUN apt-get update && apt-get install -y curl
 
 # DL3025: Use JSON for ENTRYPOINT
 
-ENTRYPOINT curl http://example.com
+ENTRYPOINT curl <http://example.com>
 
 # DL3020: Use COPY instead of ADD
 
-ADD http://example.com/file.tar.gz /tmp/
+ADD <http://example.com/file.tar.gz> /tmp/
 EOF
 ```text
 ---
@@ -510,90 +510,90 @@ EOF
 
 ### 4.1 Per-Test Success Criteria
 
-### All tests must meet these criteria:
+### All tests must meet these criteria
 
 1. **Exit Code Validation:**
-   - Scan commands: Exit 0 (no findings) or 1 (findings found)
-   - CI commands with `--fail-on`: Exit 1 if threshold exceeded, 0 otherwise
-   - Errors/crashes: Exit 2+ (test FAILS)
+- Scan commands: Exit 0 (no findings) or 1 (findings found)
+- CI commands with `--fail-on`: Exit 1 if threshold exceeded, 0 otherwise
+- Errors/crashes: Exit 2+ (test FAILS)
 
 2. **Output File Presence:**
-   - `results/summaries/findings.json` (required)
-   - `results/summaries/SUMMARY.md` (required)
-   - `results/summaries/dashboard.html` (required)
-   - `results/summaries/findings.sarif` (optional, if SARIF output enabled)
-   - `results/summaries/timings.json` (optional, if `--profile` flag used)
+- `results/summaries/findings.json` (required)
+- `results/summaries/SUMMARY.md` (required)
+- `results/summaries/dashboard.html` (required)
+- `results/summaries/findings.sarif` (optional, if SARIF output enabled)
+- `results/summaries/timings.json` (optional, if `--profile` flag used)
 
 3. **JSON Schema Validation:**
-   - All findings conform to CommonFinding v1.2.0 schema
-   - Required fields present: `id`, `ruleId`, `severity`, `tool`, `location`, `message`
-   - Compliance fields present for compliance-enriched findings
+- All findings conform to CommonFinding v1.2.0 schema
+- Required fields present: `id`, `ruleId`, `severity`, `tool`, `location`, `message`
+- Compliance fields present for compliance-enriched findings
 
 4. **Finding Count:**
-   - Known vulnerable targets (Juice Shop, test fixtures): ≥1 finding expected
-   - Empty/clean targets: 0 findings expected
+- Known vulnerable targets (Juice Shop, test fixtures): ≥1 finding expected
+- Empty/clean targets: 0 findings expected
 
 5. **Performance:**
-   - Fast profile: ≤10 minutes per repo
-   - Balanced profile: ≤20 minutes per repo
-   - Deep profile: ≤60 minutes per repo
+- Fast profile: ≤10 minutes per repo
+- Balanced profile: ≤20 minutes per repo
+- Deep profile: ≤60 minutes per repo
 
 ### 4.2 Multi-Target Specific Criteria
 
-### Additional checks for multi-target tests (U5, U11, M6, W4):
+### Additional checks for multi-target tests (U5, U11, M6, W4)
 
 1. **Directory Structure:**
-   - At least 2 of these directories must exist:
-     - `results/individual-repos/`
-     - `results/individual-images/`
-     - `results/individual-iac/`
-     - `results/individual-web/`
-     - `results/individual-gitlab/`
-     - `results/individual-k8s/`
+- At least 2 of these directories must exist:
+- `results/individual-repos/`
+- `results/individual-images/`
+- `results/individual-iac/`
+- `results/individual-web/`
+- `results/individual-gitlab/`
+- `results/individual-k8s/`
 
 2. **Unified Aggregation:**
-   - `summaries/findings.json` contains findings from all target types
-   - No duplicate findings (fingerprint IDs unique)
-   - Findings have `location.path` correctly scoped to target type
+- `summaries/findings.json` contains findings from all target types
+- No duplicate findings (fingerprint IDs unique)
+- Findings have `location.path` correctly scoped to target type
 
 3. **Compliance Enrichment:**
-   - Findings have `compliance` field with ≥1 framework mapping
-   - Dashboard filters populated with OWASP, CWE, CIS, NIST, PCI, ATT&CK values
+- Findings have `compliance` field with ≥1 framework mapping
+- Dashboard filters populated with OWASP, CWE, CIS, NIST, PCI, ATT&CK values
 
 ### 4.3 Docker-Specific Criteria
 
-### Additional checks for Docker tests (U9-U11, M5-M6, W3-W4):
+### Additional checks for Docker tests (U9-U11, M5-M6, W3-W4)
 
 1. **Volume Mounts:**
-   - Results written to host filesystem (not inside container)
-   - File paths in findings.json are host paths (not `/tmp/scan/`)
+- Results written to host filesystem (not inside container)
+- File paths in findings.json are host paths (not `/tmp/scan/`)
 
 2. **Container Networking:**
-   - URL scanning works (ZAP can reach external URLs)
-   - Image scanning works (Docker-in-Docker socket mounted)
+- URL scanning works (ZAP can reach external URLs)
+- Image scanning works (Docker-in-Docker socket mounted)
 
 3. **Image Variants:**
-   - Full variant: All 11 tools available
-   - Slim variant: 3 core tools (trufflehog, semgrep, trivy)
-   - Alpine variant: Minimal size, 3 core tools
+- Full variant: All 11 tools available
+- Slim variant: 3 core tools (trufflehog, semgrep, trivy)
+- Alpine variant: Minimal size, 3 core tools
 
 ### 4.4 Wizard-Specific Criteria
 
-### Additional checks for wizard tests (U7, U8, M4, W2):
+### Additional checks for wizard tests (U7, U8, M4, W2)
 
 1. **Non-Interactive Mode (`--yes`):**
-   - Smart defaults applied (profile, tools, results-dir)
-   - No user prompts (fully automated)
-   - Valid configuration emitted
+- Smart defaults applied (profile, tools, results-dir)
+- No user prompts (fully automated)
+- Valid configuration emitted
 
 2. **Artifact Generation:**
-   - `--emit-script`: Generated shell script is executable and valid
-   - `--emit-make-target`: Generated Makefile target is syntactically correct
-   - `--emit-gha`: Generated GitHub Actions workflow is valid YAML
+- `--emit-script`: Generated shell script is executable and valid
+- `--emit-make-target`: Generated Makefile target is syntactically correct
+- `--emit-gha`: Generated GitHub Actions workflow is valid YAML
 
 3. **Configuration Persistence:**
-   - Wizard respects existing `jmo.yml` if present
-   - Wizard creates valid `jmo.yml` if missing
+- Wizard respects existing `jmo.yml` if present
+- Wizard creates valid `jmo.yml` if missing
 
 ---
 
@@ -649,13 +649,13 @@ on:
   pull_request:
     paths:
 
-      - 'scripts/**'
-      - 'tests/**'
-      - 'pyproject.toml'
+- 'scripts/**'
+- 'tests/**'
+- 'pyproject.toml'
 
   schedule:
 
-    - cron: '0 6 * * *'  # Nightly at 6 AM UTC
+- cron: '0 6 * * *'  # Nightly at 6 AM UTC
 
   workflow_dispatch:
 
@@ -667,36 +667,36 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+- uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+- name: Set up Python 3.11
 
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install JMo Security
+- name: Install JMo Security
 
         run: |
           pip install -e .
           make tools  # Install external security tools
 
-      - name: Set up Docker
+- name: Set up Docker
 
         uses: docker/setup-buildx-action@v3
 
-      - name: Pull Docker images
+- name: Pull Docker images
 
         run: |
           docker pull ghcr.io/jimmy058910/jmo-security:0.6.0-full
           docker pull ghcr.io/jimmy058910/jmo-security:0.6.0-slim
 
-      - name: Run Ubuntu test suite
+- name: Run Ubuntu test suite
 
         run: |
           bash tests/e2e/run_comprehensive_tests.sh
 
-      - name: Upload test results
+- name: Upload test results
 
         if: always()
         uses: actions/upload-artifact@v4
@@ -704,13 +704,13 @@ jobs:
           name: ubuntu-test-results
           path: /tmp/jmo-comprehensive-tests-*/
 
-      - name: Generate test report
+- name: Generate test report
 
         if: always()
         run: |
           python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.csv
 
-      - name: Comment PR with results
+- name: Comment PR with results
 
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -732,27 +732,27 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+- uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+- name: Set up Python 3.11
 
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install JMo Security
+- name: Install JMo Security
 
         run: |
           pip install -e .
           brew install semgrep trivy syft checkov hadolint
           # Install other tools via Homebrew
 
-      - name: Run macOS test suite
+- name: Run macOS test suite
 
         run: |
           bash tests/e2e/run_comprehensive_tests.sh
 
-      - name: Upload test results
+- name: Upload test results
 
         if: always()
         uses: actions/upload-artifact@v4
@@ -894,19 +894,19 @@ jobs:
 
 ### 7.1 Test Suite Maintenance Plan
 
-### Quarterly Reviews:
+### Quarterly Reviews
 
 - Update test fixtures for new vulnerability patterns
 - Add tests for newly supported tools
 - Refresh vulnerable test targets (Juice Shop, test fixtures)
 
-### Per-Release Updates:
+### Per-Release Updates
 
 - Add tests for new features (target types, compliance frameworks)
 - Update validation functions for schema changes
 - Benchmark performance improvements
 
-### Continuous Monitoring:
+### Continuous Monitoring
 
 - CI/CD test results tracked over time
 - Flaky test detection and remediation
@@ -914,19 +914,19 @@ jobs:
 
 ### 7.2 Future Test Enhancements
 
-### Short-term (v0.7.0):
+### Short-term (v0.7.0)
 
 - Add snapshot testing for dashboard HTML
 - Add compliance filter interaction tests (Playwright/Puppeteer)
 - Add parallel execution for faster test runs
 
-### Medium-term (v0.8.0):
+### Medium-term (v0.8.0)
 
 - Add performance benchmarking suite
 - Add load testing (100+ repos, 1000+ images)
 - Add stress testing (memory limits, disk space limits)
 
-### Long-term (v1.0.0):
+### Long-term (v1.0.0)
 
 - Add integration tests with CI/CD platforms (GitHub Actions, GitLab CI, Jenkins)
 - Add security testing (penetration testing, fuzzing)
@@ -972,19 +972,19 @@ bash tests/e2e/fixtures/setup_fixtures.sh --validate
 
 ### 8.3 Test Result Interpretation
 
-### Exit Codes:
+### Exit Codes
 
 - `0` - All tests passed
 - `1` - One or more tests failed (see CSV for details)
 - `2` - Test framework error (setup failed)
 
-### CSV Columns:
+### CSV Columns
 
 - `test_id` - Unique test identifier (U1, M2, etc.)
 - `status` - PASS/FAIL/SKIP
 - `duration_seconds` - Execution time in seconds
 
-### Pass Criteria:
+### Pass Criteria
 
 - ≥95% success rate (24/25 tests) for release
 - All Tier 1 tests (repos, images, multi-target) must pass
@@ -1049,7 +1049,7 @@ docker run --rm ghcr.io/jimmy058910/jmo-security:0.6.0-alpine --help
 
 docker images --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}" | grep jmo-security
 
-# Expected sizes:
+# Expected sizes
 
 # full:   ~2.5GB (all 11 tools)
 

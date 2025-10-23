@@ -777,6 +777,46 @@ Skills centralize expertise for complex tasks, providing:
 
 **Skills are guides, not rigid requirements.** If project constraints require a different approach, document the deviation in your PR description or code comments. Consider updating the skill if the deviation becomes a common pattern.
 
+## Skill Auto-Activation
+
+Claude Code automatically activates skills based on natural language patterns. You don't need to remember skill names - just describe what you want to do.
+
+### Common Trigger Patterns
+
+| User Request | Auto-Activated Skill | Example |
+|--------------|---------------------|---------|
+| "Add support for [tool]" | jmo-adapter-generator | "Add support for Snyk" |
+| "Scans are too slow" | jmo-profile-optimizer | "Optimize balanced profile" |
+| "CI is failing" | jmo-ci-debugger | "GitHub Actions timeout" |
+| "Write tests for [adapter]" | jmo-test-fabricator | "Write tests for snyk_adapter.py" |
+| "Map [CWE] to frameworks" | jmo-compliance-mapper | "Map CWE-79 to OWASP" |
+| "Fix [vulnerability]" | jmo-security-hardening | "Fix CSRF in API" |
+| "Refactor [function]" | jmo-refactoring-assistant | "Refactor cmd_scan" |
+| "Document [feature]" | jmo-documentation-updater | "Document AWS scanning" |
+| "[tool] not working" | jmo-systematic-debugging | "Semgrep returns no findings" |
+| "Build React [component]" | jmo-dashboard-builder | "Add SBOM tree view" |
+
+### How It Works
+
+1. **User describes task** in natural language
+2. **Claude matches pattern** to appropriate skill
+3. **Skill activates automatically** with context
+4. **Workflow begins** without manual skill invocation
+
+### Override Auto-Activation
+
+If you want to use a specific skill explicitly:
+
+```text
+"Use the jmo-profile-optimizer skill to analyze timings.json"
+```
+
+This ensures the exact skill is used, even if the pattern might match multiple skills.
+
+### Full Trigger Patterns
+
+See [dev-only/hybrid-implementation-files/02-natural-language-triggers.md](dev-only/hybrid-implementation-files/02-natural-language-triggers.md) for complete trigger pattern reference.
+
 ### Common Skill Workflows
 
 Skills compose together for end-to-end features. See [.claude/skills/SKILL_WORKFLOWS.md](.claude/skills/SKILL_WORKFLOWS.md) for detailed multi-skill workflows.
@@ -798,6 +838,77 @@ Time: 4-6 hours (vs. 8-12 hours without skills)
 
 Time: 2-3 hours (vs. 4-6 hours without skills)
 
+## Parallel Multi-Skill Workflows
+
+For independent tasks, use Task tool parallelism to achieve 2-3x speedup.
+
+### Workflow Example: Add New Tool (Parallel)
+
+**Sequential (Old):** 6-8 hours
+
+```text
+1. jmo-adapter-generator (2-3 hours)
+2. jmo-test-fabricator (1-2 hours)
+3. jmo-documentation-updater (30-45 min)
+```
+
+**Parallel (New):** 3-4 hours (2x speedup)
+
+```text
+Launch 3 agents in parallel:
+- Agent 1: jmo-adapter-generator (code)
+- Agent 2: jmo-test-fabricator (tests)
+- Agent 3: jmo-documentation-updater (docs)
+
+Wait for all to complete → integrate results
+```
+
+### When to Use Parallel
+
+✅ **Use parallel when:**
+
+- Tasks are independent (no data dependencies)
+- Each task takes >30 minutes
+- Total time savings >50%
+
+❌ **Don't use parallel when:**
+
+- Tasks depend on each other (adapter must exist before tests)
+- Tasks are quick (<5 minutes)
+- Coordination overhead > time savings
+
+### Parallel Workflow Patterns
+
+#### Pattern 1: Fan-out/Fan-in (Independent Analysis)
+
+```text
+User: "Analyze performance and dependencies before refactoring"
+  ↓
+Fork:
+  - Agent 1: jmo-profile-optimizer (analyze timings.json)
+  - Agent 2: dependency-analyzer (analyze dependencies)
+  ↓
+Join: Combine results
+  ↓
+jmo-refactoring-assistant (refactor with full context)
+```
+
+#### Pattern 2: Pipeline (Sequential with Parallel Stages)
+
+```text
+User: "Add AWS scanning and document it"
+  ↓
+Stage 1: jmo-target-type-expander (sequential)
+  ↓
+Stage 2 (parallel):
+  - Agent 1: jmo-test-fabricator (write tests)
+  - Agent 2: jmo-documentation-updater (document feature)
+  ↓
+Integration: Merge results
+```
+
+**Full Parallel Workflows:** See [dev-only/hybrid-implementation-files/13-parallel-workflows.md](dev-only/hybrid-implementation-files/13-parallel-workflows.md)
+
 ### Skill Maintenance
 
 Skills use **Semantic Versioning** and are updated on a regular schedule:
@@ -809,6 +920,299 @@ Skills use **Semantic Versioning** and are updated on a regular schedule:
 - **As Needed:** All others (when core architecture changes)
 
 See [.claude/skills/INDEX.md#skill-maintenance](.claude/skills/INDEX.md#skill-maintenance) for complete versioning and update process.
+
+## Agents vs. Skills
+
+JMo Security uses a **hybrid architecture** combining skills (domain-specific workflows) and agents (autonomous detection/validation).
+
+### When to Use Skills (Agents vs. Skills)
+
+✅ **Use Skills When:**
+
+- Known workflow exists (e.g., adding adapter, optimizing profiles)
+- Step-by-step guidance needed
+- Domain expertise required (security, compliance, profiling)
+- Consistency matters (following JMo patterns)
+
+**Examples:**
+
+- "Add Snyk scanner" → jmo-adapter-generator
+- "Scans too slow" → jmo-profile-optimizer
+- "Fix CSRF" → jmo-security-hardening
+
+### When to Use Agents
+
+✅ **Use Agents When:**
+
+- Proactive detection needed (find issues before user notices)
+- Automated validation required (pre-release checks)
+- Impact analysis before changes (refactoring safety)
+- Broad codebase scanning (not targeted fixes)
+
+**Examples:**
+
+- "Find coverage gaps" → coverage-gap-finder agent
+- "Verify release readiness" → release-readiness agent
+- "What depends on jmo.py?" → dependency-analyzer agent
+- "Check if docs up-to-date" → doc-sync-checker agent
+
+### Retained Agents (4)
+
+| Agent | Purpose | Use Case | Integration |
+|-------|---------|----------|-------------|
+| **coverage-gap-finder** | Find untested code paths | Before release, weekly checks | → jmo-test-fabricator |
+| **release-readiness** | Pre-release validation | Before tagging versions | → jmo-ci-debugger |
+| **dependency-analyzer** | Analyze code dependencies | Before refactoring | → jmo-refactoring-assistant |
+| **doc-sync-checker** | Detect documentation drift | After features, weekly | → jmo-documentation-updater |
+
+### Retired Agents (3)
+
+- ❌ **security-auditor** - Redundant with jmo-security-hardening skill
+- ❌ **code-quality-auditor** - Redundant with jmo-refactoring-assistant skill
+- ❌ **codebase-explorer** - Use faster `Explore` agent instead
+
+### Agent Coordination Patterns
+
+#### Pattern 1: Agent → Skill (Detection → Fix)
+
+```text
+coverage-gap-finder (detect gaps) → jmo-test-fabricator (write tests)
+doc-sync-checker (detect drift) → jmo-documentation-updater (fix docs)
+```
+
+#### Pattern 2: Skill → Agent → Skill (Safe Refactoring)
+
+```text
+User: "Refactor cmd_scan"
+  → dependency-analyzer (analyze impact)
+  → jmo-refactoring-assistant (refactor safely)
+```
+
+### Proactive Agent Triggers
+
+**Weekly (Automated):**
+
+- Sunday 10 PM UTC: coverage-gap-finder, doc-sync-checker
+
+**Pre-Release (Automated):**
+
+- Before `git tag`: release-readiness
+
+**Post-Feature (Automated):**
+
+- After scripts/ modified: doc-sync-checker
+
+**Manual:**
+
+- "Find coverage gaps" → coverage-gap-finder
+- "Verify release readiness" → release-readiness
+- "Analyze dependencies of [file]" → dependency-analyzer
+- "Check doc sync" → doc-sync-checker
+
+**Full Agent Policy:** See [dev-only/hybrid-implementation-files/03-agent-usage-policy.md](dev-only/hybrid-implementation-files/03-agent-usage-policy.md)
+
+## Memory System (.jmo/memory/)
+
+JMo Security uses a **lightweight JSON-based memory system** to persist learning across sessions, reducing repeated analysis and speeding up common workflows.
+
+### How Memory Works
+
+**Automated (80%):**
+
+- Claude automatically queries memory before re-analyzing patterns
+- Stores findings after skill completion
+- Retrieves cached results for common queries
+- Updates namespace-scoped data
+
+**Manual (20%):**
+
+- Review memory contents: `cat .jmo/memory/adapters/snyk.json`
+- Prune outdated entries: `rm .jmo/memory/adapters/deprecated-tool.json`
+- Override cached data: Edit JSON if analysis was incorrect
+- Analyze trends: `jq '.success_rate' .jmo/memory/*/*.json`
+
+### Memory Directory Structure
+
+```text
+.jmo/memory/
+├── adapters/           # Tool adapter patterns
+│   ├── snyk.json
+│   ├── trivy.json
+│   └── semgrep.json
+├── compliance/         # CWE → framework mappings
+│   ├── cwe-79.json
+│   └── cwe-89.json
+├── profiles/           # Performance optimization history
+│   ├── fast-optimization.json
+│   └── balanced-optimization.json
+├── target-types/       # Multi-target patterns
+│   ├── aws.json
+│   └── npm.json
+├── refactoring/        # Code refactoring decisions
+│   └── cmd_scan.json
+└── security/           # Security fix patterns
+    ├── csrf-protection.json
+    └── path-traversal.json
+```
+
+### What's Stored
+
+✅ **Stored:**
+
+- Tool output patterns (e.g., "Snyk uses `vulnerabilities[]` array")
+- Common pitfalls (e.g., "Trivy exits code 1 on findings")
+- Performance metrics (e.g., "Semgrep averages 45s on 10k LOC")
+- Compliance mappings (e.g., "CWE-79 → OWASP A03:2021")
+
+❌ **NOT Stored:**
+
+- Actual security findings (those go in `results/`)
+- Secrets or credentials
+- Repository names or code snippets
+- Personal data
+
+### Example: Automated Memory Usage
+
+```bash
+# User: "Add support for Snyk scanner"
+
+# Claude automatically:
+# 1. Checks: .jmo/memory/adapters/snyk.json (not found)
+# 2. Uses jmo-adapter-generator skill (full workflow)
+# 3. Stores: .jmo/memory/adapters/snyk.json
+#    {
+#      "tool": "snyk",
+#      "output_format": "results[].vulnerabilities[]",
+#      "exit_codes": {"0": "clean", "1": "findings", "2": "error"},
+#      "common_pitfalls": ["Requires auth token", "Large repos timeout"],
+#      "last_updated": "2025-10-21"
+#    }
+
+# Next time: "Update Snyk adapter for v2.0"
+# Claude retrieves .jmo/memory/adapters/snyk.json
+# - Already knows exit codes (skip research)
+# - Already has patterns (faster updates)
+# - 40% time savings
+```
+
+### Memory Integration by Skill
+
+| Skill | Memory Namespace | Query Pattern | Time Savings |
+|-------|-----------------|---------------|--------------|
+| jmo-adapter-generator | adapters/ | "Have I added this tool?" | 40% |
+| jmo-compliance-mapper | compliance/ | "What frameworks map?" | 60% |
+| jmo-profile-optimizer | profiles/ | "What optimizations worked?" | 50% |
+| jmo-refactoring-assistant | refactoring/ | "What refactorings done?" | 30% |
+| jmo-security-hardening | security/ | "How did I fix this CWE?" | 45% |
+
+### Manual Memory Management
+
+**Review memory:**
+
+```bash
+cat .jmo/memory/compliance/cwe-79.json
+```
+
+**Prune old entries (quarterly cleanup):**
+
+```bash
+# Remove deprecated tool patterns
+rm .jmo/memory/adapters/gitleaks.json  # Tool removed from JMo
+
+# Future: Memory CLI
+jmotools memory prune --older-than 180d
+```
+
+**Override incorrect data:**
+
+```bash
+# If Claude misidentified a pattern, edit JSON directly
+vim .jmo/memory/adapters/tool.json
+```
+
+### Privacy & Security
+
+- Memory is **gitignored** (never committed)
+- Stored in `.jmo/memory/` (local only)
+- No secrets or PII
+- Safe to delete (regenerates on next use)
+
+**Full Memory Guide:** See [dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md](dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md)
+
+## Pre/Post-Operation Hooks
+
+JMo Security uses hooks to automate quality enforcement at key points in the development workflow.
+
+### Recommended Hooks Configuration
+
+Add to `.claude/hooks.json`:
+
+```json
+{
+  "pre-edit": {
+    "command": "make lint-file {file}",
+    "description": "Lint file before editing"
+  },
+  "post-edit": {
+    "command": "make fmt-file {file}",
+    "description": "Format file after editing"
+  },
+  "pre-task": {
+    "command": "make verify-env",
+    "description": "Verify environment before starting task"
+  },
+  "post-task": {
+    "command": "pytest --cov={changed_files} --cov-fail-under=85",
+    "description": "Run tests on changed files after task"
+  },
+  "pre-release": {
+    "command": "claude-code agent release-readiness",
+    "description": "Run release-readiness agent before tagging"
+  }
+}
+```
+
+### Hook Execution Flow
+
+```text
+User: "Add Snyk adapter"
+  ↓
+pre-task hook: make verify-env
+  ↓
+jmo-adapter-generator skill
+  ↓
+pre-edit hook: make lint-file scripts/core/adapters/snyk_adapter.py
+  ↓
+Edit file
+  ↓
+post-edit hook: make fmt-file scripts/core/adapters/snyk_adapter.py
+  ↓
+post-task hook: pytest --cov=scripts/core/adapters/snyk_adapter.py
+  ↓
+Done (with automated quality checks)
+```
+
+### Benefits
+
+- **Enforce quality automatically** - No manual `make` commands
+- **Catch issues early** - Pre-edit linting prevents broken code
+- **Maintain consistency** - Post-edit formatting ensures style
+- **Verify coverage** - Post-task testing ensures ≥85%
+
+### When to Disable Hooks Temporarily
+
+```bash
+# For rapid prototyping (skip formatting)
+export SKIP_HOOKS=post-edit
+
+# For large refactors (skip tests until done)
+export SKIP_HOOKS=post-task
+
+# Re-enable
+unset SKIP_HOOKS
+```
+
+**Full Hooks Guide:** See [dev-only/hybrid-implementation-files/10-hooks-configuration.md](dev-only/hybrid-implementation-files/10-hooks-configuration.md)
 
 ## Important Conventions
 

@@ -1008,7 +1008,9 @@ def map_cwe_to_top25_2024(cwes: List[str]) -> List[Dict[str, Any]]:
             )
 
     # Sort by rank
-    top25_entries.sort(key=lambda x: x["rank"])
+    top25_entries.sort(
+        key=lambda x: int(x["rank"]) if isinstance(x["rank"], (int, str)) else 0
+    )
     return top25_entries
 
 
@@ -1165,12 +1167,12 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> List[str]:
     if tool not in TOOL_RULE_TO_OWASP_TOP10_2021:
         return []
 
-    tool_mappings = TOOL_RULE_TO_OWASP_TOP10_2021[tool]
+    tool_mappings: Dict[str, Any] = TOOL_RULE_TO_OWASP_TOP10_2021[tool]  # type: ignore[assignment]
 
     # Check for exact match
     if rule_id in tool_mappings:
         mapping = tool_mappings[rule_id]
-        return mapping if mapping else []
+        return list(mapping) if mapping and isinstance(mapping, (list, tuple)) else []
 
     # Check for pattern match
     for pattern, mapping in tool_mappings.items():
@@ -1180,11 +1182,20 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> List[str]:
             # Glob-style pattern matching
             prefix = pattern.split("*")[0]
             if rule_id.startswith(prefix):
-                return mapping if mapping else []
+                return (
+                    list(mapping)
+                    if mapping and isinstance(mapping, (list, tuple))
+                    else []
+                )
 
     # Check for wildcard match
     if "*" in tool_mappings and tool_mappings["*"]:
-        return tool_mappings["*"]
+        wildcard_mapping = tool_mappings["*"]
+        return (
+            list(wildcard_mapping)
+            if isinstance(wildcard_mapping, (list, tuple))
+            else []
+        )
 
     return []
 

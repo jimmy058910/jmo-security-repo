@@ -121,16 +121,16 @@ docker pull jmogaming/jmo-security:latest
 # Navigate to your project
 cd /path/to/your/project
 
-# Run the scan
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced --human-logs
+# Run the scan (Linux/macOS/WSL - use quoted $(pwd))
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
 ```
 
 **What this command does:**
 
 - `docker run` - Run a container
 - `--rm` - Auto-remove container when done
-- `-v $(pwd):/scan` - Mount current directory into container at `/scan`
+- `-v "$(pwd):/scan"` - Mount current directory into container at `/scan` (quotes handle spaces in paths)
 - `ghcr.io/jimmy058910/jmo-security:latest` - Our security image
 - `scan` - Run a security scan
 - `--repo /scan` - Scan the mounted directory
@@ -141,10 +141,20 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 #### Windows PowerShell (Use This Syntax)
 
 ```powershell
-docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced --human-logs
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
 ```
 
 **Important:** Windows users must use `${PWD}` (with curly braces) and quotes.
+
+#### Cross-Platform Quick Reference
+
+| Platform | Volume Mount Syntax | Example |
+|----------|---------------------|---------|
+| **Linux/macOS/WSL/Git Bash** | `"$(pwd):/scan"` | `docker run -v "$(pwd):/scan" ...` |
+| **Windows PowerShell 5.1+** | `"${PWD}:/scan"` | `docker run -v "${PWD}:/scan" ...` |
+| **Windows CMD** | `"%CD%:/scan"` | `docker run -v "%CD%:/scan" ...` |
+
+**Why quotes matter:** Paths with spaces (e.g., `C:\My Projects\`) will fail without quotes.
 
 ### Step 4: View Your Results
 
@@ -265,7 +275,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:alpine
 #### Fast Scan (Quick Check)
 
 ```bash
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile fast --human-logs
 ```
 
@@ -275,7 +285,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 #### Balanced Scan (Recommended Default)
 
 ```bash
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced --human-logs
 ```
 
@@ -285,7 +295,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 #### Deep Scan (Comprehensive)
 
 ```bash
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile deep --human-logs
 ```
 
@@ -304,7 +314,7 @@ docker run --rm -v ~/projects:/repos ghcr.io/jimmy058910/jmo-security:latest \
 
 ```bash
 # Fail if HIGH or CRITICAL findings detected
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   ci --repo /scan --fail-on HIGH --profile
 ```
 
@@ -476,7 +486,7 @@ per_tool:
 EOF
 
 # Run with custom profile
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile-name custom --human-logs
 ```
 
@@ -487,14 +497,14 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```bash
 # First scan: Downloads Trivy DB to named volume (~30-60s for initial download)
 docker run --rm \
-  -v $(pwd):/scan \
+  -v "$(pwd):/scan" \
   -v trivy-cache:/root/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --profile balanced
 
 # Subsequent scans: Reuses cached DB (30-60s faster - no download!)
 docker run --rm \
-  -v $(pwd):/scan \
+  -v "$(pwd):/scan" \
   -v trivy-cache:/root/.cache/trivy \
   ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --profile balanced
@@ -553,7 +563,7 @@ suppressions:
 ```bash
 # Run as current user to avoid permission issues
 docker run --rm --user $(id -u):$(id -g) \
-  -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced
 ```
 
@@ -564,7 +574,7 @@ docker run --rm --user $(id -u):$(id -g) \
 docker run --rm \
   --memory="2g" \
   --cpus="2.0" \
-  -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced
 ```
 
@@ -685,7 +695,7 @@ sudo usermod -aG docker $USER
 **Solution 1:** Use faster profile
 
 ```bash
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:slim \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:slim \
   scan --repo /scan --results /scan/results --profile fast
 ```
 
@@ -715,7 +725,7 @@ docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-sec
 3. Try with `--allow-missing-tools` flag:
 
    ```bash
-   docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+   docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
      scan --repo /scan --results /scan/results --profile balanced --allow-missing-tools
    ```
 
@@ -727,7 +737,7 @@ docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-sec
 
 ```bash
 docker run --rm --user $(id -u):$(id -g) \
-  -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+  -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced
 ```
 
@@ -790,7 +800,7 @@ docker run --rm --user $(id -u):$(id -g) ...
 **2. Use read-only volumes when possible:**
 
 ```bash
-docker run --rm -v $(pwd):/scan:ro ...
+docker run --rm -v "$(pwd):/scan":ro ...
 ```
 
 **3. Limit network access for untrusted repos:**
@@ -838,7 +848,7 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 
 **Get security tips and updates delivered to your inbox:**
 
-[![Newsletter](https://img.shields.io/badge/📧_Newsletter-Subscribe-667eea)](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)
+[![Newsletter](https://img.shields.io/badge/📧_Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/💚_Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
 
 - 🚀 New feature announcements
@@ -846,7 +856,7 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 - 💡 Real-world security case studies
 - 🎁 Exclusive guides and early access
 
-**[Subscribe to Newsletter](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)** | **[Support Full-Time Development](https://ko-fi.com/jmogaming)**
+**[Subscribe to Newsletter](https://jmotools.com/subscribe.html)** | **[Support Full-Time Development](https://ko-fi.com/jmogaming)**
 
 ---
 

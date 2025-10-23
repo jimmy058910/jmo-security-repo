@@ -26,3 +26,34 @@ def test_write_sarif(tmp_path: Path):
     write_sarif(SAMPLE, out)
     s = out.read_text(encoding="utf-8")
     assert '"version": "2.1.0"' in s
+
+
+def test_write_sarif_with_file_error(tmp_path: Path):
+    """Test SARIF writer handles file write errors gracefully."""
+    import pytest
+
+    findings = [{"tool": {"name": "test"}, "ruleId": "TEST-001", "severity": "HIGH", "location": {"path": "test.py"}, "message": "test"}]
+
+    # Try to write to read-only directory
+    ro_dir = tmp_path / "readonly"
+    ro_dir.mkdir()
+    ro_dir.chmod(0o444)  # Read-only
+
+    output_path = ro_dir / "findings.sarif"
+
+    with pytest.raises(PermissionError):
+        write_sarif(findings, output_path)
+
+
+def test_write_sarif_malformed_findings(tmp_path: Path):
+    """Test SARIF writer handles malformed findings gracefully."""
+    # Findings missing required fields
+    findings = [{"invalid": "structure"}]
+
+    output_path = tmp_path / "findings.sarif"
+    write_sarif(findings, output_path)
+
+    # Should write valid SARIF structure even with malformed input
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert '"version": "2.1.0"' in content

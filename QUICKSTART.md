@@ -4,6 +4,57 @@
 
 ---
 
+## ⚡ Fastest Path to Scanning
+
+**Choose based on what you have installed:**
+
+1. **Have Docker?** → [Option 2: Docker](#option-2--docker-zero-installation) (60 seconds)
+2. **Have Python + pip?** → [Install JMo first](#-installation-in-2-minutes), then [Option 3: CLI Wrapper](#option-3--cli-wrapper-commands-local-install)
+3. **Have nothing?** → [Option 2: Docker](#option-2--docker-zero-installation) (install Docker first, 5 minutes)
+
+---
+
+## 📦 Installation (in 2 Minutes)
+
+**Skip this if using Docker** (Option 2 below) - **Docker includes everything**.
+
+### Quick Install (Python Package)
+
+```bash
+# 1. Install JMo Security CLI
+pip install jmo-security
+
+# 2. Add to PATH (Linux/macOS/WSL - skip on native Windows)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# 3. Verify installation
+jmo --help
+jmotools --help
+```
+
+**✅ JMo CLI installed!** Now install security tools:
+
+### Option A: Auto-Install Security Tools (Easiest)
+
+```bash
+# Clone repo for installation scripts
+git clone https://github.com/jimmy058910/jmo-security-repo.git
+cd jmo-security-repo
+
+# Auto-install all tools (Linux/WSL/macOS)
+make tools
+
+# Verify tools installed correctly
+make verify-env
+```
+
+### Option B: Manual Tool Installation
+
+See [README — Tool Installation](README.md#-tool-installation) section for platform-specific instructions.
+
+---
+
 ## 🚀 Choose Your Path
 
 ### Option 1: 🧙 Interactive Wizard (Recommended for Beginners)
@@ -44,9 +95,12 @@ jmotools wizard --docker     # Force Docker mode
 # One-time pull
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
-# Scan current directory
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced --human-logs
+# Scan current directory (Linux/macOS/WSL)
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
+
+# Windows PowerShell users: Use "${PWD}:/scan" instead of "$(pwd):/scan"
+# Windows CMD users: Use "%CD%:/scan" instead
 
 # View results
 open results/summaries/dashboard.html  # macOS
@@ -209,10 +263,17 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
    type results\summaries\SUMMARY.md
    ```
 
+**Cross-platform Docker volume mount syntax:**
+
+| Platform | Syntax | Example |
+|----------|--------|---------|
+| **Linux/macOS/WSL** | `"$(pwd):/scan"` | `docker run -v "$(pwd):/scan" ...` |
+| **Windows PowerShell** | `"${PWD}:/scan"` | `docker run -v "${PWD}:/scan" ...` |
+| **Windows CMD** | `"%CD%:/scan"` | `docker run -v "%CD%:/scan" ...` |
+
 **Windows-specific Docker notes:**
 
-- ✅ **Always use `${PWD}` (with curly braces)** instead of `$(pwd)` for volume mounts
-- ✅ **Use quotes** around volume paths: `"${PWD}:/scan"`
+- ✅ **Always use quotes** around volume paths to handle spaces
 - ✅ **Use backslashes** for Windows paths: `start results\summaries\dashboard.html`
 - ✅ **Share drives:** Docker Desktop may ask permission to access C:\ - approve this
 

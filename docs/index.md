@@ -38,9 +38,13 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 
 ### Complete Beginner (Never Used Security Tools)
 
-**Start Here:** [Docker Guide](DOCKER_README.md#quick-start-absolute-beginners) or run `jmotools wizard`
+**Start Here:**
 
-**Why:** Zero-installation path with step-by-step guidance. The wizard walks you through everything interactively.
+1. **Install:** [Docker Desktop](https://www.docker.com/products/docker-desktop) (5 minutes) OR [pip install jmo-security](#-installation-in-2-minutes) (2 minutes)
+2. **Run:** `jmotools wizard` (if pip installed) OR Docker command (see [Docker Guide](DOCKER_README.md#quick-start-absolute-beginners))
+3. **Done:** Wizard walks you through everything interactively
+
+**Why:** Zero-installation path (Docker) or simple pip install (Python). The wizard handles everything else.
 
 **Next Steps:**
 
@@ -103,6 +107,45 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 1. Set up dev environment: [CONTRIBUTING — Dev Setup](../CONTRIBUTING.md#development-setup)
 2. Understand testing: [Testing Guide](../TEST.md)
 3. Learn release process: [Release Guide](RELEASE.md)
+
+---
+
+## 📦 Installation (in 2 Minutes)
+
+**Choose your installation method:**
+
+### Method 1: Docker (Easiest - Zero Tool Installation)
+
+```bash
+# Download from: https://www.docker.com/products/docker-desktop
+# Then pull JMo image:
+docker pull ghcr.io/jimmy058910/jmo-security:latest
+
+# Ready to scan!
+docker run -it --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest wizard
+```
+
+### Method 2: Python Package (pip)
+
+```bash
+# Install JMo CLI
+pip install jmo-security
+
+# Add to PATH (Linux/macOS/WSL)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify
+jmo --help
+jmotools --help
+
+# Install security tools (auto-install)
+git clone https://github.com/jimmy058910/jmo-security-repo.git
+cd jmo-security-repo
+make tools
+```
+
+**📖 Detailed guide:** [QUICKSTART.md — Installation](../QUICKSTART.md#-installation-in-2-minutes)
 
 ---
 
@@ -191,7 +234,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 jmotools wizard
 
 # Docker (zero tools)
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced --human-logs
 
 # CLI (local tools)

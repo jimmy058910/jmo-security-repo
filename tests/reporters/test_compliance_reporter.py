@@ -885,3 +885,41 @@ def test_pci_dss_message_truncation(tmp_path: Path):
     # Message should be truncated to 100 chars
     assert long_message[:100] in content
     assert len([line for line in content.split("\n") if "A" * 150 in line]) == 0
+
+
+def test_compliance_summary_no_compliance_data(tmp_path: Path):
+    """Test compliance summary when no compliance fields present."""
+    # Findings without compliance field
+    findings = [
+        {
+            "tool": {"name": "test"},
+            "ruleId": "TEST-001",
+            "severity": "HIGH",
+            "location": {"path": "test.py"},
+            "message": "Test finding without compliance data",
+        }
+    ]
+
+    output_path = tmp_path / "COMPLIANCE_SUMMARY.md"
+    write_compliance_summary(findings, output_path)
+
+    # Should still write valid summary
+    assert output_path.exists()
+    content = output_path.read_text()
+    # Should indicate findings with no compliance mappings
+    assert "findings with compliance mappings:** 0" in content.lower()
+    assert "total findings:** 1" in content.lower()
+
+
+def test_compliance_summary_empty_findings(tmp_path: Path):
+    """Test compliance summary with empty findings list."""
+    findings = []
+
+    output_path = tmp_path / "COMPLIANCE_SUMMARY_EMPTY.md"
+    write_compliance_summary(findings, output_path)
+
+    # Should write valid summary with zeros
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert "total findings:** 0" in content.lower()
+    assert "findings with compliance mappings:** 0" in content.lower()

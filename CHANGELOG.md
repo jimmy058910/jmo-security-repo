@@ -2,9 +2,44 @@
 
 For the release process, see docs/RELEASE.md.
 
-## Unreleased
+## 0.7.0 (2025-10-23)
 
 ### Added
+
+- **Cross-platform Docker documentation (v0.7.0)**: Improved Docker volume mount syntax for all platforms
+  - **Linux/macOS/WSL:** Use `"$(pwd):/scan"` (universal, works in bash/zsh/sh/Git Bash)
+  - **Windows PowerShell:** Use `"${PWD}:/scan"` (PowerShell 5.1+)
+  - **Windows CMD:** Use `"%CD%:/scan"` (Command Prompt)
+  - **Added:** Cross-platform quick reference tables in QUICKSTART.md and docs/DOCKER_README.md
+  - **Quoted paths:** All examples now quote volume mounts to handle spaces in paths
+  - **Rationale:** `$(pwd)` is more portable than `${PWD}` and works across more shells
+  - Updated files: QUICKSTART.md, docs/DOCKER_README.md, docs/index.md
+
+- **Auto-detect CPU threads (v0.7.0)**: Intelligent thread count optimization for faster, safer scanning
+  - **75% CPU utilization:** Auto-detects CPU cores, uses 75% (leaves 25% for system)
+  - **Min 2, Max 16:** Enforces minimum 2 threads (small systems), caps at 16 (diminishing returns)
+  - **jmo.yml support:** Use `threads: auto` in config or profiles
+  - **Environment variable:** `JMO_THREADS=auto` for dynamic detection
+  - **Shared utilities:** `scripts/cli/cpu_utils.py` used by both CLI and wizard
+  - **Examples:**
+    - 2 cores → 2 threads (minimum enforced)
+    - 8 cores → 6 threads (75% of 8)
+    - 16 cores → 12 threads (75% of 16)
+    - 32 cores → 16 threads (capped at maximum)
+  - **Motivation:** Docker deep scans appeared stalled due to default ThreadPoolExecutor auto-detection choosing too few threads
+  - See [docs/USER_GUIDE.md — Thread Configuration](docs/USER_GUIDE.md#thread-configuration)
+
+- **Real-time progress tracking (v0.7.0)**: Live scan progress with ETA estimation (zero dependencies)
+  - **Progress format:** `[3/10] ✓ repo: my-app (45s) | Progress: 30% | ETA: 2m 15s`
+  - **Key features:**
+    - Per-target timing (shows which targets are slow)
+    - Success/failure symbols (✓/✗)
+    - ETA calculation based on average completion time
+    - Thread-safe for concurrent scans
+    - Human-readable duration formatting (45s, 2m 30s, 1h 15m)
+  - **Implementation:** `ProgressTracker` class in `scripts/cli/jmo.py` (no external dependencies)
+  - **All target types:** Tracks repos, images, IaC files, URLs, GitLab repos, K8s resources
+  - **Motivation:** Long-running scans (15-60 min) showed no output, appeared frozen
 
 - **Privacy-first telemetry system (v0.7.0)**: Optional anonymous usage analytics to help prioritize features
   - **Opt-in only:** Disabled by default, requires explicit enablement via config or wizard prompt
@@ -20,6 +55,22 @@ For the release process, see docs/RELEASE.md.
   - **99% test coverage:** Comprehensive test suite with mocked Gist API
   - See [docs/USER_GUIDE.md — Telemetry](docs/USER_GUIDE.md#telemetry-configuration-v070) for complete guide
   - See [docs/TELEMETRY_IMPLEMENTATION_GUIDE.md](docs/TELEMETRY_IMPLEMENTATION_GUIDE.md) for implementation details
+
+- **Memory system (v0.7.0)**: Lightweight JSON-based caching to persist analysis patterns across sessions
+  - **Private developer tool:** Stored in `.jmo/memory/` (gitignored), designed for solo maintainer workflows
+  - **Namespace organization:** 6 memory namespaces (adapters, compliance, profiles, target-types, refactoring, security)
+  - **80% automated:** Claude automatically queries/stores patterns after skill completion
+  - **20% manual:** Review with `cat .jmo/memory/*/*.json`, prune outdated entries, override incorrect analyses
+  - **Skill integration:** Reduces repeated analysis by 30-60% for common queries (adapter patterns, compliance mappings, optimization history)
+  - **Safe to delete:** Memory regenerates on next use, no secrets or PII stored
+  - **Schema validation:** JSON schema at `.jmo/memory/schemas.json` ensures consistent data structure
+  - **Examples:**
+    - Tool adapter patterns (e.g., "Snyk uses `vulnerabilities[]` array")
+    - Common pitfalls (e.g., "Trivy exits code 1 on findings")
+    - Performance metrics (e.g., "Semgrep averages 45s on 10k LOC")
+    - Compliance mappings (e.g., "CWE-79 → OWASP A03:2021")
+  - **Implementation:** `scripts/core/memory.py` (123 lines, 96% test coverage)
+  - See [.jmo/memory/README.md](.jmo/memory/README.md) for complete guide
 
 - **Wizard multi-target support (v0.6.2)**: Interactive wizard now supports all 6 target types introduced in v0.6.0+
   - **Target types:** Repositories, container images, IaC files, web URLs, GitLab repos, Kubernetes clusters

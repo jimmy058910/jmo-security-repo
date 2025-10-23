@@ -221,9 +221,14 @@ VARIANT ?= full
 # Determine Dockerfile based on variant
 DOCKERFILE := $(if $(filter full,$(VARIANT)),Dockerfile,Dockerfile.$(VARIANT))
 
+# Auto-detect target architecture (amd64 or arm64) for Docker builds
+# This ensures Alpine builds install semgrep/checkov on amd64
+TARGETARCH := $(shell uname -m | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
+
 docker-build:
 	@echo "Building Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
-	docker build -f $(DOCKERFILE) -t $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) .
+	@echo "Target architecture: $(TARGETARCH)"
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f $(DOCKERFILE) -t $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) .
 	@if [ "$(VARIANT)" = "full" ]; then \
 		docker tag $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
 		echo "Tagged as latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
@@ -237,9 +242,10 @@ docker-build-all:
 
 docker-build-local:
 	@echo "Building all Docker variants with 'local' tag for testing..."
-	docker build -f Dockerfile -t jmo-security:local-full .
-	docker build -f Dockerfile.slim -t jmo-security:local-slim .
-	docker build -f Dockerfile.alpine -t jmo-security:local-alpine .
+	@echo "Target architecture: $(TARGETARCH)"
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile -t jmo-security:local-full .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.slim -t jmo-security:local-slim .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.alpine -t jmo-security:local-alpine .
 	@echo ""
 	@echo "✅ Local Docker images built successfully:"
 	@echo "  - jmo-security:local-full"

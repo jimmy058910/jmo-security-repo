@@ -39,7 +39,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timezone
 
 try:
@@ -91,7 +91,8 @@ def load_versions() -> Dict:
         sys.exit(1)
 
     with open(VERSIONS_YAML) as f:
-        return yaml.safe_load(f)
+        data: Dict[Any, Any] = yaml.safe_load(f) or {}
+        return data
 
 
 def save_versions(data: Dict) -> None:
@@ -127,7 +128,8 @@ def get_latest_github_release(repo: str) -> Optional[str]:
         data = json.loads(result.stdout)
         tag = data.get("tag_name", "")
         # Strip 'v' prefix if present
-        return tag.lstrip("v")
+        version: str = str(tag).lstrip("v") if tag else ""
+        return version if version else None
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
         return None
 

@@ -48,10 +48,10 @@ echo "4. Test Trivy caching performance"
 echo ""
 
 # Check if Docker is running
-if ! docker info > /dev/null 2>&1; then
-    echo -e "${RED}ERROR: Docker is not running${NC}"
-    echo "Please start Docker and try again"
-    exit 1
+if ! docker info >/dev/null 2>&1; then
+  echo -e "${RED}ERROR: Docker is not running${NC}"
+  echo "Please start Docker and try again"
+  exit 1
 fi
 
 # Build all variants
@@ -78,8 +78,8 @@ echo -e "${BLUE}Step 2: Measuring image sizes...${NC}"
 echo ""
 
 get_size_mb() {
-    local image=$1
-    docker inspect "$image" | jq -r '.[0].Size' | awk '{printf "%.0f", $1/1024/1024}'
+  local image=$1
+  docker inspect "$image" | jq -r '.[0].Size' | awk '{printf "%.0f", $1/1024/1024}'
 }
 
 FULL_SIZE=$(get_size_mb "jmo-security:0.6.1-full")
@@ -92,27 +92,27 @@ echo "|---------|-----------------|---------------|--------------|--------|"
 # Full variant
 FULL_REDUCTION=$(awk "BEGIN {printf \"%.0f\", ($BASELINE_FULL_MB - $FULL_SIZE) / $BASELINE_FULL_MB * 100}")
 if [ "$FULL_SIZE" -le "$GOAL_FULL_MB" ]; then
-    FULL_STATUS="${GREEN}✓ PASS${NC}"
+  FULL_STATUS="${GREEN}✓ PASS${NC}"
 else
-    FULL_STATUS="${YELLOW}⚠ PARTIAL${NC}"
+  FULL_STATUS="${YELLOW}⚠ PARTIAL${NC}"
 fi
 echo -e "| Full    | ${BASELINE_FULL_MB}MB | ${FULL_SIZE}MB (-${FULL_REDUCTION}%) | ${GOAL_FULL_MB}MB | $FULL_STATUS |"
 
 # Slim variant
 SLIM_REDUCTION=$(awk "BEGIN {printf \"%.0f\", ($BASELINE_SLIM_MB - $SLIM_SIZE) / $BASELINE_SLIM_MB * 100}")
 if [ "$SLIM_SIZE" -le "$GOAL_SLIM_MB" ]; then
-    SLIM_STATUS="${GREEN}✓ PASS${NC}"
+  SLIM_STATUS="${GREEN}✓ PASS${NC}"
 else
-    SLIM_STATUS="${YELLOW}⚠ PARTIAL${NC}"
+  SLIM_STATUS="${YELLOW}⚠ PARTIAL${NC}"
 fi
 echo -e "| Slim    | ${BASELINE_SLIM_MB}MB | ${SLIM_SIZE}MB (-${SLIM_REDUCTION}%) | ${GOAL_SLIM_MB}MB | $SLIM_STATUS |"
 
 # Alpine variant
 ALPINE_REDUCTION=$(awk "BEGIN {printf \"%.0f\", ($BASELINE_ALPINE_MB - $ALPINE_SIZE) / $BASELINE_ALPINE_MB * 100}")
 if [ "$ALPINE_SIZE" -le "$GOAL_ALPINE_MB" ]; then
-    ALPINE_STATUS="${GREEN}✓ PASS${NC}"
+  ALPINE_STATUS="${GREEN}✓ PASS${NC}"
 else
-    ALPINE_STATUS="${YELLOW}⚠ PARTIAL${NC}"
+  ALPINE_STATUS="${YELLOW}⚠ PARTIAL${NC}"
 fi
 echo -e "| Alpine  | ${BASELINE_ALPINE_MB}MB | ${ALPINE_SIZE}MB (-${ALPINE_REDUCTION}%) | ${GOAL_ALPINE_MB}MB | $ALPINE_STATUS |"
 
@@ -123,7 +123,7 @@ echo -e "${BLUE}Step 3: Verifying tools in full image...${NC}"
 echo ""
 
 echo -e "${YELLOW}Testing jmo CLI...${NC}"
-docker run --rm jmo-security:0.6.1-full --help > /dev/null
+docker run --rm jmo-security:0.6.1-full --help >/dev/null
 echo -e "${GREEN}✓ jmo CLI works${NC}"
 
 echo -e "${YELLOW}Testing trufflehog...${NC}"
@@ -150,10 +150,10 @@ mkdir -p /tmp/docker-test-scan
 echo -e "${YELLOW}First scan (with pre-downloaded DB)...${NC}"
 START_TIME=$(date +%s)
 docker run --rm \
-    -v /tmp/docker-test-scan:/scan \
-    -v trivy-test-cache:/root/.cache/trivy \
-    jmo-security:0.6.1-full \
-    scan --help > /dev/null 2>&1 || true
+  -v /tmp/docker-test-scan:/scan \
+  -v trivy-test-cache:/root/.cache/trivy \
+  jmo-security:0.6.1-full \
+  scan --help >/dev/null 2>&1 || true
 END_TIME=$(date +%s)
 FIRST_SCAN_TIME=$((END_TIME - START_TIME))
 echo -e "${GREEN}✓ First scan completed in ${FIRST_SCAN_TIME}s (DB pre-cached in image)${NC}"
@@ -161,17 +161,17 @@ echo -e "${GREEN}✓ First scan completed in ${FIRST_SCAN_TIME}s (DB pre-cached 
 echo -e "${YELLOW}Second scan (with volume-cached DB)...${NC}"
 START_TIME=$(date +%s)
 docker run --rm \
-    -v /tmp/docker-test-scan:/scan \
-    -v trivy-test-cache:/root/.cache/trivy \
-    jmo-security:0.6.1-full \
-    scan --help > /dev/null 2>&1 || true
+  -v /tmp/docker-test-scan:/scan \
+  -v trivy-test-cache:/root/.cache/trivy \
+  jmo-security:0.6.1-full \
+  scan --help >/dev/null 2>&1 || true
 END_TIME=$(date +%s)
 SECOND_SCAN_TIME=$((END_TIME - START_TIME))
 echo -e "${GREEN}✓ Second scan completed in ${SECOND_SCAN_TIME}s (cache hit)${NC}"
 
 echo ""
 echo -e "${BLUE}Cleanup...${NC}"
-docker volume rm trivy-test-cache > /dev/null 2>&1 || true
+docker volume rm trivy-test-cache >/dev/null 2>&1 || true
 rm -rf /tmp/docker-test-scan
 
 echo ""

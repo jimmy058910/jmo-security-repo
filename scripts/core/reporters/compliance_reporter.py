@@ -201,8 +201,8 @@ def write_attack_navigator_json(
     ]
 
     # Count techniques
-    technique_counts = defaultdict(int)
-    technique_metadata = {}
+    technique_counts: Dict[str, int] = defaultdict(int)
+    technique_metadata: Dict[str, Dict[str, Any]] = {}
 
     for f in attack_findings:
         attack_mappings = f.get("compliance", {}).get("mitreAttack", [])
@@ -315,14 +315,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
     findings_with_compliance = sum(1 for f in findings if f.get("compliance"))
 
     # OWASP Top 10 2021 counts
-    owasp_counts = defaultdict(int)
+    owasp_counts: Dict[str, int] = defaultdict(int)
     for f in findings:
         owasp_list = f.get("compliance", {}).get("owaspTop10_2021", [])
         for owasp_cat in owasp_list:
             owasp_counts[owasp_cat] += 1
 
     # CWE Top 25 2024 counts
-    cwe_top25_counts = defaultdict(int)
+    cwe_top25_counts: Dict[str, int] = defaultdict(int)
     for f in findings:
         cwe_list = f.get("compliance", {}).get("cweTop25_2024", [])
         for cwe_entry in cwe_list:
@@ -331,7 +331,7 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
                 cwe_top25_counts[cwe_id] += 1
 
     # CIS Controls counts
-    cis_controls = set()
+    cis_controls: set[str] = set()
     for f in findings:
         cis_list = f.get("compliance", {}).get("cisControlsV8_1", [])
         for cis_entry in cis_list:
@@ -340,7 +340,7 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
                 cis_controls.add(control)
 
     # NIST CSF 2.0 counts by function
-    nist_csf_functions = defaultdict(int)
+    nist_csf_functions: Dict[str, int] = defaultdict(int)
     for f in findings:
         nist_list = f.get("compliance", {}).get("nistCsf2_0", [])
         for nist_entry in nist_list:
@@ -471,8 +471,8 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
         )
 
         # Count techniques across all findings
-        tech_counts = defaultdict(int)
-        tech_names = {}
+        tech_counts: Dict[str, int] = defaultdict(int)
+        tech_names: Dict[str, str] = {}
         for f in findings:
             mitre_list = f.get("compliance", {}).get("mitreAttack", [])
             for mitre_entry in mitre_list:

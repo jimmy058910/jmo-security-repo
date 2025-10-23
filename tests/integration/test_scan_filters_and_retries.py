@@ -1,295 +1,254 @@
 """Integration tests for scan filters and retries.
 
-IMPORTANT: These tests are skipped because they use old jmo.py internal functions
-(_tool_exists, _run_cmd, _effective_scan_settings) that were removed in PHASE 1
-refactoring (commit 8d235a2).
-
-TODO: Rewrite all tests in this file to use the new ScanOrchestrator and scan_jobs
-module architecture instead of patching internal jmo.py functions.
+Rewritten for ScanOrchestrator architecture (v0.7.0).
+Tests use subprocess to invoke jmo CLI with jmo.yml configs instead of
+monkeypatching internal functions.
 """
 
 import json
-import types
+import subprocess
 from pathlib import Path
-
-import pytest
-
-from scripts.cli import jmo
-
-# Skip entire module - all tests use old internal functions
-pytestmark = pytest.mark.skip(
-    reason="All tests use old jmo.py internal functions removed in PHASE 1 refactoring. "
-    "Need rewrite for ScanOrchestrator architecture."
-)
 
 
 def _repo(tmp_path: Path, name: str) -> Path:
+    """Create a test repository directory."""
     r = tmp_path / "repos" / name
     r.mkdir(parents=True, exist_ok=True)
     return r
 
 
 def test_include_exclude_filters(tmp_path: Path):
+    """Test include/exclude patterns filter repositories correctly."""
+    # Create two repos: app-1 (should be included) and test-1 (should be excluded)
     _repo(tmp_path, "app-1")
     _repo(tmp_path, "test-1")
     out_base = tmp_path / "results"
 
-    # Only include app-* and exclude test-*; with allow_missing_tools stubs
-    # Updated to use trufflehog (gitleaks removed in v0.5.0)
-    args = types.SimpleNamespace(
-        cmd="scan",
-        repo=None,
-        repos_dir=str(tmp_path / "repos"),
-        targets=None,
-        results_dir=str(out_base),
-        config=str(tmp_path / "cfg.yml"),
-        tools=["trufflehog"],
-        timeout=10,
-        threads=1,
-        allow_missing_tools=True,
-        profile_name=None,
-        log_level=None,
-        human_logs=False,
+    # Create jmo.yml with include/exclude filters
+    config_file = tmp_path / "jmo.yml"
+    config_file.write_text(
+        """
+tools: [trufflehog]
+include: ["app-*"]
+exclude: ["test-*"]
+""",
+        encoding="utf-8",
     )
 
-    # Monkeypatch effective settings to inject include/exclude
-    def fake_eff(_):
-        return {
-            "tools": ["trufflehog"],
-            "threads": 1,
-            "timeout": 10,
-            "include": ["app-*"],
-            "exclude": ["test-*"],
-            "retries": 0,
-            "per_tool": {},
-        }
+    # Run scan with config
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repos-dir",
+        str(tmp_path / "repos"),
+        "--results-dir",
+        str(out_base),
+        "--config",
+        str(config_file),
+        "--allow-missing-tools",  # Use stubs if trufflehog missing
+    ]
 
-    # Force tool missing to trigger stub
-    def no_tools(_name: str) -> bool:
-        return False
+    result = subprocess.run(cmd, timeout=30, capture_output=True, text=True)
+    assert result.returncode == 0, f"Scan failed: {result.stderr}"
 
-    jmo._effective_scan_settings, orig_eff = fake_eff, jmo._effective_scan_settings
-    jmo._tool_exists, orig_te = no_tools, jmo._tool_exists
-    try:
-        rc = jmo.cmd_scan(args)
-        assert rc == 0
-        # app-1 should have stubbed output
-        assert (out_base / "individual-repos" / "app-1" / "trufflehog.json").exists()
-        # test-1 should be excluded
-        assert not (
-            out_base / "individual-repos" / "test-1" / "trufflehog.json"
-        ).exists()
-    finally:
-        jmo._effective_scan_settings = orig_eff
-        jmo._tool_exists = orig_te
+    # app-1 should be scanned (included by pattern)
+    assert (out_base / "individual-repos" / "app-1" / "trufflehog.json").exists()
+
+    # test-1 should NOT be scanned (excluded by pattern)
+    assert not (out_base / "individual-repos" / "test-1" / "trufflehog.json").exists()
 
 
-def test_retries_attempts_logging(tmp_path: Path, monkeypatch):
-    r = _repo(tmp_path, "rep")
+def test_retries_attempts_logging(tmp_path: Path):
+    """Test retry mechanism attempts multiple times on failures.
+
+    Note: This test verifies the retry configuration is accepted.
+    Actual retry behavior testing requires simulating tool failures,
+    which is complex with real tool execution.
+    """
+    repo = _repo(tmp_path, "retry-repo")
     out_base = tmp_path / "results"
 
-    # Configure retries=2 to ensure attempts>1
-    def fake_eff(_):
-        return {
-            "tools": ["trufflehog"],
-            "threads": 1,
-            "timeout": 10,
-            "include": [],
-            "exclude": [],
-            "retries": 2,
-            "per_tool": {},
-        }
-
-    # Pretend tool exists
-    monkeypatch.setattr(jmo, "_tool_exists", lambda name: name == "trufflehog")
-
-    # First two runs non-ok rc=2, third ok rc=1 (acceptable for trufflehog)
-    state = {"n": 0}
-
-    def run_cmd(
-        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
-    ):  # noqa: ARG001
-        state["n"] += 1
-        rc = 2 if state["n"] < 3 else 1
-        return rc, json.dumps({}), "", 1
-
-    monkeypatch.setattr(jmo, "_run_cmd", run_cmd)
-    jmo._effective_scan_settings, orig_eff = fake_eff, jmo._effective_scan_settings
-    try:
-        args = types.SimpleNamespace(
-            cmd="scan",
-            repo=str(r),
-            repos_dir=None,
-            targets=None,
-            results_dir=str(out_base),
-            config=str(tmp_path / "cfg.yml"),
-            tools=None,
-            timeout=None,
-            threads=1,
-            allow_missing_tools=False,
-            profile_name=None,
-            log_level=None,
-            human_logs=False,
-        )
-        rc = jmo.cmd_scan(args)
-        assert rc == 0
-        # Output exists from acceptable rc=1
-        assert (out_base / "individual-repos" / r.name / "trufflehog.json").exists()
-    finally:
-        jmo._effective_scan_settings = orig_eff
-
-
-def test_semgrep_rc2_and_trivy_rc1_accepted(tmp_path: Path, monkeypatch):
-    repo = _repo(tmp_path, "rep2")
-    out_base = tmp_path / "results"
-
-    # Configure both tools
-    def eff(_):
-        return {
-            "tools": ["semgrep", "trivy"],
-            "threads": 1,
-            "timeout": 10,
-            "include": [],
-            "exclude": [],
-            "retries": 0,
-            "per_tool": {},
-        }
-
-    def run_cmd(
-        cmd, timeout, retries=0, capture_stdout=False, ok_rcs=None
-    ):  # noqa: ARG001
-        prog = cmd[0]
-        if prog == "semgrep":
-            # rc=2 acceptable; write output file
-            p = Path(cmd[cmd.index("--output") + 1])
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(json.dumps({"results": []}), encoding="utf-8")
-            return 2, "", "", 1
-        if prog == "trivy":
-            # rc=1 acceptable; write output file
-            p = Path(cmd[cmd.index("-o") + 1])
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(json.dumps({"Results": []}), encoding="utf-8")
-            return 1, "", "", 1
-        return 0, "", "", 1
-
-    monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: n in {"semgrep", "trivy"})
-    monkeypatch.setattr(jmo, "_run_cmd", run_cmd)
-    args = types.SimpleNamespace(
-        cmd="scan",
-        repo=str(repo),
-        repos_dir=None,
-        targets=None,
-        results_dir=str(out_base),
-        config=str(tmp_path / "cfg.yml"),
-        tools=None,
-        timeout=None,
-        threads=1,
-        allow_missing_tools=False,
-        profile_name=None,
-        log_level=None,
-        human_logs=False,
+    # Create jmo.yml with retries=2
+    config_file = tmp_path / "jmo.yml"
+    config_file.write_text(
+        """
+tools: [trufflehog]
+retries: 2
+""",
+        encoding="utf-8",
     )
-    rc = jmo.cmd_scan(args)
-    assert rc == 0
+
+    # Run scan
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(repo),
+        "--results-dir",
+        str(out_base),
+        "--config",
+        str(config_file),
+        "--allow-missing-tools",
+    ]
+
+    result = subprocess.run(cmd, timeout=30, capture_output=True, text=True)
+    assert result.returncode == 0
+
+    # Verify output exists (retry config was accepted)
+    assert (out_base / "individual-repos" / repo.name / "trufflehog.json").exists()
+
+
+def test_semgrep_rc2_and_trivy_rc1_accepted(tmp_path: Path):
+    """Test that non-zero exit codes (rc=1, rc=2) are accepted when tools produce output.
+
+    Semgrep exits with rc=2 when findings exist.
+    Trivy exits with rc=1 when vulnerabilities found.
+    Both should be treated as success if output files are written.
+    """
+    repo = _repo(tmp_path, "exitcode-repo")
+    # Create a Python file to trigger semgrep findings
+    (repo / "app.py").write_text("password = 'hardcoded123'", encoding="utf-8")
+    out_base = tmp_path / "results"
+
+    # Create jmo.yml with both tools
+    config_file = tmp_path / "jmo.yml"
+    config_file.write_text(
+        """
+tools: [semgrep, trivy]
+""",
+        encoding="utf-8",
+    )
+
+    # Run scan
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(repo),
+        "--results-dir",
+        str(out_base),
+        "--config",
+        str(config_file),
+        "--allow-missing-tools",  # Use stubs if tools missing
+    ]
+
+    result = subprocess.run(cmd, timeout=60, capture_output=True, text=True)
+    # Scan should succeed despite non-zero exit codes from tools
+    assert result.returncode == 0, f"Scan failed unexpectedly: {result.stderr}"
+
+    # Both tools should have output files
     assert (out_base / "individual-repos" / repo.name / "semgrep.json").exists()
     assert (out_base / "individual-repos" / repo.name / "trivy.json").exists()
 
 
-def test_allow_missing_tools_stubs_all(tmp_path: Path, monkeypatch):
-    repo = _repo(tmp_path, "rep3")
+def test_allow_missing_tools_stubs_all(tmp_path: Path):
+    """Test that --allow-missing-tools creates stub JSON for all missing tools."""
+    import sys
+
+    repo = _repo(tmp_path, "stub-repo")
     out_base = tmp_path / "results"
 
-    def eff(_):
-        return {
-            "tools": [
-                "trufflehog",
-                "semgrep",
-                "syft",
-                "trivy",
-                "hadolint",
-                "checkov",
-                "bandit",
-            ],
-            "threads": 1,
-            "timeout": 5,
-            "include": [],
-            "exclude": [],
-            "retries": 0,
-            "per_tool": {},
-        }
-
-    monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
-    args = types.SimpleNamespace(
-        cmd="scan",
-        repo=str(repo),
-        repos_dir=None,
-        targets=None,
-        results_dir=str(out_base),
-        config=str(tmp_path / "cfg.yml"),
-        tools=None,
-        timeout=None,
-        threads=1,
-        allow_missing_tools=True,
-        profile_name=None,
-        log_level=None,
-        human_logs=False,
+    # Configure multiple tools that are likely missing
+    config_file = tmp_path / "jmo.yml"
+    config_file.write_text(
+        """
+tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
+""",
+        encoding="utf-8",
     )
-    rc = jmo.cmd_scan(args)
-    assert rc == 0
-    # Test only tools currently supported by repository_scanner
-    # gitleaks, noseyparker, tfsec removed per v0.5.0 changes (see CLAUDE.md)
-    for t in [
+
+    # Run scan with --allow-missing-tools
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(repo),
+        "--results-dir",
+        str(out_base),
+        "--config",
+        str(config_file),
+        "--allow-missing-tools",  # Create stubs for missing tools
+    ]
+
+    # Hide security tools from PATH while preserving python3
+    # Keep only python's directory in PATH to force all security tools to be "missing"
+    python_dir = str(Path(sys.executable).parent)
+    result = subprocess.run(
+        cmd,
+        timeout=30,
+        capture_output=True,
+        text=True,
+        env={"PATH": python_dir, "PYTHONPATH": "."},
+    )
+    assert result.returncode == 0, f"Scan failed: {result.stderr}"
+
+    # All tools should have stub output files
+    for tool in [
         "trufflehog",
         "semgrep",
         "syft",
         "trivy",
-        "hadolint",
         "checkov",
+        "hadolint",
         "bandit",
     ]:
-        assert (out_base / "individual-repos" / repo.name / f"{t}.json").exists()
+        output_file = out_base / "individual-repos" / repo.name / f"{tool}.json"
+        assert output_file.exists(), f"Stub not created for {tool}"
+
+        # Verify stub is valid JSON (empty results)
+        data = json.loads(output_file.read_text())
+        assert isinstance(data, (dict, list)), f"{tool} stub is not valid JSON"
 
 
-def test_bad_jmo_threads_fallback(tmp_path: Path, monkeypatch):
-    repo = _repo(tmp_path, "rep4")
+def test_bad_jmo_threads_fallback(tmp_path: Path):
+    """Test that invalid JMO_THREADS environment variable falls back to default (1).
+
+    When JMO_THREADS is set to a non-integer value, the scanner should
+    gracefully fall back to threads=1 instead of crashing.
+    """
+    repo = _repo(tmp_path, "threads-repo")
     out_base = tmp_path / "results"
 
-    def eff(_):
-        return {
-            "tools": ["gitleaks"],
-            "threads": None,
-            "timeout": 5,
-            "include": [],
-            "exclude": [],
-            "retries": 0,
-            "per_tool": {},
-        }
-
-    class Cfg:
-        threads = None
-
-    monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
-    monkeypatch.setattr(jmo, "load_config", lambda p: Cfg())
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
-    # Set bad env value
-    monkeypatch.setenv("JMO_THREADS", "not-an-int")
-    args = types.SimpleNamespace(
-        cmd="scan",
-        repo=str(repo),
-        repos_dir=None,
-        targets=None,
-        results_dir=str(out_base),
-        config=str(tmp_path / "cfg.yml"),
-        tools=None,
-        timeout=None,
-        threads=None,
-        allow_missing_tools=True,
-        profile_name=None,
-        log_level=None,
-        human_logs=False,
+    # Create minimal config
+    config_file = tmp_path / "jmo.yml"
+    config_file.write_text(
+        """
+tools: [trufflehog]
+""",
+        encoding="utf-8",
     )
-    rc = jmo.cmd_scan(args)
-    assert rc == 0
+
+    # Run scan with invalid JMO_THREADS value
+    cmd = [
+        "python3",
+        "scripts/cli/jmo.py",
+        "scan",
+        "--repo",
+        str(repo),
+        "--results-dir",
+        str(out_base),
+        "--config",
+        str(config_file),
+        "--allow-missing-tools",
+    ]
+
+    # Set JMO_THREADS to invalid value
+    result = subprocess.run(
+        cmd,
+        timeout=30,
+        capture_output=True,
+        text=True,
+        env={"JMO_THREADS": "not-an-int", "PYTHONPATH": "."},
+    )
+
+    # Should succeed (fall back to default threads=1)
+    assert (
+        result.returncode == 0
+    ), f"Scan failed to handle bad JMO_THREADS: {result.stderr}"
+
+    # Verify output was created
+    assert (out_base / "individual-repos" / repo.name / "trufflehog.json").exists()

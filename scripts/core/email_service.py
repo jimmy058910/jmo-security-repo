@@ -46,7 +46,7 @@ except ImportError:
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # Use verified jmotools.com domain (verified on 2025-10-16)
 # Override with JMO_FROM_EMAIL env var if needed
-FROM_EMAIL = os.getenv("JMO_FROM_EMAIL", "hello@jmotools.com")
+FROM_EMAIL = os.getenv("JMO_FROM_EMAIL", "marketing@jmotools.com")
 
 # Email templates
 WELCOME_EMAIL_HTML = """
@@ -64,34 +64,84 @@ WELCOME_EMAIL_HTML = """
             margin: 0 auto;
             padding: 20px;
         }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
         h1 {
-            color: #2d3748;
-            font-size: 24px;
-            margin-bottom: 20px;
+            margin: 0;
+            font-size: 32px;
+        }
+        .tagline {
+            margin: 15px 0 0 0;
+            font-size: 18px;
+            opacity: 0.95;
         }
         h2 {
-            color: #4a5568;
-            font-size: 18px;
-            margin-top: 24px;
+            color: #667eea;
+            font-size: 20px;
+            margin-top: 30px;
             margin-bottom: 12px;
         }
-        code {
+        .value-prop {
             background: #f7fafc;
-            border: 1px solid #e2e8f0;
-            padding: 2px 6px;
-            border-radius: 3px;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        .value-prop p {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            line-height: 1.7;
+        }
+        .benefits {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .benefits li {
+            padding-left: 1.5em;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .benefits li::before {
+            content: '✅';
+            position: absolute;
+            left: 0;
+        }
+        .quick-start {
+            background: #f7fafc;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+        }
+        .quick-start strong {
+            color: #10b981;
+        }
+        code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 3px 8px;
+            border-radius: 4px;
             font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 13px;
         }
         .cta {
             background: #10b981;
             color: white;
-            padding: 12px 24px;
+            padding: 14px 28px;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 8px;
             display: inline-block;
             margin: 20px 0;
             font-weight: 600;
+            font-size: 16px;
         }
         .footer {
             margin-top: 40px;
@@ -100,50 +150,65 @@ WELCOME_EMAIL_HTML = """
             font-size: 14px;
             color: #718096;
         }
-        ul {
-            margin: 12px 0;
-        }
-        li {
-            margin-bottom: 8px;
-        }
     </style>
 </head>
 <body>
-    <h1>🎉 Welcome to JMo Security!</h1>
+    <div class="header">
+        <h1>🎉 Welcome to JMo Security!</h1>
+        <p class="tagline">Unified security scanning for code, containers, cloud, and web</p>
+    </div>
 
-    <p>Thanks for joining! You're now part of a community securing thousands of repositories with unified security scanning.</p>
+    <p>Thanks for joining!</p>
 
-    <h2>Quick Start Guide</h2>
+    <div class="value-prop">
+        <p><strong>JMo Security finds vulnerabilities in code, containers, cloud configs, and live websites—all in one command. No security expertise required.</strong></p>
+        <ul class="benefits">
+            <li><strong>Zero installation:</strong> Scan in 60 seconds with Docker (or install locally)</li>
+            <li><strong>For everyone:</strong> Interactive wizard guides beginners; CLI power for pros</li>
+            <li><strong>Always current:</strong> Auto-updated security tools (11+ scanners, weekly checks)</li>
+            <li><strong>Compliance ready:</strong> Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK</li>
+            <li><strong>Actionable results:</strong> Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs</li>
+        </ul>
+        <p style="margin-bottom: 0;">Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.</p>
+    </div>
+
+    <h2>🚀 Quick Start (Choose Your Path)</h2>
+
+    <div class="quick-start">
+        <strong>Complete beginner?</strong><br>
+        Run <code>jmotools wizard</code> for 5-minute guided setup<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md">📖 Wizard Documentation</a>
+    </div>
+
+    <div class="quick-start">
+        <strong>Docker user?</strong><br>
+        Pull image, scan in 60 seconds (Windows-friendly)<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md">📖 Docker Guide</a>
+    </div>
+
+    <div class="quick-start">
+        <strong>Security pro?</strong><br>
+        Install CLI, customize profiles, automate in CI/CD<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo#readme">📖 Full Documentation</a>
+    </div>
+
+    <h2>📚 Additional Resources</h2>
     <ul>
-        <li>Run your first scan: <code>jmo scan --repo . --profile fast</code></li>
-        <li>View interactive results: <code>open results/summaries/dashboard.html</code></li>
-        <li>Get help anytime: <code>jmo --help</code></li>
-    </ul>
-
-    <h2>Three Scanning Profiles</h2>
-    <ul>
-        <li><strong>Fast</strong> (5-8 min): Pre-commit checks, quick validation</li>
-        <li><strong>Balanced</strong> (15-20 min): CI/CD pipelines, production scans</li>
-        <li><strong>Deep</strong> (30-60 min): Security audits, compliance scans</li>
-    </ul>
-
-    <h2>What's Next?</h2>
-    <ul>
-        <li>📖 <a href="https://github.com/jimmy058910/jmo-security-repo#readme">Read the full documentation</a></li>
-        <li>🐳 <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md">Try Docker mode (zero installation)</a></li>
-        <li>🧙 <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md">Use the interactive wizard</a></li>
         <li>💬 <a href="https://github.com/jimmy058910/jmo-security-repo/discussions">Join community discussions</a></li>
+        <li>🐛 <a href="https://github.com/jimmy058910/jmo-security-repo/issues">Report issues or request features</a></li>
+        <li>⭐ <a href="https://github.com/jimmy058910/jmo-security-repo">Star on GitHub</a> to help others discover JMo Security</li>
     </ul>
 
-    <a href="https://ko-fi.com/jmogaming" class="cta">💚 Support Full-Time Development</a>
+    <div style="text-align: center;">
+        <a href="https://ko-fi.com/jmogaming" class="cta">💚 Support Full-Time Development</a>
+    </div>
 
     <div class="footer">
         <p><strong>What you'll receive:</strong></p>
         <ul>
-            <li>🚀 New feature announcements (monthly)</li>
-            <li>🔒 Security tips and best practices (weekly)</li>
-            <li>💡 Real-world security audit case studies</li>
-            <li>🎁 Exclusive guides and cheat sheets</li>
+            <li>🚀 New feature announcements</li>
+            <li>🔒 Security tips and best practices</li>
+            <li>💡 Case studies & exclusive guides - Learn from actual security audits with deep-dives not available elsewhere</li>
         </ul>
 
         <p style="margin-top: 20px;">
@@ -157,37 +222,50 @@ WELCOME_EMAIL_HTML = """
 
 WELCOME_EMAIL_TEXT = """
 🎉 Welcome to JMo Security!
+Unified security scanning for code, containers, cloud, and web
 
-Thanks for joining! You're now part of a community securing thousands of repositories with unified security scanning.
+Thanks for joining!
 
-Quick Start Guide
------------------
-- Run your first scan: jmo scan --repo . --profile fast
-- View interactive results: open results/summaries/dashboard.html
-- Get help anytime: jmo --help
+What is JMo Security?
+---------------------
+JMo Security finds vulnerabilities in code, containers, cloud configs, and live websites—all in one command. No security expertise required.
 
-Three Scanning Profiles
------------------------
-- Fast (5-8 min): Pre-commit checks, quick validation
-- Balanced (15-20 min): CI/CD pipelines, production scans
-- Deep (30-60 min): Security audits, compliance scans
+✅ Zero installation: Scan in 60 seconds with Docker (or install locally)
+✅ For everyone: Interactive wizard guides beginners; CLI power for pros
+✅ Always current: Auto-updated security tools (11+ scanners, weekly checks)
+✅ Compliance ready: Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK
+✅ Actionable results: Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs
 
-What's Next?
-------------
-📖 Read the docs: https://github.com/jimmy058910/jmo-security-repo#readme
-🐳 Try Docker mode: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md
-🧙 Use the wizard: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md
-💬 Join discussions: https://github.com/jimmy058910/jmo-security-repo/discussions
+Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.
+
+Quick Start (Choose Your Path)
+-------------------------------
+Complete beginner?
+  → Run: jmotools wizard (5-minute guided setup)
+  → Docs: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md
+
+Docker user?
+  → Pull image, scan in 60 seconds (Windows-friendly)
+  → Docs: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md
+
+Security pro?
+  → Install CLI, customize profiles, automate in CI/CD
+  → Docs: https://github.com/jimmy058910/jmo-security-repo#readme
+
+Additional Resources
+--------------------
+💬 Join community discussions: https://github.com/jimmy058910/jmo-security-repo/discussions
+🐛 Report issues or request features: https://github.com/jimmy058910/jmo-security-repo/issues
+⭐ Star on GitHub: https://github.com/jimmy058910/jmo-security-repo
 
 💚 Support full-time development: https://ko-fi.com/jmogaming
 
 ---
 
 What you'll receive:
-🚀 New feature announcements (monthly)
-🔒 Security tips and best practices (weekly)
-💡 Real-world security audit case studies
-🎁 Exclusive guides and cheat sheets
+🚀 New feature announcements
+🔒 Security tips and best practices
+💡 Case studies & exclusive guides - Learn from actual security audits with deep-dives not available elsewhere
 
 We'll never spam you. Unsubscribe anytime.
 Questions? Reply to this email or open an issue on GitHub.
@@ -235,7 +313,7 @@ def send_welcome_email(
             ],
         }
 
-        response = resend.Emails.send(params)
+        response = resend.Emails.send(params)  # type: ignore[arg-type]
 
         # Resend returns a dict with 'id' on success
         return bool(

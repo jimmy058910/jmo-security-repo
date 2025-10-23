@@ -98,22 +98,19 @@ def test_timings_data_structure(tmp_path):
         # Verify timings is a dictionary
         assert isinstance(timings, dict)
 
-        # Check for common fields (may vary based on implementation)
-        # Common fields: total_duration, scan_duration, report_duration, etc.
-        possible_fields = [
-            "total_duration",
-            "scan_duration",
-            "report_duration",
-            "tools",
-            "aggregation_time",
-            "summary",
-        ]
+        # Check for actual fields from normalize_and_report.py profiling
+        # Fields: aggregate_seconds, recommended_threads, jobs, meta
+        assert "aggregate_seconds" in timings, "Expected 'aggregate_seconds' field"
+        assert isinstance(timings["aggregate_seconds"], (int, float))
+        assert timings["aggregate_seconds"] >= 0
 
-        # At least one of these fields should exist
-        has_timing_field = any(field in timings for field in possible_fields)
-        assert (
-            has_timing_field
-        ), f"Expected at least one timing field: {possible_fields}"
+        # Verify jobs array exists and contains tool timing data
+        assert "jobs" in timings, "Expected 'jobs' array with tool timings"
+        assert isinstance(timings["jobs"], list)
+
+        # Verify meta field exists
+        assert "meta" in timings, "Expected 'meta' field"
+        assert isinstance(timings["meta"], dict)
 
 
 @pytest.mark.slow

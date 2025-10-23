@@ -31,14 +31,14 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** Final pre-release status report
 
-### Content
+**Content:**
 
 - Test results summary (11/11 passed)
 - Release workflow documentation
 - Risk assessment
 - Release notes template
 
-### Why Archived
+**Why Archived:**
 
 - Release completed successfully
 - Workflow documented in docs/RELEASE.md
@@ -50,14 +50,14 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** E2E test results documentation
 
-### Content
+### Content (2)
 
 - Detailed test results table
 - Performance metrics baseline
 - Findings detection validation
 - Known limitations
 
-### Why Archived
+### Why Archived (2)
 
 - Tests passed, baseline established
 - Performance metrics useful for regression testing
@@ -69,14 +69,14 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** Pre-release validation checklist
 
-### Content
+### Content (3)
 
 - Core features checklist
 - Infrastructure enhancements
 - Performance metrics
 - Release workflow steps
 
-### Why Archived
+### Why Archived (3)
 
 - All checklist items completed
 - Template useful for future releases
@@ -88,7 +88,7 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** Complete pre-release audit report
 
-### Content
+### Content (4)
 
 - Comprehensive test validation
 - Architecture review
@@ -96,7 +96,7 @@ This directory contains temporary documentation created during the v0.6.0 releas
 - Technical debt assessment (ZERO found)
 - Integration points validation
 
-### Why Archived
+### Why Archived (4)
 
 - Audit complete, release approved
 - Massive reference document (637 lines)
@@ -109,7 +109,7 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** Critical dashboard bug analysis and fix
 
-### Content
+### Content (5)
 
 - Root cause analysis (`</script>` tag escaping)
 - Complete fix with code examples
@@ -117,7 +117,7 @@ This directory contains temporary documentation created during the v0.6.0 releas
 - Puppeteer verification
 - Lessons learned
 
-### Why Archived
+### Why Archived (5)
 
 - Bug fix fully documented in CHANGELOG.md (lines 11-25)
 - Fix implemented in `scripts/core/reporters/html_reporter.py`
@@ -130,7 +130,7 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Status:** ✅ Integrated into CONTRIBUTING.md, then deleted from archive
 
-### Content
+### Content (6)
 
 - Build instructions for all variants
 - Local testing procedures
@@ -151,14 +151,14 @@ This directory contains temporary documentation created during the v0.6.0 releas
 
 **Purpose:** Master test planning document
 
-### Content
+### Content (7)
 
 - Test categories (unit, adapter, reporter, integration, E2E)
 - Test matrix for all target types
 - Validation functions
 - Expected outcomes
 
-### Why Archived
+### Why Archived (6)
 
 - Tests implemented in `tests/e2e/`
 - Test plan executed successfully

@@ -157,103 +157,232 @@ app.post('/api/subscribe', async (req, res) => {
       });
     }
 
-    // Send welcome email via Resend
+    // Send welcome email via Resend (unified template matching Python CLI)
     const welcomeEmailHTML = `
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to JMo Security</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #1a202c;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 32px;
+        }
+        .tagline {
+            margin: 15px 0 0 0;
+            font-size: 18px;
+            opacity: 0.95;
+        }
+        h2 {
+            color: #667eea;
+            font-size: 20px;
+            margin-top: 30px;
+            margin-bottom: 12px;
+        }
+        .value-prop {
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        .value-prop p {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            line-height: 1.7;
+        }
+        .benefits {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .benefits li {
+            padding-left: 1.5em;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .benefits li::before {
+            content: '✅';
+            position: absolute;
+            left: 0;
+        }
+        .quick-start {
+            background: #f7fafc;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+        }
+        .quick-start strong {
+            color: #10b981;
+        }
+        code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .cta {
+            background: #10b981;
+            color: white;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 20px 0;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 14px;
+            color: #718096;
+        }
+    </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px;">
-    <h1 style="margin: 0; font-size: 32px;">🎉 Welcome to JMo Security!</h1>
-    <p style="margin: 15px 0 0 0; font-size: 18px; opacity: 0.95;">Terminal-first security scanning for developers</p>
-  </div>
+<body>
+    <div class="header">
+        <h1>🎉 Welcome to JMo Security!</h1>
+        <p class="tagline">Unified security scanning for code, containers, cloud, and web</p>
+    </div>
 
-  <div style="padding: 20px;">
-    <p style="font-size: 16px; margin-bottom: 20px;">Hi there!</p>
+    <p>Thanks for joining!</p>
 
-    <p style="font-size: 16px; margin-bottom: 20px;">Thanks for subscribing to the JMo Security newsletter. Welcome to the community!</p>
+    <div class="value-prop">
+        <p><strong>JMo Security finds vulnerabilities in code, containers, cloud configs, and live websites—all in one command. No security expertise required.</strong></p>
+        <ul class="benefits">
+            <li><strong>Zero installation:</strong> Scan in 60 seconds with Docker (or install locally)</li>
+            <li><strong>For everyone:</strong> Interactive wizard guides beginners; CLI power for pros</li>
+            <li><strong>Always current:</strong> Auto-updated security tools (11+ scanners, weekly checks)</li>
+            <li><strong>Compliance ready:</strong> Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK</li>
+            <li><strong>Actionable results:</strong> Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs</li>
+        </ul>
+        <p style="margin-bottom: 0;">Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.</p>
+    </div>
 
-    <h2 style="color: #667eea; font-size: 22px; margin-top: 30px; margin-bottom: 15px;">🚀 What You'll Receive</h2>
-    <ul style="font-size: 16px; line-height: 1.8;">
-      <li><strong>Weekly Security Tips</strong> - Practical advice for securing your code</li>
-      <li><strong>New Feature Announcements</strong> - Be first to try new scanners and tools</li>
-      <li><strong>Real-World Case Studies</strong> - Learn from actual security audits</li>
-      <li><strong>Exclusive Guides</strong> - Deep-dives not available elsewhere</li>
-      <li><strong>Early Access</strong> - Test premium features before public release</li>
+    <h2>🚀 Quick Start (Choose Your Path)</h2>
+
+    <div class="quick-start">
+        <strong>Complete beginner?</strong><br>
+        Run <code>jmotools wizard</code> for 5-minute guided setup<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md">📖 Wizard Documentation</a>
+    </div>
+
+    <div class="quick-start">
+        <strong>Docker user?</strong><br>
+        Pull image, scan in 60 seconds (Windows-friendly)<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md">📖 Docker Guide</a>
+    </div>
+
+    <div class="quick-start">
+        <strong>Security pro?</strong><br>
+        Install CLI, customize profiles, automate in CI/CD<br>
+        <a href="https://github.com/jimmy058910/jmo-security-repo#readme">📖 Full Documentation</a>
+    </div>
+
+    <h2>📚 Additional Resources</h2>
+    <ul>
+        <li>💬 <a href="https://github.com/jimmy058910/jmo-security-repo/discussions">Join community discussions</a></li>
+        <li>🐛 <a href="https://github.com/jimmy058910/jmo-security-repo/issues">Report issues or request features</a></li>
+        <li>⭐ <a href="https://github.com/jimmy058910/jmo-security-repo">Star on GitHub</a> to help others discover JMo Security</li>
     </ul>
 
-    <h2 style="color: #667eea; font-size: 22px; margin-top: 30px; margin-bottom: 15px;">⚡ Quick Start Guide</h2>
-    <p style="font-size: 16px; margin-bottom: 15px;">Get started with JMo Security in 3 ways:</p>
-
-    <div style="background: #f7fafc; border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; border-radius: 6px;">
-      <strong style="color: #667eea;">1️⃣ Interactive Wizard (Recommended)</strong>
-      <pre style="background: #2d3748; color: #e2e8f0; padding: 12px; border-radius: 6px; margin: 10px 0; overflow-x: auto;"><code>jmotools wizard</code></pre>
+    <div style="text-align: center;">
+        <a href="https://ko-fi.com/jmogaming" class="cta">💚 Support Full-Time Development</a>
     </div>
 
-    <div style="background: #f7fafc; border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; border-radius: 6px;">
-      <strong style="color: #667eea;">2️⃣ Docker (Zero Installation)</strong>
-      <pre style="background: #2d3748; color: #e2e8f0; padding: 12px; border-radius: 6px; margin: 10px 0; overflow-x: auto;"><code>docker pull ghcr.io/jimmy058910/jmo-security:latest
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \\
-  scan --repo /scan --results /scan/results --profile balanced</code></pre>
+    <div class="footer">
+        <p><strong>What you'll receive:</strong></p>
+        <ul>
+            <li>🚀 New feature announcements</li>
+            <li>🔒 Security tips and best practices</li>
+            <li>💡 Case studies & exclusive guides - Learn from actual security audits with deep-dives not available elsewhere</li>
+        </ul>
+
+        <p style="margin-top: 20px;">
+            We'll never spam you. Unsubscribe anytime.<br>
+            Questions? Reply to this email or <a href="https://github.com/jimmy058910/jmo-security-repo/issues">open an issue</a>.
+        </p>
+
+        <p style="font-size: 12px; color: #a0aec0; text-align: center; margin-top: 20px;">
+            You're receiving this email because you subscribed via ${safeSource.replace('_', ' ')}. <br>
+            <a href="{{unsubscribe_url}}" style="color: #667eea; text-decoration: none;">Unsubscribe</a> |
+            <a href="https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html" style="color: #667eea; text-decoration: none;">Privacy Policy</a>
+        </p>
     </div>
-
-    <div style="background: #f7fafc; border-left: 4px solid #667eea; padding: 15px; margin: 15px 0; border-radius: 6px;">
-      <strong style="color: #667eea;">3️⃣ CLI Wrapper Commands</strong>
-      <pre style="background: #2d3748; color: #e2e8f0; padding: 12px; border-radius: 6px; margin: 10px 0; overflow-x: auto;"><code>jmotools fast --repos-dir ~/repos</code></pre>
-    </div>
-
-    <div style="text-align: center; margin: 40px 0 30px 0;">
-      <a href="https://github.com/jimmy058910/jmo-security-repo" style="display: inline-block; background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">View on GitHub</a>
-      <a href="https://jmotools.com" style="display: inline-block; background: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin-left: 10px;">Documentation</a>
-    </div>
-
-    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-
-    <p style="font-size: 14px; color: #718096; text-align: center;">
-      💚 <a href="https://ko-fi.com/jmogaming" style="color: #667eea; text-decoration: none;">Support full-time development on Ko-Fi</a>
-    </p>
-
-    <p style="font-size: 12px; color: #a0aec0; text-align: center; margin-top: 20px;">
-      You're receiving this email because you subscribed via ${safeSource.replace('_', ' ')}. <br>
-      <a href="{{unsubscribe_url}}" style="color: #667eea; text-decoration: none;">Unsubscribe</a> |
-      <a href="https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html" style="color: #667eea; text-decoration: none;">Privacy Policy</a>
-    </p>
-  </div>
 </body>
 </html>`;
 
     const welcomeEmailText = `
-Welcome to JMo Security!
+🎉 Welcome to JMo Security!
+Unified security scanning for code, containers, cloud, and web
 
-Thanks for subscribing to the JMo Security newsletter. Welcome to the community!
+Thanks for joining!
 
-What You'll Receive:
-- Weekly Security Tips - Practical advice for securing your code
-- New Feature Announcements - Be first to try new scanners and tools
-- Real-World Case Studies - Learn from actual security audits
-- Exclusive Guides - Deep-dives not available elsewhere
-- Early Access - Test premium features before public release
+What is JMo Security?
+---------------------
+JMo Security finds vulnerabilities in code, containers, cloud configs, and live websites—all in one command. No security expertise required.
 
-Quick Start Guide:
+✅ Zero installation: Scan in 60 seconds with Docker (or install locally)
+✅ For everyone: Interactive wizard guides beginners; CLI power for pros
+✅ Always current: Auto-updated security tools (11+ scanners, weekly checks)
+✅ Compliance ready: Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK
+✅ Actionable results: Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs
 
-1. Interactive Wizard (Recommended):
-   jmotools wizard
+Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.
 
-2. Docker (Zero Installation):
-   docker pull ghcr.io/jimmy058910/jmo-security:latest
-   docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced
+Quick Start (Choose Your Path)
+-------------------------------
+Complete beginner?
+  → Run: jmotools wizard (5-minute guided setup)
+  → Docs: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/examples/wizard-examples.md
 
-3. CLI Wrapper Commands:
-   jmotools fast --repos-dir ~/repos
+Docker user?
+  → Pull image, scan in 60 seconds (Windows-friendly)
+  → Docs: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md
 
-GitHub: https://github.com/jimmy058910/jmo-security-repo
-Documentation: https://jmotools.com
+Security pro?
+  → Install CLI, customize profiles, automate in CI/CD
+  → Docs: https://github.com/jimmy058910/jmo-security-repo#readme
 
-Support full-time development: https://ko-fi.com/jmogaming
+Additional Resources
+--------------------
+💬 Join community discussions: https://github.com/jimmy058910/jmo-security-repo/discussions
+🐛 Report issues or request features: https://github.com/jimmy058910/jmo-security-repo/issues
+⭐ Star on GitHub: https://github.com/jimmy058910/jmo-security-repo
+
+💚 Support full-time development: https://ko-fi.com/jmogaming
+
+---
+
+What you'll receive:
+🚀 New feature announcements
+🔒 Security tips and best practices
+💡 Case studies & exclusive guides - Learn from actual security audits with deep-dives not available elsewhere
+
+We'll never spam you. Unsubscribe anytime.
+Questions? Reply to this email or open an issue on GitHub.
 
 ---
 You're receiving this email because you subscribed via ${safeSource.replace('_', ' ')}.
@@ -263,7 +392,7 @@ Privacy Policy: https://jimmy058910.github.io/jmo-security-repo/PRIVACY.html
 
     // Send email via Resend
     const response = await resend.emails.send({
-      from: 'JMo Security <hello@jmotools.com>',
+      from: 'JMo Security <marketing@jmotools.com>',
       to: [email],
       subject: 'Welcome to JMo Security! 🎉',
       html: welcomeEmailHTML,

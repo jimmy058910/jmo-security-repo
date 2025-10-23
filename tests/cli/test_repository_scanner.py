@@ -327,7 +327,6 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-
             mock_runner.run_all_parallel.return_value = []
 
             name, statuses = scan_repository(
@@ -412,7 +411,6 @@ class TestRepositoryScanner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
-
             mock_runner.run_all_parallel.return_value = []
 
             name, statuses = scan_repository(
@@ -487,7 +485,6 @@ class TestRepositoryScanner:
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
-
 
             mock_runner.run_all_parallel.return_value = []
 
@@ -594,6 +591,259 @@ class TestRepositoryScanner:
             # Verify all 11 tools succeeded
             for tool in deep_profile_tools:
                 assert statuses.get(tool) is True, f"Tool {tool} failed or not executed"
+
+
+    def test_allow_missing_tools_writes_stubs(self, tmp_path):
+        """Test that allow_missing_tools writes stubs for all missing tools"""
+        repo = tmp_path / "missing-tools-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        # Mock tool_exists to return False for all tools
+        def mock_tool_exists(tool_name):
+            return False
+
+        stub_calls = []
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append((tool_name, output_path))
+            output_path.write_text('{"results": []}')
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["trufflehog", "semgrep", "trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # All 3 tools should have stubs written
+            assert len(stub_calls) == 3
+            assert any("trufflehog" in str(call[1]) for call in stub_calls)
+            assert any("semgrep" in str(call[1]) for call in stub_calls)
+            assert any("trivy" in str(call[1]) for call in stub_calls)
+
+            # All tools should be marked as True in statuses
+            assert statuses["trufflehog"] is True
+            assert statuses["semgrep"] is True
+            assert statuses["trivy"] is True
+
+    def test_allow_missing_tools_all_scanners(self, tmp_path):
+        """Test allow_missing_tools for all 11 deep profile tools"""
+        repo = tmp_path / "all-missing-repo"
+        repo.mkdir()
+
+        def mock_tool_exists(tool_name):
+            return False
+
+        stub_calls = []
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append((tool_name, str(output_path)))
+            output_path.write_text('{}')
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            all_tools = [
+                "trufflehog",
+                "noseyparker",
+                "semgrep",
+                "bandit",
+                "syft",
+                "trivy",
+                "checkov",
+                "hadolint",
+                "zap",
+                "falco",
+                "afl++",
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=all_tools,
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # All 11 tools should have stubs written
+            assert len(stub_calls) == 11
+            for tool in all_tools:
+                assert statuses[tool] is True, f"{tool} should be marked True"
+                # For afl++, check for "aflplusplus" in path (++ is sanitized)
+                search_term = "aflplusplus" if tool == "afl++" else tool
+                assert any(search_term in path for _, path in stub_calls), \
+                    f"Stub should be written for {tool} (searched for '{search_term}')"
+
+    def test_per_tool_flags_applied(self, tmp_path):
+        """Test that per_tool_config flags are correctly applied"""
+        repo = tmp_path / "flags-test-repo"
+        repo.mkdir()
+
+        def mock_tool_exists(tool_name):
+            return tool_name in ["semgrep", "trivy"]
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="semgrep", status="success", attempts=1),
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            per_tool_config = {
+                "semgrep": {
+                    "flags": ["--exclude", "node_modules", "--exclude", ".git"]
+                },
+                "trivy": {
+                    "flags": ["--severity", "HIGH,CRITICAL", "--no-progress"]
+                },
+            }
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["semgrep", "trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config=per_tool_config,
+                allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
+            )
+
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+            # Verify semgrep flags
+            semgrep_def = next((t for t in tool_defs if t.name == "semgrep"), None)
+            assert semgrep_def is not None
+            assert "--exclude" in semgrep_def.command
+            assert "node_modules" in semgrep_def.command
+
+            # Verify trivy flags
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
+            assert "--severity" in trivy_def.command
+            assert "HIGH,CRITICAL" in trivy_def.command
+
+    def test_per_tool_timeout_overrides(self, tmp_path):
+        """Test that per_tool_config timeout overrides work for multiple tools"""
+        repo = tmp_path / "timeout-override-repo"
+        repo.mkdir()
+
+        def mock_tool_exists(tool_name):
+            return tool_name in ["trufflehog", "semgrep", "trivy"]
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trufflehog", status="success", attempts=1),
+                ToolResult(tool="semgrep", status="success", attempts=1),
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            per_tool_config = {
+                "trufflehog": {"timeout": 300},
+                "semgrep": {"timeout": 900},
+                "trivy": {"timeout": 1200},
+            }
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["trufflehog", "semgrep", "trivy"],
+                timeout=600,  # Default timeout
+                retries=0,
+                per_tool_config=per_tool_config,
+                allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
+            )
+
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+
+            # Verify each tool has its override timeout
+            trufflehog_def = next((t for t in tool_defs if t.name == "trufflehog"), None)
+            assert trufflehog_def.timeout == 300
+
+            semgrep_def = next((t for t in tool_defs if t.name == "semgrep"), None)
+            assert semgrep_def.timeout == 900
+
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def.timeout == 1200
+
+    def test_mixed_available_and_missing_tools(self, tmp_path):
+        """Test scanning with mix of available and missing tools"""
+        repo = tmp_path / "mixed-tools-repo"
+        repo.mkdir()
+
+        def mock_tool_exists(tool_name):
+            # Only trufflehog and trivy available
+            return tool_name in ["trufflehog", "trivy"]
+
+        stub_calls = []
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append(tool_name)
+            output_path.write_text('{}')
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trufflehog", status="success", attempts=1),
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["trufflehog", "semgrep", "trivy", "bandit"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # Available tools should run
+            assert statuses["trufflehog"] is True
+            assert statuses["trivy"] is True
+
+            # Missing tools should have stubs
+            assert statuses["semgrep"] is True
+            assert statuses["bandit"] is True
+
+            # Stubs should be written for missing tools only
+            assert "semgrep" in [call for call in stub_calls]
+            assert "bandit" in [call for call in stub_calls]
+            assert len(stub_calls) == 2  # Only semgrep and bandit
 
 
 if __name__ == "__main__":

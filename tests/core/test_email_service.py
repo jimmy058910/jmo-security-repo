@@ -267,18 +267,18 @@ def test_welcome_email_contains_required_content():
 
     # HTML version checks
     assert "Welcome to JMo Security" in WELCOME_EMAIL_HTML
-    assert "jmo scan" in WELCOME_EMAIL_HTML
-    assert "Quick Start Guide" in WELCOME_EMAIL_HTML
-    assert "Three Scanning Profiles" in WELCOME_EMAIL_HTML
+    assert "jmotools wizard" in WELCOME_EMAIL_HTML  # Updated wizard command
+    assert "Quick Start" in WELCOME_EMAIL_HTML  # Section header
+    assert "Additional Resources" in WELCOME_EMAIL_HTML  # Documentation section
     assert "ko-fi.com" in WELCOME_EMAIL_HTML  # Support link
     assert "Unsubscribe" in WELCOME_EMAIL_HTML  # GDPR compliance
 
     # Text version checks
     assert "Welcome to JMo Security" in WELCOME_EMAIL_TEXT
-    assert "jmo scan" in WELCOME_EMAIL_TEXT
-    assert "Quick Start Guide" in WELCOME_EMAIL_TEXT
-    assert "ko-fi.com" in WELCOME_EMAIL_TEXT
-    assert "Unsubscribe" in WELCOME_EMAIL_TEXT
+    assert "jmotools wizard" in WELCOME_EMAIL_TEXT  # Updated wizard command
+    assert "Quick Start" in WELCOME_EMAIL_TEXT  # Section header
+    assert "ko-fi.com" in WELCOME_EMAIL_TEXT  # Support link
+    assert "Unsubscribe" in WELCOME_EMAIL_TEXT  # GDPR compliance
 
 
 def test_welcome_email_html_valid_structure():

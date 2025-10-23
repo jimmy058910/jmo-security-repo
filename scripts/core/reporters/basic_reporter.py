@@ -52,7 +52,7 @@ def _get_top_issue_summary(findings_for_file: List[Dict[str, Any]]) -> str:
     top_rule, count = rule_counts.most_common(1)[0]
 
     # Simplify rule ID for display
-    display_rule = top_rule.split(".")[-1] if "." in top_rule else top_rule
+    display_rule: str = str(top_rule.split(".")[-1] if "." in top_rule else top_rule)
 
     if count > 1:
         return f"{display_rule} ({count}×)"

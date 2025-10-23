@@ -28,6 +28,7 @@ from scripts.cli.scan_utils import (
     tool_exists as _tool_exists,
     write_stub as _write_stub,
 )
+from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 
 # Telemetry
 from scripts.core.telemetry import (
@@ -85,96 +86,121 @@ def _effective_scan_settings(args) -> Dict[str, Any]:
     }
 
 
-def parse_args():
-    ap = argparse.ArgumentParser(prog="jmo")
-    sub = ap.add_subparsers(dest="cmd")
+def _add_target_args(parser, target_group=None):
+    """Add common target scanning arguments (repos, images, IaC, URLs, GitLab, K8s)."""
+    # Repository targets (mutually exclusive if in a group)
+    if target_group:
+        g = target_group
+        g.add_argument("--repo", help="Path to a single repository to scan")
+        g.add_argument(
+            "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
+        )
+        g.add_argument("--targets", help="File listing repo paths (one per line)")
+    else:
+        parser.add_argument("--repo", help="Path to a single repository to scan")
+        parser.add_argument(
+            "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
+        )
+        parser.add_argument("--targets", help="File listing repo paths (one per line)")
 
-    sp = sub.add_parser(
-        "scan", help="Run configured tools on repos and write JSON outputs"
-    )
-    g = sp.add_mutually_exclusive_group(required=False)
-    g.add_argument("--repo", help="Path to a single repository to scan")
-    g.add_argument(
-        "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
-    )
-    g.add_argument("--targets", help="File listing repo paths (one per line)")
-
-    # Container image scanning (Tier 1)
-    sp.add_argument(
+    # Container image scanning
+    parser.add_argument(
         "--image", help="Container image to scan (format: registry/image:tag)"
     )
-    sp.add_argument("--images-file", help="File with one image per line")
+    parser.add_argument("--images-file", help="File with one image per line")
 
-    # IaC/Terraform state scanning (Tier 1)
-    sp.add_argument("--terraform-state", help="Terraform state file to scan")
-    sp.add_argument("--cloudformation", help="CloudFormation template to scan")
-    sp.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
+    # IaC/Terraform state scanning
+    parser.add_argument("--terraform-state", help="Terraform state file to scan")
+    parser.add_argument("--cloudformation", help="CloudFormation template to scan")
+    parser.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
 
-    # Live web app/API scanning (Tier 1)
-    sp.add_argument("--url", help="Web application URL to scan")
-    sp.add_argument("--urls-file", help="File with URLs (one per line)")
-    sp.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
+    # Live web app/API scanning
+    parser.add_argument("--url", help="Web application URL to scan")
+    parser.add_argument("--urls-file", help="File with URLs (one per line)")
+    parser.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
 
-    # GitLab integration (Tier 1)
-    sp.add_argument(
+    # GitLab integration
+    parser.add_argument(
         "--gitlab-url", help="GitLab instance URL (e.g., https://gitlab.com)"
     )
-    sp.add_argument(
+    parser.add_argument(
         "--gitlab-token", help="GitLab access token (or use GITLAB_TOKEN env var)"
     )
-    sp.add_argument("--gitlab-group", help="GitLab group to scan")
-    sp.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
+    parser.add_argument("--gitlab-group", help="GitLab group to scan")
+    parser.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
 
-    # Kubernetes cluster scanning (Tier 1)
-    sp.add_argument("--k8s-context", help="Kubernetes context to scan")
-    sp.add_argument("--k8s-namespace", help="Kubernetes namespace to scan")
-    sp.add_argument(
+    # Kubernetes cluster scanning
+    parser.add_argument("--k8s-context", help="Kubernetes context to scan")
+    parser.add_argument("--k8s-namespace", help="Kubernetes namespace to scan")
+    parser.add_argument(
         "--k8s-all-namespaces", action="store_true", help="Scan all namespaces"
     )
 
-    sp.add_argument(
+
+def _add_scan_config_args(parser):
+    """Add common scan configuration arguments."""
+    parser.add_argument(
         "--results-dir",
         default="results",
         help="Base results directory (default: results)",
     )
-    sp.add_argument(
+    parser.add_argument(
         "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
     )
-    sp.add_argument("--tools", nargs="*", help="Override tools list from config")
-    sp.add_argument(
+    parser.add_argument("--tools", nargs="*", help="Override tools list from config")
+    parser.add_argument(
         "--timeout",
         type=int,
         default=None,
         help="Per-tool timeout seconds (default: from config or 600)",
     )
-    sp.add_argument(
+    parser.add_argument(
         "--threads",
         type=int,
         default=None,
         help="Concurrent repos to scan (default: auto)",
     )
-    sp.add_argument(
+    parser.add_argument(
         "--allow-missing-tools",
         action="store_true",
         help="If a tool is missing, create empty JSON instead of failing",
     )
-    sp.add_argument(
+    parser.add_argument(
         "--profile-name",
         default=None,
         help="Optional profile name from config.profiles to apply for scanning",
     )
-    sp.add_argument(
+
+
+def _add_logging_args(parser):
+    """Add common logging arguments."""
+    parser.add_argument(
         "--log-level",
         default=None,
         help="Log level: DEBUG|INFO|WARN|ERROR (default: from config)",
     )
-    sp.add_argument(
+    parser.add_argument(
         "--human-logs",
         action="store_true",
         help="Emit human-friendly colored logs instead of JSON",
     )
 
-    rp = sub.add_parser("report", help="Aggregate findings and emit reports")
+
+def _add_scan_args(subparsers):
+    """Add 'scan' subcommand arguments."""
+    sp = subparsers.add_parser(
+        "scan", help="Run configured tools on repos and write JSON outputs"
+    )
+    g = sp.add_mutually_exclusive_group(required=False)
+    _add_target_args(sp, target_group=g)
+    _add_scan_config_args(sp)
+    _add_logging_args(sp)
+    return sp
+
+
+def _add_report_args(subparsers):
+    """Add 'report' subcommand arguments."""
+    rp = subparsers.add_parser("report", help="Aggregate findings and emit reports")
     # Allow both positional and optional for results dir (backward compatible)
     rp.add_argument(
         "results_dir_pos",
@@ -210,97 +236,24 @@ def parse_args():
         default=None,
         help="Override worker threads for aggregation (default: auto)",
     )
-    rp.add_argument(
-        "--log-level", default=None, help="Log level: DEBUG|INFO|WARN|ERROR"
-    )
-    rp.add_argument(
-        "--human-logs",
-        action="store_true",
-        help="Emit human-friendly colored logs instead of JSON",
-    )
+    _add_logging_args(rp)
     # Accept --allow-missing-tools for symmetry with scan (no-op during report)
     rp.add_argument(
         "--allow-missing-tools",
         action="store_true",
         help="Accepted for compatibility; reporting tolerates missing tool outputs by default",
     )
+    return rp
 
-    cp = sub.add_parser(
+
+def _add_ci_args(subparsers):
+    """Add 'ci' subcommand arguments."""
+    cp = subparsers.add_parser(
         "ci", help="Run scan then report with thresholds; convenient for CI"
     )
     cg = cp.add_mutually_exclusive_group(required=False)
-    cg.add_argument("--repo", help="Path to a single repository to scan")
-    cg.add_argument(
-        "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
-    )
-    cg.add_argument("--targets", help="File listing repo paths (one per line)")
-
-    # Container image scanning (Tier 1)
-    cp.add_argument(
-        "--image", help="Container image to scan (format: registry/image:tag)"
-    )
-    cp.add_argument("--images-file", help="File with one image per line")
-
-    # IaC/Terraform state scanning (Tier 1)
-    cp.add_argument("--terraform-state", help="Terraform state file to scan")
-    cp.add_argument("--cloudformation", help="CloudFormation template to scan")
-    cp.add_argument("--k8s-manifest", help="Kubernetes manifest file to scan")
-
-    # Live web app/API scanning (Tier 1)
-    cp.add_argument("--url", help="Web application URL to scan")
-    cp.add_argument("--urls-file", help="File with URLs (one per line)")
-    cp.add_argument("--api-spec", help="OpenAPI/Swagger spec URL or file")
-
-    # GitLab integration (Tier 1)
-    cp.add_argument(
-        "--gitlab-url", help="GitLab instance URL (e.g., https://gitlab.com)"
-    )
-    cp.add_argument(
-        "--gitlab-token", help="GitLab access token (or use GITLAB_TOKEN env var)"
-    )
-    cp.add_argument("--gitlab-group", help="GitLab group to scan")
-    cp.add_argument("--gitlab-repo", help="Single GitLab repo (format: group/repo)")
-
-    # Kubernetes cluster scanning (Tier 1)
-    cp.add_argument("--k8s-context", help="Kubernetes context to scan")
-    cp.add_argument("--k8s-namespace", help="Kubernetes namespace to scan")
-    cp.add_argument(
-        "--k8s-all-namespaces", action="store_true", help="Scan all namespaces"
-    )
-
-    cp.add_argument(
-        "--results-dir",
-        default="results",
-        help="Base results directory (default: results)",
-    )
-    cp.add_argument(
-        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
-    )
-    cp.add_argument(
-        "--tools", nargs="*", help="Override tools list from config (for scan)"
-    )
-    cp.add_argument(
-        "--timeout",
-        type=int,
-        default=None,
-        help="Per-tool timeout seconds (default: from config or 600)",
-    )
-    cp.add_argument(
-        "--threads",
-        type=int,
-        default=None,
-        help="Concurrent repos to scan/aggregate (default: auto)",
-    )
-    cp.add_argument(
-        "--allow-missing-tools",
-        action="store_true",
-        help="If a tool is missing, create empty JSON instead of failing",
-    )
-    cp.add_argument(
-        "--profile-name",
-        default=None,
-        help="Optional profile name from config.profiles to apply for scanning",
-    )
+    _add_target_args(cp, target_group=cg)
+    _add_scan_config_args(cp)
     cp.add_argument(
         "--fail-on",
         default=None,
@@ -309,14 +262,18 @@ def parse_args():
     cp.add_argument(
         "--profile", action="store_true", help="Collect timings.json during report"
     )
-    cp.add_argument(
-        "--log-level", default=None, help="Log level: DEBUG|INFO|WARN|ERROR"
-    )
-    cp.add_argument(
-        "--human-logs",
-        action="store_true",
-        help="Emit human-friendly colored logs instead of JSON",
-    )
+    _add_logging_args(cp)
+    return cp
+
+
+def parse_args():
+    """Parse command-line arguments for jmo CLI."""
+    ap = argparse.ArgumentParser(prog="jmo")
+    sub = ap.add_subparsers(dest="cmd")
+
+    _add_scan_args(sub)
+    _add_report_args(sub)
+    _add_ci_args(sub)
 
     try:
         return ap.parse_args()
@@ -551,7 +508,8 @@ def _check_first_run() -> bool:
     except ImportError as e:
         logger.debug(f"PyYAML not available: {e}")
         return False
-    except Exception as e:
+    except (yaml.YAMLError, ValueError, TypeError) as e:
+        # YAML parsing errors, invalid config structure, type errors
         logger.debug(f"Config file parsing error: {e}")
         return False
 
@@ -583,7 +541,7 @@ def _collect_email_opt_in(args) -> None:
             from scripts.core.email_service import send_welcome_email, validate_email
 
             if validate_email(email):
-                success = send_welcome_email(email, source="cli_onboarding")
+                success = send_welcome_email(email, source="cli")
 
                 # Save to config
                 import yaml
@@ -666,7 +624,7 @@ def _show_kofi_reminder(args) -> None:
     config_path.parent.mkdir(exist_ok=True)
 
     # Load existing config
-    config = {}
+    config: Dict[str, Any] = {}
     if config_path.exists():
         try:
             import yaml
@@ -675,7 +633,8 @@ def _show_kofi_reminder(args) -> None:
                 config = yaml.safe_load(f) or {}
         except (ImportError, OSError) as e:
             logger.debug(f"Failed to load config file: {e}")
-        except Exception as e:
+        except (yaml.YAMLError, ValueError, TypeError) as e:
+            # YAML parsing errors, invalid config structure, type errors
             logger.debug(f"Config file parsing error: {e}")
 
     # Increment scan count
@@ -720,23 +679,133 @@ def _get_max_workers(args, eff: Dict, cfg) -> Optional[int]:
     2. JMO_THREADS environment variable
     3. Profile threads setting
     4. Config file threads
-    5. None (auto-detect)
+    5. Auto-detect (75% of CPU cores, min 2, max 16)
+
+    Returns:
+        int: Number of worker threads, or None to let ThreadPoolExecutor decide
     """
     import os
 
-    if eff.get("threads"):
-        return max(1, int(eff["threads"]))
+    # Check effective settings (from CLI or profile)
+    threads_val = eff.get("threads")
+    if threads_val is not None:
+        # Support 'auto' keyword
+        if isinstance(threads_val, str) and threads_val.lower() == "auto":
+            return _auto_detect_threads(args)
+        return max(1, int(threads_val))
 
-    if os.getenv("JMO_THREADS"):
+    # Check environment variable
+    env_threads = os.getenv("JMO_THREADS")
+    if env_threads:
         try:
-            return max(1, int(os.getenv("JMO_THREADS") or "0"))
+            if env_threads.lower() == "auto":
+                return _auto_detect_threads(args)
+            return max(1, int(env_threads))
         except (ValueError, TypeError) as e:
             logger.debug(f"Invalid JMO_THREADS value: {e}")
 
-    if cfg.threads:
+    # Check config file
+    if cfg.threads is not None:
+        if isinstance(cfg.threads, str) and cfg.threads.lower() == "auto":
+            return _auto_detect_threads(args)
         return max(1, int(cfg.threads))
 
-    return None  # Let ThreadPoolExecutor auto-detect
+    # Default: Auto-detect
+    return _auto_detect_threads(args)
+
+
+def _auto_detect_threads(args) -> int:
+    """
+    Auto-detect optimal thread count based on CPU cores.
+
+    Wrapper around shared cpu_utils.auto_detect_threads() with logging.
+
+    Args:
+        args: CLI arguments (for logging)
+
+    Returns:
+        int: Optimal thread count
+    """
+    return _auto_detect_threads_shared(log_fn=lambda level, msg: _log(args, level, msg))
+
+
+class ProgressTracker:
+    """
+    Simple progress tracker for scan operations (no external dependencies).
+
+    Tracks completed/total targets and provides formatted progress updates.
+    Thread-safe for concurrent scan operations.
+    """
+
+    def __init__(self, total: int, args):
+        """
+        Initialize progress tracker.
+
+        Args:
+            total: Total number of targets to scan
+            args: CLI arguments (for logging)
+        """
+        import threading
+
+        self.total = total
+        self.completed = 0
+        self.args = args
+        self._lock = threading.Lock()
+        self._start_time = None
+
+    def start(self):
+        """Start progress tracking timer."""
+        import time
+
+        self._start_time = time.time()
+
+    def update(self, target_type: str, target_name: str, elapsed: float):
+        """
+        Update progress after completing a target scan.
+
+        Args:
+            target_type: Type of target (repo, image, url, etc.)
+            target_name: Name/identifier of target
+            elapsed: Elapsed time in seconds for this target
+        """
+        import time
+
+        with self._lock:
+            self.completed += 1
+            percentage = int((self.completed / self.total) * 100)
+            status_symbol = "✓" if elapsed >= 0 else "✗"
+
+            # Calculate ETA
+            if self._start_time and self.completed > 0:
+                total_elapsed = time.time() - self._start_time
+                avg_time_per_target = total_elapsed / self.completed
+                remaining = self.total - self.completed
+                eta_seconds = int(avg_time_per_target * remaining)
+                eta_str = self._format_duration(eta_seconds)
+            else:
+                eta_str = "calculating..."
+
+            # Format progress message
+            message = (
+                f"[{self.completed}/{self.total}] {status_symbol} {target_type}: {target_name} "
+                f"({self._format_duration(int(elapsed))}) | "
+                f"Progress: {percentage}% | ETA: {eta_str}"
+            )
+
+            _log(self.args, "INFO", message)
+
+    def _format_duration(self, seconds: int) -> str:
+        """Format duration in human-readable format."""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            mins = seconds // 60
+            secs = seconds % 60
+            return f"{mins}m {secs}s"
+        else:
+            hours = seconds // 3600
+            mins = (seconds % 3600) // 60
+            return f"{hours}h {mins}m"
 
 
 def cmd_scan(args) -> int:
@@ -807,7 +876,7 @@ def cmd_scan(args) -> int:
         + len(targets.iac_files)
         + len(targets.urls)
         + len(targets.gitlab_repos)
-        + len(targets.k8s_contexts)
+        + len(targets.k8s_resources)
     )
     num_target_types = sum(
         [
@@ -816,7 +885,7 @@ def cmd_scan(args) -> int:
             len(targets.iac_files) > 0,
             len(targets.urls) > 0,
             len(targets.gitlab_repos) > 0,
-            len(targets.k8s_contexts) > 0,
+            len(targets.k8s_resources) > 0,
         ]
     )
 
@@ -832,7 +901,7 @@ def cmd_scan(args) -> int:
                 "urls": len(targets.urls),
                 "iac": len(targets.iac_files),
                 "gitlab": len(targets.gitlab_repos),
-                "k8s": len(targets.k8s_contexts),
+                "k8s": len(targets.k8s_resources),
             },
             # Business metrics
             "ci_detected": detect_ci_environment(),
@@ -841,7 +910,7 @@ def cmd_scan(args) -> int:
             "total_targets_bucket": bucket_targets(total_targets),
             "scan_frequency_hint": infer_scan_frequency(),
         },
-        cfg.raw,
+        {},
         version=__version__,
     )
 
@@ -870,6 +939,10 @@ def cmd_scan(args) -> int:
     # Track scan results
     all_results = []
     futures = []
+
+    # Initialize progress tracker
+    progress = ProgressTracker(total_targets, args)
+    progress.start()
 
     # Use ThreadPoolExecutor for parallel scanning
     max_workers = scan_config.max_workers
@@ -1009,18 +1082,29 @@ def cmd_scan(args) -> int:
                 )
                 futures.append(("k8s", k8s_info.get("name", "unknown"), future))
 
-        # Wait for all futures to complete
+        # Wait for all futures to complete with progress tracking
         for target_type, target_name, future in futures:
             if stop_flag["stop"]:
                 future.cancel()
                 continue
 
             try:
+                import time
+
+                target_start = time.time()
                 name, statuses = future.result()
-                _log(args, "INFO", f"Completed {target_type} scan: {target_name}")
+                target_elapsed = time.time() - target_start
+
+                # Update progress tracker
+                progress.update(target_type, target_name, target_elapsed)
+
                 all_results.append((target_type, name, statuses))
             except Exception as e:
                 _log(args, "ERROR", f"Failed to scan {target_type} {target_name}: {e}")
+
+                # Update progress tracker (negative elapsed indicates failure)
+                progress.update(target_type, target_name, -1.0)
+
                 if not scan_config.allow_missing_tools:
                     raise
 
@@ -1049,7 +1133,7 @@ def cmd_scan(args) -> int:
                 0
             ),  # Will be counted in report phase
         },
-        cfg.raw,
+        {},
         version=__version__,
     )
 

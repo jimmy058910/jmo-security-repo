@@ -19,7 +19,6 @@ import json
 import subprocess
 
 
-
 def test_deep_profile_includes_all_tools(tmp_path):
     """Verify deep profile invokes all 12 tools."""
     # Create minimal test repo
@@ -190,5 +189,5 @@ def test_deep_profile_report_aggregation(tmp_path):
     assert findings_json.exists()
 
     findings = json.loads(findings_json.read_text())
-    assert "findings" in findings
-    assert isinstance(findings["findings"], list)
+    # findings.json is now a list of findings directly (not wrapped in {"findings": [...]})
+    assert isinstance(findings, list)

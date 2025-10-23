@@ -53,14 +53,18 @@ def scan_url(
     statuses: Dict[str, bool] = {}
     tool_defs = []
 
-    # Sanitize URL for directory name (extract domain)
+    # Validate URL scheme - only HTTP(S) allowed for DAST scanning
     parsed = urlparse(url)
-    if parsed.scheme == "file":
-        # file:// URL - use filename
-        safe_name = Path(parsed.path).stem if parsed.path else "unknown"
-    else:
-        # http/https URL - use domain
-        safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
+    ALLOWED_SCHEMES = {"http", "https"}
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise ValueError(
+            f"Invalid URL scheme '{parsed.scheme}'. "
+            f"Only HTTP(S) URLs are supported for web scanning. "
+            f"Use --repo for local filesystem scanning."
+        )
+
+    # Sanitize URL for directory name (extract domain)
+    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
 
     out_dir = results_dir / "individual-web" / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)

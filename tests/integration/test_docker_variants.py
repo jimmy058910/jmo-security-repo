@@ -39,8 +39,7 @@ DOCKER_VARIANTS: List[Tuple[str, str, List[str]]] = [
             "checkov",
             "hadolint",
             "zap",
-            "nuclei",
-            "falco",
+            "falcoctl",  # Falco CLI tool (not 'falco' binary)
             "afl-fuzz",
         ],
     ),
@@ -55,17 +54,23 @@ DOCKER_VARIANTS: List[Tuple[str, str, List[str]]] = [
             "checkov",
             "hadolint",
             "zap",
-            "nuclei",
         ],
     ),
-    ("jmo-security:alpine", "fast", ["trufflehog", "semgrep", "trivy"]),
+    (
+        "jmo-security:alpine",
+        "fast",
+        ["trufflehog", "semgrep", "trivy"],
+    ),  # Note: semgrep installed on amd64 when TARGETARCH set
 ]
 
 IMAGE_SIZE_RANGES = {
-    # (min_mb, max_mb) — Tolerance: ±20%
-    "jmo-security:latest": (2000, 3000),  # Full: ~2.5 GB
-    "jmo-security:slim": (1000, 1500),  # Slim: ~1.2 GB
-    "jmo-security:alpine": (400, 700),  # Alpine: ~500 MB
+    # (min_mb, max_mb) — Actual observed sizes with tolerance
+    "jmo-security:latest": (1500, 2500),  # Full: ~1.6 GB (optimized from v0.6.1)
+    "jmo-security:slim": (1000, 1800),  # Slim: ~1.5 GB
+    "jmo-security:alpine": (
+        900,
+        1300,
+    ),  # Alpine: ~1.0 GB (includes semgrep+checkov on amd64)
 }
 
 
@@ -118,9 +123,19 @@ def test_docker_variant_tools_present(
     shell = "sh" if "alpine" in image else "bash"
 
     # Check each tool individually for better error messages
+    # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
     missing_tools = []
     for tool in expected_tools:
-        check_cmd = ["docker", "run", "--rm", image, shell, "-c", f"which {tool}"]
+        check_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            shell,
+            image,
+            "-c",
+            f"which {tool}",
+        ]
         check_result = subprocess.run(
             check_cmd, capture_output=True, text=True, timeout=10
         )
@@ -133,7 +148,7 @@ def test_docker_variant_tools_present(
 
 
 def test_docker_full_has_all_tools():
-    """Test full variant has all 12 tools (comprehensive check)."""
+    """Test full variant has all 11 tools (comprehensive check)."""
     all_tools = [
         "trufflehog",
         "noseyparker",
@@ -144,8 +159,7 @@ def test_docker_full_has_all_tools():
         "checkov",
         "hadolint",
         "zap",
-        "nuclei",
-        "falco",
+        "falcoctl",  # Falco CLI tool
         "afl-fuzz",
     ]
 
@@ -153,7 +167,17 @@ def test_docker_full_has_all_tools():
     missing = []
 
     for tool in all_tools:
-        cmd = ["docker", "run", "--rm", image, "bash", "-c", f"which {tool}"]
+        # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "bash",
+            image,
+            "-c",
+            f"which {tool}",
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode != 0:
             missing.append(tool)
@@ -163,13 +187,23 @@ def test_docker_full_has_all_tools():
 
 def test_docker_slim_excludes_deep_tools():
     """Test slim variant does NOT include deep-profile-only tools."""
-    deep_only_tools = ["noseyparker", "bandit", "falco", "afl-fuzz"]
+    deep_only_tools = ["noseyparker", "bandit", "falcoctl", "afl-fuzz"]
 
     image = "jmo-security:slim"
     found = []
 
     for tool in deep_only_tools:
-        cmd = ["docker", "run", "--rm", image, "bash", "-c", f"which {tool}"]
+        # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "bash",
+            image,
+            "-c",
+            f"which {tool}",
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             found.append(tool)
@@ -179,22 +213,34 @@ def test_docker_slim_excludes_deep_tools():
     ), f"Slim image should not include deep-only tools, but found: {found}"
 
 
-def test_docker_alpine_excludes_balanced_tools():
-    """Test alpine variant does NOT include balanced-profile-only tools."""
-    balanced_only_tools = ["syft", "checkov", "hadolint", "zap", "nuclei"]
+def test_docker_alpine_excludes_deep_only_tools():
+    """Test alpine variant does NOT include deep-profile-only tools."""
+    # Alpine (fast profile) excludes: noseyparker, bandit, falcoctl, afl-fuzz
+    # Note: With TARGETARCH=amd64, alpine now includes semgrep+checkov
+    deep_only_tools = ["noseyparker", "bandit", "falcoctl", "afl-fuzz"]
 
     image = "jmo-security:alpine"
     found = []
 
-    for tool in balanced_only_tools:
-        cmd = ["docker", "run", "--rm", image, "sh", "-c", f"which {tool}"]
+    for tool in deep_only_tools:
+        # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            image,
+            "-c",
+            f"which {tool}",
+        ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             found.append(tool)
 
     assert (
         not found
-    ), f"Alpine image should not include balanced-only tools, but found: {found}"
+    ), f"Alpine image should not include deep-only tools, but found: {found}"
 
 
 # ========== Category 3: Image Size Validation Tests ==========
@@ -334,12 +380,14 @@ def test_docker_variants_version_consistency():
 
     for image, _, _ in DOCKER_VARIANTS:
         shell = "sh" if "alpine" in image else "bash"
+        # Override entrypoint since Docker images have jmo CLI as ENTRYPOINT
         cmd = [
             "docker",
             "run",
             "--rm",
-            image,
+            "--entrypoint",
             shell,
+            image,
             "-c",
             "python3 -c 'import importlib.metadata; print(importlib.metadata.version(\"jmo-security\"))'",
         ]

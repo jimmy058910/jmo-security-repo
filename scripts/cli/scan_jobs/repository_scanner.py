@@ -581,6 +581,15 @@ def scan_repository(
             statuses["afl++"] = True
 
     # Execute all tools with ToolRunner
+    if tool_defs:
+        tool_names = [t.name for t in tool_defs]
+        import sys
+
+        print(
+            f"INFO: Running {len(tool_defs)} tools on {name}: {', '.join(tool_names)}",
+            file=sys.stderr,
+        )
+
     runner = ToolRunner(
         tools=tool_defs,
     )
