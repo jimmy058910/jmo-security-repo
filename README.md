@@ -4,30 +4,28 @@
    <img src="assets/jmo-logo.png" alt="JMo Security Audit Tool Suite" width="220" />
 </p>
 
-[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml?query=branch%3Amain)
+[![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
-[![Security Scan](https://img.shields.io/badge/security-scanned-brightgreen)](SECURITY.md)
-[![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fjmotools.com)](https://jmotools.com)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-%E2%89%A53.8-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyPI version](https://badge.fury.io/py/jmo-security.svg)](https://badge.fury.io/py/jmo-security)
+[![Python Versions](https://img.shields.io/pypi/pyversions/jmo-security.svg)](https://pypi.org/project/jmo-security/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker Pulls](https://img.shields.io/docker/pulls/jimmy058910/jmo-security)](https://hub.docker.com/r/jimmy058910/jmo-security)
+[![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
+[![Documentation](https://img.shields.io/badge/docs-ReadTheDocs-blue.svg)](https://docs.jmotools.com)
+[![Blog](https://img.shields.io/badge/blog-Hashnode-2962FF.svg)](https://blog.jmotools.com)
 
-[![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-brightgreen.svg)](https://github.com/jimmy058910/jmo-security-repo/issues)
-[![Buy me an energy drink](https://img.shields.io/badge/Buy%20me%20an-energy%20drink-%23ff4d00)](https://ko-fi.com/jmogaming)
+## 📬 Stay Updated & Support
 
-## 📬 Stay Updated
-
-[![Newsletter](https://img.shields.io/badge/📧_Newsletter-Subscribe-667eea)](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)
+[![Newsletter](https://img.shields.io/badge/📧_Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/💚_Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
+[![GitHub Sponsors](https://img.shields.io/badge/💰_Sponsor-GitHub-ea4aaa?logo=github&logoColor=white)](https://github.com/sponsors/jimmy058910)
 
 **Get security tips and updates delivered to your inbox:**
 
 - 🚀 New feature announcements
-- 🔒 Weekly security best practices
-- 💡 Real-world security case studies
-- 🎁 Exclusive guides and early access
+- 💡 Real-world security case studies & exclusive guides
 
-**[Subscribe to Newsletter](https://jimmy058910.github.io/jmo-security-repo/subscribe.html)** | **[Support Full-Time Development](https://ko-fi.com/jmogaming)**
+**[Subscribe to Newsletter](https://jmotools.com/subscribe.html)** | **[Support Full-Time Development](https://ko-fi.com/jmogaming)**
 
 ---
 
