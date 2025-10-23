@@ -1062,15 +1062,19 @@ def _build_command_parts(config: WizardConfig) -> list[str]:
         cmd_parts = ["docker", "run", "--rm"]
 
         # Volume mounts (only for file-based targets)
+        # Convert to absolute paths for Docker volume mounts
         if config.target.type == "repo":
             if config.target.repo_path:
-                cmd_parts.extend(["-v", f"{config.target.repo_path}:/scan"])
+                repo_abs = str(Path(config.target.repo_path).resolve())
+                cmd_parts.extend(["-v", f"{repo_abs}:/scan"])
         elif config.target.type == "iac":
             if config.target.iac_path:
-                cmd_parts.extend(["-v", f"{config.target.iac_path}:/scan/iac-file"])
+                iac_abs = str(Path(config.target.iac_path).resolve())
+                cmd_parts.extend(["-v", f"{iac_abs}:/scan/iac-file"])
 
-        # Results mount
-        cmd_parts.extend(["-v", f"$(pwd)/{config.results_dir}:/results"])
+        # Results mount (convert to absolute path)
+        results_abs = str(Path(config.results_dir).resolve())
+        cmd_parts.extend(["-v", f"{results_abs}:/results"])
 
         # Image and base command
         cmd_parts.append("ghcr.io/jimmy058910/jmo-security:latest")

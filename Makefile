@@ -104,6 +104,7 @@ upgrade-pip:
 	$(PY) -m pip install -U pip setuptools wheel
 
 deps-compile:
+	@echo "Note: Requires Python 3.10+ to match CI compilation (pip-tools uses active Python version)"
 	@$(PY) -m pip show pip-tools >/dev/null 2>&1 || $(PY) -m pip install pip-tools
 	@if [ -f requirements-dev.in ]; then $(PY) -m piptools compile -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
 
