@@ -24,6 +24,7 @@ jobs:
   pypi-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     concurrency:
       group: release-pypi-${{ github.ref }}
       cancel-in-progress: false
@@ -115,9 +116,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'full' }}
           flavor: |
-            suffix=-${{ matrix.variant }},onlatest=true
+            suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'full' }}
             latest=false
 
       - name: Determine Dockerfile
@@ -272,9 +273,12 @@ jobs:
   docker-hub-readme:
     name: Update Docker Hub README
     runs-on: ubuntu-latest
+    # Run on version tags (after docker-build) OR on manual workflow_dispatch
     needs: docker-build
-    # Only run on version tags (v*), skip on workflow_dispatch
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: |
+      always() &&
+      (needs.docker-build.result == 'success' || needs.docker-build.result == 'skipped') &&
+      (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -289,7 +293,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 14 tools, multi-target scanning"
+          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 12 tools, multi-target scanning"
           readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped
