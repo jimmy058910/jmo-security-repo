@@ -19,9 +19,8 @@ Coverage target: Add 7-10% to reach 85%+
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, mock_open, patch
+from unittest.mock import MagicMock, Mock, patch
 
-import pytest
 
 # Add scripts/ to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

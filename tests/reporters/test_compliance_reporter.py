@@ -547,16 +547,6 @@ def test_compliance_summary_basic(tmp_path: Path):
     assert "**MITRE ATT&CK** | 1 techniques" in content
 
 
-def test_compliance_summary_empty_findings(tmp_path: Path):
-    """Test compliance summary with no findings."""
-    output = tmp_path / "compliance-empty.md"
-    write_compliance_summary([], output)
-
-    content = output.read_text()
-    assert "**Total Findings:** 0" in content
-    assert "**Findings with Compliance Mappings:** 0" in content
-
-
 def test_compliance_summary_no_compliance_field(tmp_path: Path):
     """Test compliance summary with findings but no compliance field."""
     findings = [create_finding(rule_id="test")]

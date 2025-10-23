@@ -19,9 +19,8 @@ Coverage goals:
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
-import pytest
 
 # Add scripts/ to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

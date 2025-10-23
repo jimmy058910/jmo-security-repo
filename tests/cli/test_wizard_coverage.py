@@ -15,11 +15,9 @@ Tests focus on:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
-import pytest
 
 from scripts.cli.wizard import PROFILES
 from scripts.cli.wizard_generators import (

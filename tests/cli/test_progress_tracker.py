@@ -2,8 +2,7 @@
 """Tests for ProgressTracker in scripts/cli/jmo.py."""
 
 import pytest
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from argparse import Namespace
 
 # Import ProgressTracker from jmo.py
