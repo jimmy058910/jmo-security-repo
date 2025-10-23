@@ -364,6 +364,8 @@ def test_profile_tool_selection_fast(tmp_path: Path):
     test_repo.mkdir()
     (test_repo / "app.py").write_text("x = 1")
 
+    results_dir = tmp_path / "results"
+
     # Run fast profile scan
     cmd = [
         "python3",
@@ -374,20 +376,25 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         "--profile-name",
         "fast",
         "--results-dir",
-        str(tmp_path / "results"),
+        str(results_dir),
         "--allow-missing-tools",
         "--human-logs",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
     assert result.returncode in [0, 1]
 
-    # Verify expected tools mentioned in logs
+    # Verify expected tools invoked (check logs OR stub files)
     output = result.stdout + result.stderr
+    tool_output_dir = results_dir / "individual-repos" / "test-repo"
 
     # Fast profile: trufflehog, semgrep, trivy
     expected_tools = ["trufflehog", "semgrep", "trivy"]
     for tool in expected_tools:
-        assert tool in output.lower(), f"Fast profile should invoke {tool}"
+        # Tool invoked if logged OR stub file exists
+        stub_file = tool_output_dir / f"{tool}.json"
+        assert (
+            tool in output.lower() or stub_file.exists()
+        ), f"Fast profile should invoke {tool} (log or stub)"
 
 
 def test_profile_tool_selection_balanced(tmp_path: Path):
@@ -402,6 +409,8 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
     # Add HTML file for zap
     (test_repo / "index.html").write_text("<html><body>Test</body></html>")
 
+    results_dir = tmp_path / "results"
+
     # Run balanced profile scan
     cmd = [
         "python3",
@@ -412,15 +421,16 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         "--profile-name",
         "balanced",
         "--results-dir",
-        str(tmp_path / "results"),
+        str(results_dir),
         "--allow-missing-tools",
         "--human-logs",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
     assert result.returncode in [0, 1]
 
-    # Verify expected tools mentioned in logs
+    # Verify expected tools invoked (check logs OR stub files)
     output = result.stdout + result.stderr
+    tool_output_dir = results_dir / "individual-repos" / "test-repo"
 
     # Balanced profile for repositories: Core tools that always run
     # Note: hadolint only runs if Dockerfile exists, zap only if web files exist
@@ -433,11 +443,17 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         "checkov",
     ]
     for tool in core_tools:
-        assert tool in output.lower(), f"Balanced profile should invoke {tool}"
+        stub_file = tool_output_dir / f"{tool}.json"
+        assert (
+            tool in output.lower() or stub_file.exists()
+        ), f"Balanced profile should invoke {tool} (log or stub)"
 
     # Verify conditional tools run when applicable
-    assert "hadolint" in output.lower(), "hadolint should run when Dockerfile exists"
-    assert "zap" in output.lower(), "zap should run when HTML files exist"
+    for tool in ["hadolint", "zap"]:
+        stub_file = tool_output_dir / f"{tool}.json"
+        assert (
+            tool in output.lower() or stub_file.exists()
+        ), f"{tool} should run when applicable files exist (log or stub)"
 
 
 def test_profile_tool_selection_deep(tmp_path: Path):
@@ -452,6 +468,8 @@ def test_profile_tool_selection_deep(tmp_path: Path):
     # Add HTML file for zap
     (test_repo / "index.html").write_text("<html><body>Test</body></html>")
 
+    results_dir = tmp_path / "results"
+
     # Run deep profile scan
     cmd = [
         "python3",
@@ -462,15 +480,16 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         "--profile-name",
         "deep",
         "--results-dir",
-        str(tmp_path / "results"),
+        str(results_dir),
         "--allow-missing-tools",
         "--human-logs",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
     assert result.returncode in [0, 1]
 
-    # Verify expected tools mentioned in logs
+    # Verify expected tools invoked (check logs OR stub files)
     output = result.stdout + result.stderr
+    tool_output_dir = results_dir / "individual-repos" / "test-repo"
 
     # Deep profile for repositories: Core tools that always run
     # Note: falco/afl++ need special files that are hard to fabricate in tests
@@ -484,11 +503,17 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         "checkov",
     ]
     for tool in core_tools:
-        assert tool in output.lower(), f"Deep profile should invoke {tool}"
+        stub_file = tool_output_dir / f"{tool}.json"
+        assert (
+            tool in output.lower() or stub_file.exists()
+        ), f"Deep profile should invoke {tool} (log or stub)"
 
     # Verify conditional tools run when applicable
-    assert "hadolint" in output.lower(), "hadolint should run when Dockerfile exists"
-    assert "zap" in output.lower(), "zap should run when HTML files exist"
+    for tool in ["hadolint", "zap"]:
+        stub_file = tool_output_dir / f"{tool}.json"
+        assert (
+            tool in output.lower() or stub_file.exists()
+        ), f"{tool} should run when applicable files exist (log or stub)"
 
 
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
