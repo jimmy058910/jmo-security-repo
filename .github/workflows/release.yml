@@ -182,24 +182,27 @@ jobs:
           {
             echo "## Docker Image Size Comparison (v0.6.1 Optimizations)"
             echo ""
-            echo "| Variant | Size (Compressed) | Size (Uncompressed) | Reduction vs v0.6.0 |"
-            echo "|---------|-------------------|---------------------|---------------------|"
+            echo "| Variant | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
+            echo "|---------|--------------|--------------|---------------------|"
           } > size-comparison.md
 
           for VARIANT in full slim alpine; do
             TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
             IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TAG}"
 
-            echo "Pulling $IMAGE..."
-            docker pull --platform linux/amd64 "$IMAGE"
+            echo "Measuring $IMAGE..."
 
-            # Get compressed size (what users download)
-            COMPRESSED=$(docker inspect "$IMAGE" | jq -r '.[0].Size' | numfmt --to=iec-i --suffix=B)
+            # Get size for amd64 platform from manifest
+            SIZE_AMD64=$(docker manifest inspect "$IMAGE" | \
+              jq -r '.manifests[] | select(.platform.architecture=="amd64") | .size' | \
+              numfmt --to=iec-i --suffix=B --format="%.1f")
 
-            # Get uncompressed size (disk usage after pull)
-            UNCOMPRESSED=$(docker inspect "$IMAGE" | jq -r '.[0].VirtualSize' | numfmt --to=iec-i --suffix=B)
+            # Get size for arm64 platform from manifest
+            SIZE_ARM64=$(docker manifest inspect "$IMAGE" | \
+              jq -r '.manifests[] | select(.platform.architecture=="arm64") | .size' | \
+              numfmt --to=iec-i --suffix=B --format="%.1f")
 
-            echo "| ${VARIANT} | ${COMPRESSED} | ${UNCOMPRESSED} | TBD (manual comparison) |" >> size-comparison.md
+            echo "| ${VARIANT} | ${SIZE_AMD64} | ${SIZE_ARM64} | TBD (manual comparison) |" >> size-comparison.md
           done
 
           echo "" >> size-comparison.md
