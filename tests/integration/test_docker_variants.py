@@ -16,10 +16,19 @@ Related:
 - COVERAGE_GAP_ANALYSIS.md Gap #1
 """
 
+import shutil
 import subprocess
 from typing import List, Tuple
 
 import pytest
+
+
+# ========== Docker Availability Check ==========
+
+# Skip all tests in this module if Docker is not available
+pytestmark = pytest.mark.skipif(
+    not shutil.which("docker"), reason="Docker not installed"
+)
 
 
 # ========== Configuration ==========
