@@ -17,7 +17,6 @@ Example:
 
 import http.server
 import json
-import os
 import socketserver
 import sys
 import threading
@@ -236,7 +235,9 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
             json_content = json.dumps(self.layer_data, indent=2)
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Disposition", "attachment; filename=jmo-attack-layer.json")
+            self.send_header(
+                "Content-Disposition", "attachment; filename=jmo-attack-layer.json"
+            )
             self.send_header("Content-Length", str(len(json_content.encode())))
             self.end_headers()
             self.wfile.write(json_content.encode())
@@ -304,7 +305,9 @@ def main():
     if not json_file.exists():
         print(f"❌ Error: File not found: {json_file}")
         print("")
-        print("Usage: python3 scripts/dev/serve_attack_navigator.py [attack-navigator.json]")
+        print(
+            "Usage: python3 scripts/dev/serve_attack_navigator.py [attack-navigator.json]"
+        )
         print(f"Example: python3 scripts/dev/serve_attack_navigator.py {DEFAULT_JSON}")
         sys.exit(1)
 

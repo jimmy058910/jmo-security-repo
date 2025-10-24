@@ -23,11 +23,11 @@ JSON_FILE="${1:-$DEFAULT_JSON}"
 
 # Validate file exists
 if [ ! -f "$JSON_FILE" ]; then
-    echo -e "${RED}Error: File not found: $JSON_FILE${NC}"
-    echo ""
-    echo "Usage: $0 [attack-navigator.json]"
-    echo "Example: $0 results/summaries/attack-navigator.json"
-    exit 1
+  echo -e "${RED}Error: File not found: $JSON_FILE${NC}"
+  echo ""
+  echo "Usage: $0 [attack-navigator.json]"
+  echo "Example: $0 results/summaries/attack-navigator.json"
+  exit 1
 fi
 
 echo -e "${GREEN}Opening ATT&CK Navigator with findings...${NC}"
@@ -44,21 +44,21 @@ echo "2. You'll need to manually upload: $ABS_PATH"
 echo ""
 
 # Detect OS and open browser
-if command -v xdg-open &> /dev/null; then
-    # Linux
-    xdg-open "$ATTACK_NAV_URL" &
-    echo -e "${GREEN}✓ Browser opened (Linux)${NC}"
-elif command -v open &> /dev/null; then
-    # macOS
-    open "$ATTACK_NAV_URL"
-    echo -e "${GREEN}✓ Browser opened (macOS)${NC}"
-elif command -v cmd.exe &> /dev/null; then
-    # WSL (Windows Subsystem for Linux)
-    cmd.exe /c start "$ATTACK_NAV_URL"
-    echo -e "${GREEN}✓ Browser opened (WSL)${NC}"
+if command -v xdg-open &>/dev/null; then
+  # Linux
+  xdg-open "$ATTACK_NAV_URL" &
+  echo -e "${GREEN}✓ Browser opened (Linux)${NC}"
+elif command -v open &>/dev/null; then
+  # macOS
+  open "$ATTACK_NAV_URL"
+  echo -e "${GREEN}✓ Browser opened (macOS)${NC}"
+elif command -v cmd.exe &>/dev/null; then
+  # WSL (Windows Subsystem for Linux)
+  cmd.exe /c start "$ATTACK_NAV_URL"
+  echo -e "${GREEN}✓ Browser opened (WSL)${NC}"
 else
-    echo -e "${RED}Could not detect browser launcher${NC}"
-    echo "Please manually open: $ATTACK_NAV_URL"
+  echo -e "${RED}Could not detect browser launcher${NC}"
+  echo "Please manually open: $ATTACK_NAV_URL"
 fi
 
 echo ""

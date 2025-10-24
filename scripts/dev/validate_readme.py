@@ -27,6 +27,7 @@ from typing import Dict, List, Tuple, Optional
 # PyPI Validation
 # ============================================================================
 
+
 def get_pypi_readme(package_name: str = "jmo-security") -> str:
     """Fetch README content from PyPI JSON API."""
     url = f"https://pypi.org/pypi/{package_name}/json"
@@ -58,7 +59,9 @@ def extract_badges(content: str) -> List[str]:
     return badges
 
 
-def compare_badges(local_badges: List[str], remote_badges: List[str]) -> Tuple[List[str], List[str]]:
+def compare_badges(
+    local_badges: List[str], remote_badges: List[str]
+) -> Tuple[List[str], List[str]]:
     """Compare local and remote badges, return differences."""
     local_set = set(local_badges)
     remote_set = set(remote_badges)
@@ -74,14 +77,18 @@ def check_pypi_issues(local_content: str, pypi_content: str) -> List[Dict[str, s
     issues = []
 
     # Issue 1: Docker Hub namespace inconsistency
-    if "docker/pulls/jimmy058910/jmo-security" in pypi_content and \
-       "docker/pulls/jmogaming/jmo-security" in local_content:
-        issues.append({
-            "type": "Docker Hub namespace mismatch",
-            "remote": "jimmy058910/jmo-security (old)",
-            "local": "jmogaming/jmo-security (current)",
-            "fix": "Update PyPI README to use jmogaming namespace (publish new release)"
-        })
+    if (
+        "docker/pulls/jimmy058910/jmo-security" in pypi_content
+        and "docker/pulls/jmogaming/jmo-security" in local_content
+    ):
+        issues.append(
+            {
+                "type": "Docker Hub namespace mismatch",
+                "remote": "jimmy058910/jmo-security (old)",
+                "local": "jmogaming/jmo-security (current)",
+                "fix": "Update PyPI README to use jmogaming namespace (publish new release)",
+            }
+        )
 
     # Issue 2: Version string mismatch
     pypi_version_match = re.search(r"v(\d+\.\d+\.\d+)", pypi_content)
@@ -91,12 +98,14 @@ def check_pypi_issues(local_content: str, pypi_content: str) -> List[Dict[str, s
         pypi_ver = pypi_version_match.group(1)
         local_ver = local_version_match.group(1)
         if pypi_ver != local_ver:
-            issues.append({
-                "type": "Version mismatch in content",
-                "remote": f"v{pypi_ver}",
-                "local": f"v{local_ver}",
-                "fix": "Republish to PyPI after version bump"
-            })
+            issues.append(
+                {
+                    "type": "Version mismatch in content",
+                    "remote": f"v{pypi_ver}",
+                    "local": f"v{local_ver}",
+                    "fix": "Republish to PyPI after version bump",
+                }
+            )
 
     return issues
 
@@ -104,6 +113,7 @@ def check_pypi_issues(local_content: str, pypi_content: str) -> List[Dict[str, s
 # ============================================================================
 # Docker Hub Validation
 # ============================================================================
+
 
 def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> Optional[str]:
     """
@@ -124,29 +134,33 @@ def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> Optional[str]:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             print(f"⚠️  Docker Hub repository not found: {repo}")
-            print(f"    This is normal if you haven't pushed to Docker Hub yet.")
+            print("    This is normal if you haven't pushed to Docker Hub yet.")
             return None
         print(f"⚠️  Error fetching Docker Hub README (HTTP {e.code})")
-        print(f"    Docker Hub API may require authentication for this repo.")
+        print("    Docker Hub API may require authentication for this repo.")
         return None
     except Exception as e:
         print(f"⚠️  Could not fetch Docker Hub README: {e}")
         return None
 
 
-def check_dockerhub_local_consistency(local_dockerhub_readme: str) -> List[Dict[str, str]]:
+def check_dockerhub_local_consistency(
+    local_dockerhub_readme: str,
+) -> List[Dict[str, str]]:
     """Check Docker Hub README for common issues."""
     issues = []
 
     # Issue 1: Old Docker Hub namespace in DOCKER_HUB_README.md
     if "jimmy058910/jmo-security" in local_dockerhub_readme:
-        issues.append({
-            "type": "Docker Hub namespace in local file",
-            "file": "DOCKER_HUB_README.md",
-            "found": "jimmy058910/jmo-security (old)",
-            "expected": "jmogaming/jmo-security (current)",
-            "fix": "Update DOCKER_HUB_README.md to use jmogaming namespace"
-        })
+        issues.append(
+            {
+                "type": "Docker Hub namespace in local file",
+                "file": "DOCKER_HUB_README.md",
+                "found": "jimmy058910/jmo-security (old)",
+                "expected": "jmogaming/jmo-security (current)",
+                "fix": "Update DOCKER_HUB_README.md to use jmogaming namespace",
+            }
+        )
 
     # Issue 2: Version mentions (check if version is recent)
     version_matches = re.findall(r"v?(\d+\.\d+\.\d+)", local_dockerhub_readme)
@@ -155,18 +169,22 @@ def check_dockerhub_local_consistency(local_dockerhub_readme: str) -> List[Dict[
         pyproject_path = Path("pyproject.toml")
         if pyproject_path.exists():
             pyproject_content = pyproject_path.read_text()
-            current_version_match = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', pyproject_content)
+            current_version_match = re.search(
+                r'version\s*=\s*"(\d+\.\d+\.\d+)"', pyproject_content
+            )
             if current_version_match:
                 current_version = current_version_match.group(1)
                 # Check if Docker Hub README mentions current version
                 if current_version not in local_dockerhub_readme:
-                    issues.append({
-                        "type": "Outdated version in Docker Hub README",
-                        "file": "DOCKER_HUB_README.md",
-                        "found": f"Versions mentioned: {', '.join(set(version_matches))}",
-                        "expected": f"Should include v{current_version}",
-                        "fix": "Update DOCKER_HUB_README.md with current version, then sync to Docker Hub"
-                    })
+                    issues.append(
+                        {
+                            "type": "Outdated version in Docker Hub README",
+                            "file": "DOCKER_HUB_README.md",
+                            "found": f"Versions mentioned: {', '.join(set(version_matches))}",
+                            "expected": f"Should include v{current_version}",
+                            "fix": "Update DOCKER_HUB_README.md with current version, then sync to Docker Hub",
+                        }
+                    )
 
     return issues
 
@@ -177,46 +195,54 @@ def check_dockerhub_sync_config() -> List[Dict[str, str]]:
 
     release_yml = Path(".github/workflows/release.yml")
     if not release_yml.exists():
-        issues.append({
-            "type": "Missing release workflow",
-            "file": ".github/workflows/release.yml",
-            "found": "File not found",
-            "expected": "Release workflow with docker-hub-readme job",
-            "fix": "Create release workflow with Docker Hub sync"
-        })
+        issues.append(
+            {
+                "type": "Missing release workflow",
+                "file": ".github/workflows/release.yml",
+                "found": "File not found",
+                "expected": "Release workflow with docker-hub-readme job",
+                "fix": "Create release workflow with Docker Hub sync",
+            }
+        )
         return issues
 
     content = release_yml.read_text()
 
     # Check for docker-hub-readme job
     if "docker-hub-readme:" not in content:
-        issues.append({
-            "type": "Missing Docker Hub sync job",
-            "file": ".github/workflows/release.yml",
-            "found": "No docker-hub-readme job",
-            "expected": "Job to sync DOCKER_HUB_README.md",
-            "fix": "Add docker-hub-readme job to release.yml"
-        })
+        issues.append(
+            {
+                "type": "Missing Docker Hub sync job",
+                "file": ".github/workflows/release.yml",
+                "found": "No docker-hub-readme job",
+                "expected": "Job to sync DOCKER_HUB_README.md",
+                "fix": "Add docker-hub-readme job to release.yml",
+            }
+        )
 
     # Check for DOCKERHUB_ENABLED gate
     if "vars.DOCKERHUB_ENABLED" not in content:
-        issues.append({
-            "type": "Missing DOCKERHUB_ENABLED variable",
-            "file": ".github/workflows/release.yml",
-            "found": "No DOCKERHUB_ENABLED check",
-            "expected": "if: vars.DOCKERHUB_ENABLED == 'true'",
-            "fix": "Add repository variable DOCKERHUB_ENABLED=true in GitHub settings"
-        })
+        issues.append(
+            {
+                "type": "Missing DOCKERHUB_ENABLED variable",
+                "file": ".github/workflows/release.yml",
+                "found": "No DOCKERHUB_ENABLED check",
+                "expected": "if: vars.DOCKERHUB_ENABLED == 'true'",
+                "fix": "Add repository variable DOCKERHUB_ENABLED=true in GitHub settings",
+            }
+        )
 
     # Check for dockerhub-description action
     if "dockerhub-description" not in content:
-        issues.append({
-            "type": "Missing Docker Hub description action",
-            "file": ".github/workflows/release.yml",
-            "found": "No dockerhub-description action",
-            "expected": "uses: peter-evans/dockerhub-description@v5",
-            "fix": "Add dockerhub-description action to sync README"
-        })
+        issues.append(
+            {
+                "type": "Missing Docker Hub description action",
+                "file": ".github/workflows/release.yml",
+                "found": "No dockerhub-description action",
+                "expected": "uses: peter-evans/dockerhub-description@v5",
+                "fix": "Add dockerhub-description action to sync README",
+            }
+        )
 
     return issues
 
@@ -225,11 +251,12 @@ def check_dockerhub_sync_config() -> List[Dict[str, str]]:
 # Main Validation Flow
 # ============================================================================
 
+
 def validate_pypi(args) -> Tuple[bool, List[Dict]]:
     """Validate PyPI README consistency."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📦 PyPI README Validation")
-    print("="*60)
+    print("=" * 60)
 
     local_readme = get_local_readme()
     pypi_readme = get_pypi_readme(args.package)
@@ -237,7 +264,7 @@ def validate_pypi(args) -> Tuple[bool, List[Dict]]:
     local_badges = extract_badges(local_readme)
     pypi_badges = extract_badges(pypi_readme)
 
-    print(f"\n📊 Badge Summary:")
+    print("\n📊 Badge Summary:")
     print(f"  Local (GitHub):  {len(local_badges)} badges")
     print(f"  PyPI:            {len(pypi_badges)} badges")
 
@@ -257,22 +284,18 @@ def validate_pypi(args) -> Tuple[bool, List[Dict]]:
         for badge in missing:
             display = badge[:100] + "..." if len(badge) > 100 else badge
             print(f"  - {display}")
-            all_issues.append({
-                "platform": "PyPI",
-                "type": "Missing badge",
-                "details": display
-            })
+            all_issues.append(
+                {"platform": "PyPI", "type": "Missing badge", "details": display}
+            )
 
     if extra:
         print(f"\n❌ Extra badges on PyPI not in local ({len(extra)}):")
         for badge in extra:
             display = badge[:100] + "..." if len(badge) > 100 else badge
             print(f"  - {display}")
-            all_issues.append({
-                "platform": "PyPI",
-                "type": "Extra badge",
-                "details": display
-            })
+            all_issues.append(
+                {"platform": "PyPI", "type": "Extra badge", "details": display}
+            )
 
     if pypi_issues:
         print(f"\n❌ Known PyPI issues ({len(pypi_issues)}):")
@@ -282,11 +305,9 @@ def validate_pypi(args) -> Tuple[bool, List[Dict]]:
             print(f"    Local:  {issue['local']}")
             if args.fix:
                 print(f"    Fix:    {issue['fix']}")
-            all_issues.append({
-                "platform": "PyPI",
-                "type": issue["type"],
-                "details": issue
-            })
+            all_issues.append(
+                {"platform": "PyPI", "type": issue["type"], "details": issue}
+            )
 
     return False, all_issues
 
@@ -296,9 +317,9 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
     if not args.check_dockerhub:
         return True, []  # Skip if not requested
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🐳 Docker Hub README Validation")
-    print("="*60)
+    print("=" * 60)
 
     all_issues = []
 
@@ -306,11 +327,13 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
     dockerhub_readme_path = Path("DOCKER_HUB_README.md")
     if not dockerhub_readme_path.exists():
         print("\n❌ DOCKER_HUB_README.md not found")
-        all_issues.append({
-            "platform": "Docker Hub",
-            "type": "Missing file",
-            "details": "DOCKER_HUB_README.md does not exist"
-        })
+        all_issues.append(
+            {
+                "platform": "Docker Hub",
+                "type": "Missing file",
+                "details": "DOCKER_HUB_README.md does not exist",
+            }
+        )
         return False, all_issues
 
     local_dockerhub_readme = dockerhub_readme_path.read_text()
@@ -327,11 +350,9 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             print(f"    Expected: {issue['expected']}")
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
-            all_issues.append({
-                "platform": "Docker Hub",
-                "type": issue["type"],
-                "details": issue
-            })
+            all_issues.append(
+                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+            )
 
     # Check GitHub Actions sync configuration
     sync_issues = check_dockerhub_sync_config()
@@ -344,11 +365,9 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             print(f"    Expected: {issue['expected']}")
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
-            all_issues.append({
-                "platform": "Docker Hub",
-                "type": issue["type"],
-                "details": issue
-            })
+            all_issues.append(
+                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+            )
 
     # Optional: Check remote Docker Hub (may fail without auth)
     dockerhub_readme = get_dockerhub_readme(args.dockerhub_repo)
@@ -357,11 +376,13 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
         # Basic comparison (exact match not expected, Docker Hub may modify formatting)
         if len(local_dockerhub_readme.strip()) == 0:
             print("⚠️  Local DOCKER_HUB_README.md is empty!")
-            all_issues.append({
-                "platform": "Docker Hub",
-                "type": "Empty local file",
-                "details": "DOCKER_HUB_README.md has no content"
-            })
+            all_issues.append(
+                {
+                    "platform": "Docker Hub",
+                    "type": "Empty local file",
+                    "details": "DOCKER_HUB_README.md has no content",
+                }
+            )
 
     has_issues = bool(all_issues)
     if not has_issues:
@@ -384,16 +405,26 @@ Examples:
 
   # Check different PyPI package
   python3 scripts/dev/validate_readme.py --package my-package
-"""
+""",
     )
-    parser.add_argument("--fix", action="store_true",
-                       help="Show detailed fix recommendations")
-    parser.add_argument("--package", default="jmo-security",
-                       help="PyPI package name (default: jmo-security)")
-    parser.add_argument("--check-dockerhub", action="store_true",
-                       help="Also validate Docker Hub README and sync configuration")
-    parser.add_argument("--dockerhub-repo", default="jmogaming/jmo-security",
-                       help="Docker Hub repository (default: jmogaming/jmo-security)")
+    parser.add_argument(
+        "--fix", action="store_true", help="Show detailed fix recommendations"
+    )
+    parser.add_argument(
+        "--package",
+        default="jmo-security",
+        help="PyPI package name (default: jmo-security)",
+    )
+    parser.add_argument(
+        "--check-dockerhub",
+        action="store_true",
+        help="Also validate Docker Hub README and sync configuration",
+    )
+    parser.add_argument(
+        "--dockerhub-repo",
+        default="jmogaming/jmo-security",
+        help="Docker Hub repository (default: jmogaming/jmo-security)",
+    )
     args = parser.parse_args()
 
     print(f"🔍 Validating README consistency for {args.package}...")
@@ -408,13 +439,15 @@ Examples:
     all_ok = pypi_ok and dockerhub_ok
 
     # Summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📊 Validation Summary")
-    print("="*60)
+    print("=" * 60)
     print(f"PyPI:       {'✅ OK' if pypi_ok else f'❌ {len(pypi_issues)} issues'}")
     if args.check_dockerhub:
-        print(f"Docker Hub: {'✅ OK' if dockerhub_ok else f'❌ {len(dockerhub_issues)} issues'}")
-    print(f"GHCR:       ✅ Auto-synced from GitHub (no check needed)")
+        print(
+            f"Docker Hub: {'✅ OK' if dockerhub_ok else f'❌ {len(dockerhub_issues)} issues'}"
+        )
+    print("GHCR:       ✅ Auto-synced from GitHub (no check needed)")
 
     if all_ok:
         print("\n✅ All README files are consistent!")
@@ -422,9 +455,9 @@ Examples:
 
     # Show fix instructions
     if args.fix:
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("📋 How to Fix Issues")
-        print("="*60)
+        print("=" * 60)
 
         if pypi_issues:
             print("\n🔧 PyPI Issues:")

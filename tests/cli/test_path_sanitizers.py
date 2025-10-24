@@ -327,10 +327,10 @@ class TestPathTraversalFuzzing:
             "repo ",
             "repo  ",
             # Unicode right-to-left override
-            "repo\u202Emalicious",
+            "repo\u202emalicious",
             # Zero-width characters
-            "repo\u200Bmalicious",
-            "repo\u200Dmalicious",
+            "repo\u200bmalicious",
+            "repo\u200dmalicious",
             # Homograph (Greek)
             "rερο",  # Greek 'ε' and 'ο'
             # Percent-encoding bypass

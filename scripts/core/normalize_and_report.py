@@ -213,7 +213,7 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
 
 
 def _build_syft_indexes(
-    findings: List[Dict[str, Any]]
+    findings: List[Dict[str, Any]],
 ) -> tuple[Dict[str, List[Dict[str, str]]], Dict[str, List[Dict[str, str]]]]:
     """Build indexes of Syft packages by file path and lowercase package name.
 

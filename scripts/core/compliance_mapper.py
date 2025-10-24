@@ -1276,7 +1276,7 @@ def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def enrich_findings_with_compliance(
-    findings: List[Dict[str, Any]]
+    findings: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """Enrich a list of findings with compliance framework mappings.
 
