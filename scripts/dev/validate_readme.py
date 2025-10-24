@@ -435,7 +435,6 @@ Examples:
     pypi_ok, pypi_issues = validate_pypi(args)
     dockerhub_ok, dockerhub_issues = validate_dockerhub(args)
 
-    all_issues = pypi_issues + dockerhub_issues
     all_ok = pypi_ok and dockerhub_ok
 
     # Summary
