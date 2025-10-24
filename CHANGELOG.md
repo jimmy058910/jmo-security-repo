@@ -4,6 +4,29 @@ For the release process, see docs/RELEASE.md.
 
 ## 0.7.1 (2025-10-23)
 
+### Changed
+
+- **Telemetry opt-out model (BREAKING)**: Switched from opt-in to opt-out for improved data collection
+  - **Default behavior:** Telemetry now **enabled by default** (was disabled in v0.7.0)
+  - **Auto-disabled in CI/CD:** Detects CI environment variables, never collects in automation
+  - **First-run notice:** Shows informative banner on first 3 CLI scans and wizard runs
+  - **Easy opt-out:** New `jmotools telemetry` commands (status/enable/disable/info)
+  - **Docker banner:** Shows telemetry notice in container environments
+  - **Privacy unchanged:** Still 100% anonymous (random UUID, no PII, no repo names/secrets)
+  - **Rationale:** Improves data collection from 5-15% (opt-in) to expected 80-90% (opt-out), enabling better feature prioritization and bug fixes
+  - **Opt-out:** `jmotools telemetry disable` OR `export JMO_TELEMETRY_DISABLE=1` OR edit jmo.yml
+  - **Privacy policy:** <https://jmotools.com/privacy>
+  - Updated files: scripts/core/telemetry.py, scripts/cli/wizard.py, scripts/cli/jmo.py, scripts/cli/jmotools.py, jmo.yml, docs/TELEMETRY.md, docker-entrypoint.sh
+
+### Added
+
+- **Telemetry CLI commands**: New `jmotools telemetry` subcommands for managing telemetry settings
+  - `jmotools telemetry status` — Show current telemetry status and configuration
+  - `jmotools telemetry enable` — Opt back in (updates jmo.yml)
+  - `jmotools telemetry disable` — Opt-out (updates jmo.yml)
+  - `jmotools telemetry info` — Show what data is collected and privacy policy
+  - Impact: One-command telemetry management, transparent data collection
+
 ### Fixed
 
 - **Enhanced exception logging**: Improved developer experience with detailed debug logging
@@ -20,7 +43,7 @@ For the release process, see docs/RELEASE.md.
   - Downloads Homebrew installer to temp file before execution
   - Displays SHA256 hash for manual verification against official GitHub source
   - Validates downloaded file is not empty before execution
-  - Provides verification link: `https://github.com/Homebrew/install/blob/HEAD/install.sh`
+  - Provides verification link: `<https://github.com/Homebrew/install/blob/HEAD/install.sh`>
   - Impact: Mitigates supply chain risks for developer environment setup
 
 ## 0.7.0 (2025-10-23)
@@ -211,25 +234,31 @@ During comprehensive testing (October 2025), discovered critical version mismatc
 Comprehensive CLI for version management:
 
 ```bash
+
 # Check for updates
+
 python3 scripts/dev/update_versions.py --check-latest
 
 # Update specific tool
+
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
 # Sync all Dockerfiles
+
 python3 scripts/dev/update_versions.py --sync
 
 # Dry-run validation (CI uses this)
+
 python3 scripts/dev/update_versions.py --sync --dry-run
 
 # Generate version report
+
 python3 scripts/dev/update_versions.py --report
 
 # Check outdated + create GitHub issues
-python3 scripts/dev/update_versions.py --check-outdated --create-issues
-```
 
+python3 scripts/dev/update_versions.py --check-outdated --create-issues
+```text
 **Features:**
 
 - GitHub API integration for latest releases
@@ -378,7 +407,7 @@ No action required for users. Version management is automated:
 
 3. **Live Web URL Scanning** (DAST)
    - **Tools:** OWASP ZAP (dynamic application security testing)
-   - **CLI:** `--url https://example.com`, `--urls-file urls.txt`, `--api-spec swagger.json`
+   - **CLI:** `--url <https://example.com`,> `--urls-file urls.txt`, `--api-spec swagger.json`
    - **Use case:** Production app scanning, API endpoint testing
    - **Output:** `results/individual-web/<domain>/zap.json`
 
@@ -397,20 +426,22 @@ No action required for users. Version management is automated:
 **Multi-Target Scanning:**
 
 ```bash
+
 # Scan multiple target types in one command
+
 jmo scan \
   --repo ./myapp \
   --image myapp:latest \
   --terraform-state infrastructure.tfstate \
-  --url https://myapp.com \
+  --url <https://myapp.com> \
   --gitlab-repo myorg/backend \
   --k8s-context prod \
   --results-dir ./comprehensive-audit
 
 # CI mode with multi-target support
-jmo ci --image nginx:latest --url https://api.example.com --fail-on HIGH
-```
 
+jmo ci --image nginx:latest --url <https://api.example.com> --fail-on HIGH
+```text
 **Results Directory Structure (Updated):**
 
 ```text
@@ -429,44 +460,48 @@ results/
     ├── COMPLIANCE_SUMMARY.md
     ├── PCI_DSS_COMPLIANCE.md
     └── attack-navigator.json
-```
-
+```text
 **Implementation Details:**
 
 **CLI Arguments Added (25 new arguments):**
 
 ```python
+
 # Container images
+
 --image IMAGE                    # Single container image
 --images-file IMAGES_FILE        # Batch file with images
 
 # IaC files
+
 --terraform-state FILE           # Terraform state file
 --cloudformation FILE            # CloudFormation template
 --k8s-manifest FILE              # Kubernetes manifest
 
 # Web apps/APIs
+
 --url URL                        # Single web URL
 --urls-file URLS_FILE            # Batch file with URLs
 --api-spec API_SPEC              # OpenAPI/Swagger spec
 
 # GitLab integration
+
 --gitlab-url URL                 # GitLab instance URL
 --gitlab-token TOKEN             # GitLab access token
 --gitlab-group GROUP             # Scan all repos in group
 --gitlab-repo REPO               # Single GitLab repo
 
 # Kubernetes clusters
+
 --k8s-context CONTEXT            # Kubernetes context
 --k8s-namespace NAMESPACE        # Specific namespace
 --k8s-all-namespaces             # Scan all namespaces
-```
-
+```text
 **Target Collection Functions:**
 
 - `_iter_images()` - Collect container images from `--image` and `--images-file`
 - `_iter_iac_files()` - Collect IaC files with type detection (terraform/cloudformation/k8s)
-- `_iter_urls()` - Collect web URLs including API specs (handles file://, http://, https://)
+- `_iter_urls()` - Collect web URLs including API specs (handles file://, <http://,> https://)
 - `_iter_gitlab_repos()` - Collect GitLab repos with token validation
 - `_iter_k8s_resources()` - Collect K8s contexts/namespaces
 
@@ -633,8 +668,7 @@ No breaking changes. All new features are additive:
     ]
   }
 }
-```
-
+```text
 **Compliance Mapping Module** ([scripts/core/compliance_mapper.py](scripts/core/compliance_mapper.py)):
 
 - **1000+ rule mappings** across all tools and frameworks
@@ -754,22 +788,25 @@ No breaking changes. Compliance enrichment is automatic and backward compatible:
 **Profile Restructuring:**
 
 ```yaml
+
 # Fast Profile (3 tools, 5-8 minutes)
+
 tools: [trufflehog, semgrep, trivy]
 use_case: Pre-commit checks, quick validation, CI/CD gate
 coverage: Verified secrets, SAST, SCA, containers, IaC
 
 # Balanced Profile (7 tools, 15-20 minutes)
+
 tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
 use_case: CI/CD pipelines, regular audits, production scans
 coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST
 
 # Deep Profile (11 tools, 30-60 minutes)
+
 tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
 use_case: Security audits, compliance scans, pre-release validation
 coverage: Static, dynamic, runtime, fuzzing, dual secrets scanners, dual Python SAST
-```
-
+```text
 **New Adapters:**
 
 - **ZAP adapter** ([scripts/core/adapters/zap_adapter.py](scripts/core/adapters/zap_adapter.py)):
@@ -941,6 +978,7 @@ For users upgrading from v0.4.x to v0.5.0:
 **Example Output:**
 
 ```markdown
+
 # Security Summary
 
 Total findings: 57 | 🔴 36 HIGH | 🟡 20 MEDIUM | ⚪ 1 LOW
@@ -963,8 +1001,7 @@ Total findings: 57 | 🔴 36 HIGH | 🟡 20 MEDIUM | ⚪ 1 LOW
 
 - 🔑 Secrets: 32 findings (56% of total)
 - 🔧 Code Quality: 25 findings (44% of total)
-```
-
+```text
 **Files Changed:**
 
 - `scripts/core/reporters/basic_reporter.py` - Complete markdown summary redesign (+150 lines)
@@ -1272,21 +1309,25 @@ This release completes ROADMAP items #1 (Docker All-in-One Images) and #2 (Inter
 **Usage:**
 
 ```bash
+
 # Interactive mode
+
 jmotools wizard
 
 # Non-interactive (automation)
+
 jmotools wizard --yes
 
 # Force Docker mode
+
 jmotools wizard --docker
 
 # Generate artifacts
+
 jmotools wizard --emit-make-target Makefile.security
 jmotools wizard --emit-script scan.sh
 jmotools wizard --emit-gha .github/workflows/security.yml
-```
-
+```text
 **Testing:**
 
 - 18 unit tests covering all wizard functionality
@@ -1324,19 +1365,21 @@ jmotools wizard --emit-gha .github/workflows/security.yml
 **Usage:**
 
 ```bash
+
 # Pull and scan
+
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced
 
 # CI/CD integration
+
 container:
   image: ghcr.io/jimmy058910/jmo-security:latest
 steps:
 
   - run: jmo ci --repo . --fail-on HIGH --profile
-```
-
+```text
 **Testing:**
 
 - Integration tests: `tests/integration/test_docker_images.py`

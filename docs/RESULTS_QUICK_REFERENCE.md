@@ -1,6 +1,6 @@
 # JMo Security Results Quick Reference
 
-**One-page guide to triage your scan results in 30 minutes**
+*One-page guide to triage your scan results in 30 minutes*
 
 > **📖 Need more detail?** See [RESULTS_GUIDE.md](RESULTS_GUIDE.md) for the complete 12,000-word guide.
 
@@ -10,18 +10,17 @@
 
 ```bash
 cat results/summaries/SUMMARY.md
-```
-
+```text
 **Look for:**
+
 - Total CRITICAL + HIGH count (your immediate priority)
 - Top files (where are the issues?)
 - Top tools (what found what?)
 
 **Example:**
-```
+```text
 Total: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM
-```
-
+```text
 **Translation:** 94 findings to review (not 8058)
 
 ---
@@ -29,16 +28,19 @@ Total: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM
 ## Step 2: Filter Production Code (5 minutes)
 
 ```bash
+
 # Extract only CRITICAL + HIGH in production code
+
 jq '[.[] | select(.severity == "CRITICAL" or .severity == "HIGH")
          | select(.location.path | contains("tests/") or contains(".venv/") or contains("fixtures/") | not)]' \
   results/summaries/findings.json > priority.json
 
 # Count them
-jq 'length' priority.json
-```
 
+jq 'length' priority.json
+```text
 **Common patterns to ignore:**
+
 - `.venv/`, `node_modules/` → Dependencies (not your code)
 - `tests/fixtures/` → Test data (intentional vulnerabilities)
 - `samples/`, `examples/` → Demo code
@@ -48,11 +50,12 @@ jq 'length' priority.json
 ## Step 3: Group by Rule (10 minutes)
 
 ```bash
+
 # Find systemic issues (same rule ID repeated)
+
 jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].severity})
     | sort_by(.count) | reverse | .[0:10]' priority.json
-```
-
+```text
 **Why:** Fixing 1 root cause can eliminate 50+ findings
 
 **Example:**
@@ -60,8 +63,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 [
   {"rule": "CVE-2023-12345", "count": 50, "severity": "HIGH"}
 ]
-```
-
+```text
 **Fix:** One `pip install --upgrade vulnerable-package` fixes all 50
 
 ---
@@ -79,8 +81,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 **Quick check for Bandit B101 in tests:**
 ```bash
 jq '[.[] | select(.ruleId == "B101" and (.location.path | contains("test")))] | length' priority.json
-```
-
+```text
 ---
 
 ## Step 5: Suppress Noise (3 minutes)
@@ -90,60 +91,65 @@ jq '[.[] | select(.ruleId == "B101" and (.location.path | contains("test")))] | 
 ```yaml
 suppressions:
   # Third-party dependencies
+
   - path: ".venv/*"
     reason: "Third-party PyPI packages"
 
   # Test fixtures
+
   - path: "tests/fixtures/*"
     reason: "Intentional vulnerabilities for testing"
 
   # Specific false positives
-  - ruleId: "B101"
-    path: "tests/*"
-    reason: "pytest uses assert extensively"
-```
 
+  - ruleId: "B101"
+
+    reason: "pytest uses assert extensively"
+```text
 **Re-run scan to verify:**
 ```bash
 jmotools balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
-```
-
+```text
 ---
 
 ## Common Queries (Copy-Paste)
 
 ### Find All Secrets
+
 ```bash
 jq '[.[] | select(.tags[]? == "secret")]' results/summaries/findings.json
-```
+```text
 
 ### Find Exploitable CVEs (CVSS ≥7.0)
+
 ```bash
 jq '[.[] | select(.cvss? and (.cvss.score >= 7.0))]' results/summaries/findings.json
-```
+```text
 
 ### Find SQL Injection
+
 ```bash
 jq '[.[] | select(.ruleId | contains("sql") or (.message | ascii_downcase | contains("sql injection")))]' results/summaries/findings.json
-```
+```text
 
 ### Get OWASP A03 (Injection) Findings
+
 ```bash
 jq '[.[] | select(.compliance.owaspTop10_2021[]? == "A03:2021")]' results/summaries/findings.json
-```
+```text
 
 ### Group by File
+
 ```bash
 jq 'group_by(.location.path) | map({file: .[0].location.path, count: length})
     | sort_by(.count) | reverse | .[0:20]' results/summaries/findings.json
-```
-
+```text
 ---
 
 ## Triage Decision Tree
 
-```
+```text
 Is it CRITICAL or HIGH?
   NO → Defer to next sprint
   YES → Continue...
@@ -163,8 +169,7 @@ Is it a systemic issue (50+ occurrences)?
 Is it a false positive?
   YES → Add to jmo.suppress.yml
   NO → FIX IMMEDIATELY
-```
-
+```text
 ---
 
 ## File Quick Reference
@@ -210,20 +215,20 @@ Is it a false positive?
 
 **GitHub Actions:**
 ```yaml
+
 - name: Security Scan
   run: docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan
 
 - name: Gate on HIGH/CRITICAL
-  run: |
+
     HIGH_COUNT=$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' results/summaries/findings.json)
     [ "$HIGH_COUNT" -eq 0 ] || exit 1
 
 - name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
+
   with:
     sarif_file: results/summaries/findings.sarif
-```
-
+```text
 ---
 
 ## Troubleshooting
@@ -243,8 +248,8 @@ Is it a false positive?
 
 - **Full Guide:** [docs/RESULTS_GUIDE.md](RESULTS_GUIDE.md)
 - **User Guide:** [docs/USER_GUIDE.md](USER_GUIDE.md)
-- **Issues:** https://github.com/jimmy058910/jmo-security-repo/issues
-- **Discussions:** https://github.com/jimmy058910/jmo-security-repo/discussions
+- **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
+- **Discussions:** <https://github.com/jimmy058910/jmo-security-repo/discussions>
 
 ---
 
