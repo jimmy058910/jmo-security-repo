@@ -18,11 +18,14 @@ Output format: NDJSON (newline-delimited JSON)
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
+
+logger = logging.getLogger(__name__)
 
 
 def _nuclei_severity_to_severity(severity: str) -> str:
@@ -67,14 +70,18 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
 
     # Nuclei outputs NDJSON (one JSON object per line)
-    for line in raw.splitlines():
+    for line_num, line in enumerate(raw.splitlines(), start=1):
         line = line.strip()
         if not line:
+            logger.debug(f"Skipping empty line {line_num} in {path}")
             continue  # Skip empty lines
 
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
+            )
             continue  # Skip malformed lines
 
         if not isinstance(item, dict):

@@ -107,3 +107,6 @@ scripts/api/.vercel/
 .env
 .env.local
 .env.*.local
+
+# Metrics collection output (maintainer-only, contains sensitive analytics)
+/metrics/

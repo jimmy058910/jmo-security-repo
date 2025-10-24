@@ -105,7 +105,10 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 # View results
 open results/summaries/dashboard.html  # macOS
 xdg-open results/summaries/dashboard.html  # Linux
+cat results/summaries/SUMMARY.md  # Quick text overview
 ```
+
+📖 **Understanding your results:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Complete guide to triaging findings and integrating with your workflow
 
 **Three image variants:**
 
@@ -263,6 +266,8 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
    type results\summaries\SUMMARY.md
    ```
 
+   📖 **Understanding results:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Triage workflow and remediation guide
+
 **Cross-platform Docker volume mount syntax:**
 
 | Platform | Syntax | Example |
@@ -398,6 +403,8 @@ docker run --rm -v "${PWD}:/scan" ...
    # Open dashboard (launches Windows browser from WSL)
    explorer.exe results/summaries/dashboard.html
    ```
+
+   📖 **Next steps:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Learn to triage findings, suppress false positives, and integrate with CI/CD
 
 **WSL Performance Tips:**
 
@@ -800,6 +807,11 @@ ls -1 results/individual-repos/infra-demo   # per-tool raw outputs
 2. **Check SUMMARY.md** - Human-readable overview and top rules
 3. **Review Individual Reports** - Detailed findings per repository
 4. Optional: For a machine-readable format, check summaries/findings.json or summaries/findings.sarif
+
+📖 **Master your results workflow:**
+
+- **Complete triage guide:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Systematic 30-minute triage, compliance reports, CI/CD integration, real-world examples
+- **Quick reference card:** [docs/RESULTS_QUICK_REFERENCE.md](docs/RESULTS_QUICK_REFERENCE.md) - One-page printable workflow
 
 ## Understanding the Results
 

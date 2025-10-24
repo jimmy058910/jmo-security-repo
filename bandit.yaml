@@ -4,6 +4,8 @@
 # Exclude non-source directories from recursive scans
 exclude_dirs:
   - .venv
+  - .venv-pypi
+  - .post-release-venv
   - venv
   - docs
   - samples

@@ -40,7 +40,7 @@ from scripts.core.telemetry import send_event
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
+__version__ = "0.7.1"
 
 # Profile definitions with resource estimates (v0.5.0)
 PROFILES = {
@@ -249,8 +249,23 @@ def _validate_url(url: str) -> bool:
         ) as response:  # nosec B310 - user-provided URL, validated
             is_ok: bool = response.status == 200
             return is_ok
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, Exception):
-        # Any error means URL is not reachable
+    except urllib.error.HTTPError as e:
+        # HTTP errors (4xx, 5xx)
+        logger.debug(f"URL validation failed for {url}: HTTP {e.code} {e.reason}")
+        return False
+    except urllib.error.URLError as e:
+        # Network/DNS errors
+        logger.debug(
+            f"URL validation failed for {url}: {type(e.reason).__name__}: {e.reason}"
+        )
+        return False
+    except TimeoutError:
+        # Timeout errors
+        logger.debug(f"URL validation timeout for {url}: exceeded 2s")
+        return False
+    except Exception as e:
+        # Unexpected errors
+        logger.debug(f"URL validation failed for {url}: {type(e).__name__}: {e}")
         return False
 
 
@@ -284,9 +299,16 @@ def _detect_iac_type(file_path: Path) -> str:
             # CloudFormation templates have AWSTemplateFormatVersion or Resources
             if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
                 return "cloudformation"
-        except (IOError, OSError, UnicodeDecodeError):
-            # File read can fail: permissions, encoding issues, I/O errors
-            pass
+        except (IOError, OSError) as e:
+            # File read can fail: permissions, I/O errors
+            logger.debug(
+                f"Skipping IaC file {file_path}: I/O error - {type(e).__name__}: {e}"
+            )
+        except UnicodeDecodeError as e:
+            # Encoding issues
+            logger.debug(
+                f"Skipping IaC file {file_path}: encoding error at position {e.start}"
+            )
 
     # Default to k8s-manifest for YAML files
     if suffix in (".yaml", ".yml"):
@@ -331,7 +353,16 @@ def _validate_k8s_context(context: str) -> bool:
         # Check if specific context exists
         contexts = result.stdout.strip().split("\n")
         return context in contexts
-    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+    except subprocess.TimeoutExpired:
+        logger.debug(f"K8s context validation timeout for {context}: exceeded 5s")
+        return False
+    except FileNotFoundError:
+        logger.debug("K8s context validation failed: kubectl not found")
+        return False
+    except Exception as e:
+        logger.debug(
+            f"K8s context validation failed for {context}: {type(e).__name__}: {e}"
+        )
         return False
 
 

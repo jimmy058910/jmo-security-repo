@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test
+.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -24,6 +24,9 @@ help:
 	@echo "  deps-compile - Use pip-tools to compile requirements-dev.in -> requirements-dev.txt"
 	@echo "  deps-sync    - Use pip-tools to sync the environment to requirements-dev.txt"
 	@echo "  deps-refresh - Recompile + sync dev deps (pip-tools)"
+	@echo "  deps-validate - Validate requirements-dev.txt Python version and conflicts"
+	@echo "  deps-upgrade  - Upgrade all dependencies to latest versions (use with caution)"
+	@echo "  deps-check-outdated - Check for outdated packages"
 	@echo "  uv-sync      - Sync dev deps with uv if installed (alternative to pip-tools)"
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
@@ -34,6 +37,7 @@ help:
 	@echo "  fast      - Fast profile scan via jmotools"
 	@echo "  balanced  - Balanced profile scan via jmotools"
 	@echo "  full      - Deep profile scan via jmotools"
+	@echo "  attack-navigator - Open ATT&CK Navigator with scan findings (auto-serve)"
 	@echo ""
 	@echo "Docker Targets:"
 	@echo "  docker-build         - Build Docker image (VARIANT=full|slim|alpine, default: full)"
@@ -41,6 +45,15 @@ help:
 	@echo "  docker-build-local   - Build all variants with 'local' tag for testing before release"
 	@echo "  docker-test          - Test Docker image (VARIANT=full|slim|alpine, default: full)"
 	@echo "  docker-push          - Push Docker image to registry (VARIANT=full|slim|alpine, TAG=latest)"
+	@echo ""
+	@echo "Release Targets:"
+	@echo "  validate-readme      - Check README consistency (PyPI + Docker Hub + GHCR)"
+	@echo ""
+	@echo "Metrics Targets (Maintainer-Only):"
+	@echo "  collect-metrics      - Collect weekly metrics (GitHub, PyPI, Docker Hub, telemetry)"
+	@echo "  metrics              - Alias for collect-metrics"
+	@echo "  validate-readme-pypi - Check PyPI README only (skip Docker Hub)"
+	@echo "  check-pypi-readme    - Alias for validate-readme"
 
 TOOLS_SCRIPT := scripts/dev/install_tools.sh
 VERIFY_SCRIPT := scripts/dev/ci-local.sh
@@ -113,6 +126,18 @@ deps-sync:
 	@if [ -f requirements-dev.txt ]; then $(PY) -m piptools sync requirements-dev.txt; else echo 'requirements-dev.txt not found'; exit 1; fi
 
 deps-refresh: upgrade-pip deps-compile deps-sync
+
+deps-validate:
+	@$(PY) scripts/dev/update_dependencies.py --validate
+
+deps-upgrade:
+	@echo "WARNING: This will upgrade ALL dependencies to latest versions"
+	@echo "Press Ctrl+C to cancel, or Enter to continue..."
+	@read dummy
+	@$(PY) scripts/dev/update_dependencies.py --upgrade
+
+deps-check-outdated:
+	@$(PY) scripts/dev/update_dependencies.py --check-outdated
 
 uv-sync:
 	@if command -v uv >/dev/null 2>&1; then \
@@ -275,3 +300,42 @@ docker-push:
 		docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
 		echo "Pushed latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
 	fi
+
+# ATT&CK Navigator automation
+ATTACK_JSON ?= results/summaries/attack-navigator.json
+attack-navigator:
+	@if [ ! -f "$(ATTACK_JSON)" ]; then \
+		echo "❌ Error: $(ATTACK_JSON) not found"; \
+		echo ""; \
+		echo "Run a scan first:"; \
+		echo "  make balanced"; \
+		echo "  jmo report results --profile"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting ATT&CK Navigator server..."
+	@echo "📊 Layer file: $(ATTACK_JSON)"
+	@$(PY) scripts/dev/serve_attack_navigator.py $(ATTACK_JSON)
+
+# README validation for releases
+validate-readme:
+	@echo "🔍 Validating README consistency (PyPI + Docker Hub)..."
+	@$(PY) scripts/dev/validate_readme.py --check-dockerhub --fix || true
+	@echo ""
+	@echo "💡 Documentation: dev-only/README_CONSISTENCY.md"
+	@echo "💡 Quick reference: dev-only/PYPI_README_QUICK_REF.md"
+
+check-pypi-readme: validate-readme
+
+# Validate PyPI README only (skip Docker Hub)
+validate-readme-pypi:
+	@echo "🔍 Validating PyPI README only..."
+	@$(PY) scripts/dev/validate_readme.py --fix || true
+
+# Metrics collection (maintainer-only)
+collect-metrics:
+	@echo "📊 Collecting weekly metrics..."
+	@./scripts/dev/collect_metrics.sh
+	@echo ""
+	@echo "📄 View summary: cat metrics/summary-$$(date +%Y-%m-%d).md"
+
+metrics: collect-metrics

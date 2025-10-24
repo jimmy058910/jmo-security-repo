@@ -2,6 +2,27 @@
 
 For the release process, see docs/RELEASE.md.
 
+## 0.7.1 (2025-10-23)
+
+### Fixed
+
+- **Enhanced exception logging**: Improved developer experience with detailed debug logging
+  - GitLab scanner: Added logging for clone failures, token errors, image scan failures, and cleanup errors
+  - Wizard: Added specific logging for URL validation failures (HTTP errors, timeouts, DNS errors)
+  - Wizard: Enhanced IaC file type detection with logging for I/O and encoding errors
+  - Wizard: Improved K8s context validation logging with timeout and kubectl detection errors
+  - Nuclei adapter: Added debug logging for skipped empty lines and malformed JSON (NDJSON format)
+  - Falco adapter: Added debug logging for malformed JSON events in NDJSON streams
+  - TruffleHog adapter: Enhanced logging for JSON parse failures with fallback to NDJSON
+  - Impact: Faster debugging, better troubleshooting, clearer error messages in logs
+
+- **SHA256 verification for Homebrew installer**: Defense-in-depth for macOS dev environments
+  - Downloads Homebrew installer to temp file before execution
+  - Displays SHA256 hash for manual verification against official GitHub source
+  - Validates downloaded file is not empty before execution
+  - Provides verification link: `https://github.com/Homebrew/install/blob/HEAD/install.sh`
+  - Impact: Mitigates supply chain risks for developer environment setup
+
 ## 0.7.0 (2025-10-23)
 
 ### Added
@@ -54,7 +75,7 @@ For the release process, see docs/RELEASE.md.
   - **Wizard integration:** First-run prompt with clear privacy explanation
   - **99% test coverage:** Comprehensive test suite with mocked Gist API
   - See [docs/USER_GUIDE.md — Telemetry](docs/USER_GUIDE.md#telemetry-configuration-v070) for complete guide
-  - See [docs/TELEMETRY_IMPLEMENTATION_GUIDE.md](docs/TELEMETRY_IMPLEMENTATION_GUIDE.md) for implementation details
+  - See [docs/TELEMETRY.md](docs/TELEMETRY.md) for implementation details
 
 - **Memory system (v0.7.0)**: Lightweight JSON-based caching to persist analysis patterns across sessions
   - **Private developer tool:** Stored in `.jmo/memory/` (gitignored), designed for solo maintainer workflows

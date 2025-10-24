@@ -35,7 +35,24 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    - QUICKSTART.md is up-to-date
    - docs/USER_GUIDE.md includes new features
 
-4. **Verify CI is green:**
+4. **Validate README consistency (PyPI + Docker Hub sync check):**
+
+   ```bash
+   make validate-readme
+   ```
+
+   **Why:** PyPI and Docker Hub render READMEs from uploaded packages/API, not from GitHub. This check detects:
+   - **PyPI:** Missing/outdated badges, Docker namespace mismatches, stale content
+   - **Docker Hub:** Old namespace in DOCKER_HUB_README.md, outdated versions, sync configuration issues
+   - **GHCR:** Auto-syncs from GitHub (no check needed)
+
+   **Fix:** If inconsistencies found:
+   - **PyPI issues:** Resolved automatically when you publish the new release (uses current README.md)
+   - **Docker Hub issues:** Update DOCKER_HUB_README.md before release, ensure DOCKERHUB_ENABLED=true
+
+   **Documentation:** See [dev-only/README_CONSISTENCY.md](../dev-only/README_CONSISTENCY.md) for complete guide.
+
+5. **Verify CI is green:**
    - Check GitHub Actions: all tests passing on ubuntu-latest and macos-latest
    - Coverage uploaded to Codecov successfully
 

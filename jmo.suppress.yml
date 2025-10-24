@@ -1,0 +1,94 @@
+# JMo Security Suppression Configuration
+# Suppress findings to reduce false positives and focus on actionable issues
+#
+# Suppression Types:
+# - By fingerprint ID (specific finding)
+# - By path pattern (glob matching)
+# - By rule ID (all instances of a rule)
+# - By severity level
+#
+# See: https://jmotools.com/docs/suppressions
+
+suppressions:
+  # =============================================================================
+  # Third-Party Dependencies (Virtual Environments)
+  # =============================================================================
+  # These are security warnings in official Python packages (pip, setuptools, distlib)
+  # installed in virtual environments. They represent known limitations in package
+  # management tools and are not exploitable in our codebase.
+
+  - path: ".venv/*"
+    reason: "Dev dependencies - vetted PyPI packages in gitignored virtual environment"
+
+  - path: ".venv-pypi/*"
+    reason: "PyPI build environment - temporary, not deployed"
+
+  - path: ".post-release-venv/*"
+    reason: "Release testing environment - temporary, not deployed"
+
+  # =============================================================================
+  # Test Fixtures (Intentional Vulnerabilities)
+  # =============================================================================
+  # These files contain intentionally vulnerable code to validate that scanners
+  # correctly detect security issues. DO NOT FIX - these are required for testing.
+
+  - path: "tests/e2e/fixtures/*"
+    reason: "Test fixtures with intentional vulnerabilities for E2E validation"
+
+  - path: "samples/fixtures/*"
+    reason: "Demo files for documentation and examples with known issues"
+
+  # =============================================================================
+  # Documentation Examples
+  # =============================================================================
+  # Example credentials and code snippets in documentation are not security risks.
+
+  - path: "docs/archive/*"
+    ruleId: "detected-aws-access-key-id-value"
+    reason: "Example credentials in archived documentation drafts (not real keys)"
+
+  - path: "docs/archive/*"
+    severity: "HIGH"
+    reason: "Archived documentation with example code and patterns"
+
+  # =============================================================================
+  # GitHub Actions (Low-Risk Patterns)
+  # =============================================================================
+  # Echo statements in CI logs are read-only operations with minimal risk.
+  # Semgrep flags any github.* context interpolation as high risk by default.
+
+  - path: ".github/workflows/e2e-comprehensive-tests.yml"
+    ruleId: "run-shell-injection"
+    line: [74, 86]
+    reason: "Read-only display of commit messages in CI logs (sandboxed environment)"
+
+  # =============================================================================
+  # Bandit Test File Patterns (B101 - Assert Statements)
+  # =============================================================================
+  # Assert statements in test files are expected and safe (used for test assertions).
+
+  - path: "tests/*"
+    ruleId: "B101"
+    reason: "Assert statements are expected in test files for test validation"
+
+  - path: "test_*.py"
+    ruleId: "B101"
+    reason: "Assert statements in test files"
+
+  - path: "*_test.py"
+    ruleId: "B101"
+    reason: "Assert statements in test files"
+
+  # =============================================================================
+  # Future: Add Production Suppressions Here
+  # =============================================================================
+  # When triaging production findings, add suppressions with:
+  # - Clear reason explaining why it's safe or accepted risk
+  # - Link to ticket/PR if it's a known issue being tracked
+  # - Expiration date if it's a temporary suppression
+  #
+  # Example:
+  # - id: "fingerprint-abc123"
+  #   reason: "Accepted risk: Legacy API endpoint, scheduled for deprecation in Q2 2025"
+  #   expires: "2025-06-30"
+  #   ticket: "https://github.com/jimmy058910/jmo-security-repo/issues/123"

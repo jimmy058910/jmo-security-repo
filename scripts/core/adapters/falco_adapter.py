@@ -9,11 +9,14 @@ Supports:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
+
+logger = logging.getLogger(__name__)
 
 
 def _falco_priority_to_severity(priority: str) -> str:
@@ -75,7 +78,10 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
 
         try:
             event = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
+            )
             continue
 
         if not isinstance(event, dict):

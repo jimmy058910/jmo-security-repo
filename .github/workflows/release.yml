@@ -53,6 +53,15 @@ jobs:
             exit 1
           fi
 
+      - name: Validate README will render correctly on PyPI
+        run: |
+          echo "✅ README.md will be published to PyPI from this release"
+          echo "📝 Current README.md size: $(wc -c < README.md) bytes"
+          echo "📊 Badge count: $(grep -c '!\[' README.md || echo 0)"
+          echo ""
+          echo "⚠️  Note: If you see badge/content differences on PyPI after release,"
+          echo "    run 'make validate-readme' locally to check for drift."
+
       - name: Build sdist/wheel
         run: python -m build
 

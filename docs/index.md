@@ -157,6 +157,7 @@ make tools
 |----------|---------|----------|
 | [README.md](../README.md) | Project overview, "Three Ways to Get Started" | Everyone |
 | [QUICKSTART.md](../QUICKSTART.md) | 5-minute universal guide | Developers |
+| [**RESULTS_GUIDE.md**](RESULTS_GUIDE.md) | **Complete guide to understanding, triaging, and acting on scan results** | **Everyone** |
 | [USER_GUIDE.md](USER_GUIDE.md) | Comprehensive reference | Advanced users |
 | [DOCKER_README.md](DOCKER_README.md) | Complete Docker guide (beginner → advanced) | All levels |
 
@@ -164,6 +165,8 @@ make tools
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
+| [**Quick Reference**](QUICK_REFERENCE.md) | **One-page command reference (scanning, Docker, troubleshooting)** | **Everyone** |
+| [**Results Quick Reference**](RESULTS_QUICK_REFERENCE.md) | **One-page printable triage card (30-minute workflow)** | **Everyone** |
 | [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows | Beginners |
 | [TSV Scanning](examples/scan_from_tsv.md) | Clone and scan from TSV files | DevOps |
 | [GitHub Actions Docker](examples/github-actions-docker.yml) | CI/CD workflow examples | DevOps/SRE |
@@ -199,6 +202,10 @@ make tools
 
 ## 🔍 Understanding Results
 
+**📖 Complete guide:** [RESULTS_GUIDE.md](RESULTS_GUIDE.md) - The definitive guide to understanding, triaging, and acting on your scan results.
+
+**Quick reference:**
+
 ### Severity Levels
 
 | Level | Meaning | Action Required |
@@ -220,6 +227,9 @@ make tools
 - **`findings.yaml`** - YAML format (requires PyYAML)
 - **`SUPPRESSIONS.md`** - Suppressed findings summary (if suppressions used)
 - **`timings.json`** - Performance profiling data (when `--profile` used)
+- **`COMPLIANCE_SUMMARY.md`** - Multi-framework compliance report (OWASP, CWE, NIST, PCI DSS, CIS, ATT&CK)
+- **`PCI_DSS_COMPLIANCE.md`** - Detailed PCI DSS compliance report
+- **`attack-navigator.json`** - MITRE ATT&CK Navigator visualization
 
 ---
 

@@ -32,6 +32,7 @@ Plus container image discovery and scanning:
 Integrates with repository_scanner and image_scanner for comprehensive coverage.
 """
 
+import logging
 import os
 import re
 import subprocess
@@ -43,6 +44,8 @@ from typing import Dict, List, Tuple, Set
 
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image
+
+logger = logging.getLogger(__name__)
 
 
 def _discover_container_images(repo_path: Path) -> Set[str]:
@@ -78,7 +81,10 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
                         # Skip scratch images
                         if image.lower() != "scratch":
                             images.add(image)
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                f"Skipping Dockerfile {dockerfile}: failed to parse - {type(e).__name__}: {e}"
+            )
             continue  # Skip files that can't be read
 
     # Pattern 2: docker-compose.yml images
@@ -100,7 +106,10 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
                             image = str(service_config["image"])
                             if image and image.lower() != "scratch":
                                 images.add(image)
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                f"Skipping docker-compose file {compose_file}: failed to parse - {type(e).__name__}: {e}"
+            )
             continue  # Skip files that can't be parsed
 
     # Pattern 3: Kubernetes manifests
@@ -127,7 +136,10 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
                                     image = str(container["image"])
                                     if image and image.lower() != "scratch":
                                         images.add(image)
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                f"Skipping Kubernetes manifest {k8s_file}: failed to parse - {type(e).__name__}: {e}"
+            )
             continue  # Skip files that can't be parsed
 
     return images
@@ -168,6 +180,9 @@ def scan_gitlab_repo(
 
     if not gitlab_token:
         # No token - cannot clone, return failure for all tools
+        logger.error(
+            f"GitLab token missing for {full_path}: set GITLAB_TOKEN env var or pass --gitlab-token"
+        )
         statuses = {tool: False for tool in tools}
         return full_path, statuses
 
@@ -215,6 +230,10 @@ def scan_gitlab_repo(
 
         if result.returncode != 0:
             # Clone failed - return failure for all tools
+            stderr_msg = result.stderr.decode("utf-8", errors="ignore").strip()
+            logger.error(
+                f"GitLab clone failed for {full_path}: git returned {result.returncode} - {stderr_msg}"
+            )
             statuses = {tool: False for tool in tools}
             return full_path, statuses
 
@@ -263,8 +282,12 @@ def scan_gitlab_repo(
                         if tool not in statuses or not statuses[tool]:
                             # Only update if tool wasn't already successful
                             statuses[f"image:{image}:{tool}"] = status
-                except Exception:
+                except Exception as e:
                     # Image scan failed - continue with other images
+                    logger.error(
+                        f"Container image scan failed for {image} (discovered in {full_path}): {type(e).__name__}: {e}",
+                        exc_info=True,
+                    )
                     continue
 
         # Move results from temp location to final GitLab results directory
@@ -282,15 +305,25 @@ def scan_gitlab_repo(
 
     except subprocess.TimeoutExpired:
         # Clone timeout - return failure for all tools
+        logger.error(
+            f"GitLab clone timeout for {full_path}: git clone exceeded {timeout}s timeout",
+            exc_info=True,
+        )
         statuses = {tool: False for tool in tools}
         return full_path, statuses
-    except Exception:
+    except Exception as e:
         # Any other error - return failure for all tools
+        logger.error(
+            f"GitLab scan failed for {full_path}: {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         statuses = {tool: False for tool in tools}
         return full_path, statuses
     finally:
         # Always clean up temporary directory
         try:
             shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass  # Ignore cleanup errors
+        except Exception as e:
+            logger.debug(
+                f"Failed to clean up temp directory {temp_dir}: {type(e).__name__}: {e}"
+            )

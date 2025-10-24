@@ -4,21 +4,42 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmo-security"
-version = "0.7.0"
+version = "0.7.1"
 description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs, multi-target scanning)"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "James Moceri", email = "general@jmogaming.com" }]
+keywords = [
+    "security", "scanning", "SAST", "SBOM", "secrets-detection",
+    "compliance", "OWASP", "CWE", "DevSecOps", "cybersecurity"
+]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "License :: OSI Approved :: MIT License",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
 ]
 dependencies = [
     "PyYAML>=6.0",  # Required for config file loading (jmo.yml)
 ]
+
+[project.urls]
+Homepage = "https://jmotools.com"
+Documentation = "https://docs.jmotools.com"
+Repository = "https://github.com/jimmy058910/jmo-security-repo"
+"Bug Tracker" = "https://github.com/jimmy058910/jmo-security-repo/issues"
+LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 
 [project.optional-dependencies]
 reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies

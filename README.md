@@ -47,7 +47,7 @@ A terminal-first, cross-platform security audit toolkit that orchestrates multip
 Docs hub: [docs/index.md](docs/index.md)
 Project homepage: [jmotools.com](https://jmotools.com)
 
-> Origin story: This started as part of a Cybersecurity Capstone Project. It has since grown into a general-purpose toolkit. I’d love for folks with deeper expertise to jump in—issues and PRs are welcome!
+> **Origin Story:** Built as my capstone project for **Institute of Data × Michigan Tech University's Cybersecurity Bootcamp** (graduated October 2025). Now a production-grade security platform. **Actively seeking cybersecurity/DevSecOps roles** — let's connect! Issues and PRs welcome.
 
 Thinking about contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and coding standards. For publishing, see [docs/RELEASE.md](docs/RELEASE.md).
 
@@ -235,7 +235,15 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 open results/summaries/dashboard.html  # macOS
 xdg-open results/summaries/dashboard.html  # Linux
 start results/summaries/dashboard.html  # Windows (WSL2)
+cat results/summaries/SUMMARY.md  # Quick text overview
 ```
+
+📖 **Learn how to triage and act on your findings:**
+
+- **Quick triage workflow (30 min):** [docs/RESULTS_QUICK_REFERENCE.md](docs/RESULTS_QUICK_REFERENCE.md) - Printable one-page reference
+- **Complete results guide:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Understanding, triaging, CI/CD integration, compliance
+
+```bash
 
 **Three image variants available:**
 
@@ -437,7 +445,12 @@ make verify-env
 
    # View results (opens in Windows browser)
    explorer.exe results/summaries/dashboard.html
+   type results\summaries\SUMMARY.md
    ```
+
+   📖 **Understanding results:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Complete triage and remediation guide
+
+   ```bash
 
 #### Alternative: Use the Wizard in Docker mode
 
@@ -745,6 +758,11 @@ cat results/summaries/SUMMARY.md
 # macOS: open results/summaries/dashboard.html
 # Linux: xdg-open results/summaries/dashboard.html
 ```
+
+📖 **Next steps after scanning:**
+
+- **Understand your results:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Triage workflow, compliance reports, CI/CD integration
+- **Quick reference card:** [docs/RESULTS_QUICK_REFERENCE.md](docs/RESULTS_QUICK_REFERENCE.md) - 30-minute triage workflow
 
 Looking for screenshots and how to capture them? See: [docs/screenshots/README.md](docs/screenshots/README.md)
 
@@ -1140,31 +1158,95 @@ python3 scripts/cli/jmo.py scan --repos-dir ~/repos --tools trufflehog semgrep -
 - Screenshots: `docs/screenshots/README.md` and `docs/screenshots/capture.sh` to generate dashboard visuals.
 - Testing: see `TEST.md` for running lint, tests, and coverage locally (CI gate ≥85%).
 
-## 🔍 Understanding Results
+## 🔍 Understanding Your Results
+
+**📖 Complete Guides:**
+
+- **[Results Guide](docs/RESULTS_GUIDE.md)** - The definitive 12,000-word guide covering everything from triage to compliance
+- **[Quick Reference](docs/RESULTS_QUICK_REFERENCE.md)** - One-page printable card for 30-minute triage
+
+**What you get after a scan:**
+
+After running a scan, you'll have multiple output formats in `results/summaries/`:
+
+| File | Use When | Key Features |
+|------|----------|--------------|
+| **`dashboard.html`** | First look, deep investigation | Interactive charts, filterable table, clickable file paths |
+| **`SUMMARY.md`** | Quick triage, team sharing | Human-readable, top risks, remediation priorities |
+| **`COMPLIANCE_SUMMARY.md`** | Compliance audits | OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK mappings |
+| **`PCI_DSS_COMPLIANCE.md`** | Payment compliance | Detailed PCI DSS requirement mapping |
+| **`findings.json`** | Scripting, automation | Machine-readable CommonFinding schema |
+| **`findings.sarif`** | CI/CD integration | GitHub/GitLab Security tab upload |
+| **`attack-navigator.json`** | Threat modeling | MITRE ATT&CK heatmap visualization |
+
+**Triage in 30 minutes:**
+
+```bash
+# Step 1: Quick overview (2 min)
+cat results/summaries/SUMMARY.md
+
+# Step 2: Filter production code only (5 min)
+jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")
+         | select(.location.path | contains("tests/") or contains(".venv/") | not)]' \
+  results/summaries/findings.json > priority.json
+
+# Step 3: Group by rule to find systemic issues (10 min)
+jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length})
+    | sort_by(.count) | reverse' priority.json
+
+# Step 4: Suppress false positives (3 min)
+# Create jmo.suppress.yml (see docs/RESULTS_GUIDE.md)
+
+# Step 5: Open dashboard for deep dive (10 min)
+open results/summaries/dashboard.html
+```
+
+📖 **Complete triage workflow:** This is just a quick example. For the full 30-minute systematic triage process, see [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - includes compliance reports, CI/CD integration, and real-world examples.
 
 ### Severity Levels
 
 The toolkit uses a type-safe severity enum with comparison operators for consistent filtering and sorting:
 
-- **CRITICAL**: Verified secrets requiring immediate action
-- **HIGH**: Likely secrets or serious vulnerabilities
-- **MEDIUM**: Potential issues requiring review
-- **LOW**: Minor issues for regular maintenance
-- **INFO**: Informational findings
+- **CRITICAL**: Immediate security risk (hardcoded passwords, RCE) - **Fix immediately**
+- **HIGH**: Serious issue (SQL injection, XSS, CVE ≥7.0) - **Fix within 1 week**
+- **MEDIUM**: Moderate risk (weak crypto, missing auth) - **Fix within 1 month**
+- **LOW**: Minor issue (info disclosure) - **Fix when convenient**
+- **INFO**: Informational (deprecated APIs) - **Optional improvement**
 
-### Key Metrics
+### Compliance Framework Auto-Enrichment
 
-- **Total Findings**: All security issues detected
-- **Verified Secrets**: Confirmed active credentials (TruffleHog)
-- **Unique Issues**: Distinct types of security problems
-- **Tool Coverage**: Number of tools that found issues
+All findings automatically enriched with 6 compliance frameworks:
+
+| Framework | What It Maps | When to Use |
+|-----------|--------------|-------------|
+| **OWASP Top 10 2021** | Web app security categories (A03:2021 = Injection) | Web security audits, developer training |
+| **CWE Top 25 2024** | Common weakness types (CWE-798 = Hardcoded Creds) | Secure coding standards, CVE remediation |
+| **NIST CSF 2.0** | Risk management functions (PROTECT/DETECT) | Enterprise risk reporting, FISMA compliance |
+| **PCI DSS 4.0** | Payment security requirements (6.2.4 = Code scanning) | Payment processing compliance |
+| **CIS Controls v8.1** | Security best practices (IG1/IG2/IG3) | Cyber insurance, benchmarking |
+| **MITRE ATT&CK** | Attack techniques (T1195 = Supply Chain) | Threat modeling, SOC analysis |
+
+**Example compliance finding:**
+
+```json
+{
+  "ruleId": "DL3018",
+  "message": "Pin versions in apk add",
+  "severity": "MEDIUM",
+  "compliance": {
+    "cisControlsV8_1": [{"control": "4.1", "implementationGroup": "IG1"}],
+    "nistCsf2_0": [{"function": "PROTECT", "category": "PR.IP"}],
+    "pciDss4_0": [{"requirement": "2.2.1", "priority": "HIGH"}]
+  }
+}
+```
 
 ### Recommendations Priority
 
-1. **Immediate**: Rotate/revoke verified secrets
-2. **High Priority**: Fix critical and high severity issues
-3. **Medium Priority**: Address medium severity findings
-4. **Long-term**: Implement preventive measures
+1. **Immediate**: Fix all CRITICAL findings (verified secrets, RCE, critical CVEs)
+2. **High Priority**: Fix all HIGH findings in production code (not tests/dependencies)
+3. **Medium Priority**: Review MEDIUM findings, suppress false positives
+4. **Long-term**: Address LOW findings, improve code quality
 
 ## 🎯 Three-Stage Implementation Strategy
 

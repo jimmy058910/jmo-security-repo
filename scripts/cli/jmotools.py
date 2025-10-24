@@ -150,6 +150,12 @@ def _open_outputs(out_dir: Path) -> None:
     sys.stderr.write("\x1b[36m[INFO]\x1b[0m Results:\n")
     for p in paths:
         sys.stderr.write(f"  {p}\n")
+    sys.stderr.write("\n")
+    sys.stderr.write(
+        "\x1b[36m📖 Learn how to triage and act on your findings:\x1b[0m\n"
+    )
+    sys.stderr.write("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md\n")
+    sys.stderr.write("  - Complete guide: docs/RESULTS_GUIDE.md\n")
 
 
 def _profile_for(cmd_name: str) -> str:

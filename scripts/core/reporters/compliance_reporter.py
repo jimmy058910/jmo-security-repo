@@ -259,10 +259,10 @@ def write_attack_navigator_json(
             }
         )
 
-    # Build ATT&CK Navigator JSON
+    # Build ATT&CK Navigator JSON (v17 format for current Navigator)
     navigator_layer = {
         "name": "JMo Security Scan Results",
-        "versions": {"attack": "16", "navigator": "5.0.1", "layer": "4.5"},
+        "versions": {"attack": "17", "navigator": "5.1.0", "layer": "4.5"},
         "domain": "enterprise-attack",
         "description": f"Security findings mapped to MITRE ATT&CK techniques. Total findings: {len(attack_findings)}, Techniques covered: {len(technique_counts)}",
         "filters": {"platforms": ["Linux", "macOS", "Windows", "Cloud", "Containers"]},

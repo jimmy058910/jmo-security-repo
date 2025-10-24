@@ -316,9 +316,9 @@ ALTER USER myuser WITH PASSWORD 'new-secure-password';
 
 wget <https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar>
 
-# Create secrets.txt with all leaked secrets
+# Create secrets.txt with all leaked secrets (example - replace with actual keys)
 
-echo "AKIA1234567890ABCDEF" > secrets.txt
+echo "AKIA1234567890ABCDEF" > secrets.txt  # Example key (not real)
 
 # Clean history
 

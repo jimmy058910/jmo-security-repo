@@ -11,11 +11,14 @@ Inputs supported:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
+
+logger = logging.getLogger(__name__)
 
 
 def _flatten(obj: Any) -> Iterable[Dict[str, Any]]:
@@ -39,16 +42,21 @@ def _iter_trufflehog(path: Path) -> Iterable[Dict[str, Any]]:
             if isinstance(item, dict):
                 yield item
         return
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug(
+            f"Falling back to NDJSON parsing for {path}: {e.msg} at position {e.pos}"
+        )
     # Fall back to NDJSON
-    for line in raw.splitlines():
+    for line_num, line in enumerate(raw.splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
         try:
             obj = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.debug(
+                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
+            )
             continue
         if isinstance(obj, dict):
             yield obj

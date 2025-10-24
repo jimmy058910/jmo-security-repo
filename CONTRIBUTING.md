@@ -389,4 +389,20 @@ We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos.
 - Issues for bugs and features.
 - Discussions for ideas and Q&A (enable in repo settings if not present).
 
+---
+
+## About the Maintainer
+
+This project was built by **James (Jimmy) Moceri** as a capstone for the **Institute of Data × Michigan Tech University Cybersecurity Bootcamp** (graduated October 2025). The project evolved from a 1-week learning exercise into a production-grade security platform with 91% test coverage, multi-target scanning, and 6-framework compliance automation.
+
+**Professional Background:**
+
+- 12+ years operational management & leadership (process optimization, team development, strategic planning)
+- Cybersecurity Bootcamp graduate (OSINT, SIEM, vulnerability assessment, penetration testing, NIST RMF)
+- CCSP (Certified Cyber Security Professional) certification in progress
+
+**Currently seeking:** Security Engineering, DevSecOps, Application Security, or SOC Analyst roles where I can leverage this unique combination of operational leadership + security engineering expertise.
+
+**Let's connect:** [LinkedIn](https://linkedin.com/in/jimmy-moceri) | [GitHub](https://github.com/jimmy058910)
+
 Thanks again for contributing!
