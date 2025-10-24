@@ -1,6 +1,6 @@
 # JMo Security Results Guide
 
-**The Complete Guide to Understanding, Triaging, and Acting on Your Security Scan Results**
+*The Complete Guide to Understanding, Triaging, and Acting on Your Security Scan Results*
 
 ## Table of Contents
 
@@ -25,35 +25,38 @@ After running a JMo Security scan, you'll get multiple output formats. Here's wh
 
 ```bash
 cat results/summaries/SUMMARY.md
-```
-
+```text
 **What you'll see:**
+
 - Total findings count with severity breakdown (CRITICAL/HIGH/MEDIUM/LOW/INFO)
 - Top files with the most findings
 - Which tools found what
 - Quick remediation priorities
 
 **Example:**
-```
+```text
 Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 7391 LOW
-```
-
+```text
 **What this means:** Most findings are LOW severity (common for code quality checks). Focus on the 3 CRITICAL and 91 HIGH first.
 
 ### 2. Open the Interactive Dashboard (2 minutes)
 
 ```bash
+
 # Linux/WSL
+
 xdg-open results/summaries/dashboard.html
 
 # macOS
+
 open results/summaries/dashboard.html
 
 # Windows
-start results/summaries/dashboard.html
-```
 
+start results/summaries/dashboard.html
+```text
 **What you'll see:**
+
 - Visual charts showing severity distribution
 - Filterable table of all findings
 - Direct links to affected files
@@ -65,20 +68,20 @@ start results/summaries/dashboard.html
 
 ```bash
 cat results/summaries/COMPLIANCE_SUMMARY.md
-```
-
+```text
 **What you'll see:**
+
 - Which OWASP Top 10 categories are affected
 - CWE Top 25 coverage
 - NIST CSF, PCI DSS, CIS Controls, MITRE ATT&CK mappings
 
 **Example:**
-```
+```text
 OWASP Top 10 2021: 4/10 categories
+
 - A02:2021 (Cryptographic Failures): 102 findings
 - A03:2021 (Injection): 301 findings
-```
-
+```text
 **What this means:** If you need SOC 2, PCI DSS, or ISO 27001 compliance, these reports show exactly which security findings map to which requirements.
 
 ---
@@ -87,7 +90,7 @@ OWASP Top 10 2021: 4/10 categories
 
 After a scan, you'll have this directory structure:
 
-```
+```text
 results/
 ├── individual-repos/          # Raw tool outputs per repository
 │   └── <repo-name>/
@@ -122,7 +125,7 @@ results/
     ├── attack-navigator.json  # MITRE ATT&CK Navigator visualization
     ├── dashboard.html         # Interactive web dashboard
     └── timings.json           # Performance profiling (if --profile used)
-```
+```text
 
 ### Which Files to Use When
 
@@ -146,9 +149,9 @@ The `SUMMARY.md` file is your starting point for triage. Here's how to read it:
 
 ```markdown
 Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 7391 LOW
-```
-
+```text
 **What to look for:**
+
 - **CRITICAL/HIGH count** - Your immediate priority
 - **Total vs. actionable** - If you have 8000 findings but only 94 are HIGH+, most are noise or low-priority code quality issues
 
@@ -159,9 +162,9 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 |------|----------|----------|-----------|
 | tests/e2e/fixtures/iac/aws-s3-public.tf | 19 | 🔴 CRITICAL | RDS Cluster backup retention <1 day |
 | Dockerfile.alpine | 6 | 🔴 CRITICAL | ':latest' tag used |
-```
-
+```text
 **What to do:**
+
 1. **Check if it's production code** - Test fixtures, examples, archived code can often be suppressed
 2. **Assess real-world impact** - "RDS backup retention" is critical for production, not for a demo repo
 3. **Prioritize by exposure** - Public-facing code (web apps, APIs) > internal tools > test code
@@ -169,17 +172,19 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 ### Section 3: By Tool
 
 ```markdown
+
 - **trivy**: 81 findings (🔴 3 CRITICAL, 🔴 28 HIGH)
 - **semgrep**: 32 findings (🔴 6 HIGH, 🟡 24 MEDIUM)
 - **trufflehog**: 7 findings (🟡 7 MEDIUM)
-```
-
+```text
 **What this tells you:**
+
 - **Trivy found CRITICAL** - Likely container or dependency vulnerabilities (CVEs)
 - **Semgrep found HIGH** - Code security issues (SQL injection, XSS, command injection)
 - **TruffleHog found MEDIUM** - Potential secrets (unverified by default)
 
 **Tool-Specific Context:**
+
 - **TruffleHog MEDIUM = unverified secrets** - May be false positives (test keys, examples)
 - **Trivy CRITICAL = CVE** - Likely real vulnerability with CVSS ≥9.0
 - **Bandit LOW = assert statements** - Code quality, not security risk
@@ -187,23 +192,25 @@ Total findings: 8058 | 🔴 3 CRITICAL | 🔴 91 HIGH | 🟡 280 MEDIUM | ⚪ 73
 ### Section 4: Remediation Priorities
 
 ```markdown
+
 1. **Fix Image user should not be 'root'** (5 findings) → Review container security
 2. **Address 63 code security issues** → Review SAST findings
-```
-
+```text
 **How to use this:**
+
 - Start with **systemic issues** (same fix applies to multiple findings)
 - Example: "User should not be root" in 5 Dockerfiles → One fix (add `USER jmo` to base Dockerfile template)
 
 ### Section 5: By Category
 
 ```markdown
+
 - 🔧 Code Quality: 7673 findings (95% of total)
 - 🛡️ Vulnerabilities: 79 findings (1% of total)
 - 🔑 Secrets: 9 findings (0% of total)
-```
-
+```text
 **What this means:**
+
 - **95% Code Quality** - Bandit flagging `assert` statements, missing type hints, etc. (LOW priority)
 - **1% Vulnerabilities** - CVEs in dependencies (CRITICAL/HIGH priority)
 - **0% Secrets** - Good! But verify the 9 findings aren't real credentials
@@ -224,13 +231,14 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 |----------|----------|
 | A02:2021 | 102 |
 | A03:2021 | 301 |
-```
-
+```text
 **What it means:**
+
 - **A02:2021 - Cryptographic Failures:** 102 findings related to weak crypto, missing encryption, insecure storage
 - **A03:2021 - Injection:** 301 findings related to SQL/command/code injection
 
 **When to use:**
+
 - **Web app security audits** - OWASP is the standard for web application risks
 - **Developer training** - Show devs which OWASP categories they're triggering
 - **Compliance:** Required for PCI DSS 6.2.4, SOC 2
@@ -244,13 +252,14 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 | CWE ID | Rank | Findings |
 |--------|------|----------|
 | CWE-798 | 18 | 7 |
-```
-
+```text
 **What it means:**
+
 - **CWE-798 (Rank 18):** Use of Hard-coded Credentials - 7 findings
 - **Rank:** Position in MITRE's "Most Dangerous Software Weaknesses" list (1 = worst)
 
 **When to use:**
+
 - **CVE remediation** - CWEs are referenced in CVE descriptions
 - **Secure coding standards** - Map your findings to industry-recognized weakness categories
 - **Vendor assessments** - Customers often ask "Do you scan for CWE Top 25?"
@@ -267,15 +276,16 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 | IDENTIFY | 8047 |
 | PROTECT  | 22 |
 | DETECT   | 7673 |
-```
-
+```text
 **What it means:**
+
 - **GOVERN:** Findings related to policies, risk management, supply chain (CWE-798, dependency issues)
 - **IDENTIFY:** Asset management, vulnerability discovery (most SBOM findings)
 - **PROTECT:** Access control, secure configuration (Dockerfile USER, file permissions)
 - **DETECT:** Monitoring, logging, threat detection (code quality checks)
 
 **When to use:**
+
 - **Enterprise risk management** - Map security findings to business risk functions
 - **Compliance:** Required for NIST 800-53, FISMA, some government contracts
 - **Executive reporting** - CISOs understand NIST CSF better than CWE IDs
@@ -286,16 +296,19 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 
 **Example:**
 ```markdown
+
 ### Requirement 6.2.4: Bespoke software is developed securely
+
 **Priority:** CRITICAL
 **Findings:** 7673
-```
-
+```text
 **What it means:**
+
 - **Requirement 6.2.4:** All custom code must be scanned for vulnerabilities
 - **7673 findings:** Includes code quality (many LOW), but also HIGH findings like SQL injection
 
 **When to use:**
+
 - **Payment processing apps** - Required if you handle credit cards
 - **Compliance audits** - Auditors want evidence of secure development
 - **Merchant onboarding** - Payment processors require PCI DSS evidence
@@ -311,13 +324,14 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 | Framework | Coverage |
 |-----------|----------|
 | CIS Controls v8.1 | 14 controls |
-```
-
+```text
 **What it means:**
+
 - **14 controls triggered** - Your findings map to 14 of the 18 CIS Critical Security Controls
 - **Implementation Groups (IG1/IG2/IG3):** IG1 = basic cyber hygiene, IG3 = advanced controls
 
 **When to use:**
+
 - **Cyber insurance** - Insurers often require CIS Controls compliance
 - **Benchmarking** - Compare your posture against CIS benchmarks
 - **Prioritization** - Focus on IG1 controls first (foundational)
@@ -325,26 +339,30 @@ JMo Security auto-enriches findings with 6 compliance frameworks. Here's how to 
 ### 6. MITRE ATT&CK
 
 **Files:**
+
 - `COMPLIANCE_SUMMARY.md` → MITRE ATT&CK section
 - `attack-navigator.json` → Import into [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/)
 
 **Example:**
 ```markdown
 **Top 5 Techniques:**
+
 1. **T1195** - Supply Chain Compromise (374 findings)
 2. **T1552** - Unsecured Credentials (7 findings)
-```
-
+```text
 **What it means:**
+
 - **T1195 - Supply Chain Compromise:** Findings in dependencies, SBOM packages (Syft detected 374 packages)
 - **T1552 - Unsecured Credentials:** Hardcoded secrets, weak crypto
 
 **When to use:**
+
 - **Threat modeling** - Map findings to attacker tactics (Initial Access, Persistence, etc.)
 - **Purple team exercises** - Focus defensive controls on detected techniques
 - **SOC analysis** - Help SOC analysts understand attack paths
 
 **How to visualize:**
+
 1. Open [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/)
 2. Upload `attack-navigator.json`
 3. See heatmap of which techniques your findings map to
@@ -358,25 +376,31 @@ You've got 8000 findings. Here's how to prioritize them in 30 minutes:
 ### Step 1: Filter by Severity (5 minutes)
 
 ```bash
+
 # Extract only CRITICAL and HIGH findings
+
 jq '[.[] | select(.severity == "CRITICAL" or .severity == "HIGH")]' \
   results/summaries/findings.json > critical-high.json
 
 # Count them
-jq 'length' critical-high.json
-# Output: 94
-```
 
+jq 'length' critical-high.json
+
+# Output: 94
+
+```text
 **Result:** You now have 94 findings to review instead of 8058.
 
 ### Step 2: Categorize by Location (10 minutes)
 
 ```bash
-# Group by file path pattern
-jq 'group_by(.location.path | split("/")[0:3] | join("/"))' critical-high.json > grouped.json
-```
 
+# Group by file path pattern
+
+jq 'group_by(.location.path | split("/")[0:3] | join("/"))' critical-high.json > grouped.json
+```text
 **Categories to look for:**
+
 1. **Production code** (`src/`, `scripts/`, root files)
 2. **Test code** (`tests/`, `fixtures/`, `samples/`)
 3. **Dependencies** (`.venv/`, `node_modules/`, `vendor/`)
@@ -384,7 +408,7 @@ jq 'group_by(.location.path | split("/")[0:3] | join("/"))' critical-high.json >
 
 **Triage decision tree:**
 
-```
+```text
 Is it in production code?
   YES → Priority 1 (fix immediately)
   NO → Is it in dependencies?
@@ -392,7 +416,7 @@ Is it in production code?
     NO → Is it a test fixture?
       YES → Priority 4 (suppress or document as intentional)
       NO → Priority 2 (CI/CD hardening)
-```
+```text
 
 ### Step 3: Check for False Positives (10 minutes)
 
@@ -406,15 +430,18 @@ Is it in production code?
 | TruffleHog | Generic secrets | Example credentials in docs/README | Check for comments like `# Example (not real)` |
 | Trivy | CVEs in test dependencies | Vulnerable packages only imported in tests | Check if imported in production code |
 
-**Example: Bandit B101 in test files**
+### Example: Bandit B101 in test files
 
 ```bash
+
 # Find all B101 findings in test files
+
 jq '.[] | select(.ruleId == "B101" and (.location.path | contains("test")))' \
   critical-high.json | jq -s 'length'
-# Output: 62
-```
 
+# Output: 62
+
+```text
 **Decision:** Suppress B101 for test files (pytest uses `assert` extensively)
 
 ### Step 4: Identify Systemic Issues (5 minutes)
@@ -422,11 +449,12 @@ jq '.[] | select(.ruleId == "B101" and (.location.path | contains("test")))' \
 **What to look for:**
 
 ```bash
+
 # Top 5 most common rules
+
 jq '[.[] | .ruleId] | group_by(.) | map({rule: .[0], count: length}) | sort_by(.count) | reverse | .[0:5]' \
   critical-high.json
-```
-
+```text
 **Example output:**
 ```json
 [
@@ -434,9 +462,9 @@ jq '[.[] | .ruleId] | group_by(.) | map({rule: .[0], count: length}) | sort_by(.
   {"rule": "CVE-2023-12345", "count": 15},
   {"rule": "root-user", "count": 5}
 ]
-```
-
+```text
 **What this means:**
+
 1. **B101 (62 occurrences)** - Systemic pattern (likely test files) → One suppression rule fixes all 62
 2. **CVE-2023-12345 (15 occurrences)** - Same vulnerable dependency in 15 places → One `pip install --upgrade` fixes all 15
 3. **root-user (5 occurrences)** - 5 Dockerfiles missing `USER` statement → One template fix
@@ -477,7 +505,7 @@ All findings follow the **CommonFinding schema v1.2.0**. Here's how to query the
     "mitreAttack": [{"tactic": "Initial Access", "technique": "T1190"}]
   }
 }
-```
+```text
 
 ### Common Queries
 
@@ -486,28 +514,28 @@ All findings follow the **CommonFinding schema v1.2.0**. Here's how to query the
 ```bash
 jq '[.[] | select(.tags[]? == "secret" or .ruleId | contains("secret"))]' \
   results/summaries/findings.json > secrets.json
-```
+```text
 
 #### 2. Find Exploitable CVEs (CVSS ≥7.0)
 
 ```bash
 jq '[.[] | select(.cvss? and (.cvss.score >= 7.0))]' \
   results/summaries/findings.json > exploitable-cves.json
-```
+```text
 
 #### 3. Find All SQL Injection Issues
 
 ```bash
 jq '[.[] | select(.ruleId | contains("sql") or (.message | ascii_downcase | contains("sql injection")))]' \
   results/summaries/findings.json > sql-injection.json
-```
+```text
 
 #### 4. Get OWASP A03 (Injection) Findings
 
 ```bash
 jq '[.[] | select(.compliance.owaspTop10_2021[]? == "A03:2021")]' \
   results/summaries/findings.json > owasp-a03.json
-```
+```text
 
 #### 5. Find Findings in Production Code Only
 
@@ -516,7 +544,7 @@ jq '[.[] | select(.location.path | contains("tests/") | not)
            | select(.location.path | contains(".venv/") | not)
            | select(.location.path | contains("fixtures/") | not)]' \
   results/summaries/findings.json > production-only.json
-```
+```text
 
 #### 6. Group Findings by File
 
@@ -525,8 +553,7 @@ jq 'group_by(.location.path)
     | map({path: .[0].location.path, count: length, severities: [.[] | .severity] | unique})
     | sort_by(.count) | reverse' \
   results/summaries/findings.json > by-file.json
-```
-
+```text
 ---
 
 ## Using the Interactive Dashboard
@@ -556,19 +583,23 @@ The HTML dashboard is the fastest way to explore findings visually.
 ### Tips for Effective Use
 
 **1. Start with Severity Filter**
+
 - Click the "HIGH" severity badge to see only high-priority findings
 - Review each finding's remediation field for fix guidance
 
 **2. Use Path Filters to Focus**
+
 - Search for `src/` to see only production code
 - Search for `Dockerfile` to see container issues
 - Search for `.tf` to see IaC findings
 
 **3. Export Filtered Results**
+
 - After filtering, use browser's "Save Page As" to save filtered view
 - Or copy filtered table data to Excel/Sheets for team review
 
 **4. Share with Non-Technical Stakeholders**
+
 - Dashboard is self-contained (no external dependencies)
 - Can be emailed or uploaded to internal wiki
 - Works offline
@@ -586,41 +617,50 @@ Create `jmo.suppress.yml` in your repo root:
 ```yaml
 suppressions:
   # Suppress by fingerprint ID (most specific)
+
   - id: "ca88e028c8a99735"
     reason: "Accepted risk: Using alpine:latest for faster builds"
 
   # Suppress by rule + path pattern
+
   - ruleId: "B101"
-    path: "tests/*"
+
     reason: "pytest uses assert statements extensively"
 
   # Suppress by path only (all findings in directory)
+
   - path: ".venv/*"
     reason: "Third-party dependencies vetted by PyPI"
 
   # Suppress by rule + line number (very specific)
+
   - ruleId: "run-shell-injection"
-    path: ".github/workflows/ci.yml"
+
     line: 74
     reason: "Read-only echo of commit message in CI logs"
-```
+```text
 
 ### Method 2: Update Scan Configuration
 
 Edit `jmo.yml`:
 
 ```yaml
+
 # Exclude entire directories from scanning
+
 exclude_paths:
+
   - ".venv/"
   - ".venv-*/"
   - "node_modules/"
   - "tests/e2e/fixtures/"
 
 # Per-tool configuration
+
 per_tool:
   bandit:
     flags:
+
       - "--exclude"
       - ".venv,.venv-pypi,.post-release-venv"
       - "--skip"
@@ -628,11 +668,12 @@ per_tool:
 
   semgrep:
     flags:
+
       - "--exclude"
       - "tests/e2e/fixtures/"
       - "--exclude"
       - "docs/archive/"
-```
+```text
 
 ### Method 3: Tool-Specific Configuration
 
@@ -641,21 +682,22 @@ Some tools have their own config files:
 **Bandit** (`.bandit`):
 ```yaml
 exclude_dirs:
+
   - .venv
   - tests/fixtures
   - samples/
 
 skips:
+
   - B101  # assert_used
   - B404  # import_subprocess
-```
-
+```text
 **Semgrep** (`.semgrepignore`):
-```
+```text
 .venv/
 tests/e2e/fixtures/
 docs/archive/
-```
+```text
 
 ### Viewing Suppressed Findings
 
@@ -664,20 +706,20 @@ After adding suppressions, re-run the scan:
 ```bash
 jmotools balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
-```
-
+```text
 **Example output:**
 ```markdown
+
 # Suppression Summary
 
 **Total Suppressions:** 1,245
 
 ## By Reason
+
 - Third-party dependencies vetted by PyPI: 1,180
 - Test fixtures with intentional vulnerabilities: 62
 - Accepted risk: alpine:latest for faster builds: 3
-```
-
+```text
 ---
 
 ## Integrating with Your Workflow
@@ -691,16 +733,16 @@ cat results/summaries/SUPPRESSIONS.md
 1. Add to `.pre-commit-config.yaml`:
 
 ```yaml
+
 - repo: local
-  hooks:
+
     - id: jmo-security-scan
-      name: JMo Security Scan (Fast Profile)
+
       entry: bash -c 'jmotools fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
       language: system
       pass_filenames: false
       always_run: true
-```
-
+```text
 2. Install: `pre-commit install`
 
 **Result:** Commits are blocked if HIGH/CRITICAL findings exist.
@@ -726,15 +768,16 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Run JMo Security Scan
-        run: |
+
           docker run --rm -v "$(pwd):/scan" jmo-security:latest \
             scan --repo /scan --profile-name balanced --human-logs
 
       - name: Check for HIGH/CRITICAL findings
-        run: |
+
           HIGH_COUNT=$(jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' \
             results/summaries/findings.json)
 
@@ -745,17 +788,16 @@ jobs:
           fi
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+
         with:
           sarif_file: results/summaries/findings.sarif
 
       - name: Archive Results
-        uses: actions/upload-artifact@v4
+
         with:
           name: security-scan-results
           path: results/summaries/
-```
-
+```text
 **Result:** PRs are blocked if HIGH/CRITICAL findings exist, and results appear in GitHub Security tab.
 
 ### Scenario 3: Weekly Scheduled Scans
@@ -771,6 +813,7 @@ name: Weekly Security Audit
 
 on:
   schedule:
+
     - cron: '0 10 * * 1'  # Every Monday at 10 AM UTC
   workflow_dispatch:
 
@@ -778,18 +821,19 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Run Deep Scan
-        run: |
+
           docker run --rm -v "$(pwd):/scan" jmo-security:latest \
             scan --repo /scan --profile-name deep --human-logs --profile
 
       - name: Generate Trend Report
-        run: |
+
           # Compare to last week's results
           CURRENT_HIGH=$(jq '[.[] | select(.severity == "HIGH")] | length' results/summaries/findings.json)
-          PREVIOUS_HIGH=$(curl -s "https://api.github.com/repos/${{ github.repository }}/actions/artifacts" \
+          PREVIOUS_HIGH=$(curl -s "<https://api.github.com/repos/${{> github.repository }}/actions/artifacts" \
             | jq '.artifacts[] | select(.name == "weekly-scan-results") | .id' | head -1)
 
           echo "## Security Trend Report" >> $GITHUB_STEP_SUMMARY
@@ -797,13 +841,12 @@ jobs:
           echo "**Change from last week:** ..." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Results
-        uses: actions/upload-artifact@v4
+
         with:
           name: weekly-scan-results
           path: results/summaries/
           retention-days: 90
-```
-
+```text
 **Result:** Weekly audit with historical tracking.
 
 ### Scenario 4: Slack/Email Notifications
@@ -813,8 +856,9 @@ jobs:
 **Setup:**
 
 ```yaml
+
 - name: Send Slack Alert
-  if: failure()
+
   uses: slackapi/slack-github-action@v1
   with:
     webhook-url: ${{ secrets.SLACK_WEBHOOK }}
@@ -831,8 +875,7 @@ jobs:
           }
         ]
       }
-```
-
+```text
 ---
 
 ## Advanced: SARIF and CI/CD Integration
@@ -840,6 +883,7 @@ jobs:
 ### What is SARIF?
 
 **SARIF (Static Analysis Results Interchange Format)** is an industry-standard JSON format for security findings, supported by:
+
 - GitHub Code Scanning
 - GitLab SAST
 - Azure DevOps
@@ -853,14 +897,15 @@ JMo Security outputs `findings.sarif` (SARIF 2.1.0) for seamless integration.
 **Upload findings to GitHub Security tab:**
 
 ```yaml
+
 - name: Upload SARIF to GitHub
-  uses: github/codeql-action/upload-sarif@v3
+
   with:
     sarif_file: results/summaries/findings.sarif
     category: jmo-security-scan
-```
-
+```text
 **What you get:**
+
 - Findings appear in **Security → Code scanning** tab
 - Pull requests show findings as annotations
 - Auto-dismiss findings when fixed
@@ -872,7 +917,7 @@ JMo Security outputs `findings.sarif` (SARIF 2.1.0) for seamless integration.
 permissions:
   security-events: write  # Required for SARIF upload
   contents: read
-```
+```text
 
 ### GitLab SAST Integration
 
@@ -882,13 +927,13 @@ permissions:
 security-scan:
   stage: test
   script:
+
     - docker run --rm -v "$(pwd):/scan" jmo-security:latest scan --repo /scan
     - cp results/summaries/findings.sarif gl-sast-report.json
-  artifacts:
+
     reports:
       sast: gl-sast-report.json
-```
-
+```text
 **Result:** Findings appear in GitLab Security Dashboard and Merge Request widget.
 
 ### Azure DevOps Integration
@@ -896,13 +941,13 @@ security-scan:
 **Upload to Azure DevOps Security tab:**
 
 ```yaml
+
 - task: PublishBuildArtifacts@1
-  inputs:
+
     pathtoPublish: 'results/summaries/findings.sarif'
     artifactName: 'CodeAnalysisLogs'
     publishLocation: 'Container'
-```
-
+```text
 ---
 
 ## Real-World Triage Examples
@@ -949,7 +994,7 @@ security-scan:
    - Checkov: 10 CRITICAL (IaC misconfigurations)
 
 2. **Investigate Trivy CVEs:**
-   ```bash
+
    jq '[.[] | select(.tool.name == "trivy" and .severity == "CRITICAL")]' findings.json
    ```
 
@@ -999,7 +1044,7 @@ security-scan:
 mkdir -p compliance/soc2/
 cp results/summaries/SUMMARY.md compliance/soc2/scan-$(date +%Y-%m-%d).md
 cp results/summaries/COMPLIANCE_SUMMARY.md compliance/soc2/
-```
+```text
 
 ### Preparing for a PCI DSS Audit
 
@@ -1009,9 +1054,10 @@ cp results/summaries/COMPLIANCE_SUMMARY.md compliance/soc2/
 
 1. **Provide PCI_DSS_COMPLIANCE.md**
 2. **Filter to show only production code:**
-   ```bash
+
    jq '[.[] | select(.location.path | contains("tests/") | not)]' findings.json > production-findings.json
    ```
+
 3. **Document remediation:**
    - HIGH findings fixed within 30 days
    - MEDIUM findings fixed within 90 days
@@ -1019,8 +1065,7 @@ cp results/summaries/COMPLIANCE_SUMMARY.md compliance/soc2/
 **Pro Tip:** Use `--fail-on HIGH` in CI to prevent merging code with HIGH findings:
 ```bash
 jmotools ci --repo . --fail-on HIGH
-```
-
+```text
 ---
 
 ## Troubleshooting Common Issues
@@ -1030,12 +1075,14 @@ jmotools ci --repo . --fail-on HIGH
 **Solution:** Filter aggressively
 
 ```bash
+
 # Create a "findings-priority.json" with only actionable items
+
 jq '[.[] | select(.severity == "CRITICAL" or .severity == "HIGH")
          | select(.location.path | contains("tests/") | not)
          | select(.location.path | contains(".venv/") | not)]' \
   findings.json > findings-priority.json
-```
+```text
 
 ### Issue 2: "Same CVE appears in 50 different locations"
 
@@ -1044,15 +1091,13 @@ jq '[.[] | select(.severity == "CRITICAL" or .severity == "HIGH")
 ```bash
 jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].severity})
     | sort_by(.count) | reverse' findings.json
-```
-
+```text
 **Example output:**
 ```json
 [
   {"rule": "CVE-2023-12345", "count": 50, "severity": "HIGH"}
 ]
-```
-
+```text
 **Fix:** One `pip install --upgrade vulnerable-package` fixes all 50.
 
 ### Issue 3: "Dashboard won't open / shows blank page"
@@ -1060,7 +1105,9 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 **Cause:** Browser security restrictions on local HTML files with embedded JavaScript
 
 **Solution:**
+
 1. **Use a local web server:**
+
    ```bash
    cd results/summaries
    python3 -m http.server 8000
@@ -1068,6 +1115,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
    ```
 
 2. **Or use `file://` with Chrome flag:**
+
    ```bash
    google-chrome --allow-file-access-from-files dashboard.html
    ```
@@ -1079,8 +1127,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 **Solution:** Upgrade to v0.6.2+:
 ```bash
 pip install --upgrade jmo-security-audit
-```
-
+```text
 Compliance auto-enrichment was added in v0.5.1.
 
 ---
@@ -1090,24 +1137,31 @@ Compliance auto-enrichment was added in v0.5.1.
 ### Essential Commands
 
 ```bash
+
 # View summary
+
 cat results/summaries/SUMMARY.md
 
 # Count HIGH/CRITICAL findings
+
 jq '[.[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' results/summaries/findings.json
 
 # Find secrets
+
 jq '[.[] | select(.tags[]? == "secret")]' results/summaries/findings.json
 
 # Group by file
+
 jq 'group_by(.location.path) | map({file: .[0].location.path, count: length})' results/summaries/findings.json
 
 # Get OWASP A03 findings
+
 jq '[.[] | select(.compliance.owaspTop10_2021[]? == "A03:2021")]' results/summaries/findings.json
 
 # Filter production code only
+
 jq '[.[] | select(.location.path | contains("tests/") or contains(".venv/") | not)]' results/summaries/findings.json
-```
+```text
 
 ### File Quick Reference
 
@@ -1133,6 +1187,7 @@ jq '[.[] | select(.location.path | contains("tests/") or contains(".venv/") | no
 6. **Track trends** - Run weekly scans
 
 **Questions?**
+
 - [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)
 - [Documentation](https://github.com/jimmy058910/jmo-security-repo/docs)
 - [Open an Issue](https://github.com/jimmy058910/jmo-security-repo/issues)
