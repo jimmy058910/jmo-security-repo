@@ -80,11 +80,14 @@ repos:
       - id: shfmt
 
   # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes
+  # IMPORTANT: Uses Python 3.10+ to match CI/CD environments (prevents version mismatches)
   - repo: local
     hooks:
       - id: deps-compile
-        name: deps-compile (generate requirements-dev.txt)
+        name: deps-compile (validate Python 3.10+ and generate requirements-dev.txt)
         language: system
         files: ^requirements-dev\.in$
         pass_filenames: false
-        entry: make deps-compile
+        # Strategy: Try Python 3.11 first (most common), fallback to 3.10, then 3.12
+        # If none available, fail with clear error message
+        entry: bash -c 'python3 scripts/dev/update_dependencies.py --compile || { echo "ERROR: deps-compile requires Python 3.10+. Install python3.10, python3.11, or python3.12"; exit 1; }'

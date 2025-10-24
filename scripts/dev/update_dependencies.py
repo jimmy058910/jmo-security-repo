@@ -19,6 +19,7 @@ Usage:
 
 Features:
     - Python version validation (enforces 3.10+)
+    - Auto-detection of Python 3.10+ interpreters
     - Prevents accidental downgrades
     - Detects dependency conflicts
     - Provides upgrade preview before applying
@@ -26,10 +27,11 @@ Features:
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # ANSI colors for output
 GREEN = "\033[92m"
@@ -39,19 +41,76 @@ BLUE = "\033[94m"
 RESET = "\033[0m"
 
 
+def find_python_310_plus() -> Optional[str]:
+    """Find Python 3.10+ interpreter on the system."""
+    # Candidates to try (in order of preference)
+    candidates = [
+        "python3.11",  # Most common in CI/modern systems
+        "python3.10",  # Minimum required version
+        "python3.12",  # Latest stable
+        "python3.13",  # Future-proofing
+        "python3",     # Default (may be 3.8/3.9)
+    ]
+
+    for candidate in candidates:
+        try:
+            result = subprocess.run(
+                [candidate, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                # Extract version from "Python 3.11.13"
+                version_str = result.stdout.strip()
+                if "Python 3." in version_str:
+                    version_parts = version_str.split("Python 3.")[1].split(".")
+                    minor = int(version_parts[0])
+                    if minor >= 10:
+                        return candidate
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, IndexError):
+            continue
+
+    return None
+
+
 def get_python_version() -> Tuple[int, int]:
     """Get current Python version as (major, minor)."""
     return (sys.version_info.major, sys.version_info.minor)
 
 
-def validate_python_version(min_major: int = 3, min_minor: int = 10) -> bool:
-    """Validate Python version meets minimum requirements."""
+def validate_python_version(min_major: int = 3, min_minor: int = 10, auto_reexec: bool = True) -> bool:
+    """Validate Python version meets minimum requirements.
+
+    Args:
+        min_major: Minimum Python major version
+        min_minor: Minimum Python minor version
+        auto_reexec: If True and current Python is too old, re-exec with Python 3.10+
+
+    Returns:
+        True if version is valid, False otherwise
+    """
     major, minor = get_python_version()
     if major < min_major or (major == min_major and minor < min_minor):
-        print(f"{RED}[error]{RESET} Python {min_major}.{min_minor}+ required (detected {major}.{minor})")
-        print(f"{YELLOW}[hint]{RESET} Use: python3.10 -m pip install pip-tools")
-        print(f"{YELLOW}[hint]{RESET} Then: python3.10 scripts/dev/update_dependencies.py --compile")
-        return False
+        if auto_reexec:
+            # Try to find Python 3.10+ and re-execute
+            python_310_plus = find_python_310_plus()
+            if python_310_plus:
+                print(f"{YELLOW}[warn]{RESET} Python {major}.{minor} detected, re-executing with {python_310_plus}...")
+                # Re-execute this script with the correct Python version
+                os.execvp(python_310_plus, [python_310_plus] + sys.argv)
+                # execvp never returns (replaces current process)
+            else:
+                print(f"{RED}[error]{RESET} Python {min_major}.{min_minor}+ required (detected {major}.{minor})")
+                print(f"{YELLOW}[hint]{RESET} No Python 3.10+ found on system")
+                print(f"{YELLOW}[hint]{RESET} Install: sudo apt install python3.11  # Ubuntu/Debian")
+                print(f"{YELLOW}[hint]{RESET} Or: brew install python@3.11  # macOS")
+                return False
+        else:
+            print(f"{RED}[error]{RESET} Python {min_major}.{min_minor}+ required (detected {major}.{minor})")
+            print(f"{YELLOW}[hint]{RESET} Use: python3.10 -m pip install pip-tools")
+            print(f"{YELLOW}[hint]{RESET} Then: python3.10 scripts/dev/update_dependencies.py --compile")
+            return False
     print(f"{GREEN}[ok]{RESET} Python {major}.{minor} (meets requirement ≥{min_major}.{min_minor})")
     return True
 

@@ -1263,6 +1263,11 @@ def execute_scan(config: WizardConfig) -> int:
                 shell=False,  # IMPORTANT: shell=False prevents command injection
                 check=False,
             )
+            # Print results guide after scan completes
+            if result.returncode == 0 or result.returncode == 1:
+                print("\n" + _colorize("📖 Learn how to triage and act on your findings:", "blue"))
+                print("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md")
+                print("  - Complete guide: docs/RESULTS_GUIDE.md")
             return result.returncode
         else:
             # Native execution via jmotools
