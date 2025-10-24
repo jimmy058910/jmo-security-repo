@@ -90,4 +90,7 @@ repos:
         pass_filenames: false
         # Strategy: Try Python 3.11 first (most common), fallback to 3.10, then 3.12
         # If none available, fail with clear error message
-        entry: bash -c 'python3 scripts/dev/update_dependencies.py --compile || { echo "ERROR: deps-compile requires Python 3.10+. Install python3.10, python3.11, or python3.12"; exit 1; }'
+        entry: >-
+          bash -c 'python3 scripts/dev/update_dependencies.py --compile ||
+          { echo "ERROR: deps-compile requires Python 3.10+.
+          Install python3.10, python3.11, or python3.12"; exit 1; }'
