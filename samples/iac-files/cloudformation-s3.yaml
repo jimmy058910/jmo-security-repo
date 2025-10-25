@@ -1,0 +1,99 @@
+# Example CloudFormation template with intentional security issues for testing
+# DO NOT USE IN PRODUCTION
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Test CloudFormation template with security issues'
+
+Resources:
+  # Security Issue: Publicly accessible S3 bucket
+  TestBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: test-public-bucket-12345
+      # Issue: Public read access
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      # Issue: No encryption
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: []
+
+  # Security Issue: Overly permissive bucket policy
+  TestBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TestBucket
+      PolicyDocument:
+        Statement:
+          - Action: 's3:GetObject'
+            Effect: Allow
+            # Issue: Allows public access
+            Principal: '*'
+            Resource: !Sub '${TestBucket.Arn}/*'
+
+  # Security Issue: Security group with overly permissive rules
+  TestSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Test security group with issues
+      # Issue: Allows SSH from anywhere
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        # Issue: Allows all ports from anywhere
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+
+  # Security Issue: Unencrypted RDS instance
+  TestDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: test-db-instance
+      Engine: mysql
+      EngineVersion: '8.0'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      MasterUsername: admin
+      # Issue: Hardcoded password
+      MasterUserPassword: Password123!
+      # Issue: No encryption
+      StorageEncrypted: false
+      # Issue: Public access
+      PubliclyAccessible: true
+      # Issue: No backup retention
+      BackupRetentionPeriod: 0
+
+  # Security Issue: IAM role with overly permissive policy
+  TestIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: TestPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Issue: Admin access
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+
+Outputs:
+  BucketName:
+    Description: Name of the S3 bucket
+    Value: !Ref TestBucket
+  SecurityGroupId:
+    Description: ID of the security group
+    Value: !Ref TestSecurityGroup

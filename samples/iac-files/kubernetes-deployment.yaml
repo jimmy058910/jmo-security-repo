@@ -1,0 +1,135 @@
+# Example Kubernetes manifest with intentional security issues for testing
+# DO NOT USE IN PRODUCTION
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-namespace
+
+---
+# Security Issue: Deployment with privileged containers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment
+  namespace: test-namespace
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+      - name: test-container
+        image: nginx:latest
+        # Issue: Running as root
+        securityContext:
+          privileged: true
+          runAsUser: 0
+          allowPrivilegeEscalation: true
+        # Issue: Hardcoded secrets
+        env:
+        - name: API_KEY
+          value: "sk-1234567890abcdef"
+        - name: DATABASE_PASSWORD
+          value: "SuperSecret123!"
+        # Issue: No resource limits
+        resources: {}
+        ports:
+        - containerPort: 80
+
+---
+# Security Issue: Service with LoadBalancer (potentially exposing app publicly)
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+  namespace: test-namespace
+spec:
+  type: LoadBalancer
+  selector:
+    app: test-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
+---
+# Security Issue: ConfigMap with sensitive data
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+  namespace: test-namespace
+data:
+  # Issue: Hardcoded credentials in ConfigMap
+  database-url: "postgresql://admin:password123@db.example.com:5432/mydb"
+  api-token: "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+
+---
+# Security Issue: Pod with hostPath volume
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: test-namespace
+spec:
+  containers:
+  - name: test-container
+    image: ubuntu:latest
+    # Issue: No security context
+    command: ["/bin/sh", "-c", "sleep 3600"]
+    volumeMounts:
+    - name: host-volume
+      mountPath: /host
+  # Issue: Mounting host filesystem
+  volumes:
+  - name: host-volume
+    hostPath:
+      path: /
+      type: Directory
+
+---
+# Security Issue: Role with overly permissive permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: test-role
+  namespace: test-namespace
+rules:
+# Issue: Wildcard permissions
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: test-rolebinding
+  namespace: test-namespace
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: test-namespace
+roleRef:
+  kind: Role
+  name: test-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Security Issue: Secret in plain text (should use SealedSecrets or external secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+  namespace: test-namespace
+type: Opaque
+# Issue: Base64 encoding is NOT encryption
+data:
+  username: YWRtaW4=  # admin
+  password: cGFzc3dvcmQxMjM=  # password123

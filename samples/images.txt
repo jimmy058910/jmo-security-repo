@@ -1,0 +1,23 @@
+# Sample container images for security testing
+# Format: One image reference per line
+# Lines starting with # are comments and will be ignored
+
+# Popular base images (public Docker Hub)
+nginx:latest
+nginx:1.25-alpine
+node:14
+node:18-alpine
+python:3.9
+python:3.11-slim
+alpine:latest
+ubuntu:22.04
+debian:bullseye-slim
+
+# Known vulnerable images for testing (DO NOT USE IN PRODUCTION)
+vulnerables/web-dvwa:latest
+bkimminich/juice-shop:latest
+webgoat/webgoat-8.0:latest
+
+# Add your images here
+# myregistry.io/myapp:v1.0
+# ghcr.io/username/repo:tag
