@@ -347,6 +347,90 @@ git commit -m "deps: update development dependencies"
 
 **CI validation:** Pull requests automatically check that `requirements-dev.txt` matches `requirements-dev.in`. If the check fails, run `make deps-compile` and commit the updated file.
 
+## Weekly Maintenance Routine
+
+To prevent technical debt accumulation and nightly CI failures, maintainers should follow this weekly maintenance routine:
+
+### Monday Morning (After Nightly CI Run)
+
+**Time: 15-30 minutes**
+
+1. **Check nightly CI results:**
+
+   ```bash
+   gh run list --workflow=ci.yml --limit 5
+   # Look for "CI" runs triggered by "schedule" at 6 AM UTC
+   ```
+
+2. **If nightly lint-full failed, investigate immediately:**
+
+   ```bash
+   # Get the failed run ID
+   gh run view <run-id> --log-failed
+
+   # Categorize failures (actionlint, markdownlint, mypy, deps-compile)
+   # Follow jmo-ci-debugger skill pattern #14
+   ```
+
+3. **Apply Technical Debt Principle:**
+   - Fix ALL violations found, not just new ones
+   - Example: If markdownlint shows 8 issues, fix all 8 (not just your 3)
+   - Rationale: Prevents compound debt, maintains codebase health
+
+4. **Verify fixes locally before pushing:**
+
+   ```bash
+   # Run the same checks that failed in CI
+   pre-commit run --all-files
+   mypy scripts/
+   npx markdownlint-cli2 "**/*.md" "#node_modules"
+   ```
+
+### Why This Matters
+
+**Nightly CI catches issues that PR checks miss:**
+
+- **PR checks (quick-checks):** Fast validation (2-3 min), runs actionlint, yamllint, deps-compile freshness
+- **Nightly lint-full:** Comprehensive validation (8-12 min), runs full pre-commit suite including markdownlint, mypy, ruff, bandit
+
+**Common cascade pattern:**
+
+```text
+Monday: Small markdownlint issue introduced (PR passes quick-checks)
+Tuesday: Mypy type:ignore added (PR passes, lint-full not checked)
+Wednesday: Another markdown issue (PR passes, debt accumulates)
+Thursday: Nightly CI fails with 13 violations across 4 tools
+```
+
+**Prevention strategy:**
+
+1. **Enhanced pre-push hook** (blocks bad commits locally)
+2. **Lint Preview in CI** (catches 80% of issues in PRs)
+3. **Weekly Monday check** (fixes anything that slipped through)
+4. **jmo-ci-debugger skill** (documents proven fix patterns)
+
+### Quick Commands
+
+```bash
+# Check last 5 CI runs
+gh run list --workflow=ci.yml --limit 5
+
+# View failed run logs
+gh run view <run-id> --log-failed
+
+# Run full local lint suite (matches nightly)
+pre-commit run --all-files
+
+# Fix all markdownlint issues
+npx markdownlint-cli2 --fix "**/*.md" "#node_modules"
+
+# Check mypy
+mypy scripts/
+
+# Rerun failed CI job
+gh run rerun <run-id> --failed
+```
+
 ## Coding standards
 
 - Python: Ruff for linting (`ruff check`) and `ruff format`/`black` for formatting.

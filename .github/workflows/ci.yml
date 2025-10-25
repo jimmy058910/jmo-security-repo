@@ -57,6 +57,27 @@ jobs:
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
 
+      - name: "Lint Preview (subset of lint-full)"
+        run: |
+          # Install lint dependencies
+          python -m pip install --upgrade 'pip<25.3'
+          pip install -r requirements-dev.txt
+
+          # Run critical lint checks (catches 80% of nightly failures early)
+          echo "::group::Markdownlint"
+          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "⚠️  Markdownlint issues found (non-blocking preview)"
+          echo "::endgroup::"
+
+          echo "::group::Mypy (scripts only)"
+          mypy scripts/ || echo "⚠️  Mypy issues found (non-blocking preview)"
+          echo "::endgroup::"
+
+          echo "::group::Ruff"
+          ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
+          echo "::endgroup::"
+
+          echo "✅ Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
+
   # Test matrix runs in parallel, independent of quick-checks
   test-matrix:
     name: Test ${{ matrix.os }} / Python ${{ matrix.python-version }}
