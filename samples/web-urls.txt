@@ -1,0 +1,26 @@
+# Sample web URLs for security testing (DAST)
+# Format: One URL per line
+# Lines starting with # are comments and will be ignored
+
+# IMPORTANT: Only scan applications you own or have explicit permission to test
+# Unauthorized scanning is illegal and unethical
+
+# Public intentionally vulnerable web applications (for testing only)
+http://testhtml5.vulnweb.com
+http://testphp.vulnweb.com
+http://testasp.vulnweb.com
+
+# OWASP Juice Shop (run locally first: docker run -p 3000:3000 bkimminich/juice-shop)
+# http://localhost:3000
+
+# DVWA (run locally first: docker run -p 80:80 vulnerables/web-dvwa)
+# http://localhost
+
+# Your own test applications
+# http://localhost:8080
+# http://test.example.com
+# https://staging.myapp.com
+
+# API endpoints (ensure you have permission)
+# http://localhost:8080/api/v1
+# https://api.test.example.com/v2
