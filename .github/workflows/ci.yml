@@ -16,7 +16,7 @@ concurrency:
 jobs:
   # Fast validation checks (2-3 minutes)
   quick-checks:
-    name: Quick checks
+    name: quick-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
