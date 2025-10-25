@@ -223,7 +223,7 @@ class CustomHandler(http.server.SimpleHTTPRequestHandler):
         """Handle GET requests."""
         if self.path == "/" or self.path == "/index.html":
             # Serve custom HTML page
-            html_content = generate_html(self.layer_data)
+            html_content = generate_html(self.layer_data or {})
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(html_content.encode())))

@@ -238,16 +238,18 @@ jobs:
             echo "| ${VARIANT} | ${SIZE_AMD64} | ${SIZE_ARM64} | TBD (manual comparison) |" >> size-comparison.md
           done
 
-          echo "" >> size-comparison.md
-          echo "**Optimization Goals (ROADMAP #1):**" >> size-comparison.md
-          echo "- Full: 1.5GB → 900MB (40% reduction)" >> size-comparison.md
-          echo "- Slim: 700MB → 400MB (43% reduction)" >> size-comparison.md
-          echo "- Alpine: 500MB → 300MB (40% reduction)" >> size-comparison.md
-          echo "" >> size-comparison.md
-          echo "**Optimizations Applied:**" >> size-comparison.md
-          echo "- Multi-stage builds (separate builder and runtime stages)" >> size-comparison.md
-          echo "- Layer caching cleanup (apt cache, pip cache, Python bytecode)" >> size-comparison.md
-          echo "- Trivy DB pre-download (eliminates 30-60s scan delay)" >> size-comparison.md
+          {
+            echo ""
+            echo "**Optimization Goals (ROADMAP #1):**"
+            echo "- Full: 1.5GB → 900MB (40% reduction)"
+            echo "- Slim: 700MB → 400MB (43% reduction)"
+            echo "- Alpine: 500MB → 300MB (40% reduction)"
+            echo ""
+            echo "**Optimizations Applied:**"
+            echo "- Multi-stage builds (separate builder and runtime stages)"
+            echo "- Layer caching cleanup (apt cache, pip cache, Python bytecode)"
+            echo "- Trivy DB pre-download (eliminates 30-60s scan delay)"
+          } >> size-comparison.md
 
           cat size-comparison.md
 
@@ -323,7 +325,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 12 tools, multi-target scanning"
+          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 12 tools, multi-target scanning, real-time progress"
           readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped

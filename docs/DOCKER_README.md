@@ -117,6 +117,7 @@ docker pull jmogaming/jmo-security:latest
 - ⚠️ **Rate limits:** 200 pulls per 6 hours (free tier)
 
 **Recommendation:**
+
 - **AWS users:** Use ECR Public for faster pulls and native AWS integration
 - **General users:** Use GHCR for unlimited pulls without rate limits
 - **Docker Hub users:** Use Docker Hub for familiarity and discoverability

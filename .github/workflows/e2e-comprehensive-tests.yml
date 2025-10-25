@@ -208,10 +208,10 @@ jobs:
         id: check_docker
         run: |
           if command -v docker &> /dev/null; then
-            echo "docker_available=true" >> $GITHUB_OUTPUT
+            echo "docker_available=true" >> "$GITHUB_OUTPUT"
             echo "✅ Docker is available"
           else
-            echo "docker_available=false" >> $GITHUB_OUTPUT
+            echo "docker_available=false" >> "$GITHUB_OUTPUT"
             echo "⚠️ Docker is not available on this runner (expected for macOS)"
           fi
 

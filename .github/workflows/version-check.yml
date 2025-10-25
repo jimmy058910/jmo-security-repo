@@ -72,6 +72,7 @@ jobs:
       - name: Check for Trivy version mismatch (critical)
         run: |
           # Extract Trivy versions from all Dockerfiles
+          # shellcheck disable=SC2252
           TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile || echo "not_found")
           TRIVY_SLIM=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.slim || echo "not_found")
           TRIVY_ALPINE=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.alpine || echo "not_found")
@@ -110,7 +111,7 @@ jobs:
             echo "Checking $dockerfile for hardcoded versions..."
 
             # Look for download URLs with hardcoded versions (bad pattern)
-            if grep -P 'github.com/[^/]+/[^/]+/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/' "$dockerfile" | grep -v '\${.*_VERSION}'; then
+            if grep -P 'github.com/[^/]+/[^/]+/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/' "$dockerfile" | grep -v "\${.*_VERSION}"; then
               echo "::warning file=$dockerfile::Found hardcoded version in download URL"
               ISSUES=$((ISSUES + 1))
             fi
