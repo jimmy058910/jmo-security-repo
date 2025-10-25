@@ -53,6 +53,7 @@ make attack-navigator  # Open ATT&CK threat map (auto-serve)
 ## 📊 Understanding Results
 
 **📖 For complete results triage guide, see:**
+
 - **[RESULTS_GUIDE.md](RESULTS_GUIDE.md)** - Complete 12,000-word guide
 - **[RESULTS_QUICK_REFERENCE.md](RESULTS_QUICK_REFERENCE.md)** - One-page printable triage card
 
@@ -161,7 +162,7 @@ jmo scan --repo . --profile-name balanced
 
 ### Results Structure
 
-```
+```text
 results/
 ├── individual-repos/          # Per-repo tool outputs
 │   └── <repo-name>/
@@ -188,7 +189,7 @@ results/
 - **Quick Start**: [../QUICKSTART.md](../QUICKSTART.md)
 - **Docker Guide**: [DOCKER_README.md](DOCKER_README.md)
 - **Examples**: [examples/](examples/)
-- **Project Homepage**: https://jmotools.com
+- **Project Homepage**: <https://jmotools.com>
 
 ---
 
@@ -240,8 +241,8 @@ make attack-navigator
 ## 🆘 Getting Help
 
 - **Documentation**: [docs/](.)
-- **Issues**: https://github.com/jimmy058910/jmo-security-repo/issues
-- **Discussions**: https://github.com/jimmy058910/jmo-security-repo/discussions
+- **Issues**: <https://github.com/jimmy058910/jmo-security-repo/issues>
+- **Discussions**: <https://github.com/jimmy058910/jmo-security-repo/discussions>
 
 ---
 

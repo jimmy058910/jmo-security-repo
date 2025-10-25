@@ -236,7 +236,7 @@ def query_memory(
         return default
 
     try:
-        data = json.loads(memory_file.read_text(encoding="utf-8"))
+        data: dict[str, Any] = json.loads(memory_file.read_text(encoding="utf-8"))
 
         # Log retrieval
         last_updated = data.get("last_updated", "unknown")

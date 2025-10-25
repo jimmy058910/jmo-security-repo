@@ -1093,14 +1093,15 @@ v0.7.1 adds defense-in-depth for macOS developer environments by verifying the H
 
 1. Downloads Homebrew installer to temp file (no immediate execution)
 2. Displays SHA256 hash for manual verification
-3. Provides verification link: https://github.com/Homebrew/install/blob/HEAD/install.sh
+3. Provides verification link: <https://github.com/Homebrew/install/blob/HEAD/install.sh>
 4. Validates downloaded file is not empty
 5. Only executes after verification
 
 **Why this matters:** Mitigates supply chain risks by ensuring Homebrew installer hasn't been tampered with during transit or by a compromised mirror.
 
 **Example output during `make tools` on macOS:**
-```
+
+```bash
 Homebrew not found. Installing Homebrew...
 Download SHA256: a1b2c3d4e5f6g7h8...
 Verify at: https://github.com/Homebrew/install/blob/HEAD/install.sh
@@ -1672,19 +1673,22 @@ jmotools wizard --log-level DEBUG
 ```
 
 **What you get:**
+
 - **GitLab scanner:** Clone failures, token errors, image scan errors, cleanup errors
 - **Wizard:** URL validation failures (HTTP errors, timeouts, DNS), IaC file type detection errors, K8s context validation errors
 - **Adapters:** JSON parse failures with fallback behavior (Nuclei, Falco, TruffleHog)
 - **Detailed stack traces:** Full exception context for all errors
 
 **Example output:**
-```
+
+```text
 [DEBUG] GitLab clone failed for mygroup/myrepo: HTTPError 401 (Invalid token)
 [DEBUG] Nuclei: Skipped empty line at index 42
 [DEBUG] TruffleHog: JSON parse failed, falling back to NDJSON
 ```
 
 **When to use:**
+
 - Scans failing with unclear errors
 - Tools returning no findings unexpectedly
 - Investigating timeouts or hangs

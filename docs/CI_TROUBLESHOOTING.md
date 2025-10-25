@@ -262,6 +262,7 @@ Error: unknown flag: --version
 ```
 
 **Root Causes:**
+
 1. Docker tag includes 'v' prefix (Git tag format)
 2. Testing with unsupported CLI flags
 
@@ -372,6 +373,7 @@ gh pr create --title "Hotfix: bypass CI" --label "hotfix"
 ### 2. Branch Protection Rules
 
 Required status checks:
+
 - ✅ Quick checks
 - ✅ Test ubuntu-latest / Python 3.11
 - ✅ Lint (quick checks)
@@ -427,11 +429,13 @@ When CI breaks repeatedly:
 ## Success Metrics
 
 **CI Health:**
+
 - ✅ Green CI on main branch for 7+ days
 - ✅ PR checks pass on first push (no re-runs needed)
 - ✅ Pre-commit hooks catch 95%+ of issues locally
 
 **When to Update This Guide:**
+
 - New CI failure pattern encountered
 - Preventable issue reaches CI 2+ times
 - Workflow changes (new jobs, checks, requirements)

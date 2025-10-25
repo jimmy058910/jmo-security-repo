@@ -20,7 +20,7 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ============================================================================
@@ -33,8 +33,8 @@ def get_pypi_readme(package_name: str = "jmo-security") -> str:
     url = f"https://pypi.org/pypi/{package_name}/json"
     try:
         with urllib.request.urlopen(url, timeout=10) as response:
-            data = json.loads(response.read().decode())
-            return data["info"]["description"]
+            data: dict[str, Any] = json.loads(response.read().decode())
+            return str(data["info"]["description"])
     except Exception as e:
         print(f"❌ Error fetching PyPI README: {e}", file=sys.stderr)
         sys.exit(2)
@@ -128,9 +128,10 @@ def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> Optional[str]:
         req.add_header("User-Agent", "jmo-security-validator/1.0")
 
         with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode())
+            data: dict[str, Any] = json.loads(response.read().decode())
             # Docker Hub full_description field contains the README
-            return data.get("full_description", "")
+            description = data.get("full_description", "")
+            return str(description) if description else None
     except urllib.error.HTTPError as e:
         if e.code == 404:
             print(f"⚠️  Docker Hub repository not found: {repo}")
@@ -306,7 +307,11 @@ def validate_pypi(args) -> Tuple[bool, List[Dict]]:
             if args.fix:
                 print(f"    Fix:    {issue['fix']}")
             all_issues.append(
-                {"platform": "PyPI", "type": issue["type"], "details": issue}
+                {
+                    "platform": "PyPI",
+                    "type": issue["type"],
+                    "details": str(issue),
+                }
             )
 
     return False, all_issues
@@ -351,7 +356,7 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
             all_issues.append(
-                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+                {"platform": "Docker Hub", "type": issue["type"], "details": str(issue)}
             )
 
     # Check GitHub Actions sync configuration
@@ -366,7 +371,7 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
             all_issues.append(
-                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+                {"platform": "Docker Hub", "type": issue["type"], "details": str(issue)}
             )
 
     # Optional: Check remote Docker Hub (may fail without auth)
