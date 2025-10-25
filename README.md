@@ -225,10 +225,14 @@ Perfect for:
 
 ```bash
 # Pull the image (one-time, ~500MB)
+# Option 1: Amazon ECR Public (recommended for AWS users)
+docker pull public.ecr.aws/m2d8u2k1/jmo-security:latest
+
+# Option 2: GitHub Container Registry (recommended for general users)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
-# Scan current directory
-docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
+# Scan current directory (replace IMAGE with your chosen registry)
+docker run --rm -v $(pwd):/scan IMAGE:latest \
   scan --repo /scan --results /scan/results --profile balanced --human-logs
 
 # View results

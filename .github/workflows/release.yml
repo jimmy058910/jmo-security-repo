@@ -10,8 +10,11 @@ on:
 env:
   REGISTRY_GHCR: ghcr.io
   REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_ECR_PUBLIC: public.ecr.aws
   IMAGE_NAME_GHCR: ${{ github.repository_owner }}/jmo-security  # GitHub: jimmy058910/jmo-security
   IMAGE_NAME_DOCKERHUB: jmogaming/jmo-security                  # Docker Hub: jmogaming/jmo-security
+  IMAGE_NAME_ECR_PUBLIC: m2d8u2k1/jmo-security                  # ECR Public: public.ecr.aws/m2d8u2k1/jmo-security
+  AWS_REGION: us-east-1                                         # ECR Public only exists in us-east-1
 
 permissions:
   contents: read
@@ -30,7 +33,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -91,7 +94,7 @@ jobs:
         variant: [full, slim, alpine]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -114,12 +117,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Configure AWS credentials for ECR Public
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::786980363770:role/GitHubActionsECRPublicRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR Public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
+            ${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}
             ${{ vars.DOCKERHUB_ENABLED == 'true' && format('{0}/{1}', env.REGISTRY_DOCKERHUB, env.IMAGE_NAME_DOCKERHUB) || '' }}
           tags: |
             type=semver,pattern={{version}}
@@ -159,11 +174,17 @@ jobs:
           # Use the first tag from metadata output (e.g., 0.4.0-full)
           TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
 
-          echo "Testing image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
+          echo "Testing GHCR image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
           docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
           # Test basic commands (jmo CLI doesn't have --version, use --help instead)
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" scan --help
+
+          echo ""
+          echo "Testing ECR Public image: ${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}"
+          docker pull --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}"
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}" --help
+          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}" scan --help
 
   # Benchmark image sizes (v0.6.1+ optimization tracking)
   docker-size-benchmark:
@@ -290,7 +311,7 @@ jobs:
       (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Update Docker Hub description
         # Requires secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (PAT with read/write/delete scope)

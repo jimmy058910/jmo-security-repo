@@ -54,6 +54,7 @@ During v0.7.1 release prep, we discovered `requirements-dev.txt` was compiled wi
 We built [scripts/dev/update_dependencies.py](../scripts/dev/update_dependencies.py) to prevent this:
 
 **Features:**
+
 - ✅ Enforces Python 3.10+ for compilation
 - ✅ Detects dependency conflicts (`pip check`)
 - ✅ Prevents accidental downgrades
@@ -63,46 +64,56 @@ We built [scripts/dev/update_dependencies.py](../scripts/dev/update_dependencies
 **Usage:**
 
 ```bash
+
 # Validate current requirements-dev.txt
+
 python3 scripts/dev/update_dependencies.py --validate
 
 # Recompile (safe, preserves versions)
+
 python3 scripts/dev/update_dependencies.py --compile
 
 # Upgrade all dependencies (use with caution)
+
 python3 scripts/dev/update_dependencies.py --upgrade
 
 # Check for outdated packages
+
 python3 scripts/dev/update_dependencies.py --check-outdated
-```
+```text
 
 ### Makefile Integration
 
 ```bash
+
 # Validate (pre-release requirement)
+
 make deps-validate
 
 # Recompile with current Python
+
 make deps-compile
 
 # Upgrade all dependencies (prompts for confirmation)
+
 make deps-upgrade
 
 # Check for outdated packages
+
 make deps-check-outdated
-```
+```text
 
 ### CI Automation
 
 Added to [.github/workflows/ci.yml](../.github/workflows/ci.yml):
 
 ```yaml
+
 - name: Validate requirements-dev.txt Python version
-  run: |
+
     python -m pip install pip-tools
     python scripts/dev/update_dependencies.py --validate
-```
-
+```text
 **This runs on every PR and push**, blocking merges if Python version is incorrect.
 
 ---
@@ -114,16 +125,22 @@ Added to [.github/workflows/ci.yml](../.github/workflows/ci.yml):
 **Every Monday morning:**
 
 ```bash
+
 # Check for outdated packages
+
 make deps-check-outdated
 
 # Review output for security-critical packages:
-# - pytest, pytest-cov (test infrastructure)
-# - black, ruff, mypy (dev tools)
-# - pip-tools (dependency management)
-```
 
+# - pytest, pytest-cov (test infrastructure)
+
+# - black, ruff, mypy (dev tools)
+
+# - pip-tools (dependency management)
+
+```text
 **Action if vulnerabilities found:**
+
 1. Research CVE severity (use `pip-audit` if available)
 2. If HIGH/CRITICAL, upgrade immediately
 3. Otherwise, defer to monthly cycle
@@ -133,27 +150,35 @@ make deps-check-outdated
 **Comprehensive dependency refresh:**
 
 ```bash
+
 # Step 1: Check current state
+
 make deps-validate
 make deps-check-outdated
 
 # Step 2: Review outdated packages
+
 # Note packages with major version changes (may have breaking changes)
 
 # Step 3: Upgrade (prompts for confirmation)
+
 make deps-upgrade
 
 # Step 4: Review changes
+
 git diff requirements-dev.txt
 
 # Step 5: Validate no conflicts
+
 make deps-validate
 
 # Step 6: Run full test suite
+
 make test
 make lint
 
 # Step 7: Commit
+
 git add requirements-dev.txt
 git commit -m "deps: monthly dependency update (YYYY-MM)
 
@@ -162,37 +187,47 @@ git commit -m "deps: monthly dependency update (YYYY-MM)
 - No dependency conflicts
 
 Related: Monthly maintenance cycle"
-```
+```text
 
 ### Before Every Release (v0.7.1 Lesson)
 
 **Pre-release checklist:**
 
 ```bash
+
 # 1. Validate Python version
+
 make deps-validate
 
 # Expected output:
+
 # [ok] requirements-dev.txt compiled with Python 3.10 (or higher)
+
 # [ok] No dependency conflicts detected
 
 # 2. If validation fails:
+
 python3.10 scripts/dev/update_dependencies.py --compile
+
 # OR
+
 python3.11 scripts/dev/update_dependencies.py --compile
 
 # 3. Verify no downgrades
+
 git diff requirements-dev.txt
+
 # Look for lines like: -package==1.2.0 +package==1.1.0 (DOWNGRADE, BAD)
 
 # 4. Run tests
+
 make test
 
 # 5. Commit if changed
+
 git add requirements-dev.txt
 git commit -m "deps: recompile with Python 3.10+ for v0.X.Y release"
-```
-
+```text
 ---
 
 ## Troubleshooting
@@ -204,18 +239,22 @@ git commit -m "deps: recompile with Python 3.10+ for v0.X.Y release"
 **Fix:**
 
 ```bash
+
 # Option 1: Use Python 3.10
+
 python3.10 -m pip install pip-tools
 python3.10 scripts/dev/update_dependencies.py --compile
 
 # Option 2: Use Python 3.11
+
 python3.11 -m pip install pip-tools
 python3.11 scripts/dev/update_dependencies.py --compile
 
 # Option 3: Use Python 3.12
+
 python3.12 -m pip install pip-tools
 python3.12 scripts/dev/update_dependencies.py --compile
-```
+```text
 
 ### Error: "X dependency conflict(s) detected"
 
@@ -223,24 +262,27 @@ python3.12 scripts/dev/update_dependencies.py --compile
 
 **Example:**
 
-```
+```text
 checkov 3.2.477 requires packaging<24.0, but have packaging 25.0
-```
-
+```text
 **Fix:**
 
 ```bash
+
 # Option 1: Pin conflicting package in requirements-dev.in
+
 echo "packaging<24.0  # Required by checkov" >> requirements-dev.in
 make deps-compile
 
 # Option 2: Wait for upstream fix (check checkov releases)
+
 # If checkov updates to support packaging>=24.0, update checkov version
 
 # Option 3: Downgrade offending package (last resort)
+
 echo "packaging==23.2" >> requirements-dev.in
 make deps-compile
-```
+```text
 
 ### Error: "Downgrades detected! This should not happen."
 
@@ -248,28 +290,33 @@ make deps-compile
 
 **Example:**
 
-```
+```text
 Downgrades (4):
   ↓ bandit: 1.8.6 → 1.7.10
   ↓ pytest-cov: 7.0.0 → 5.0.0
-```
-
+```text
 **Fix:**
 
 ```bash
+
 # Step 1: Check requirements-dev.in for version pins
+
 cat requirements-dev.in | grep -E "bandit|pytest-cov"
 
 # Step 2: Remove overly restrictive pins
+
 # BAD:  bandit<1.8  # Forces downgrade
+
 # GOOD: bandit>=1.7.10  # Allows upgrades
 
 # Step 3: Recompile
+
 make deps-compile
 
 # Step 4: Verify upgrades
+
 git diff requirements-dev.txt | grep -E "^\+bandit|^\+pytest-cov"
-```
+```text
 
 ### Error: "pip-tools not installed"
 
@@ -278,14 +325,16 @@ git diff requirements-dev.txt | grep -E "^\+bandit|^\+pytest-cov"
 **Fix:**
 
 ```bash
+
 # Install for active Python
+
 python3 -m pip install pip-tools
 
 # Or specify Python version
+
 python3.10 -m pip install pip-tools
 python3.11 -m pip install pip-tools
-```
-
+```text
 ---
 
 ## Development Workflow
@@ -293,71 +342,90 @@ python3.11 -m pip install pip-tools
 ### Adding a New Dependency
 
 ```bash
+
 # Step 1: Add to requirements-dev.in
+
 echo "new-package>=1.0.0" >> requirements-dev.in
 
 # Step 2: Recompile
+
 make deps-compile
 
 # Step 3: Sync environment
+
 make deps-sync
 
 # Step 4: Verify no conflicts
+
 make deps-validate
 
 # Step 5: Test
+
 make test
 
 # Step 6: Commit both files
+
 git add requirements-dev.in requirements-dev.txt
 git commit -m "deps: add new-package for [purpose]"
-```
+```text
 
 ### Removing a Dependency
 
 ```bash
+
 # Step 1: Remove from requirements-dev.in
+
 # (edit file manually)
 
 # Step 2: Recompile (will remove transitive deps if unused)
+
 make deps-compile
 
 # Step 3: Sync environment (will uninstall)
+
 make deps-sync
 
 # Step 4: Verify no conflicts
+
 make deps-validate
 
 # Step 5: Commit
+
 git add requirements-dev.in requirements-dev.txt
 git commit -m "deps: remove old-package (no longer needed)"
-```
+```text
 
 ### Upgrading a Specific Package
 
 ```bash
+
 # Step 1: Update version in requirements-dev.in
+
 # Before: package>=1.0.0
+
 # After:  package>=2.0.0
 
 # Step 2: Recompile
+
 make deps-compile
 
 # Step 3: Review changes
+
 git diff requirements-dev.txt
 
 # Step 4: Test for breaking changes
+
 make test
 make lint
 
 # Step 5: Commit
+
 git add requirements-dev.in requirements-dev.txt
 git commit -m "deps: upgrade package to v2.0.0
 
 - Breaking changes: [list if any]
 - Tested: [describe test coverage]"
-```
-
+```text
 ---
 
 ## CI Integration
@@ -367,24 +435,27 @@ git commit -m "deps: upgrade package to v2.0.0
 The CI workflow **blocks releases** if dependencies are invalid:
 
 ```yaml
+
 - name: Validate requirements-dev.txt Python version
-  run: |
+
     python -m pip install pip-tools
     python scripts/dev/update_dependencies.py --validate
-```
-
+```text
 **Exit codes:**
+
 - `0` - All checks passed
 - `1` - Python version mismatch OR dependency conflicts
 
 ### Dependabot Integration
 
 [.github/dependabot.yml](../.github/dependabot.yml) automatically creates PRs for:
+
 - Python package updates (weekly)
 - GitHub Actions updates (weekly)
 - Docker base image updates (weekly)
 
 **Workflow:**
+
 1. Dependabot creates PR with version bump
 2. CI validates Python version and conflicts
 3. Tests run on Python 3.10/3.11/3.12
@@ -424,17 +495,15 @@ If you previously compiled dependencies with Python 3.8/3.9:
 ```bash
 sudo apt update
 sudo apt install python3.10 python3.10-venv
-```
-
+```text
 **macOS (Homebrew):**
 ```bash
 brew install python@3.10
-```
-
+```text
 **Windows (WSL):**
 ```bash
 sudo apt install python3.10
-```
+```text
 
 ### Step 2: Update Your Workflow
 
@@ -442,29 +511,28 @@ sudo apt install python3.10
 ```bash
 python3 -m pip install pip-tools
 python3 -m piptools compile -o requirements-dev.txt requirements-dev.in
-```
-
+```text
 **New workflow (Python 3.10+):**
 ```bash
 python3.10 -m pip install pip-tools
 python3.10 scripts/dev/update_dependencies.py --compile
+
 # OR use Makefile
+
 make deps-compile  # Uses PY variable (defaults to python3)
-```
+```text
 
 ### Step 3: Validate
 
 ```bash
 make deps-validate
-```
-
+```text
 **Expected output:**
-```
+```text
 [ok] Python 3.10 (meets requirement ≥3.10)
 [ok] requirements-dev.txt compiled with Python 3.10
 [ok] No dependency conflicts detected
-```
-
+```text
 ---
 
 ## Future Improvements
@@ -472,25 +540,28 @@ make deps-validate
 ### Planned Enhancements
 
 1. **Automatic Vulnerability Scanning:**
-   ```bash
+
    pip install pip-audit
    make deps-audit  # Check for known CVEs
    ```
 
 2. **Dependency Graph Visualization:**
+
    ```bash
    pip install pipdeptree
    make deps-tree  # Show dependency tree
    ```
 
 3. **Lockfile Comparison:**
+
    ```bash
    make deps-diff v0.7.0 v0.7.1  # Compare dependency changes between versions
    ```
 
 4. **Automated PR Creation:**
+
    ```bash
-   # After `make deps-upgrade`, auto-create PR with changelog
+   # After make deps-upgrade, auto-create PR with changelog
    make deps-upgrade-pr
    ```
 
@@ -502,7 +573,7 @@ make deps-validate
 - **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)
 - **Dependabot Config:** [.github/dependabot.yml](../.github/dependabot.yml)
 - **Makefile Targets:** [Makefile](../Makefile) (lines 24-30, 115-136)
-- **pip-tools Documentation:** https://pip-tools.readthedocs.io/
+- **pip-tools Documentation:** <https://pip-tools.readthedocs.io/>
 
 ---
 
@@ -525,6 +596,7 @@ make deps-validate
 ### Prevention
 
 **Never again will we:**
+
 - ❌ Compile dependencies with wrong Python version
 - ❌ Miss dependency conflicts before release
 - ❌ Lose Dependabot upgrades due to downgrades

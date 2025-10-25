@@ -90,12 +90,12 @@ docs/archive/*
 samples/fixtures/infra-demo/docker-test-results/
 
 # JMo Memory System (persistent learning, local only)
-.jmo/memory/*
+# Allow directory structure (.gitkeep files) and README, but ignore all content files
+.jmo/memory/**/*
 !.jmo/memory/.gitkeep
 !.jmo/memory/README.md
 !.jmo/memory/schemas.json
-!.jmo/memory/*/
-!.jmo/memory/*/.gitkeep
+!.jmo/memory/**/.gitkeep
 
 # Node.js dependencies (API)
 node_modules/
