@@ -356,7 +356,7 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
             all_issues.append(
-                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+                {"platform": "Docker Hub", "type": issue["type"], "details": str(issue)}
             )
 
     # Check GitHub Actions sync configuration
@@ -371,7 +371,7 @@ def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
             if args.fix:
                 print(f"    Fix:      {issue['fix']}")
             all_issues.append(
-                {"platform": "Docker Hub", "type": issue["type"], "details": issue}
+                {"platform": "Docker Hub", "type": issue["type"], "details": str(issue)}
             )
 
     # Optional: Check remote Docker Hub (may fail without auth)

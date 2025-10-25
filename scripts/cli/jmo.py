@@ -751,7 +751,7 @@ class ProgressTracker:
         self.completed = 0
         self.args = args
         self._lock = threading.Lock()
-        self._start_time = None
+        self._start_time: float | None = None
 
     def start(self):
         """Start progress tracking timer."""

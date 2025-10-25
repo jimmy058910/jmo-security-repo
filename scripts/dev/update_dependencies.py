@@ -145,7 +145,7 @@ def check_requirements_txt_python_version(req_file: Path) -> Tuple[bool, str]:
     return False, "Python version header not found"
 
 
-def run_pip_compile(upgrade: bool = False, repo_root: Path = None) -> int:
+def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int:
     """Run pip-compile to regenerate requirements-dev.txt."""
     if repo_root is None:
         repo_root = Path(__file__).parent.parent.parent
@@ -241,7 +241,7 @@ def check_outdated_packages() -> List[Dict[str, str]]:
                     )
             else:
                 print(f"{GREEN}[ok]{RESET} All packages up-to-date")
-            return outdated
+            return list(outdated)
         else:
             print(f"{RED}[error]{RESET} Failed to check outdated packages")
             print(result.stderr)
@@ -258,7 +258,7 @@ def compare_requirements(
 
     def parse_requirements(file_path: Path) -> Dict[str, str]:
         """Parse requirements file into dict of package: version."""
-        packages = {}
+        packages: dict[str, str] = {}
         if not file_path.exists():
             return packages
 
