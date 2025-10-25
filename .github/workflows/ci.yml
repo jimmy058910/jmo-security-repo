@@ -47,7 +47,10 @@ jobs:
 
       - name: Check deps-compile freshness
         run: |
-          python -m pip install -U pip setuptools wheel pip-tools
+          # Pin pip <25.3 until pip-tools supports pip 25.3's API changes
+          # Issue: pip 25.3 removed InstallRequirement.use_pep517, breaking pip-tools 7.5.1
+          # Tracking: https://github.com/jazzband/pip-tools/issues
+          python -m pip install -U "pip<25.3" setuptools wheel pip-tools
           python -m piptools compile -o requirements-dev.txt requirements-dev.in
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
 
