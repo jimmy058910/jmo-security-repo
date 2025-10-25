@@ -1292,11 +1292,20 @@ results/
 3. Commit with message: `release: vX.Y.Z`
 4. Create and push tag: `git tag vX.Y.Z && git push --tags`
 5. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
+6. CI verifies badges auto-update correctly (60s after PyPI publish)
 
 **Prerequisites:**
 
 - Configure repo as Trusted Publisher in PyPI settings (one-time setup)
 - No `PYPI_API_TOKEN` required with OIDC workflow
+
+**Badge Automation:**
+
+- All README badges auto-update from PyPI (no manual edits needed)
+- Badge verification runs on every release (`.github/workflows/release.yml`)
+- Badge CDN caching: expect 5-30 minute delay for global propagation
+- Manual verification: `make verify-badges`
+- See [docs/BADGE_AUTOMATION.md](docs/BADGE_AUTOMATION.md) for complete guide
 
 ## Troubleshooting
 

@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics
+.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -48,6 +48,7 @@ help:
 	@echo ""
 	@echo "Release Targets:"
 	@echo "  validate-readme      - Check README consistency (PyPI + Docker Hub + GHCR)"
+	@echo "  verify-badges        - Verify PyPI badges match pyproject.toml version"
 	@echo ""
 	@echo "Metrics Targets (Maintainer-Only):"
 	@echo "  collect-metrics      - Collect weekly metrics (GitHub, PyPI, Docker Hub, telemetry)"
@@ -339,3 +340,8 @@ collect-metrics:
 	@echo "📄 View summary: cat metrics/summary-$$(date +%Y-%m-%d).md"
 
 metrics: collect-metrics
+
+# Verify PyPI badges match pyproject.toml
+verify-badges:
+	@echo "🏷️  Verifying PyPI badge versions..."
+	@bash scripts/dev/verify_badges.sh

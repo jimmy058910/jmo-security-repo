@@ -191,6 +191,7 @@ make tools
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
 | [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |
 | [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
+| [Badge Automation](BADGE_AUTOMATION.md) | PyPI badge auto-update system | Maintainers |
 | [Compliance Framework Analysis](archive/COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail (archived) | Advanced |
 | [Telemetry](TELEMETRY.md) | Privacy-first usage tracking (v0.7.0+) | Everyone |
 | [Testing Matrix](TESTING_MATRIX.md) | Test coverage dimensions | Contributors |
