@@ -325,7 +325,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME_DOCKERHUB }}
-          short-description: "JMo Security Suite - Terminal-first security audit toolkit with 12 tools, multi-target scanning, real-time progress"
+          short-description: "Security audit toolkit with 12 tools - scan repos, images, IaC, URLs, K8s in one unified CLI"
           readme-filepath: ./DOCKER_HUB_README.md
 
       - name: Docker Hub update skipped
