@@ -81,9 +81,21 @@ Expected: `Docker version XX.X.X`
 
 #### Registry Options
 
-We publish to two Docker registries:
+We publish to three Docker registries:
 
-**GitHub Container Registry (GHCR) - Recommended:**
+**Amazon ECR Public - Recommended for AWS Users:**
+
+```bash
+docker pull public.ecr.aws/m2d8u2k1/jmo-security:latest
+```
+
+- ✅ **Unlimited pulls** (no rate limits)
+- ✅ **Best for AWS** (ECS/EKS native integration)
+- ✅ **Faster pulls in AWS** (geographic distribution)
+- ✅ **Multi-arch support** (amd64 + arm64)
+- ✅ **Free for all users**
+
+**GitHub Container Registry (GHCR) - Recommended for General Use:**
 
 ```bash
 docker pull ghcr.io/jimmy058910/jmo-security:latest
@@ -94,10 +106,9 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 - ✅ **Multi-arch support** (amd64 + arm64)
 - ✅ **Free for all users**
 
-**Docker Hub - Coming in v0.5.2+:**
+**Docker Hub - Available in v0.5.2+:**
 
 ```bash
-# Available starting v0.5.2
 docker pull jmogaming/jmo-security:latest
 ```
 
@@ -105,7 +116,10 @@ docker pull jmogaming/jmo-security:latest
 - ✅ **Higher discoverability** (appears in Docker Hub search)
 - ⚠️ **Rate limits:** 200 pulls per 6 hours (free tier)
 
-**Recommendation:** Use GHCR for production and CI/CD pipelines to avoid rate limits.
+**Recommendation:**
+- **AWS users:** Use ECR Public for faster pulls and native AWS integration
+- **General users:** Use GHCR for unlimited pulls without rate limits
+- **Docker Hub users:** Use Docker Hub for familiarity and discoverability
 
 **Download info:**
 
@@ -122,6 +136,11 @@ docker pull jmogaming/jmo-security:latest
 cd /path/to/your/project
 
 # Run the scan (Linux/macOS/WSL - use quoted $(pwd))
+# Option 1: ECR Public (recommended for AWS users)
+docker run --rm -v "$(pwd):/scan" public.ecr.aws/m2d8u2k1/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
+
+# Option 2: GitHub Container Registry (recommended for general users)
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results --profile-name balanced --human-logs
 ```
