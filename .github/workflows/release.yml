@@ -118,7 +118,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Configure AWS credentials for ECR Public
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::786980363770:role/GitHubActionsECRPublicRole
           aws-region: ${{ env.AWS_REGION }}
@@ -134,8 +134,8 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
-            ${{ vars.DOCKERHUB_ENABLED == 'true' && format('{0}/{1}', env.REGISTRY_DOCKERHUB, env.IMAGE_NAME_DOCKERHUB) || '' }}
             ${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}
+            ${{ vars.DOCKERHUB_ENABLED == 'true' && format('{0}/{1}', env.REGISTRY_DOCKERHUB, env.IMAGE_NAME_DOCKERHUB) || '' }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
