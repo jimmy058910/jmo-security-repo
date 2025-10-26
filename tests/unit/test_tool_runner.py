@@ -553,7 +553,7 @@ class TestErrorHandling:
             try:
                 os.chmod(script_path, stat.S_IRWXU)
                 os.unlink(script_path)
-            except:
+            except Exception:  # noqa: S110
                 pass
 
     def test_run_tool_unexpected_exception_handling(self):
