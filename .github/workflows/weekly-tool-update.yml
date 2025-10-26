@@ -147,21 +147,23 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## Weekly Tool Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Weekly Tool Update Summary"
+            echo ""
 
-          if [[ "${{ steps.check.outputs.updates_available }}" == "true" ]]; then
-            if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
-              echo "✅ **Updates applied successfully**" >> $GITHUB_STEP_SUMMARY
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "- Branch created: \`${{ steps.commit.outputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
-              echo "- Pull request created and set to auto-merge" >> $GITHUB_STEP_SUMMARY
-              echo "- Will merge automatically when CI passes" >> $GITHUB_STEP_SUMMARY
+            if [[ "${{ steps.check.outputs.updates_available }}" == "true" ]]; then
+              if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
+                echo "✅ **Updates applied successfully**"
+                echo ""
+                echo "- Branch created: \`${{ steps.commit.outputs.branch }}\`"
+                echo "- Pull request created and set to auto-merge"
+                echo "- Will merge automatically when CI passes"
+              else
+                echo "⚠️ **Updates available but no changes committed**"
+              fi
             else
-              echo "⚠️ **Updates available but no changes committed**" >> $GITHUB_STEP_SUMMARY
+              echo "ℹ️ **All tools already up-to-date**"
+              echo ""
+              echo "No updates needed this week."
             fi
-          else
-            echo "ℹ️ **All tools already up-to-date**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "No updates needed this week." >> $GITHUB_STEP_SUMMARY
-          fi
+          } >> "$GITHUB_STEP_SUMMARY"

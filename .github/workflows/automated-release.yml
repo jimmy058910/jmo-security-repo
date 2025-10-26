@@ -100,24 +100,26 @@ jobs:
           TODAY=$(date +%Y-%m-%d)
 
           # Create new changelog entry
-          echo "## [$NEW_VERSION] - $TODAY" > new_entry.md
-          echo "" >> new_entry.md
-          echo "### Summary" >> new_entry.md
-          echo "" >> new_entry.md
-          echo "${{ inputs.changelog_entry }}" >> new_entry.md
-          echo "" >> new_entry.md
-          echo "### Changes" >> new_entry.md
-          echo "" >> new_entry.md
+          {
+            echo "## [$NEW_VERSION] - $TODAY"
+            echo ""
+            echo "### Summary"
+            echo ""
+            echo "${{ inputs.changelog_entry }}"
+            echo ""
+            echo "### Changes"
+            echo ""
 
-          # Add tool updates if any
-          if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
-            echo "**Security Tool Updates:**" >> new_entry.md
-            echo "" >> new_entry.md
-            git diff versions.yaml | grep "^[+-]  version:" | while read line; do
-              echo "- $line" >> new_entry.md
-            done
-            echo "" >> new_entry.md
-          fi
+            # Add tool updates if any
+            if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
+              echo "**Security Tool Updates:**"
+              echo ""
+              git diff versions.yaml | grep "^[+-]  version:" | while read -r line; do
+                echo "- $line"
+              done
+              echo ""
+            fi
+          } > new_entry.md
 
           # Insert new entry after "# Changelog" header
           sed -i "/^# Changelog/r new_entry.md" CHANGELOG.md
@@ -181,49 +183,51 @@ jobs:
           BRANCH="${{ steps.create_branch.outputs.branch }}"
 
           # Create PR body
-          echo "## Release v${NEW_VERSION}" > pr_body.txt
-          echo "" >> pr_body.txt
-          echo "### Summary" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "${{ inputs.changelog_entry }}" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "### Changes in this release" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "**Version Bump:** ${{ inputs.version_bump }}" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "**Tool Updates:**" >> pr_body.txt
+          {
+            echo "## Release v${NEW_VERSION}"
+            echo ""
+            echo "### Summary"
+            echo ""
+            echo "${{ inputs.changelog_entry }}"
+            echo ""
+            echo "### Changes in this release"
+            echo ""
+            echo "**Version Bump:** ${{ inputs.version_bump }}"
+            echo ""
+            echo "**Tool Updates:**"
 
-          # Add tool update details
-          if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
-            git diff origin/main..HEAD versions.yaml | grep "^[+-]  version:" | while read line; do
-              echo "- $line" >> pr_body.txt
-            done
-          else
-            echo "- All tools already up-to-date" >> pr_body.txt
-          fi
+            # Add tool update details
+            if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
+              git diff origin/main..HEAD versions.yaml | grep "^[+-]  version:" | while read -r line; do
+                echo "- $line"
+              done
+            else
+              echo "- All tools already up-to-date"
+            fi
 
-          echo "" >> pr_body.txt
-          echo "### Pre-Release Checklist" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "- ✅ All security tools updated to latest versions" >> pr_body.txt
-          echo "- ✅ Version bumped in pyproject.toml" >> pr_body.txt
-          echo "- ✅ CHANGELOG.md updated" >> pr_body.txt
-          echo "- ⏳ CI tests pending" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "### Release Process" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "1. **Merge this PR** to main" >> pr_body.txt
-          echo "2. **Workflow will automatically:**" >> pr_body.txt
-          echo "   - Create git tag v${NEW_VERSION}" >> pr_body.txt
-          echo "   - Publish to PyPI via Trusted Publishers" >> pr_body.txt
-          echo "   - Build and push Docker images" >> pr_body.txt
-          echo "   - Create GitHub release" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "---" >> pr_body.txt
-          echo "" >> pr_body.txt
-          echo "🤖 **Automated Release PR**" >> pr_body.txt
-          echo "📅 **Created**: $(date +%Y-%m-%d)" >> pr_body.txt
-          echo "🔗 **Workflow**: \`.github/workflows/automated-release.yml\`" >> pr_body.txt
+            echo ""
+            echo "### Pre-Release Checklist"
+            echo ""
+            echo "- ✅ All security tools updated to latest versions"
+            echo "- ✅ Version bumped in pyproject.toml"
+            echo "- ✅ CHANGELOG.md updated"
+            echo "- ⏳ CI tests pending"
+            echo ""
+            echo "### Release Process"
+            echo ""
+            echo "1. **Merge this PR** to main"
+            echo "2. **Workflow will automatically:**"
+            echo "   - Create git tag v${NEW_VERSION}"
+            echo "   - Publish to PyPI via Trusted Publishers"
+            echo "   - Build and push Docker images"
+            echo "   - Create GitHub release"
+            echo ""
+            echo "---"
+            echo ""
+            echo "🤖 **Automated Release PR**"
+            echo "📅 **Created**: $(date +%Y-%m-%d)"
+            echo "🔗 **Workflow**: \`.github/workflows/automated-release.yml\`"
+          } > pr_body.txt
 
           # Create PR
           gh pr create \
@@ -238,19 +242,21 @@ jobs:
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           BRANCH="${{ steps.create_branch.outputs.branch }}"
 
-          echo "## Automated Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **Release PR created successfully**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: v${NEW_VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Type**: ${{ inputs.version_bump }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: \`${BRANCH}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. Review the pull request" >> $GITHUB_STEP_SUMMARY
-          echo "2. Verify CI tests pass" >> $GITHUB_STEP_SUMMARY
-          echo "3. Merge the PR to trigger release workflow" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Automated Release Summary"
+            echo ""
+            echo "✅ **Release PR created successfully**"
+            echo ""
+            echo "- **Version**: v${NEW_VERSION}"
+            echo "- **Type**: ${{ inputs.version_bump }}"
+            echo "- **Branch**: \`${BRANCH}\`"
+            echo ""
+            echo "### Next Steps"
+            echo ""
+            echo "1. Review the pull request"
+            echo "2. Verify CI tests pass"
+            echo "3. Merge the PR to trigger release workflow"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   finalize-release:
     name: Finalize release (after PR merge)
