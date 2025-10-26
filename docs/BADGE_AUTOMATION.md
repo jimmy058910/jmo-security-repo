@@ -280,10 +280,10 @@ Badge verification runs automatically:
 
 ## References
 
-- **Shields.io Documentation:** https://shields.io
-- **Badge.fury.io:** https://badge.fury.io
-- **PyPI JSON API:** https://warehouse.pypa.io/api-reference/json.html
-- **GitHub Badges Guide:** https://docs.github.com/en/actions/managing-workflow-runs/adding-a-workflow-status-badge
+- **Shields.io Documentation:** <https://shields.io>
+- **Badge.fury.io:** <https://badge.fury.io>
+- **PyPI JSON API:** <https://warehouse.pypa.io/api-reference/json.html>
+- **GitHub Badges Guide:** <https://docs.github.com/en/actions/managing-workflow-runs/adding-a-workflow-status-badge>
 
 ---
 
