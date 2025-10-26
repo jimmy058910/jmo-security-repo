@@ -53,6 +53,17 @@ RUN ZAP_VERSION="2.16.1" && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
+# Download Nuclei
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(uname -m) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in x86_64) echo "amd64";; aarch64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -silent
+
 #
 # Stage 2: Runtime - Minimal Alpine runtime environment
 #

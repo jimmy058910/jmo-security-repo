@@ -333,16 +333,18 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 4. Generate stable fingerprint ID
 5. Return list of findings
 
-**Supported Tools (v0.6.2):**
+**Supported Tools (v0.7.2):**
 
 - **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
 - **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
 - **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
 - **IaC:** checkov (policy-as-code)
 - **Dockerfile:** hadolint (best practices)
-- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), Nuclei (fast vulnerability scanner with 4000+ templates, API security)
+- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), **Nuclei (fast vulnerability scanner with 4000+ templates, API security)** — FULLY INTEGRATED v0.7.2+
 - **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
 - **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
+
+**Tool Count: 12 security scanners** (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
 
 **Removed Tools (v0.5.0):**
 

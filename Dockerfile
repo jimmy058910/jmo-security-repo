@@ -80,6 +80,17 @@ RUN ZAP_VERSION="2.16.1" && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
+# Download Nuclei
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(dpkg --print-architecture) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -silent
+
 # Build AFL++ (requires build tools already installed above)
 RUN AFL_VERSION="4.21c" && \
     curl -sSL "https://github.com/AFLplusplus/AFLplusplus/archive/refs/tags/v${AFL_VERSION}.tar.gz" \

@@ -96,6 +96,17 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
+  nuclei:
+    version: 3.4.10
+    github_repo: projectdiscovery/nuclei
+    description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
+    release_pattern: nuclei_{version}_linux_{arch}.zip
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/projectdiscovery/nuclei/releases/latest
+    critical: false
+    notes: 'Requires templates update: nuclei -update-templates'
 special_tools:
   zap:
     version: 2.16.1
