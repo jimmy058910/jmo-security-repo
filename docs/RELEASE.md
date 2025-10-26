@@ -1,8 +1,77 @@
 # Release Guide
 
-Remember to update CHANGELOG.md with user-facing changes.
+**Two Release Methods:**
+
+1. **Automated Release** (Recommended) - One-click via GitHub Actions
+2. **Manual Release** (Advanced) - Full control for experienced maintainers
 
 This project publishes to PyPI via GitHub Actions on git tags of the form `v*` using Trusted Publishers (OIDC).
+
+---
+
+## Method 1: Automated Release (Recommended)
+
+**Use the automated-release workflow for one-click releases with guaranteed tool updates.**
+
+### Quick Start
+
+1. Navigate to GitHub Actions → **Automated Release** → **Run workflow**
+2. Fill in parameters:
+   - **Version bump:** patch (0.7.1→0.7.2) / minor (0.7.1→0.8.0) / major (0.7.1→1.0.0)
+   - **Changelog entry:** Brief summary (e.g., "Add AWS scanning support and fix CLI argument parsing")
+3. Click **Run workflow**
+4. Wait for PR creation (~3-5 minutes)
+5. Review PR, verify CI passes
+6. Merge PR → release workflow triggers automatically
+
+### What It Does Automatically
+
+1. ✅ Updates ALL security tools to latest versions
+2. ✅ Bumps version in pyproject.toml
+3. ✅ Updates CHANGELOG.md with your entry
+4. ✅ Syncs Dockerfiles with new tool versions
+5. ✅ Creates release PR with detailed summary
+6. ✅ When merged → creates git tag and triggers full release
+
+### Benefits
+
+- **Zero manual steps** - Just provide version bump type and changelog entry
+- **Guaranteed tool updates** - Cannot accidentally skip tool updates
+- **Consistent structure** - Commit messages, PR format, CHANGELOG format all standardized
+- **Audit trail** - PR shows exactly what changed before release
+- **Fail-safe** - CI blocks if tool updates fail or tests break
+
+### Example Workflow
+
+```bash
+# 1. Navigate to GitHub Actions
+https://github.com/jimmy058910/jmo-security-repo/actions/workflows/automated-release.yml
+
+# 2. Click "Run workflow"
+# 3. Select:
+#    - Branch: main
+#    - Version bump: patch
+#    - Changelog entry: "Fix badge verification and add weekly tool updates"
+
+# 4. Wait for PR creation
+# PR title: "release: v0.7.2"
+# PR body includes:
+#   - Summary of changes
+#   - Tool version updates (semgrep 1.99.0 → 1.140.0, etc.)
+#   - Pre-release checklist
+
+# 5. Review PR, merge when CI passes
+# 6. Tag v0.7.2 created automatically
+# 7. Release workflow publishes to PyPI and Docker Hub
+```
+
+---
+
+## Method 2: Manual Release (Advanced)
+
+For experienced maintainers who want full control over the release process.
+
+Remember to update CHANGELOG.md with user-facing changes.
 
 ## Prerequisites
 
@@ -13,7 +82,38 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 ## Pre-Release Checklist
 
-1. **Run full test suite locally:**
+**🔴 CRITICAL FIRST STEP: Update ALL security tools to latest versions**
+
+1. **Update ALL security tools (MANDATORY - enforced by CI):**
+
+   ```bash
+   # Check for available updates
+   python3 scripts/dev/update_versions.py --check-latest
+
+   # If updates found, update all tools
+   python3 scripts/dev/update_versions.py --update-all  # Update versions.yaml
+   python3 scripts/dev/update_versions.py --sync         # Sync Dockerfiles
+
+   # Commit tool updates
+   git add versions.yaml Dockerfile* scripts/dev/install_tools.sh
+   git commit -m "deps(tools): update all to latest before vX.Y.Z
+
+   Updated all security tools before release vX.Y.Z:
+   - semgrep, checkov, trivy, trufflehog, syft, etc.
+
+   See: python3 scripts/dev/update_versions.py --report"
+
+   # Verify all tools current
+   python3 scripts/dev/update_versions.py --check-latest
+   # Expected output: [ok] All tools are up to date
+   ```
+
+   **Why this matters:**
+   - Outdated tools miss security vulnerabilities (semgrep 41 versions behind = 200+ missing rules)
+   - Users expect latest security tools in fresh releases
+   - CI will BLOCK release if tools are outdated (pre-release-check job)
+
+2. **Run full test suite locally:**
 
    ```bash
    make test
@@ -21,7 +121,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing --cov-fail-under=85
    ```
 
-2. **Verify linting and formatting:**
+3. **Verify linting and formatting:**
 
    ```bash
    make lint
@@ -29,13 +129,13 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    make pre-commit-run
    ```
 
-3. **Review documentation:**
+4. **Review documentation:**
    - CHANGELOG.md updated with "Unreleased" changes moved to new version section
    - README.md reflects latest features
    - QUICKSTART.md is up-to-date
    - docs/USER_GUIDE.md includes new features
 
-4. **Validate README consistency (PyPI + Docker Hub sync check):**
+5. **Validate README consistency (PyPI + Docker Hub sync check):**
 
    ```bash
    make validate-readme

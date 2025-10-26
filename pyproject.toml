@@ -84,6 +84,21 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 
+[tool.coverage.run]
+omit = [
+    # Data-only files with no executable logic
+    "scripts/core/compliance_frameworks.py",  # Pure data structure (compliance mappings)
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
 [tool.ruff]
 # Exclude test fixtures that are intentionally vulnerable
 extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]

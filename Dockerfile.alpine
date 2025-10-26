@@ -14,6 +14,7 @@ ARG TARGETARCH
 RUN apk add --no-cache \
     curl \
     wget \
+    unzip \
     ca-certificates
 
 # Download TruffleHog
@@ -26,7 +27,7 @@ RUN TRUFFLEHOG_VERSION="3.90.11" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.34.2" && \
+RUN SYFT_VERSION="1.36.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     wget -q "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -O /tmp/syft.tar.gz && \
@@ -40,7 +41,7 @@ RUN TRIVY_VERSION="0.67.2" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint
-RUN HADOLINT_VERSION="2.12.0" && \
+RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     wget -q "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -O /usr/local/bin/hadolint && \
@@ -52,6 +53,17 @@ RUN ZAP_VERSION="2.16.1" && \
     -O /tmp/zap.tar.gz && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
+
+# Download Nuclei
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(uname -m) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in x86_64) echo "amd64";; aarch64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -silent
 
 #
 # Stage 2: Runtime - Minimal Alpine runtime environment
@@ -87,8 +99,8 @@ ARG TARGETARCH
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel && \
     if [ "$TARGETARCH" = "amd64" ]; then \
         python3 -m pip install --no-cache-dir --break-system-packages \
-            semgrep==1.99.0 \
-            checkov==3.2.255; \
+            semgrep==1.140.0 \
+            checkov==3.2.487; \
     else \
         echo "Skipping semgrep/checkov on ARM64 (rustworkx build time)"; \
     fi && \
@@ -100,6 +112,7 @@ COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 
 # Create ZAP symlink
@@ -132,6 +145,7 @@ RUN echo "=== Verifying Alpine tools (${TARGETARCH}) ===" && \
     trivy --version && \
     hadolint --version && \
     zap -version && \
+    nuclei -version && \
     if [ "$TARGETARCH" = "amd64" ]; then \
         semgrep --version && \
         checkov --version; \

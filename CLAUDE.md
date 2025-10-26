@@ -333,16 +333,18 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 4. Generate stable fingerprint ID
 5. Return list of findings
 
-**Supported Tools (v0.6.2):**
+**Supported Tools (v0.7.2):**
 
 - **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
 - **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
 - **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
 - **IaC:** checkov (policy-as-code)
 - **Dockerfile:** hadolint (best practices)
-- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), Nuclei (fast vulnerability scanner with 4000+ templates, API security)
+- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), **Nuclei (fast vulnerability scanner with 4000+ templates, API security)** — FULLY INTEGRATED v0.7.2+
 - **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
 - **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
+
+**Tool Count: 12 security scanners** (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
 
 **Removed Tools (v0.5.0):**
 
@@ -569,20 +571,43 @@ CI enforces ≥85% coverage (see [.github/workflows/ci.yml](.github/workflows/ci
 
 **GitHub Actions Workflows:**
 
-The project uses 2 consolidated workflows for all CI/CD operations:
+The project uses 5 workflows for full CI/CD automation:
 
 1. **[.github/workflows/ci.yml](.github/workflows/ci.yml)** — Primary CI workflow
-   - `quick-checks` job: actionlint, yamllint, deps-compile freshness, guardrails (2-3 min)
+   - `quick-checks` job: actionlint, yamllint, deps-compile freshness, guardrails, badge verification (2-3 min)
    - `test-matrix` job: Ubuntu/macOS × Python 3.10/3.11/3.12 (parallel, independent)
    - `lint-full` job: Full pre-commit suite (nightly scheduled runs only)
    - Triggers: push, pull_request, workflow_dispatch, schedule (nightly at 6 AM UTC)
 
 2. **[.github/workflows/release.yml](.github/workflows/release.yml)** — Release automation
+   - `pre-release-check` job: Blocks release if tools outdated (CRITICAL GATE)
    - `pypi-publish` job: Build and publish to PyPI (Trusted Publishers OIDC)
    - `docker-build` job: Multi-arch Docker images (full/slim/alpine variants)
    - `docker-scan` job: Trivy vulnerability scanning
-   - `docker-hub-readme` job: Sync README to Docker Hub (future)
+   - `verify-badges` job: Verify PyPI badges after publish
    - Triggers: version tags (`v*`), workflow_dispatch
+
+3. **[.github/workflows/weekly-tool-update.yml](.github/workflows/weekly-tool-update.yml)** — Weekly automation (NEW)
+   - Runs every Sunday at 00:00 UTC
+   - Updates ALL security tools to latest versions via `update_versions.py --update-all`
+   - Syncs Dockerfiles automatically
+   - Creates PR with auto-merge enabled
+   - Merges automatically if CI passes
+   - Triggers: schedule (weekly), workflow_dispatch
+
+4. **[.github/workflows/automated-release.yml](.github/workflows/automated-release.yml)** — One-click releases (NEW)
+   - Manual trigger with version bump type (patch/minor/major) and changelog entry
+   - Updates ALL tools before release
+   - Bumps version in pyproject.toml
+   - Updates CHANGELOG.md
+   - Creates release PR
+   - Triggers: workflow_dispatch only
+
+5. **[.github/workflows/version-check.yml](.github/workflows/version-check.yml)** — Version consistency (EXISTING)
+   - Runs weekly to detect outdated tools
+   - Fails CI if CRITICAL tools outdated
+   - Sends alerts for non-critical updates
+   - Triggers: schedule (weekly Sunday 02:00 UTC), workflow_dispatch
 
 **Pre-commit Hooks:**
 
@@ -1287,16 +1312,88 @@ results/
 
 ## Release Process
 
-1. Bump version in `pyproject.toml` under `[project] version`
-2. Update `CHANGELOG.md` with changes
-3. Commit with message: `release: vX.Y.Z`
-4. Create and push tag: `git tag vX.Y.Z && git push --tags`
-5. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
+**Two Release Methods:**
+
+### Method 1: Automated Release (Recommended)
+
+Use the automated-release workflow for one-click releases:
+
+```bash
+# Navigate to GitHub Actions → Automated Release → Run workflow
+# Select:
+#   - Version bump: patch/minor/major
+#   - Changelog entry: "Brief summary of changes"
+```
+
+**What it does automatically:**
+
+1. Updates ALL security tools to latest versions
+2. Bumps version in pyproject.toml
+3. Updates CHANGELOG.md with your entry
+4. Creates release PR with detailed summary
+5. When PR merged → automatically creates tag and triggers full release workflow
+
+**Advantages:**
+
+- ✅ Zero manual steps
+- ✅ Guaranteed tool updates before release
+- ✅ Consistent commit messages and PR structure
+- ✅ Cannot accidentally skip tool updates
+
+### Method 2: Manual Release (Advanced)
+
+For advanced users who want full control:
+
+**CRITICAL: All security tools MUST be updated before EVERY release.**
+
+1. **Update ALL security tools to latest versions:**
+   ```bash
+   python3 scripts/dev/update_versions.py --check-latest  # Check for updates
+   python3 scripts/dev/update_versions.py --update-all    # Update all tools
+   python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
+   git add versions.yaml Dockerfile*
+   git commit -m "deps(tools): update all to latest before vX.Y.Z"
+   ```
+
+2. Bump version in `pyproject.toml` under `[project] version`
+3. Update `CHANGELOG.md` with changes
+4. Commit with message: `release: vX.Y.Z`
+5. Create and push tag: `git tag vX.Y.Z && git push --tags`
+6. **CI enforces tool updates** — Release BLOCKS if tools outdated (pre-release-check job)
+7. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
+8. CI verifies badges auto-update correctly (60s after PyPI publish)
 
 **Prerequisites:**
 
 - Configure repo as Trusted Publisher in PyPI settings (one-time setup)
 - No `PYPI_API_TOKEN` required with OIDC workflow
+- **CRITICAL:** All tools must be up-to-date (enforced by CI pre-release gate)
+
+**Badge Automation:**
+
+- All README badges auto-update from PyPI (no manual edits needed)
+
+**Weekly Tool Updates:**
+
+The project uses automated weekly tool updates to ensure all security tools stay current:
+
+- **Schedule:** Every Sunday at 00:00 UTC
+- **Process:**
+  1. `weekly-tool-update.yml` workflow runs automatically
+  2. Updates ALL tools to latest versions via `update_versions.py --update-all`
+  3. Syncs Dockerfiles automatically
+  4. Creates PR with auto-merge enabled
+  5. Merges automatically if CI tests pass
+- **Benefits:**
+  - Zero manual intervention for tool updates
+  - Continuous security improvements
+  - Early detection of breaking changes (fails CI if incompatible)
+  - PRs provide clear audit trail of what changed
+- **Override:** Can manually trigger via GitHub Actions → Weekly Tool Update → Run workflow
+- Badge verification runs on every release (`.github/workflows/release.yml`)
+- Badge CDN caching: expect 5-30 minute delay for global propagation
+- Manual verification: `make verify-badges`
+- See [docs/BADGE_AUTOMATION.md](docs/BADGE_AUTOMATION.md) for complete guide
 
 ## Troubleshooting
 

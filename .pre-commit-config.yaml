@@ -12,9 +12,14 @@ repos:
         # - GitHub Actions workflow examples
         # - MkDocs config (uses !ENV tags not supported by standard YAML parser)
         # - Sample IaC files (CloudFormation uses !Ref tags, K8s has multi-doc)
-        exclude: >-
-          ^(tests/e2e/fixtures/iac/.*\.yaml|samples/iac-files/.*\.yaml
-          |docker-compose\.yml|docs/examples/github-actions-docker\.yml|mkdocs\.yml)$
+        exclude: |
+          (?x)^(
+            tests/e2e/fixtures/iac/.*\.yaml|
+            samples/iac-files/.*\.yaml|
+            docker-compose\.yml|
+            docs/examples/github-actions-docker\.yml|
+            mkdocs\.yml
+          )$
       - id: check-json
       - id: check-toml
       - id: mixed-line-ending

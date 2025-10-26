@@ -14,6 +14,7 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
+    unzip \
     ca-certificates \
     build-essential \
     clang \
@@ -30,7 +31,7 @@ RUN TRUFFLEHOG_VERSION="3.90.11" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.34.2" && \
+RUN SYFT_VERSION="1.36.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -44,7 +45,7 @@ RUN TRIVY_VERSION="0.67.2" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint
-RUN HADOLINT_VERSION="2.12.0" && \
+RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
@@ -57,7 +58,7 @@ RUN SHFMT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") &&
     chmod +x /usr/local/bin/shfmt
 
 # Download Falcoctl
-RUN FALCOCTL_VERSION="0.11.0" && \
+RUN FALCOCTL_VERSION="0.11.4" && \
     FALCOCTL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_${FALCOCTL_ARCH}.tar.gz" \
     -o /tmp/falcoctl.tar.gz && \
@@ -79,6 +80,17 @@ RUN ZAP_VERSION="2.16.1" && \
     -O /tmp/zap.tar.gz && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
+
+# Download Nuclei
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(dpkg --print-architecture) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -silent
 
 # Build AFL++ (requires build tools already installed above)
 RUN AFL_VERSION="4.21c" && \
@@ -128,10 +140,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Clean __pycache__ and .pyc files immediately after install
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    bandit==1.7.10 \
-    semgrep==1.99.0 \
-    checkov==3.2.255 \
-    ruff==0.14.0 && \
+    bandit==1.8.6 \
+    semgrep==1.140.0 \
+    checkov==3.2.487 \
+    ruff==0.14.2 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -140,6 +152,7 @@ COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
 COPY --from=builder /usr/local/bin/falcoctl /usr/local/bin/falcoctl
 COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
@@ -193,6 +206,7 @@ RUN echo "=== Verifying installed tools ===" && \
     checkov --version && \
     hadolint --version && \
     zap -version && \
+    nuclei -version && \
     falcoctl version && \
     (afl-fuzz -h > /dev/null 2>&1 || true) && \
     shellcheck --version && \

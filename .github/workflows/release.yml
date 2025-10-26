@@ -23,10 +23,60 @@ permissions:
   security-events: write  # For uploading SARIF files to GitHub Security
 
 jobs:
+  # PRE-RELEASE GATE: Verify all tools are up-to-date before releasing
+  pre-release-check:
+    name: Verify tools up-to-date
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Check for outdated tools
+        run: |
+          echo "🔍 Checking for outdated tools before release..."
+          echo ""
+          python3 scripts/dev/update_versions.py --check-latest || {
+            echo ""
+            echo "❌ ERROR: Cannot release with outdated tools!"
+            echo ""
+            echo "Found outdated tools. Update before releasing:"
+            echo "  python3 scripts/dev/update_versions.py --update-all"
+            echo "  python3 scripts/dev/update_versions.py --sync"
+            echo "  git add versions.yaml Dockerfile*"
+            echo "  git commit -m 'deps(tools): update all to latest before ${GITHUB_REF##*/}'"
+            echo "  git tag ${GITHUB_REF##*/} --force"
+            echo "  git push origin ${GITHUB_REF##*/} --force"
+            echo ""
+            echo "Alternatively, run the pre-release update workflow:"
+            echo "  gh workflow run pre-release-update.yml -f version=${GITHUB_REF##*/v}"
+            echo ""
+            exit 1
+          }
+
+      - name: Report current tool versions
+        run: |
+          echo ""
+          echo "✅ All tools are up-to-date! Proceeding with release."
+          echo ""
+          python3 scripts/dev/update_versions.py --report
+
   # Build and publish Python package to PyPI
   pypi-publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    needs: pre-release-check  # BLOCKS release if tools are outdated
     if: startsWith(github.ref, 'refs/tags/v')
     concurrency:
       group: release-pypi-${{ github.ref }}
@@ -336,3 +386,33 @@ jobs:
           echo "1. Create Docker Hub PAT: https://hub.docker.com/settings/security"
           echo "2. Add secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN"
           echo "3. Set repository variable DOCKERHUB_ENABLED=true"
+
+  # Verify PyPI badges auto-update correctly after release
+  verify-badges:
+    name: Verify PyPI Badges
+    runs-on: ubuntu-latest
+    needs: pypi-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Wait for PyPI to propagate (60s)
+        run: |
+          echo "⏳ Waiting 60s for PyPI to propagate the new version..."
+          sleep 60
+
+      - name: Verify badges match pyproject.toml
+        run: |
+          echo "🏷️  Verifying PyPI badges auto-update correctly..."
+          bash scripts/dev/verify_badges.sh || {
+            echo ""
+            echo "⚠️  Badge verification failed. This is often due to:"
+            echo "  1. PyPI propagation delay (wait 2-5 minutes)"
+            echo "  2. Badge CDN caching (wait 15-30 minutes)"
+            echo "  3. Version mismatch (check pyproject.toml)"
+            echo ""
+            echo "Manual verification:"
+            echo "  make verify-badges"
+            exit 1
+          }

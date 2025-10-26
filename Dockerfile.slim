@@ -14,6 +14,7 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
+    unzip \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +28,7 @@ RUN TRUFFLEHOG_VERSION="3.90.11" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.34.2" && \
+RUN SYFT_VERSION="1.36.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -41,7 +42,7 @@ RUN TRIVY_VERSION="0.67.2" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint
-RUN HADOLINT_VERSION="2.12.0" && \
+RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
@@ -53,6 +54,17 @@ RUN ZAP_VERSION="2.16.1" && \
     -O /tmp/zap.tar.gz && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
+
+# Download Nuclei
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(dpkg --print-architecture) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -silent
 
 #
 # Stage 2: Runtime - Minimal runtime environment
@@ -86,8 +98,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Upgrade pip and install Python tools in single layer with cache cleanup
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.99.0 \
-    checkov==3.2.255 && \
+    semgrep==1.140.0 \
+    checkov==3.2.487 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -97,6 +109,7 @@ COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 
 # Create ZAP symlink
@@ -130,6 +143,7 @@ RUN echo "=== Verifying core tools ===" && \
     hadolint --version && \
     checkov --version && \
     zap -version && \
+    nuclei -version && \
     echo "=== Core tools verified ==="
 
 ENTRYPOINT ["jmo"]

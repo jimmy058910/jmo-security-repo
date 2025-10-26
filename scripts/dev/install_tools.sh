@@ -228,6 +228,20 @@ Linux)
         warn "ZAP installation requires manual setup; see https://www.zaproxy.org/download/"
       fi
     else ok "ZAP installed"; fi
+    # Nuclei (DAST - fast vulnerability scanner)
+    if ! command -v nuclei >/dev/null 2>&1; then
+      case "$(uname -m)" in
+      x86_64 | amd64) NUCLEI_ARCH=amd64 ;;
+      aarch64 | arm64) NUCLEI_ARCH=arm64 ;;
+      *) NUCLEI_ARCH=amd64 ;;
+      esac
+      bg bash -c "NUCLEI_VERSION=\$(curl -s https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
+        curl -sSL \"https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_\${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip\" -o /tmp/nuclei.zip && \
+        sudo unzip -o /tmp/nuclei.zip -d /usr/local/bin && \
+        sudo chmod +x /usr/local/bin/nuclei && \
+        rm /tmp/nuclei.zip && \
+        nuclei -update-templates -silent"
+    else ok "nuclei installed"; fi
     # Falco (runtime security - optional, deep profile)
     if ! command -v falco >/dev/null 2>&1; then
       warn "falco not found (optional for deep profile); requires kernel modules - see https://falco.org/docs/getting-started/installation/"
