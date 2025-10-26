@@ -13,7 +13,38 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 ## Pre-Release Checklist
 
-1. **Run full test suite locally:**
+**🔴 CRITICAL FIRST STEP: Update ALL security tools to latest versions**
+
+1. **Update ALL security tools (MANDATORY - enforced by CI):**
+
+   ```bash
+   # Check for available updates
+   python3 scripts/dev/update_versions.py --check-latest
+
+   # If updates found, update all tools
+   python3 scripts/dev/update_versions.py --update-all  # Update versions.yaml
+   python3 scripts/dev/update_versions.py --sync         # Sync Dockerfiles
+
+   # Commit tool updates
+   git add versions.yaml Dockerfile* scripts/dev/install_tools.sh
+   git commit -m "deps(tools): update all to latest before vX.Y.Z
+
+   Updated all security tools before release vX.Y.Z:
+   - semgrep, checkov, trivy, trufflehog, syft, etc.
+
+   See: python3 scripts/dev/update_versions.py --report"
+
+   # Verify all tools current
+   python3 scripts/dev/update_versions.py --check-latest
+   # Expected output: [ok] All tools are up to date
+   ```
+
+   **Why this matters:**
+   - Outdated tools miss security vulnerabilities (semgrep 41 versions behind = 200+ missing rules)
+   - Users expect latest security tools in fresh releases
+   - CI will BLOCK release if tools are outdated (pre-release-check job)
+
+2. **Run full test suite locally:**
 
    ```bash
    make test
@@ -21,7 +52,7 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=term-missing --cov-fail-under=85
    ```
 
-2. **Verify linting and formatting:**
+3. **Verify linting and formatting:**
 
    ```bash
    make lint
@@ -29,13 +60,13 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
    make pre-commit-run
    ```
 
-3. **Review documentation:**
+4. **Review documentation:**
    - CHANGELOG.md updated with "Unreleased" changes moved to new version section
    - README.md reflects latest features
    - QUICKSTART.md is up-to-date
    - docs/USER_GUIDE.md includes new features
 
-4. **Validate README consistency (PyPI + Docker Hub sync check):**
+5. **Validate README consistency (PyPI + Docker Hub sync check):**
 
    ```bash
    make validate-readme

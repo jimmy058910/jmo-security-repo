@@ -1287,17 +1287,30 @@ results/
 
 ## Release Process
 
-1. Bump version in `pyproject.toml` under `[project] version`
-2. Update `CHANGELOG.md` with changes
-3. Commit with message: `release: vX.Y.Z`
-4. Create and push tag: `git tag vX.Y.Z && git push --tags`
-5. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
-6. CI verifies badges auto-update correctly (60s after PyPI publish)
+**CRITICAL: All security tools MUST be updated before EVERY release.**
+
+1. **Update ALL security tools to latest versions:**
+   ```bash
+   python3 scripts/dev/update_versions.py --check-latest  # Check for updates
+   python3 scripts/dev/update_versions.py --update-all    # Update all tools
+   python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
+   git add versions.yaml Dockerfile*
+   git commit -m "deps(tools): update all to latest before vX.Y.Z"
+   ```
+
+2. Bump version in `pyproject.toml` under `[project] version`
+3. Update `CHANGELOG.md` with changes
+4. Commit with message: `release: vX.Y.Z`
+5. Create and push tag: `git tag vX.Y.Z && git push --tags`
+6. **CI enforces tool updates** — Release BLOCKS if tools outdated (pre-release-check job)
+7. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
+8. CI verifies badges auto-update correctly (60s after PyPI publish)
 
 **Prerequisites:**
 
 - Configure repo as Trusted Publisher in PyPI settings (one-time setup)
 - No `PYPI_API_TOKEN` required with OIDC workflow
+- **NEW:** All tools must be up-to-date (enforced by CI pre-release gate)
 
 **Badge Automation:**
 
