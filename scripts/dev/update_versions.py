@@ -542,7 +542,9 @@ def update_all_tools(critical_only: bool = False) -> int:
             print(f"  • {tool}: {old} → {new}")
 
     if skipped_tools:
-        log(f"Skipped {len(skipped_tools)} non-critical tool(s) (use --all to include):")
+        log(
+            f"Skipped {len(skipped_tools)} non-critical tool(s) (use --all to include):"
+        )
         for tool, old, new, reason in skipped_tools:
             print(f"  • {tool}: {old} → {new} ({reason})")
 
@@ -667,7 +669,9 @@ def main() -> int:
         elif args.update_all:
             updated_count = update_all_tools(critical_only=args.critical_only)
             if updated_count > 0:
-                log("Don't forget to run: python3 scripts/dev/update_versions.py --sync")
+                log(
+                    "Don't forget to run: python3 scripts/dev/update_versions.py --sync"
+                )
                 return 0
             return 0
 

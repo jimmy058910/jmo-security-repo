@@ -480,7 +480,10 @@ class TestErrorHandling:
         assert result.is_success() is False
         assert result.status in ("error", "retry_exhausted")
         assert result.attempts == 3  # Initial + 2 retries
-        assert "timeout" in result.error_message.lower() or "Timeout" in result.error_message
+        assert (
+            "timeout" in result.error_message.lower()
+            or "Timeout" in result.error_message
+        )
 
         # Should have delays between retries (2s after timeout)
         # 3 attempts × 1s timeout + delays ≈ 3-7s
@@ -503,11 +506,16 @@ class TestErrorHandling:
         assert result.is_success() is False
         assert result.status == "error"
         assert result.returncode == -1
-        assert "not found" in result.error_message.lower() or "Tool not found" in result.error_message
+        assert (
+            "not found" in result.error_message.lower()
+            or "Tool not found" in result.error_message
+        )
         assert result.attempts == 1  # No retries for FileNotFoundError
 
         # Should return quickly (no retries)
-        assert duration < 2.0, f"FileNotFoundError should return quickly, got {duration}s"
+        assert (
+            duration < 2.0
+        ), f"FileNotFoundError should return quickly, got {duration}s"
 
     def test_run_tool_permission_error_with_retry(self):
         """Test PermissionError handling with retry attempts"""
@@ -516,7 +524,7 @@ class TestErrorHandling:
         import os
         import stat
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
             f.write("#!/bin/bash\necho test\n")
             script_path = f.name
 
@@ -673,7 +681,10 @@ class TestErrorHandling:
         result = runner.run_tool(tool)
 
         assert result.is_success() is False
-        assert "timeout" in result.error_message.lower() or "Timeout" in result.error_message
+        assert (
+            "timeout" in result.error_message.lower()
+            or "Timeout" in result.error_message
+        )
 
     def test_run_tool_zero_retries_no_delay(self):
         """Test that tools with retries=0 don't have delay overhead"""
@@ -700,10 +711,30 @@ class TestErrorHandling:
         """Test summary generation with diverse result statuses"""
         results = [
             ToolResult(tool="success1", status="success", returncode=0, duration=1.0),
-            ToolResult(tool="success2", status="success", returncode=1, duration=2.0),  # Findings
-            ToolResult(tool="timeout1", status="error", returncode=-1, duration=5.0, error_message="Timeout"),
-            ToolResult(tool="error1", status="error", returncode=-1, duration=0.5, error_message="Not found"),
-            ToolResult(tool="retry", status="retry_exhausted", returncode=2, duration=3.0, attempts=3),
+            ToolResult(
+                tool="success2", status="success", returncode=1, duration=2.0
+            ),  # Findings
+            ToolResult(
+                tool="timeout1",
+                status="error",
+                returncode=-1,
+                duration=5.0,
+                error_message="Timeout",
+            ),
+            ToolResult(
+                tool="error1",
+                status="error",
+                returncode=-1,
+                duration=0.5,
+                error_message="Not found",
+            ),
+            ToolResult(
+                tool="retry",
+                status="retry_exhausted",
+                returncode=2,
+                duration=3.0,
+                attempts=3,
+            ),
         ]
 
         runner = ToolRunner([])
