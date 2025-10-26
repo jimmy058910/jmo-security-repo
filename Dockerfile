@@ -152,6 +152,7 @@ COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
 COPY --from=builder /usr/local/bin/falcoctl /usr/local/bin/falcoctl
 COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
@@ -205,6 +206,7 @@ RUN echo "=== Verifying installed tools ===" && \
     checkov --version && \
     hadolint --version && \
     zap -version && \
+    nuclei -version && \
     falcoctl version && \
     (afl-fuzz -h > /dev/null 2>&1 || true) && \
     shellcheck --version && \
