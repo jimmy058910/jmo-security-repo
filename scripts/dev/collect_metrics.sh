@@ -231,6 +231,7 @@ collect_telemetry() {
 }
 
 # Generate summary report
+# shellcheck disable=SC2129  # Multiple heredocs appending to same file is efficient and readable
 generate_summary() {
   log "Generating summary report..."
 

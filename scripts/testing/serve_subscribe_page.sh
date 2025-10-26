@@ -2,7 +2,7 @@
 
 # Serve the subscribe page via HTTP (avoids CORS issues with file://)
 
-cd /home/jimmy058910/jmo-security-repo/docs
+cd /home/jimmy058910/jmo-security-repo/docs || exit 1
 
 echo "=============================================="
 echo "🌐 Starting local web server for testing"
@@ -37,5 +37,5 @@ echo "Press Ctrl+C to stop the server when done testing"
 echo ""
 
 # Wait for Ctrl+C
-trap "kill $SERVER_PID; echo ''; echo '✅ Server stopped'; exit 0" INT TERM
-wait $SERVER_PID
+trap 'kill '"$SERVER_PID"'; echo ""; echo "✅ Server stopped"; exit 0' INT TERM
+wait "$SERVER_PID"

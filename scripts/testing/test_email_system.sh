@@ -20,7 +20,7 @@ curl -s "${API_URL}/api/health" | python3 -m json.tool
 echo ""
 echo "✅ If you see status: 'ok', the API is working!"
 echo ""
-read -p "Press ENTER to continue to Test 2..."
+read -r -p "Press ENTER to continue to Test 2..."
 echo ""
 
 # Test 2: Subscribe Landing Page (WSL Browser)
@@ -49,7 +49,7 @@ echo "   2. Click 'Subscribe - It's Free'"
 echo "   3. Verify success message appears"
 echo "   4. Check your inbox for email from marketing@jmotools.com"
 echo ""
-read -p "Press ENTER after testing the subscribe page..."
+read -r -p "Press ENTER after testing the subscribe page..."
 echo ""
 
 # Test 3: Dashboard Form
@@ -82,7 +82,7 @@ echo "   2. Enter your email"
 echo "   3. Click 'Subscribe Free'"
 echo "   4. Verify success message"
 echo ""
-read -p "Press ENTER after testing the dashboard form..."
+read -r -p "Press ENTER after testing the dashboard form..."
 echo ""
 
 # Test 4: CLI First-Run Experience
@@ -90,7 +90,7 @@ echo "🖥️  Test 4: CLI First-Run Experience"
 echo "-------------------------------------------"
 echo "This will reset your JMo config to simulate a first-time user"
 echo ""
-read -p "Press ENTER to continue (or Ctrl+C to skip)..."
+read -r -p "Press ENTER to continue (or Ctrl+C to skip)..."
 
 # Backup existing config if it exists
 if [ -f ~/.jmo/config.yml ]; then
