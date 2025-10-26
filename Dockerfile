@@ -30,7 +30,7 @@ RUN TRUFFLEHOG_VERSION="3.90.11" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.34.2" && \
+RUN SYFT_VERSION="1.36.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -44,7 +44,7 @@ RUN TRIVY_VERSION="0.67.2" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint
-RUN HADOLINT_VERSION="2.12.0" && \
+RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
@@ -57,7 +57,7 @@ RUN SHFMT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") &&
     chmod +x /usr/local/bin/shfmt
 
 # Download Falcoctl
-RUN FALCOCTL_VERSION="0.11.0" && \
+RUN FALCOCTL_VERSION="0.11.4" && \
     FALCOCTL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_${FALCOCTL_ARCH}.tar.gz" \
     -o /tmp/falcoctl.tar.gz && \
@@ -128,10 +128,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Clean __pycache__ and .pyc files immediately after install
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    bandit==1.7.10 \
-    semgrep==1.99.0 \
-    checkov==3.2.255 \
-    ruff==0.14.0 && \
+    bandit==1.8.6 \
+    semgrep==1.140.0 \
+    checkov==3.2.487 \
+    ruff==0.14.2 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 

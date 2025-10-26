@@ -486,6 +486,82 @@ python3 scripts/dev/update_versions.py --sync
     return len(outdated_critical) + len(outdated_normal)
 
 
+def update_all_tools(critical_only: bool = False) -> int:
+    """
+    Update ALL tools to their latest versions automatically.
+
+    Args:
+        critical_only: If True, only update tools marked as critical
+
+    Returns:
+        Number of tools updated (0 if all already up-to-date)
+    """
+    log("Checking for tool updates...")
+    results = check_latest_versions()
+    versions = load_versions()
+
+    updated_tools = []
+    failed_tools = []
+    skipped_tools = []
+
+    for tool, (current, latest, is_outdated) in results.items():
+        if not is_outdated:
+            continue
+
+        # Check if tool is critical
+        is_critical = False
+        for category in ["python_tools", "binary_tools", "special_tools"]:
+            if tool in versions.get(category, {}):
+                is_critical = versions[category][tool].get("critical", False)
+                break
+
+        # Skip non-critical if flag set
+        if critical_only and not is_critical:
+            skipped_tools.append((tool, current, latest, "non-critical"))
+            continue
+
+        # Update the tool
+        log(f"Updating {tool}: {current} → {latest}")
+        if update_tool_version(tool, latest):
+            updated_tools.append((tool, current, latest))
+            ok(f"✓ {tool} updated successfully")
+        else:
+            failed_tools.append((tool, current, latest))
+            warn(f"✗ {tool} update failed")
+
+    # Print summary
+    print("")
+    if updated_tools:
+        ok(f"Successfully updated {len(updated_tools)} tool(s):")
+        for tool, old, new in updated_tools:
+            print(f"  • {tool}: {old} → {new}")
+
+    if failed_tools:
+        warn(f"Failed to update {len(failed_tools)} tool(s):")
+        for tool, old, new in failed_tools:
+            print(f"  • {tool}: {old} → {new}")
+
+    if skipped_tools:
+        log(f"Skipped {len(skipped_tools)} non-critical tool(s) (use --all to include):")
+        for tool, old, new, reason in skipped_tools:
+            print(f"  • {tool}: {old} → {new} ({reason})")
+
+    print("")
+    if updated_tools:
+        log("Next steps:")
+        print("  1. Run: python3 scripts/dev/update_versions.py --sync")
+        print("  2. Test: make docker-build")
+        print("  3. Commit: git add versions.yaml Dockerfile*")
+        print('  4. Commit: git commit -m "deps(tools): update all to latest"')
+        return len(updated_tools)
+    elif failed_tools:
+        err("Some tool updates failed. Fix errors and retry.")
+        return 1
+    else:
+        ok("All tools are already up-to-date!")
+        return 0
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -514,6 +590,11 @@ def main() -> int:
         action="store_true",
         help="Check for outdated tools (use with --create-issues)",
     )
+    group.add_argument(
+        "--update-all",
+        action="store_true",
+        help="Update ALL tools to latest versions automatically",
+    )
 
     parser.add_argument("--version", type=str, help="Version to set (used with --tool)")
     parser.add_argument(
@@ -525,6 +606,11 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Check for changes without writing files (used with --sync)",
+    )
+    parser.add_argument(
+        "--critical-only",
+        action="store_true",
+        help="Only update critical tools (used with --update-all)",
     )
 
     args = parser.parse_args()
@@ -577,6 +663,13 @@ def main() -> int:
             else:
                 ok("All tools are up to date")
                 return 0
+
+        elif args.update_all:
+            updated_count = update_all_tools(critical_only=args.critical_only)
+            if updated_count > 0:
+                log("Don't forget to run: python3 scripts/dev/update_versions.py --sync")
+                return 0
+            return 0
 
     except Exception as e:
         err(f"Unexpected error: {e}")
