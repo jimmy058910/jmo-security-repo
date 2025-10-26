@@ -14,6 +14,7 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
+    unzip \
     ca-certificates \
     build-essential \
     clang \
