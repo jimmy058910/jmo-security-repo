@@ -168,12 +168,20 @@ jobs:
         run: |
           # Run quick scan to generate SARIF
           python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/test-results
-          python3 scripts/cli/jmo.py report /tmp/test-results
+          # Generate report into the summaries folder
+          python3 scripts/cli/jmo.py report /tmp/test-results --out /tmp/test-results/summaries
+          if [ ! -f /tmp/test-results/summaries/findings.sarif ]; then
+            echo "SARIF file not found: /tmp/test-results/summaries/findings.sarif"
+            ls -la /tmp/test-results/summaries || true
+            exit 1
+          fi
 
       - name: Validate SARIF schema
-        uses: microsoft/sarif-actions@v0.2
+        uses: github/super-linter/slim@v5
+        env:
+          SARIF_REPORTER: true
         with:
-          command: /tmp/test-results/summaries/findings.sarif
+          sarif_file: /tmp/test-results/summaries/findings.sarif
 
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
