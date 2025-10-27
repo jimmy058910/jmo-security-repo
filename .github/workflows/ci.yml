@@ -174,7 +174,7 @@ jobs:
             echo "SARIF file not found: /tmp/test-results/summaries/findings.sarif"
             ls -la /tmp/test-results/summaries || true
             exit 1
-          fi
+           fi 
 
       - name: Validate SARIF schema
         uses: github/super-linter/slim@v5
