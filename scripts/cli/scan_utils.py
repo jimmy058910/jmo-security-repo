@@ -23,7 +23,7 @@ def tool_exists(tool_name: str) -> bool:
     Returns:
     - bool: If the tool is present then it will return true, else it will return false.
     """
- 
+
     logger = logging.getLogger(__name__)
 
     tool_path = shutil.which(tool_name)
