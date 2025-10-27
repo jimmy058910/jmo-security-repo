@@ -164,6 +164,17 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+      - name: Generate SARIF for validation
+        run: |
+          # Run quick scan to generate SARIF
+          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/test-results
+          python3 scripts/cli/jmo.py report /tmp/test-results
+
+      - name: Validate SARIF schema
+        uses: microsoft/sarif-actions@v0.2
+        with:
+          command: /tmp/test-results/summaries/findings.sarif
+
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
     name: Lint (quick checks)
