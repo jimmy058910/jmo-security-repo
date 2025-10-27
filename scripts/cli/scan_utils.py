@@ -6,7 +6,7 @@ Centralized utility functions used by scan job modules.
 
 import json
 import shutil
-import logger
+import logging
 from pathlib import Path
 
 
@@ -23,6 +23,9 @@ def tool_exists(tool_name: str) -> bool:
     Returns:
     - bool: If the tool is present then it will return true, else it will return false.
     """
+ 
+    logger = logging.getLogger(__name__)
+
     tool_path = shutil.which(tool_name)
 
     if tool_path:
