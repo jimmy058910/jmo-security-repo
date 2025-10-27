@@ -122,7 +122,7 @@ jobs:
         run: python -m twine check dist/*
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-${{ github.ref_name }}
           path: dist/*
@@ -304,7 +304,7 @@ jobs:
           cat size-comparison.md
 
       - name: Upload size comparison
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: docker-size-comparison-${{ steps.tag.outputs.value }}
           path: size-comparison.md
