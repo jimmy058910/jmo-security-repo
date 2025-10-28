@@ -10,3 +10,5 @@ jsonschema
 pre-commit
 mypy
 types-PyYAML
+croniter
+types-croniter
