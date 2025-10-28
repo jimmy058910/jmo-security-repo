@@ -81,18 +81,34 @@ main() {
     echo ""
     echo "=== Verification ==="
 
+    # Check if this is a release commit (HEAD commit message starts with "release: v")
+    is_release_commit=false
+    if git -C "$REPO_ROOT" log -1 --format=%s | grep -q '^release: v'; then
+        is_release_commit=true
+        echo -e "${YELLOW}ℹ️  Detected release commit${NC}"
+    fi
+
     # Check if PyPI matches local
     if [[ "$pypi_version" == "$local_version" ]]; then
         echo -e "${GREEN}✅ PyPI matches local version${NC}"
     else
-        echo -e "${RED}❌ Version mismatch:${NC}"
-        echo -e "   Local:  $local_version"
-        echo -e "   PyPI:   $pypi_version"
-        echo ""
-        echo "Action needed: Tag and release v$local_version"
-        echo "  git tag v$local_version"
-        echo "  git push --tags"
-        exit 1
+        if $is_release_commit; then
+            echo -e "${YELLOW}⚠️  Version mismatch (expected for release PR):${NC}"
+            echo -e "   Local:  $local_version"
+            echo -e "   PyPI:   $pypi_version"
+            echo ""
+            echo "This is a release commit - version will sync after tag push triggers release workflow."
+            echo "Skipping version mismatch check."
+        else
+            echo -e "${RED}❌ Version mismatch:${NC}"
+            echo -e "   Local:  $local_version"
+            echo -e "   PyPI:   $pypi_version"
+            echo ""
+            echo "Action needed: Tag and release v$local_version"
+            echo "  git tag v$local_version"
+            echo "  git push --tags"
+            exit 1
+        fi
     fi
 
     # Check if badge matches PyPI
