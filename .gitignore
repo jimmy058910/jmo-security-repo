@@ -89,6 +89,9 @@ docs/archive/*
 .claude/
 samples/fixtures/infra-demo/docker-test-results/
 
+# Hypothesis property-based testing cache (test artifacts, not source)
+.hypothesis/
+
 # JMo Memory System (persistent learning, local only)
 # Allow directory structure (.gitkeep files) and README, but ignore all content files
 .jmo/memory/**/*
