@@ -1,6 +1,5 @@
 """Integration tests for GitLab CI workflow generation."""
 
-import pytest
 import yaml
 from scripts.core.schedule_manager import (
     ScheduleManager,
