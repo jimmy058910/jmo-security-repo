@@ -13,17 +13,21 @@ from croniter import croniter
 @dataclass
 class ScheduleMetadata:
     """Kubernetes-style metadata."""
+
     name: str
     uid: str = field(default_factory=lambda: str(uuid.uuid4()))
     labels: Dict[str, str] = field(default_factory=dict)
     annotations: Dict[str, str] = field(default_factory=dict)
-    creationTimestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    creationTimestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     generation: int = 1
 
 
 @dataclass
 class BackendConfig:
     """Backend-specific configuration."""
+
     type: str  # "github-actions" | "gitlab-ci" | "local-cron"
     config: Dict[str, Any] = field(default_factory=dict)
 
@@ -31,6 +35,7 @@ class BackendConfig:
 @dataclass
 class JobTemplateSpec:
     """Scan job specification."""
+
     profile: str
     targets: Dict[str, Any]
     results: Dict[str, Any]
@@ -41,6 +46,7 @@ class JobTemplateSpec:
 @dataclass
 class ScheduleSpec:
     """Schedule specification (Kubernetes CronJob-inspired)."""
+
     schedule: str  # Cron syntax
     timezone: str = "UTC"
     suspend: bool = False
@@ -48,18 +54,20 @@ class ScheduleSpec:
     startingDeadlineSeconds: Optional[int] = None
     successfulJobsHistoryLimit: int = 30
     failedJobsHistoryLimit: int = 10
-    backend: BackendConfig = field(default_factory=lambda: BackendConfig(type="github-actions"))
-    jobTemplate: JobTemplateSpec = field(default_factory=lambda: JobTemplateSpec(
-        profile="balanced",
-        targets={},
-        results={},
-        options={}
-    ))
+    backend: BackendConfig = field(
+        default_factory=lambda: BackendConfig(type="github-actions")
+    )
+    jobTemplate: JobTemplateSpec = field(
+        default_factory=lambda: JobTemplateSpec(
+            profile="balanced", targets={}, results={}, options={}
+        )
+    )
 
 
 @dataclass
 class ScheduleStatus:
     """Runtime status."""
+
     conditions: List[Dict[str, Any]] = field(default_factory=list)
     lastScheduleTime: Optional[str] = None
     lastSuccessfulTime: Optional[str] = None
@@ -72,10 +80,18 @@ class ScheduleStatus:
 @dataclass
 class ScanSchedule:
     """Complete schedule resource."""
+
     apiVersion: str = "jmo.security/v1alpha1"
     kind: str = "ScanSchedule"
-    metadata: ScheduleMetadata = field(default_factory=lambda: ScheduleMetadata(name=""))
-    spec: ScheduleSpec = field(default_factory=lambda: ScheduleSpec(schedule="", jobTemplate=JobTemplateSpec(profile="", targets={}, results={}, options={})))
+    metadata: ScheduleMetadata = field(
+        default_factory=lambda: ScheduleMetadata(name="")
+    )
+    spec: ScheduleSpec = field(
+        default_factory=lambda: ScheduleSpec(
+            schedule="",
+            jobTemplate=JobTemplateSpec(profile="", targets={}, results={}, options={}),
+        )
+    )
     status: ScheduleStatus = field(default_factory=lambda: ScheduleStatus())
 
 
@@ -104,9 +120,9 @@ class ScheduleManager:
                 "kind": "ScheduleManifest",
                 "metadata": {
                     "version": "2.0.0",
-                    "created_at": datetime.now(timezone.utc).isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                 },
-                "schedules": []
+                "schedules": [],
             }
             self.schedules_file.write_text(json.dumps(manifest, indent=2))
             # Set secure permissions (read/write for owner only)
@@ -126,19 +142,24 @@ class ScheduleManager:
         schedule.status.nextScheduleTime = cron.get_next(datetime).isoformat()
 
         # Add condition
-        schedule.status.conditions.append({
-            "type": "Ready",
-            "status": "True",
-            "lastTransitionTime": now.isoformat(),
-            "reason": "Created",
-            "message": "Schedule created successfully"
-        })
+        schedule.status.conditions.append(
+            {
+                "type": "Ready",
+                "status": "True",
+                "lastTransitionTime": now.isoformat(),
+                "reason": "Created",
+                "message": "Schedule created successfully",
+            }
+        )
 
         # Load existing manifest
         manifest = json.loads(self.schedules_file.read_text())
 
         # Check for duplicate name
-        if any(s["metadata"]["name"] == schedule.metadata.name for s in manifest["schedules"]):
+        if any(
+            s["metadata"]["name"] == schedule.metadata.name
+            for s in manifest["schedules"]
+        ):
             raise ValueError(f"Schedule '{schedule.metadata.name}' already exists")
 
         # Append and save
@@ -154,7 +175,8 @@ class ScheduleManager:
 
         if labels:
             schedules = [
-                s for s in schedules
+                s
+                for s in schedules
                 if all(s.metadata.labels.get(k) == v for k, v in labels.items())
             ]
 
@@ -190,8 +212,7 @@ class ScheduleManager:
         original_count = len(manifest["schedules"])
 
         manifest["schedules"] = [
-            s for s in manifest["schedules"]
-            if s["metadata"]["name"] != name
+            s for s in manifest["schedules"] if s["metadata"]["name"] != name
         ]
 
         if len(manifest["schedules"]) == original_count:
@@ -210,7 +231,9 @@ class ScheduleManager:
         metadata = ScheduleMetadata(**data["metadata"])
         backend = BackendConfig(**data["spec"]["backend"])
         job_template = JobTemplateSpec(**data["spec"]["jobTemplate"])
-        spec = ScheduleSpec(**{**data["spec"], "backend": backend, "jobTemplate": job_template})
+        spec = ScheduleSpec(
+            **{**data["spec"], "backend": backend, "jobTemplate": job_template}
+        )
         status = ScheduleStatus(**data["status"])
 
         return ScanSchedule(
@@ -218,5 +241,5 @@ class ScheduleManager:
             kind=data["kind"],
             metadata=metadata,
             spec=spec,
-            status=status
+            status=status,
         )
