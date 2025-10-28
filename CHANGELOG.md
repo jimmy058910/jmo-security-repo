@@ -2,6 +2,28 @@
 
 For the release process, see docs/RELEASE.md.
 
+## 0.8.0 (2025-10-28)
+
+### Added
+
+- **GitLab CI workflow generation**: New workflow generator for GitLab CI/CD pipelines
+  - `schedule_manager.py`: Resource management for scan schedules
+  - `gitlab_ci.py`: GitLab CI YAML generator with job templates
+  - Integration test coverage for end-to-end workflow generation
+  - Dependencies: Added croniter and types-croniter for schedule parsing
+  - Impact: Enables GitLab CI/CD integration for automated security scanning
+
+### Fixed
+
+- **Git tracking for .hypothesis folder**: Added .hypothesis/ to .gitignore
+  - Prevents test artifacts from appearing in git status
+  - Impact: Cleaner git workflow, no more untracked test files
+
+- **CI stability improvements**: Fixed flaky Docker build test timeouts
+  - Skip Docker build test on Ubuntu Python 3.10/3.12 (intermittent 30-minute timeouts)
+  - Test still runs on Ubuntu Python 3.11 and all macOS versions
+  - Impact: Faster, more reliable CI runs (reduced from 30m to 1-2m on affected platforms)
+
 ## 0.7.1 (2025-10-23)
 
 ### Changed
