@@ -170,16 +170,28 @@ jobs:
           python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/test-results
           python3 scripts/cli/jmo.py report /tmp/test-results
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0'
-
-      - name: Install SARIF MultiTool
-        run: dotnet tool install -g Microsoft.Sarif.Multitool
-
       - name: Validate SARIF schema
-        run: sarif validate /tmp/test-results/summaries/findings.sarif
+        run: |
+          # Install JSON schema validation tools
+          python3 -m pip install jsonschema requests
+          
+          # Validate SARIF file with official SARIF 2.1.0 schema
+          python3 -c "
+          import json
+          import jsonschema
+          import requests
+          
+          # Download official SARIF 2.1.0 schema
+          schema_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json'
+          schema = requests.get(schema_url).json()
+          
+          # Load and validate SARIF file
+          with open('/tmp/test-results/summaries/findings.sarif', 'r') as f:
+              sarif_data = json.load(f)
+          
+          jsonschema.validate(sarif_data, schema)
+          print('✅ SARIF file is valid according to SARIF 2.1.0 schema')
+          "
 
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
