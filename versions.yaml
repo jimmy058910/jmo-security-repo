@@ -7,13 +7,13 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.140.0
+    version: 1.141.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.487
+    version: 3.2.488
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -26,7 +26,7 @@ python_tools:
     critical: false
 binary_tools:
   trufflehog:
-    version: 3.90.11
+    version: 3.90.12
     github_repo: trufflesecurity/trufflehog
     description: Verified secrets scanner (primary)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -161,6 +161,45 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2025-10-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-28'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.90.11
+    new_version: 3.90.12
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-28'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.487
+    new_version: 3.2.488
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-10-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-10-28'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.140.0
+    new_version: 1.141.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-10-26'
   action: Automated version update
   tools_updated: []

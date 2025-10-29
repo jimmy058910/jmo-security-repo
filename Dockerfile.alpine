@@ -18,7 +18,7 @@ RUN apk add --no-cache \
     ca-certificates
 
 # Download TruffleHog
-RUN TRUFFLEHOG_VERSION="3.90.11" && \
+RUN TRUFFLEHOG_VERSION="3.90.12" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     wget -q "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -O /tmp/trufflehog.tar.gz && \
@@ -99,8 +99,8 @@ ARG TARGETARCH
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel && \
     if [ "$TARGETARCH" = "amd64" ]; then \
         python3 -m pip install --no-cache-dir --break-system-packages \
-            semgrep==1.140.0 \
-            checkov==3.2.487; \
+            semgrep==1.141.0 \
+            checkov==3.2.488; \
     else \
         echo "Skipping semgrep/checkov on ARM64 (rustworkx build time)"; \
     fi && \
