@@ -89,7 +89,8 @@ jobs:
           echo "🔍 Validating SARIF schema compliance..."
 
           # Generate SARIF for validation
-          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/sarif-test
+          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog \
+            --results-dir /tmp/sarif-test
           python3 scripts/cli/jmo.py report /tmp/sarif-test
 
           # Install JSON schema validation tools
@@ -104,20 +105,19 @@ jobs:
 
           try:
               # Download official SARIF 2.1.0 schema
-              schema_url = (
-                  'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/'
-                  'Schemata/sarif-schema-2.1.0.json'
-              )
+              base_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec'
+              schema_url = f'{base_url}/main/Schemata/sarif-schema-2.1.0.json'
               schema = requests.get(schema_url).json()
 
               # Load and validate SARIF file
-              with open('/tmp/sarif-test/summaries/findings.sarif', 'r') as f:
+              sarif_path = '/tmp/sarif-test/summaries/findings.sarif'
+              with open(sarif_path, 'r') as f:
                   sarif_data = json.load(f)
 
               jsonschema.validate(sarif_data, schema)
               print('✅ SARIF schema valid')
           except Exception as e:
-              print(f'❌ SARIF validation failed: {e}')
+              print('❌ SARIF validation failed:', str(e))
               sys.exit(1)
           "
 
