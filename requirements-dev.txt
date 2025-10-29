@@ -19,6 +19,8 @@ click==8.3.0
     # via black
 coverage[toml]==7.11.0
     # via pytest-cov
+croniter==6.0.0
+    # via -r requirements-dev.in
 distlib==0.4.0
     # via virtualenv
 filelock==3.20.0
@@ -77,8 +79,12 @@ pytest-cov==7.0.0
     # via -r requirements-dev.in
 pytest-rerunfailures==16.1
     # via -r requirements-dev.in
+python-dateutil==2.9.0.post0
+    # via croniter
 pytokens==0.2.0
     # via black
+pytz==2025.2
+    # via croniter
 pyyaml==6.0.3
     # via
     #   -r requirements-dev.in
@@ -96,10 +102,14 @@ rpds-py==0.28.0
     #   referencing
 ruff==0.14.2
     # via -r requirements-dev.in
+six==1.17.0
+    # via python-dateutil
 sortedcontainers==2.4.0
     # via hypothesis
 stevedore==5.5.0
     # via bandit
+types-croniter==6.0.0.20250809
+    # via -r requirements-dev.in
 types-pyyaml==6.0.12.20250915
     # via -r requirements-dev.in
 typing-extensions==4.15.0

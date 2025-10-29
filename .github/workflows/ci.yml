@@ -71,18 +71,52 @@ jobs:
 
           # Run critical lint checks (catches 80% of nightly failures early)
           echo "::group::Markdownlint"
-          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "Warning: Markdownlint issues found (non-blocking preview)"
+          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "⚠️  Markdownlint issues found (non-blocking preview)"
           echo "::endgroup::"
 
           echo "::group::Mypy (scripts only)"
-          mypy scripts/ || echo "Warning: Mypy issues found (non-blocking preview)"
+          mypy scripts/ || echo "⚠️  Mypy issues found (non-blocking preview)"
           echo "::endgroup::"
 
           echo "::group::Ruff"
-          ruff check scripts/ tests/ || echo "Warning: Ruff issues found (non-blocking preview)"
+          ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
           echo "::endgroup::"
 
-          echo "Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
+          echo "✅ Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
+
+      - name: Validate SARIF schema
+        run: |
+          echo "🔍 Validating SARIF schema compliance..."
+          
+          # Generate SARIF for validation
+          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/sarif-test
+          python3 scripts/cli/jmo.py report /tmp/sarif-test
+          
+          # Install JSON schema validation tools
+          python3 -m pip install jsonschema requests
+          
+          # Validate SARIF file with official SARIF 2.1.0 schema
+          python3 -c "
+          import json
+          import jsonschema
+          import requests
+          import sys
+          
+          try:
+              # Download official SARIF 2.1.0 schema
+              schema_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json'
+              schema = requests.get(schema_url).json()
+              
+              # Load and validate SARIF file
+              with open('/tmp/sarif-test/summaries/findings.sarif', 'r') as f:
+                  sarif_data = json.load(f)
+              
+              jsonschema.validate(sarif_data, schema)
+              print('✅ SARIF schema valid')
+          except Exception as e:
+              print(f'❌ SARIF validation failed: {e}')
+              sys.exit(1)
+          "
 
   # Test matrix runs in parallel, independent of quick-checks
   test-matrix:
@@ -164,34 +198,7 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-      - name: Generate SARIF for validation
-        run: |
-          # Run quick scan to generate SARIF
-          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/test-results
-          python3 scripts/cli/jmo.py report /tmp/test-results
 
-      - name: Validate SARIF schema
-        run: |
-          # Install JSON schema validation tools
-          python3 -m pip install jsonschema requests
-          
-          # Validate SARIF file with official SARIF 2.1.0 schema
-          python3 -c "
-          import json
-          import jsonschema
-          import requests
-          
-          # Download official SARIF 2.1.0 schema
-          schema_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json'
-          schema = requests.get(schema_url).json()
-          
-          # Load and validate SARIF file
-          with open('/tmp/test-results/summaries/findings.sarif', 'r') as f:
-              sarif_data = json.load(f)
-          
-          jsonschema.validate(sarif_data, schema)
-          print('✅ SARIF file is valid according to SARIF 2.1.0 schema')
-          "
 
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
