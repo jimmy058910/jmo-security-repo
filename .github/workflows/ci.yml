@@ -71,18 +71,18 @@ jobs:
 
           # Run critical lint checks (catches 80% of nightly failures early)
           echo "::group::Markdownlint"
-          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "⚠️  Markdownlint issues found (non-blocking preview)"
+          npx markdownlint-cli2 "**/*.md" "#node_modules" || echo "Warning: Markdownlint issues found (non-blocking preview)"
           echo "::endgroup::"
 
           echo "::group::Mypy (scripts only)"
-          mypy scripts/ || echo "⚠️  Mypy issues found (non-blocking preview)"
+          mypy scripts/ || echo "Warning: Mypy issues found (non-blocking preview)"
           echo "::endgroup::"
 
           echo "::group::Ruff"
-          ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
+          ruff check scripts/ tests/ || echo "Warning: Ruff issues found (non-blocking preview)"
           echo "::endgroup::"
 
-          echo "✅ Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
+          echo "Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
 
   # Test matrix runs in parallel, independent of quick-checks
   test-matrix:
@@ -168,20 +168,18 @@ jobs:
         run: |
           # Run quick scan to generate SARIF
           python3 scripts/cli/jmo.py scan --repo . --tools trufflehog --results-dir /tmp/test-results
-          # Generate report into the summaries folder
-          python3 scripts/cli/jmo.py report /tmp/test-results --out /tmp/test-results/summaries
-          if [ ! -f /tmp/test-results/summaries/findings.sarif ]; then
-            echo "SARIF file not found: /tmp/test-results/summaries/findings.sarif"
-            ls -la /tmp/test-results/summaries || true
-            exit 1
-           fi 
+          python3 scripts/cli/jmo.py report /tmp/test-results
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0'
+
+      - name: Install SARIF MultiTool
+        run: dotnet tool install -g Microsoft.Sarif.Multitool
 
       - name: Validate SARIF schema
-        uses: github/super-linter/slim@v5
-        env:
-          SARIF_REPORTER: true
-        with:
-          sarif_file: /tmp/test-results/summaries/findings.sarif
+        run: sarif validate /tmp/test-results/summaries/findings.sarif
 
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
