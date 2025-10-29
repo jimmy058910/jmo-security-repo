@@ -6,12 +6,27 @@ For the release process, see docs/RELEASE.md.
 
 ### Added
 
-- **GitLab CI workflow generation**: New workflow generator for GitLab CI/CD pipelines
-  - `scripts/core/schedule_manager.py`: Resource management for scan schedules with cron parsing
-  - `scripts/core/workflow_generators/gitlab_ci.py`: GitLab CI YAML generator with job templates
-  - `tests/integration/test_gitlab_ci_generation.py`: End-to-end integration tests
+- **Schedule Management System**: Kubernetes-inspired scan scheduling with local persistence
+  - `scripts/core/schedule_manager.py`: Complete scheduling infrastructure with cron syntax support
+  - **API Design**: Kubernetes-style resources (metadata, spec, status) for familiar DevOps patterns
+  - **Storage**: Local persistence in `~/.jmo/schedules.json` with secure permissions (0o600)
+  - **Cron Support**: Full cron syntax validation via croniter, timezone support, next run calculation
+  - **Features**: Suspend schedules, concurrency policies (Forbid/Allow/Replace), history limits
+  - **Backends**: Support for GitHub Actions, GitLab CI, and local cron execution
+  - **CLI Commands**: `jmo schedule create|list|get|update|delete|export` (planned)
   - Dependencies: Added `croniter>=2.0` and `types-croniter` for schedule parsing and type hints
-  - Impact: Enables automated security scanning in GitLab CI/CD pipelines with flexible scheduling
+
+- **GitLab CI Workflow Generation**: Automated GitLab CI YAML generation from schedules
+  - `scripts/core/workflow_generators/gitlab_ci.py`: Complete GitLab CI YAML generator
+  - **Job Templates**: Profile-based job generation (fast/balanced/deep)
+  - **Multi-Target Support**: All 6 target types (repos, images, IaC, web, GitLab, K8s)
+  - **Slack Notifications**: Success/failure notifications via Slack webhooks
+    - Configurable via `schedule.spec.jobTemplate.notifications.channels[]`
+    - Rich message formatting with pipeline status, commit info, findings count
+    - Webhook URL configuration: `{"type": "slack", "url": "https://hooks.slack.com/..."}`
+  - **Schedule Export**: `jmo schedule export <name>` generates ready-to-use `.gitlab-ci.yml`
+  - `tests/integration/test_gitlab_ci_generation.py`: Comprehensive integration tests
+  - Impact: Zero-config GitLab CI/CD integration with enterprise notification support
 
 ### Fixed
 

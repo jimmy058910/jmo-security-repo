@@ -620,10 +620,20 @@ This project provides an automated framework for conducting thorough security au
   - Kubernetes clusters (live audits)
 - ✅ **Multi-Tool Scanning**: Curated set covering secrets (trufflehog verified, noseyparker), SAST (semgrep, bandit), SBOM+vuln/misconfig (syft+trivy), IaC (checkov), Dockerfile (hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++)
   - **v0.5.0 Update:** Removed deprecated tools (gitleaks, tfsec, osv-scanner), added DAST/runtime/fuzzing capabilities
+- ⏰ **Schedule Management (v0.8.0)**: Kubernetes-inspired scan scheduling with GitLab CI generation
+  - Cron-based scheduling with local persistence (`~/.jmo/schedules.json`)
+  - GitLab CI workflow generation with Slack notifications
+  - Support for GitHub Actions, GitLab CI, and local cron backends
+  - Suspend schedules, concurrency policies, history limits
 - 📊 **Comprehensive Reporting**: Unified findings (JSON/YAML), enriched SARIF 2.1.0 with taxonomies, Markdown summary, and an interactive HTML dashboard with XSS protection
 - 🎨 **Easy-to-Read Outputs**: Well-formatted reports with severity categorization using type-safe enums
 - 🔄 **Automated Workflows**: One CLI to scan, aggregate, and gate on severity (scan/report/ci)
 - 🧭 **Profiles and Overrides**: Named profiles, per-tool flags/timeouts, include/exclude patterns, configurable thread recommendations
+- 🚀 **Performance & UX (v0.7.0)**: Real-time progress tracking, auto-CPU thread detection, intelligent telemetry
+  - Live ETA estimation during scans (zero dependencies)
+  - Auto-detect CPU cores for optimal parallelism (75% utilization)
+  - Privacy-first telemetry system (opt-out, anonymous, GDPR/CCPA compliant)
+  - Memory system for persistent learning across sessions
 - 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 - 🔒 **Security-First**: XSS vulnerability patched, comprehensive input escaping, secure-by-default configurations
 

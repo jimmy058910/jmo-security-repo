@@ -167,6 +167,8 @@ make tools
 |----------|---------|----------|
 | [**Quick Reference**](QUICK_REFERENCE.md) | **One-page command reference (scanning, Docker, troubleshooting)** | **Everyone** |
 | [**Results Quick Reference**](RESULTS_QUICK_REFERENCE.md) | **One-page printable triage card (30-minute workflow)** | **Everyone** |
+| [**Schedule Guide**](SCHEDULE_GUIDE.md) | **Complete guide to automated scan scheduling (v0.8.0+)** | **DevOps/SRE** |
+| [**Slack Notifications**](examples/slack-notifications.md) | **Real-world Slack integration patterns (v0.8.0+)** | **DevOps/SRE** |
 | [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows | Beginners |
 | [TSV Scanning](examples/scan_from_tsv.md) | Clone and scan from TSV files | DevOps |
 | [GitHub Actions Docker](examples/github-actions-docker.yml) | CI/CD workflow examples | DevOps/SRE |
