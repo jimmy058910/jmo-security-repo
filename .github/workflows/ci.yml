@@ -88,10 +88,17 @@ jobs:
         run: |
           echo "🔍 Validating SARIF schema compliance..."
 
+          # Install required packages for SARIF validation
+          pip install jsonschema requests
+
+          # Install project dependencies for jmo.py
+          pip install -r requirements-dev.txt
+          pip install -e .
+
           # Generate SARIF for validation
-          python3 scripts/cli/jmo.py scan --repo . --tools trufflehog \
+          PYTHONPATH=. python3 scripts/cli/jmo.py scan --repo . --tools trufflehog \
             --results-dir /tmp/sarif-test
-          python3 scripts/cli/jmo.py report /tmp/sarif-test
+          PYTHONPATH=. python3 scripts/cli/jmo.py report /tmp/sarif-test
 
           # Validate SARIF schema using Python
           python3 -c "
