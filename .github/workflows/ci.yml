@@ -113,24 +113,35 @@ jobs:
               ]
           }
 
-          # Create directory and write test SARIF file
-          test_dir = '/tmp/sarif-test/summaries'
-          os.makedirs(test_dir, exist_ok=True)
-
-          with open(f'{test_dir}/findings.sarif', 'w') as f:
-              json.dump(sarif_data, f, indent=2)
-
           try:
-              # Download SARIF schema
+              # Download SARIF schema with error handling
               schema_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json'
-              schema = requests.get(schema_url).json()
+              print(f'Downloading SARIF schema from: {schema_url}')
+
+              response = requests.get(schema_url)
+              response.raise_for_status()
+
+              # Debug the response content
+              print(f'Response status: {response.status_code}')
+              print(f'Response headers: {dict(response.headers)}')
+              print(f'Response content length: {len(response.text)}')
+              print(f'First 100 chars: {response.text[:100]}')
+
+              schema = response.json()
+              print('✅ SARIF schema downloaded and parsed successfully')
 
               # Validate the test SARIF file
               jsonschema.validate(sarif_data, schema)
-
               print('✅ SARIF schema validation passed')
               print('✅ SARIF reporter can generate valid SARIF 2.1.0 files')
 
+          except requests.RequestException as e:
+              print(f'❌ Failed to download SARIF schema: {e}')
+              sys.exit(1)
+          except json.JSONDecodeError as e:
+              print(f'❌ Failed to parse SARIF schema JSON: {e}')
+              print(f'Response text: {response.text[:500]}')
+              sys.exit(1)
           except Exception as e:
               print(f'❌ SARIF validation failed: {e}')
               sys.exit(1)
