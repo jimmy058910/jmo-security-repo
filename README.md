@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
 [![PyPI version](https://badge.fury.io/py/jmo-security.svg)](https://badge.fury.io/py/jmo-security)
 [![Python Versions](https://img.shields.io/pypi/pyversions/jmo-security.svg)](https://pypi.org/project/jmo-security/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/licenses/MIT)
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 [![Documentation](https://img.shields.io/badge/docs-ReadTheDocs-blue.svg)](https://docs.jmotools.com)
@@ -73,6 +73,18 @@ See `.github/workflows/tests.yml` and `.github/workflows/release.yml` for detail
 Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
 
 ## 🎉 Recent Improvements
+
+### v0.8.0 - GitLab CI & Stability (October 2025)
+
+**GitLab CI/CD Integration:**
+
+- ✅ **GitLab CI Workflow Generation** - Generate `.gitlab-ci.yml` for automated security scanning
+  - Resource management with cron-based scheduling
+  - Job templates for Docker-based scans
+  - Flexible scan profiles (fast/balanced/deep)
+- ✅ **CI Stability** - Fixed flaky Docker build test timeouts
+  - Reduced CI runtime from 30m to 1-2m on affected platforms
+  - Cleaner git workflow with `.hypothesis/` gitignore
 
 ### v0.7.0 - Performance & UX (October 2025)
 
