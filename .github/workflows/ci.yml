@@ -104,7 +104,10 @@ jobs:
 
           try:
               # Download official SARIF 2.1.0 schema
-              schema_url = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json'
+              schema_url = (
+                  'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/'
+                  'Schemata/sarif-schema-2.1.0.json'
+              )
               schema = requests.get(schema_url).json()
 
               # Load and validate SARIF file
