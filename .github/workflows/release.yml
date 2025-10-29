@@ -397,22 +397,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Wait for PyPI to propagate (60s)
+      - name: Wait for PyPI to propagate with retries
         run: |
-          echo "⏳ Waiting 60s for PyPI to propagate the new version..."
-          sleep 60
+          echo "⏳ Waiting for PyPI to propagate the new version..."
 
-      - name: Verify badges match pyproject.toml
-        run: |
-          echo "🏷️  Verifying PyPI badges auto-update correctly..."
-          bash scripts/dev/verify_badges.sh || {
+          # Initial wait
+          echo "  Initial wait: 90s..."
+          sleep 90
+
+          # Retry loop with exponential backoff
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          SUCCESS=false
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             echo ""
-            echo "⚠️  Badge verification failed. This is often due to:"
-            echo "  1. PyPI propagation delay (wait 2-5 minutes)"
-            echo "  2. Badge CDN caching (wait 15-30 minutes)"
+            echo "🔍 Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Verifying badges..."
+
+            if bash scripts/dev/verify_badges.sh; then
+              SUCCESS=true
+              break
+            fi
+
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+              WAIT_TIME=$((30 * RETRY_COUNT))  # 30s, 60s exponential backoff
+              echo "⏳ Waiting ${WAIT_TIME}s before retry..."
+              sleep $WAIT_TIME
+            fi
+          done
+
+          if [ "$SUCCESS" = false ]; then
+            echo ""
+            echo "❌ Badge verification failed after $MAX_RETRIES attempts."
+            echo ""
+            echo "⚠️  This is often due to:"
+            echo "  1. PyPI API propagation delay (can take 2-5 minutes)"
+            echo "  2. Badge CDN caching (wait 15-30 minutes for global propagation)"
             echo "  3. Version mismatch (check pyproject.toml)"
             echo ""
             echo "Manual verification:"
             echo "  make verify-badges"
             exit 1
-          }
+          fi
+
+          echo ""
+          echo "✅ Badge verification successful!"
