@@ -830,6 +830,262 @@ Full privacy policy and data handling details:
 
 **Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
+## Schedule Management (v0.8.0+)
+
+**Automate recurring security scans with Kubernetes-inspired scheduling**
+
+JMo Security v0.8.0 introduces a comprehensive schedule management system for automated, recurring scans with:
+
+- **Cron-based scheduling** with full cron syntax support
+- **Local persistence** in `~/.jmo/schedules.json` with secure permissions (0o600)
+- **Multiple backends**: GitLab CI, GitHub Actions, local cron
+- **Slack notifications**: Success/failure alerts to team channels
+- **Kubernetes-inspired API**: Familiar metadata/spec/status patterns for DevOps teams
+
+### Quick Start
+
+```python
+from scripts.core.schedule_manager import (
+    ScheduleManager, ScanSchedule, ScheduleMetadata,
+    ScheduleSpec, BackendConfig, JobTemplateSpec
+)
+
+# Initialize manager
+manager = ScheduleManager()
+
+# Create weekly scan schedule
+schedule = ScanSchedule(
+    metadata=ScheduleMetadata(
+        name="weekly-prod-scan",
+        labels={"team": "security", "environment": "production"}
+    ),
+    spec=ScheduleSpec(
+        schedule="0 2 * * 1",  # Every Monday at 2 AM UTC
+        timezone="UTC",
+        backend=BackendConfig(type="gitlab-ci"),
+        jobTemplate=JobTemplateSpec(
+            profile="balanced",
+            targets={"repos_dir": "/repos"},
+            results={"dir": "/results"},
+            options={"fail_on": "HIGH"},
+            notifications={
+                "enabled": True,
+                "channels": [
+                    {
+                        "type": "slack",
+                        "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+                    }
+                ]
+            }
+        )
+    )
+)
+
+# Save schedule
+manager.create(schedule)
+print(f"✅ Created schedule: {schedule.metadata.name}")
+print(f"📅 Next run: {schedule.status.nextScheduleTime}")
+```
+
+### Schedule CLI Commands (Planned)
+
+The following CLI commands are planned for future releases:
+
+```bash
+# Create schedule
+jmo schedule create weekly-scan \
+  --cron "0 2 * * 1" \
+  --profile balanced \
+  --backend gitlab-ci \
+  --slack-webhook "$SLACK_WEBHOOK_URL"
+
+# List all schedules
+jmo schedule list
+
+# Get specific schedule
+jmo schedule get weekly-scan
+
+# Update schedule
+jmo schedule update weekly-scan --cron "0 3 * * 1"
+
+# Delete schedule
+jmo schedule delete weekly-scan
+
+# Export to GitLab CI YAML
+jmo schedule export weekly-scan > .gitlab-ci.yml
+
+# Suspend/resume
+jmo schedule suspend weekly-scan
+jmo schedule resume weekly-scan
+```
+
+**Current implementation:** Use Python API directly (see [docs/SCHEDULE_GUIDE.md](SCHEDULE_GUIDE.md))
+
+### Managing Schedules
+
+**List all schedules:**
+
+```python
+manager = ScheduleManager()
+
+# List all
+schedules = manager.list()
+for s in schedules:
+    print(f"{s.metadata.name}: {s.spec.schedule} (next: {s.status.nextScheduleTime})")
+
+# Filter by labels
+prod_schedules = manager.list(labels={"environment": "production"})
+```
+
+**Update existing schedule:**
+
+```python
+schedule = manager.get("weekly-scan")
+schedule.spec.schedule = "0 3 * * *"  # Change to 3 AM
+schedule.spec.jobTemplate.profile = "deep"  # Use deep profile
+manager.update(schedule)
+```
+
+**Delete schedule:**
+
+```python
+success = manager.delete("weekly-scan")
+```
+
+### GitLab CI Integration
+
+**Generate GitLab CI YAML:**
+
+```python
+from scripts.core.workflow_generators.gitlab_ci import GitLabCIGenerator
+
+generator = GitLabCIGenerator()
+schedule = manager.get("weekly-scan")
+yaml_content = generator.generate(schedule)
+
+# Write to .gitlab-ci.yml
+with open(".gitlab-ci.yml", "w") as f:
+    f.write(yaml_content)
+```
+
+**Generated YAML includes:**
+
+- Profile-based scan job (fast/balanced/deep)
+- Multi-target support (all 6 target types)
+- Slack success/failure notifications
+- SARIF upload for GitLab security dashboard
+- Artifact persistence
+
+**GitLab schedule setup:**
+
+1. Navigate to **CI/CD > Schedules** in GitLab
+2. Create new schedule with cron syntax from `schedule.spec.schedule`
+3. Set timezone to `UTC`
+4. GitLab will run `.gitlab-ci.yml` on schedule
+
+### Slack Notifications
+
+**Setup webhook:**
+
+1. Go to [Slack API: Incoming Webhooks](https://api.slack.com/messaging/webhooks)
+2. Create app and enable Incoming Webhooks
+3. Add webhook to workspace channel (e.g., `#security-alerts`)
+4. Copy webhook URL: `https://hooks.slack.com/services/T00/B00/XXX`
+
+**Configure in schedule:**
+
+```python
+notifications={
+    "enabled": True,
+    "channels": [
+        {
+            "type": "slack",
+            "url": "https://hooks.slack.com/services/T00/B00/XXX"
+        }
+    ]
+}
+```
+
+**Best practice:** Use environment variables or CI/CD secrets, never hardcode webhook URLs
+
+**Multiple channels:**
+
+```python
+notifications={
+    "enabled": True,
+    "channels": [
+        {"type": "slack", "url": os.environ["SLACK_SECURITY"]},  # #security
+        {"type": "slack", "url": os.environ["SLACK_DEVOPS"]}     # #devops
+    ]
+}
+```
+
+### Cron Syntax Reference
+
+Standard 5-field cron format:
+
+```text
+┌─ minute (0-59)
+│ ┌─ hour (0-23)
+│ │ ┌─ day of month (1-31)
+│ │ │ ┌─ month (1-12)
+│ │ │ │ ┌─ day of week (0-7, Sunday=0 or 7)
+│ │ │ │ │
+* * * * *
+```
+
+**Common patterns:**
+
+```python
+"0 2 * * *"      # Every day at 2 AM UTC
+"0 2 * * 1"      # Every Monday at 2 AM UTC
+"0 */6 * * *"    # Every 6 hours
+"0 9 * * 1-5"    # Every weekday at 9 AM UTC
+"0 0 1 * *"      # First day of month at midnight
+"*/15 * * * *"   # Every 15 minutes (testing)
+```
+
+### Advanced Configuration
+
+**Concurrency policies:**
+
+```python
+spec=ScheduleSpec(
+    schedule="0 2 * * *",
+    concurrencyPolicy="Forbid"  # Skip if previous still running
+    # Options: "Forbid" (default), "Allow", "Replace"
+)
+```
+
+**History limits:**
+
+```python
+spec=ScheduleSpec(
+    schedule="0 2 * * *",
+    successfulJobsHistoryLimit=30,  # Keep 30 successful runs
+    failedJobsHistoryLimit=10       # Keep 10 failed runs
+)
+```
+
+**Suspend schedule temporarily:**
+
+```python
+schedule = manager.get("weekly-scan")
+schedule.spec.suspend = True  # Pause
+manager.update(schedule)
+
+schedule.spec.suspend = False  # Resume
+manager.update(schedule)
+```
+
+### Complete Documentation
+
+For comprehensive schedule management documentation, see:
+
+- **[docs/SCHEDULE_GUIDE.md](SCHEDULE_GUIDE.md)** — Complete guide with examples
+- **[docs/examples/slack-notifications.md](examples/slack-notifications.md)** — Slack integration patterns
+- **[docs/examples/.gitlab-ci.yml](examples/.gitlab-ci.yml)** — GitLab CI examples
+
 ## Key CLI commands and flags
 
 Subcommands: scan, report, ci
