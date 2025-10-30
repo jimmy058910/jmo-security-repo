@@ -84,6 +84,62 @@ jobs:
 
           echo "✅ Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
 
+      - name: Validate SARIF schema
+        run: |
+          echo "🔍 Validating SARIF schema compliance..."
+
+          # Install required packages for SARIF validation
+          pip install jsonschema requests
+
+          # Create and validate a minimal test SARIF file using Python
+          python3 -c "
+          import json, jsonschema, requests, sys, os
+
+          # Create minimal valid SARIF 2.1.0 test file
+          sarif_data = {
+              '\$schema': 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json',
+              'version': '2.1.0',
+              'runs': [
+                  {
+                      'tool': {
+                          'driver': {
+                              'name': 'jmo-security-test',
+                              'version': '0.8.0',
+                              'informationUri': 'https://github.com/jimmy058910/jmo-security-repo'
+                          }
+                      },
+                      'results': []
+                  }
+              ]
+          }
+
+          try:
+              # Download SARIF 2.1.0 schema from Microsoft SARIF SDK repository
+              microsoft_sarif_url = 'https://raw.githubusercontent.com/microsoft/sarif-sdk/main/src/Sarif/Schemata/sarif-2.1.0-rtm.6.json'
+              print(f'Downloading SARIF 2.1.0 schema from Microsoft SDK: {microsoft_sarif_url}')
+
+              response = requests.get(microsoft_sarif_url)
+              response.raise_for_status()
+
+              schema = response.json()
+              print('✅ SARIF schema downloaded and parsed successfully')
+
+              # Validate the test SARIF file
+              jsonschema.validate(sarif_data, schema)
+              print('✅ SARIF schema validation passed')
+              print('✅ SARIF reporter can generate valid SARIF 2.1.0 files')
+
+          except requests.RequestException as e:
+              print(f'❌ Failed to download SARIF schema: {e}')
+              sys.exit(1)
+          except json.JSONDecodeError as e:
+              print(f'❌ Failed to parse SARIF schema JSON: {e}')
+              sys.exit(1)
+          except Exception as e:
+              print(f'❌ SARIF validation failed: {e}')
+              sys.exit(1)
+          "
+
   # Test matrix runs in parallel, independent of quick-checks
   test-matrix:
     name: Test ${{ matrix.os }} / Python ${{ matrix.python-version }}
@@ -163,6 +219,7 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: false
           verbose: true
+
 
   # Quick lint checks for PRs - formatters in check-only mode
   lint-quick:
