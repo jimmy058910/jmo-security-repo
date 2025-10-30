@@ -180,6 +180,7 @@ make tools
 |----------|---------|----------|
 | [CHANGELOG.md](../CHANGELOG.md) | Version history | Everyone |
 | [ROADMAP.md](../ROADMAP.md) | Future plans & milestones | Everyone |
+| [CONTRIBUTORS.md](../CONTRIBUTORS.md) | Community contributors & recognition | Everyone |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution guidelines | Contributors |
 | [TEST.md](../TEST.md) | Testing guide | Contributors |
 | [RELEASE.md](RELEASE.md) | Release process | Maintainers |
