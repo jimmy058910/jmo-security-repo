@@ -4,19 +4,28 @@ For the release process, see docs/RELEASE.md.
 
 ## 0.8.0 (2025-10-28)
 
-### Added
+### Added (Partial Implementation)
 
-- **Schedule Management System**: Kubernetes-inspired scan scheduling with local persistence
-  - `scripts/core/schedule_manager.py`: Complete scheduling infrastructure with cron syntax support
-  - **API Design**: Kubernetes-style resources (metadata, spec, status) for familiar DevOps patterns
-  - **Storage**: Local persistence in `~/.jmo/schedules.json` with secure permissions (0o600)
-  - **Cron Support**: Full cron syntax validation via croniter, timezone support, next run calculation
-  - **Features**: Suspend schedules, concurrency policies (Forbid/Allow/Replace), history limits
-  - **Backends**: Support for GitHub Actions, GitLab CI, and local cron execution
-  - **CLI Commands**: `jmo schedule create|list|get|update|delete|export` (planned)
-  - Dependencies: Added `croniter>=2.0` and `types-croniter` for schedule parsing and type hints
+- **Schedule Management System (Foundation)**: Kubernetes-inspired scheduling infrastructure (40% complete)
+  - ✅ **COMPLETED:**
+    - `scripts/core/schedule_manager.py`: Core data models and CRUD operations
+    - **API Design**: Kubernetes-style resources (metadata, spec, status) for familiar DevOps patterns
+    - **Storage**: Local persistence in `~/.jmo/schedules.json` with secure permissions (0o600)
+    - **Cron Support**: Full cron syntax validation via croniter, timezone support, next run calculation
+    - **Features**: Suspend schedules, concurrency policies (Forbid/Allow/Replace), history limits
+    - Dependencies: Added `croniter>=2.0` and `types-croniter` for schedule parsing and type hints
+  - ❌ **NOT YET IMPLEMENTED (deferred to v0.9.0):**
+    - GitHub Actions workflow generator (`scripts/core/workflow_generators/github_actions.py`)
+    - Local cron installer (`scripts/core/cron_installer.py`)
+    - CLI commands (`jmo schedule create|list|get|update|delete|export|install|uninstall|validate`)
+    - Unit tests (`tests/unit/test_schedule_manager.py`)
+    - Integration tests (`tests/integration/test_schedule_cli.py`)
+    - User documentation (USER_GUIDE.md, QUICKSTART.md)
+  - **Status:** Core infrastructure complete, CLI integration planned for v0.9.0
+  - **Rationale:** Foundation enables GitLab CI generator; remaining 60% deferred to focus on v0.8.0 priorities
+  - Related: [Issue #33](https://github.com/jimmy058910/jmo-security-repo/issues/33), [dev-only/feature-1-final-design.md](dev-only/feature-1-final-design.md)
 
-- **GitLab CI Workflow Generation**: Automated GitLab CI YAML generation from schedules
+- **GitLab CI Workflow Generation**: Automated GitLab CI YAML generation from schedules (COMPLETED)
   - `scripts/core/workflow_generators/gitlab_ci.py`: Complete GitLab CI YAML generator
   - **Job Templates**: Profile-based job generation (fast/balanced/deep)
   - **Multi-Target Support**: All 6 target types (repos, images, IaC, web, GitLab, K8s)
@@ -24,9 +33,10 @@ For the release process, see docs/RELEASE.md.
     - Configurable via `schedule.spec.jobTemplate.notifications.channels[]`
     - Rich message formatting with pipeline status, commit info, findings count
     - Webhook URL configuration: `{"type": "slack", "url": "https://hooks.slack.com/..."}`
-  - **Schedule Export**: `jmo schedule export <name>` generates ready-to-use `.gitlab-ci.yml`
+  - **Schedule Export**: Uses `ScheduleManager` API to generate ready-to-use `.gitlab-ci.yml`
   - `tests/integration/test_gitlab_ci_generation.py`: Comprehensive integration tests
   - Impact: Zero-config GitLab CI/CD integration with enterprise notification support
+  - Note: Fully functional for GitLab users; GitHub Actions and local cron support deferred to v0.9.0
 
 ### Fixed
 
