@@ -28,15 +28,14 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 
 ## Strategic Direction
 
-**Old Focus:** Monetization, SaaS, Enterprise features
-**New Focus:** Distribution, adoption, community contributions, developer experience
+**Focus:** Distribution, adoption, community contributions, developer experience
 
 **Key Principles:**
 
-- ✅ Open-source first, monetization later (after 50K+ users)
-- ✅ Community-driven development
+- ✅ Open-source first, community-driven development
 - ✅ Amazing developer experience
 - ✅ Viral growth through shareability
+- ✅ Sustainable long-term project growth
 
 ---
 
@@ -78,6 +77,7 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 | 3 | **Homebrew + Winget Packaging** ⚠️ | 2-3 weeks | 📋 Planned | TBD |
 | 4 | **Wizard V2** (Multi-target, Workflows, Artifacts) | 3-4 weeks | 📋 Planned | TBD |
 | 5 | Intelligent Prioritization (EPSS/KEV) | 1-2 weeks | 📋 Planned | [#49](https://github.com/jimmy058910/jmo-security-repo/issues/49) |
+| 6 | **Schedule Management Completion** | 1-2 weeks | 📋 Planned | [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33) (continuation) |
 
 ⚠️ **Note:** Homebrew + Winget packaging ONLY after plugin system is complete (stable API required)
 
@@ -174,18 +174,6 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 |---------|---------|--------------|
 | Docker all-in-one images | v0.4.0 | [#29](https://github.com/jimmy058910/jmo-security-repo/issues/29) |
 | Interactive wizard | v0.4.0 | [#30](https://github.com/jimmy058910/jmo-security-repo/issues/30) |
-
----
-
-## Deferred Features (Monetization-focused)
-
-These are **deferred indefinitely** until achieving 50K+ users and strong community adoption:
-
-- ❌ GitHub App Integration ([#37](https://github.com/jimmy058910/jmo-security-repo/issues/37)) — SaaS revenue driver
-- ❌ Secret Management Integration ([#55](https://github.com/jimmy058910/jmo-security-repo/issues/55)) — Tiered pricing model
-- ❌ Contextual Security Education ([#54](https://github.com/jimmy058910/jmo-security-repo/issues/54)) — Free tier differentiator
-
-**Rationale:** Open-source growth comes first. Monetization can be explored after strong adoption.
 
 ---
 
