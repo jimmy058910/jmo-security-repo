@@ -60,11 +60,15 @@ nav:
   - Home: index.md
   - User Guide: USER_GUIDE.md
   - Docker Guide: DOCKER_README.md
+  - Schedule Guide: SCHEDULE_GUIDE.md
   - Examples:
       - Overview: examples/README.md
       - Wizard Examples: examples/wizard-examples.md
-  - Version Management: VERSION_MANAGEMENT.md
-  - Release Process: RELEASE.md
+      - Slack Notifications: examples/slack-notifications.md
+  - Advanced:
+      - Version Management: VERSION_MANAGEMENT.md
+      - Telemetry: TELEMETRY.md
+      - Release Process: RELEASE.md
 
 # Plugins
 plugins:

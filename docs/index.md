@@ -16,19 +16,19 @@
 
 ---
 
-## 🎉 Latest Updates (v0.7.0 - October 2025)
+## 🎉 Latest Updates (v0.8.0 - October 2025)
 
-- 📚 **NEW: ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
-- 📝 **NEW: Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
-- 💰 **NEW: GitHub Sponsors** - Support ongoing development
-- 📊 **Privacy-First Telemetry (v0.7.0)** - Optional anonymous usage analytics (opt-in only, GDPR/CCPA compliant)
+- 🚀 **NEW: GitLab CI/CD Integration** - Auto-generate `.gitlab-ci.yml` from schedules with one command
+- 📅 **NEW: Schedule Management** - Kubernetes-style scan scheduling with cron syntax support
+- 💬 **NEW: Slack Notifications** - Built-in webhook integration for real-time pipeline alerts
+- 📚 **ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
+- 📝 **Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
+- 💰 **GitHub Sponsors** - Support ongoing development
+- 📊 **Privacy-First Telemetry (v0.7.0)** - Optional anonymous usage analytics (opt-out model, GDPR/CCPA compliant)
 - 🧠 **Memory System (v0.7.0)** - Lightweight JSON-based caching for faster repeated analysis
-- 🧙 **Interactive Wizard (v0.6.2)** - Now supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
-- 🐳 **Docker Optimized (27% smaller)** - Multi-stage builds, layer caching, persistent Trivy DB
-- 🔒 **XSS Patched** - HTML dashboard security hardened
-- 📊 **Enriched SARIF 2.1.0** - CWE/OWASP/CVE taxonomies
-- 🎯 **1036 Tests Passing** - Comprehensive test coverage
-- 📚 **Documentation Unified** - Zero markdownlint violations
+- 🧙 **Interactive Wizard (v0.6.2)** - Supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
+- 🐳 **Docker Optimized** - Multi-stage builds, layer caching, persistent Trivy DB
+- 📊 **Enriched SARIF 2.1.0** - CWE/OWASP/CVE taxonomies for code scanning platforms
 
 See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 
