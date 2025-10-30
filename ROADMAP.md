@@ -8,7 +8,7 @@
 
 This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. All completed features are documented in [CHANGELOG.md](CHANGELOG.md).
 
-**Current Status:** v0.7.1 with privacy-first telemetry, real-time progress tracking, and auto-detect CPU threads
+**Current Status:** v0.8.0-dev with SARIF validation, improved error messages, and enhanced reporting
 
 **Recent Releases:**
 
@@ -53,7 +53,6 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 | 1 | Scheduled Scans & Cron Support | 4-6 hours | 📋 Planned | [#33](https://github.com/jimmy058910/jmo-security-repo/issues/33) |
 | 2 | Machine-Readable Diff Reports | 8-12 hours | 📋 Planned | [#32](https://github.com/jimmy058910/jmo-security-repo/issues/32) |
 | 3 | Rewrite Skipped Integration Tests | 2-4 hours | ⚠️ Partial (5 tests skipped) | [#69](https://github.com/jimmy058910/jmo-security-repo/issues/69) |
-| 4 | CI Linting - Full Pre-commit | 1 week | 🕐 Monitoring (nightly validation) | [#31](https://github.com/jimmy058910/jmo-security-repo/issues/31) |
 
 **Growth Targets:**
 
@@ -106,7 +105,7 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 | 2 | AI Remediation Orchestration (MCP Server) | 4-6 weeks | 📋 Planned | [#50](https://github.com/jimmy058910/jmo-security-repo/issues/50) |
 | 3 | Cross-Tool Deduplication Enhancement | 2-3 weeks | 📋 Planned | [#51](https://github.com/jimmy058910/jmo-security-repo/issues/51) |
 | 4 | Policy-as-Code Integration (OPA) | 3-4 weeks | 📋 Planned | [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35) |
-
+| 5 | **Docker Image Optimization Phase 2** | 2-3 weeks | 📋 Planned | [#48](https://github.com/jimmy058910/jmo-security-repo/issues/48) |
 **Supporting Features:**
 
 - Supply Chain Attestation (SLSA) — [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36)
@@ -129,6 +128,16 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 
 ## Completed Features
 
+### v0.8.0-dev Series (October 2025)
+
+| Feature | Version | GitHub Issue |
+|---------|---------|--------------|
+| SARIF schema validation in CI | v0.8.0-dev | [#87](https://github.com/jimmy058910/jmo-security-repo/issues/87) |
+| Improved tool error messages | v0.8.0-dev | [#86](https://github.com/jimmy058910/jmo-security-repo/issues/86) |
+| CI Linting - Full pre-commit coverage (nightly) | v0.8.0-dev | [#31](https://github.com/jimmy058910/jmo-security-repo/issues/31) |
+| Enhanced markdown summary (risk breakdown) | v0.8.0-dev | [#45](https://github.com/jimmy058910/jmo-security-repo/issues/45) |
+| HTML Dashboard v2 (actionable findings) | v0.8.0-dev | [#44](https://github.com/jimmy058910/jmo-security-repo/issues/44) |
+
 ### v0.7.x Series (October 2025)
 
 | Feature | Version | GitHub Issue |
@@ -145,7 +154,7 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 | Feature | Version | GitHub Issue |
 |---------|---------|--------------|
 | Fix Deep Profile Tool Execution | v0.6.1 | [#42](https://github.com/jimmy058910/jmo-security-repo/issues/42) |
-| Docker Image Optimization | v0.6.1 | [#48](https://github.com/jimmy058910/jmo-security-repo/issues/48) |
+| Docker Image Optimization Phase 1 | v0.6.1 | [#48](https://github.com/jimmy058910/jmo-security-repo/issues/48) (partial) |
 | Multi-target unified scanning | v0.6.0 | — |
 | Nuclei integration (API security) | v0.6.0 | — |
 | GitLab container discovery | v0.6.2 | — |
@@ -228,6 +237,6 @@ Want to help implement these features? Check out:
 
 ---
 
-**Last Updated:** 2025-10-25
+**Last Updated:** 2025-10-30
 **Review Cadence:** Monthly (first Monday of each month)
 **Maintained By:** Jimmy ([@jimmy058910](https://github.com/jimmy058910))
