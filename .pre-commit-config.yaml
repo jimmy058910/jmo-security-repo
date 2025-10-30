@@ -65,7 +65,7 @@ repos:
     rev: v1.14.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-PyYAML]
+        additional_dependencies: [types-PyYAML, types-croniter]
         args: [--config-file=pyproject.toml]
         files: ^scripts/
 
@@ -99,6 +99,7 @@ repos:
         # Strategy: Try Python 3.11 first (most common), fallback to 3.10, then 3.12
         # If none available, fail with clear error message
         entry: >-
-          bash -c 'python3 scripts/dev/update_dependencies.py --compile ||
+          bash -c 'python3 -m pip install --quiet pip-tools 2>/dev/null || true;
+          python3 scripts/dev/update_dependencies.py --compile ||
           { echo "ERROR: deps-compile requires Python 3.10+.
           Install python3.10, python3.11, or python3.12"; exit 1; }'

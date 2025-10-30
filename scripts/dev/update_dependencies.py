@@ -25,6 +25,8 @@ Features:
     - Provides upgrade preview before applying
     - CI-compatible (exit codes for automation)
 """
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -151,20 +153,20 @@ def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int
         repo_root = Path(__file__).parent.parent.parent
 
     req_in = repo_root / "requirements-dev.in"
-    req_out = repo_root / "requirements-dev.txt"
 
     if not req_in.exists():
         print(f"{RED}[error]{RESET} {req_in} not found")
         return 1
 
+    # Use relative paths to avoid absolute path pollution in requirements-dev.txt
     cmd = [
         sys.executable,
         "-m",
         "piptools",
         "compile",
         "--output-file",
-        str(req_out),
-        str(req_in),
+        "requirements-dev.txt",
+        "requirements-dev.in",
     ]
 
     if upgrade:
@@ -180,7 +182,7 @@ def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int
     print(f"{BLUE}[cmd]{RESET} {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=repo_root)
         if result.returncode == 0:
             print(f"{GREEN}[ok]{RESET} requirements-dev.txt compiled successfully")
             print(result.stdout)
