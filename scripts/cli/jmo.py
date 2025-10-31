@@ -13,6 +13,7 @@ from scripts.core.exceptions import (
 from scripts.core.config import load_config
 from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
+from scripts.cli.schedule_commands import cmd_schedule
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
@@ -376,6 +377,73 @@ def _add_adapters_args(subparsers):
     return adapters_parser
 
 
+def _add_schedule_args(subparsers):
+    """Add 'schedule' subcommand arguments for scheduled scan management."""
+    schedule_parser = subparsers.add_parser(
+        "schedule",
+        help="Manage scheduled security scans",
+        description="Manage scheduled scans using CI/CD or local cron"
+    )
+    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
+
+    # CREATE
+    create_parser = schedule_subparsers.add_parser("create", help="Create new schedule")
+    create_parser.add_argument("--name", required=True, help="Schedule name")
+    create_parser.add_argument("--cron", required=True, help="Cron expression (e.g., '0 2 * * *')")
+    create_parser.add_argument("--profile", required=True, choices=["fast", "balanced", "deep"], help="Scan profile")
+    create_parser.add_argument("--repos-dir", help="Repository directory to scan")
+    create_parser.add_argument("--image", action="append", help="Container image to scan (can specify multiple)")
+    create_parser.add_argument("--url", action="append", help="Web URL to scan (can specify multiple)")
+    create_parser.add_argument("--backend", default="github-actions", choices=["github-actions", "gitlab-ci", "local-cron"], help="Backend type")
+    create_parser.add_argument("--timezone", default="UTC", help="Timezone for schedule (default: UTC)")
+    create_parser.add_argument("--description", help="Human-readable description")
+    create_parser.add_argument("--label", action="append", help="Label in KEY=VALUE format")
+    create_parser.add_argument("--slack-webhook", help="Slack webhook URL for notifications")
+
+    # LIST
+    list_parser = schedule_subparsers.add_parser("list", help="List schedules")
+    list_parser.add_argument("--format", choices=["table", "json", "yaml"], default="table", help="Output format")
+    list_parser.add_argument("--label", action="append", help="Filter by label (KEY=VALUE)")
+
+    # GET
+    get_parser = schedule_subparsers.add_parser("get", help="Get schedule details")
+    get_parser.add_argument("name", help="Schedule name")
+    get_parser.add_argument("--format", choices=["json", "yaml"], default="yaml", help="Output format")
+
+    # UPDATE
+    update_parser = schedule_subparsers.add_parser("update", help="Update schedule")
+    update_parser.add_argument("name", help="Schedule name")
+    update_parser.add_argument("--cron", help="New cron expression")
+    update_parser.add_argument("--profile", choices=["fast", "balanced", "deep"], help="New scan profile")
+    update_parser.add_argument("--suspend", action="store_true", help="Suspend schedule")
+    update_parser.add_argument("--resume", action="store_true", help="Resume schedule")
+
+    # EXPORT
+    export_parser = schedule_subparsers.add_parser("export", help="Export workflow file")
+    export_parser.add_argument("name", help="Schedule name")
+    export_parser.add_argument("--backend", choices=["github-actions", "gitlab-ci"], help="Override backend type")
+    export_parser.add_argument("--output", "-o", help="Output file (default: stdout)")
+
+    # INSTALL
+    install_parser = schedule_subparsers.add_parser("install", help="Install to local cron (Linux/macOS only)")
+    install_parser.add_argument("name", help="Schedule name")
+
+    # UNINSTALL
+    uninstall_parser = schedule_subparsers.add_parser("uninstall", help="Remove from local cron")
+    uninstall_parser.add_argument("name", help="Schedule name")
+
+    # DELETE
+    delete_parser = schedule_subparsers.add_parser("delete", help="Delete schedule")
+    delete_parser.add_argument("name", help="Schedule name")
+    delete_parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+
+    # VALIDATE
+    validate_parser = schedule_subparsers.add_parser("validate", help="Validate schedule configuration")
+    validate_parser.add_argument("name", help="Schedule name")
+
+    return schedule_parser
+
+
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
     ap = argparse.ArgumentParser(
@@ -419,6 +487,7 @@ Documentation: https://docs.jmotools.com
     _add_report_args(sub)
     _add_ci_args(sub)
     _add_adapters_args(sub)
+    _add_schedule_args(sub)
 
     try:
         return ap.parse_args()
@@ -1244,6 +1313,10 @@ def _open_results(args):
 def main():
     args = parse_args()
 
+    # Handle empty namespace (--help called during pytest)
+    if not hasattr(args, "cmd"):
+        return 0
+
     # Route to appropriate command handler
     if args.cmd == "wizard":
         return cmd_wizard(args)
@@ -1259,6 +1332,8 @@ def main():
         return cmd_ci(args)
     elif args.cmd == "adapters":
         return cmd_adapters(args)
+    elif args.cmd == "schedule":
+        return cmd_schedule(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1

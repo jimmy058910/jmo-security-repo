@@ -89,6 +89,60 @@ h1,h2{margin: 0 0 12px 0}
 .table th.sort-asc::after{content:' ▲';color:#1976d2}
 .table th.sort-desc::after{content:' ▼';color:#1976d2}
 .table tr:hover{background:#fafafa}
+.priority-badge{display:inline-block;padding:4px 10px;border-radius:10px;font-size:14px;font-weight:700;color:#fff;min-width:45px;text-align:center}
+.priority-critical{background:#d32f2f}
+.priority-high{background:#f57c00}
+.priority-medium{background:#fbc02d;color:#000}
+.priority-low{background:#7cb342}
+.priority-info{background:#757575}
+.kev-badge{display:inline-block;padding:2px 6px;margin-left:4px;border-radius:8px;background:#ff1744;color:#fff;font-size:10px;font-weight:700;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1} 50%{opacity:0.7}}
+.priority-sparkline{display:inline-block;height:14px;background:#e0e0e0;border-radius:2px;margin-left:4px;vertical-align:middle}
+.priority-sparkline-fill{height:100%;background:currentColor;border-radius:2px;transition:width 0.3s}
+.medal{font-size:16px;margin-right:4px;vertical-align:middle}
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:20px}
+.summary-card{background:#fff;border:2px solid #e0e0e0;border-radius:8px;padding:16px;text-align:center;transition:transform 0.2s,box-shadow 0.2s}
+.summary-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.summary-card.critical{border-color:#d32f2f;background:linear-gradient(135deg,#fff 0%,#ffebee 100%)}
+.summary-card.kev{border-color:#ff1744;background:linear-gradient(135deg,#fff 0%,#fff3e0 100%)}
+.summary-card.high-epss{border-color:#f57c00;background:linear-gradient(135deg,#fff 0%,#fff3e0 100%)}
+.summary-card.avg{border-color:#1976d2;background:linear-gradient(135deg,#fff 0%,#e3f2fd 100%)}
+.summary-card-icon{font-size:32px;margin-bottom:8px}
+.summary-card-value{font-size:28px;font-weight:700;margin:8px 0}
+.summary-card-label{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:0.5px}
+.summary-card-subtitle{font-size:11px;color:#999;margin-top:4px}
+.quick-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:12px;background:#f5f5f5;border-radius:6px}
+.quick-filter-btn{padding:8px 16px;border:2px solid transparent;border-radius:20px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px}
+.quick-filter-btn:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.quick-filter-btn.active{border-color:#1976d2;background:#e3f2fd;color:#1976d2}
+.quick-filter-btn.critical{border-color:#d32f2f}
+.quick-filter-btn.critical.active{background:#ffebee;color:#d32f2f;border-color:#d32f2f}
+.quick-filter-btn.kev{border-color:#ff1744}
+.quick-filter-btn.kev.active{background:#ffe0e0;color:#ff1744;border-color:#ff1744}
+.quick-filter-btn.epss{border-color:#f57c00}
+.quick-filter-btn.epss.active{background:#fff3e0;color:#f57c00;border-color:#f57c00}
+.quick-filter-count{display:inline-block;background:rgba(0,0,0,0.1);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;margin-left:4px}
+.priority-col{min-width:120px!important}
+.epss-bar{width:100%;height:20px;background:#e0e0e0;border-radius:4px;overflow:hidden;margin:8px 0}
+.epss-bar-fill{height:100%;background:linear-gradient(90deg,#4caf50 0%,#ff9800 50%,#d32f2f 100%);transition:width 0.3s}
+.risk-level-badge{display:inline-block;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:700;color:#fff;margin-bottom:12px}
+.risk-level-critical{background:#d32f2f}
+.risk-level-high{background:#f57c00}
+.risk-level-medium{background:#fbc02d;color:#000}
+.risk-level-low{background:#7cb342}
+.triage-urgent{border:2px solid #d32f2f!important;animation:urgentPulse 2s infinite}
+@keyframes urgentPulse{0%,100%{box-shadow:0 0 0 0 rgba(211,47,47,0.4)} 50%{box-shadow:0 0 0 6px rgba(211,47,47,0)}}
+.quick-action-btns{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+.quick-action-btn{padding:6px 12px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;transition:all 0.2s}
+.quick-action-btn:hover{background:#f0f0f0;transform:translateY(-1px)}
+.quick-action-btn.fixed{border-color:#4caf50;color:#4caf50}
+.quick-action-btn.fixed:hover{background:#e8f5e9}
+.quick-action-btn.fp{border-color:#ff9800;color:#ff9800}
+.quick-action-btn.fp:hover{background:#fff3e0}
+.quick-action-btn.accept{border-color:#757575;color:#757575}
+.quick-action-btn.accept:hover{background:#f5f5f5}
+.quick-action-btn.escalate{border-color:#d32f2f;color:#d32f2f;font-weight:600}
+.quick-action-btn.escalate:hover{background:#ffebee}
 .expandable-row{cursor:pointer}
 .expandable-row td{position:relative}
 .expandable-row td:first-child::before{content:'▶';display:inline-block;width:12px;color:#666;transition:transform 0.2s}
@@ -138,13 +192,57 @@ kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px
 <body>
 <div class="header">
   <div>
-    <h1>Security Dashboard v2.1 (Compliance-Aware)</h1>
+    <h1>Security Dashboard v2.2 (Priority Intelligence)</h1>
     <div>
       <span class="badge">Total: __TOTAL__</span>
       __SEV_BADGES__
     </div>
   </div>
   <button class="btn theme-toggle" id="themeToggle">Toggle Theme</button>
+</div>
+
+<!-- Quick Win #3: Priority Summary Cards -->
+<div class="summary-cards" id="summaryCards">
+  <div class="summary-card critical">
+    <div class="summary-card-icon">🔴</div>
+    <div class="summary-card-value" id="criticalCount">0</div>
+    <div class="summary-card-label">Critical Priority</div>
+    <div class="summary-card-subtitle" id="criticalPercent">0% of total</div>
+  </div>
+  <div class="summary-card kev">
+    <div class="summary-card-icon">🚨</div>
+    <div class="summary-card-value" id="kevCount">0</div>
+    <div class="summary-card-label">KEV Findings</div>
+    <div class="summary-card-subtitle">Actively Exploited</div>
+  </div>
+  <div class="summary-card high-epss">
+    <div class="summary-card-icon">🔥</div>
+    <div class="summary-card-value" id="highEpssCount">0</div>
+    <div class="summary-card-label">High EPSS</div>
+    <div class="summary-card-subtitle">&gt;50% Exploit Probability</div>
+  </div>
+  <div class="summary-card avg">
+    <div class="summary-card-icon">📊</div>
+    <div class="summary-card-value" id="avgPriority">0</div>
+    <div class="summary-card-label">Avg Priority</div>
+    <div class="summary-card-subtitle" id="avgPriorityLabel">out of 100</div>
+  </div>
+</div>
+
+<!-- Quick Win #2: Quick Filter Buttons -->
+<div class="quick-filters">
+  <button class="quick-filter-btn critical" id="filterCritical" onclick="toggleQuickFilter('critical')">
+    🚨 Critical Priority<span class="quick-filter-count" id="criticalFilterCount">0</span>
+  </button>
+  <button class="quick-filter-btn kev" id="filterKev" onclick="toggleQuickFilter('kev')">
+    ⚠️ KEV Only<span class="quick-filter-count" id="kevFilterCount">0</span>
+  </button>
+  <button class="quick-filter-btn epss" id="filterEpss" onclick="toggleQuickFilter('epss')">
+    🔥 High EPSS<span class="quick-filter-count" id="epssFilterCount">0</span>
+  </button>
+  <button class="quick-filter-btn" id="clearQuickFilters" onclick="clearQuickFilters()">
+    Clear All
+  </button>
 </div>
 
 <div class="filters">
@@ -230,6 +328,7 @@ kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px
 <div id="tableContainer">
   <table class="table" id="tbl">
     <thead><tr>
+      <th data-key="priority" class="priority-col">Priority</th>
       <th data-key="severity">Severity</th>
       <th data-key="ruleId">Rule</th>
       <th data-key="path">Path</th>
@@ -260,11 +359,52 @@ let groupBy = '';
 let triageState = {}; // Load from localStorage
 const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
 
+// Quick Win #2: Quick filter state
+let activeQuickFilters = {
+  critical: false,
+  kev: false,
+  epss: false
+};
+
 // Load triage state from localStorage
 try{
   const saved = localStorage.getItem('jmo_triage_state');
   if(saved) triageState = JSON.parse(saved);
 }catch(e){}
+
+// Quick Win #2: Toggle quick filter
+function toggleQuickFilter(type){
+  activeQuickFilters[type] = !activeQuickFilters[type];
+  document.getElementById('filter' + type.charAt(0).toUpperCase() + type.slice(1)).classList.toggle('active', activeQuickFilters[type]);
+  render();
+}
+
+function clearQuickFilters(){
+  activeQuickFilters = { critical: false, kev: false, epss: false };
+  document.getElementById('filterCritical').classList.remove('active');
+  document.getElementById('filterKev').classList.remove('active');
+  document.getElementById('filterEpss').classList.remove('active');
+  render();
+}
+
+// Quick Win #3: Update summary cards
+function updateSummaryCards(){
+  const criticalPriority = data.filter(f => (f.priority?.priority || 0) >= 80);
+  const kevFindings = data.filter(f => f.priority?.is_kev);
+  const highEpss = data.filter(f => (f.priority?.epss || 0) > 0.5);
+  const avgPriority = data.length > 0 ? (data.reduce((sum, f) => sum + (f.priority?.priority || 0), 0) / data.length) : 0;
+
+  document.getElementById('criticalCount').textContent = criticalPriority.length;
+  document.getElementById('criticalPercent').textContent = `${((criticalPriority.length / data.length) * 100).toFixed(1)}% of total`;
+  document.getElementById('kevCount').textContent = kevFindings.length;
+  document.getElementById('highEpssCount').textContent = highEpss.length;
+  document.getElementById('avgPriority').textContent = avgPriority.toFixed(0);
+
+  // Update quick filter counts
+  document.getElementById('criticalFilterCount').textContent = criticalPriority.length;
+  document.getElementById('kevFilterCount').textContent = kevFindings.length;
+  document.getElementById('epssFilterCount').textContent = highEpss.length;
+}
 
 // Theme handling
 function setTheme(theme){
@@ -306,6 +446,11 @@ function severityRank(s){
 }
 
 function matchesFilter(f){
+  // Quick Win #2: Quick filters (priority-based)
+  if(activeQuickFilters.critical && (f.priority?.priority || 0) < 80) return false;
+  if(activeQuickFilters.kev && !f.priority?.is_kev) return false;
+  if(activeQuickFilters.epss && (f.priority?.epss || 0) <= 0.5) return false;
+
   // Severity filter - checkbox-based
   const checkedSevs = Array.from(document.querySelectorAll('#sevCheckboxes input[type="checkbox"]:checked')).map(cb => cb.value);
   if(checkedSevs.length > 0 && checkedSevs.length < SEV_ORDER.length && !checkedSevs.includes(f.severity)) return false;
@@ -349,11 +494,19 @@ function filtered(){
 }
 
 function sortRows(rows){
-  if(!sortKey){ return rows; }
+  if(!sortKey){
+    // Default: sort by priority descending
+    return rows.slice().sort((a,b)=>{
+      const ap = a.priority?.priority || 0;
+      const bp = b.priority?.priority || 0;
+      return bp - ap; // Higher priority first
+    });
+  }
   const factor = sortDir === 'asc' ? 1 : -1;
   return rows.slice().sort((a,b)=>{
     let av, bv;
-    if(sortKey==='severity') { av = severityRank(a.severity); bv = severityRank(b.severity); }
+    if(sortKey==='priority') { av = (a.priority?.priority||0); bv = (b.priority?.priority||0); }
+    else if(sortKey==='severity') { av = severityRank(a.severity); bv = severityRank(b.severity); }
     else if(sortKey==='ruleId'){ av = (a.ruleId||''); bv = (b.ruleId||''); }
     else if(sortKey==='path'){ av = (a.location?.path||''); bv = (b.location?.path||''); }
     else if(sortKey==='line'){ av = (a.location?.startLine||0); bv = (b.location?.startLine||0); }
@@ -402,6 +555,56 @@ function renderDetailRow(f){
     html += `</div>`;
   }
 
+  // Quick Win #4: Enhanced Priority metadata (EPSS/KEV) with visual elements
+  if(f.priority){
+    html += '<div class="meta-section"><strong>Priority Analysis:</strong></div>';
+    html += '<div style="margin-left:8px;padding:12px;border:2px solid #e0e0e0;border-radius:8px;background:#fafafa">';
+
+    // Risk level badge
+    const priority = f.priority.priority || 0;
+    let riskLevel = 'LOW';
+    let riskClass = 'risk-level-low';
+    if(priority >= 80) { riskLevel = 'CRITICAL RISK'; riskClass = 'risk-level-critical'; }
+    else if(priority >= 60) { riskLevel = 'HIGH RISK'; riskClass = 'risk-level-high'; }
+    else if(priority >= 40) { riskLevel = 'MEDIUM RISK'; riskClass = 'risk-level-medium'; }
+
+    html += `<div class="risk-level-badge ${riskClass}">${riskLevel} - Priority: ${priority.toFixed(0)}/100</div>`;
+
+    // EPSS visual bar
+    if(f.priority.epss !== null && f.priority.epss !== undefined){
+      const epssPercent = (f.priority.epss * 100).toFixed(2);
+      html += `<div style="margin:12px 0"><strong>EPSS Exploit Probability:</strong></div>`;
+      html += `<div class="epss-bar"><div class="epss-bar-fill" style="width:${f.priority.epss * 100}%"></div></div>`;
+      html += `<div style="font-size:12px;color:#666;margin-top:4px">${epssPercent}% probability (${(f.priority.epss_percentile*100).toFixed(1)}th percentile)</div>`;
+    }
+
+    // KEV warning with visual emphasis
+    if(f.priority.is_kev){
+      const isOverdue = f.priority.kev_due_date && new Date(f.priority.kev_due_date) < new Date();
+      html += `<div style="background:#ffebee;border-left:4px solid #d32f2f;padding:12px;margin:12px 0;border-radius:4px">`;
+      html += `<div style="color:#d32f2f;font-weight:bold;font-size:14px">⚠️ CISA KEV: ACTIVELY EXPLOITED IN THE WILD</div>`;
+      if(f.priority.kev_due_date){
+        html += `<div style="margin-top:8px;font-size:13px">Federal Agency Remediation Due: <strong>${escapeHtml(f.priority.kev_due_date)}</strong>`;
+        if(isOverdue) html += ` <span style="color:#d32f2f;font-weight:bold">(OVERDUE)</span>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Score components - expanded by default for Critical Priority
+    const expandedByDefault = priority >= 80;
+    html += `<details ${expandedByDefault ? 'open' : ''}><summary style="cursor:pointer;font-size:12px;font-weight:600;margin-top:8px">Score Components</summary>`;
+    html += '<div style="margin-left:12px;font-size:12px;margin-top:8px;line-height:1.8">';
+    html += `<div>Severity: <strong>${f.severity}</strong> (${f.priority.components?.severity_score||0} points)</div>`;
+    html += `<div>EPSS: <strong>${(f.priority.components?.epss_multiplier||1).toFixed(2)}x</strong> multiplier</div>`;
+    html += `<div>KEV: <strong>${(f.priority.components?.kev_multiplier||1).toFixed(1)}x</strong> multiplier ${f.priority.is_kev ? '(actively exploited)' : ''}</div>`;
+    html += `<div>Reachability: <strong>${(f.priority.components?.reachability_multiplier||1).toFixed(1)}x</strong></div>`;
+    html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #ddd">Final: <strong>${priority.toFixed(1)}/100</strong> ${priority === 100 ? '(capped)' : ''}</div>`;
+    html += '</div></details>';
+
+    html += '</div>';
+  }
+
   // Risk metadata
   if(f.risk){
     html += '<div class="meta-section"><strong>Risk Metadata:</strong></div>';
@@ -439,16 +642,36 @@ function renderDetailRow(f){
     html += '</div>';
   }
 
-  // Triage controls
+  // Quick Win #5: Triage controls with priority-aware styling and quick actions
   html += '<div class="meta-section"><strong>Triage:</strong></div>';
+
+  // Quick action buttons
+  html += '<div class="quick-action-btns">';
+  html += `<button class="quick-action-btn fixed" onclick="triageFinding('${escapeHtml(f.id)}', 'fixed')">✓ Mark as Fixed</button>`;
+  html += `<button class="quick-action-btn fp" onclick="triageFinding('${escapeHtml(f.id)}', 'false_positive')">× False Positive</button>`;
+  html += `<button class="quick-action-btn accept" onclick="triageFinding('${escapeHtml(f.id)}', 'accepted_risk')">⚠ Accept Risk</button>`;
+  const priorityScore = f.priority?.priority || 0;
+  if(priorityScore >= 80 || f.priority?.is_kev){
+    html += `<button class="quick-action-btn escalate" onclick="escalateFinding('${escapeHtml(f.id)}')">🚨 Escalate to Security Team</button>`;
+  }
+  html += '</div>';
+
+  // Traditional dropdown with priority-aware styling
+  html += '<div style="margin-top:12px;font-size:12px;color:#666">Or use dropdown:</div>';
   html += '<div class="triage-controls">';
   const triaged = triageState[f.id];
   const status = triaged ? triaged.status : 'none';
-  html += `<select class="triage-select" onchange="triageFinding('${escapeHtml(f.id)}', this.value)">`;
+
+  // Add urgent styling for Critical Priority or KEV findings
+  const urgentClass = (priorityScore >= 80 || f.priority?.is_kev) ? 'triage-urgent' : '';
+  html += `<select class="triage-select ${urgentClass}" onchange="triageFinding('${escapeHtml(f.id)}', this.value)">`;
   html += `<option value="none" ${status === 'none' ? 'selected' : ''}>-- Not Triaged --</option>`;
-  html += `<option value="fixed" ${status === 'fixed' ? 'selected' : ''}>Fixed</option>`;
-  html += `<option value="false_positive" ${status === 'false_positive' ? 'selected' : ''}>False Positive</option>`;
-  html += `<option value="accepted_risk" ${status === 'accepted_risk' ? 'selected' : ''}>Accepted Risk</option>`;
+  html += `<option value="fixed" ${status === 'fixed' ? 'selected' : ''}>✓ Fixed</option>`;
+  html += `<option value="false_positive" ${status === 'false_positive' ? 'selected' : ''}>× False Positive</option>`;
+  html += `<option value="accepted_risk" ${status === 'accepted_risk' ? 'selected' : ''}>⚠ Accepted Risk</option>`;
+  if(priorityScore >= 80 || f.priority?.is_kev){
+    html += `<option value="urgent" ${status === 'urgent' ? 'selected' : ''}>🚨 Urgent</option>`;
+  }
   html += `</select>`;
   if(triaged){
     html += `<span style="font-size:11px;color:#666">Triaged on ${triaged.date || 'unknown'}</span>`;
@@ -482,7 +705,30 @@ function renderFlat(rows){
   rows.forEach((f, idx) => {
     const triaged = triageState[f.id];
     const triagedStyle = triaged ? 'opacity:0.6' : '';
+
+    // Quick Win #1: Priority badge with medals and sparkline
+    const priority = f.priority?.priority || 0;
+    let priorityClass = 'priority-info';
+    if(priority >= 80) priorityClass = 'priority-critical';
+    else if(priority >= 60) priorityClass = 'priority-high';
+    else if(priority >= 40) priorityClass = 'priority-medium';
+    else if(priority >= 20) priorityClass = 'priority-low';
+
+    // Medals for top 3
+    let medal = '';
+    if(idx === 0) medal = '<span class="medal">🥇</span>';
+    else if(idx === 1) medal = '<span class="medal">🥈</span>';
+    else if(idx === 2) medal = '<span class="medal">🥉</span>';
+
+    // Sparkline (mini bar chart)
+    const sparklineWidth = Math.min(100, priority);
+    const sparkline = `<span class="priority-sparkline" style="width:${sparklineWidth}px"><span class="priority-sparkline-fill" style="width:100%;background:${priority >= 80 ? '#d32f2f' : priority >= 60 ? '#f57c00' : priority >= 40 ? '#fbc02d' : '#7cb342'}"></span></span>`;
+
+    const priorityBadge = `${medal}<span class="priority-badge ${priorityClass}">${priority.toFixed(0)}</span>`;
+    const kevBadge = f.priority?.is_kev ? '<span class="kev-badge" title="CISA KEV: Actively Exploited">KEV</span>' : '';
+
     html += `<tr class="expandable-row" data-idx="${idx}" onclick="toggleRow(${idx})" style="${triagedStyle}">
+      <td>${priorityBadge}${sparkline}${kevBadge}</td>
       <td class="sev-${escapeHtml(f.severity)}">${escapeHtml(f.severity)}</td>
       <td>${escapeHtml(f.ruleId)}</td>
       <td>${escapeHtml(f.location?.path)}</td>
@@ -491,9 +737,9 @@ function renderFlat(rows){
       <td>${escapeHtml(f.tool?.name)}</td>
       <td><button class="btn" style="padding:2px 6px;font-size:11px" onclick="event.stopPropagation();toggleRow(${idx})">Details</button></td>
     </tr>`;
-    html += `<tr class="detail-row" data-idx="${idx}"><td colspan="7">${renderDetailRow(f)}</td></tr>`;
+    html += `<tr class="detail-row" data-idx="${idx}"><td colspan="8">${renderDetailRow(f)}</td></tr>`;
   });
-  document.querySelector('#tbl tbody').innerHTML = html || '<tr><td colspan="7">No results</td></tr>';
+  document.querySelector('#tbl tbody').innerHTML = html || '<tr><td colspan="8">No results</td></tr>';
 }
 
 function renderGrouped(rows){
@@ -519,12 +765,25 @@ function renderGrouped(rows){
       <span>${escapeHtml(key)} <span class="badge sev-${maxSev}">${items.length} finding${items.length > 1 ? 's' : ''}</span></span>
     </div>`;
     html += '<div class="group-content">';
-    html += '<table class="table"><thead><tr><th>Severity</th><th>Rule</th><th>Path</th><th>Line</th><th>Message</th><th>Tool</th><th>Actions</th></tr></thead><tbody>';
+    html += '<table class="table"><thead><tr><th>Priority</th><th>Severity</th><th>Rule</th><th>Path</th><th>Line</th><th>Message</th><th>Tool</th><th>Actions</th></tr></thead><tbody>';
     items.forEach((f, idx) => {
       const globalIdx = rows.indexOf(f);
       const triaged = triageState[f.id];
       const triagedStyle = triaged ? 'opacity:0.6' : '';
+
+      // Priority badge
+      const priority = f.priority?.priority || 0;
+      let priorityClass = 'priority-info';
+      if(priority >= 80) priorityClass = 'priority-critical';
+      else if(priority >= 60) priorityClass = 'priority-high';
+      else if(priority >= 40) priorityClass = 'priority-medium';
+      else if(priority >= 20) priorityClass = 'priority-low';
+
+      const priorityBadge = `<span class="priority-badge ${priorityClass}">${priority.toFixed(0)}</span>`;
+      const kevBadge = f.priority?.is_kev ? '<span class="kev-badge" title="CISA KEV: Actively Exploited">KEV</span>' : '';
+
       html += `<tr class="expandable-row" data-idx="${globalIdx}" onclick="toggleRow(${globalIdx})" style="${triagedStyle}">
+        <td>${priorityBadge}${kevBadge}</td>
         <td class="sev-${escapeHtml(f.severity)}">${escapeHtml(f.severity)}</td>
         <td>${escapeHtml(f.ruleId)}</td>
         <td>${escapeHtml(f.location?.path)}</td>
@@ -533,7 +792,7 @@ function renderGrouped(rows){
         <td>${escapeHtml(f.tool?.name)}</td>
         <td><button class="btn" style="padding:2px 6px;font-size:11px" onclick="event.stopPropagation();toggleRow(${globalIdx})">Details</button></td>
       </tr>`;
-      html += `<tr class="detail-row" data-idx="${globalIdx}"><td colspan="7">${renderDetailRow(f)}</td></tr>`;
+      html += `<tr class="detail-row" data-idx="${globalIdx}"><td colspan="8">${renderDetailRow(f)}</td></tr>`;
     });
     html += '</tbody></table></div>';
   });
@@ -717,10 +976,10 @@ function setSort(key){
 }
 
 function toCsv(rows){
-  const header = ['severity','ruleId','path','line','message','tool','triaged'];
+  const header = ['priority','kev','epss','severity','ruleId','path','line','message','tool','triaged'];
   function esc(v){ const s = String(v??''); return '"'+s.replace(/"/g,'""')+'"'; }
   const lines = [header.join(',')].concat(rows.map(f => [
-    f.severity||'', f.ruleId||'', (f.location?.path||''), (f.location?.startLine||0), (f.message||''), (f.tool?.name||''), triageState[f.id] ? 'YES' : 'NO'
+    (f.priority?.priority||0).toFixed(1), f.priority?.is_kev ? 'YES' : 'NO', f.priority?.epss ? (f.priority.epss*100).toFixed(2)+'%' : '', f.severity||'', f.ruleId||'', (f.location?.path||''), (f.location?.startLine||0), (f.message||''), (f.tool?.name||''), triageState[f.id] ? 'YES' : 'NO'
   ].map(esc).join(',')));
   return lines.join('\n');
 }
@@ -888,6 +1147,37 @@ document.addEventListener('keydown', function(e){
       }).catch(()=>{});
   }catch(e){}
 })();
+
+// Quick Win #5: Escalate finding to security team
+function escalateFinding(id){
+  const f = data.find(finding => finding.id === id);
+  if(!f) return;
+
+  const subject = encodeURIComponent(`[URGENT] Security Finding: ${f.ruleId}`);
+  const body = encodeURIComponent(`URGENT SECURITY FINDING
+
+Priority: ${f.priority?.priority || 0}/100
+${f.priority?.is_kev ? 'KEV Status: ACTIVELY EXPLOITED IN THE WILD\n' : ''}
+Severity: ${f.severity}
+Rule: ${f.ruleId}
+File: ${f.location?.path}:${f.location?.startLine || 0}
+Message: ${f.message}
+
+${f.priority?.is_kev ? `KEV Due Date: ${f.priority.kev_due_date}\n` : ''}
+${f.priority?.epss ? `EPSS: ${(f.priority.epss * 100).toFixed(2)}% exploit probability\n` : ''}
+
+Please review immediately.`);
+
+  window.location.href = `mailto:security@yourcompany.com?subject=${subject}&body=${body}`;
+  // Also mark as triaged with urgent status
+  triageFinding(id, 'urgent');
+}
+
+// Initialize: Update summary cards on load
+updateSummaryCards();
+
+// Re-render to show initial state
+render();
 </script>
 
 <!-- Email Collection CTA (Touch Point #2) -->

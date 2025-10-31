@@ -30,7 +30,11 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     rules: Dict[str, Dict[str, Any]] = {}
     results = []
 
-    for f in findings:
+    for idx, f in enumerate(findings):
+        # Skip None or invalid findings (can happen with filtering)
+        if not f or not isinstance(f, dict):
+            print(f"Warning: Skipping invalid finding at index {idx}: {type(f)}")
+            continue
         rule_id = f.get("ruleId", "rule")
 
         # Enhanced rule metadata
@@ -63,9 +67,10 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
         # Add code snippet if available in context
-        if f.get("context", {}).get("snippet"):
+        context = f.get("context") if f else None
+        if context and isinstance(context, dict) and context.get("snippet"):
             location_obj["physicalLocation"]["region"]["snippet"] = {
-                "text": f["context"]["snippet"]
+                "text": context["snippet"]
             }
 
         # End line if available
@@ -185,5 +190,7 @@ def write_sarif(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    sarif = to_sarif(findings)
+    # Filter out None or invalid findings before converting to SARIF
+    valid_findings = [f for f in findings if f and isinstance(f, dict)]
+    sarif = to_sarif(valid_findings)
     p.write_text(json.dumps(sarif, indent=2), encoding="utf-8")

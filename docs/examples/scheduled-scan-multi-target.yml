@@ -1,0 +1,70 @@
+# Example: Multi-Target Security Scan (GitHub Actions)
+#
+# This workflow scans multiple target types:
+# - Repositories (source code)
+# - Container images (Docker)
+# - Infrastructure as Code (Terraform)
+# - Web applications (DAST)
+#
+# Runs weekly on Sunday at 3 AM UTC
+#
+# Setup:
+# 1. Copy to: .github/workflows/jmo-comprehensive-scan.yml
+# 2. Update target paths/URLs for your environment
+# 3. Commit and push to GitHub
+
+name: JMo Security Scan: comprehensive-weekly
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Weekly on Sunday at 3 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run JMo Comprehensive Scan
+        run: >
+          docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest
+          scan
+          --profile balanced
+          --repos-dir /workspace
+          --image nginx:latest
+          --image postgres:15
+          --terraform-state infrastructure/terraform.tfstate
+          --url https://example.com
+          --results-dir /workspace/results
+          --allow-missing-tools
+          --human-logs
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmo-results-comprehensive-${{ github.run_number }}
+          path: results/summaries/
+          retention-days: 90
+        if: always()
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/summaries/findings.sarif
+        if: always()
+
+      - name: Fail on HIGH severity findings
+        run: |
+          # Check if any HIGH severity findings exist
+          if grep -q '"severity": "HIGH"' results/summaries/findings.json; then
+            echo "::error::HIGH severity findings detected!"
+            exit 1
+          fi
+        if: always()

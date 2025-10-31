@@ -94,6 +94,10 @@ class ScanSchedule:
     )
     status: ScheduleStatus = field(default_factory=lambda: ScheduleStatus())
 
+    def to_dict(self) -> dict:
+        """Convert schedule to dictionary for JSON/YAML serialization."""
+        return asdict(self)
+
 
 class ScheduleManager:
     """Manage scan schedules with Kubernetes-inspired API."""

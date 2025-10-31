@@ -1,0 +1,71 @@
+# Example: Automated Nightly Security Scan (GitHub Actions)
+#
+# This workflow runs JMo Security scans automatically every night at 2 AM UTC.
+# Results are uploaded to GitHub Security tab and stored as artifacts.
+#
+# Setup:
+# 1. Copy this file to: .github/workflows/jmo-nightly-scan.yml
+# 2. Commit and push to GitHub
+# 3. View results in: Security tab > Code scanning alerts
+#
+# Generated with: jmo schedule create + jmo schedule export
+
+name: JMo Security Scan: nightly-deep
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Every night at 2 AM UTC
+  workflow_dispatch:      # Allow manual triggers
+
+permissions:
+  contents: read
+  security-events: write  # Required for SARIF upload to GitHub Security
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run JMo Security Scan
+        run: >
+          docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest
+          scan --profile deep --repos-dir /workspace --results-dir /workspace/results --human-logs
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmo-results-nightly-deep-${{ github.run_number }}
+          path: results/summaries/
+          retention-days: 90
+        if: always()
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/summaries/findings.sarif
+        if: always()
+
+# Optional: Add Slack notifications
+# Uncomment and add SLACK_WEBHOOK_URL to repository secrets
+
+#      - name: Notify Slack on failure
+#        if: failure()
+#        uses: slackapi/slack-github-action@v1
+#        with:
+#          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+#          payload: |
+#            {
+#              "text": "🚨 JMo Security Scan Failed",
+#              "blocks": [
+#                {
+#                  "type": "section",
+#                  "text": {
+#                    "type": "mrkdwn",
+#                    "text": "Security scan *nightly-deep* failed\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+#                  }
+#                }
+#              ]
+#            }

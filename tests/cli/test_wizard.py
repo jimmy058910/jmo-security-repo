@@ -366,13 +366,14 @@ def test_colorize():
 
 
 def test_print_header(capsys):
-    """Test header printing."""
+    """Test header printing (v0.9.0 uses box-drawing characters)."""
     from scripts.cli.wizard import _print_header
 
     _print_header("Test Header")
     captured = capsys.readouterr()
     assert "Test Header" in captured.out
-    assert "=" in captured.out
+    # v0.9.0 uses Unicode box-drawing characters (╔═╗ instead of ==)
+    assert "═" in captured.out or "=" in captured.out  # Support both old and new style
 
 
 def test_print_step(capsys):

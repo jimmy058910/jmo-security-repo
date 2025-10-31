@@ -1,0 +1,56 @@
+# Example: Automated Security Scan (GitLab CI)
+#
+# This job runs JMo Security scans automatically on schedule.
+# Results are uploaded as GitLab artifacts.
+#
+# Setup:
+# 1. Add this to your .gitlab-ci.yml file
+# 2. Configure pipeline schedule in GitLab UI:
+#    CI/CD > Schedules > New schedule
+#    - Description: Nightly security scan
+#    - Interval pattern: 0 2 * * * (every night at 2 AM UTC)
+#    - Target branch: main
+#    - Active: Yes
+#
+# Generated with: jmo schedule create --backend gitlab-ci + jmo schedule export
+
+jmo-security-scan:
+  image: ghcr.io/jimmy058910/jmo-security:latest
+
+  # Only run on schedule (not on every commit)
+  only:
+    - schedules
+
+  script:
+    # Run scan with balanced profile
+    - jmo scan
+        --profile balanced
+        --repos-dir /builds/$CI_PROJECT_PATH
+        --results-dir ./results
+        --human-logs
+
+    # Display summary
+    - cat ./results/summaries/SUMMARY.md
+
+  artifacts:
+    # Store results for 30 days
+    expire_in: 30 days
+    paths:
+      - results/summaries/
+    reports:
+      # Upload SARIF to GitLab Security Dashboard
+      sast: results/summaries/findings.sarif
+
+  # Allow failure if no critical issues found
+  allow_failure: false
+
+# Optional: Add Slack notification stage
+# Uncomment and set SLACK_WEBHOOK_URL in CI/CD variables
+
+#notify-slack:
+#  stage: .post
+#  only:
+#    - schedules
+#  when: on_failure
+#  script:
+#    - 'curl -X POST -H "Content-Type: application/json" -d "{\"text\": \"🚨 JMo Security Scan Failed - ${CI_PROJECT_NAME}\"}" ${SLACK_WEBHOOK_URL}'

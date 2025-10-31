@@ -32,6 +32,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
 
+# Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
+from scripts.core.priority_calculator import PriorityCalculator
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -157,6 +160,16 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
     except Exception as e:
         # Unexpected enrichment failure
         logger.debug(f"Unexpected error during compliance enrichment: {e}")
+
+    # Enrich findings with priority scores (v0.9.0 Feature #5: EPSS/KEV)
+    try:
+        _enrich_with_priority(deduped)
+    except (KeyError, ValueError, TypeError) as e:
+        # Missing priority data or malformed findings
+        logger.debug(f"Priority enrichment skipped: {e}")
+    except Exception as e:
+        # Unexpected enrichment failure (e.g., EPSS/KEV API errors)
+        logger.debug(f"Unexpected error during priority enrichment: {e}")
 
     return deduped
 
@@ -392,6 +405,46 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
         match = _find_sbom_match(f, by_path, by_name)
         if match:
             _attach_sbom_context(f, match)
+
+
+def _enrich_with_priority(findings: List[Dict[str, Any]]) -> None:
+    """Enrich findings with priority scores using EPSS and CISA KEV data.
+
+    Adds a 'priority' field to each finding containing:
+    - priority: float (0-100 score)
+    - epss: float (0.0-1.0 exploit probability) if available
+    - epss_percentile: float (0.0-1.0) if available
+    - is_kev: bool (whether CVE is in CISA KEV catalog)
+    - kev_due_date: str (remediation deadline for federal agencies) if applicable
+    - components: dict (breakdown of score components for transparency)
+
+    Args:
+        findings: List of findings to enrich (modified in-place)
+    """
+    if not findings:
+        return
+
+    # Initialize priority calculator
+    calculator = PriorityCalculator()
+
+    # Calculate priorities in bulk for better performance
+    priority_scores = calculator.calculate_priorities_bulk(findings)
+
+    # Attach priority data to findings
+    for finding in findings:
+        finding_id = finding.get("id")
+        if finding_id and finding_id in priority_scores:
+            priority_score = priority_scores[finding_id]
+
+            # Convert PriorityScore dataclass to dict for JSON serialization
+            finding["priority"] = {
+                "priority": priority_score.priority,
+                "epss": priority_score.epss,
+                "epss_percentile": priority_score.epss_percentile,
+                "is_kev": priority_score.is_kev,
+                "kev_due_date": priority_score.kev_due_date,
+                "components": priority_score.components,
+            }
 
 
 def main() -> int:

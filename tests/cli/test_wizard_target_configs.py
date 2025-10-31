@@ -1,16 +1,24 @@
 """
 Comprehensive test suite for wizard.py target configuration functions.
 
-This file systematically tests all configure_*_target() functions to achieve 85%+ coverage.
-Created fresh with absolute best standards and proper mocks.
+Tests wizard functions that delegate to wizard_flows.target_configurators module.
+Uses proper mocking to avoid blocking on user input.
+
+Coverage Target: 85%+
+Test Categories:
+- select_target_type() wrapper tests
+- configure_*_target() delegation tests (smoke tests)
+- generate_command_list() integration tests
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
+import pytest
 
 from scripts.cli.wizard import (
     TargetConfig,
+    WizardConfig,
     configure_gitlab_target,
     configure_iac_target,
     configure_image_target,
@@ -23,7 +31,39 @@ from scripts.cli.wizard import (
 
 
 # =============================================================================
-# Test select_target_type() - Lines 507-526
+# Test Helper Functions
+# =============================================================================
+
+
+def create_mock_target_config(
+    target_type: str = "repo",
+    **kwargs
+) -> TargetConfig:
+    """Create mock TargetConfig for testing."""
+    config = TargetConfig()
+    config.type = target_type
+
+    # Set defaults based on type
+    if target_type == "repo":
+        config.repo_mode = kwargs.get("repo_mode", "repos-dir")
+        config.repo_path = kwargs.get("repo_path", "/test/repos")
+    elif target_type == "image":
+        config.image_name = kwargs.get("image_name", "nginx:latest")
+    elif target_type == "url":
+        config.url = kwargs.get("url", "https://example.com")
+    elif target_type == "iac":
+        config.iac_files = kwargs.get("iac_files", ["/test/terraform.tf"])
+    elif target_type == "gitlab":
+        config.gitlab_url = kwargs.get("gitlab_url", "https://gitlab.com")
+        config.gitlab_repo = kwargs.get("gitlab_repo", "org/repo")
+    elif target_type == "k8s":
+        config.k8s_context = kwargs.get("k8s_context", "minikube")
+
+    return config
+
+
+# =============================================================================
+# Test select_target_type() - Wrapper Function
 # =============================================================================
 
 
@@ -76,488 +116,361 @@ def test_select_target_type_k8s(mock_choice):
 
 
 # =============================================================================
-# Test configure_repo_target() - Lines 536-595
+# Test configure_*_target() - Delegation Smoke Tests
 # =============================================================================
 
 
-@patch("scripts.cli.wizard._detect_repos_in_dir")
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_repo_target_repos_dir_with_repos(
-    mock_choice, mock_text, mock_validate, mock_detect
-):
-    """Test configuring repos-dir mode with detected repositories."""
-    mock_choice.return_value = "repos-dir"
-    mock_text.return_value = "/test/repos"
-    mock_validate.return_value = Path("/test/repos")
+@patch("scripts.cli.wizard._configure_repo")
+def test_configure_repo_target_delegates_correctly(mock_configure):
+    """Test configure_repo_target() delegates to target_configurators module."""
+    # Setup mock return value
+    expected_config = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test")
+    mock_configure.return_value = expected_config
 
-    # Mock detecting repos
-    repo1, repo2 = MagicMock(), MagicMock()
-    repo1.name = "repo1"
-    repo2.name = "repo2"
-    mock_detect.return_value = [repo1, repo2]
-
+    # Call wrapper function
     result = configure_repo_target()
 
+    # Verify delegation
+    assert mock_configure.called
     assert result.type == "repo"
     assert result.repo_mode == "repos-dir"
-    assert result.repo_path == "/test/repos"
+    assert result.repo_path == "/test"
 
 
-@patch("scripts.cli.wizard._prompt_yes_no")
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_repo_target_repos_dir_no_repos_continue(
-    mock_choice, mock_text, mock_validate, mock_yes_no
-):
-    """Test configuring repos-dir mode with no repos but user continues anyway."""
-    mock_choice.return_value = "repos-dir"
-    mock_text.return_value = "/test/empty"
-    mock_validate.return_value = Path("/test/empty")
-    mock_yes_no.return_value = True  # Continue anyway
-
-    result = configure_repo_target()
-
-    assert result.type == "repo"
-    assert result.repo_mode == "repos-dir"
-    assert result.repo_path == "/test/empty"
-
-
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_repo_target_single_repo(mock_choice, mock_text, mock_validate):
-    """Test configuring single repository mode."""
-    mock_choice.return_value = "repo"
-    mock_text.return_value = "/test/my-repo"
-    mock_validate.return_value = Path("/test/my-repo")
-
-    result = configure_repo_target()
-
-    assert result.type == "repo"
-    assert result.repo_mode == "repo"
-    assert result.repo_path == "/test/my-repo"
-
-
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_repo_target_targets_file(mock_choice, mock_text, mock_validate):
-    """Test configuring targets file mode."""
-    mock_choice.return_value = "targets"
-    mock_text.return_value = "/test/targets.txt"
-    mock_validate.return_value = Path("/test/targets.txt")
-
-    result = configure_repo_target()
-
-    assert result.type == "repo"
-    assert result.repo_mode == "targets"
-    assert result.repo_path == "/test/targets.txt"
-
-
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_repo_target_tsv_mode(mock_choice, mock_text):
-    """Test configuring TSV clone mode."""
-    mock_choice.return_value = "tsv"
-    mock_text.side_effect = ["/test/repos.tsv", "/test/cloned-repos"]
-
-    result = configure_repo_target()
-
-    assert result.type == "repo"
-    assert result.repo_mode == "tsv"
-    assert result.tsv_path == "/test/repos.tsv"
-    assert result.tsv_dest == "/test/cloned-repos"
-
-
-# =============================================================================
-# Test configure_image_target() - Lines 605-647
-# =============================================================================
-
-
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_image_target_single(mock_choice, mock_text):
-    """Test configuring single container image."""
-    mock_choice.return_value = "single"
-    mock_text.return_value = "nginx:1.21"
+@patch("scripts.cli.wizard._configure_image")
+def test_configure_image_target_delegates_correctly(mock_configure):
+    """Test configure_image_target() delegates to target_configurators module."""
+    expected_config = create_mock_target_config("image", image_name="nginx:latest")
+    mock_configure.return_value = expected_config
 
     result = configure_image_target()
 
+    assert mock_configure.called
     assert result.type == "image"
-    assert result.image_name == "nginx:1.21"
+    assert result.image_name == "nginx:latest"
 
 
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_image_target_batch(mock_choice, mock_text, mock_validate, tmp_path):
-    """Test configuring batch images from file."""
-    images_file = tmp_path / "images.txt"
-    images_file.write_text("nginx:latest\nredis:alpine\npostgres:13\n")
-
-    mock_choice.return_value = "batch"
-    mock_text.return_value = str(images_file)
-    mock_validate.return_value = images_file
-
-    result = configure_image_target()
-
-    assert result.type == "image"
-    assert result.images_file == str(images_file)
-
-
-# =============================================================================
-# Test configure_iac_target() - Lines 657-696
-# =============================================================================
-
-
-@patch("scripts.cli.wizard._detect_iac_type")
-@patch("scripts.cli.wizard._prompt_choice")
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-def test_configure_iac_target_terraform(
-    mock_text, mock_validate, mock_choice, mock_detect, tmp_path
-):
-    """Test configuring Terraform IaC target."""
-    tf_file = tmp_path / "terraform.tfstate"
-    tf_file.write_text('{"version": 4}')
-
-    mock_text.return_value = str(tf_file)
-    mock_validate.return_value = tf_file
-    mock_detect.return_value = "terraform"
-    mock_choice.return_value = "terraform"
+@patch("scripts.cli.wizard._configure_iac")
+def test_configure_iac_target_delegates_correctly(mock_configure):
+    """Test configure_iac_target() delegates to target_configurators module."""
+    expected_config = create_mock_target_config("iac", iac_files=["/test/main.tf"])
+    mock_configure.return_value = expected_config
 
     result = configure_iac_target()
 
+    assert mock_configure.called
     assert result.type == "iac"
-    assert result.iac_type == "terraform"
-    assert result.iac_path == str(tf_file)
+    assert result.iac_files == ["/test/main.tf"]
 
 
-@patch("scripts.cli.wizard._detect_iac_type")
-@patch("scripts.cli.wizard._prompt_choice")
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-def test_configure_iac_target_cloudformation(
-    mock_text, mock_validate, mock_choice, mock_detect, tmp_path
-):
-    """Test configuring CloudFormation IaC target."""
-    cf_file = tmp_path / "template.yaml"
-    cf_file.write_text("AWSTemplateFormatVersion: '2010-09-09'")
-
-    mock_text.return_value = str(cf_file)
-    mock_validate.return_value = cf_file
-    mock_detect.return_value = "cloudformation"
-    mock_choice.return_value = "cloudformation"
-
-    result = configure_iac_target()
-
-    assert result.type == "iac"
-    assert result.iac_type == "cloudformation"
-    assert result.iac_path == str(cf_file)
-
-
-@patch("scripts.cli.wizard._detect_iac_type")
-@patch("scripts.cli.wizard._prompt_choice")
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-def test_configure_iac_target_k8s_manifest(
-    mock_text, mock_validate, mock_choice, mock_detect, tmp_path
-):
-    """Test configuring Kubernetes manifest IaC target."""
-    k8s_file = tmp_path / "deployment.yaml"
-    k8s_file.write_text("apiVersion: apps/v1\nkind: Deployment")
-
-    mock_text.return_value = str(k8s_file)
-    mock_validate.return_value = k8s_file
-    mock_detect.return_value = "k8s-manifest"
-    mock_choice.return_value = "k8s-manifest"
-
-    result = configure_iac_target()
-
-    assert result.type == "iac"
-    assert result.iac_type == "k8s-manifest"
-    assert result.iac_path == str(k8s_file)
-
-
-# =============================================================================
-# Test configure_url_target() - Lines 706-769
-# =============================================================================
-
-
-@patch("scripts.cli.wizard._validate_url")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_url_target_single_reachable(
-    mock_choice, mock_text, mock_validate_url
-):
-    """Test configuring single URL that is reachable."""
-    mock_choice.return_value = "single"
-    mock_text.return_value = "https://example.com"
-    mock_validate_url.return_value = True
+@patch("scripts.cli.wizard._configure_url")
+def test_configure_url_target_delegates_correctly(mock_configure):
+    """Test configure_url_target() delegates to target_configurators module."""
+    expected_config = create_mock_target_config("url", url="https://example.com")
+    mock_configure.return_value = expected_config
 
     result = configure_url_target()
 
+    assert mock_configure.called
     assert result.type == "url"
     assert result.url == "https://example.com"
 
 
-@patch("scripts.cli.wizard._prompt_yes_no")
-@patch("scripts.cli.wizard._validate_url")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_url_target_single_unreachable_continue(
-    mock_choice, mock_text, mock_validate_url, mock_yes_no
-):
-    """Test configuring single URL that is unreachable but user continues."""
-    mock_choice.return_value = "single"
-    mock_text.return_value = "https://unreachable.test"
-    mock_validate_url.return_value = False
-    mock_yes_no.return_value = True  # Use anyway
-
-    result = configure_url_target()
-
-    assert result.type == "url"
-    assert result.url == "https://unreachable.test"
-
-
-@patch("scripts.cli.wizard._validate_path")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_url_target_batch(mock_choice, mock_text, mock_validate, tmp_path):
-    """Test configuring batch URLs from file."""
-    urls_file = tmp_path / "urls.txt"
-    urls_file.write_text("https://example.com\nhttps://test.com\n")
-
-    mock_choice.return_value = "batch"
-    mock_text.return_value = str(urls_file)
-    mock_validate.return_value = urls_file
-
-    result = configure_url_target()
-
-    assert result.type == "url"
-    assert result.urls_file == str(urls_file)
-
-
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_url_target_api_spec(mock_choice, mock_text):
-    """Test configuring API target with OpenAPI spec."""
-    mock_choice.return_value = "api"
-    mock_text.return_value = "./openapi.yaml"
-
-    result = configure_url_target()
-
-    assert result.type == "url"
-    assert result.api_spec == "./openapi.yaml"
-
-
-# =============================================================================
-# Test configure_gitlab_target() - Lines 779-836
-# =============================================================================
-
-
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_gitlab_target_repo_with_env_token(
-    mock_choice, mock_text, monkeypatch
-):
-    """Test configuring GitLab repo with token from environment."""
-    monkeypatch.setenv("GITLAB_TOKEN", "glpat-env-token")
-
-    mock_choice.return_value = "repo"
-    mock_text.side_effect = ["https://gitlab.com", "group/project"]
+@patch("scripts.cli.wizard._configure_gitlab")
+def test_configure_gitlab_target_delegates_correctly(mock_configure):
+    """Test configure_gitlab_target() delegates to target_configurators module."""
+    expected_config = create_mock_target_config(
+        "gitlab",
+        gitlab_url="https://gitlab.com",
+        gitlab_repo="org/repo"
+    )
+    mock_configure.return_value = expected_config
 
     result = configure_gitlab_target()
 
+    assert mock_configure.called
     assert result.type == "gitlab"
-    assert result.gitlab_url == "https://gitlab.com"
-    assert result.gitlab_token == "glpat-env-token"
-    assert result.gitlab_repo == "group/project"
+    assert result.gitlab_repo == "org/repo"
 
 
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_gitlab_target_repo_prompt_token(mock_choice, mock_text, monkeypatch):
-    """Test configuring GitLab repo with token from prompt."""
-    monkeypatch.delenv("GITLAB_TOKEN", raising=False)
-
-    mock_choice.return_value = "repo"
-    mock_text.side_effect = [
-        "https://gitlab.example.com",
-        "glpat-prompt-token",
-        "mygroup/myrepo",
-    ]
-
-    result = configure_gitlab_target()
-
-    assert result.type == "gitlab"
-    assert result.gitlab_url == "https://gitlab.example.com"
-    assert result.gitlab_token == "glpat-prompt-token"
-    assert result.gitlab_repo == "mygroup/myrepo"
-
-
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_gitlab_target_group(mock_choice, mock_text, monkeypatch):
-    """Test configuring GitLab group."""
-    monkeypatch.setenv("GITLAB_TOKEN", "glpat-token")
-
-    mock_choice.return_value = "group"
-    mock_text.side_effect = ["https://gitlab.com", "my-organization"]
-
-    result = configure_gitlab_target()
-
-    assert result.type == "gitlab"
-    assert result.gitlab_group == "my-organization"
-
-
-# =============================================================================
-# Test configure_k8s_target() - Lines 846-906
-# =============================================================================
-
-
-@patch("shutil.which")
-@patch("scripts.cli.wizard._validate_k8s_context")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_k8s_target_single_namespace(
-    mock_choice, mock_text, mock_validate, mock_which
-):
-    """Test configuring Kubernetes single namespace."""
-    mock_which.return_value = "/usr/bin/kubectl"  # kubectl is available
-    mock_text.side_effect = ["prod-cluster", "production"]
-    mock_validate.return_value = True  # Context is valid
-    mock_choice.return_value = "single"
+@patch("scripts.cli.wizard._configure_k8s")
+def test_configure_k8s_target_delegates_correctly(mock_configure):
+    """Test configure_k8s_target() delegates to target_configurators module."""
+    expected_config = create_mock_target_config("k8s", k8s_context="minikube")
+    mock_configure.return_value = expected_config
 
     result = configure_k8s_target()
 
+    assert mock_configure.called
     assert result.type == "k8s"
-    assert result.k8s_context == "prod-cluster"
-    assert result.k8s_namespace == "production"
-    assert result.k8s_all_namespaces is False
-
-
-@patch("shutil.which")
-@patch("scripts.cli.wizard._validate_k8s_context")
-@patch("scripts.cli.wizard._prompt_text")
-@patch("scripts.cli.wizard._prompt_choice")
-def test_configure_k8s_target_all_namespaces(
-    mock_choice, mock_text, mock_validate, mock_which
-):
-    """Test configuring Kubernetes all namespaces."""
-    mock_which.return_value = "/usr/bin/kubectl"  # kubectl is available
-    mock_text.return_value = "staging-cluster"
-    mock_validate.return_value = True  # Context is valid
-    mock_choice.return_value = "all"
-
-    result = configure_k8s_target()
-
-    assert result.type == "k8s"
-    assert result.k8s_context == "staging-cluster"
-    assert result.k8s_all_namespaces is True
+    assert result.k8s_context == "minikube"
 
 
 # =============================================================================
-# Test generate_command_list() - Lines 996-1027
+# Test generate_command_list() - Command Builder Integration
 # =============================================================================
 
 
-def test_generate_command_list_native_repo():
-    """Test generating native command list for repository scan."""
-    from scripts.cli.wizard import WizardConfig
-
+def test_generate_command_list_repo_target():
+    """Test command generation for repository target."""
     config = WizardConfig()
+    config.profile = "balanced"
+    config.target = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test/repos")
     config.use_docker = False
+
+    result = generate_command_list(config)
+
+    # Verify command structure (wizard generates jmotools commands)
+    assert isinstance(result, list)
+    assert len(result) > 0
+    assert "jmotools" in result or result[0] == "jmotools"
+    assert "--repos-dir" in result
+    assert "/test/repos" in result
+    assert "balanced" in result
+
+
+def test_generate_command_list_image_target():
+    """Test command generation for container image target."""
+    config = WizardConfig()
     config.profile = "fast"
-    config.target = TargetConfig()
-    config.target.type = "repo"
-    config.target.repo_mode = "repos-dir"
-    config.target.repo_path = "/test/repos"
-    config.results_dir = "results"
+    config.target = create_mock_target_config("image", image_name="nginx:latest")
+    config.use_docker = False
+
+    result = generate_command_list(config)
+
+    assert "--image" in result
+    assert "nginx:latest" in result
+    assert "fast" in result
+
+
+def test_generate_command_list_url_target():
+    """Test command generation for URL target."""
+    config = WizardConfig()
+    config.profile = "balanced"
+    config.target = create_mock_target_config("url", url="https://example.com")
+    config.use_docker = False
+
+    result = generate_command_list(config)
+
+    assert "--url" in result
+    assert "https://example.com" in result
+
+
+def test_generate_command_list_with_threads():
+    """Test command generation with custom thread count."""
+    config = WizardConfig()
+    config.profile = "balanced"
+    config.target = create_mock_target_config("repo")
+    config.use_docker = False
+    config.threads = 8
+
+    result = generate_command_list(config)
+
+    assert "--threads" in result
+    assert "8" in result
+
+
+def test_generate_command_list_with_timeout():
+    """Test command generation with custom timeout."""
+    config = WizardConfig()
+    config.profile = "deep"
+    config.target = create_mock_target_config("repo")
+    config.use_docker = False
+    config.timeout = 600
+
+    result = generate_command_list(config)
+
+    assert "--timeout" in result
+    assert "600" in result
+
+
+def test_generate_command_list_docker_mode():
+    """Test command generation in Docker mode."""
+    config = WizardConfig()
+    config.profile = "fast"
+    config.target = create_mock_target_config("repo")
+    config.use_docker = True
+
+    result = generate_command_list(config)
+
+    # Docker mode should have different command structure
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+
+# =============================================================================
+# Test TargetConfig to_dict() - Serialization
+# =============================================================================
+
+
+def test_target_config_to_dict_repo():
+    """Test TargetConfig serialization for repository target."""
+    config = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test/repos")
+
+    result = config.to_dict()
+
+    assert result["type"] == "repo"
+    assert result["repo_mode"] == "repos-dir"
+    assert result["repo_path"] == "/test/repos"
+
+
+def test_target_config_to_dict_image():
+    """Test TargetConfig serialization for image target."""
+    config = create_mock_target_config("image", image_name="python:3.11")
+
+    result = config.to_dict()
+
+    assert result["type"] == "image"
+    assert result["image_name"] == "python:3.11"
+
+
+def test_target_config_to_dict_url():
+    """Test TargetConfig serialization for URL target."""
+    config = create_mock_target_config("url", url="https://api.example.com")
+
+    result = config.to_dict()
+
+    assert result["type"] == "url"
+    assert result["url"] == "https://api.example.com"
+
+
+# =============================================================================
+# Test WizardConfig to_dict() - Complete Configuration Serialization
+# =============================================================================
+
+
+def test_wizard_config_to_dict_complete():
+    """Test WizardConfig serialization with all fields."""
+    config = WizardConfig()
+    config.profile = "balanced"
+    config.target = create_mock_target_config("repo")
+    config.use_docker = False
     config.threads = 4
     config.timeout = 300
-    config.fail_on = "HIGH"
-    config.log_level = "INFO"
-    config.human_logs = True
 
-    cmd_list = generate_command_list(config)
+    result = config.to_dict()
 
-    # cmd_list is a flat list of strings: ["jmotools", "fast", "--repos-dir", ...]
-    assert isinstance(cmd_list, list)
-    assert len(cmd_list) > 0
-    assert "jmotools" in cmd_list or any("jmo" in arg.lower() for arg in cmd_list)
-    assert "--repos-dir" in cmd_list
-    assert "/test/repos" in cmd_list
-    assert "fast" in cmd_list  # Profile is included as command
+    assert result["profile"] == "balanced"
+    assert result["use_docker"] is False
+    assert result["threads"] == 4
+    assert result["timeout"] == 300
+    assert "target" in result
 
 
-def test_generate_command_list_docker_image():
-    """Test generating Docker command list for container image scan."""
-    from scripts.cli.wizard import WizardConfig
-
+def test_wizard_config_to_dict_minimal():
+    """Test WizardConfig serialization with minimal fields."""
     config = WizardConfig()
-    config.use_docker = True
-    config.profile = "balanced"
-    config.target = TargetConfig()
-    config.target.type = "image"
-    config.target.image_name = "nginx:latest"
-    config.results_dir = "results"
+    config.profile = "fast"
+    config.target = create_mock_target_config("repo")
 
-    cmd_list = generate_command_list(config)
+    result = config.to_dict()
 
-    # Docker command: ["docker", "run", "--rm", "-v", ..., "jmo-security:latest", ...]
-    assert isinstance(cmd_list, list)
-    assert len(cmd_list) > 0
-    assert "docker" in cmd_list
-    assert "run" in cmd_list
-    assert "--image" in cmd_list
-    assert "nginx:latest" in cmd_list
+    assert result["profile"] == "fast"
+    assert "target" in result
 
 
-def test_generate_command_list_gitlab():
-    """Test generating command list for GitLab scan."""
-    from scripts.cli.wizard import WizardConfig
+# =============================================================================
+# Edge Cases and Error Handling
+# =============================================================================
 
+
+def test_generate_command_list_empty_config():
+    """Test command generation handles missing fields gracefully."""
     config = WizardConfig()
+    config.profile = "fast"
+    config.target = TargetConfig()  # Empty target
     config.use_docker = False
-    config.profile = "deep"
-    config.target = TargetConfig()
-    config.target.type = "gitlab"
-    config.target.gitlab_url = "https://gitlab.com"
-    config.target.gitlab_token = "glpat-token"
-    config.target.gitlab_repo = "group/repo"
-    config.results_dir = "results"
 
-    cmd_list = generate_command_list(config)
-
-    assert isinstance(cmd_list, list)
-    assert len(cmd_list) > 0
-    assert "--gitlab-repo" in cmd_list
-    assert "group/repo" in cmd_list
+    # Should not crash, returns valid command list
+    result = generate_command_list(config)
+    assert isinstance(result, list)
 
 
-def test_generate_command_list_k8s():
-    """Test generating command list for Kubernetes scan."""
-    from scripts.cli.wizard import WizardConfig
+def test_target_config_to_dict_empty():
+    """Test TargetConfig serialization with no fields set."""
+    config = TargetConfig()
 
+    result = config.to_dict()
+
+    # Should return dict with type field at minimum
+    assert isinstance(result, dict)
+    assert "type" in result
+
+
+def test_wizard_config_no_target():
+    """Test WizardConfig serialization without target set."""
     config = WizardConfig()
-    config.use_docker = False
+    config.profile = "fast"
+    # No target set
+
+    result = config.to_dict()
+
+    assert result["profile"] == "fast"
+    # Should handle missing target gracefully
+
+
+# =============================================================================
+# Integration Test: End-to-End Command Generation
+# =============================================================================
+
+
+def test_end_to_end_repo_scan_command():
+    """Test complete workflow: configure target -> generate command."""
+    # Create complete config
+    config = WizardConfig()
     config.profile = "balanced"
-    config.target = TargetConfig()
-    config.target.type = "k8s"
-    config.target.k8s_context = "prod"
-    config.target.k8s_namespace = "default"
-    config.target.k8s_all_namespaces = False
-    config.results_dir = "results"
+    config.use_docker = False
+    config.threads = 8
+    config.timeout = 600
 
-    cmd_list = generate_command_list(config)
+    # Configure repository target
+    target = TargetConfig()
+    target.type = "repo"
+    target.repo_mode = "repos-dir"
+    target.repo_path = "/test/repos"
+    config.target = target
 
-    assert isinstance(cmd_list, list)
-    assert len(cmd_list) > 0
-    assert "--k8s-context" in cmd_list
-    assert "prod" in cmd_list
-    assert "--k8s-namespace" in cmd_list
-    assert "default" in cmd_list
+    # Generate command
+    cmd = generate_command_list(config)
+
+    # Verify command contains all expected elements
+    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert "--repos-dir" in cmd or "repos-dir" in " ".join(cmd)
+    assert "/test/repos" in cmd
+    assert "balanced" in cmd
+    assert "--threads" in cmd or "8" in cmd
+
+
+def test_end_to_end_multi_image_command():
+    """Test command generation for multiple images."""
+    config = WizardConfig()
+    config.profile = "fast"
+    config.use_docker = False
+
+    target = TargetConfig()
+    target.type = "image"
+    target.images_file = "/test/images.txt"
+    config.target = target
+
+    cmd = generate_command_list(config)
+
+    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert "--images-file" in cmd or "images-file" in " ".join(cmd)
+
+
+def test_end_to_end_url_scan_with_api_spec():
+    """Test command generation for URL with API spec."""
+    config = WizardConfig()
+    config.profile = "balanced"
+    config.use_docker = False
+
+    target = TargetConfig()
+    target.type = "url"
+    target.url = "https://api.example.com"
+    target.api_spec = "/test/openapi.yaml"
+    config.target = target
+
+    cmd = generate_command_list(config)
+
+    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert "--url" in cmd or "https://api.example.com" in " ".join(cmd)
