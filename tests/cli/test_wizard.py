@@ -657,9 +657,7 @@ def test_configure_advanced_invalid_inputs(
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch(
-    "builtins.input", side_effect=["1000", "30"]
-)  # threads > cpu*2, timeout < 60
+@patch("builtins.input", side_effect=["1000", "30"])  # threads > cpu*2, timeout < 60
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
 @patch("scripts.cli.wizard.get_cpu_count", return_value=4)
 def test_configure_advanced_boundary_clamping(

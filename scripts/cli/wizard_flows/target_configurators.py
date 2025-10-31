@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import os
 import shutil
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from scripts.cli.wizard import TargetConfig
+    pass
 
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
 from scripts.cli.wizard_flows.validators import (
@@ -74,13 +73,19 @@ def configure_repo_target(target_config_class: Any, print_step_fn: Callable) -> 
             if mode == "repos-dir":
                 repos = _detector.detect_repos(validated)
                 if repos:
-                    print(_prompter.colorize(f"Found {len(repos)} repositories:", "green"))
+                    print(
+                        _prompter.colorize(f"Found {len(repos)} repositories:", "green")
+                    )
                     for repo in repos[:5]:
                         print(f"  - {repo.name}")
                     if len(repos) > 5:
                         print(f"  ... and {len(repos) - 5} more")
                 else:
-                    print(_prompter.colorize("Warning: No git repositories detected", "yellow"))
+                    print(
+                        _prompter.colorize(
+                            "Warning: No git repositories detected", "yellow"
+                        )
+                    )
                     if not _prompter.prompt_yes_no("Continue anyway?", default=False):
                         continue
 
@@ -163,7 +168,9 @@ def configure_iac_target(target_config_class: Any, print_step_fn: Callable) -> A
             for key, desc in types:
                 print(f"  [{key:15}] {desc}")
 
-            iac_type = _prompter.prompt_choice("\nSelect type:", types, default=detected_type)
+            iac_type = _prompter.prompt_choice(
+                "\nSelect type:", types, default=detected_type
+            )
             config.iac_type = iac_type
             return config
 
@@ -198,7 +205,9 @@ def configure_url_target(target_config_class: Any, print_step_fn: Callable) -> A
                 config.url = url
                 break
             else:
-                print(_prompter.colorize(f"Warning: URL not reachable: {url}", "yellow"))
+                print(
+                    _prompter.colorize(f"Warning: URL not reachable: {url}", "yellow")
+                )
                 if _prompter.prompt_yes_no("Use this URL anyway?", default=False):
                     config.url = url
                     break
@@ -321,7 +330,9 @@ def configure_k8s_target(target_config_class: Any, print_step_fn: Callable) -> A
             config.k8s_context = context
             break
         else:
-            print(_prompter.colorize(f"Warning: Context not found: {context}", "yellow"))
+            print(
+                _prompter.colorize(f"Warning: Context not found: {context}", "yellow")
+            )
             if _prompter.prompt_yes_no("Use this context anyway?", default=False):
                 config.k8s_context = context
                 break

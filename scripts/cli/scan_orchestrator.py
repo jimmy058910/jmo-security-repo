@@ -537,7 +537,7 @@ class ScanOrchestrator:
         Returns:
             List of (target_name, statuses_dict) tuples for all scanned targets
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor
         from scripts.cli.scan_jobs import (
             scan_repository,
             scan_image,

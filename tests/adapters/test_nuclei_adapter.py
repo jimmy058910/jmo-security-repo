@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.nuclei_adapter import load_nuclei
+from scripts.core.adapters.nuclei_adapter import NucleiAdapter
 
 
 def write_tmp(tmp_path: Path, name: str, content: str) -> Path:
@@ -33,31 +33,31 @@ def test_nuclei_basic(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei.json", sample)
-    out = load_nuclei(path)
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
 
     # Verify parsing succeeded
-    assert len(out) == 1, "Should parse 1 finding"
+    assert len(findings) == 1, "Should parse 1 finding"
 
-    item = out[0]
+    item = findings[0]
 
     # Verify CommonFinding schema fields
-    assert item["ruleId"] == "CVE-2021-44228"
-    assert item["severity"] == "CRITICAL"
-    assert item["location"]["path"] == "https://example.com/api"
-    assert item["location"]["startLine"] == 0  # Web findings don't have line numbers
-    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]  # After enrichment
+    assert item.ruleId == "CVE-2021-44228"
+    assert item.severity == "CRITICAL"
+    assert item.location["path"] == "https://example.com/api"
+    assert item.location["startLine"] == 0  # Web findings don't have line numbers
+    assert item.schemaVersion in ["1.1.0", "1.2.0"]  # After enrichment
 
     # Verify required fields exist
-    assert "id" in item, "Fingerprint ID required"
-    assert (
-        len(item["id"]) == 16
-    ), "Fingerprint should be 16 hex chars (truncated SHA256)"
-    assert "tool" in item
-    assert item["tool"]["name"] == "nuclei"
-    assert "message" in item
-    assert "version-check" in item["message"]  # Should include matcher-name
-    assert "raw" in item, "Original tool output must be preserved"
-    assert item["raw"]["template-id"] == "CVE-2021-44228"
+    assert hasattr(item, "id"), "Fingerprint ID required"
+    assert len(item.id) == 16, "Fingerprint should be 16 hex chars (truncated SHA256)"
+    assert hasattr(item, "tool")
+    assert item.tool["name"] == "nuclei"
+    assert hasattr(item, "message")
+    assert "version-check" in item.message  # Should include matcher-name
+    assert hasattr(item, "raw") and item.raw, "Original tool output must be preserved"
+    assert item.raw["template-id"] == "CVE-2021-44228"
 
 
 def test_nuclei_multiple_findings(tmp_path: Path):
@@ -86,16 +86,18 @@ def test_nuclei_multiple_findings(tmp_path: Path):
         ),
     ]
     path = write_tmp(tmp_path, "nuclei_multi.json", "\n".join(lines))
-    out = load_nuclei(path)
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 3, "Should parse all 3 findings"
-    assert out[0]["ruleId"] == "CVE-2021-44228"
-    assert out[1]["ruleId"] == "CVE-2020-5902"
-    assert out[2]["ruleId"] == "exposed-git-config"
+    assert len(findings) == 3, "Should parse all 3 findings"
+    assert findings[0].ruleId == "CVE-2021-44228"
+    assert findings[1].ruleId == "CVE-2020-5902"
+    assert findings[2].ruleId == "exposed-git-config"
     # Verify severities were normalized
-    assert out[0]["severity"] == "CRITICAL"
-    assert out[1]["severity"] == "HIGH"
-    assert out[2]["severity"] == "MEDIUM"
+    assert findings[0].severity == "CRITICAL"
+    assert findings[1].severity == "HIGH"
+    assert findings[2].severity == "MEDIUM"
 
 
 # ========================================
@@ -107,15 +109,21 @@ def test_nuclei_empty_and_malformed(tmp_path: Path):
     """Test error handling for empty and malformed inputs."""
     # Test 1: Empty file
     p1 = write_tmp(tmp_path, "empty.json", "")
-    assert load_nuclei(p1) == [], "Empty file should return empty list"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    assert adapter.parse(p1) == [], "Empty file should return empty list"
 
     # Test 2: Malformed JSON (syntax error)
     p2 = write_tmp(tmp_path, "bad.json", "{not valid json}\n{also bad}")
-    assert load_nuclei(p2) == [], "Malformed JSON should return empty list"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    assert adapter.parse(p2) == [], "Malformed JSON should return empty list"
 
     # Test 3: Valid JSON but wrong structure (non-dict)
     p3 = write_tmp(tmp_path, "badstruct.json", json.dumps([1, 2, 3]))
-    assert load_nuclei(p3) == [], "Non-dict JSON should return empty list"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    assert adapter.parse(p3) == [], "Non-dict JSON should return empty list"
 
     # Test 4: Mixed valid and invalid lines
     lines = [
@@ -126,14 +134,18 @@ def test_nuclei_empty_and_malformed(tmp_path: Path):
         "another bad line",  # Invalid
     ]
     p4 = write_tmp(tmp_path, "mixed.json", "\n".join(lines))
-    out = load_nuclei(p4)
-    assert len(out) == 1, "Should parse 1 valid finding (skip 2 invalid)"
-    assert out[0]["ruleId"] == "test"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(p4)
+    assert len(findings) == 1, "Should parse 1 valid finding (skip 2 invalid)"
+    assert findings[0].ruleId == "test"
 
 
 def test_nuclei_nonexistent_file(tmp_path: Path):
     """Test loading from non-existent file returns empty list."""
-    result = load_nuclei(tmp_path / "nonexistent.json")
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    result = adapter.parse(tmp_path / "nonexistent.json")
     assert result == [], "Non-existent file should return empty list"
 
 
@@ -152,10 +164,12 @@ def test_nuclei_empty_lines(tmp_path: Path):
         "",  # Empty
     ]
     path = write_tmp(tmp_path, "empty_lines.json", "\n".join(lines))
-    out = load_nuclei(path)
-    assert len(out) == 2, "Should parse 2 valid findings (skip empty lines)"
-    assert out[0]["ruleId"] == "test1"
-    assert out[1]["ruleId"] == "test2"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 2, "Should parse 2 valid findings (skip empty lines)"
+    assert findings[0].ruleId == "test1"
+    assert findings[1].ruleId == "test2"
 
 
 def test_nuclei_unicode_and_encoding(tmp_path: Path):
@@ -173,11 +187,13 @@ def test_nuclei_unicode_and_encoding(tmp_path: Path):
         ensure_ascii=False,
     )
     path = write_tmp(tmp_path, "nuclei_unicode.json", sample)
-    out = load_nuclei(path)
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    assert "SQL注入" in out[0]["title"]
-    assert "测试" in out[0]["location"]["path"]
+    assert len(findings) == 1
+    assert "SQL注入" in findings[0].title
+    assert "测试" in findings[0].location["path"]
 
 
 # ========================================
@@ -200,12 +216,14 @@ def test_nuclei_v110_remediation(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_remediation.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert isinstance(item["remediation"], str)
-    assert "Remove .env file" in item["remediation"]
+    item = findings[0]
+    assert isinstance(item.remediation, str)
+    assert "Remove .env file" in item.remediation
 
 
 def test_nuclei_v110_remediation_without_field(tmp_path: Path):
@@ -221,12 +239,14 @@ def test_nuclei_v110_remediation_without_field(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_no_remediation.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert isinstance(item["remediation"], str)
-    assert len(item["remediation"]) > 0
+    item = findings[0]
+    assert isinstance(item.remediation, str)
+    assert len(item.remediation) > 0
 
 
 def test_nuclei_v110_cwe_metadata(tmp_path: Path):
@@ -246,18 +266,20 @@ def test_nuclei_v110_cwe_metadata(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_cwe.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
+    item = findings[0]
     # Check risk metadata (v1.1.0 feature)
-    assert "risk" in item
-    assert "cwe" in item["risk"]
-    assert item["risk"]["cwe"] == ["CWE-89", "CWE-20"]
+    assert hasattr(item, "risk") and item.risk
+    assert "cwe" in item.risk
+    assert item.risk["cwe"] == ["CWE-89", "CWE-20"]
 
     # Check CVE references
-    assert "references" in item
-    assert "https://nvd.nist.gov/vuln/detail/CVE-2023-12345" in item["references"]
+    assert hasattr(item, "references") and item.references
+    assert "https://nvd.nist.gov/vuln/detail/CVE-2023-12345" in item.references
 
 
 def test_nuclei_v110_cwe_string_format(tmp_path: Path):
@@ -276,15 +298,17 @@ def test_nuclei_v110_cwe_string_format(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_cwe_string.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert "risk" in item
-    assert "cwe" in item["risk"]
+    item = findings[0]
+    assert hasattr(item, "risk") and item.risk
+    assert "cwe" in item.risk
     # Should be converted to list by adapter
-    assert item["risk"]["cwe"] == ["CWE-79"]
-    assert isinstance(item["risk"]["cwe"], list)
+    assert item.risk["cwe"] == ["CWE-79"]
+    assert isinstance(item.risk["cwe"], list)
 
 
 def test_nuclei_v110_references(tmp_path: Path):
@@ -304,13 +328,15 @@ def test_nuclei_v110_references(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_refs.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert "references" in item
-    assert "https://nvd.nist.gov/vuln/detail/CVE-2023-12345" in item["references"]
-    assert "https://example.com/advisory" in item["references"]
+    item = findings[0]
+    assert hasattr(item, "references") and item.references
+    assert "https://nvd.nist.gov/vuln/detail/CVE-2023-12345" in item.references
+    assert "https://example.com/advisory" in item.references
 
 
 # ========================================
@@ -334,17 +360,19 @@ def test_nuclei_compliance_enrichment(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_compliance.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
+    item = findings[0]
 
     # Schema version should be 1.2.0 after enrichment
-    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]
+    assert item.schemaVersion in ["1.1.0", "1.2.0"]
 
     # Compliance field may be added by enrichment (depends on CWE mapping)
-    if "compliance" in item:
-        compliance = item["compliance"]
+    if hasattr(item, "compliance") and item.compliance:
+        compliance = item.compliance
 
         # Verify structure - should have at least one framework
         possible_frameworks = [
@@ -365,9 +393,9 @@ def test_nuclei_compliance_enrichment(tmp_path: Path):
             assert "A03:2021" in compliance["owaspTop10_2021"]
 
     # Verify risk metadata is preserved after enrichment
-    if "risk" in item:
-        assert "cwe" in item["risk"]
-        assert item["risk"]["cwe"] == ["CWE-79"]
+    if hasattr(item, "risk") and item.risk:
+        assert "cwe" in item.risk
+        assert item.risk["cwe"] == ["CWE-79"]
 
 
 def test_nuclei_compliance_no_cwe(tmp_path: Path):
@@ -383,12 +411,14 @@ def test_nuclei_compliance_no_cwe(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_no_cwe.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
+    item = findings[0]
     # Should still have schemaVersion 1.2.0 after enrichment attempt
-    assert item["schemaVersion"] in ["1.1.0", "1.2.0"]
+    assert item.schemaVersion in ["1.1.0", "1.2.0"]
 
 
 # ========================================
@@ -420,9 +450,10 @@ def test_nuclei_severity_normalization(tmp_path: Path):
             }
         )
         path = write_tmp(tmp_path, f"nuclei_{nuclei_sev}.json", sample)
-        out = load_nuclei(path)
-        assert len(out) == 1
-        assert out[0]["severity"] == expected_sev, f"Failed for {nuclei_sev}"
+        adapter = NucleiAdapter()
+        findings = adapter.parse(path)
+        assert len(findings) == 1
+        assert findings[0].severity == expected_sev, f"Failed for {nuclei_sev}"
 
 
 def test_nuclei_alternative_field_names(tmp_path: Path):
@@ -438,10 +469,12 @@ def test_nuclei_alternative_field_names(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_alt_fields.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
-    assert out[0]["ruleId"] == "alt-field-test"
-    assert out[0]["location"]["path"] == "https://example.com/alt"
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    assert findings[0].ruleId == "alt-field-test"
+    assert findings[0].location["path"] == "https://example.com/alt"
 
 
 def test_nuclei_missing_optional_fields(tmp_path: Path):
@@ -457,15 +490,17 @@ def test_nuclei_missing_optional_fields(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_minimal.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
+    item = findings[0]
     # Required fields should be populated with defaults
-    assert item["severity"] == "MEDIUM"  # Default severity
-    assert item["location"]["path"] == ""  # Empty string if missing
-    assert "remediation" in item  # Should have default remediation
-    assert item["tool"]["version"] == "unknown"  # Default version
+    assert item.severity == "MEDIUM"  # Default severity
+    assert item.location["path"] == ""  # Empty string if missing
+    assert hasattr(item, "remediation")  # Should have default remediation
+    assert item.tool["version"] == "unknown"  # Default version
 
 
 def test_nuclei_tags_present(tmp_path: Path):
@@ -482,23 +517,25 @@ def test_nuclei_tags_present(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_tags.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert "tags" in item
-    assert isinstance(item["tags"], list)
-    assert len(item["tags"]) > 0
+    item = findings[0]
+    assert hasattr(item, "tags") and item.tags
+    assert isinstance(item.tags, list)
+    assert len(item.tags) > 0
 
     # Verify tool category tags present
-    assert "dast" in item["tags"]
-    assert "web-security" in item["tags"]
-    assert "api-security" in item["tags"]
+    assert "dast" in item.tags
+    assert "web-security" in item.tags
+    assert "api-security" in item.tags
 
     # Verify template tags were added
-    assert "cve" in item["tags"]
-    assert "wordpress" in item["tags"]
-    assert "plugin" in item["tags"]
+    assert "cve" in item.tags
+    assert "wordpress" in item.tags
+    assert "plugin" in item.tags
 
 
 def test_nuclei_raw_field_preserved(tmp_path: Path):
@@ -516,15 +553,17 @@ def test_nuclei_raw_field_preserved(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_raw.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert "raw" in item
-    assert isinstance(item["raw"], dict)
+    item = findings[0]
+    assert hasattr(item, "raw") and item.raw
+    assert isinstance(item.raw, dict)
     # Original tool output should be completely preserved
-    assert item["raw"]["custom_nuclei_field"] == "custom_value"
-    assert item["raw"]["metadata"] == {"key": "value"}
+    assert item.raw["custom_nuclei_field"] == "custom_value"
+    assert item.raw["metadata"] == {"key": "value"}
 
 
 def test_nuclei_fingerprint_stability(tmp_path: Path):
@@ -542,17 +581,21 @@ def test_nuclei_fingerprint_stability(tmp_path: Path):
 
     # Parse twice to verify fingerprint doesn't change
     path = write_tmp(tmp_path, "nuclei_fingerprint.json", sample)
-    out1 = load_nuclei(path)
-    out2 = load_nuclei(path)
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    out1 = adapter.parse(path)
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    out2 = adapter.parse(path)
 
     assert len(out1) == 1
     assert len(out2) == 1
 
     # Fingerprints should be identical
-    assert out1[0]["id"] == out2[0]["id"]
+    assert out1[0].id == out2[0].id
     # Fingerprint should be 16 hex characters (truncated SHA256)
-    assert len(out1[0]["id"]) == 16
-    assert all(c in "0123456789abcdef" for c in out1[0]["id"])
+    assert len(out1[0].id) == 16
+    assert all(c in "0123456789abcdef" for c in out1[0].id)
 
 
 def test_nuclei_matcher_name_in_message(tmp_path: Path):
@@ -569,12 +612,14 @@ def test_nuclei_matcher_name_in_message(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_matcher.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
+    item = findings[0]
     # Matcher name should be in message
-    assert "matcher: nginx-1.20.1" in item["message"]
+    assert "matcher: nginx-1.20.1" in item.message
 
 
 def test_nuclei_host_fallback(tmp_path: Path):
@@ -591,8 +636,10 @@ def test_nuclei_host_fallback(tmp_path: Path):
         }
     )
     path = write_tmp(tmp_path, "nuclei_host.json", sample)
-    out = load_nuclei(path)
-    assert len(out) == 1
+    adapter = NucleiAdapter()
+    adapter = NucleiAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
-    item = out[0]
-    assert item["location"]["path"] == "example.com"
+    item = findings[0]
+    assert item.location["path"] == "example.com"

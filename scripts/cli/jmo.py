@@ -5,7 +5,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Optional
 
 from scripts.core.exceptions import (
     ConfigurationException,
@@ -16,19 +16,6 @@ from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
-from scripts.cli.scan_jobs import (
-    scan_repository,
-    scan_image,
-    scan_iac_file,
-    scan_url,
-    scan_gitlab_repo,
-    scan_k8s_resource,
-)
-from scripts.cli.scan_utils import (
-    tool_exists as _tool_exists,
-    write_stub as _write_stub,
-    run_cmd as _run_cmd,
-)
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 
 # Telemetry
@@ -267,6 +254,23 @@ def _add_ci_args(subparsers):
     return cp
 
 
+def _add_adapters_args(subparsers):
+    """Add 'adapters' subcommand arguments for plugin management."""
+    adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
+    adapters_subparsers = adapters_parser.add_subparsers(dest="adapters_command")
+
+    # List command
+    adapters_subparsers.add_parser("list", help="List all loaded adapter plugins")
+
+    # Validate command
+    validate_parser = adapters_subparsers.add_parser(
+        "validate", help="Validate an adapter plugin file"
+    )
+    validate_parser.add_argument("file", help="Path to adapter plugin file")
+
+    return adapters_parser
+
+
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
     ap = argparse.ArgumentParser(prog="jmo")
@@ -275,6 +279,7 @@ def parse_args():
     _add_scan_args(sub)
     _add_report_args(sub)
     _add_ci_args(sub)
+    _add_adapters_args(sub)
 
     try:
         return ap.parse_args()
@@ -761,8 +766,6 @@ def cmd_scan(args) -> int:
     if _check_first_run():
         _collect_email_opt_in(args)
 
-    from concurrent.futures import ThreadPoolExecutor
-
     # Load effective settings with profile/per-tool overrides
     eff = _effective_scan_settings(args)
     cfg = load_config(args.config)
@@ -900,9 +903,7 @@ def cmd_scan(args) -> int:
     # Send scan.completed telemetry event
     scan_duration = time.time() - scan_start_time
     tools_succeeded = sum(1 for _, statuses in all_results if any(statuses.values()))
-    tools_failed = sum(
-        1 for _, statuses in all_results if not all(statuses.values())
-    )
+    tools_failed = sum(1 for _, statuses in all_results if not all(statuses.values()))
 
     send_event(
         "scan.completed",
@@ -934,6 +935,50 @@ def cmd_ci(args) -> int:
     return _cmd_ci_impl(args, cmd_scan, _cmd_report_impl)
 
 
+def cmd_adapters(args) -> int:
+    """Handle 'jmo adapters' subcommand for plugin management."""
+    from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+
+    if args.adapters_command == "list":
+        # Discover and list all plugins
+        count = discover_adapters()
+        registry = get_plugin_registry()
+
+        print(f"Loaded {count} adapter plugins:\n")
+
+        for name in sorted(registry.list_plugins()):
+            metadata = registry.get_metadata(name)
+            if metadata:
+                print(f"  {name:<15} v{metadata.version:<8} {metadata.description}")
+            else:
+                print(f"  {name:<15} (no metadata)")
+
+        return 0
+
+    elif args.adapters_command == "validate":
+        # Validate specific adapter file
+        plugin_file = Path(args.file)
+        if not plugin_file.exists():
+            print(f"Error: File not found: {plugin_file}")
+            return 1
+
+        try:
+            # Try to load plugin
+            from scripts.core.plugin_loader import PluginLoader, PluginRegistry
+
+            registry = PluginRegistry()
+            loader = PluginLoader(registry)
+            loader._load_plugin(plugin_file)
+
+            print(f"✅ Valid plugin: {plugin_file}")
+            return 0
+        except Exception as e:
+            print(f"❌ Invalid plugin: {e}")
+            return 1
+
+    return 0
+
+
 def main():
     args = parse_args()
     if args.cmd == "report":
@@ -942,6 +987,8 @@ def main():
         return cmd_scan(args)
     if args.cmd == "ci":
         return cmd_ci(args)
+    if args.cmd == "adapters":
+        return cmd_adapters(args)
     return 0
 
 

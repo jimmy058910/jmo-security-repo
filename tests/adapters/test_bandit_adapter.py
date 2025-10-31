@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.bandit_adapter import load_bandit
+from scripts.core.adapters.bandit_adapter import BanditAdapter
 
 
 def write_tmp(tmp_path: Path, name: str, content: str) -> Path:
@@ -25,19 +25,25 @@ def test_bandit_normalization_results_array(tmp_path: Path):
         ]
     }
     path = write_tmp(tmp_path, "bandit.json", json.dumps(sample))
-    out = load_bandit(path)
-    assert len(out) == 1
-    item = out[0]
-    assert item["schemaVersion"] in ["1.0.0", "1.2.0"]  # Enriched findings get 1.2.0
-    assert item["ruleId"] == "B101"
-    assert item["severity"] in {"LOW", "MEDIUM", "HIGH", "CRITICAL", "INFO"}
-    assert item["location"]["path"].endswith("scripts/core/foo.py")
-    assert item["location"]["startLine"] == 12
-    assert item["tool"]["name"] == "bandit"
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    item = findings[0]
+    assert item.schemaVersion in ["1.0.0", "1.2.0"]  # Enriched findings get 1.2.0
+    assert item.ruleId == "B101"
+    assert item.severity in {"LOW", "MEDIUM", "HIGH", "CRITICAL", "INFO"}
+    assert item.location["path"].endswith("scripts/core/foo.py")
+    assert item.location["startLine"] == 12
+    assert item.tool["name"] == "bandit"
 
 
 def test_bandit_empty_and_malformed(tmp_path: Path):
     p1 = write_tmp(tmp_path, "empty.json", "")
-    assert load_bandit(p1) == []
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    assert adapter.parse(p1) == []
     p2 = write_tmp(tmp_path, "bad.json", "{not json}")
-    assert load_bandit(p2) == []
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    assert adapter.parse(p2) == []

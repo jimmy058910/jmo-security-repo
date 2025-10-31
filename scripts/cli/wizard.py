@@ -19,8 +19,6 @@ Examples:
 from __future__ import annotations
 
 import logging
-import os
-import shutil
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
@@ -34,7 +32,6 @@ from scripts.cli.wizard_generators import (
     generate_makefile_target,
     generate_shell_script,
 )
-from scripts.core.telemetry import send_event
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
 from scripts.cli.wizard_flows.validators import (
     validate_path,
@@ -178,8 +175,6 @@ def _prompt_choice(
         )
 
 
-
-
 # Use PromptHelper.prompt_yes_no for all yes/no prompts
 _prompt_yes_no = _prompter.prompt_yes_no  # Direct delegation to PromptHelper
 
@@ -206,8 +201,6 @@ def _select_mode(title: str, modes: List[Tuple[str, str]], default: str = "") ->
 # Use Docker detection from validators module
 _detect_docker = detect_docker
 _check_docker_running = check_docker_running
-
-
 
 
 # Use TargetDetector from wizard_flows for all target detection
@@ -769,7 +762,9 @@ def run_wizard(
             content = generate_makefile_target(config, command)
             Path(emit_make).write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
-            send_wizard_telemetry(wizard_start_time, config, __version__, artifact_type="makefile")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="makefile"
+            )
             return 0
 
         if emit_script:
@@ -779,7 +774,9 @@ def run_wizard(
             script_path.write_text(content)
             script_path.chmod(0o755)
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
-            send_wizard_telemetry(wizard_start_time, config, __version__, artifact_type="shell")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="shell"
+            )
             return 0
 
         if emit_gha:
@@ -788,12 +785,16 @@ def run_wizard(
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
-            send_wizard_telemetry(wizard_start_time, config, __version__, artifact_type="gha")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="gha"
+            )
             return 0
 
         # Execute scan
         result = execute_scan(config)
-        send_wizard_telemetry(wizard_start_time, config, __version__, artifact_type=None)
+        send_wizard_telemetry(
+            wizard_start_time, config, __version__, artifact_type=None
+        )
         return result
 
     except KeyboardInterrupt:

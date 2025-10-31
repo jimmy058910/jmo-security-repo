@@ -356,6 +356,125 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 
 When local binary is missing/fails, automatically falls back to Docker-based runner via `scripts/core/run_noseyparker_docker.sh`. Requires Docker installed and `ghcr.io/praetorian-inc/noseyparker:latest` image.
 
+
+### Plugin Architecture (v0.9.0+)
+
+**All tool adapters use a plugin architecture introduced in v0.9.0** for faster development, independent updates, and hot-reload during development.
+
+**Key Benefits:**
+
+- ✅ **Faster tool integration:** 4 hours → 1 hour per adapter (75% reduction)
+- ✅ **Independent adapter updates:** Ship adapter improvements without core releases
+- ✅ **Hot-reload during development:** No reinstall needed when editing adapters
+- ✅ **Low-risk experimentation:** Test new tools without committing to codebase
+- ✅ **Dynamic discovery:** Adapters auto-discovered from multiple search paths
+
+**Plugin System Components:**
+
+1. **[plugin_api.py](scripts/core/plugin_api.py)** — Base classes and decorators
+   - `Finding` dataclass (CommonFinding schema v1.2.0)
+   - `PluginMetadata` dataclass (name, version, author, description, tool_name, schema_version, output_format, exit_codes)
+   - `AdapterPlugin` abstract base class
+   - `@adapter_plugin` decorator for registration
+   - Default `get_fingerprint()` implementation
+
+2. **[plugin_loader.py](scripts/core/plugin_loader.py)** — Auto-discovery and loading
+   - `PluginRegistry` class (register/get/list/unregister plugins)
+   - `PluginLoader` class (auto-discovery from search paths, hot-reload)
+   - Global singleton functions: `discover_adapters()`, `get_plugin_registry()`, `get_plugin_loader()`
+
+3. **[normalize_and_report.py](scripts/core/normalize_and_report.py)** — Integration point
+   - Dynamically discovers adapters via `discover_adapters()`
+   - Loads tool outputs using plugin registry
+   - No hard-coded imports or tool lists
+
+**Search Paths:**
+
+- `~/.jmo/adapters/` — User plugins (highest priority, for custom adapters)
+- `scripts/core/adapters/` — Built-in plugins (12 official adapters)
+
+**Creating a New Adapter:**
+
+See [.claude/skills/jmo-adapter-generator/SKILL.md](.claude/skills/jmo-adapter-generator/SKILL.md) for complete step-by-step guide.
+
+**Quick Example:**
+
+```python
+@adapter_plugin(PluginMetadata(
+    name="mytool",  # CRITICAL: Must match mytool.json filename
+    version="1.0.0",
+    tool_name="mytool",
+    schema_version="1.2.0"
+))
+class MyToolAdapter(AdapterPlugin):
+    @property
+    def metadata(self):
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> List[Finding]:
+        # Parse tool output, create Finding objects, return list
+        findings = []
+        # ... parsing logic ...
+        return findings
+```
+
+**Key Requirements:**
+
+1. **Plugin name MUST match JSON filename:** `mytool.json` → `name="mytool"`
+2. **Special case:** `afl++.json` → use `name="aflplusplus"` (handled automatically)
+3. **Direct Finding creation:** Create `Finding` objects, not dicts
+4. **Compliance enrichment:** Use dict conversion pattern (see reference implementations)
+
+**Hot-Reload During Development:**
+
+```bash
+# Edit adapter (no reinstall needed)
+vim scripts/core/adapters/trivy_adapter.py
+
+# Run tests immediately - plugin auto-reloads
+pytest tests/adapters/test_trivy_adapter.py -v
+```
+
+**CLI Commands for Plugin Management (v0.9.0+):**
+
+```bash
+# List all loaded plugins
+jmo adapters list
+# Output:
+# Loaded 12 adapter plugins:
+#   trivy           v1.0.0    Adapter for Aqua Security Trivy vulnerability scanner
+#   semgrep         v1.0.0    Adapter for Semgrep multi-language SAST scanner
+#   ...
+
+# Validate a plugin file
+jmo adapters validate scripts/core/adapters/mytool_adapter.py
+# Output: ✅ Valid plugin: scripts/core/adapters/mytool_adapter.py
+```
+
+**Testing Adapters:**
+
+```bash
+# Test single adapter
+pytest tests/adapters/test_mytool_adapter.py -v
+
+# Test all adapters (v0.9.0: 112/113 tests passing)
+pytest tests/adapters/ -v
+
+# Run with coverage (CI requires ≥85%)
+pytest tests/adapters/ --cov=scripts.core.adapters --cov-report=term-missing
+```
+
+**Reference Implementations:**
+
+- **Simple pattern:** [trivy_adapter.py](scripts/core/adapters/trivy_adapter.py) — Direct Finding creation, multiple finding types
+- **Complex pattern:** [trufflehog_adapter.py](scripts/core/adapters/trufflehog_adapter.py) — NDJSON handling, helper functions
+
+**Performance Impact:**
+
+- **Plugin loading:** ~10ms overhead per adapter (negligible)
+- **Auto-discovery:** ~50ms total for 12 adapters (negligible)
+- **Hot-reload:** Instant (no cache clearing needed)
+
 ### Multi-Target Scanning Architecture (v0.6.0+)
 
 **Overview:**

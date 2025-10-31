@@ -1,6 +1,5 @@
 """Pre-deployment security checklist workflow."""
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 from .base_flow import BaseWizardFlow

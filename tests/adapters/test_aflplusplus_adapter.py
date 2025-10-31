@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.aflplusplus_adapter import load_aflplusplus
+from scripts.core.adapters.aflplusplus_adapter import AFLPlusPlusAdapter
 
 
 def write_tmp(tmp_path: Path, name: str, content: str) -> Path:
@@ -29,15 +29,17 @@ def test_aflplusplus_basic_crash(tmp_path: Path):
         ],
     }
     path = write_tmp(tmp_path, "afl.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-    assert len(out) == 1
-    item = out[0]
-    assert item["severity"] == "CRITICAL"
-    assert item["title"].startswith("Fuzzing crash: SEGV")
-    assert "exploitable" in item["title"]
-    assert item["context"]["crash_type"] == "SEGV"
-    assert item["context"]["classification"] == "exploitable"
-    assert "memory-safety" in item["tags"]
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    item = findings[0]
+    assert item.severity == "CRITICAL"
+    assert item.title.startswith("Fuzzing crash: SEGV")
+    assert "exploitable" in item.title
+    assert item.context["crash_type"] == "SEGV"
+    assert item.context["classification"] == "exploitable"
+    assert "memory-safety" in item.tags
 
 
 def test_aflplusplus_multiple_crashes(tmp_path: Path):
@@ -70,15 +72,17 @@ def test_aflplusplus_multiple_crashes(tmp_path: Path):
         ],
     }
     path = write_tmp(tmp_path, "afl.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-    assert len(out) == 3
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 3
     # Check severity mapping
-    segv = [f for f in out if f["context"]["crash_type"] == "SEGV"][0]
-    abort = [f for f in out if f["context"]["crash_type"] == "ABORT"][0]
-    hang = [f for f in out if f["context"]["crash_type"] == "HANG"][0]
-    assert segv["severity"] == "CRITICAL"
-    assert abort["severity"] == "CRITICAL"
-    assert hang["severity"] == "MEDIUM"
+    segv = [f for f in findings if f.context["crash_type"] == "SEGV"][0]
+    abort = [f for f in findings if f.context["crash_type"] == "ABORT"][0]
+    hang = [f for f in findings if f.context["crash_type"] == "HANG"][0]
+    assert segv.severity == "CRITICAL"
+    assert abort.severity == "CRITICAL"
+    assert hang.severity == "MEDIUM"
 
 
 def test_aflplusplus_crash_type_severity(tmp_path: Path):
@@ -106,17 +110,22 @@ def test_aflplusplus_crash_type_severity(tmp_path: Path):
             ]
         }
         path = write_tmp(tmp_path, f"afl_{crash_type}.json", json.dumps(sample))
-        out = load_aflplusplus(path)
-        assert len(out) == 1
-        assert out[0]["severity"] == expected_severity
+        adapter = AFLPlusPlusAdapter()
+        findings = adapter.parse(path)
+        assert len(findings) == 1
+        assert findings[0].severity == expected_severity
 
 
 def test_aflplusplus_empty_and_nonexistent(tmp_path: Path):
     """Test empty file and nonexistent file."""
     empty = write_tmp(tmp_path, "empty.json", "")
-    assert load_aflplusplus(empty) == []
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    assert adapter.parse(empty) == []
     nonexistent = tmp_path / "nonexistent.json"
-    assert load_aflplusplus(nonexistent) == []
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    assert adapter.parse(nonexistent) == []
 
 
 def test_aflplusplus_alternative_structure(tmp_path: Path):
@@ -133,9 +142,11 @@ def test_aflplusplus_alternative_structure(tmp_path: Path):
         ],
     }
     path = write_tmp(tmp_path, "afl_alt.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-    assert len(out) == 1
-    assert out[0]["context"]["crash_id"] == "001"
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    assert findings[0].context["crash_id"] == "001"
 
 
 def test_aflplusplus_stack_trace_truncation(tmp_path: Path):
@@ -153,22 +164,28 @@ def test_aflplusplus_stack_trace_truncation(tmp_path: Path):
         ]
     }
     path = write_tmp(tmp_path, "afl_trace.json", json.dumps(sample))
-    out = load_aflplusplus(path)
-    assert len(out) == 1
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
     # Stack trace in context should be truncated to 500 chars
-    assert len(out[0]["context"]["stack_trace"]) <= 500
+    assert len(findings[0].context["stack_trace"]) <= 500
 
 
 def test_aflplusplus_malformed_json(tmp_path: Path):
     """Test handling of malformed JSON."""
     path = write_tmp(tmp_path, "bad.json", "{not valid json}")
-    assert load_aflplusplus(path) == []
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    assert adapter.parse(path) == []
 
 
 def test_aflplusplus_non_dict_root(tmp_path: Path):
     """Test handling non-dict root JSON."""
     path = write_tmp(tmp_path, "array.json", json.dumps(["not", "a", "dict"]))
-    assert load_aflplusplus(path) == []
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    assert adapter.parse(path) == []
 
 
 def test_aflplusplus_non_dict_crashes(tmp_path: Path):
@@ -187,11 +204,13 @@ def test_aflplusplus_non_dict_crashes(tmp_path: Path):
     }
 
     path = write_tmp(tmp_path, "afl_mixed.json", json.dumps(sample))
-    out = load_aflplusplus(path)
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
 
     # Should skip invalid items and process valid one
-    assert len(out) == 1
-    assert out[0]["context"]["crash_id"] == "valid"
+    assert len(findings) == 1
+    assert findings[0].context["crash_id"] == "valid"
 
 
 def test_aflplusplus_missing_optional_fields(tmp_path: Path):
@@ -207,16 +226,18 @@ def test_aflplusplus_missing_optional_fields(tmp_path: Path):
     }
 
     path = write_tmp(tmp_path, "afl_minimal.json", json.dumps(sample))
-    out = load_aflplusplus(path)
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Should have defaults
-    assert item["tool"]["version"] == "unknown"
-    assert item["context"]["timestamp"] == ""
-    assert item["context"]["stack_trace"] == ""
-    assert item["context"]["classification"] == "unknown"
+    assert item.tool["version"] == "unknown"
+    assert item.context["timestamp"] == ""
+    assert item.context["stack_trace"] == ""
+    assert item.context["classification"] == "unknown"
 
 
 def test_aflplusplus_raw_payload_preserved(tmp_path: Path):
@@ -235,15 +256,17 @@ def test_aflplusplus_raw_payload_preserved(tmp_path: Path):
     }
 
     path = write_tmp(tmp_path, "afl_raw.json", json.dumps(sample))
-    out = load_aflplusplus(path)
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Verify raw payload is fully preserved
-    assert "raw" in item
-    assert item["raw"]["custom_field"] == "custom_value"
-    assert item["raw"]["custom_metadata"]["key"] == "value"
+    assert hasattr(item, "raw") and item.raw
+    assert item.raw["custom_field"] == "custom_value"
+    assert item.raw["custom_metadata"]["key"] == "value"
 
 
 def test_aflplusplus_tags_based_on_crash_type(tmp_path: Path):
@@ -261,13 +284,15 @@ def test_aflplusplus_tags_based_on_crash_type(tmp_path: Path):
     }
 
     path = write_tmp(tmp_path, "afl_tags.json", json.dumps(sample))
-    out = load_aflplusplus(path)
+    adapter = AFLPlusPlusAdapter()
+    adapter = AFLPlusPlusAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Check tags
-    tags = item["tags"]
+    tags = item.tags
     assert "fuzzing" in tags
     assert "afl++" in tags
     assert "heap-buffer-overflow" in tags

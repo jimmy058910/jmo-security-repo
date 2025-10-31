@@ -64,7 +64,8 @@ def test_sanitize_name_with_special_chars():
 
     assert scanner._sanitize_name("my/repo:tag") == "my_repo_tag"
     assert (
-        scanner._sanitize_name("registry/image@sha256:abc") == "registry_image_sha256_abc"
+        scanner._sanitize_name("registry/image@sha256:abc")
+        == "registry_image_sha256_abc"
     )
     assert scanner._sanitize_name("my repo") == "my_repo"
     assert scanner._sanitize_name("my?repo") == "my_repo"

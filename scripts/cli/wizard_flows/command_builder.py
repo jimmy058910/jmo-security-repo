@@ -44,7 +44,9 @@ def build_image_args(target: TargetConfig, use_docker: bool = False) -> List[str
         if use_docker:
             # Mount images file for Docker
             file_abs = str(Path(target.images_file).resolve())
-            args.extend(["-v", f"{file_abs}:/images.txt", "--images-file", "/images.txt"])
+            args.extend(
+                ["-v", f"{file_abs}:/images.txt", "--images-file", "/images.txt"]
+            )
         else:
             args.extend(["--images-file", target.images_file])
 
@@ -133,7 +135,11 @@ def build_command_parts(config: WizardConfig) -> List[str]:
 
         # Add volume mounts (collected from target-specific builders)
         target_args = _get_target_args_with_volumes(config.target, use_docker=True)
-        volume_mounts = [arg for i, arg in enumerate(target_args) if arg == "-v" or (i > 0 and target_args[i-1] == "-v")]
+        volume_mounts = [
+            arg
+            for i, arg in enumerate(target_args)
+            if arg == "-v" or (i > 0 and target_args[i - 1] == "-v")
+        ]
         cmd_parts.extend(volume_mounts)
 
         # Results mount (convert to absolute path)
@@ -145,7 +151,9 @@ def build_command_parts(config: WizardConfig) -> List[str]:
         cmd_parts.append("scan")
 
         # Add target flags (non-volume args)
-        target_flags = [arg for arg in target_args if arg not in volume_mounts and arg != "-v"]
+        target_flags = [
+            arg for arg in target_args if arg not in volume_mounts and arg != "-v"
+        ]
         cmd_parts.extend(target_flags)
 
         cmd_parts.extend(["--results", "/results"])

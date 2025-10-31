@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.trivy_adapter import load_trivy
+from scripts.core.adapters.trivy_adapter import TrivyAdapter
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -11,6 +11,7 @@ def write(tmp_path: Path, name: str, content: str) -> Path:
 
 
 def test_trivy_vuln_and_secret(tmp_path: Path):
+    """Test Trivy adapter parses vulnerabilities and secrets."""
     sample = {
         "Version": "0",
         "Results": [
@@ -34,13 +35,26 @@ def test_trivy_vuln_and_secret(tmp_path: Path):
         ],
     }
     p = write(tmp_path, "trivy.json", json.dumps(sample))
-    out = load_trivy(p)
-    assert any(f["ruleId"] == "CVE-123" and f["severity"] == "CRITICAL" for f in out)
-    assert any(f["ruleId"] == "secret" or f["title"] == "Hardcoded token" for f in out)
+
+    adapter = TrivyAdapter()
+    adapter = TrivyAdapter()
+    findings = adapter.parse(p)
+
+    # Check findings are Finding objects
+    assert len(findings) == 2
+    assert any(f.ruleId == "CVE-123" and f.severity == "CRITICAL" for f in findings)
+    assert any(
+        f.ruleId == "Hardcoded token" or f.title == "Hardcoded token" for f in findings
+    )
 
 
 def test_trivy_empty_bad(tmp_path: Path):
+    """Test Trivy adapter handles empty/bad input."""
+    adapter = TrivyAdapter()
+    adapter = TrivyAdapter()
+
     p1 = write(tmp_path, "empty.json", "")
-    assert load_trivy(p1) == []
+    assert adapter.parse(p1) == []
+
     p2 = write(tmp_path, "bad.json", "{not json}")
-    assert load_trivy(p2) == []
+    assert adapter.parse(p2) == []

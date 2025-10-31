@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import shutil
 import subprocess
 import urllib.error
@@ -62,7 +61,9 @@ def validate_url(url: str, timeout: int = 2) -> bool:
         logger.debug(f"URL validation failed for {url}: HTTP {e.code} {e.reason}")
         return False
     except urllib.error.URLError as e:
-        logger.debug(f"URL validation failed for {url}: {type(e.reason).__name__}: {e.reason}")
+        logger.debug(
+            f"URL validation failed for {url}: {type(e.reason).__name__}: {e.reason}"
+        )
         return False
     except TimeoutError:
         logger.debug(f"URL validation timeout for {url}: exceeded {timeout}s")
@@ -103,9 +104,13 @@ def detect_iac_type(file_path: Path) -> str:
             if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
                 return "cloudformation"
         except (IOError, OSError) as e:
-            logger.debug(f"Skipping IaC file {file_path}: I/O error - {type(e).__name__}: {e}")
+            logger.debug(
+                f"Skipping IaC file {file_path}: I/O error - {type(e).__name__}: {e}"
+            )
         except UnicodeDecodeError as e:
-            logger.debug(f"Skipping IaC file {file_path}: encoding error at position {e.start}")
+            logger.debug(
+                f"Skipping IaC file {file_path}: encoding error at position {e.start}"
+            )
 
     # Default to k8s-manifest for YAML files
     if suffix in (".yaml", ".yml"):
@@ -152,13 +157,17 @@ def validate_k8s_context(context: str, timeout: int = 5) -> bool:
         contexts = result.stdout.strip().split("\n")
         return context in contexts
     except subprocess.TimeoutExpired:
-        logger.debug(f"K8s context validation timeout for {context}: exceeded {timeout}s")
+        logger.debug(
+            f"K8s context validation timeout for {context}: exceeded {timeout}s"
+        )
         return False
     except FileNotFoundError:
         logger.debug("K8s context validation failed: kubectl not found")
         return False
     except Exception as e:
-        logger.debug(f"K8s context validation failed for {context}: {type(e).__name__}: {e}")
+        logger.debug(
+            f"K8s context validation failed for {context}: {type(e).__name__}: {e}"
+        )
         return False
 
 

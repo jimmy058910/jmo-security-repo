@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.syft_adapter import load_syft
-from scripts.core.adapters.hadolint_adapter import load_hadolint
-from scripts.core.adapters.checkov_adapter import load_checkov
+from scripts.core.adapters.syft_adapter import SyftAdapter
+from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.adapters.checkov_adapter import CheckovAdapter
 
 
 def write(p: Path, obj):
@@ -32,12 +32,11 @@ def test_syft_adapter_packages_and_vulns(tmp_path: Path):
     }
     f = tmp_path / "syft.json"
     write(f, data)
-    items = load_syft(f)
-    assert any(i.get("ruleId") == "SBOM.PACKAGE" for i in items)
-    assert any(
-        i.get("ruleId") == "CVE-2024-0001" and i.get("severity") == "HIGH"
-        for i in items
-    )
+    adapter = SyftAdapter()
+    adapter = SyftAdapter()
+    items = adapter.parse(f)
+    assert any(i.ruleId == "SBOM.PACKAGE" for i in items)
+    assert any(i.ruleId == "CVE-2024-0001" and i.severity == "HIGH" for i in items)
 
 
 def test_hadolint_adapter(tmp_path: Path):
@@ -52,8 +51,10 @@ def test_hadolint_adapter(tmp_path: Path):
     ]
     f = tmp_path / "hadolint.json"
     write(f, data)
-    items = load_hadolint(f)
-    assert items and items[0]["ruleId"] == "DL3008"
+    adapter = HadolintAdapter()
+    adapter = HadolintAdapter()
+    items = adapter.parse(f)
+    assert items and items[0].ruleId == "DL3008"
 
 
 def test_checkov_adapter(tmp_path: Path):
@@ -71,10 +72,10 @@ def test_checkov_adapter(tmp_path: Path):
     }
     f = tmp_path / "checkov.json"
     write(f, data)
-    items = load_checkov(f)
-    assert (
-        items and items[0]["ruleId"] == "CKV_AWS_1" and items[0]["severity"] == "HIGH"
-    )
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    items = adapter.parse(f)
+    assert items and items[0].ruleId == "CKV_AWS_1" and items[0].severity == "HIGH"
 
 
 # tfsec removed in v0.6.0+ (replaced by trivy IaC scanning)

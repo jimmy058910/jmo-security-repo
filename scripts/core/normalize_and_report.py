@@ -26,19 +26,8 @@ from typing import Any, Dict, List, Optional
 
 from scripts.core.exceptions import AdapterParseException
 
-# Active tool adapters (12 tools)
-from scripts.core.adapters.trufflehog_adapter import load_trufflehog
-from scripts.core.adapters.semgrep_adapter import load_semgrep
-from scripts.core.adapters.noseyparker_adapter import load_noseyparker
-from scripts.core.adapters.syft_adapter import load_syft
-from scripts.core.adapters.hadolint_adapter import load_hadolint
-from scripts.core.adapters.checkov_adapter import load_checkov
-from scripts.core.adapters.trivy_adapter import load_trivy
-from scripts.core.adapters.bandit_adapter import load_bandit
-from scripts.core.adapters.zap_adapter import load_zap
-from scripts.core.adapters.nuclei_adapter import load_nuclei
-from scripts.core.adapters.falco_adapter import load_falco
-from scripts.core.adapters.aflplusplus_adapter import load_aflplusplus
+# Plugin system (v0.9.0)
+from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
@@ -55,6 +44,12 @@ PROFILE_TIMINGS: Dict[str, Any] = {
 
 def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
     findings: List[Dict[str, Any]] = []
+
+    # Discover and load all adapter plugins
+    plugin_count = discover_adapters()
+    logger.info(f"Loaded {plugin_count} adapter plugins")
+    registry = get_plugin_registry()
+
     jobs = []
     max_workers = 8
     try:
@@ -98,34 +93,28 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
                 continue
 
             for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-                # Active tools only (12 tools)
-                th = target / "trufflehog.json"
-                sg = target / "semgrep.json"
-                np = target / "noseyparker.json"
-                sy = target / "syft.json"
-                hd = target / "hadolint.json"
-                ck = target / "checkov.json"
-                bd = target / "bandit.json"
-                tv = target / "trivy.json"
-                zap_file = target / "zap.json"
-                nuclei_file = target / "nuclei.json"
-                falco_file = target / "falco.json"
-                afl_file = target / "afl++.json"
-                for path, loader in (
-                    (th, load_trufflehog),
-                    (sg, load_semgrep),
-                    (np, load_noseyparker),
-                    (sy, load_syft),
-                    (hd, load_hadolint),
-                    (ck, load_checkov),
-                    (bd, load_bandit),
-                    (tv, load_trivy),
-                    (zap_file, load_zap),
-                    (nuclei_file, load_nuclei),
-                    (falco_file, load_falco),
-                    (afl_file, load_aflplusplus),
-                ):
-                    jobs.append(ex.submit(_safe_load, loader, path, profiling))
+                # Discover all tool outputs using plugin registry
+                for tool_output in target.glob("*.json"):
+                    tool_name = tool_output.stem  # e.g., "trivy", "semgrep", "afl++"
+
+                    # Handle special case: afl++.json → tool name is "aflplusplus"
+                    if tool_name == "afl++":
+                        tool_name = "aflplusplus"
+
+                    # Get plugin for this tool
+                    plugin_class = registry.get(tool_name)
+                    if plugin_class is None:
+                        logger.warning(
+                            f"No adapter plugin found for: {tool_name} ({tool_output})"
+                        )
+                        continue
+
+                    # Submit job to load findings using plugin
+                    jobs.append(
+                        ex.submit(
+                            _safe_load_plugin, plugin_class, tool_output, profiling
+                        )
+                    )
         for fut in as_completed(jobs):
             try:
                 findings.extend(fut.result())
@@ -172,7 +161,65 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
     return deduped
 
 
+def _safe_load_plugin(
+    plugin_class, path: Path, profiling: bool = False
+) -> List[Dict[str, Any]]:
+    """Load findings using plugin architecture (v0.9.0+).
+
+    Args:
+        plugin_class: AdapterPlugin class (not instance)
+        path: Path to tool output file
+        profiling: Whether to record timing data
+
+    Returns:
+        List of finding dictionaries
+    """
+    try:
+        adapter = plugin_class()  # Instantiate plugin
+        tool_name = adapter.metadata.name
+
+        if profiling:
+            t0 = time.perf_counter()
+            findings = adapter.parse(path)
+            dt = time.perf_counter() - t0
+            try:
+                PROFILE_TIMINGS["jobs"].append(
+                    {
+                        "tool": tool_name,
+                        "path": str(path),
+                        "seconds": round(dt, 6),
+                        "count": len(findings) if isinstance(findings, list) else 0,
+                    }
+                )
+            except (KeyError, TypeError, AttributeError) as e:
+                logger.debug(f"Failed to record profiling timing: {e}")
+            # Convert Finding objects to dicts
+            return [vars(f) for f in findings]
+        else:
+            findings = adapter.parse(path)
+            # Convert Finding objects to dicts
+            return [vars(f) for f in findings]
+
+    except FileNotFoundError:
+        logger.debug(f"Tool output not found: {path}")
+        return []
+    except AdapterParseException as e:
+        logger.debug(f"Adapter parse failed: {e}")
+        return []
+    except (OSError, PermissionError) as e:
+        logger.debug(f"Failed to read tool output {path}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error loading {path}: {e}", exc_info=True)
+        return []
+
+
 def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, Any]]:
+    """DEPRECATED: Legacy loader function for backward compatibility.
+
+    This function will be removed in v1.0.0.
+    Use _safe_load_plugin instead.
+    """
     try:
         if profiling:
             t0 = time.perf_counter()

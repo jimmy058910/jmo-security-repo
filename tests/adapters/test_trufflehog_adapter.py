@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.trufflehog_adapter import load_trufflehog
+from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 
 
 def write_tmp(tmp_path: Path, name: str, content: str) -> Path:
@@ -20,12 +20,14 @@ def test_trufflehog_array(tmp_path: Path):
         }
     ]
     path = write_tmp(tmp_path, "th.json", json.dumps(sample))
-    out = load_trufflehog(path)
-    assert len(out) == 1
-    item = out[0]
-    assert item["severity"] == "HIGH"
-    assert item["location"]["path"] == "config/aws.yaml"
-    assert item["location"]["startLine"] == 7
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    item = findings[0]
+    assert item.severity == "HIGH"
+    assert item.location["path"] == "config/aws.yaml"
+    assert item.location["startLine"] == 7
 
 
 def test_trufflehog_ndjson_and_nested(tmp_path: Path):
@@ -42,23 +44,29 @@ def test_trufflehog_ndjson_and_nested(tmp_path: Path):
         ]
     )
     path = write_tmp(tmp_path, "th.ndjson", ndjson)
-    out = load_trufflehog(path)
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
+    findings = adapter.parse(path)
     # Should parse 2 findings
-    assert len(out) == 2
-    assert any(it["ruleId"] == "Slack" for it in out)
-    assert any(it["ruleId"] == "Nested" for it in out)
+    assert len(findings) == 2
+    assert any(f.ruleId == "Slack" for f in findings)
+    assert any(f.ruleId == "Nested" for f in findings)
 
 
 def test_trufflehog_single_object_and_empty(tmp_path: Path):
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
     single = {"DetectorName": "JWT", "Verified": True, "Line": 12}
     p1 = write_tmp(tmp_path, "single.json", json.dumps(single))
-    assert len(load_trufflehog(p1)) == 1
+    assert len(adapter.parse(p1)) == 1
     empty = write_tmp(tmp_path, "empty.json", "")
-    assert load_trufflehog(empty) == []
+    assert adapter.parse(empty) == []
 
 
 def test_trufflehog_verified_vs_unverified():
     """Test that verified secrets have HIGH severity, unverified have MEDIUM."""
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
     sample = [
         {
             "DetectorName": "GitHub",
@@ -80,22 +88,24 @@ def test_trufflehog_verified_vs_unverified():
         path = Path(f.name)
 
     try:
-        out = load_trufflehog(path)
-        assert len(out) == 2
+        findings = adapter.parse(path)
+        assert len(findings) == 2
 
         # Verified should be HIGH
-        verified = [f for f in out if f["ruleId"] == "GitHub"][0]
-        assert verified["severity"] == "HIGH"
+        verified = [f for f in findings if f.ruleId == "GitHub"][0]
+        assert verified.severity == "HIGH"
 
         # Unverified should be MEDIUM
-        unverified = [f for f in out if f["ruleId"] == "AWS"][0]
-        assert unverified["severity"] == "MEDIUM"
+        unverified = [f for f in findings if f.ruleId == "AWS"][0]
+        assert unverified.severity == "MEDIUM"
     finally:
         path.unlink()
 
 
 def test_trufflehog_verification_endpoints():
     """Test that verified secrets include verification metadata."""
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
     sample = [
         {
             "DetectorName": "GitLab",
@@ -115,19 +125,21 @@ def test_trufflehog_verification_endpoints():
         path = Path(f.name)
 
     try:
-        out = load_trufflehog(path)
-        assert len(out) == 1
+        findings = adapter.parse(path)
+        assert len(findings) == 1
 
-        finding = out[0]
+        finding = findings[0]
         # Should preserve raw field with verification metadata
-        assert "raw" in finding
-        assert "ExtraData" in finding["raw"] or "extradata" in str(finding).lower()
+        assert finding.raw is not None
+        assert "ExtraData" in finding.raw or "extradata" in str(finding).lower()
     finally:
         path.unlink()
 
 
 def test_trufflehog_raw_field_preservation():
     """Test that raw field includes verification metadata."""
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
     sample = [
         {
             "DetectorName": "AWS",
@@ -145,22 +157,24 @@ def test_trufflehog_raw_field_preservation():
         path = Path(f.name)
 
     try:
-        out = load_trufflehog(path)
-        assert len(out) == 1
+        findings = adapter.parse(path)
+        assert len(findings) == 1
 
-        finding = out[0]
+        finding = findings[0]
         # Raw field should be preserved as dict
-        assert "raw" in finding
-        assert isinstance(finding["raw"], dict)
+        assert finding.raw is not None
+        assert isinstance(finding.raw, dict)
         # Should contain original trufflehog payload
-        assert "DetectorName" in finding["raw"]
-        assert finding["raw"]["DetectorName"] == "AWS"
+        assert "DetectorName" in finding.raw
+        assert finding.raw["DetectorName"] == "AWS"
     finally:
         path.unlink()
 
 
 def test_trufflehog_multiple_verification_statuses():
     """Test handling of multiple secrets with different verification statuses."""
+    adapter = TruffleHogAdapter()
+    adapter = TruffleHogAdapter()
     sample = [
         {
             "DetectorName": "Stripe",
@@ -190,12 +204,12 @@ def test_trufflehog_multiple_verification_statuses():
         path = Path(f.name)
 
     try:
-        out = load_trufflehog(path)
-        assert len(out) == 4
+        findings = adapter.parse(path)
+        assert len(findings) == 4
 
         # Count verified vs unverified
-        verified_count = sum(1 for f in out if f["severity"] == "HIGH")
-        unverified_count = sum(1 for f in out if f["severity"] == "MEDIUM")
+        verified_count = sum(1 for f in findings if f.severity == "HIGH")
+        unverified_count = sum(1 for f in findings if f.severity == "MEDIUM")
 
         assert verified_count == 2  # Stripe and SendGrid
         assert unverified_count == 2  # Twilio and Mailchimp

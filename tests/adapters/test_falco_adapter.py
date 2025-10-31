@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.falco_adapter import load_falco
+from scripts.core.adapters.falco_adapter import FalcoAdapter
 
 
 def write_tmp(tmp_path: Path, name: str, content: str) -> Path:
@@ -29,14 +29,16 @@ def test_falco_basic_event(tmp_path: Path):
         "hostname": "host1",
     }
     path = write_tmp(tmp_path, "falco.json", json.dumps(event))
-    out = load_falco(path)
-    assert len(out) == 1
-    item = out[0]
-    assert item["severity"] == "MEDIUM"
-    assert item["title"] == "Read sensitive file untrusted"
-    assert item["context"]["container_name"] == "my-container"
-    assert item["context"]["file"] == "/etc/shadow"
-    assert "filesystem" in item["tags"]
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
+    item = findings[0]
+    assert item.severity == "MEDIUM"
+    assert item.title == "Read sensitive file untrusted"
+    assert item.context["container_name"] == "my-container"
+    assert item.context["file"] == "/etc/shadow"
+    assert "filesystem" in item.tags
 
 
 def test_falco_ndjson_multiple_events(tmp_path: Path):
@@ -57,11 +59,13 @@ def test_falco_ndjson_multiple_events(tmp_path: Path):
     ]
     ndjson = "\n".join([json.dumps(e) for e in events])
     path = write_tmp(tmp_path, "falco.ndjson", ndjson)
-    out = load_falco(path)
-    assert len(out) == 2
-    assert out[0]["severity"] == "CRITICAL"
-    assert out[1]["severity"] == "HIGH"
-    assert "runtime-security" in out[0]["tags"]
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 2
+    assert findings[0].severity == "CRITICAL"
+    assert findings[1].severity == "HIGH"
+    assert "runtime-security" in findings[0].tags
 
 
 def test_falco_priority_mapping(tmp_path: Path):
@@ -82,17 +86,22 @@ def test_falco_priority_mapping(tmp_path: Path):
             "output": f"Event with {priority} priority",
         }
         path = write_tmp(tmp_path, f"falco_{priority}.json", json.dumps(event))
-        out = load_falco(path)
-        assert len(out) == 1
-        assert out[0]["severity"] == expected_severity
+        adapter = FalcoAdapter()
+        findings = adapter.parse(path)
+        assert len(findings) == 1
+        assert findings[0].severity == expected_severity
 
 
 def test_falco_empty_and_nonexistent(tmp_path: Path):
     """Test empty file and nonexistent file."""
     empty = write_tmp(tmp_path, "empty.json", "")
-    assert load_falco(empty) == []
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    assert adapter.parse(empty) == []
     nonexistent = tmp_path / "nonexistent.json"
-    assert load_falco(nonexistent) == []
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    assert adapter.parse(nonexistent) == []
 
 
 def test_falco_blank_lines_ignored(tmp_path: Path):
@@ -100,14 +109,18 @@ def test_falco_blank_lines_ignored(tmp_path: Path):
     event = {"rule": "Test Rule", "priority": "Warning", "output": "Test output"}
     ndjson = f"\n{json.dumps(event)}\n\n"
     path = write_tmp(tmp_path, "falco_blanks.json", ndjson)
-    out = load_falco(path)
-    assert len(out) == 1
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
+    assert len(findings) == 1
 
 
 def test_falco_malformed_json(tmp_path: Path):
     """Test handling of malformed JSON."""
     path = write_tmp(tmp_path, "bad.json", "{not valid json}")
-    assert load_falco(path) == []
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    assert adapter.parse(path) == []
 
 
 def test_falco_non_dict_event(tmp_path: Path):
@@ -128,11 +141,13 @@ def test_falco_non_dict_event(tmp_path: Path):
     )
 
     path = write_tmp(tmp_path, "falco_mixed.ndjson", ndjson)
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
     # Should skip invalid line and process valid one
-    assert len(out) == 1
-    assert out[0]["ruleId"] == "FALCO-test-rule"
+    assert len(findings) == 1
+    assert findings[0].ruleId == "FALCO-test-rule"
 
 
 def test_falco_container_context(tmp_path: Path):
@@ -152,17 +167,19 @@ def test_falco_container_context(tmp_path: Path):
 
     path = write_tmp(tmp_path, "falco_container.json", json.dumps(sample))
 
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Check context field includes container info
-    assert "context" in item
-    assert item["context"]["container_id"] == "abc123"
-    assert item["context"]["container_name"] == "nginx-prod"
-    assert item["context"]["process"] == "/bin/bash"
-    assert item["context"]["user"] == "root"
+    assert hasattr(item, "context") and item.context
+    assert item.context["container_id"] == "abc123"
+    assert item.context["container_name"] == "nginx-prod"
+    assert item.context["process"] == "/bin/bash"
+    assert item.context["user"] == "root"
 
 
 def test_falco_file_access_context(tmp_path: Path):
@@ -182,15 +199,17 @@ def test_falco_file_access_context(tmp_path: Path):
 
     path = write_tmp(tmp_path, "falco_file.json", json.dumps(sample))
 
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Check context includes file and hostname
-    assert item["context"]["file"] == "/etc/passwd"
-    assert item["context"]["hostname"] == "prod-server-01"
-    assert item["location"]["path"] == "/etc/passwd"
+    assert item.context["file"] == "/etc/passwd"
+    assert item.context["hostname"] == "prod-server-01"
+    assert item.location["path"] == "/etc/passwd"
 
 
 def test_falco_tags_extraction(tmp_path: Path):
@@ -207,14 +226,16 @@ def test_falco_tags_extraction(tmp_path: Path):
 
     path = write_tmp(tmp_path, "falco_tags.json", json.dumps(sample))
 
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Check tags are present
-    assert "tags" in item
-    tags = item["tags"]
+    assert hasattr(item, "tags") and item.tags
+    tags = item.tags
     assert "runtime-security" in tags  # Default tag
     assert "falco" in tags  # Default tag
     assert "k8s_audit" in tags  # Source tag
@@ -233,16 +254,18 @@ def test_falco_missing_optional_fields(tmp_path: Path):
 
     path = write_tmp(tmp_path, "falco_minimal.json", json.dumps(sample))
 
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Should have defaults
-    assert item["tool"]["version"] == "unknown"
-    assert item["context"]["timestamp"] == ""
-    assert item["context"]["hostname"] == ""
-    assert item["context"]["source"] == "syscall"  # Default source
+    assert item.tool["version"] == "unknown"
+    assert item.context["timestamp"] == ""
+    assert item.context["hostname"] == ""
+    assert item.context["source"] == "syscall"  # Default source
 
 
 def test_falco_raw_payload_preserved(tmp_path: Path):
@@ -258,12 +281,14 @@ def test_falco_raw_payload_preserved(tmp_path: Path):
 
     path = write_tmp(tmp_path, "falco_raw.json", json.dumps(sample))
 
-    out = load_falco(path)
+    adapter = FalcoAdapter()
+    adapter = FalcoAdapter()
+    findings = adapter.parse(path)
 
-    assert len(out) == 1
-    item = out[0]
+    assert len(findings) == 1
+    item = findings[0]
 
     # Verify raw payload is fully preserved
-    assert "raw" in item
-    assert item["raw"]["custom_metadata"]["key"] == "value"
-    assert item["raw"]["output_fields"]["custom_field"] == "custom_value"
+    assert hasattr(item, "raw") and item.raw
+    assert item.raw["custom_metadata"]["key"] == "value"
+    assert item.raw["output_fields"]["custom_field"] == "custom_value"

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+
+REFACTORED: v0.9.0 - Now uses plugin architecture
 Falco adapter: normalize Falco JSON outputs to CommonFinding
 Supports:
 - Falco alert JSON output (NDJSON format)
@@ -15,6 +17,12 @@ from typing import Any, Dict, List
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.plugin_api import (
+    AdapterPlugin,
+    Finding,
+    PluginMetadata,
+    adapter_plugin,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +43,70 @@ def _falco_priority_to_severity(priority: str) -> str:
     return mapping.get(priority_lower, "MEDIUM")
 
 
-def load_falco(path: str | Path) -> List[Dict[str, Any]]:
+@adapter_plugin(
+    PluginMetadata(
+        name="falco",
+        version="1.0.0",
+        author="JMo Security",
+        description="Adapter for Falco runtime security monitoring",
+        tool_name="falco",
+        schema_version="1.2.0",
+        output_format="json",
+        exit_codes={0: "clean"},
+    )
+)
+class FalcoAdapter(AdapterPlugin):
+    """Adapter for Falco runtime security monitoring (plugin architecture)."""
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Return plugin metadata."""
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> List[Finding]:
+        """Parse tool output and return normalized findings.
+
+        Args:
+            output_path: Path to falco.json output file
+
+        Returns:
+            List of Finding objects following CommonFinding schema v1.2.0
+        """
+        # Delegate to internal function that returns dicts
+        findings_dicts = _load_falco_internal(output_path)
+
+        # Convert dicts to Finding objects
+        findings = []
+        for f_dict in findings_dicts:
+            finding = Finding(
+                schemaVersion=f_dict.get("schemaVersion", "1.2.0"),
+                id=f_dict.get("id", ""),
+                ruleId=f_dict.get("ruleId", ""),
+                severity=f_dict.get("severity", "INFO"),
+                tool=f_dict.get("tool", {}),
+                location=f_dict.get("location", {}),
+                message=f_dict.get("message", ""),
+                title=f_dict.get("title"),
+                description=f_dict.get("description"),
+                remediation=f_dict.get("remediation"),
+                references=f_dict.get("references", []),
+                tags=f_dict.get("tags", []),
+                cvss=f_dict.get("cvss"),
+                risk=f_dict.get("risk"),
+                compliance=f_dict.get("compliance"),
+                context=f_dict.get("context"),
+                raw=f_dict.get("raw"),
+            )
+            findings.append(finding)
+
+        return findings
+
+
+def _load_falco_internal(path: str | Path) -> List[Dict[str, Any]]:
+    """Internal function that returns dicts (refactored from original load_falco)."""
+
+
+def _load_falco_internal(path: str | Path) -> List[Dict[str, Any]]:
     """Load and normalize Falco JSON output.
 
     Expected JSON structure (NDJSON - one JSON object per line):
