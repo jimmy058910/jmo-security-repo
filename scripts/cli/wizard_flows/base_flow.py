@@ -131,6 +131,85 @@ class TargetDetector:
 
         return list(set(urls))
 
+    def detect_package_files(self, search_dir: Path = None) -> List[Path]:
+        """Detect package manifest files across languages.
+
+        Args:
+            search_dir: Directory to search (defaults to current directory)
+
+        Returns:
+            List of package manifest file paths
+        """
+        if search_dir is None:
+            search_dir = Path.cwd()
+
+        package_files = []
+
+        # Python
+        package_files.extend(search_dir.glob("**/requirements.txt"))
+        package_files.extend(search_dir.glob("**/pyproject.toml"))
+        package_files.extend(search_dir.glob("**/setup.py"))
+        package_files.extend(search_dir.glob("**/Pipfile"))
+
+        # JavaScript/Node.js
+        package_files.extend(search_dir.glob("**/package.json"))
+
+        # Go
+        package_files.extend(search_dir.glob("**/go.mod"))
+
+        # Rust
+        package_files.extend(search_dir.glob("**/Cargo.toml"))
+
+        # Java/Maven
+        package_files.extend(search_dir.glob("**/pom.xml"))
+
+        # Java/Gradle
+        package_files.extend(search_dir.glob("**/build.gradle"))
+        package_files.extend(search_dir.glob("**/build.gradle.kts"))
+
+        # Ruby
+        package_files.extend(search_dir.glob("**/Gemfile"))
+
+        # .NET
+        package_files.extend(search_dir.glob("**/*.csproj"))
+
+        return list(set(package_files))
+
+    def detect_lock_files(self, search_dir: Path = None) -> List[Path]:
+        """Detect lock files for reproducible dependency scans.
+
+        Args:
+            search_dir: Directory to search (defaults to current directory)
+
+        Returns:
+            List of lock file paths
+        """
+        if search_dir is None:
+            search_dir = Path.cwd()
+
+        lock_files = []
+
+        # Python
+        lock_files.extend(search_dir.glob("**/requirements-lock.txt"))
+        lock_files.extend(search_dir.glob("**/poetry.lock"))
+        lock_files.extend(search_dir.glob("**/Pipfile.lock"))
+
+        # JavaScript/Node.js
+        lock_files.extend(search_dir.glob("**/package-lock.json"))
+        lock_files.extend(search_dir.glob("**/yarn.lock"))
+        lock_files.extend(search_dir.glob("**/pnpm-lock.yaml"))
+
+        # Go
+        lock_files.extend(search_dir.glob("**/go.sum"))
+
+        # Rust
+        lock_files.extend(search_dir.glob("**/Cargo.lock"))
+
+        # Ruby
+        lock_files.extend(search_dir.glob("**/Gemfile.lock"))
+
+        return list(set(lock_files))
+
 
 class PromptHelper:
     """Helper for interactive prompts with colored output."""
