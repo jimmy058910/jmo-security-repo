@@ -7,6 +7,7 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 ## Table of Contents
 
 - [Five Workflow Types (v0.9.0+)](#five-workflow-types-v090)
+- [Visual Interface (v0.9.0+)](#visual-interface-v090)
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
 - [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
@@ -15,6 +16,164 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 - [Privacy-First Telemetry (v0.7.0+)](#privacy-first-telemetry-v070)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
+
+---
+
+## Visual Interface (v0.9.0+)
+
+**NEW in v0.9.0:** Enhanced visual interface with progress tracking, colored output, and structured information displays.
+
+### Progress Tracking
+
+The wizard now displays a 6-step progress bar during execution:
+
+```text
+→ [Step 1/6] Detecting scan targets...  [████░░░░░░░░░░░░░░░░] 17%
+✅ Detected 3 targets
+
+→ [Step 2/6] Gathering configuration options...  [████████░░░░░░░░░░░░] 33%
+
+╔════════════════════════════════════════════════════════════════════╗
+║               🚀  Pre-Deployment Security Checklist  🚀               ║
+╚════════════════════════════════════════════════════════════════════╝
+
+┌─ 🔍 Detected Deployment Targets ──────────────────────────────────
+│ • Container images: 2 detected
+│   → nginx:latest
+│   → postgres:14
+│ • IaC files: 3 detected
+│   → main.tf
+│   → variables.tf
+│   → outputs.tf
+│ • Web URLs: 1 detected for DAST
+│   → http://localhost:8080
+└────────────────────────────────────────────────────────────────────
+
+ℹ️  Auto-detected environment: staging
+
+→ [Step 3/6] Building scan command...  [████████████░░░░░░░░] 50%
+✅ Command built successfully
+
+→ [Step 4/6] Preparing preflight summary...  [████████████████░░░░] 67%
+
+┌─ 🚀 Preflight Check ───────────────────────────────────────────────
+│ • Profile: balanced
+│ • Command: jmo ci --profile balanced --fail-on HIGH --image nginx:latest
+│ • Estimated time: 15-20 minutes
+└────────────────────────────────────────────────────────────────────
+
+→ [Step 5/6] Awaiting confirmation...  [████████████████████░] 83%
+Execute scan? [Y/n]: y
+
+→ [Step 6/6] Executing security scan...  [████████████████████] 100%
+ℹ️  Scan in progress... This may take several minutes.
+✅ Scan completed successfully!
+```
+
+### Visual Elements
+
+**Unicode Box Drawing:**
+- Elegant headers with double-line borders: `╔═╗║╚╝`
+- Summary boxes with single-line borders: `┌─└│`
+
+**Progress Bars:**
+- Filled blocks: `████` (completed)
+- Empty blocks: `░░░░` (remaining)
+- Percentage display: `[████████░░░░] 40%`
+
+**Status Icons:**
+- ✅ Success messages
+- ⚠️ Warnings (production deployments, missing files)
+- ℹ️ Informational messages
+- ✗ Error messages
+- → Progress indicators
+- • List bullet points
+
+**Color Coding:**
+- Cyan: Headers, borders, progress bars
+- Green: Success messages, checkmarks
+- Yellow: Warnings
+- Red: Errors
+- Magenta: Highlights
+- Dim: Secondary information
+
+### Smart Recommendations (EntireStackFlow)
+
+```text
+┌─ 💡 Smart Recommendations ─────────────────────────────────────────
+│ • Found Dockerfile but no images detected. Consider building image first:
+│   'docker build -t myapp .'
+│ • Found terraform/ directory. Consider initializing:
+│   'cd terraform && terraform init && terraform plan -out=tfplan'
+│ • Found GitHub Actions workflows. Consider CI/CD Security Audit workflow.
+└────────────────────────────────────────────────────────────────────
+```
+
+### Production Warnings (DeploymentFlow)
+
+When deploying to production, the wizard displays strict requirements:
+
+```text
+┌─ ⚠️  Production Deployment Requirements ───────────────────────────
+│ • Deep scan profile (comprehensive checks)
+│ • Zero CRITICAL findings
+│ • Compliance validation (OWASP, CWE, PCI DSS)
+│ • All container images scanned
+│ • Infrastructure-as-Code validated
+└────────────────────────────────────────────────────────────────────
+
+⚠️  Production deployments require 'deep' profile (30-60 min)
+```
+
+### Profile Information (RepoFlow)
+
+Clear profile comparison before selection:
+
+```text
+┌─ 📊 Profile Options ───────────────────────────────────────────────
+│ • fast: 3 tools, 5-8 minutes (pre-commit, quick checks)
+│ • balanced: 8 tools, 15-20 minutes (CI/CD, regular audits)
+│ • deep: 12 tools, 30-60 minutes (security audits, compliance)
+└────────────────────────────────────────────────────────────────────
+```
+
+### CI/CD Pipeline Detection (CICDFlow)
+
+```text
+┌─ 🔍 Detected CI/CD Pipelines ──────────────────────────────────────
+│ • GitHub Actions workflows: 3 detected
+│   → ci.yml
+│   → release.yml
+│   → security.yml
+│ • Container images: 2 found in pipelines
+└────────────────────────────────────────────────────────────────────
+
+ℹ️  Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)
+```
+
+### Dependency Detection (DependencyFlow)
+
+```text
+┌─ 🔍 Detected Dependency Files ─────────────────────────────────────
+│ • Package manifests: 3 detected
+│   → requirements.txt
+│   → package.json
+│   → Cargo.toml
+│ • Lock files: 2 detected (reproducible scans)
+│   → poetry.lock
+│   → package-lock.json
+│ • Container images: 1 detected
+└────────────────────────────────────────────────────────────────────
+```
+
+### Benefits
+
+- **Improved UX:** Clear visual hierarchy with borders and icons
+- **Real-time feedback:** Progress bars reduce uncertainty during long scans
+- **Time estimates:** Users can plan workflow with accurate time predictions
+- **Contextual guidance:** Smart recommendations based on detected files
+- **Environment awareness:** Production vs staging warnings prevent mistakes
+- **Accessibility:** Color-coded messages (green=success, yellow=warning, red=error)
 
 ---
 
