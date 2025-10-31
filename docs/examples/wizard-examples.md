@@ -6,6 +6,7 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 
 ## Table of Contents
 
+- [Five Workflow Types (v0.9.0+)](#five-workflow-types-v090)
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
 - [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
@@ -14,6 +15,214 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 - [Privacy-First Telemetry (v0.7.0+)](#privacy-first-telemetry-v070)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
+
+---
+
+## Five Workflow Types (v0.9.0+)
+
+**NEW in v0.9.0:** The wizard now supports 5 specialized workflows tailored to different use cases. Each workflow auto-detects targets, provides smart recommendations, and generates workflow-specific artifacts.
+
+### 1. Single Repository Scanning (RepoFlow)
+
+**Use Case:** Scan a single repository for secrets, vulnerabilities, and code issues
+
+**Auto-Detection:**
+- Detects if current directory is a Git repository
+- Detects programming language and package managers
+
+**Example:**
+```bash
+jmotools wizard
+# Select workflow: "Single Repository"
+# Profile: balanced (recommended)
+# Generates: Makefile with security-scan target
+```
+
+**Artifacts Generated:**
+- Basic Makefile with `security-scan`, `security-report`, `security-clean` targets
+- Optional GitHub Actions workflow
+- Optional shell script
+
+---
+
+### 2. Entire Development Stack (EntireStackFlow)
+
+**Use Case:** Scan everything in current directory (repos + containers + IaC + web apps)
+
+**Auto-Detection:**
+- All Git repositories
+- Container images (from Dockerfile, docker-compose.yml, K8s manifests)
+- IaC files (Terraform, CloudFormation, K8s)
+- Web applications (from package.json, docker-compose ports)
+
+**Smart Recommendations:**
+- "Found Dockerfile → build image first: `docker build -t myapp .`"
+- "Found terraform/ directory → initialize: `terraform init && terraform plan`"
+- "Found .gitlab-ci.yml → scan GitLab repositories with `--gitlab-repo`"
+- "Found kubernetes/ directory → scan live cluster with `--k8s-context`"
+- "Found GitHub Actions workflows → consider CI/CD Security Audit"
+
+**Example:**
+```bash
+jmotools wizard
+# Select workflow: "Entire Development Stack"
+# Profile: balanced
+# Parallel scanning: yes
+# Generate artifacts: yes
+```
+
+**Detected Output Example:**
+```
+🔍 Detected targets:
+  ✓ 3 repositories
+  ✓ 2 container images (nginx:latest, postgres:14)
+  ✓ 5 IaC files (Terraform)
+  ✓ 1 web application (http://localhost:3000)
+
+💡 Smart Recommendations:
+  • Found Dockerfile for 'myapp' but image not built yet. Build it first: 'docker build -t myapp .'
+  • Found .gitlab-ci.yml. Consider scanning GitLab repositories with '--gitlab-repo'.
+```
+
+**Artifacts Generated:**
+- Comprehensive Makefile with 8 targets:
+  - `security-scan-all` - Scan entire stack
+  - `security-scan-repos` - Repositories only
+  - `security-scan-images` - Images only
+  - `security-scan-iac` - IaC files only
+  - `security-scan-fast` - Quick scan (5-8 min)
+  - `security-scan-deep` - Comprehensive (30-60 min)
+  - `security-report` - Generate report
+  - `security-clean` - Clean results
+- Multi-target GitHub Actions workflow
+- GitLab CI pipeline with 2 stages (scan + report)
+- docker-compose.security.yml with scan + report services
+
+---
+
+### 3. CI/CD Security Audit (CICDFlow)
+
+**Use Case:** Audit CI/CD pipeline security (GitHub Actions, GitLab CI, Jenkins)
+
+**Auto-Detection:**
+- CI pipeline files (.github/workflows/, .gitlab-ci.yml, Jenkinsfile)
+- Container images referenced in pipelines
+- Secrets in pipeline files
+
+**Example:**
+```bash
+jmotools wizard
+# Select workflow: "CI/CD Security Audit"
+# Profile: fast (recommended for CI/CD)
+# Scan pipeline files: yes
+# Scan pipeline images: yes (2 images detected)
+# Check GitHub Actions permissions: yes
+```
+
+**Artifacts Generated:**
+- Makefile with 6 CI/CD-specific targets:
+  - `security-audit-ci` - Full CI/CD audit
+  - `security-audit-fast` - Fast check (for pipelines)
+  - `security-check-pipelines` - Scan pipeline files for secrets
+  - `security-check-images` - Scan container images from pipelines
+  - `security-report` - Generate report
+  - `security-clean` - Clean results
+- GitHub Actions workflow with fail-on HIGH
+- GitLab CI pipeline with audit stage
+- docker-compose for CI audit
+
+---
+
+### 4. Pre-Deployment Checklist (DeploymentFlow)
+
+**Use Case:** Run final security checks before deploying to production
+
+**Auto-Detection:**
+- Deployment targets (IaC, container images, K8s manifests)
+- Environment (staging vs production) from:
+  - Environment variables (ENVIRONMENT, NODE_ENV, etc.)
+  - .env files
+  - Kubernetes namespace declarations
+
+**Environment-Aware Defaults:**
+- **Staging:** balanced profile, fail on HIGH
+- **Production:** deep profile, fail on CRITICAL
+
+**Example:**
+```bash
+jmotools wizard
+# Select workflow: "Pre-Deployment Checklist"
+# Environment detected: production
+#
+# ⚠️  Production deployment requires:
+#   • Deep scan profile (comprehensive checks)
+#   • Zero CRITICAL findings
+#   • Compliance validation (OWASP, CWE, PCI DSS)
+#
+# Profile: deep (recommended for production)
+# Fail on: CRITICAL
+```
+
+**Artifacts Generated:**
+- Makefile with deployment gates:
+  - `security-check-staging` - Staging gate (fail on HIGH+)
+  - `security-check-production` - Production gate (fail on CRITICAL)
+  - `security-sbom` - Generate SBOM
+  - `security-full-check` - Full pre-deployment scan
+  - `security-report` - Generate report
+- GitHub Actions workflow with manual deployment trigger
+- GitLab CI pipeline with manual pre-deployment job
+- docker-compose for pre-deployment checks
+
+---
+
+### 5. Dependency Security Audit (DependencyFlow)
+
+**Use Case:** Focus on SBOM generation and dependency vulnerability scanning
+
+**Auto-Detection:**
+- Package manifests (14 types): Python, JavaScript, Go, Rust, Java, Ruby, .NET
+- Lock files (9 types): poetry.lock, package-lock.json, yarn.lock, go.sum, etc.
+- Container images (for SBOM extraction)
+
+**Example:**
+```bash
+jmotools wizard
+# Select workflow: "Dependency Security Audit"
+#
+# 🔍 Detected dependency files:
+#   Package manifests:
+#     • requirements.txt
+#     • package.json
+#   Lock files:
+#     • poetry.lock
+#     • package-lock.json
+#   Container images: 2 detected
+#
+# Generate SBOM: yes
+# Scan for vulnerabilities: yes
+# Check licenses: no
+```
+
+**Artifacts Generated:**
+- Basic Makefile with dependency-focused targets
+- GitHub Actions workflow using syft + trivy
+- GitLab CI pipeline for dependency scanning
+- docker-compose for SBOM generation
+
+---
+
+### Choosing the Right Workflow
+
+| Workflow | Best For | Time | Tools |
+|----------|----------|------|-------|
+| **Single Repository** | Individual repos, quick checks | 5-8 min (fast) | 3-8 tools |
+| **Entire Stack** | Full development environment | 15-20 min | 8 tools |
+| **CI/CD Audit** | Pipeline security validation | 5-10 min | 2-3 tools |
+| **Pre-Deployment** | Production deployment gates | 15-30 min | 8-12 tools |
+| **Dependency Audit** | SBOM + vulnerability focus | 5-10 min | 2 tools |
+
+**Pro Tip:** Use `jmotools wizard` and select the workflow that matches your current task. The wizard will auto-detect targets and provide smart recommendations.
 
 ---
 
