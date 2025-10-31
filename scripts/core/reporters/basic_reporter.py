@@ -319,7 +319,7 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         high_epss_findings = [
             f
             for f in priority_findings
-            if f.get("priority", {}).get("epss", 0) > 0.5  # >50% exploit probability
+            if (f.get("priority", {}).get("epss") or 0) > 0.5  # >50% exploit probability
             and not f.get("priority", {}).get("is_kev", False)  # Exclude KEV (already shown)
         ]
 
