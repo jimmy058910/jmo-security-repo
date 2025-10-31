@@ -254,6 +254,111 @@ def _add_ci_args(subparsers):
     return cp
 
 
+def _add_profile_args(subparsers, profile_name: str, description: str):
+    """Add profile-based scan command (fast/balanced/full)."""
+    profile_parser = subparsers.add_parser(profile_name, help=description)
+
+    # Target selection (mutually exclusive)
+    target_group = profile_parser.add_mutually_exclusive_group(required=False)
+    target_group.add_argument("--repo", help="Path to a single repository to scan")
+    target_group.add_argument(
+        "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
+    )
+    target_group.add_argument("--targets", help="File listing repo paths (one per line)")
+
+    # Scan configuration
+    profile_parser.add_argument(
+        "--results-dir",
+        default="results",
+        help="Results directory (default: results)",
+    )
+    profile_parser.add_argument("--threads", type=int, default=None, help="Override threads")
+    profile_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help="Override per-tool timeout seconds",
+    )
+    profile_parser.add_argument(
+        "--fail-on",
+        default=None,
+        help="Optional severity threshold to fail the run (CRITICAL/HIGH/MEDIUM/LOW/INFO)",
+    )
+    profile_parser.add_argument(
+        "--no-open", action="store_true", help="Do not open results after run"
+    )
+    profile_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail if tools are missing (disable stubs)",
+    )
+    profile_parser.add_argument("--human-logs", action="store_true", help="Human-friendly logs")
+    profile_parser.add_argument(
+        "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
+    )
+
+    return profile_parser
+
+
+def _add_wizard_args(subparsers):
+    """Add 'wizard' subcommand for interactive guided scanning."""
+    wizard_parser = subparsers.add_parser(
+        "wizard", help="Interactive wizard for guided security scanning"
+    )
+    wizard_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Non-interactive mode: use defaults for all prompts",
+    )
+    wizard_parser.add_argument(
+        "--emit-script",
+        action="store_true",
+        help="Emit shell script instead of running",
+    )
+    wizard_parser.add_argument(
+        "--emit-make-target",
+        action="store_true",
+        help="Emit Makefile target instead of running",
+    )
+    wizard_parser.add_argument(
+        "--emit-gha",
+        action="store_true",
+        help="Emit GitHub Actions workflow instead of running",
+    )
+    return wizard_parser
+
+
+def _add_setup_args(subparsers):
+    """Add 'setup' subcommand for tool verification and installation."""
+    setup_parser = subparsers.add_parser(
+        "setup", help="Verify and optionally auto-install security tools"
+    )
+    setup_parser.add_argument(
+        "--auto-install",
+        action="store_true",
+        help="Attempt to auto-install missing tools",
+    )
+    setup_parser.add_argument(
+        "--print-commands",
+        action="store_true",
+        help="Print installation commands without executing",
+    )
+    setup_parser.add_argument(
+        "--force-reinstall",
+        action="store_true",
+        help="Force reinstallation of all tools",
+    )
+    setup_parser.add_argument(
+        "--human-logs", action="store_true", help="Human-friendly logs"
+    )
+    setup_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with error if any tools are missing",
+    )
+    return setup_parser
+
+
 def _add_adapters_args(subparsers):
     """Add 'adapters' subcommand arguments for plugin management."""
     adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
@@ -273,9 +378,43 @@ def _add_adapters_args(subparsers):
 
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
-    ap = argparse.ArgumentParser(prog="jmo")
-    sub = ap.add_subparsers(dest="cmd")
+    ap = argparse.ArgumentParser(
+        prog="jmo",
+        description="JMo Security Audit Suite - Unified security scanning with 12+ tools",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+BEGINNER-FRIENDLY COMMANDS:
+  wizard              Interactive wizard for guided security scanning
+  fast                Quick scan with 3 best-in-class tools (5-8 min)
+  balanced            Balanced scan with 8 production-ready tools (15-20 min)
+  full                Comprehensive scan with all 12 tools (30-60 min)
+  setup               Verify and install security tools
 
+ADVANCED COMMANDS:
+  scan                Run configured tools on repositories (low-level)
+  report              Aggregate findings and emit reports
+  ci                  Scan + report with failure thresholds (for CI/CD)
+  adapters            Manage adapter plugins
+
+QUICK START:
+  jmo wizard                         # Interactive guided scanning
+  jmo fast --repo ./myapp            # Fast scan of single repository
+  jmo balanced --repos-dir ~/repos   # Scan all repositories in directory
+  jmo scan --help                    # Show advanced options
+
+Documentation: https://docs.jmotools.com
+        """,
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    # Beginner-friendly commands
+    _add_wizard_args(sub)
+    _add_profile_args(sub, "fast", "Quick scan with 3 best-in-class tools (5-8 min)")
+    _add_profile_args(sub, "balanced", "Balanced scan with 8 production-ready tools (15-20 min)")
+    _add_profile_args(sub, "full", "Comprehensive scan with all 12 tools (30-60 min)")
+    _add_setup_args(sub)
+
+    # Advanced commands
     _add_scan_args(sub)
     _add_report_args(sub)
     _add_ci_args(sub)
@@ -979,17 +1118,150 @@ def cmd_adapters(args) -> int:
     return 0
 
 
+def cmd_wizard(args):
+    """Run interactive wizard for guided scanning."""
+    # Import wizard module
+    wizard_script = Path(__file__).resolve().parent / "wizard.py"
+    if not wizard_script.exists():
+        sys.stderr.write("ERROR: wizard.py not found\n")
+        return 1
+
+    # Import and run wizard
+    sys.path.insert(0, str(wizard_script.parent))
+    from wizard import run_wizard
+
+    return run_wizard(
+        yes=args.yes,
+        emit_script=args.emit_script,
+        emit_make_target=args.emit_make_target,
+        emit_gha=args.emit_gha,
+    )
+
+
+def cmd_setup(args):
+    """Run tool verification and installation."""
+    import shutil
+    import subprocess  # nosec B404 - needed for tool installation
+
+    script = Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+    if not script.exists():
+        sys.stderr.write(f"ERROR: Tool setup script not found: {script}\n")
+        return 1
+
+    cmd = ["bash", str(script)]
+
+    if args.auto_install:
+        cmd.append("--install")
+    elif args.print_commands:
+        cmd.append("--print-commands")
+
+    if args.strict:
+        cmd.append("--strict")
+
+    rc = subprocess.run(cmd).returncode  # nosec B603 - controlled command
+
+    if rc != 0 and args.strict:
+        sys.stderr.write("ERROR: Tool setup failed\n")
+        return rc
+
+    return 0
+
+
+def cmd_profile(args, profile_name: str):
+    """Run scan with specific profile (fast/balanced/full)."""
+    # Map profile names
+    profile_map = {
+        "fast": "fast",
+        "balanced": "balanced",
+        "full": "deep",
+    }
+
+    actual_profile = profile_map.get(profile_name, "balanced")
+
+    # Create a modified args object for cmd_ci
+    # Copy all attributes from args
+    ci_args = argparse.Namespace(**vars(args))
+
+    # Set profile-specific attributes
+    ci_args.cmd = "ci"  # Route through CI command for scan + report
+    ci_args.profile_name = actual_profile
+    ci_args.allow_missing_tools = not args.strict
+
+    # Run CI command (scan + report + threshold check)
+    exit_code = cmd_ci(ci_args)
+
+    # Open results if not disabled
+    if not args.no_open and exit_code == 0:
+        _open_results(args)
+
+    return exit_code
+
+
+def _open_results(args):
+    """Open scan results in browser/editor."""
+    import os
+    import shutil
+    import subprocess  # nosec B404
+
+    results_dir = Path(args.results_dir) / "summaries"
+    if not results_dir.exists():
+        return
+
+    html = results_dir / "dashboard.html"
+    md = results_dir / "SUMMARY.md"
+
+    opener = None
+    if sys.platform.startswith("linux"):
+        opener = shutil.which("xdg-open")
+    elif sys.platform == "darwin":
+        opener = shutil.which("open")
+    elif os.name == "nt":
+        opener = "start"
+
+    paths = [p for p in [html, md] if p.exists()]
+    if not paths:
+        return
+
+    # Allowlist for safety
+    allowed_openers = {"xdg-open", "open", "start"}
+    opener_name = os.path.basename(opener) if opener and os.path.isabs(opener) else opener
+
+    if opener and opener_name in allowed_openers:
+        for p in paths:
+            try:
+                if opener == "start":
+                    os.startfile(str(p))  # type: ignore[attr-defined]  # nosec B606
+                else:
+                    subprocess.Popen(  # nosec B603
+                        [opener, str(p)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+            except Exception:
+                pass
+
+
 def main():
     args = parse_args()
-    if args.cmd == "report":
+
+    # Route to appropriate command handler
+    if args.cmd == "wizard":
+        return cmd_wizard(args)
+    elif args.cmd == "setup":
+        return cmd_setup(args)
+    elif args.cmd in ("fast", "balanced", "full"):
+        return cmd_profile(args, args.cmd)
+    elif args.cmd == "report":
         return cmd_report(args)
-    if args.cmd == "scan":
+    elif args.cmd == "scan":
         return cmd_scan(args)
-    if args.cmd == "ci":
+    elif args.cmd == "ci":
         return cmd_ci(args)
-    if args.cmd == "adapters":
+    elif args.cmd == "adapters":
         return cmd_adapters(args)
-    return 0
+    else:
+        sys.stderr.write(f"Unknown command: {args.cmd}\n")
+        return 1
 
 
 def _log(args, level: str, message: str) -> None:

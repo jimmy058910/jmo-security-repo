@@ -176,11 +176,46 @@ See [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-targ
 
 See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
-## 🚀 Three Ways to Get Started
+## 🚀 Five Ways to Get Started
 
-> **🪟 Windows Users:** Use **Option 2 (Docker)** for the best experience. WSL2 with Docker Desktop provides zero-installation scanning with full tool compatibility. Native Windows support is limited due to tool availability. See [Docker for Windows Setup](#windows-docker-setup) below.
+### NEW in v0.9.0: 📦 Package Managers (Easiest Installation)
 
-### Option 1: 🧙 Interactive Wizard (Recommended for Beginners)
+**The fastest way to get JMo Security on your system:**
+
+#### macOS / Linux: Homebrew
+
+```bash
+# Install via Homebrew
+brew install jmo-security
+
+# Start scanning immediately
+jmotools wizard
+```
+
+#### Windows: Winget
+
+```powershell
+# Install via Winget (Windows 10+)
+winget install jmo.jmo-security
+
+# Start scanning immediately
+jmotools wizard
+```
+
+**Why use package managers?**
+- ✅ **One command install** - No Python/dependency setup required
+- ✅ **Automatic updates** - `brew upgrade` or `winget upgrade`
+- ✅ **System integration** - Added to PATH automatically
+- ✅ **Trusted sources** - Homebrew Core and Microsoft Winget
+- ✅ **Clean uninstall** - `brew uninstall` or `winget uninstall`
+
+📖 **Installation troubleshooting:** [packaging/TESTING.md](packaging/TESTING.md)
+
+---
+
+> **🪟 Windows Users:** Choose **Winget** (above) or **Docker** (below) for the best experience. WSL2 with Docker Desktop provides zero-installation scanning with full tool compatibility.
+
+### Option 2: 🧙 Interactive Wizard (Recommended for Beginners)
 
 **Never used security scanners before?** Start with the guided wizard:
 
@@ -224,7 +259,7 @@ jmotools wizard --emit-gha .github/workflows/security.yml  # GitHub Actions
 
 ---
 
-### Option 2: 🐳 Docker (Zero Installation) ⭐ Recommended for Windows
+### Option 3: 🐳 Docker (Zero Installation)
 
 **✨ Start scanning in 60 seconds with ZERO tool installation!**
 
@@ -280,7 +315,7 @@ cat results/summaries/SUMMARY.md  # Quick text overview
 
 ---
 
-### Option 3: 🧪 CLI Wrapper Commands (Local Install)
+### Option 4: 🧪 CLI Wrapper Commands (Local Install)
 
 **Prerequisites:**
 
@@ -328,9 +363,31 @@ Note: Under the hood, wrapper commands verify your OS/tools, optionally clone fr
 
 ## 📦 Installation Quick Reference
 
-**Choose your installation path based on experience level:**
+**Choose your installation path:**
 
-### Path 1: Docker (Zero Installation - Recommended for Beginners)
+### Path 1: Package Manager (Fastest - NEW in v0.9.0) ⭐
+
+**Time:** 30 seconds | **Tools:** All scanners ready to use
+
+**macOS / Linux (Homebrew):**
+```bash
+brew install jmo-security
+jmotools wizard  # Start scanning immediately
+```
+
+**Windows (Winget):**
+```powershell
+winget install jmo.jmo-security
+jmotools wizard  # Start scanning immediately
+```
+
+**✅ Best for:** Everyone! One-command install with automatic updates
+
+**📖 Full guide:** [packaging/README.md](packaging/README.md)
+
+---
+
+### Path 2: Docker (Zero Installation - Recommended for Beginners)
 
 **Time:** 2 minutes | **Tools:** All 11+ scanners included
 
@@ -353,7 +410,7 @@ docker run -it --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest wiza
 
 ---
 
-### Path 2: Python Package (pip install)
+### Path 3: Python Package (pip install)
 
 **Time:** 5-10 minutes | **Tools:** Install separately (see below)
 

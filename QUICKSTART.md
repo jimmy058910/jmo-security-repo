@@ -1,20 +1,59 @@
 # Quick Start – JMo Security CLI
 
-**Get scanning in under 5 minutes. Three entry points based on your experience level.**
+**Get scanning in under 1 minute with package managers (NEW in v0.9.0)!**
 
 ---
 
 ## ⚡ Fastest Path to Scanning
 
-**Choose based on what you have installed:**
+### NEW: Package Managers (30 seconds) ⭐
+
+**macOS / Linux:**
+```bash
+brew install jmo-security
+jmotools wizard  # Start scanning!
+```
+
+**Windows:**
+```powershell
+winget install jmo.jmo-security
+jmotools wizard  # Start scanning!
+```
+
+### Alternative Paths:
 
 1. **Have Docker?** → [Option 2: Docker](#option-2--docker-zero-installation) (60 seconds)
 2. **Have Python + pip?** → [Install JMo first](#-installation-in-2-minutes), then [Option 3: CLI Wrapper](#option-3--cli-wrapper-commands-local-install)
-3. **Have nothing?** → [Option 2: Docker](#option-2--docker-zero-installation) (install Docker first, 5 minutes)
+3. **Prefer manual setup?** → [Docker](#option-2--docker-zero-installation) or [Python install](#-installation-in-2-minutes)
 
 ---
 
 ## 📦 Installation (in 2 Minutes)
+
+### Path 1: Package Manager (Recommended - v0.9.0+)
+
+**macOS / Linux (Homebrew):**
+```bash
+brew install jmo-security
+# ✅ Done! Tools bundled, added to PATH automatically
+```
+
+**Windows (Winget):**
+```powershell
+winget install jmo.jmo-security
+# ✅ Done! Installed to C:\Users\<user>\AppData\Local\JMo Security
+```
+
+**Benefits:**
+- ✅ One command install
+- ✅ Automatic updates (`brew upgrade` / `winget upgrade`)
+- ✅ Clean uninstall (`brew uninstall` / `winget uninstall`)
+
+**Skip to:** [Choose Your Path](#-choose-your-path)
+
+---
+
+### Path 2: Python Package (pip install)
 
 **Skip this if using Docker** (Option 2 below) - **Docker includes everything**.
 
