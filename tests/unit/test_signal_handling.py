@@ -25,7 +25,8 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", fake_eff)
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
+    # Note: _tool_exists removed in v0.9.0 refactoring - tools handled by scanners now
+    # allow_missing_tools=True handles missing tools gracefully
 
     # Monkeypatch signal.signal to immediately invoke handler once to set stop flag
     captured = {"handler": None}

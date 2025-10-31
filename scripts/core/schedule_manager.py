@@ -98,6 +98,85 @@ class ScanSchedule:
         """Convert schedule to dictionary for JSON/YAML serialization."""
         return asdict(self)
 
+    @classmethod
+    def from_simple_args(
+        cls,
+        name: str,
+        cron: str,
+        profile: str,
+        repos_dir: Optional[str] = None,
+        backend: str = "github-actions",
+        labels: Optional[Dict[str, str]] = None,
+        **kwargs,
+    ) -> "ScanSchedule":
+        """Convenience factory for creating schedules with simplified args.
+
+        This method provides a simpler API for tests and CLI usage:
+
+        ScanSchedule.from_simple_args(
+            name="nightly-scan",
+            cron="0 2 * * *",
+            profile="balanced",
+            repos_dir="~/repos",
+            labels={"env": "prod"}
+        )
+
+        Instead of the verbose nested structure:
+
+        ScanSchedule(
+            metadata=ScheduleMetadata(name="nightly-scan", labels={"env": "prod"}),
+            spec=ScheduleSpec(
+                schedule="0 2 * * *",
+                jobTemplate=JobTemplateSpec(
+                    profile="balanced",
+                    targets={"repos_dir": "~/repos"},
+                    ...
+                )
+            )
+        )
+        """
+        # Build targets from simplified args
+        targets = {}
+        if repos_dir:
+            targets["repos_dir"] = repos_dir
+
+        # Extract other target types from kwargs
+        for key in ["image", "terraform_state", "url", "gitlab_repo", "k8s_context"]:
+            if key in kwargs:
+                targets[key] = kwargs.pop(key)
+
+        # Build results config
+        results = kwargs.pop("results", {"dir": "./results"})
+
+        # Build options
+        options = kwargs.pop("options", {})
+
+        # Build annotations (description stored here)
+        annotations = kwargs.pop("annotations", {})
+        if "description" in kwargs:
+            annotations["description"] = kwargs.pop("description")
+
+        # Create nested structure
+        return cls(
+            metadata=ScheduleMetadata(
+                name=name,
+                labels=labels or {},
+                annotations=annotations,
+            ),
+            spec=ScheduleSpec(
+                schedule=cron,
+                backend=BackendConfig(type=backend, config=kwargs.pop("backend_config", {})),
+                jobTemplate=JobTemplateSpec(
+                    profile=profile,
+                    targets=targets,
+                    results=results,
+                    options=options,
+                ),
+                timezone=kwargs.pop("timezone", "UTC"),
+                suspend=kwargs.pop("suspend", False),
+            ),
+        )
+
 
 class ScheduleManager:
     """Manage scan schedules with Kubernetes-inspired API."""
