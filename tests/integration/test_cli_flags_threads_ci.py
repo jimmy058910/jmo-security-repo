@@ -44,7 +44,7 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
         return result
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: n == "semgrep")
+    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
     monkeypatch.setattr(subprocess, "run", mock_run)
 
     args = types.SimpleNamespace(
@@ -96,7 +96,7 @@ def test_threads_env_then_config(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
     monkeypatch.setattr(jmo, "load_config", lambda p: Cfg())
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
+    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
 
     # Case 1: env set
     monkeypatch.setenv("JMO_THREADS", "2")

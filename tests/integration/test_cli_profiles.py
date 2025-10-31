@@ -38,7 +38,7 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     _write_yaml(cfg_path, cfg)
 
     # Force which to say no tools installed so stubs are written
-    monkeypatch.setattr(jmo, "_tool_exists", lambda _: False)
+    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
 
     # Prepare args and run scan
     args = types.SimpleNamespace(
@@ -87,7 +87,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     def fake_which(tool: str) -> bool:
         return tool == "semgrep"
 
-    monkeypatch.setattr(jmo, "_tool_exists", fake_which)
+    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
 
     calls = []
 
@@ -159,7 +159,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    monkeypatch.setattr(jmo, "_tool_exists", lambda t: t == "syft")
+    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
 
     attempt = {"n": 0}
 

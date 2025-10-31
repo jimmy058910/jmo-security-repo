@@ -82,7 +82,7 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
 
             return mock_run
 
-        monkeypatch.setattr(jmo, "_tool_exists", tool_exists_factory(t))
+        # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
         monkeypatch.setattr(subprocess, "run", make_mock_run(t))
 
         args = types.SimpleNamespace(
