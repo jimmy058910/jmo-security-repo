@@ -11,6 +11,7 @@ Tests cover:
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import pytest
@@ -62,7 +63,7 @@ def test_schedule_create_list_delete(tmp_path):
     # 1. CREATE schedule
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "test-nightly",
             "--cron", "0 2 * * *",
@@ -83,7 +84,7 @@ def test_schedule_create_list_delete(tmp_path):
     # 2. LIST schedules
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "list",
             "--format", "json",
         ],
@@ -101,7 +102,7 @@ def test_schedule_create_list_delete(tmp_path):
     # 3. GET schedule details
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "get",
             "test-nightly",
             "--format", "json",
@@ -120,7 +121,7 @@ def test_schedule_create_list_delete(tmp_path):
     # 4. DELETE schedule
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "delete",
             "test-nightly",
             "--force",
@@ -137,7 +138,7 @@ def test_schedule_create_list_delete(tmp_path):
     # 5. Verify deletion
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "list",
             "--format", "json",
         ],
@@ -159,7 +160,7 @@ def test_schedule_export_github_actions(tmp_path):
     # Create schedule
     subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "gha-export",
             "--cron", "0 3 * * *",
@@ -175,7 +176,7 @@ def test_schedule_export_github_actions(tmp_path):
     # Export workflow
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "export",
             "gha-export",
         ],
@@ -210,7 +211,7 @@ def test_schedule_export_gitlab_ci(tmp_path):
     # Create schedule
     subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "gitlab-export",
             "--cron", "0 4 * * *",
@@ -226,7 +227,7 @@ def test_schedule_export_gitlab_ci(tmp_path):
     # Export workflow with backend override
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "export",
             "gitlab-export",
             "--backend", "gitlab-ci",
@@ -261,7 +262,7 @@ def test_schedule_install_local_cron(tmp_path):
     # Create schedule
     subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "cron-test",
             "--cron", "0 5 * * *",
@@ -277,7 +278,7 @@ def test_schedule_install_local_cron(tmp_path):
     # Install to cron
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "install",
             "cron-test",
         ],
@@ -304,7 +305,7 @@ def test_schedule_install_local_cron(tmp_path):
         # Uninstall
         uninstall_result = subprocess.run(
             [
-                "python3.11", "-m", "scripts.cli.jmo",
+                sys.executable, "-m", "scripts.cli.jmo",
                 "schedule", "uninstall",
                 "cron-test",
             ],
@@ -325,7 +326,7 @@ def test_schedule_label_filtering(tmp_path):
     # Create schedules with different labels
     subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "prod-scan",
             "--cron", "0 2 * * *",
@@ -341,7 +342,7 @@ def test_schedule_label_filtering(tmp_path):
 
     subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "create",
             "--name", "dev-scan",
             "--cron", "0 3 * * *",
@@ -358,7 +359,7 @@ def test_schedule_label_filtering(tmp_path):
     # List all schedules
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "list",
             "--format", "json",
         ],
@@ -374,7 +375,7 @@ def test_schedule_label_filtering(tmp_path):
     # Filter by env=prod
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "list",
             "--format", "json",
             "--label", "env=prod",
@@ -392,7 +393,7 @@ def test_schedule_label_filtering(tmp_path):
     # Filter by team=devops
     result = subprocess.run(
         [
-            "python3.11", "-m", "scripts.cli.jmo",
+            sys.executable, "-m", "scripts.cli.jmo",
             "schedule", "list",
             "--format", "json",
             "--label", "team=devops",
