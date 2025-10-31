@@ -233,9 +233,7 @@ def test_generate_github_actions_docker():
 @patch("scripts.cli.wizard._check_docker_running")
 @patch("scripts.cli.wizard._prompt_yes_no")
 @patch("scripts.cli.wizard._prompt_choice")
-@patch("scripts.cli.wizard._prompt_text")
 def test_run_wizard_non_interactive(
-    mock_text,
     mock_choice,
     mock_yes_no,
     mock_docker_running,
@@ -259,7 +257,8 @@ def test_run_wizard_non_interactive(
 
     # Should not have prompted for profile/target selection
     mock_choice.assert_not_called()
-    mock_text.assert_not_called()
+    # Note: _prompt_text is no longer mocked since it's only used by configure_advanced
+    # which is skipped in --yes mode
 
     # Should have reasonable exit code
     assert rc == 0
@@ -344,11 +343,11 @@ def test_profile_resource_estimates():
 
 def test_cpu_count_fallback():
     """Test CPU count detection with fallback."""
-    from scripts.cli.wizard import _get_cpu_count
+    from scripts.cli.cpu_utils import get_cpu_count
 
     # Should return fallback if detection fails
-    with patch("scripts.cli.wizard.os.cpu_count", return_value=None):
-        count = _get_cpu_count()
+    with patch("scripts.cli.cpu_utils.os.cpu_count", return_value=None):
+        count = get_cpu_count()
         assert count == 4  # Default fallback
 
 
@@ -410,7 +409,7 @@ def test_prompt_choice_default(mock_input):
 @patch("builtins.input", return_value="custom text")
 def test_prompt_text_custom(mock_input):
     """Test prompt_text with custom input."""
-    from scripts.cli.wizard import _prompt_text
+    from scripts.cli.wizard_flows.target_configurators import _prompt_text
 
     result = _prompt_text("Enter value:", default="default")
     assert result == "custom text"
@@ -419,7 +418,7 @@ def test_prompt_text_custom(mock_input):
 @patch("builtins.input", return_value="")
 def test_prompt_text_default(mock_input):
     """Test prompt_text with default."""
-    from scripts.cli.wizard import _prompt_text
+    from scripts.cli.wizard_flows.target_configurators import _prompt_text
 
     result = _prompt_text("Enter value:", default="default_value")
     assert result == "default_value"
@@ -627,10 +626,10 @@ def test_configure_advanced_no_customize(mock_yes_no):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch("scripts.cli.wizard._prompt_text", side_effect=["8", "1200", ""])
+@patch("builtins.input", side_effect=["8", "1200", ""])
 @patch("scripts.cli.wizard._prompt_choice", return_value="high")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
-def test_configure_advanced_customize(mock_cpu, mock_choice, mock_text, mock_yes_no):
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+def test_configure_advanced_customize(mock_cpu, mock_choice, mock_input, mock_yes_no):
     """Test configure_advanced with customization."""
     from scripts.cli.wizard import configure_advanced
 
@@ -641,11 +640,11 @@ def test_configure_advanced_customize(mock_cpu, mock_choice, mock_text, mock_yes
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch("scripts.cli.wizard._prompt_text", side_effect=["invalid", "30"])
+@patch("builtins.input", side_effect=["invalid", "30"])
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
 def test_configure_advanced_invalid_inputs(
-    mock_cpu, mock_choice, mock_text, mock_yes_no
+    mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced with invalid numeric inputs."""
     from scripts.cli.wizard import configure_advanced
@@ -659,12 +658,12 @@ def test_configure_advanced_invalid_inputs(
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
 @patch(
-    "scripts.cli.wizard._prompt_text", side_effect=["1000", "30"]
+    "builtins.input", side_effect=["1000", "30"]
 )  # threads > cpu*2, timeout < 60
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
 def test_configure_advanced_boundary_clamping(
-    mock_cpu, mock_choice, mock_text, mock_yes_no
+    mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced clamping values to boundaries."""
     from scripts.cli.wizard import configure_advanced

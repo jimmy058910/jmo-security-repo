@@ -27,6 +27,7 @@ from scripts.cli.scan_jobs import (
 from scripts.cli.scan_utils import (
     tool_exists as _tool_exists,
     write_stub as _write_stub,
+    run_cmd as _run_cmd,
 )
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 
@@ -425,70 +426,6 @@ def _iter_k8s_resources(args) -> list[dict[str, str]]:
         )
 
     return k8s_resources
-
-
-def _run_cmd(
-    cmd: list[str],
-    timeout: int,
-    retries: int = 0,
-    capture_stdout: bool = False,
-    ok_rcs: Tuple[int, ...] | None = None,
-) -> Tuple[int, str, str, int]:
-    """Run a command with timeout and optional retries.
-
-    Returns a tuple: (returncode, stdout, stderr, used_attempts).
-    stdout is empty when capture_stdout=False. used_attempts is how many tries were made.
-    """
-    import subprocess  # nosec B404: imported for controlled, vetted CLI invocations below
-    import time
-
-    attempts = max(0, retries) + 1
-    used_attempts = 0
-    last_exc: Exception | None = None
-    rc = 1
-    for i in range(attempts):
-        used_attempts = i + 1
-        try:
-            cp = subprocess.run(  # nosec B603: executing fixed CLI tools, no shell, args vetted
-                cmd,
-                stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout,
-            )
-            rc = cp.returncode
-            success = (rc == 0) if ok_rcs is None else (rc in ok_rcs)
-            if success or i == attempts - 1:
-                return (
-                    rc,
-                    (cp.stdout or "") if capture_stdout else "",
-                    (cp.stderr or ""),
-                    used_attempts,
-                )
-            time.sleep(min(1.0 * (i + 1), 3.0))
-            continue
-        except subprocess.TimeoutExpired as e:
-            last_exc = e
-            rc = 124
-        except subprocess.CalledProcessError as e:
-            # Command failed with non-zero exit code
-            last_exc = e
-            rc = e.returncode
-            logger.debug(f"Command failed with exit code {e.returncode}: {e}")
-        except (OSError, FileNotFoundError, PermissionError) as e:
-            # System errors (command not found, permissions, etc.)
-            last_exc = e
-            rc = 1
-            logger.error(f"Command execution error: {e}")
-        except Exception as e:
-            # Unexpected errors
-            last_exc = e
-            rc = 1
-            logger.error(f"Unexpected command execution error: {e}", exc_info=True)
-        if i < attempts - 1:
-            time.sleep(min(1.0 * (i + 1), 3.0))
-            continue
-    return rc, "", str(last_exc or ""), used_attempts or 1
 
 
 def _check_first_run() -> bool:
@@ -936,189 +873,35 @@ def cmd_scan(args) -> int:
     signal.signal(signal.SIGINT, _handle_stop)
     signal.signal(signal.SIGTERM, _handle_stop)
 
-    # Track scan results
-    all_results = []
-    futures = []
-
     # Initialize progress tracker
     progress = ProgressTracker(total_targets, args)
     progress.start()
 
-    # Use ThreadPoolExecutor for parallel scanning
-    max_workers = scan_config.max_workers
-    executor = (
-        ThreadPoolExecutor(max_workers=max_workers)
-        if max_workers
-        else ThreadPoolExecutor()
-    )
+    # Create progress callback for orchestrator
+    def progress_callback(target_type, target_id, statuses):
+        """Update progress tracker when scan completes."""
+        progress.update(target_type, target_id, elapsed=1.0)
 
+    # Execute scans via orchestrator (replaces 158 lines of inline logic)
     try:
-        # === REPOSITORIES ===
-        if targets.repos:
-            _log(args, "INFO", f"Scanning {len(targets.repos)} repositories...")
-            for repo in targets.repos:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_repository,
-                    repo,
-                    results_dir / "individual-repos",
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("repo", repo.name, future))
-
-        # === CONTAINER IMAGES ===
-        if targets.images:
-            _log(args, "INFO", f"Scanning {len(targets.images)} container images...")
-            for image in targets.images:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_image,
-                    image,
-                    results_dir,
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("image", image, future))
-
-        # === IAC FILES ===
-        if targets.iac_files:
-            _log(args, "INFO", f"Scanning {len(targets.iac_files)} IaC files...")
-            for iac_type, iac_path in targets.iac_files:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_iac_file,
-                    iac_type,
-                    iac_path,
-                    results_dir,
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("iac", f"{iac_type}:{iac_path.name}", future))
-
-        # === WEB URLS ===
-        if targets.urls:
-            _log(args, "INFO", f"Scanning {len(targets.urls)} web URLs...")
-            for url in targets.urls:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_url,
-                    url,
-                    results_dir,
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("url", url, future))
-
-        # === GITLAB REPOS ===
-        if targets.gitlab_repos:
-            _log(
-                args,
-                "INFO",
-                f"Scanning {len(targets.gitlab_repos)} GitLab repositories...",
-            )
-            for gitlab_info in targets.gitlab_repos:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_gitlab_repo,
-                    gitlab_info,
-                    results_dir,
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("gitlab", gitlab_info.get("name", "unknown"), future))
-
-        # === KUBERNETES RESOURCES ===
-        if targets.k8s_resources:
-            _log(
-                args,
-                "INFO",
-                f"Scanning {len(targets.k8s_resources)} Kubernetes resources...",
-            )
-            for k8s_info in targets.k8s_resources:
-                if stop_flag["stop"]:
-                    break
-                future = executor.submit(
-                    scan_k8s_resource,
-                    k8s_info,
-                    results_dir,
-                    tools,
-                    scan_config.timeout,
-                    scan_config.retries,
-                    per_tool_config,
-                    scan_config.allow_missing_tools,
-                    _tool_exists,  # Pass for test monkeypatching
-                    _write_stub,  # Pass for test monkeypatching
-                )
-                futures.append(("k8s", k8s_info.get("name", "unknown"), future))
-
-        # Wait for all futures to complete with progress tracking
-        for target_type, target_name, future in futures:
-            if stop_flag["stop"]:
-                future.cancel()
-                continue
-
-            try:
-                import time
-
-                target_start = time.time()
-                name, statuses = future.result()
-                target_elapsed = time.time() - target_start
-
-                # Update progress tracker
-                progress.update(target_type, target_name, target_elapsed)
-
-                all_results.append((target_type, name, statuses))
-            except Exception as e:
-                _log(args, "ERROR", f"Failed to scan {target_type} {target_name}: {e}")
-
-                # Update progress tracker (negative elapsed indicates failure)
-                progress.update(target_type, target_name, -1.0)
-
-                if not scan_config.allow_missing_tools:
-                    raise
-
-    finally:
-        executor.shutdown(wait=True)
+        all_results = orchestrator.scan_all(targets, per_tool_config, progress_callback)
+    except KeyboardInterrupt:
+        _log(args, "WARN", "Scan interrupted by user")
+        return 130
+    except Exception as e:
+        _log(args, "ERROR", f"Scan failed: {e}")
+        if not scan_config.allow_missing_tools:
+            raise
+        return 1
 
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
 
     # Send scan.completed telemetry event
     scan_duration = time.time() - scan_start_time
-    tools_succeeded = sum(1 for _, _, statuses in all_results if any(statuses.values()))
+    tools_succeeded = sum(1 for _, statuses in all_results if any(statuses.values()))
     tools_failed = sum(
-        1 for _, _, statuses in all_results if not all(statuses.values())
+        1 for _, statuses in all_results if not all(statuses.values())
     )
 
     send_event(

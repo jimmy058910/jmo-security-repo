@@ -519,3 +519,145 @@ class ScanOrchestrator:
                 "total_count": targets.total_count(),
             },
         }
+
+    def scan_all(
+        self, targets: ScanTargets, per_tool_config: Dict, progress_callback=None
+    ) -> List[Tuple[str, Dict[str, bool]]]:
+        """
+        Execute scans on all discovered targets in parallel.
+
+        This method encapsulates ALL scanning logic that was previously inline in cmd_scan.
+        It handles parallel execution, progress tracking, and result aggregation for all 6 target types.
+
+        Args:
+            targets: Discovered scan targets
+            per_tool_config: Per-tool configuration overrides
+            progress_callback: Optional callback for progress updates (callable)
+
+        Returns:
+            List of (target_name, statuses_dict) tuples for all scanned targets
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from scripts.cli.scan_jobs import (
+            scan_repository,
+            scan_image,
+            scan_iac_file,
+            scan_url,
+            scan_gitlab_repo,
+            scan_k8s_resource,
+        )
+
+        all_results = []
+        futures = []
+        max_workers = self.get_effective_max_workers()
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit repositories
+            for repo in targets.repos:
+                future = executor.submit(
+                    scan_repository,
+                    repo,
+                    self.config.results_dir / "individual-repos",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("repo", repo.name, future))
+
+            # Submit images
+            for image in targets.images:
+                future = executor.submit(
+                    scan_image,
+                    image,
+                    self.config.results_dir / "individual-images",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("image", image, future))
+
+            # Submit IaC files
+            for iac_type, iac_path in targets.iac_files:
+                future = executor.submit(
+                    scan_iac_file,
+                    iac_type,
+                    iac_path,
+                    self.config.results_dir / "individual-iac",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("iac", str(iac_path), future))
+
+            # Submit URLs
+            for url in targets.urls:
+                future = executor.submit(
+                    scan_url,
+                    url,
+                    self.config.results_dir / "individual-web",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("url", url, future))
+
+            # Submit GitLab repos
+            for gitlab_repo_info in targets.gitlab_repos:
+                future = executor.submit(
+                    scan_gitlab_repo,
+                    gitlab_repo_info,
+                    self.config.results_dir / "individual-gitlab",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                repo_id = f"{gitlab_repo_info.get('group', '')}_{gitlab_repo_info.get('name', '')}"
+                futures.append(("gitlab", repo_id, future))
+
+            # Submit K8s resources
+            for k8s_resource_info in targets.k8s_resources:
+                future = executor.submit(
+                    scan_k8s_resource,
+                    k8s_resource_info,
+                    self.config.results_dir / "individual-k8s",
+                    self.config.tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                res_id = f"{k8s_resource_info.get('context', '')}_{k8s_resource_info.get('namespace', '')}"
+                futures.append(("k8s", res_id, future))
+
+            # Collect results as they complete
+            for target_type, target_id, future in futures:
+                try:
+                    name, statuses = future.result()
+                    all_results.append((name, statuses))
+
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(target_type, target_id, statuses)
+
+                except Exception as e:
+                    # Log error but continue with other targets
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.error(
+                        f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
+                    )
+                    # Still append partial result
+                    all_results.append((target_id, {}))
+
+        return all_results
