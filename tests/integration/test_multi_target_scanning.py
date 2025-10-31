@@ -330,7 +330,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     # Scan repo + image (both will find same CVE in requests package)
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -346,7 +346,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
 
     # Generate report
-    cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
+    cmd_report = ["python3", "-m", "scripts.cli.jmo", "report", str(tmp_path / "results")]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify deduplication
@@ -374,7 +374,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     # Scan repo + image (multi-target)
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -391,7 +391,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     assert result.returncode in [0, 1]
 
     # Generate report
-    cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
+    cmd_report = ["python3", "-m", "scripts.cli.jmo", "report", str(tmp_path / "results")]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify compliance summary includes all frameworks
@@ -430,7 +430,7 @@ resource "aws_s3_bucket" "test" {
     # Scan all 3 target types
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -469,7 +469,7 @@ def test_multi_target_partial_failure(tmp_path: Path):
     # Scan valid repo + invalid image (should fail gracefully)
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),

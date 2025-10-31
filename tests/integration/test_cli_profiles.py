@@ -236,7 +236,7 @@ profiles:
     # Run scan with custom profile
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -295,7 +295,7 @@ profiles:
     # Run scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -342,7 +342,7 @@ profiles:
     # Run scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -371,7 +371,8 @@ def test_profile_tool_selection_fast(tmp_path: Path):
     # Run fast profile scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -416,7 +417,7 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
     # Run balanced profile scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -475,7 +476,7 @@ def test_profile_tool_selection_deep(tmp_path: Path):
     # Run deep profile scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -553,7 +554,7 @@ profiles:
     # Run scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -606,7 +607,7 @@ profiles:
     # Run scan with profile
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m", "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
