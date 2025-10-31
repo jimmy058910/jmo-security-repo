@@ -1,0 +1,117 @@
+---
+name: Homebrew Formula Auto-Update
+
+# Automatically submits PR to homebrew-core when new version released
+# Uses dawidd6/action-homebrew-bump-formula for automated formula updates
+# Docs: https://github.com/dawidd6/action-homebrew-bump-formula
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to bump (without v prefix, e.g., 0.9.0)'
+        required: true
+
+env:
+  FORMULA_NAME: jmo-security
+
+permissions:
+  contents: read
+
+jobs:
+  bump-formula:
+    name: Submit PR to homebrew-core
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+
+    steps:
+      - name: Extract version from tag or input
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Bumping Homebrew formula to version: $VERSION"
+
+      - name: Verify PyPI release exists
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "🔍 Verifying PyPI release exists for version $VERSION..."
+
+          # Wait up to 5 minutes for PyPI to be available
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if curl -fsSL "https://pypi.org/pypi/jmo-security/$VERSION/json" > /dev/null 2>&1; then
+              echo "✅ PyPI release $VERSION confirmed!"
+              exit 0
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: PyPI release not yet available, waiting 10s..."
+            sleep 10
+          done
+
+          echo "❌ ERROR: PyPI release $VERSION not found after 5 minutes"
+          echo "Homebrew formula bump requires PyPI tarball to be available"
+          echo "Please verify the release exists: https://pypi.org/project/jmo-security/$VERSION/"
+          exit 1
+
+      - name: Bump Homebrew formula
+        uses: dawidd6/action-homebrew-bump-formula@v4
+        with:
+          # Required: Personal Access Token with repo + workflow scopes
+          # Setup: GitHub Settings → Developer settings → Personal access tokens (classic)
+          # Scopes: repo, workflow
+          # Store as repository secret: Settings → Secrets → Actions → New repository secret
+          token: ${{ secrets.HOMEBREW_BUMP_TOKEN }}
+
+          # Formula details
+          formula: jmo-security
+
+          # Tag name (with v prefix)
+          tag: v${{ steps.version.outputs.version }}
+
+          # Revision for HEAD-only formulas (not applicable for tagged releases)
+          # revision: ${{ github.sha }}
+
+          # Force update even if version hasn't changed (default: false)
+          force: false
+
+          # Tap to bump (default: homebrew/core for public formulas)
+          # tap: Homebrew/homebrew-core  # Automatically detected
+
+      - name: Success notification
+        if: success()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "✅ Successfully submitted PR to homebrew-core for version $VERSION"
+          echo ""
+          echo "📋 Next steps:"
+          echo "  1. Monitor PR at: https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security"
+          echo "  2. Homebrew maintainers will review (typically 1-2 weeks)"
+          echo "  3. After merge, users can install with: brew install jmo-security"
+          echo ""
+          echo "🔗 Homebrew formula: https://github.com/Homebrew/homebrew-core/blob/master/Formula/j/jmo-security.rb"
+
+      - name: Failure notification
+        if: failure()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "❌ Failed to bump Homebrew formula for version $VERSION"
+          echo ""
+          echo "Common issues:"
+          echo "  1. HOMEBREW_BUMP_TOKEN not configured (see workflow comments)"
+          echo "  2. PyPI release not yet available"
+          echo "  3. Formula already up-to-date"
+          echo "  4. SHA256 mismatch in existing formula"
+          echo ""
+          echo "Manual fallback:"
+          echo "  brew bump-formula-pr --tag=v$VERSION jmo-security"
+          exit 1

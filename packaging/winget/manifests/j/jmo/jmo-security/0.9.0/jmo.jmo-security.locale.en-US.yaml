@@ -1,0 +1,127 @@
+# Created using winget create
+# Documentation: https://github.com/microsoft/winget-pkgs
+
+PackageIdentifier: jmo.jmo-security
+PackageVersion: 0.9.0
+PackageLocale: en-US
+Publisher: JMo Tools
+PublisherUrl: https://jmotools.com
+PublisherSupportUrl: https://github.com/jimmy058910/jmo-security-repo/issues
+Author: James Moceri
+PackageName: JMo Security
+PackageUrl: https://jmotools.com
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/LICENSE
+Copyright: Copyright (C) 2024-2026 James Moceri
+CopyrightUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/LICENSE
+ShortDescription: Unified security scanning suite with 12+ tools and plugin system
+Description: |-
+  JMo Security is a terminal-first security audit toolkit that orchestrates
+  multiple scanners with unified outputs and multi-target scanning capabilities.
+
+  WINDOWS COMPATIBILITY:
+  • ✅ 7/12 security tools work natively on Windows (fast/balanced profiles)
+  • ⚠️  5/12 tools require WSL2 or Docker (Nosey Parker, Falco, AFL++, ZAP, some Semgrep rules)
+  • 🐳 RECOMMENDED: Use WSL2 + Docker Desktop for full tool suite (all 12 tools)
+  • 📦 Native Windows: Use --profile fast or --profile balanced for best experience
+
+  Features:
+  • Multi-target scanning (repositories, containers, IaC, web apps, GitLab, Kubernetes)
+  • 12+ integrated security tools (TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, etc.)
+  • Plugin architecture for custom tool adapters (75% faster integration)
+  • Interactive wizard for guided scanning workflows
+  • Compliance framework integration (OWASP Top 10, CWE Top 25, NIST CSF, PCI DSS, CIS Controls, MITRE ATT&CK)
+  • Unified reporting (JSON, Markdown, HTML dashboard, SARIF 2.1.0)
+  • Profile-based configuration (fast/balanced/deep)
+  • Schedule management system (Kubernetes-inspired CronJob specs)
+  • Intelligent vulnerability prioritization with EPSS/KEV integration
+  • Cross-platform (Windows, macOS, Linux)
+
+  What's New in v0.9.0:
+  ✅ Plugin system for tool adapters (75% faster tool integration)
+  ✅ Refactored architecture (50% code reduction, improved maintainability)
+  ✅ Homebrew + Winget packaging (mainstream distribution)
+  ✅ Enhanced Wizard V2 with multi-target workflows
+  ✅ EPSS/KEV prioritization (30-50% noise reduction)
+  ✅ Schedule management completion (full CI/CD automation)
+  ✅ Hot-reload support for development iteration
+
+  Target Users:
+  • DevSecOps engineers automating security in CI/CD pipelines
+  • Security teams performing comprehensive audits
+  • Developers integrating security into development workflows
+  • Platform engineers securing containerized and cloud infrastructure
+
+Moniker: jmo-security
+Tags:
+  - security
+  - scanning
+  - devops
+  - devsecops
+  - sast
+  - sca
+  - sbom
+  - secrets-detection
+  - secrets-scanning
+  - vulnerabilities
+  - vulnerability-scanner
+  - compliance
+  - owasp
+  - cwe
+  - nist
+  - pci-dss
+  - mitre-attack
+  - trivy
+  - semgrep
+  - trufflehog
+  - syft
+  - checkov
+  - zap
+  - nuclei
+  - docker
+  - kubernetes
+  - terraform
+  - iac
+  - infrastructure-as-code
+  - gitlab
+  - ci-cd
+  - automation
+  - multi-target
+  - plugin-system
+  - cybersecurity
+ReleaseNotes: |-
+  🎉 JMo Security v0.9.0 - Developer Experience & Orchestration
+
+  Major Features:
+  • Plugin System: 75% faster tool integration (4 hours → 1 hour)
+  • Refactored Architecture: 50% code reduction (2788 → <1400 lines)
+  • Homebrew + Winget: Mainstream distribution channels
+  • Wizard V2: 5 multi-target workflows, auto-detection engine
+  • EPSS/KEV Prioritization: 30-50% noise reduction, focus on real threats
+  • Schedule Completion: Full CI/CD automation with GitHub Actions + local cron
+
+  Performance Improvements:
+  • Plugin loading: <100ms
+  • EPSS cache latency: <500ms
+  • Onboarding time: 15 min → 5 min (67% reduction)
+
+  Developer Experience:
+  • Hot-reload support (no reinstall needed during development)
+  • Independent adapter updates (ship without core releases)
+  • Low-risk experimentation (test new tools without committing)
+  • Comprehensive testing (≥85% coverage maintained)
+
+  Breaking Changes:
+  • None (100% backward compatible with v0.8.0)
+
+  Full Changelog: https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md
+ReleaseNotesUrl: https://github.com/jimmy058910/jmo-security-repo/releases/tag/v0.9.0
+Documentations:
+  - DocumentLabel: User Guide
+    DocumentUrl: https://docs.jmotools.com/USER_GUIDE
+  - DocumentLabel: Quick Start
+    DocumentUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/QUICKSTART.md
+  - DocumentLabel: Plugin Development
+    DocumentUrl: https://docs.jmotools.com/PLUGIN_DEVELOPMENT
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

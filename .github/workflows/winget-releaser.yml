@@ -1,0 +1,134 @@
+---
+name: WinGet Manifest Auto-Update
+
+# Automatically submits PR to microsoft/winget-pkgs when new version released
+# Uses vedantmgoyal9/winget-releaser for automated manifest creation
+# Docs: https://github.com/vedantmgoyal9/winget-releaser
+
+on:
+  release:
+    types: [published]  # Only run on published releases (not drafts or prereleases)
+  workflow_dispatch:
+
+env:
+  PACKAGE_IDENTIFIER: jmo.jmo-security
+
+permissions:
+  contents: read
+
+jobs:
+  release-winget:
+    name: Submit PR to microsoft/winget-pkgs
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Extract version from release
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "release") {
+            $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          } else {
+            # Fallback: get latest release
+            $version = (gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' -replace '^v', '')
+          }
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Output "📦 Creating WinGet manifest for version: $version"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Verify GitHub Release exists with installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Output "🔍 Verifying GitHub Release v$version has Windows installer..."
+
+          $release = gh api repos/${{ github.repository }}/releases/tags/v$version --jq '.'
+          $assets = $release | ConvertFrom-Json | Select-Object -ExpandProperty assets
+
+          $installer = $assets | Where-Object { $_.name -match 'jmo-security-.*-win64\.exe$' }
+
+          if (-not $installer) {
+            Write-Output "❌ ERROR: No Windows installer found in release v$version"
+            Write-Output ""
+            Write-Output "Expected asset pattern: jmo-security-$version-win64.exe"
+            Write-Output "Available assets:"
+            $assets | ForEach-Object { Write-Output "  - $($_.name)" }
+            Write-Output ""
+            Write-Output "Please ensure the Windows installer is built and uploaded before running this workflow."
+            exit 1
+          }
+
+          Write-Output "✅ Found installer: $($installer.name)"
+          Write-Output "   Size: $([math]::Round($installer.size / 1MB, 2)) MB"
+          Write-Output "   URL: $($installer.browser_download_url)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Submit manifest to microsoft/winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          # Required: Personal Access Token with public_repo scope
+          # Setup:
+          #   1. Fork microsoft/winget-pkgs under same account/org as this repo
+          #   2. GitHub Settings → Developer settings → Personal access tokens (classic)
+          #   3. Scopes: public_repo
+          #   4. Store as repository secret: Settings → Secrets → Actions → New repository secret
+          token: ${{ secrets.WINGET_RELEASER_TOKEN }}
+
+          # Package identifier (must match existing entry in winget-pkgs)
+          identifier: jmo.jmo-security
+
+          # Release tag (with v prefix)
+          # If not provided, defaults to latest release
+          # version: v${{ steps.version.outputs.version }}
+
+          # Installer URLs (auto-detected from GitHub release assets)
+          # Pattern: jmo-security-{version}-win64.exe
+          # installers-regex: 'jmo-security-.*-win64\.exe$'  # Default works
+
+          # Maximum number of installers to include (default: 6 - x64/x86/ARM64 × exe/msi)
+          # max-installers: 2  # We only have x64 exe for now
+
+          # Fork repository to submit PR from (default: your fork of microsoft/winget-pkgs)
+          # fork-user: ${{ github.repository_owner }}
+
+          # Enable automatic updates for future releases (default: true)
+          # Creates GitHub Actions workflow in your fork to auto-submit on new releases
+          # create-version-pr: true
+
+      - name: Success notification
+        if: success()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Output "✅ Successfully submitted PR to microsoft/winget-pkgs for version $version"
+          Write-Output ""
+          Write-Output "📋 Next steps:"
+          Write-Output "  1. Monitor PR at: https://github.com/microsoft/winget-pkgs/pulls?q=is%3Apr+jmo-security"
+          Write-Output "  2. Microsoft maintainers will review (typically 1-2 weeks)"
+          Write-Output "  3. After merge, users can install with: winget install jmo.jmo-security"
+          Write-Output ""
+          Write-Output "🔗 WinGet manifest: https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/jmo/jmo-security"
+
+      - name: Failure notification
+        if: failure()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Output "❌ Failed to submit WinGet manifest for version $version"
+          Write-Output ""
+          Write-Output "Common issues:"
+          Write-Output "  1. WINGET_RELEASER_TOKEN not configured (see workflow comments)"
+          Write-Output "  2. GitHub release not yet published"
+          Write-Output "  3. Windows installer asset not found in release"
+          Write-Output "  4. microsoft/winget-pkgs fork doesn't exist under same account"
+          Write-Output "  5. Manifest schema validation failed"
+          Write-Output ""
+          Write-Output "Manual fallback using Komac:"
+          Write-Output "  komac update jmo.jmo-security --version $version --submit"
+          Write-Output ""
+          Write-Output "Manual fallback using WinGetCreate:"
+          Write-Output "  wingetcreate update jmo.jmo-security -v $version -u https://github.com/${{ github.repository }}/releases/download/v$version/jmo-security-$version-win64.exe -t ${{ secrets.WINGET_RELEASER_TOKEN }}"
+          exit 1
