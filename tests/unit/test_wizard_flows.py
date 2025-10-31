@@ -188,6 +188,7 @@ class TestRepoFlow:
     def test_prompt_user(self):
         """Test user prompting."""
         flow = RepoFlow()
+        flow.detected_targets = {"repos": []}  # Mock detected_targets
         flow.prompter = Mock()
         flow.prompter.prompt_choice.return_value = "balanced"
         flow.prompter.prompt_yes_no.return_value = True

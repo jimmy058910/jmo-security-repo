@@ -80,20 +80,28 @@ class DependencyFlow(BaseWizardFlow):
 
     def _print_detected_dependencies(self, targets: Dict) -> None:
         """Print summary of detected package managers and files."""
-        print("\n🔍 Detected dependency files:\n")
+        items = []
 
         if targets["package_files"]:
-            print("  Package manifests:")
-            for pkg_file in targets["package_files"][:10]:  # Limit display
-                print(f"    • {pkg_file}")
+            pkg_count = len(targets["package_files"])
+            items.append(f"Package manifests: {pkg_count} detected")
+            for pkg_file in targets["package_files"][:5]:  # Show first 5
+                items.append(f"  → {pkg_file.name}")
+            if pkg_count > 5:
+                items.append(f"  ... and {pkg_count - 5} more")
 
         if targets["lock_files"]:
-            print("\n  Lock files (for reproducible scans):")
-            for lock_file in targets["lock_files"][:10]:
-                print(f"    • {lock_file}")
+            lock_count = len(targets["lock_files"])
+            items.append(f"Lock files: {lock_count} detected (reproducible scans)")
+            for lock_file in targets["lock_files"][:3]:  # Show first 3
+                items.append(f"  → {lock_file.name}")
+            if lock_count > 3:
+                items.append(f"  ... and {lock_count - 3} more")
 
         if targets["images"]:
-            print(f"\n  Container images: {len(targets['images'])} detected")
+            items.append(f"Container images: {len(targets['images'])} detected")
 
-        if not any([targets["package_files"], targets["lock_files"], targets["images"]]):
-            print("  ⚠️  No dependency files detected")
+        if items:
+            self.prompter.print_summary_box("🔍 Detected Dependency Files", items)
+        else:
+            self.prompter.print_warning("No dependency files detected")

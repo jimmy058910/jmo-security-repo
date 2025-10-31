@@ -31,10 +31,7 @@ class EntireStackFlow(BaseWizardFlow):
         # Generate and display smart recommendations
         recommendations = self._generate_recommendations(self.detected_targets)
         if recommendations:
-            print("\n💡 Smart Recommendations:\n")
-            for rec in recommendations:
-                print(f"  • {rec}")
-            print()
+            self.prompter.print_summary_box("💡 Smart Recommendations", recommendations)
 
         # Profile selection
         profile = self.prompter.prompt_choice(

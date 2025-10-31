@@ -43,11 +43,15 @@ class CICDFlow(BaseWizardFlow):
         Returns:
             Dictionary with selections
         """
-        print("\n🔒 CI/CD Security Audit\n")
+        self.prompter.print_header("CI/CD Security Audit", icon="lock")
+
+        # Display detected CI/CD files
+        self._print_detected_pipelines(self.detected_targets)
 
         # Use fast profile for CI/CD by default
+        self.prompter.print_info("Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)")
         profile = self.prompter.prompt_choice(
-            "Select scan profile (CI/CD typically uses 'fast'):",
+            "Select scan profile:",
             choices=["fast", "balanced"],
             default="fast",
         )
@@ -60,8 +64,9 @@ class CICDFlow(BaseWizardFlow):
         # Scan pipeline images
         num_images = len(self.detected_targets.get("pipeline_images", []))
         if num_images > 0:
+            self.prompter.print_info(f"Found {num_images} container images in pipeline definitions")
             scan_pipeline_images = self.prompter.prompt_yes_no(
-                f"Scan {num_images} container images referenced in pipelines?", default=True
+                f"Scan container images referenced in pipelines?", default=True
             )
         else:
             scan_pipeline_images = False
@@ -87,6 +92,32 @@ class CICDFlow(BaseWizardFlow):
             "check_permissions": check_permissions,
             "emit_workflow": emit_workflow,
         }
+
+    def _print_detected_pipelines(self, targets: Dict) -> None:
+        """Print summary of detected CI/CD pipeline files."""
+        items = []
+
+        if targets.get("github_actions"):
+            gha_count = len(targets["github_actions"])
+            items.append(f"GitHub Actions workflows: {gha_count} detected")
+            for workflow in targets["github_actions"][:3]:
+                items.append(f"  → {workflow.name}")
+            if gha_count > 3:
+                items.append(f"  ... and {gha_count - 3} more")
+
+        if targets.get("gitlab_ci"):
+            items.append("GitLab CI: .gitlab-ci.yml detected")
+
+        if targets.get("jenkinsfile"):
+            items.append("Jenkins: Jenkinsfile detected")
+
+        if targets.get("pipeline_images"):
+            items.append(f"Container images: {len(targets['pipeline_images'])} found in pipelines")
+
+        if items:
+            self.prompter.print_summary_box("🔍 Detected CI/CD Pipelines", items)
+        else:
+            self.prompter.print_warning("No CI/CD pipeline files detected")
 
     def build_command(self, targets: Dict, options: Dict) -> List[str]:
         """Build CI/CD-optimized scan command.

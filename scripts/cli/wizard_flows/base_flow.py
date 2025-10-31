@@ -217,11 +217,31 @@ class PromptHelper:
     # ANSI color codes
     COLORS = {
         "blue": "\x1b[36m",
+        "cyan": "\x1b[96m",
         "green": "\x1b[32m",
         "yellow": "\x1b[33m",
         "red": "\x1b[31m",
+        "magenta": "\x1b[35m",
         "bold": "\x1b[1m",
+        "dim": "\x1b[2m",
         "reset": "\x1b[0m",
+    }
+
+    # Visual elements
+    ICONS = {
+        "check": "✓",
+        "cross": "✗",
+        "arrow": "→",
+        "bullet": "•",
+        "star": "★",
+        "rocket": "🚀",
+        "lock": "🔒",
+        "package": "📦",
+        "chart": "📊",
+        "warning": "⚠️",
+        "info": "ℹ️",
+        "success": "✅",
+        "hourglass": "⏳",
     }
 
     def colorize(self, text: str, color: str) -> str:
@@ -229,24 +249,99 @@ class PromptHelper:
 
         Args:
             text: Text to colorize
-            color: Color name (blue, green, yellow, red, bold)
+            color: Color name (blue, cyan, green, yellow, red, magenta, bold, dim)
 
         Returns:
             Colorized text with reset code
         """
         return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
 
-    def print_header(self, text: str) -> None:
-        """Print a formatted section header."""
+    def print_header(self, text: str, icon: str = "star") -> None:
+        """Print a formatted section header with icon.
+
+        Args:
+            text: Header text
+            icon: Icon name (star, rocket, lock, package, chart)
+        """
         print()
-        print(self.colorize("=" * 70, "blue"))
-        print(self.colorize(text.center(70), "bold"))
-        print(self.colorize("=" * 70, "blue"))
+        print(self.colorize("╔" + "═" * 68 + "╗", "cyan"))
+        icon_char = self.ICONS.get(icon, self.ICONS["star"])
+        header_text = f"{icon_char}  {text}  {icon_char}"
+        print(self.colorize(f"║{header_text.center(68)}║", "bold"))
+        print(self.colorize("╚" + "═" * 68 + "╝", "cyan"))
         print()
 
     def print_step(self, step: int, total: int, text: str) -> None:
-        """Print a step indicator."""
-        print(self.colorize(f"\n[Step {step}/{total}] {text}", "blue"))
+        """Print a step indicator with progress bar.
+
+        Args:
+            step: Current step number
+            total: Total number of steps
+            text: Step description
+        """
+        # Progress bar
+        progress_width = 20
+        filled = int((step / total) * progress_width)
+        bar = "█" * filled + "░" * (progress_width - filled)
+        percentage = int((step / total) * 100)
+
+        # Step indicator
+        step_text = f"[Step {step}/{total}]"
+        progress_text = f"[{bar}] {percentage}%"
+
+        print()
+        print(self.colorize("─" * 70, "dim"))
+        print(
+            self.colorize(f"{self.ICONS['arrow']} {step_text} {text}", "bold")
+            + f"  {self.colorize(progress_text, 'cyan')}"
+        )
+        print()
+
+    def print_success(self, message: str) -> None:
+        """Print a success message.
+
+        Args:
+            message: Success message
+        """
+        print(self.colorize(f"{self.ICONS['success']} {message}", "green"))
+
+    def print_info(self, message: str) -> None:
+        """Print an info message.
+
+        Args:
+            message: Info message
+        """
+        print(self.colorize(f"{self.ICONS['info']} {message}", "cyan"))
+
+    def print_warning(self, message: str) -> None:
+        """Print a warning message.
+
+        Args:
+            message: Warning message
+        """
+        print(self.colorize(f"{self.ICONS['warning']} {message}", "yellow"))
+
+    def print_error(self, message: str) -> None:
+        """Print an error message.
+
+        Args:
+            message: Error message
+        """
+        print(self.colorize(f"{self.ICONS['cross']} {message}", "red"))
+
+    def print_summary_box(self, title: str, items: List[str]) -> None:
+        """Print a summary box with items.
+
+        Args:
+            title: Box title
+            items: List of items to display
+        """
+        print()
+        print(self.colorize("┌─ " + title + " " + "─" * (66 - len(title)), "cyan"))
+        for item in items:
+            print(self.colorize(f"│ {self.ICONS['bullet']} {item}", "dim"))
+        print(self.colorize("└" + "─" * 68, "cyan"))
+        print()
 
     def prompt_choice(
         self, question: str, choices: List[str], default: Optional[str] = None
@@ -418,44 +513,76 @@ class BaseWizardFlow(ABC):
         pass
 
     def execute(self) -> int:
-        """Execute the workflow (template method).
+        """Execute the workflow (template method) with progress tracking.
 
         Returns:
             Exit code (0 for success, non-zero for failure)
         """
-        # 1. Detect targets
+        total_steps = 6  # Detection, User Input, Command Build, Preflight, Confirmation, Execution
+
+        # Step 1: Detect targets
+        self.prompter.print_step(1, total_steps, "Detecting scan targets...")
         targets = self.detect_targets()
         if not targets or all(not v for v in targets.values()):
-            print(self.prompter.colorize("❌ No targets detected.", "red"))
+            self.prompter.print_error("No targets detected")
             return 1
 
-        # 2. Display targets
-        self.prompter.print_header("Detected Targets")
-        for target_type, target_list in targets.items():
-            if target_list:
-                print(
-                    f"  {self.prompter.colorize('✓', 'green')} {target_type.replace('_', ' ').title()}: {len(target_list)}"
-                )
+        # Store targets for workflows to access
+        self.detected_targets = targets
 
-        # 3. Prompt user
+        self.prompter.print_success(f"Detected {sum(len(v) if isinstance(v, list) else 1 for v in targets.values() if v)} targets")
+
+        # Step 2: User input (workflow-specific)
+        self.prompter.print_step(2, total_steps, "Gathering configuration options...")
         options = self.prompt_user()
+        self.prompter.print_success("Configuration complete")
 
-        # 4. Build command
+        # Step 3: Build command
+        self.prompter.print_step(3, total_steps, "Building scan command...")
         command = self.build_command(targets, options)
+        self.prompter.print_success("Command built successfully")
 
-        # 5. Display preflight summary
-        self.prompter.print_header("Preflight Summary")
-        print(f"  Command: {' '.join(command)}")
+        # Step 4: Preflight summary
+        self.prompter.print_step(4, total_steps, "Preparing preflight summary...")
+        preflight_items = [
+            f"Profile: {options.get('profile', 'default')}",
+            f"Command: {' '.join(command)}",
+            f"Estimated time: {self._estimate_time(options.get('profile', 'balanced'))}",
+        ]
+        self.prompter.print_summary_box("🚀 Preflight Check", preflight_items)
 
-        # 6. Confirm execution
-        if not self.prompter.confirm("\nExecute scan?"):
-            print(self.prompter.colorize("❌ Cancelled.", "yellow"))
+        # Step 5: Confirmation
+        self.prompter.print_step(5, total_steps, "Awaiting confirmation...")
+        if not self.prompter.confirm("Execute scan?"):
+            self.prompter.print_warning("Scan cancelled by user")
             return 0
 
-        # 7. Execute command
+        # Step 6: Execute scan
+        self.prompter.print_step(6, total_steps, "Executing security scan...")
+        self.prompter.print_info("Scan in progress... This may take several minutes.")
         try:
             result = subprocess.run(command, check=False)  # nosec B603
+            if result.returncode == 0:
+                self.prompter.print_success("Scan completed successfully!")
+            else:
+                self.prompter.print_error(f"Scan completed with errors (exit code {result.returncode})")
             return result.returncode
         except Exception as e:
-            print(self.prompter.colorize(f"❌ Scan failed: {e}", "red"))
+            self.prompter.print_error(f"Scan failed: {e}")
             return 1
+
+    def _estimate_time(self, profile: str) -> str:
+        """Estimate scan time based on profile.
+
+        Args:
+            profile: Scan profile name
+
+        Returns:
+            Time estimate string
+        """
+        estimates = {
+            "fast": "5-8 minutes",
+            "balanced": "15-20 minutes",
+            "deep": "30-60 minutes",
+        }
+        return estimates.get(profile, "15-20 minutes")

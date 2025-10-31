@@ -29,26 +29,38 @@ class DeploymentFlow(BaseWizardFlow):
         Returns:
             Dictionary with selections
         """
-        print("\n🚀 Pre-Deployment Security Checklist\n")
+        self.prompter.print_header("Pre-Deployment Security Checklist", icon="rocket")
+
+        # Display detected deployment targets
+        self._print_detected_deployment_targets(self.detected_targets)
 
         # Environment selection with auto-detection
         detected_env = self.detected_targets.get("environment", "staging")
+        self.prompter.print_info(f"Auto-detected environment: {detected_env}")
         environment = self.prompter.prompt_choice(
-            f"Deployment environment (detected: {detected_env}):",
+            "Deployment environment:",
             choices=["staging", "production"],
             default=detected_env,
         )
 
         # Production deployment warning
         if environment == "production":
-            print("\n⚠️  Production deployment requires:")
-            print("  • Deep scan profile (comprehensive checks)")
-            print("  • Zero CRITICAL findings")
-            print("  • Compliance validation (OWASP, CWE, PCI DSS)")
-            print()
+            prod_requirements = [
+                "Deep scan profile (comprehensive checks)",
+                "Zero CRITICAL findings",
+                "Compliance validation (OWASP, CWE, PCI DSS)",
+                "All container images scanned",
+                "Infrastructure-as-Code validated",
+            ]
+            self.prompter.print_summary_box("⚠️  Production Deployment Requirements", prod_requirements)
 
         # Profile selection based on environment
         profile_default = "deep" if environment == "production" else "balanced"
+        if environment == "production":
+            self.prompter.print_warning("Production deployments require 'deep' profile (30-60 min)")
+        else:
+            self.prompter.print_info("Staging deployments typically use 'balanced' profile (15-20 min)")
+
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
             choices=["balanced", "deep"],
@@ -68,6 +80,34 @@ class DeploymentFlow(BaseWizardFlow):
             "profile": profile,
             "fail_on": fail_threshold,
         }
+
+    def _print_detected_deployment_targets(self, targets: Dict) -> None:
+        """Print summary of detected deployment targets."""
+        items = []
+
+        if targets.get("images"):
+            items.append(f"Container images: {len(targets['images'])} detected")
+            for image in targets["images"][:3]:
+                items.append(f"  → {image}")
+            if len(targets["images"]) > 3:
+                items.append(f"  ... and {len(targets['images']) - 3} more")
+
+        if targets.get("iac"):
+            items.append(f"IaC files: {len(targets['iac'])} detected")
+            for iac_file in targets["iac"][:3]:
+                items.append(f"  → {iac_file.name}")
+            if len(targets["iac"]) > 3:
+                items.append(f"  ... and {len(targets['iac']) - 3} more")
+
+        if targets.get("web"):
+            items.append(f"Web URLs: {len(targets['web'])} detected for DAST")
+            for url in targets["web"][:3]:
+                items.append(f"  → {url}")
+
+        if items:
+            self.prompter.print_summary_box("🔍 Detected Deployment Targets", items)
+        else:
+            self.prompter.print_warning("No deployment targets detected")
 
     def build_command(self, targets: Dict, options: Dict) -> List[str]:
         """Build pre-deployment scan command.
