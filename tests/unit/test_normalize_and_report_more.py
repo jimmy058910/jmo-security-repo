@@ -149,16 +149,17 @@ def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r"
     repo.mkdir(parents=True, exist_ok=True)
-    # create one tool file (name doesn't matter for our monkeypatch)
-    _write(repo / "gitleaks.json", "[]")
+    # Use trufflehog.json (gitleaks removed in v0.5.0)
+    _write(repo / "trufflehog.json", "[]")
 
-    def dup(_loader, _path, profiling=False):  # noqa: ARG001
+    def dup(_plugin_class, _path, profiling=False):  # noqa: ARG001
         return [
             {"id": "DUP", "schemaVersion": "1.0.0"},
             {"id": "DUP", "schemaVersion": "1.0.0"},
         ]
 
-    monkeypatch.setattr(nr, "_safe_load", dup)
+    # v0.9.0 uses _safe_load_plugin
+    monkeypatch.setattr(nr, "_safe_load_plugin", dup)
     out = nr.gather_results(root)
     # Deduped to a single element
     assert len([f for f in out if f.get("id") == "DUP"]) == 1
