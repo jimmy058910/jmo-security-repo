@@ -82,6 +82,7 @@ main() {
   echo "=== Verification ==="
 
   # Check if this is a release commit or release branch or tag workflow
+  # Also skip check for dev/feature branches (expected to have unreleased versions)
   is_release_commit=false
   current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
   current_tag=$(git -C "$REPO_ROOT" describe --exact-match --tags 2>/dev/null || echo "")
@@ -95,6 +96,9 @@ main() {
   elif [[ $current_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     is_release_commit=true
     echo -e "${YELLOW}ℹ️  Detected release tag: $current_tag${NC}"
+  elif [[ $current_branch == "dev" ]] || [[ $current_branch =~ ^feature/ ]]; then
+    is_release_commit=true
+    echo -e "${YELLOW}ℹ️  Detected dev/feature branch: $current_branch (skipping version check)${NC}"
   fi
 
   # Check if PyPI matches local
