@@ -29,17 +29,18 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         "bandit",
     ]
 
-    # Pretend only the current tool exists
-    def tool_exists_factory(current: str):
-        def _tool_exists(name: str) -> bool:
-            return name == current
-
-        return _tool_exists
-
     import subprocess
+    import shutil
     from unittest.mock import MagicMock
 
     for t in tools:
+        # Mock shutil.which to simulate tool being installed
+        def fake_which_factory(current: str):
+            def _fake_which(name: str):
+                return f"/usr/bin/{name}" if name == current else None
+            return _fake_which
+
+        monkeypatch.setattr(shutil, "which", fake_which_factory(t))
 
         def make_mock_run(tool_name):
             """Create subprocess.run mock for specific tool."""
