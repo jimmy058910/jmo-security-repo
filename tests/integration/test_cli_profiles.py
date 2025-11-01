@@ -87,7 +87,9 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     def fake_which(tool: str) -> bool:
         return tool == "semgrep"
 
-    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+    # Mock tool_exists to simulate semgrep being installed
+    from scripts.cli import scan_utils
+    monkeypatch.setattr(scan_utils, "tool_exists", lambda t: t == "semgrep")
 
     calls = []
 
