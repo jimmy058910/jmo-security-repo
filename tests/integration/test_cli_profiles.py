@@ -160,7 +160,9 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+    # Mock shutil.which to simulate syft being installed
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda tool: "/usr/bin/syft" if tool == "syft" else None)
 
     attempt = {"n": 0}
 
