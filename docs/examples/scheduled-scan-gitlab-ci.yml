@@ -47,10 +47,13 @@ jmo-security-scan:
 # Optional: Add Slack notification stage
 # Uncomment and set SLACK_WEBHOOK_URL in CI/CD variables
 
-#notify-slack:
+# notify-slack:
 #  stage: .post
 #  only:
 #    - schedules
 #  when: on_failure
 #  script:
-#    - 'curl -X POST -H "Content-Type: application/json" -d "{\"text\": \"🚨 JMo Security Scan Failed - ${CI_PROJECT_NAME}\"}" ${SLACK_WEBHOOK_URL}'
+#    - >
+#      curl -X POST -H "Content-Type: application/json"
+#      -d "{\"text\": \"🚨 JMo Security Scan Failed - ${CI_PROJECT_NAME}\"}"
+#      ${SLACK_WEBHOOK_URL}

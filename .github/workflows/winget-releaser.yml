@@ -130,5 +130,8 @@ jobs:
           Write-Output "  komac update jmo.jmo-security --version $version --submit"
           Write-Output ""
           Write-Output "Manual fallback using WinGetCreate:"
-          Write-Output "  wingetcreate update jmo.jmo-security -v $version -u https://github.com/${{ github.repository }}/releases/download/v$version/jmo-security-$version-win64.exe -t ${{ secrets.WINGET_RELEASER_TOKEN }}"
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/jmo-security-$version-win64.exe"
+          Write-Output "  wingetcreate update jmo.jmo-security -v $version ``"
+          Write-Output "    -u $url ``"
+          Write-Output "    -t <YOUR_TOKEN>"
           exit 1

@@ -284,6 +284,7 @@ jmo scan \
 - `--images-file FILE`: File with one image per line (supports `#` comments)
 
 **Example images.txt:**
+
 ```text
 # Production images
 nginx:latest
@@ -314,6 +315,7 @@ ghcr.io/myorg/api:main
 - `--api-spec FILE_OR_URL`: OpenAPI/Swagger spec (local file or URL)
 
 **Example urls.txt:**
+
 ```text
 # Production endpoints
 https://api.example.com
@@ -349,6 +351,7 @@ https://staging.example.com
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
 **Authentication:**
+
 ```bash
 # Via environment variable (recommended)
 export GITLAB_TOKEN="glpat-xxxxxxxxxxxxxxxxxxxx"
@@ -375,6 +378,7 @@ jmo scan --gitlab-group mygroup --gitlab-token "glpat-xxxxxxxxxxxxxxxxxxxx"
 - Appropriate RBAC permissions (read-only sufficient)
 
 **Examples:**
+
 ```bash
 # Scan specific namespace
 jmo scan --k8s-context prod --k8s-namespace default --tools trivy
@@ -569,7 +573,7 @@ jmo scan --repo ./app1 --image app1:latest --results-dir ./results
 # Fast profile for quick feedback (3 tools, 300s timeout)
 jmo scan --image nginx:latest --profile-name fast
 
-# Deep profile for comprehensive audits (12 tools, 900s timeout)
+# Deep profile for comprehensive audits (28 tools, 900s timeout)
 jmo scan --k8s-context prod --k8s-all-namespaces --profile-name deep
 ```
 
@@ -596,7 +600,7 @@ done
 
 **Note (v0.6.2):**
 
-- **GitLab Repos** now run full repository scanner (10/12 tools) instead of TruffleHog-only
+- **GitLab Repos** now run full repository scanner (10/28 tools) instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
 - GitLab repos also auto-discover and scan container images found in Dockerfiles, docker-compose.yml, and K8s manifests
 - Tool selection is automatic based on target type. Use `--tools` to override defaults.
@@ -997,7 +1001,6 @@ Full privacy policy and data handling details:
 
 **Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
-
 ## Plugin System (v0.9.0+)
 
 **Extensible architecture for custom security tool integrations**
@@ -1006,7 +1009,7 @@ JMo Security uses a plugin-based architecture for all security tool adapters, en
 
 ### Overview
 
-All 12 security tools (TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++) are implemented as plugins using a standardized API.
+All 28 security tools (26 Docker-ready) (TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++) are implemented as plugins using a standardized API.
 
 **Key Benefits:**
 
@@ -1087,11 +1090,11 @@ class SnykAdapter(AdapterPlugin):
         """Parse Snyk JSON output and return CommonFinding objects"""
         if not output_path.exists():
             return []
-        
+
         findings = []
         with open(output_path) as f:
             data = json.load(f)
-        
+
         for vuln in data.get("vulnerabilities", []):
             finding = Finding(
                 schemaVersion="1.2.0",
@@ -1113,7 +1116,7 @@ class SnykAdapter(AdapterPlugin):
                 raw=vuln  # Original Snyk payload
             )
             findings.append(finding)
-        
+
         return findings
 ```
 
@@ -1976,7 +1979,7 @@ jobs:
 
 **Goal:** Maximum coverage with **deep profile** for compliance/audits
 
-**Profile:** `deep` (12 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
+**Profile:** `deep` (28 tools: full suite including noseyparker, bandit, zap, nuclei, falco, afl++)
 
 **Configuration:**
 
@@ -2168,7 +2171,7 @@ jobs:
 | **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
 | **Commit/PR** | fast | 3 tools | 5-8 min | Push, PR | HIGH+ |
 | **Build** | balanced | 8 tools | 15-20 min | Main branch, PR | HIGH+ |
-| **Deep Audit** | deep | 12 tools | 30-60 min | Weekly, manual | MEDIUM+ |
+| **Deep Audit** | deep | 28 tools | 30-60 min | Weekly, manual | MEDIUM+ |
 | **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
 
 **Key Principle:** Fail fast with fast profile in PR stage, comprehensive coverage in build stage, exhaustive audits weekly.

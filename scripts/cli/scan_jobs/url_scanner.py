@@ -4,6 +4,7 @@ Web URL Scanner (DAST)
 Scans live web applications and APIs using:
 - OWASP ZAP: Dynamic Application Security Testing (DAST)
 - Nuclei: Fast vulnerability scanner with 4000+ templates (CVEs, misconfigs, exposures)
+- Akto: API Security testing for OWASP Top 10 API vulnerabilities (v1.0.0)
 
 Integrates with ToolRunner for execution management.
 """
@@ -155,6 +156,38 @@ def scan_url(
         elif allow_missing_tools:
             _write_stub("nuclei", nuclei_out)
             statuses["nuclei"] = True
+
+    # Akto: API Security testing (OWASP Top 10 API vulnerabilities)
+    # v1.0.0 addition
+    if "akto" in tools:
+        akto_out = out_dir / "akto.json"
+        if _tool_exists("akto"):
+            akto_flags = get_tool_flags("akto")
+
+            # Akto requires API endpoint testing
+            # Assumes Akto is running as a service and accessible via CLI
+            akto_cmd_list = [
+                "akto",
+                "test",
+                "--url", url,
+                "--output", str(akto_out),
+                "--format", "json",
+                *akto_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="akto",
+                    command=akto_cmd_list,
+                    output_file=akto_out,
+                    timeout=get_tool_timeout("akto", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=vulnerabilities found
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("akto", akto_out)
+            statuses["akto"] = True
 
     # Execute all tools with ToolRunner
     runner = ToolRunner(

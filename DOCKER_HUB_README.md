@@ -21,17 +21,18 @@ open results/summaries/dashboard.html
 
 | Tag | Size | Tools | Use Case |
 |-----|------|-------|----------|
-| `latest`, `X.Y.Z-full` | ~2.5 GB | 12 tools | Complete scanning (deep profile) |
-| `slim` | ~2.2 GB | 8 tools | CI/CD pipelines (balanced profile) |
-| `alpine` | ~2.0 GB | 3 tools | Minimal footprint (fast profile) |
+| `latest`, `X.Y.Z-full` | ~1.97 GB | 26 tools | Complete scanning (deep profile, all Docker-ready tools) |
+| `X.Y.Z-balanced` | ~1.41 GB | 21 tools | Production CI/CD pipelines (balanced profile) |
+| `X.Y.Z-slim` | ~557 MB | 15 tools | Cloud-focused scanning (IaC, K8s, containers) |
+| `X.Y.Z-fast` | ~502 MB | 8 tools | CI/CD gate, pre-commit hooks (fast profile) |
 
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab (v0.6.0+)
-- 🔐 **12 Security Tools**: TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++
+- 🔐 **28 Security Tools** (26 Docker-ready): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, OSV-Scanner, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco), Fuzzing (AFL++), License (Bearer) | *Manual install required (v1.0.0)
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
-- 🎨 **3 Profiles**: Fast (3 tools, 5-8 min), Balanced (8 tools, 15-20 min), Deep (12 tools, 30-60 min)
+- 🎨 **4 Docker Variants**: Fast (8 tools, 5-10 min), Balanced (21 tools, 18-25 min), Slim (15 tools, cloud-focused), Full (26 Docker-ready tools, 40-70 min)
 - 🔒 **Privacy-First Telemetry**: Anonymous usage analytics (opt-out model, v0.7.1+)
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation (v0.7.0+)
 

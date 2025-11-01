@@ -99,6 +99,9 @@ def test_get_anonymous_id_creates_parent_directory(tmp_path: Path, monkeypatch):
 def test_is_telemetry_enabled_when_config_enabled(monkeypatch):
     """Test is_telemetry_enabled() returns True when config enabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
     config = {"telemetry": {"enabled": True}}
     assert is_telemetry_enabled(config) is True
@@ -112,17 +115,20 @@ def test_is_telemetry_enabled_when_config_disabled(monkeypatch):
     assert is_telemetry_enabled(config) is False
 
 
-def test_is_telemetry_enabled_default_false_when_missing(monkeypatch):
-    """Test is_telemetry_enabled() defaults to False when config missing (opt-in)."""
+def test_is_telemetry_enabled_default_true_when_missing(monkeypatch):
+    """Test is_telemetry_enabled() defaults to True when config missing (opt-out model v0.7.1+)."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
-    # No telemetry key in config
+    # No telemetry key in config - should default to True (opt-out)
     config = {}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
-    # Empty telemetry object
+    # Empty telemetry object - should default to True (opt-out)
     config = {"telemetry": {}}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
 
 def test_is_telemetry_enabled_env_var_override(monkeypatch):
@@ -137,6 +143,9 @@ def test_is_telemetry_enabled_env_var_override(monkeypatch):
 def test_is_telemetry_enabled_env_var_no_override_when_not_1(monkeypatch):
     """Test JMO_TELEMETRY_DISABLE with values other than '1' don't disable."""
     monkeypatch.setenv("JMO_TELEMETRY_DISABLE", "0")
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
     config = {"telemetry": {"enabled": True}}
     assert is_telemetry_enabled(config) is True  # Not disabled
@@ -184,6 +193,9 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
 def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
     """Test send_event() spawns daemon background thread."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",

@@ -9,12 +9,14 @@
 ### NEW: Package Managers (30 seconds) ⭐
 
 **macOS / Linux:**
+
 ```bash
 brew install jmo-security
 jmotools wizard  # Start scanning!
 ```
 
 **Windows:**
+
 ```powershell
 winget install jmo.jmo-security
 jmotools wizard  # Start scanning!
@@ -33,12 +35,14 @@ jmotools wizard  # Start scanning!
 ### Path 1: Package Manager (Recommended - v0.9.0+)
 
 **macOS / Linux (Homebrew):**
+
 ```bash
 brew install jmo-security
 # ✅ Done! Tools bundled, added to PATH automatically
 ```
 
 **Windows (Winget):**
+
 ```powershell
 winget install jmo.jmo-security
 # ✅ Done! Installed to C:\Users\<user>\AppData\Local\JMo Security
@@ -616,7 +620,7 @@ jmotools balanced --repos-dir ~/projects
 
 **Critical limitations:**
 
-- ❌ **Only 6 out of 11+ tools work** on native Windows
+- ❌ **Only 6 out of 28 tools (26 Docker-ready) work** on native Windows
 - ❌ **Missing entire security categories:**
   - ❌ **No DAST scanning** (OWASP ZAP requires Java/Linux)
   - ❌ **No runtime security** (Falco requires Linux kernel)
@@ -717,7 +721,7 @@ Native Windows scanning provides **only 50-60% of the security coverage** you'd 
 | Feature | Docker Desktop | WSL 2 Native | ⚠️ Windows Native |
 |---------|----------------|--------------|-------------------|
 | **Setup Time** | 5 minutes | 10-15 minutes | 20-30 minutes |
-| **Tool Coverage** | ✅ All 11+ tools (100%) | ✅ All 11+ tools (100%) | ❌ Only 6 tools (55%) |
+| **Tool Coverage** | ✅ All 28 tools (26 Docker-ready) (100%) | ✅ All 28 tools (26 Docker-ready) (100%) | ❌ Only 6 tools (55%) |
 | **Security Coverage** | ✅ Complete | ✅ Complete | ❌ Severely limited |
 | **DAST Scanning** | ✅ Yes (ZAP) | ✅ Yes (ZAP) | ❌ No |
 | **Runtime Security** | ✅ Yes (Falco) | ✅ Yes (Falco) | ❌ No |

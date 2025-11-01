@@ -17,10 +17,16 @@ fail_on: ''
 default_profile: balanced
 profiles:
   fast:
+    # v1.0.0: 8 tools for fast pre-commit checks (5-10 min)
     tools:
     - trufflehog
     - semgrep
     - trivy
+    - checkov
+    - checkov-cicd
+    - hadolint
+    - syft
+    - osv-scanner
     threads: 8
     timeout: 300
     per_tool:
@@ -35,16 +41,33 @@ profiles:
         - --no-progress
         - --scanners
         - vuln,secret,misconfig
+      checkov-cicd:
+        flags:
+        - --quiet
   balanced:
+    # v1.0.0: 21 tools for production scans (18-25 min)
     tools:
     - trufflehog
     - semgrep
     - syft
     - trivy
     - checkov
+    - checkov-cicd
     - hadolint
     - zap
     - nuclei
+    - prowler
+    - kubescape
+    - akto
+    - scancode
+    - cdxgen
+    - gosec
+    - osv-scanner
+    - yara
+    - grype
+    - bearer
+    - horusec
+    - dependency-check
     threads: 4
     timeout: 600
     per_tool:
@@ -68,20 +91,50 @@ profiles:
         flags:
         - -severity
         - critical,high,medium
+      prowler:
+        timeout: 900
+        flags:
+        - --quiet
+      kubescape:
+        timeout: 600
+        flags:
+        - --silent
+      yara:
+        timeout: 600
+        flags:
+        - --max-rules-per-file=500
   deep:
+    # v1.0.0: 28 tools for comprehensive audits (40-70 min)
     tools:
     - trufflehog
     - noseyparker
     - semgrep
+    - semgrep-secrets
     - bandit
     - syft
     - trivy
+    - trivy-rbac
     - checkov
+    - checkov-cicd
     - hadolint
     - zap
     - nuclei
+    - prowler
+    - kubescape
+    - akto
+    - scancode
+    - cdxgen
+    - gosec
+    - osv-scanner
+    - yara
+    - grype
+    - bearer
+    - horusec
+    - dependency-check
     - falco
     - afl++
+    - mobsf
+    - lynis
     threads: 2
     timeout: 900
     retries: 1
@@ -113,6 +166,24 @@ profiles:
         flags:
         - -m
         - none
+      prowler:
+        timeout: 1200
+        flags:
+        - --quiet
+      kubescape:
+        timeout: 900
+        flags:
+        - --silent
+      mobsf:
+        timeout: 1800
+      lynis:
+        timeout: 900
+      yara:
+        timeout: 900
+        flags:
+        - --max-rules-per-file=500
+      grype:
+        timeout: 900
 profiling:
   min_threads: 2
   max_threads: 8

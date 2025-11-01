@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
 """
+Checkov adapter - Maps Checkov JSON output to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Checkov adapter: normalize Checkov JSON output (SAST for IaC) to CommonFinding.
-Expected input may include a top-level results dictionary with "failed_checks" entries.
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v2.0.0 Update (v1.0.0 Feature #1):
+- Added CI/CD pipeline security scanning support
+- Detects: GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket, Argo
+- Tags findings as 'cicd-security' or 'iac' based on check_type
+
+Tool Version: 3.2.477+
+Output Format: JSON with results.failed_checks[]
+Exit Codes: 0 (clean), 1 (findings)
+
+Supported Frameworks:
+- IaC: Terraform, CloudFormation, Kubernetes, Helm, Dockerfile
+- CI/CD: GitHub Actions, GitLab CI, CircleCI, Azure Pipelines, Bitbucket, Argo
 """
 
 from __future__ import annotations
@@ -29,9 +45,9 @@ logger = logging.getLogger(__name__)
 @adapter_plugin(
     PluginMetadata(
         name="checkov",
-        version="1.0.0",
+        version="2.0.0",
         author="JMo Security",
-        description="Adapter for Checkov IaC security scanner",
+        description="Adapter for Checkov IaC and CI/CD security scanner",
         tool_name="checkov",
         schema_version="1.2.0",
         output_format="json",
@@ -39,7 +55,26 @@ logger = logging.getLogger(__name__)
     )
 )
 class CheckovAdapter(AdapterPlugin):
-    """Adapter for Checkov IaC security scanner (plugin architecture)."""
+    """Adapter for Checkov IaC and CI/CD security scanner (plugin architecture).
+
+    v2.0.0 Features:
+    - IaC scanning: Terraform, CloudFormation, Kubernetes, Helm, Dockerfile
+    - CI/CD scanning: GitHub Actions, GitLab CI, CircleCI, Azure Pipelines,
+      Bitbucket Pipelines, Argo Workflows
+
+    Findings are automatically tagged as 'cicd-security' or 'iac' based on the
+    check_type field in Checkov output.
+    """
+
+    # CI/CD framework check_types (from Checkov output)
+    CICD_FRAMEWORKS = {
+        "github_actions",
+        "gitlab_ci",
+        "circleci_pipelines",
+        "azure_pipelines",
+        "bitbucket_pipelines",
+        "argo_workflows",
+    }
 
     @property
     def metadata(self) -> PluginMetadata:
@@ -86,6 +121,16 @@ class CheckovAdapter(AdapterPlugin):
 
 
 def _load_checkov_internal(path: str | Path) -> List[Dict[str, Any]]:
+    """Internal function to parse Checkov JSON output.
+
+    v2.0.0: Added CI/CD detection via check_type field.
+
+    Args:
+        path: Path to checkov.json output file
+
+    Returns:
+        List of dicts (converted to Finding objects by parse() method)
+    """
     p = Path(path)
     if not p.exists():
         return []
@@ -98,6 +143,23 @@ def _load_checkov_internal(path: str | Path) -> List[Dict[str, Any]]:
         return []
 
     out: List[Dict[str, Any]] = []
+
+    # Extract check_type for CI/CD detection (v2.0.0)
+    check_type = data.get("check_type", "").lower() if isinstance(data, dict) else ""
+
+    # CI/CD framework check_types
+    CICD_FRAMEWORKS = {
+        "github_actions",
+        "gitlab_ci",
+        "circleci_pipelines",
+        "azure_pipelines",
+        "bitbucket_pipelines",
+        "argo_workflows",
+    }
+
+    # Determine if this is a CI/CD scan
+    is_cicd = check_type in CICD_FRAMEWORKS
+
     # Handle structure: {"results":{"failed_checks":[...]}}
     results = data.get("results") if isinstance(data, dict) else None
     failed = results.get("failed_checks") if isinstance(results, dict) else None
@@ -124,6 +186,13 @@ def _load_checkov_internal(path: str | Path) -> List[Dict[str, Any]]:
             msg = str(it.get("check_name") or it.get("check_id") or "Policy failure")
             sev = normalize_severity(it.get("severity") or "MEDIUM")
             fid = fingerprint("checkov", rid, file_path, line, msg)
+
+            # Tag based on check_type (v2.0.0)
+            if is_cicd:
+                tags = ["cicd-security", "policy"]
+            else:
+                tags = ["iac", "policy"]
+
             finding = {
                 "schemaVersion": "1.0.0",
                 "id": fid,
@@ -138,7 +207,7 @@ def _load_checkov_internal(path: str | Path) -> List[Dict[str, Any]]:
                 },
                 "location": {"path": file_path, "startLine": line},
                 "remediation": str(it.get("guideline") or "Review policy guidance"),
-                "tags": ["iac", "policy"],
+                "tags": tags,  # Updated with CI/CD detection
                 "raw": it,
             }
             # Enrich with compliance framework mappings

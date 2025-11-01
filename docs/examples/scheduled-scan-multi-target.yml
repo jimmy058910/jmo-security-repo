@@ -13,7 +13,7 @@
 # 2. Update target paths/URLs for your environment
 # 3. Commit and push to GitHub
 
-name: JMo Security Scan: comprehensive-weekly
+name: "JMo Security Scan: comprehensive-weekly"
 
 on:
   schedule:
