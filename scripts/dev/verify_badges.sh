@@ -84,7 +84,8 @@ main() {
   # Check if this is a release commit or release branch or tag workflow
   # Also skip check for dev/feature branches (expected to have unreleased versions)
   is_release_commit=false
-  current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
+  # In GitHub Actions PRs, use GITHUB_HEAD_REF (source branch) instead of rev-parse (which returns HEAD)
+  current_branch="${GITHUB_HEAD_REF:-$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)}"
   current_tag=$(git -C "$REPO_ROOT" describe --exact-match --tags 2>/dev/null || echo "")
 
   if git -C "$REPO_ROOT" log -1 --format=%s | grep -q '^release: v'; then
