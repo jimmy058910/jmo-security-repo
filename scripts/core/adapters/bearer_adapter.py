@@ -180,7 +180,13 @@ def _load_bearer_internal(path: str | Path) -> List[Dict[str, Any]]:
                                 message += f" in field '{field_name}'"
 
                             # Generate stable fingerprint
-                            fid = fingerprint("bearer", f"DATA.{data_type_name}", filename, line_number, message)
+                            fid = fingerprint(
+                                "bearer",
+                                f"DATA.{data_type_name}",
+                                filename,
+                                line_number,
+                                message,
+                            )
 
                             # Build finding dict
                             finding = {
@@ -204,7 +210,9 @@ def _load_bearer_internal(path: str | Path) -> List[Dict[str, Any]]:
                                 "tags": ["data-privacy", "sensitive-data"],
                                 "context": {
                                     "data_type": data_type_name,
-                                    "subject_name": subject_name if subject_name else None,
+                                    "subject_name": (
+                                        subject_name if subject_name else None
+                                    ),
                                     "field_name": field_name if field_name else None,
                                 },
                                 "raw": loc,
@@ -242,7 +250,9 @@ def _load_bearer_internal(path: str | Path) -> List[Dict[str, Any]]:
                 "ruleId": rule_id,
                 "title": rule_id,
                 "message": message,
-                "description": description if description else f"Security rule {rule_id} triggered",
+                "description": (
+                    description if description else f"Security rule {rule_id} triggered"
+                ),
                 "severity": severity,
                 "tool": {
                     "name": "bearer",

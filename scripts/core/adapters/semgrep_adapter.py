@@ -131,7 +131,9 @@ class SemgrepAdapter(AdapterPlugin):
 
             # Remediation with autofix
             # v1.1.0: Return dict for autofix, string otherwise
-            remediation: Union[str, Dict[str, Any]] = "Review and remediate per rule guidance."
+            remediation: Union[str, Dict[str, Any]] = (
+                "Review and remediate per rule guidance."
+            )
             autofix = extra.get("fix")
             if autofix:
                 remediation_steps = [

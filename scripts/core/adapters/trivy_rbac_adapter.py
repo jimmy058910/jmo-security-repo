@@ -199,7 +199,9 @@ def _load_trivy_rbac_internal(path: str | Path) -> List[Dict[str, Any]]:
         references = []
         if check_id:
             # Link to Trivy RBAC check documentation
-            references.append(f"https://avd.aquasec.com/misconfig/kubernetes/{check_id.lower()}/")
+            references.append(
+                f"https://avd.aquasec.com/misconfig/kubernetes/{check_id.lower()}/"
+            )
 
         # Build tags
         tags = ["rbac", "kubernetes", "k8s-security", "access-control"]
@@ -235,7 +237,9 @@ def _load_trivy_rbac_internal(path: str | Path) -> List[Dict[str, Any]]:
             "context": {
                 "check_id": check_id if check_id else None,
                 "category": category,
-                "resource_namespace": resource_namespace if resource_namespace else None,
+                "resource_namespace": (
+                    resource_namespace if resource_namespace else None
+                ),
                 "resource_kind": resource_kind if resource_kind else None,
                 "resource_name": resource_name if resource_name else None,
                 "success": success,

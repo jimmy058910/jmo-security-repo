@@ -23,9 +23,9 @@ def test_horusec_adapter_sql_injection(tmp_path: Path):
                 "details": "SQL Injection vulnerability detected - user input directly concatenated into SQL query",
                 "securityTool": "SecurityCodeScan",
                 "type": "SQL Injection",
-                "code": "String query = \"SELECT * FROM users WHERE id=\" + userId;"
+                "code": 'String query = "SELECT * FROM users WHERE id=" + userId;',
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -57,9 +57,9 @@ def test_horusec_adapter_xss(tmp_path: Path):
                 "line": 108,
                 "details": "Cross-Site Scripting (XSS) vulnerability - unescaped user input rendered in DOM",
                 "securityTool": "HorusecJavascript",
-                "type": "Cross-Site Scripting (XSS)"
+                "type": "Cross-Site Scripting (XSS)",
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -84,9 +84,9 @@ def test_horusec_adapter_hardcoded_secret(tmp_path: Path):
                 "details": "Hardcoded secret detected in configuration file",
                 "securityTool": "HorusecPython",
                 "type": "Hardcoded Secret",
-                "code": "API_KEY = 'sk_live_1234567890abcdef'"
+                "code": "API_KEY = 'sk_live_1234567890abcdef'",
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -111,9 +111,9 @@ def test_horusec_adapter_command_injection(tmp_path: Path):
                 "line": 200,
                 "details": "Command injection vulnerability - user input passed to shell command",
                 "securityTool": "HorusecGolang",
-                "type": "Command Injection"
+                "type": "Command Injection",
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -138,7 +138,7 @@ def test_horusec_adapter_multiple_vulnerabilities(tmp_path: Path):
                 "line": 50,
                 "details": "SQL Injection",
                 "securityTool": "HorusecJava",
-                "type": "SQL Injection"
+                "type": "SQL Injection",
             },
             {
                 "vulnerabilityID": "HS-JAVA-2",
@@ -147,7 +147,7 @@ def test_horusec_adapter_multiple_vulnerabilities(tmp_path: Path):
                 "line": 75,
                 "details": "CSRF vulnerability",
                 "securityTool": "HorusecJava",
-                "type": "CSRF"
+                "type": "CSRF",
             },
             {
                 "vulnerabilityID": "HS-JS-1",
@@ -156,9 +156,9 @@ def test_horusec_adapter_multiple_vulnerabilities(tmp_path: Path):
                 "line": 120,
                 "details": "XSS vulnerability",
                 "securityTool": "HorusecJavascript",
-                "type": "XSS"
-            }
-        ]
+                "type": "XSS",
+            },
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -183,9 +183,9 @@ def test_horusec_adapter_minimal_metadata(tmp_path: Path):
                 "vulnerabilityID": "HS-TEST-1",
                 "severity": "LOW",
                 "file": "test.py",
-                "line": 10
+                "line": 10,
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -210,9 +210,9 @@ def test_horusec_adapter_no_vulnerability_id(tmp_path: Path):
                 "file": "app.js",
                 "line": 50,
                 "type": "Generic Security Issue",
-                "details": "Security issue detected"
+                "details": "Security issue detected",
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -234,21 +234,21 @@ def test_horusec_adapter_severity_normalization(tmp_path: Path):
                 "vulnerabilityID": "HS-1",
                 "severity": "INFO",
                 "file": "test1.py",
-                "line": 1
+                "line": 1,
             },
             {
                 "vulnerabilityID": "HS-2",
                 "severity": "LOW",
                 "file": "test2.py",
-                "line": 2
+                "line": 2,
             },
             {
                 "vulnerabilityID": "HS-3",
                 "severity": "MEDIUM",
                 "file": "test3.py",
-                "line": 3
-            }
-        ]
+                "line": 3,
+            },
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -266,7 +266,7 @@ def test_horusec_adapter_empty_vulnerabilities(tmp_path: Path):
     data = {
         "version": "2.8.0",
         "totalVulnerabilities": 0,
-        "analysisVulnerabilities": []
+        "analysisVulnerabilities": [],
     }
     f = tmp_path / "horusec.json"
     write(f, data)
@@ -286,9 +286,9 @@ def test_horusec_adapter_compliance_enrichment(tmp_path: Path):
                 "severity": "HIGH",
                 "file": "test.py",
                 "line": 10,
-                "type": "Test Vulnerability"
+                "type": "Test Vulnerability",
             }
-        ]
+        ],
     }
     f = tmp_path / "horusec.json"
     write(f, data)

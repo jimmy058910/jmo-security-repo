@@ -38,6 +38,7 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         def fake_which_factory(current: str):
             def _fake_which(name: str):
                 return f"/usr/bin/{name}" if name == current else None
+
             return _fake_which
 
         monkeypatch.setattr(shutil, "which", fake_which_factory(t))

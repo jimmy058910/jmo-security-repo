@@ -22,15 +22,9 @@ def test_cdxgen_adapter_basic_sbom(tmp_path: Path):
                 "purl": "pkg:npm/[email protected]",
                 "name": "lodash",
                 "version": "4.17.21",
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "MIT"
-                        }
-                    }
-                ]
+                "licenses": [{"license": {"id": "MIT"}}],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -59,28 +53,16 @@ def test_cdxgen_adapter_multiple_components(tmp_path: Path):
                 "name": "express",
                 "version": "4.18.2",
                 "purl": "pkg:npm/[email protected]",
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "MIT"
-                        }
-                    }
-                ]
+                "licenses": [{"license": {"id": "MIT"}}],
             },
             {
                 "type": "library",
                 "name": "react",
                 "version": "18.2.0",
                 "purl": "pkg:npm/[email protected]",
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "MIT"
-                        }
-                    }
-                ]
-            }
-        ]
+                "licenses": [{"license": {"id": "MIT"}}],
+            },
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -103,21 +85,15 @@ def test_cdxgen_adapter_python_packages(tmp_path: Path):
                 "name": "django",
                 "version": "4.2.0",
                 "purl": "pkg:pypi/[email protected]",
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "BSD-3-Clause"
-                        }
-                    }
-                ],
+                "licenses": [{"license": {"id": "BSD-3-Clause"}}],
                 "hashes": [
                     {
                         "alg": "SHA-256",
-                        "content": "7e4225ec065e0f354ccf7349a22d209de09cc1c074832be9eb84c51c1799109a"
+                        "content": "7e4225ec065e0f354ccf7349a22d209de09cc1c074832be9eb84c51c1799109a",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -141,19 +117,10 @@ def test_cdxgen_adapter_with_supplier(tmp_path: Path):
                 "name": "spring-boot",
                 "version": "3.1.0",
                 "purl": "pkg:maven/org.springframework.boot/[email protected]",
-                "supplier": {
-                    "name": "Spring Community",
-                    "url": ["https://spring.io"]
-                },
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "Apache-2.0"
-                        }
-                    }
-                ]
+                "supplier": {"name": "Spring Community", "url": ["https://spring.io"]},
+                "licenses": [{"license": {"id": "Apache-2.0"}}],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -175,15 +142,9 @@ def test_cdxgen_adapter_application_type(tmp_path: Path):
                 "name": "my-app",
                 "version": "1.0.0",
                 "purl": "pkg:npm/[email protected]",
-                "licenses": [
-                    {
-                        "license": {
-                            "name": "Proprietary"
-                        }
-                    }
-                ]
+                "licenses": [{"license": {"name": "Proprietary"}}],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -207,15 +168,9 @@ def test_cdxgen_adapter_no_purl(tmp_path: Path):
                 "name": "custom-lib",
                 "version": "2.0.0",
                 # No purl field
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "MIT"
-                        }
-                    }
-                ]
+                "licenses": [{"license": {"id": "MIT"}}],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -230,11 +185,7 @@ def test_cdxgen_adapter_no_purl(tmp_path: Path):
 
 def test_cdxgen_adapter_empty_components(tmp_path: Path):
     """Test cdxgen adapter with empty components array."""
-    data = {
-        "bomFormat": "CycloneDX",
-        "specVersion": "1.5",
-        "components": []
-    }
+    data = {"bomFormat": "CycloneDX", "specVersion": "1.5", "components": []}
     f = tmp_path / "cdxgen.json"
     write(f, data)
     adapter = CdxgenAdapter()
@@ -247,12 +198,7 @@ def test_cdxgen_adapter_invalid_bom_format(tmp_path: Path):
     """Test cdxgen adapter handles invalid BOM format."""
     data = {
         "bomFormat": "SPDX",  # Not CycloneDX
-        "components": [
-            {
-                "name": "test",
-                "version": "1.0.0"
-            }
-        ]
+        "components": [{"name": "test", "version": "1.0.0"}],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)
@@ -283,15 +229,9 @@ def test_cdxgen_adapter_compliance_enrichment(tmp_path: Path):
                 "name": "openssl",
                 "version": "1.1.1",
                 "purl": "pkg:generic/[email protected]",
-                "licenses": [
-                    {
-                        "license": {
-                            "id": "OpenSSL"
-                        }
-                    }
-                ]
+                "licenses": [{"license": {"id": "OpenSSL"}}],
             }
-        ]
+        ],
     }
     f = tmp_path / "cdxgen.json"
     write(f, data)

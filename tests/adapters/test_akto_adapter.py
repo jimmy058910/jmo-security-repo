@@ -17,17 +17,10 @@ def test_akto_adapter_bola_vulnerability(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "REPLACE_AUTH_TOKEN",
                 "testSuperType": "BOLA",
-                "apiInfoKey": {
-                    "method": "GET",
-                    "url": "/api/users/123"
-                },
-                "superCategory": {
-                    "severity": {
-                        "_name": "HIGH"
-                    }
-                },
+                "apiInfoKey": {"method": "GET", "url": "/api/users/123"},
+                "superCategory": {"severity": {"_name": "HIGH"}},
                 "confidencePercentage": 95,
-                "testResults": "Broken Object Level Authorization detected - user can access other users' data"
+                "testResults": "Broken Object Level Authorization detected - user can access other users' data",
             }
         ]
     }
@@ -58,15 +51,10 @@ def test_akto_adapter_bfla_vulnerability(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "CHANGE_METHOD_TO_DELETE",
                 "testSuperType": "BFLA",
-                "apiInfoKey": {
-                    "method": "POST",
-                    "url": "/api/admin/users"
-                },
-                "confidence": {
-                    "_name": "CRITICAL"
-                },
+                "apiInfoKey": {"method": "POST", "url": "/api/admin/users"},
+                "confidence": {"_name": "CRITICAL"},
                 "confidencePercentage": 100,
-                "testResults": "User can access admin functionality by changing HTTP method"
+                "testResults": "User can access admin functionality by changing HTTP method",
             }
         ]
     }
@@ -90,17 +78,10 @@ def test_akto_adapter_idor_vulnerability(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "SEQUENTIAL_ID",
                 "testSuperType": "IDOR",
-                "apiInfoKey": {
-                    "method": "GET",
-                    "url": "/api/invoices/42"
-                },
-                "superCategory": {
-                    "severity": {
-                        "_name": "MEDIUM"
-                    }
-                },
+                "apiInfoKey": {"method": "GET", "url": "/api/invoices/42"},
+                "superCategory": {"severity": {"_name": "MEDIUM"}},
                 "confidencePercentage": 80,
-                "testResults": "Sequential ID allows enumeration of resources"
+                "testResults": "Sequential ID allows enumeration of resources",
             }
         ]
     }
@@ -122,45 +103,26 @@ def test_akto_adapter_multiple_vulnerabilities(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "JWT_NONE_ALGO",
                 "testSuperType": "BROKEN_AUTH",
-                "apiInfoKey": {
-                    "method": "POST",
-                    "url": "/api/auth/login"
-                },
-                "superCategory": {
-                    "severity": {
-                        "_name": "CRITICAL"
-                    }
-                },
-                "confidencePercentage": 100
+                "apiInfoKey": {"method": "POST", "url": "/api/auth/login"},
+                "superCategory": {"severity": {"_name": "CRITICAL"}},
+                "confidencePercentage": 100,
             },
             {
                 "vulnerable": True,
                 "testSubType": "MASS_ASSIGNMENT",
                 "testSuperType": "MASS_ASSIGNMENT",
-                "apiInfoKey": {
-                    "method": "PUT",
-                    "url": "/api/users/profile"
-                },
-                "confidence": {
-                    "_name": "HIGH"
-                },
-                "confidencePercentage": 90
+                "apiInfoKey": {"method": "PUT", "url": "/api/users/profile"},
+                "confidence": {"_name": "HIGH"},
+                "confidencePercentage": 90,
             },
             {
                 "vulnerable": True,
                 "testSubType": "SSRF",
                 "testSuperType": "SSRF",
-                "apiInfoKey": {
-                    "method": "POST",
-                    "url": "/api/fetch"
-                },
-                "superCategory": {
-                    "severity": {
-                        "_name": "HIGH"
-                    }
-                },
-                "confidencePercentage": 85
-            }
+                "apiInfoKey": {"method": "POST", "url": "/api/fetch"},
+                "superCategory": {"severity": {"_name": "HIGH"}},
+                "confidencePercentage": 85,
+            },
         ]
     }
     f = tmp_path / "akto.json"
@@ -185,24 +147,16 @@ def test_akto_adapter_non_vulnerable_skipped(tmp_path: Path):
                 "vulnerable": False,
                 "testSubType": "TEST_PASSED",
                 "testSuperType": "AUTH_CHECK",
-                "apiInfoKey": {
-                    "method": "GET",
-                    "url": "/api/secure"
-                }
+                "apiInfoKey": {"method": "GET", "url": "/api/secure"},
             },
             {
                 "vulnerable": True,
                 "testSubType": "WEAK_JWT",
                 "testSuperType": "BROKEN_AUTH",
-                "apiInfoKey": {
-                    "method": "POST",
-                    "url": "/api/login"
-                },
-                "confidence": {
-                    "_name": "HIGH"
-                },
-                "confidencePercentage": 95
-            }
+                "apiInfoKey": {"method": "POST", "url": "/api/login"},
+                "confidence": {"_name": "HIGH"},
+                "confidencePercentage": 95,
+            },
         ]
     }
     f = tmp_path / "akto.json"
@@ -223,10 +177,8 @@ def test_akto_adapter_missing_api_info(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "GENERIC_VULN",
                 "testSuperType": "API_VULN",
-                "confidence": {
-                    "_name": "MEDIUM"
-                },
-                "confidencePercentage": 70
+                "confidence": {"_name": "MEDIUM"},
+                "confidencePercentage": 70,
             }
         ]
     }
@@ -249,14 +201,9 @@ def test_akto_adapter_low_severity(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "INFO_DISCLOSURE",
                 "testSuperType": "INFO_LEAK",
-                "apiInfoKey": {
-                    "method": "GET",
-                    "url": "/api/version"
-                },
-                "confidence": {
-                    "_name": "LOW"
-                },
-                "confidencePercentage": 40
+                "apiInfoKey": {"method": "GET", "url": "/api/version"},
+                "confidence": {"_name": "LOW"},
+                "confidencePercentage": 40,
             }
         ]
     }
@@ -271,9 +218,7 @@ def test_akto_adapter_low_severity(tmp_path: Path):
 
 def test_akto_adapter_empty_results(tmp_path: Path):
     """Test Akto adapter with empty test results array."""
-    data = {
-        "testingRunResults": []
-    }
+    data = {"testingRunResults": []}
     f = tmp_path / "akto.json"
     write(f, data)
     adapter = AktoAdapter()
@@ -300,14 +245,9 @@ def test_akto_adapter_compliance_enrichment(tmp_path: Path):
                 "vulnerable": True,
                 "testSubType": "BOLA_TEST",
                 "testSuperType": "BOLA",
-                "apiInfoKey": {
-                    "method": "GET",
-                    "url": "/api/data"
-                },
-                "confidence": {
-                    "_name": "HIGH"
-                },
-                "confidencePercentage": 90
+                "apiInfoKey": {"method": "GET", "url": "/api/data"},
+                "confidence": {"_name": "HIGH"},
+                "confidencePercentage": 90,
             }
         ]
     }

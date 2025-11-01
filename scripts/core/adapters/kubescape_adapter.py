@@ -240,7 +240,11 @@ def _load_kubescape_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "path": location_path,
                     "startLine": 0,  # K8s resources don't have line numbers
                 },
-                "remediation": remediation if remediation else "Review Kubernetes resource configuration",
+                "remediation": (
+                    remediation
+                    if remediation
+                    else "Review Kubernetes resource configuration"
+                ),
                 "references": [],
                 "tags": ["k8s-security", "misconfiguration"],
                 "context": {
@@ -250,7 +254,9 @@ def _load_kubescape_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "framework": framework_name if framework_name else None,
                     "resource_kind": resource_kind,
                     "resource_name": resource_name,
-                    "resource_namespace": resource_namespace if resource_namespace else None,
+                    "resource_namespace": (
+                        resource_namespace if resource_namespace else None
+                    ),
                 },
                 "raw": {
                     "control": control_data,

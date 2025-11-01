@@ -23,11 +23,11 @@ def test_bearer_adapter_dataflow_detection(tmp_path: Path):
                                 "filename": "app/models/user.rb",
                                 "line_number": 15,
                                 "field_name": "email",
-                                "subject_name": "User"
+                                "subject_name": "User",
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             }
         ]
     }
@@ -57,7 +57,7 @@ def test_bearer_adapter_security_finding(tmp_path: Path):
                 "severity": "HIGH",
                 "filename": "frontend/src/app/login/login.component.ts",
                 "line_number": 102,
-                "description": "Insecure session handling detected"
+                "description": "Insecure session handling detected",
             }
         ]
     }
@@ -87,11 +87,11 @@ def test_bearer_adapter_multiple_data_types(tmp_path: Path):
                                 "filename": "app/controllers/users_controller.rb",
                                 "line_number": 42,
                                 "field_name": "social_security_number",
-                                "subject_name": "User"
+                                "subject_name": "User",
                             }
                         ]
                     }
-                ]
+                ],
             },
             {
                 "name": "CreditCardNumber",
@@ -102,12 +102,12 @@ def test_bearer_adapter_multiple_data_types(tmp_path: Path):
                                 "filename": "app/models/payment.rb",
                                 "line_number": 20,
                                 "field_name": "card_number",
-                                "subject_name": "Payment"
+                                "subject_name": "Payment",
                             }
                         ]
                     }
-                ]
-            }
+                ],
+            },
         ]
     }
     f = tmp_path / "bearer.json"
@@ -133,17 +133,17 @@ def test_bearer_adapter_multiple_locations(tmp_path: Path):
                                 "filename": "app/models/user.rb",
                                 "line_number": 10,
                                 "field_name": "phone",
-                                "subject_name": "User"
+                                "subject_name": "User",
                             },
                             {
                                 "filename": "app/models/contact.rb",
                                 "line_number": 8,
                                 "field_name": "mobile",
-                                "subject_name": "Contact"
-                            }
+                                "subject_name": "Contact",
+                            },
                         ]
                     }
-                ]
+                ],
             }
         ]
     }
@@ -169,11 +169,11 @@ def test_bearer_adapter_mixed_findings(tmp_path: Path):
                             {
                                 "filename": "app/models/user.rb",
                                 "line_number": 25,
-                                "field_name": "password_digest"
+                                "field_name": "password_digest",
                             }
                         ]
                     }
-                ]
+                ],
             }
         ],
         "findings": [
@@ -182,9 +182,9 @@ def test_bearer_adapter_mixed_findings(tmp_path: Path):
                 "severity": "CRITICAL",
                 "filename": "app/services/encryption.rb",
                 "line_number": 15,
-                "description": "Weak encryption algorithm detected"
+                "description": "Weak encryption algorithm detected",
             }
-        ]
+        ],
     }
     f = tmp_path / "bearer.json"
     write(f, data)
@@ -211,12 +211,12 @@ def test_bearer_adapter_no_subject_name(tmp_path: Path):
                             {
                                 "filename": "app/controllers/api_controller.rb",
                                 "line_number": 30,
-                                "field_name": "client_ip"
+                                "field_name": "client_ip",
                                 # No subject_name
                             }
                         ]
                     }
-                ]
+                ],
             }
         ]
     }
@@ -232,9 +232,7 @@ def test_bearer_adapter_no_subject_name(tmp_path: Path):
 
 def test_bearer_adapter_empty_data_types(tmp_path: Path):
     """Test Bearer adapter with empty data_types array."""
-    data = {
-        "data_types": []
-    }
+    data = {"data_types": []}
     f = tmp_path / "bearer.json"
     write(f, data)
     adapter = BearerAdapter()
@@ -266,11 +264,11 @@ def test_bearer_adapter_compliance_enrichment(tmp_path: Path):
                                 "filename": "app/models/profile.rb",
                                 "line_number": 12,
                                 "field_name": "full_name",
-                                "subject_name": "UserProfile"
+                                "subject_name": "UserProfile",
                             }
                         ]
                     }
-                ]
+                ],
             }
         ]
     }

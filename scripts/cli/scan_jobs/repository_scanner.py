@@ -615,11 +615,15 @@ def scan_repository(
             checkov_cicd_flags = get_tool_flags("checkov-cicd")
             checkov_cicd_cmd = [
                 "checkov",
-                "--framework", "github_actions",
-                "--output", "json",
-                "--output-file", str(checkov_cicd_out),
+                "--framework",
+                "github_actions",
+                "--output",
+                "json",
+                "--output-file",
+                str(checkov_cicd_out),
                 *checkov_cicd_flags,
-                "--directory", str(repo / ".github" / "workflows"),
+                "--directory",
+                str(repo / ".github" / "workflows"),
             ]
             tool_defs.append(
                 ToolDefinition(
@@ -670,8 +674,10 @@ def scan_repository(
             osv_flags = get_tool_flags("osv-scanner")
             osv_cmd = [
                 "osv-scanner",
-                "--format", "json",
-                "--output", str(osv_out),
+                "--format",
+                "json",
+                "--output",
+                str(osv_out),
                 *osv_flags,
                 str(repo),
             ]
@@ -697,7 +703,8 @@ def scan_repository(
             cdxgen_flags = get_tool_flags("cdxgen")
             cdxgen_cmd = [
                 "cdxgen",
-                "-o", str(cdxgen_out),
+                "-o",
+                str(cdxgen_out),
                 *cdxgen_flags,
                 str(repo),
             ]
@@ -723,7 +730,8 @@ def scan_repository(
             scancode_flags = get_tool_flags("scancode")
             scancode_cmd = [
                 "scancode",
-                "--json", str(scancode_out),
+                "--json",
+                str(scancode_out),
                 *scancode_flags,
                 str(repo),
             ]
@@ -751,8 +759,10 @@ def scan_repository(
                 "kubescape",
                 "scan",
                 str(repo),
-                "--format", "json",
-                "--output", str(kubescape_out),
+                "--format",
+                "json",
+                "--output",
+                str(kubescape_out),
                 *kubescape_flags,
             ]
             tool_defs.append(
@@ -779,8 +789,10 @@ def scan_repository(
                 "bearer",
                 "scan",
                 str(repo),
-                "--format", "json",
-                "--output", str(bearer_out),
+                "--format",
+                "json",
+                "--output",
+                str(bearer_out),
                 *bearer_flags,
             ]
             tool_defs.append(
@@ -804,16 +816,23 @@ def scan_repository(
     if "prowler" in tools:
         prowler_out = out_dir / "prowler.json"
         # Check for cloud config files (terraform, cloudformation, etc.)
-        cloud_files = list(repo.glob("**/*.tf")) + list(repo.glob("**/*.tfvars")) + \
-                      list(repo.glob("**/cloudformation.yaml")) + list(repo.glob("**/cloudformation.json"))
+        cloud_files = (
+            list(repo.glob("**/*.tf"))
+            + list(repo.glob("**/*.tfvars"))
+            + list(repo.glob("**/cloudformation.yaml"))
+            + list(repo.glob("**/cloudformation.json"))
+        )
         if cloud_files and _tool_exists("prowler"):
             prowler_flags = get_tool_flags("prowler")
             # Run Prowler in configuration scanning mode
             prowler_cmd = [
                 "prowler",
-                "--output-formats", "json",
-                "--output-directory", str(out_dir),
-                "--output-filename", "prowler",
+                "--output-formats",
+                "json",
+                "--output-directory",
+                str(out_dir),
+                "--output-filename",
+                "prowler",
                 *prowler_flags,
             ]
             tool_defs.append(
@@ -837,7 +856,9 @@ def scan_repository(
         if _tool_exists("yara"):
             yara_flags = get_tool_flags("yara")
             # Use built-in rules or user-provided rules
-            rules_path = per_tool_config.get("yara", {}).get("rules_path", "/usr/share/yara/rules")
+            rules_path = per_tool_config.get("yara", {}).get(
+                "rules_path", "/usr/share/yara/rules"
+            )
             yara_cmd = [
                 "yara",
                 "-r",  # Recursive
@@ -870,7 +891,8 @@ def scan_repository(
             grype_cmd = [
                 "grype",
                 f"dir:{repo}",
-                "-o", "json",
+                "-o",
+                "json",
                 *grype_flags,
             ]
             tool_defs.append(
@@ -899,8 +921,10 @@ def scan_repository(
             mobile_file = mobile_files[0]  # Scan first found mobile app
             mobsf_cmd = [
                 "mobsf",
-                "-f", str(mobile_file),
-                "-o", str(mobsf_out),
+                "-f",
+                str(mobile_file),
+                "-o",
+                str(mobsf_out),
                 *mobsf_flags,
             ]
             tool_defs.append(
@@ -932,17 +956,22 @@ def scan_repository(
     if "trivy-rbac" in tools:
         trivy_rbac_out = out_dir / "trivy-rbac.json"
         # Check for K8s manifests
-        k8s_manifests = list(repo.glob("**/*deployment*.yaml")) + \
-                        list(repo.glob("**/*service*.yaml")) + \
-                        list(repo.glob("**/k8s/**/*.yaml"))
+        k8s_manifests = (
+            list(repo.glob("**/*deployment*.yaml"))
+            + list(repo.glob("**/*service*.yaml"))
+            + list(repo.glob("**/k8s/**/*.yaml"))
+        )
         if k8s_manifests and _tool_exists("trivy"):
             trivy_rbac_flags = get_tool_flags("trivy-rbac")
             trivy_rbac_cmd = [
                 "trivy",
                 "config",
-                "--format", "json",
-                "--output", str(trivy_rbac_out),
-                "--scanners", "config",
+                "--format",
+                "json",
+                "--output",
+                str(trivy_rbac_out),
+                "--scanners",
+                "config",
                 *trivy_rbac_flags,
                 str(repo),
             ]
@@ -968,9 +997,11 @@ def scan_repository(
             semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
             semgrep_secrets_cmd = [
                 "semgrep",
-                "--config", "p/secrets",
+                "--config",
+                "p/secrets",
                 "--json",
-                "--output", str(semgrep_secrets_out),
+                "--output",
+                str(semgrep_secrets_out),
                 *semgrep_secrets_flags,
                 str(repo),
             ]
@@ -997,9 +1028,12 @@ def scan_repository(
             horusec_cmd = [
                 "horusec",
                 "start",
-                "-p", str(repo),
-                "-o", "json",
-                "-O", str(horusec_out),
+                "-p",
+                str(repo),
+                "-o",
+                "json",
+                "-O",
+                str(horusec_out),
                 *horusec_flags,
             ]
             tool_defs.append(
@@ -1024,10 +1058,14 @@ def scan_repository(
             dependency_check_flags = get_tool_flags("dependency-check")
             dependency_check_cmd = [
                 "dependency-check",
-                "--project", name,
-                "--scan", str(repo),
-                "--format", "JSON",
-                "--out", str(dependency_check_out),
+                "--project",
+                name,
+                "--scan",
+                str(repo),
+                "--format",
+                "JSON",
+                "--out",
+                str(dependency_check_out),
                 *dependency_check_flags,
             ]
             tool_defs.append(

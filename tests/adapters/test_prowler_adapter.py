@@ -31,7 +31,7 @@ def test_prowler_adapter_aws_fail(tmp_path: Path):
             "Description": "S3 buckets should not allow public access",
             "Risk": "Data exposure risk",
             "RemediationCode": "aws s3api put-public-access-block --bucket my-public-bucket --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true",
-            "RemediationUrl": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html"
+            "RemediationUrl": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html",
         }
     ]
     f = tmp_path / "prowler.json"
@@ -69,7 +69,7 @@ def test_prowler_adapter_azure_fail(tmp_path: Path):
             "Region": "eastus",
             "StatusExtended": "Storage account mystorageaccount does not enforce secure transfer",
             "Description": "Azure Storage accounts should require secure transfer",
-            "RemediationUrl": "https://learn.microsoft.com/en-us/azure/storage/common/storage-require-secure-transfer"
+            "RemediationUrl": "https://learn.microsoft.com/en-us/azure/storage/common/storage-require-secure-transfer",
         }
     ]
     f = tmp_path / "prowler.json"
@@ -100,7 +100,7 @@ def test_prowler_adapter_gcp_fail(tmp_path: Path):
             "AccountUID": "project-abc",
             "Region": "us-central1",
             "StatusExtended": "Compute instance instance-123 has public IP assigned",
-            "Description": "Compute instances should not have public IPs"
+            "Description": "Compute instances should not have public IPs",
         }
     ]
     f = tmp_path / "prowler.json"
@@ -127,7 +127,7 @@ def test_prowler_adapter_k8s_fail(tmp_path: Path):
             "Provider": "kubernetes",
             "Region": "default-namespace",
             "StatusExtended": "Pod pod-nginx is running in privileged mode",
-            "Description": "Containers should not run in privileged mode"
+            "Description": "Containers should not run in privileged mode",
         }
     ]
     f = tmp_path / "prowler.json"
@@ -148,7 +148,7 @@ def test_prowler_adapter_pass_findings_skipped(tmp_path: Path):
             "Status": "PASS",
             "CheckTitle": "Passing Check",
             "Severity": "high",
-            "ResourceId": "resource-1"
+            "ResourceId": "resource-1",
         },
         {
             "CheckID": "check_fail",
@@ -157,8 +157,8 @@ def test_prowler_adapter_pass_findings_skipped(tmp_path: Path):
             "Severity": "high",
             "ResourceId": "resource-2",
             "Provider": "aws",
-            "ServiceName": "ec2"
-        }
+            "ServiceName": "ec2",
+        },
     ]
     f = tmp_path / "prowler.json"
     write_ndjson(f, findings)
@@ -180,7 +180,7 @@ def test_prowler_adapter_multiple_findings(tmp_path: Path):
             "Severity": "high",
             "ResourceId": "resource-1",
             "Provider": "aws",
-            "ServiceName": "s3"
+            "ServiceName": "s3",
         },
         {
             "CheckID": "check_2",
@@ -189,7 +189,7 @@ def test_prowler_adapter_multiple_findings(tmp_path: Path):
             "Severity": "medium",
             "ResourceId": "resource-2",
             "Provider": "aws",
-            "ServiceName": "ec2"
+            "ServiceName": "ec2",
         },
         {
             "CheckID": "check_3",
@@ -198,8 +198,8 @@ def test_prowler_adapter_multiple_findings(tmp_path: Path):
             "Severity": "low",
             "ResourceId": "resource-3",
             "Provider": "azure",
-            "ServiceName": "storage"
-        }
+            "ServiceName": "storage",
+        },
     ]
     f = tmp_path / "prowler.json"
     write_ndjson(f, findings)
@@ -223,7 +223,7 @@ def test_prowler_adapter_location_fallback(tmp_path: Path):
             "ResourceId": "resource-1",
             "ResourceArn": "arn:aws:s3:::bucket-1",
             "Provider": "aws",
-            "ServiceName": "s3"
+            "ServiceName": "s3",
         },
         {
             "CheckID": "check_id",
@@ -232,7 +232,7 @@ def test_prowler_adapter_location_fallback(tmp_path: Path):
             "Severity": "high",
             "ResourceId": "resource-2",
             "Provider": "aws",
-            "ServiceName": "ec2"
+            "ServiceName": "ec2",
         },
         {
             "CheckID": "check_fallback",
@@ -240,8 +240,8 @@ def test_prowler_adapter_location_fallback(tmp_path: Path):
             "CheckTitle": "Check with fallback",
             "Severity": "high",
             "Provider": "aws",
-            "ServiceName": "iam"
-        }
+            "ServiceName": "iam",
+        },
     ]
     f = tmp_path / "prowler.json"
     write_ndjson(f, findings)
@@ -295,7 +295,7 @@ def test_prowler_adapter_compliance_enrichment(tmp_path: Path):
             "Severity": "high",
             "ResourceId": "my-bucket",
             "Provider": "aws",
-            "ServiceName": "s3"
+            "ServiceName": "s3",
         }
     ]
     f = tmp_path / "prowler.json"

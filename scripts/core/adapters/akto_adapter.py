@@ -190,18 +190,26 @@ def _load_akto_internal(path: str | Path) -> List[Dict[str, Any]]:
         # Extract test results details
         test_results = test_run_result.get("testResults", "")
         if isinstance(test_results, str):
-            message = test_results if test_results else f"API vulnerability: {test_super_type}"
+            message = (
+                test_results
+                if test_results
+                else f"API vulnerability: {test_super_type}"
+            )
         else:
             message = f"API vulnerability: {test_super_type}"
 
         # Build title
-        title = f"{test_super_type}: {test_sub_type}" if test_sub_type else test_super_type
+        title = (
+            f"{test_super_type}: {test_sub_type}" if test_sub_type else test_super_type
+        )
 
         # Build location path (use URL or fallback)
         location_path = url if url else f"{method}:/api/endpoint"
 
         # Generate stable fingerprint
-        fid = fingerprint("akto", test_sub_type or test_super_type, location_path, 0, message)
+        fid = fingerprint(
+            "akto", test_sub_type or test_super_type, location_path, 0, message
+        )
 
         # Build references (Akto docs for vulnerability type)
         references = []

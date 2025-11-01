@@ -160,7 +160,9 @@ def _load_cdxgen_internal(path: str | Path) -> List[Dict[str, Any]]:
         # Extract component metadata
         comp_name = str(comp.get("name", "unknown"))
         comp_version = str(comp.get("version", "unknown"))
-        comp_type = str(comp.get("type", "library"))  # library, application, framework, etc.
+        comp_type = str(
+            comp.get("type", "library")
+        )  # library, application, framework, etc.
         purl = str(comp.get("purl", ""))  # Package URL
         bom_ref = str(comp.get("bom-ref", ""))
 

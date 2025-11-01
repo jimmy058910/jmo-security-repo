@@ -21,18 +21,16 @@ def test_mobsf_adapter_code_analysis_high(tmp_path: Path):
                     "severity": "high",
                     "cwe": "798",
                     "owasp-mobile": "M9",
-                    "masvs": "MSTG-STORAGE-14"
+                    "masvs": "MSTG-STORAGE-14",
                 },
                 "files": [
                     {
                         "file_path": "com/example/app/Config.java",
-                        "match_position": [
-                            {"start": 42, "end": 80}
-                        ]
+                        "match_position": [{"start": 42, "end": 80}],
                     }
-                ]
+                ],
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -65,18 +63,16 @@ def test_mobsf_adapter_code_analysis_warning(tmp_path: Path):
                 "metadata": {
                     "description": "Insecure Random Number Generator",
                     "severity": "warning",
-                    "cwe": "330"
+                    "cwe": "330",
                 },
                 "files": [
                     {
                         "file_path": "com/example/app/Crypto.java",
-                        "match_position": [
-                            {"start": 108}
-                        ]
+                        "match_position": [{"start": 108}],
                     }
-                ]
+                ],
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -96,16 +92,13 @@ def test_mobsf_adapter_code_analysis_info(tmp_path: Path):
             "android_logging": {
                 "metadata": {
                     "description": "Logging detected in application",
-                    "severity": "info"
+                    "severity": "info",
                 },
                 "files": [
-                    {
-                        "file_path": "com/example/app/Logger.java",
-                        "match_position": []
-                    }
-                ]
+                    {"file_path": "com/example/app/Logger.java", "match_position": []}
+                ],
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -125,14 +118,14 @@ def test_mobsf_adapter_manifest_analysis(tmp_path: Path):
             "android_debuggable": {
                 "title": "Application is Debuggable",
                 "description": "Application has android:debuggable=true which is dangerous in production",
-                "severity": "high"
+                "severity": "high",
             },
             "android_backup_enabled": {
                 "title": "Backup Enabled",
                 "description": "Application has android:allowBackup=true",
-                "severity": "warning"
-            }
-        }
+                "severity": "warning",
+            },
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -144,7 +137,9 @@ def test_mobsf_adapter_manifest_analysis(tmp_path: Path):
     assert items[0].ruleId == "android_debuggable"
     assert items[0].severity == "HIGH"
     assert items[0].location["path"] == "AndroidManifest.xml"
-    assert items[0].location["startLine"] == 0  # Manifest findings don't have line numbers
+    assert (
+        items[0].location["startLine"] == 0
+    )  # Manifest findings don't have line numbers
     assert "manifest" in items[0].tags
     assert "configuration" in items[0].tags
     # Second finding: backup (MEDIUM)
@@ -160,14 +155,14 @@ def test_mobsf_adapter_manifest_skips_secure(tmp_path: Path):
             "android_certificate_pinning": {
                 "title": "Certificate Pinning Implemented",
                 "description": "Application has certificate pinning enabled",
-                "severity": "secure"
+                "severity": "secure",
             },
             "android_root_detection": {
                 "title": "Root Detection Missing",
                 "description": "Application should implement root detection",
-                "severity": "high"
-            }
-        }
+                "severity": "high",
+            },
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -188,24 +183,24 @@ def test_mobsf_adapter_multiple_file_locations(tmp_path: Path):
                 "metadata": {
                     "description": "SQL Injection vulnerability",
                     "severity": "high",
-                    "cwe": "89"
+                    "cwe": "89",
                 },
                 "files": [
                     {
                         "file_path": "com/example/app/DatabaseHelper.java",
-                        "match_position": [{"start": 42}]
+                        "match_position": [{"start": 42}],
                     },
                     {
                         "file_path": "com/example/app/UserDAO.java",
-                        "match_position": [{"start": 108}]
+                        "match_position": [{"start": 108}],
                     },
                     {
                         "file_path": "com/example/app/ProductDAO.java",
-                        "match_position": [{"start": 200}]
-                    }
-                ]
+                        "match_position": [{"start": 200}],
+                    },
+                ],
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -233,11 +228,11 @@ def test_mobsf_adapter_no_files_fallback(tmp_path: Path):
             "generic_finding": {
                 "metadata": {
                     "description": "Generic security issue",
-                    "severity": "high"
+                    "severity": "high",
                 },
-                "files": []  # No files specified
+                "files": [],  # No files specified
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -260,23 +255,23 @@ def test_mobsf_adapter_combined_analysis(tmp_path: Path):
                 "metadata": {
                     "description": "WebView SSL Error Handler allows all certificates",
                     "severity": "high",
-                    "cwe": "295"
+                    "cwe": "295",
                 },
                 "files": [
                     {
                         "file_path": "com/example/app/WebViewActivity.java",
-                        "match_position": [{"start": 156}]
+                        "match_position": [{"start": 156}],
                     }
-                ]
+                ],
             }
         },
         "manifest_analysis": {
             "android_clear_text_traffic": {
                 "title": "Clear Text Traffic Allowed",
                 "description": "Application allows clear text HTTP traffic",
-                "severity": "high"
+                "severity": "high",
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)
@@ -310,18 +305,10 @@ def test_mobsf_adapter_compliance_enrichment(tmp_path: Path):
         "file_name": "app.apk",
         "code_analysis": {
             "test_finding": {
-                "metadata": {
-                    "description": "Test security issue",
-                    "severity": "high"
-                },
-                "files": [
-                    {
-                        "file_path": "test.java",
-                        "match_position": []
-                    }
-                ]
+                "metadata": {"description": "Test security issue", "severity": "high"},
+                "files": [{"file_path": "test.java", "match_position": []}],
             }
-        }
+        },
     }
     f = tmp_path / "mobsf.json"
     write(f, data)

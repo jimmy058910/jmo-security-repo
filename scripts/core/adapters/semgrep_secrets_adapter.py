@@ -183,9 +183,7 @@ def _load_semgrep_secrets_internal(path: str | Path) -> List[Dict[str, Any]]:
 
         # Extract line number
         start_line = 0
-        if isinstance(r.get("start"), dict) and isinstance(
-            r["start"].get("line"), int
-        ):
+        if isinstance(r.get("start"), dict) and isinstance(r["start"].get("line"), int):
             start_line = r["start"]["line"]
 
         # Alternative location structure
@@ -217,6 +215,7 @@ def _load_semgrep_secrets_internal(path: str | Path) -> List[Dict[str, Any]]:
 
         # Build fingerprint ID
         from scripts.core.common_finding import fingerprint
+
         fid = fingerprint("semgrep-secrets", check_id, path_str, start_line, msg)
 
         # Build references
@@ -243,7 +242,9 @@ def _load_semgrep_secrets_internal(path: str | Path) -> List[Dict[str, Any]]:
             tags.append("owasp")
 
         # Build remediation
-        remediation: Union[str, Dict[str, Any]] = "Remove hardcoded credentials. Use environment variables, secrets management systems (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+        remediation: Union[str, Dict[str, Any]] = (
+            "Remove hardcoded credentials. Use environment variables, secrets management systems (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+        )
         autofix = extra.get("fix")
         if autofix:
             remediation = {

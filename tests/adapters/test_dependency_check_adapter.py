@@ -13,9 +13,7 @@ def test_dependency_check_adapter_cve_with_cvss_v3(tmp_path: Path):
     """Test Dependency-Check adapter with CVE and CVSS v3 scoring."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "jackson-databind-2.9.8.jar",
@@ -33,18 +31,18 @@ def test_dependency_check_adapter_cve_with_cvss_v3(tmp_path: Path):
                         "cvssv3": {
                             "baseScore": 7.5,
                             "baseSeverity": "HIGH",
-                            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+                            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
                         },
                         "references": [
                             {
                                 "url": "https://github.com/advisories/GHSA-jjjh-jjxp-wpff",
-                                "source": "GitHub"
+                                "source": "GitHub",
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -73,9 +71,7 @@ def test_dependency_check_adapter_cve_with_cvss_v2_fallback(tmp_path: Path):
     """Test Dependency-Check adapter with CVE using CVSS v2 fallback."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "11.0.0"
-        },
+        "scanInfo": {"engineVersion": "11.0.0"},
         "dependencies": [
             {
                 "fileName": "commons-fileupload-1.3.1.jar",
@@ -88,12 +84,12 @@ def test_dependency_check_adapter_cve_with_cvss_v2_fallback(tmp_path: Path):
                         "cvssv2": {
                             "score": 9.8,
                             "accessVector": "NETWORK",
-                            "accessComplexity": "LOW"
-                        }
+                            "accessComplexity": "LOW",
+                        },
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -113,49 +109,36 @@ def test_dependency_check_adapter_multiple_vulnerabilities(tmp_path: Path):
     """Test Dependency-Check adapter with multiple vulnerabilities in one dependency."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "log4j-core-2.14.1.jar",
                 "filePath": "/app/lib/log4j-core-2.14.1.jar",
                 "packages": [
-                    {
-                        "id": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"
-                    }
+                    {"id": "pkg:maven/org.apache.logging.log4j/log4j-core@2.14.1"}
                 ],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2021-44228",
                         "description": "Log4j Remote Code Execution (Log4Shell)",
                         "severity": "CRITICAL",
-                        "cvssv3": {
-                            "baseScore": 10.0,
-                            "baseSeverity": "CRITICAL"
-                        }
+                        "cvssv3": {"baseScore": 10.0, "baseSeverity": "CRITICAL"},
                     },
                     {
                         "name": "CVE-2021-45046",
                         "description": "Log4j incomplete fix for CVE-2021-44228",
                         "severity": "HIGH",
-                        "cvssv3": {
-                            "baseScore": 9.0,
-                            "baseSeverity": "CRITICAL"
-                        }
+                        "cvssv3": {"baseScore": 9.0, "baseSeverity": "CRITICAL"},
                     },
                     {
                         "name": "CVE-2021-45105",
                         "description": "Log4j Denial of Service",
                         "severity": "MEDIUM",
-                        "cvssv3": {
-                            "baseScore": 5.9,
-                            "baseSeverity": "MEDIUM"
-                        }
-                    }
-                ]
+                        "cvssv3": {"baseScore": 5.9, "baseSeverity": "MEDIUM"},
+                    },
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -178,51 +161,35 @@ def test_dependency_check_adapter_multiple_dependencies(tmp_path: Path):
     """Test Dependency-Check adapter with multiple dependencies."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "express-4.17.1.tgz",
                 "filePath": "node_modules/express/package.json",
-                "packages": [
-                    {
-                        "id": "pkg:npm/express@4.17.1"
-                    }
-                ],
+                "packages": [{"id": "pkg:npm/express@4.17.1"}],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2022-24999",
                         "description": "Express.js open redirect vulnerability",
                         "severity": "MEDIUM",
-                        "cvssv3": {
-                            "baseScore": 6.1,
-                            "baseSeverity": "MEDIUM"
-                        }
+                        "cvssv3": {"baseScore": 6.1, "baseSeverity": "MEDIUM"},
                     }
-                ]
+                ],
             },
             {
                 "fileName": "axios-0.21.0.tgz",
                 "filePath": "node_modules/axios/package.json",
-                "packages": [
-                    {
-                        "id": "pkg:npm/axios@0.21.0"
-                    }
-                ],
+                "packages": [{"id": "pkg:npm/axios@0.21.0"}],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2021-3749",
                         "description": "Axios Server-Side Request Forgery (SSRF)",
                         "severity": "HIGH",
-                        "cvssv3": {
-                            "baseScore": 7.5,
-                            "baseSeverity": "HIGH"
-                        }
+                        "cvssv3": {"baseScore": 7.5, "baseSeverity": "HIGH"},
                     }
-                ]
-            }
-        ]
+                ],
+            },
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -246,71 +213,48 @@ def test_dependency_check_adapter_package_manager_detection(tmp_path: Path):
     """Test Dependency-Check adapter package manager tag detection."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "requests-2.25.1.tar.gz",
                 "filePath": "requests-2.25.1.tar.gz",
-                "packages": [
-                    {
-                        "id": "pkg:pypi/requests@2.25.1"
-                    }
-                ],
+                "packages": [{"id": "pkg:pypi/requests@2.25.1"}],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2023-32681",
                         "description": "Requests library proxy authentication leak",
                         "severity": "MEDIUM",
-                        "cvssv3": {
-                            "baseScore": 6.1,
-                            "baseSeverity": "MEDIUM"
-                        }
+                        "cvssv3": {"baseScore": 6.1, "baseSeverity": "MEDIUM"},
                     }
-                ]
+                ],
             },
             {
                 "fileName": "Newtonsoft.Json.12.0.3.nupkg",
                 "filePath": "Newtonsoft.Json.12.0.3.nupkg",
-                "packages": [
-                    {
-                        "id": "pkg:nuget/Newtonsoft.Json@12.0.3"
-                    }
-                ],
+                "packages": [{"id": "pkg:nuget/Newtonsoft.Json@12.0.3"}],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2024-21907",
                         "description": "Newtonsoft.Json Denial of Service",
                         "severity": "HIGH",
-                        "cvssv3": {
-                            "baseScore": 7.5,
-                            "baseSeverity": "HIGH"
-                        }
+                        "cvssv3": {"baseScore": 7.5, "baseSeverity": "HIGH"},
                     }
-                ]
+                ],
             },
             {
                 "fileName": "rails-5.2.3.gem",
                 "filePath": "rails-5.2.3.gem",
-                "packages": [
-                    {
-                        "id": "pkg:gem/rails@5.2.3"
-                    }
-                ],
+                "packages": [{"id": "pkg:gem/rails@5.2.3"}],
                 "vulnerabilities": [
                     {
                         "name": "CVE-2020-8164",
                         "description": "Rails remote code execution vulnerability",
                         "severity": "CRITICAL",
-                        "cvssv3": {
-                            "baseScore": 9.8,
-                            "baseSeverity": "CRITICAL"
-                        }
+                        "cvssv3": {"baseScore": 9.8, "baseSeverity": "CRITICAL"},
                     }
-                ]
-            }
-        ]
+                ],
+            },
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -333,9 +277,7 @@ def test_dependency_check_adapter_missing_cvss(tmp_path: Path):
     """Test Dependency-Check adapter handles missing CVSS scores gracefully."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "vulnerable-lib-1.0.0.jar",
@@ -344,11 +286,11 @@ def test_dependency_check_adapter_missing_cvss(tmp_path: Path):
                     {
                         "name": "CVE-2024-99999",
                         "description": "Hypothetical vulnerability without CVSS score",
-                        "severity": "MEDIUM"
+                        "severity": "MEDIUM",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -366,9 +308,7 @@ def test_dependency_check_adapter_additional_references(tmp_path: Path):
     """Test Dependency-Check adapter includes additional vulnerability references."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "spring-core-5.2.0.jar",
@@ -378,32 +318,29 @@ def test_dependency_check_adapter_additional_references(tmp_path: Path):
                         "name": "CVE-2022-22965",
                         "description": "Spring Framework RCE (Spring4Shell)",
                         "severity": "CRITICAL",
-                        "cvssv3": {
-                            "baseScore": 9.8,
-                            "baseSeverity": "CRITICAL"
-                        },
+                        "cvssv3": {"baseScore": 9.8, "baseSeverity": "CRITICAL"},
                         "references": [
                             {
                                 "url": "https://spring.io/blog/2022/03/31/spring-framework-rce-early-announcement",
-                                "source": "Spring Blog"
+                                "source": "Spring Blog",
                             },
                             {
                                 "url": "https://github.com/advisories/GHSA-36p3-wjmg-h94x",
-                                "source": "GitHub"
+                                "source": "GitHub",
                             },
                             {
                                 "url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
-                                "source": "CISA"
+                                "source": "CISA",
                             },
                             {
                                 "url": "https://access.redhat.com/security/cve/CVE-2022-22965",
-                                "source": "Red Hat"
-                            }
-                        ]
+                                "source": "Red Hat",
+                            },
+                        ],
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -414,19 +351,23 @@ def test_dependency_check_adapter_additional_references(tmp_path: Path):
     # Should include NVD link + first 3 additional references
     assert len(items[0].references) == 4
     assert "https://nvd.nist.gov/vuln/detail/CVE-2022-22965" in items[0].references
-    assert "https://spring.io/blog/2022/03/31/spring-framework-rce-early-announcement" in items[0].references
+    assert (
+        "https://spring.io/blog/2022/03/31/spring-framework-rce-early-announcement"
+        in items[0].references
+    )
     assert "https://github.com/advisories/GHSA-36p3-wjmg-h94x" in items[0].references
-    assert "https://www.cisa.gov/known-exploited-vulnerabilities-catalog" in items[0].references
+    assert (
+        "https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
+        in items[0].references
+    )
 
 
 def test_dependency_check_adapter_empty_dependencies(tmp_path: Path):
     """Test Dependency-Check adapter with empty dependencies array."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
-        "dependencies": []
+        "scanInfo": {"engineVersion": "12.1.0"},
+        "dependencies": [],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -440,21 +381,19 @@ def test_dependency_check_adapter_empty_vulnerabilities(tmp_path: Path):
     """Test Dependency-Check adapter with dependencies but no vulnerabilities."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "safe-library-1.0.0.jar",
                 "filePath": "safe-library-1.0.0.jar",
-                "vulnerabilities": []
+                "vulnerabilities": [],
             },
             {
                 "fileName": "another-safe-lib-2.0.0.jar",
                 "filePath": "another-safe-lib-2.0.0.jar",
-                "vulnerabilities": []
-            }
-        ]
+                "vulnerabilities": [],
+            },
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)
@@ -468,9 +407,7 @@ def test_dependency_check_adapter_compliance_enrichment(tmp_path: Path):
     """Test that Dependency-Check findings are enriched with compliance mappings."""
     data = {
         "reportSchema": "1.1",
-        "scanInfo": {
-            "engineVersion": "12.1.0"
-        },
+        "scanInfo": {"engineVersion": "12.1.0"},
         "dependencies": [
             {
                 "fileName": "test-lib-1.0.0.jar",
@@ -480,14 +417,11 @@ def test_dependency_check_adapter_compliance_enrichment(tmp_path: Path):
                         "name": "CVE-2024-12345",
                         "description": "Test vulnerability for compliance enrichment",
                         "severity": "HIGH",
-                        "cvssv3": {
-                            "baseScore": 7.5,
-                            "baseSeverity": "HIGH"
-                        }
+                        "cvssv3": {"baseScore": 7.5, "baseSeverity": "HIGH"},
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "dependency-check.json"
     write(f, data)

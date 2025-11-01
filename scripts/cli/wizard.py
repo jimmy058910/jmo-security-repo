@@ -727,7 +727,10 @@ def run_wizard(
     """
     import time
 
-    from scripts.core.telemetry import should_show_telemetry_banner, show_telemetry_banner
+    from scripts.core.telemetry import (
+        should_show_telemetry_banner,
+        show_telemetry_banner,
+    )
 
     wizard_start_time = time.time()
 

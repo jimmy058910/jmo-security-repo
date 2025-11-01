@@ -23,9 +23,9 @@ def test_trivy_rbac_adapter_cluster_admin(tmp_path: Path):
                 "category": "Kubernetes Security Check",
                 "namespace": "kube-system",
                 "kind": "ServiceAccount",
-                "name": "admin-sa"
+                "name": "admin-sa",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -60,9 +60,9 @@ def test_trivy_rbac_adapter_wildcard_permissions(tmp_path: Path):
                 "category": "Kubernetes Security Check",
                 "namespace": "default",
                 "kind": "Role",
-                "name": "wildcard-role"
+                "name": "wildcard-role",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -88,9 +88,9 @@ def test_trivy_rbac_adapter_secret_access(tmp_path: Path):
                 "category": "Kubernetes Security Check",
                 "namespace": "app-namespace",
                 "kind": "Role",
-                "name": "app-role"
+                "name": "app-role",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -116,7 +116,7 @@ def test_trivy_rbac_adapter_multiple_findings(tmp_path: Path):
                 "description": "Excessive cluster-admin privileges",
                 "namespace": "kube-system",
                 "kind": "ClusterRoleBinding",
-                "name": "admin-binding"
+                "name": "admin-binding",
             },
             {
                 "checkID": "KSV046",
@@ -126,7 +126,7 @@ def test_trivy_rbac_adapter_multiple_findings(tmp_path: Path):
                 "description": "Role grants wildcard verbs",
                 "namespace": "default",
                 "kind": "Role",
-                "name": "wildcard-role"
+                "name": "wildcard-role",
             },
             {
                 "checkID": "KSV041",
@@ -136,9 +136,9 @@ def test_trivy_rbac_adapter_multiple_findings(tmp_path: Path):
                 "description": "Role can access secrets",
                 "namespace": "app",
                 "kind": "Role",
-                "name": "app-role"
-            }
-        ]
+                "name": "app-role",
+            },
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -166,7 +166,7 @@ def test_trivy_rbac_adapter_success_checks_skipped(tmp_path: Path):
                 "title": "Managing privilege escalation",
                 "description": "Role does not allow privilege escalation (PASS)",
                 "kind": "Role",
-                "name": "safe-role"
+                "name": "safe-role",
             },
             {
                 "checkID": "KSV047",
@@ -175,9 +175,9 @@ def test_trivy_rbac_adapter_success_checks_skipped(tmp_path: Path):
                 "title": "Managing cluster-admin role",
                 "description": "ServiceAccount has cluster-admin privileges",
                 "kind": "ServiceAccount",
-                "name": "admin-sa"
-            }
-        ]
+                "name": "admin-sa",
+            },
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -201,9 +201,9 @@ def test_trivy_rbac_adapter_no_namespace(tmp_path: Path):
                 "title": "Managing exec/attach privileges",
                 "description": "ClusterRole grants exec/attach to pods",
                 "kind": "ClusterRole",
-                "name": "pod-exec-role"
+                "name": "pod-exec-role",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -220,13 +220,7 @@ def test_trivy_rbac_adapter_minimal_check_info(tmp_path: Path):
     """Test Trivy RBAC adapter handles minimal check information gracefully."""
     data = {
         "version": "0.50.0",
-        "checks": [
-            {
-                "checkID": "KSV999",
-                "success": False,
-                "severity": "MEDIUM"
-            }
-        ]
+        "checks": [{"checkID": "KSV999", "success": False, "severity": "MEDIUM"}],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -253,9 +247,9 @@ def test_trivy_rbac_adapter_kind_tagging(tmp_path: Path):
                 "severity": "MEDIUM",
                 "title": "Secret access",
                 "kind": "ClusterRoleBinding",
-                "name": "test-binding"
+                "name": "test-binding",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
@@ -268,10 +262,7 @@ def test_trivy_rbac_adapter_kind_tagging(tmp_path: Path):
 
 def test_trivy_rbac_adapter_empty_checks(tmp_path: Path):
     """Test Trivy RBAC adapter with empty checks array."""
-    data = {
-        "version": "0.50.0",
-        "checks": []
-    }
+    data = {"version": "0.50.0", "checks": []}
     f = tmp_path / "trivy-rbac.json"
     write(f, data)
     adapter = TrivyRbacAdapter()
@@ -291,9 +282,9 @@ def test_trivy_rbac_adapter_compliance_enrichment(tmp_path: Path):
                 "severity": "CRITICAL",
                 "title": "Test RBAC check",
                 "kind": "Role",
-                "name": "test-role"
+                "name": "test-role",
             }
-        ]
+        ],
     }
     f = tmp_path / "trivy-rbac.json"
     write(f, data)

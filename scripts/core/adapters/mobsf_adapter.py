@@ -204,7 +204,9 @@ def _load_mobsf_internal(path: str | Path) -> List[Dict[str, Any]]:
                 # Build references
                 references = []
                 if cwe:
-                    references.append(f"https://cwe.mitre.org/data/definitions/{cwe}.html")
+                    references.append(
+                        f"https://cwe.mitre.org/data/definitions/{cwe}.html"
+                    )
                 if owasp:
                     references.append(f"https://owasp.org/www-project-mobile-top-10/")
 
@@ -243,7 +245,11 @@ def _load_mobsf_internal(path: str | Path) -> List[Dict[str, Any]]:
                         "owasp_mobile": owasp if owasp else None,
                         "masvs": masvs if masvs else None,
                         "app_name": app_name,
-                        "match_count": len(match_positions) if isinstance(match_positions, list) else 0,
+                        "match_count": (
+                            len(match_positions)
+                            if isinstance(match_positions, list)
+                            else 0
+                        ),
                     },
                     "raw": finding_data,
                 }

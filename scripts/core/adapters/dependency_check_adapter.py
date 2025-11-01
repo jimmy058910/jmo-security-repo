@@ -204,7 +204,11 @@ def _load_dependency_check_internal(path: str | Path) -> List[Dict[str, Any]]:
             severity = normalize_severity(severity_raw)
 
             # Build message
-            message = description if description else f"Known vulnerability {cve_name} detected in dependency"
+            message = (
+                description
+                if description
+                else f"Known vulnerability {cve_name} detected in dependency"
+            )
 
             # Build title
             title = f"{cve_name}: {file_name}"

@@ -200,7 +200,10 @@ def _load_scancode_internal(path: str | Path) -> List[Dict[str, Any]]:
 
                 # Determine severity based on license type (informational, but flag copyleft)
                 severity = "INFO"
-                if any(copyleft in license_expr.lower() for copyleft in ["gpl", "agpl", "lgpl", "mpl", "cddl", "epl"]):
+                if any(
+                    copyleft in license_expr.lower()
+                    for copyleft in ["gpl", "agpl", "lgpl", "mpl", "cddl", "epl"]
+                ):
                     severity = "LOW"  # Copyleft licenses require review
 
                 # Generate stable fingerprint
@@ -259,7 +262,9 @@ def _load_scancode_internal(path: str | Path) -> List[Dict[str, Any]]:
                 message = f"Copyright: {copyright_value}"
 
                 # Generate stable fingerprint
-                fid = fingerprint("scancode", "COPYRIGHT", file_path, start_line, copyright_value)
+                fid = fingerprint(
+                    "scancode", "COPYRIGHT", file_path, start_line, copyright_value
+                )
 
                 # Build finding dict
                 finding = {
@@ -284,7 +289,11 @@ def _load_scancode_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "tags": ["license-compliance", "copyright"],
                     "context": {
                         "copyright_statement": copyright_value,
-                        "line_range": [start_line, end_line] if end_line > start_line else [start_line],
+                        "line_range": (
+                            [start_line, end_line]
+                            if end_line > start_line
+                            else [start_line]
+                        ),
                     },
                     "raw": copyright_entry,
                 }

@@ -184,9 +184,15 @@ def _load_yara_internal(path: str | Path) -> List[Dict[str, Any]]:
         severity_raw = str(meta.get("severity", "")).upper()
         if not severity_raw:
             # Infer severity from tags
-            if any(tag.lower() in ["critical", "apt", "ransomware", "backdoor"] for tag in rule_tags):
+            if any(
+                tag.lower() in ["critical", "apt", "ransomware", "backdoor"]
+                for tag in rule_tags
+            ):
                 severity_raw = "CRITICAL"
-            elif any(tag.lower() in ["high", "webshell", "trojan", "exploit"] for tag in rule_tags):
+            elif any(
+                tag.lower() in ["high", "webshell", "trojan", "exploit"]
+                for tag in rule_tags
+            ):
                 severity_raw = "HIGH"
             elif any(tag.lower() in ["medium", "suspicious"] for tag in rule_tags):
                 severity_raw = "MEDIUM"

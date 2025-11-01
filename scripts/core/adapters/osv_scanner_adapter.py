@@ -146,7 +146,11 @@ def _load_osv_scanner_internal(path: str | Path) -> List[Dict[str, Any]]:
         # Extract source information
         source = result.get("source", {})
         source_path = str(source.get("path", "")) if isinstance(source, dict) else ""
-        source_type = str(source.get("type", "lockfile")) if isinstance(source, dict) else "lockfile"
+        source_type = (
+            str(source.get("type", "lockfile"))
+            if isinstance(source, dict)
+            else "lockfile"
+        )
 
         # Extract packages
         packages = result.get("packages", [])
@@ -182,12 +186,22 @@ def _load_osv_scanner_internal(path: str | Path) -> List[Dict[str, Any]]:
                     aliases = []
 
                 # Build CVE list from aliases
-                cve_list = [alias for alias in aliases if isinstance(alias, str) and alias.startswith("CVE-")]
+                cve_list = [
+                    alias
+                    for alias in aliases
+                    if isinstance(alias, str) and alias.startswith("CVE-")
+                ]
 
                 # Extract summary and details
                 summary = str(vuln.get("summary", ""))
                 details = str(vuln.get("details", ""))
-                message = summary if summary else details if details else f"Vulnerability {vuln_id} in {pkg_name}"
+                message = (
+                    summary
+                    if summary
+                    else (
+                        details if details else f"Vulnerability {vuln_id} in {pkg_name}"
+                    )
+                )
 
                 # Extract CVSS scores first (from severity array)
                 cvss_v2 = None
@@ -238,7 +252,9 @@ def _load_osv_scanner_internal(path: str | Path) -> List[Dict[str, Any]]:
 
                 # Generate stable fingerprint
                 # Use package name + version + vuln ID for uniqueness
-                fid = fingerprint("osv-scanner", vuln_id, f"{pkg_name}@{pkg_version}", 0, message)
+                fid = fingerprint(
+                    "osv-scanner", vuln_id, f"{pkg_name}@{pkg_version}", 0, message
+                )
 
                 # Build finding dict
                 finding = {
@@ -260,10 +276,14 @@ def _load_osv_scanner_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "remediation": f"Update {pkg_name} from {pkg_version} to a patched version",
                     "references": references,
                     "tags": ["sca", "vulnerability", pkg_ecosystem.lower()],
-                    "cvss": {
-                        "v2": cvss_v2,
-                        "v3": cvss_v3,
-                    } if cvss_v2 or cvss_v3 else None,
+                    "cvss": (
+                        {
+                            "v2": cvss_v2,
+                            "v3": cvss_v3,
+                        }
+                        if cvss_v2 or cvss_v3
+                        else None
+                    ),
                     "context": {
                         "package_name": pkg_name,
                         "package_version": pkg_version,

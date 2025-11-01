@@ -180,7 +180,7 @@ def _load_grype_internal(path: str | Path) -> List[Dict[str, Any]]:
                         if version and base_score is not None:
                             cvss_scores[f"cvss_v{version}"] = {
                                 "score": float(base_score),
-                                "vector": vector
+                                "vector": vector,
                             }
 
         # Extract fix information
@@ -215,7 +215,9 @@ def _load_grype_internal(path: str | Path) -> List[Dict[str, Any]]:
         if isinstance(locations, list) and locations:
             # Use first location
             location_obj = locations[0] if isinstance(locations[0], dict) else {}
-            location_path = str(location_obj.get("path", f"{artifact_name}@{artifact_version}"))
+            location_path = str(
+                location_obj.get("path", f"{artifact_name}@{artifact_version}")
+            )
         else:
             location_path = f"{artifact_name}@{artifact_version}"
 
@@ -241,7 +243,9 @@ def _load_grype_internal(path: str | Path) -> List[Dict[str, Any]]:
 
         # Build remediation
         if fixed_versions:
-            remediation = f"Upgrade {artifact_name} to version {', '.join(fixed_versions[:3])}"
+            remediation = (
+                f"Upgrade {artifact_name} to version {', '.join(fixed_versions[:3])}"
+            )
         else:
             remediation = f"No fix available for {vuln_id} in {artifact_name}"
 
@@ -271,13 +275,13 @@ def _load_grype_internal(path: str | Path) -> List[Dict[str, Any]]:
                 cvss_field = {
                     "version": "3.x",
                     "score": cvss_scores[cvss_v3_key]["score"],
-                    "vector": cvss_scores[cvss_v3_key]["vector"]
+                    "vector": cvss_scores[cvss_v3_key]["vector"],
                 }
             elif cvss_v2_key:
                 cvss_field = {
                     "version": "2.0",
                     "score": cvss_scores[cvss_v2_key]["score"],
-                    "vector": cvss_scores[cvss_v2_key]["vector"]
+                    "vector": cvss_scores[cvss_v2_key]["vector"],
                 }
 
         # Build finding dict
@@ -287,7 +291,9 @@ def _load_grype_internal(path: str | Path) -> List[Dict[str, Any]]:
             "ruleId": vuln_id,
             "title": title,
             "message": message,
-            "description": description if description else f"Vulnerability {vuln_id} detected",
+            "description": (
+                description if description else f"Vulnerability {vuln_id} detected"
+            ),
             "severity": severity,
             "tool": {
                 "name": "grype",

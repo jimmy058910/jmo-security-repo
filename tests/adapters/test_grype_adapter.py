@@ -22,33 +22,21 @@ def test_grype_adapter_cve_with_fix(tmp_path: Path):
                         {
                             "version": "3.1",
                             "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-                            "metrics": {
-                                "baseScore": 9.8
-                            }
+                            "metrics": {"baseScore": 9.8},
                         }
                     ],
-                    "fix": {
-                        "versions": ["2.9.14", "2.10.0"]
-                    },
+                    "fix": {"versions": ["2.9.14", "2.10.0"]},
                     "dataSource": "nvd",
-                    "urls": ["https://nvd.nist.gov/vuln/detail/CVE-2023-1234"]
+                    "urls": ["https://nvd.nist.gov/vuln/detail/CVE-2023-1234"],
                 },
                 "artifact": {
                     "name": "libxml2",
                     "version": "2.9.10",
                     "type": "deb",
                     "purl": "pkg:deb/ubuntu/libxml2@2.9.10",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/x86_64-linux-gnu/libxml2.so.2"
-                        }
-                    ]
+                    "locations": [{"path": "/usr/lib/x86_64-linux-gnu/libxml2.so.2"}],
                 },
-                "matchDetails": [
-                    {
-                        "matcher": "dpkg-matcher"
-                    }
-                ]
+                "matchDetails": [{"matcher": "dpkg-matcher"}],
             }
         ]
     }
@@ -81,21 +69,15 @@ def test_grype_adapter_cve_no_fix(tmp_path: Path):
                     "id": "CVE-2024-5678",
                     "severity": "MEDIUM",
                     "description": "Denial of service in nginx",
-                    "fix": {
-                        "versions": []
-                    },
-                    "dataSource": "github"
+                    "fix": {"versions": []},
+                    "dataSource": "github",
                 },
                 "artifact": {
                     "name": "nginx",
                     "version": "1.20.0",
                     "type": "apk",
-                    "locations": [
-                        {
-                            "path": "/usr/sbin/nginx"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/sbin/nginx"}],
+                },
             }
         ]
     }
@@ -118,58 +100,40 @@ def test_grype_adapter_multiple_vulnerabilities(tmp_path: Path):
                     "id": "CVE-2023-1111",
                     "severity": "CRITICAL",
                     "description": "Critical vuln in openssl",
-                    "fix": {
-                        "versions": ["3.0.8"]
-                    }
+                    "fix": {"versions": ["3.0.8"]},
                 },
                 "artifact": {
                     "name": "openssl",
                     "version": "3.0.7",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/libssl.so.3"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/lib/libssl.so.3"}],
+                },
             },
             {
                 "vulnerability": {
                     "id": "CVE-2023-2222",
                     "severity": "HIGH",
                     "description": "High vuln in curl",
-                    "fix": {
-                        "versions": ["8.0.0"]
-                    }
+                    "fix": {"versions": ["8.0.0"]},
                 },
                 "artifact": {
                     "name": "curl",
                     "version": "7.88.0",
-                    "locations": [
-                        {
-                            "path": "/usr/bin/curl"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/bin/curl"}],
+                },
             },
             {
                 "vulnerability": {
                     "id": "CVE-2023-3333",
                     "severity": "LOW",
                     "description": "Low vuln in zlib",
-                    "fix": {
-                        "versions": ["1.2.13"]
-                    }
+                    "fix": {"versions": ["1.2.13"]},
                 },
                 "artifact": {
                     "name": "zlib",
                     "version": "1.2.11",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/libz.so.1"
-                        }
-                    ]
-                }
-            }
+                    "locations": [{"path": "/usr/lib/libz.so.1"}],
+                },
+            },
         ]
     }
     f = tmp_path / "grype.json"
@@ -199,24 +163,16 @@ def test_grype_adapter_cvss_v2_fallback(tmp_path: Path):
                         {
                             "version": "2.0",
                             "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
-                            "metrics": {
-                                "baseScore": 7.5
-                            }
+                            "metrics": {"baseScore": 7.5},
                         }
                     ],
-                    "fix": {
-                        "versions": ["1.0.0"]
-                    }
+                    "fix": {"versions": ["1.0.0"]},
                 },
                 "artifact": {
                     "name": "oldpackage",
                     "version": "0.9.0",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/oldpackage.so"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/lib/oldpackage.so"}],
+                },
             }
         ]
     }
@@ -243,31 +199,21 @@ def test_grype_adapter_multiple_cvss_versions(tmp_path: Path):
                         {
                             "version": "2.0",
                             "vector": "AV:N/AC:L/Au:N/C:P/I:P/A:P",
-                            "metrics": {
-                                "baseScore": 7.5
-                            }
+                            "metrics": {"baseScore": 7.5},
                         },
                         {
                             "version": "3.1",
                             "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-                            "metrics": {
-                                "baseScore": 9.8
-                            }
-                        }
+                            "metrics": {"baseScore": 9.8},
+                        },
                     ],
-                    "fix": {
-                        "versions": ["2.0.0"]
-                    }
+                    "fix": {"versions": ["2.0.0"]},
                 },
                 "artifact": {
                     "name": "testpkg",
                     "version": "1.0.0",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/testpkg.so"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/lib/testpkg.so"}],
+                },
             }
         ]
     }
@@ -291,15 +237,13 @@ def test_grype_adapter_missing_locations(tmp_path: Path):
                     "id": "CVE-2023-6666",
                     "severity": "MEDIUM",
                     "description": "Test vulnerability",
-                    "fix": {
-                        "versions": []
-                    }
+                    "fix": {"versions": []},
                 },
                 "artifact": {
                     "name": "testartifact",
                     "version": "1.0.0",
-                    "locations": []
-                }
+                    "locations": [],
+                },
             }
         ]
     }
@@ -322,21 +266,15 @@ def test_grype_adapter_purl_tagging(tmp_path: Path):
                     "id": "CVE-2023-7777",
                     "severity": "HIGH",
                     "description": "Test",
-                    "fix": {
-                        "versions": []
-                    }
+                    "fix": {"versions": []},
                 },
                 "artifact": {
                     "name": "requests",
                     "version": "2.28.0",
                     "type": "python",
                     "purl": "pkg:pypi/requests@2.28.0",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/python3/dist-packages/requests"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/lib/python3/dist-packages/requests"}],
+                },
             }
         ]
     }
@@ -352,9 +290,7 @@ def test_grype_adapter_purl_tagging(tmp_path: Path):
 
 def test_grype_adapter_empty_matches(tmp_path: Path):
     """Test Grype adapter with empty matches array."""
-    data = {
-        "matches": []
-    }
+    data = {"matches": []}
     f = tmp_path / "grype.json"
     write(f, data)
     adapter = GrypeAdapter()
@@ -382,19 +318,13 @@ def test_grype_adapter_compliance_enrichment(tmp_path: Path):
                     "id": "CVE-2023-8888",
                     "severity": "HIGH",
                     "description": "Test vulnerability",
-                    "fix": {
-                        "versions": []
-                    }
+                    "fix": {"versions": []},
                 },
                 "artifact": {
                     "name": "testpkg",
                     "version": "1.0.0",
-                    "locations": [
-                        {
-                            "path": "/usr/lib/testpkg.so"
-                        }
-                    ]
-                }
+                    "locations": [{"path": "/usr/lib/testpkg.so"}],
+                },
             }
         ]
     }

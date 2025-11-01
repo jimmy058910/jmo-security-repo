@@ -85,6 +85,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
 
     # Mock shutil.which to simulate semgrep being installed
     import shutil
+
     def fake_which(tool: str):
         return "/usr/bin/semgrep" if tool == "semgrep" else None
 
@@ -162,7 +163,10 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 
     # Mock shutil.which to simulate syft being installed
     import shutil
-    monkeypatch.setattr(shutil, "which", lambda tool: "/usr/bin/syft" if tool == "syft" else None)
+
+    monkeypatch.setattr(
+        shutil, "which", lambda tool: "/usr/bin/syft" if tool == "syft" else None
+    )
 
     attempt = {"n": 0}
 

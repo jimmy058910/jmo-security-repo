@@ -193,7 +193,11 @@ def _load_lynis_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "path": hostname,
                     "startLine": 0,  # System-level findings don't have line numbers
                 },
-                "remediation": details if details else "Review the security warning and apply recommended hardening measures",
+                "remediation": (
+                    details
+                    if details
+                    else "Review the security warning and apply recommended hardening measures"
+                ),
                 "references": references,
                 "tags": tags,
                 "context": {
@@ -223,7 +227,9 @@ def _load_lynis_internal(path: str | Path) -> List[Dict[str, Any]]:
             details = str(suggestion.get("details", ""))
 
             # Build title from test_id
-            title = f"Security Suggestion: {test_id}" if test_id else "Security Suggestion"
+            title = (
+                f"Security Suggestion: {test_id}" if test_id else "Security Suggestion"
+            )
 
             # Generate stable fingerprint
             fid = fingerprint("lynis", test_id or "suggestion", hostname, 0, message)
@@ -253,7 +259,11 @@ def _load_lynis_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "path": hostname,
                     "startLine": 0,
                 },
-                "remediation": details if details else "Review the security suggestion and consider implementing the recommended improvement",
+                "remediation": (
+                    details
+                    if details
+                    else "Review the security suggestion and consider implementing the recommended improvement"
+                ),
                 "references": references,
                 "tags": tags,
                 "context": {
@@ -280,7 +290,9 @@ def _load_lynis_internal(path: str | Path) -> List[Dict[str, Any]]:
             # Extract vulnerability metadata
             vuln_id = str(vulnerability.get("id", ""))
             cve = str(vulnerability.get("cve", ""))
-            message = str(vulnerability.get("message", vulnerability.get("description", "")))
+            message = str(
+                vulnerability.get("message", vulnerability.get("description", ""))
+            )
             package = str(vulnerability.get("package", ""))
 
             # Build title
@@ -318,7 +330,11 @@ def _load_lynis_internal(path: str | Path) -> List[Dict[str, Any]]:
                     "path": f"{hostname}:{package}" if package else hostname,
                     "startLine": 0,
                 },
-                "remediation": f"Update {package} to the latest version" if package else "Update vulnerable package",
+                "remediation": (
+                    f"Update {package} to the latest version"
+                    if package
+                    else "Update vulnerable package"
+                ),
                 "references": references,
                 "tags": tags,
                 "context": {

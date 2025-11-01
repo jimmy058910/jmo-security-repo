@@ -26,11 +26,11 @@ def test_semgrep_secrets_adapter_api_key(tmp_path: Path):
                         "owasp": ["A07:2021"],
                         "confidence": "HIGH",
                         "likelihood": "HIGH",
-                        "impact": "CRITICAL"
-                    }
-                }
+                        "impact": "CRITICAL",
+                    },
+                },
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -62,14 +62,9 @@ def test_semgrep_secrets_adapter_password(tmp_path: Path):
                 "path": "app/auth.py",
                 "start": {"line": 108},
                 "message": "Hardcoded password detected in source code",
-                "extra": {
-                    "severity": "ERROR",
-                    "metadata": {
-                        "cwe": ["CWE-259"]
-                    }
-                }
+                "extra": {"severity": "ERROR", "metadata": {"cwe": ["CWE-259"]}},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -93,14 +88,9 @@ def test_semgrep_secrets_adapter_jwt_token(tmp_path: Path):
                 "path": "services/auth_service.py",
                 "start": {"line": 200},
                 "message": "Hardcoded JWT secret token",
-                "extra": {
-                    "severity": "WARNING",
-                    "metadata": {
-                        "cwe": ["CWE-321"]
-                    }
-                }
+                "extra": {"severity": "WARNING", "metadata": {"cwe": ["CWE-321"]}},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -123,11 +113,9 @@ def test_semgrep_secrets_adapter_private_key(tmp_path: Path):
                 "path": "certs/keys.py",
                 "start": {"line": 15},
                 "message": "Private key embedded in source code",
-                "extra": {
-                    "severity": "ERROR"
-                }
+                "extra": {"severity": "ERROR"},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -151,10 +139,10 @@ def test_semgrep_secrets_adapter_with_autofix(tmp_path: Path):
                 "extra": {
                     "severity": "ERROR",
                     "fix": "API_KEY = os.getenv('API_KEY')",
-                    "metadata": {}
-                }
+                    "metadata": {},
+                },
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -178,32 +166,23 @@ def test_semgrep_secrets_adapter_multiple_secrets(tmp_path: Path):
                 "path": "deploy/aws.py",
                 "start": {"line": 5},
                 "message": "AWS access key hardcoded",
-                "extra": {
-                    "severity": "ERROR",
-                    "metadata": {"cwe": ["CWE-798"]}
-                }
+                "extra": {"severity": "ERROR", "metadata": {"cwe": ["CWE-798"]}},
             },
             {
                 "check_id": "github-token",
                 "path": "scripts/deploy.sh",
                 "start": {"line": 20},
                 "message": "GitHub personal access token detected",
-                "extra": {
-                    "severity": "ERROR",
-                    "metadata": {"cwe": ["CWE-798"]}
-                }
+                "extra": {"severity": "ERROR", "metadata": {"cwe": ["CWE-798"]}},
             },
             {
                 "check_id": "database-password",
                 "path": "config/database.py",
                 "start": {"line": 42},
                 "message": "Database password hardcoded",
-                "extra": {
-                    "severity": "WARNING",
-                    "metadata": {"cwe": ["CWE-259"]}
-                }
-            }
-        ]
+                "extra": {"severity": "WARNING", "metadata": {"cwe": ["CWE-259"]}},
+            },
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -226,16 +205,11 @@ def test_semgrep_secrets_adapter_alternative_location(tmp_path: Path):
         "results": [
             {
                 "check_id": "generic-secret",
-                "location": {
-                    "path": "app/settings.py",
-                    "start": {"line": 156}
-                },
+                "location": {"path": "app/settings.py", "start": {"line": 156}},
                 "message": "Generic secret detected",
-                "extra": {
-                    "severity": "INFO"
-                }
+                "extra": {"severity": "INFO"},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -258,11 +232,9 @@ def test_semgrep_secrets_adapter_minimal_metadata(tmp_path: Path):
                 "path": "test.py",
                 "start": {"line": 1},
                 "message": "Test secret",
-                "extra": {
-                    "severity": "ERROR"
-                }
+                "extra": {"severity": "ERROR"},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
@@ -278,10 +250,7 @@ def test_semgrep_secrets_adapter_minimal_metadata(tmp_path: Path):
 
 def test_semgrep_secrets_adapter_empty_results(tmp_path: Path):
     """Test Semgrep Secrets adapter with empty results array."""
-    data = {
-        "version": "1.90.0",
-        "results": []
-    }
+    data = {"version": "1.90.0", "results": []}
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)
     adapter = SemgrepSecretsAdapter()
@@ -300,14 +269,9 @@ def test_semgrep_secrets_adapter_compliance_enrichment(tmp_path: Path):
                 "path": "test.py",
                 "start": {"line": 10},
                 "message": "Test secret detected",
-                "extra": {
-                    "severity": "ERROR",
-                    "metadata": {
-                        "cwe": ["CWE-798"]
-                    }
-                }
+                "extra": {"severity": "ERROR", "metadata": {"cwe": ["CWE-798"]}},
             }
-        ]
+        ],
     }
     f = tmp_path / "semgrep-secrets.json"
     write(f, data)

@@ -41,6 +41,7 @@ from scripts.core.telemetry import (
 
 # ========== Fixtures ==========
 
+
 @pytest.fixture
 def clear_ci_env(monkeypatch):
     """Clear all CI environment variables to test non-CI behavior.
@@ -52,8 +53,17 @@ def clear_ci_env(monkeypatch):
     Tests that expect telemetry to be enabled must clear ALL of these,
     otherwise detect_ci_environment() returns True and telemetry is disabled.
     """
-    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID",
-                "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
 

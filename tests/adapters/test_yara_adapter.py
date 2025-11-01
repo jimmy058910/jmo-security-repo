@@ -19,13 +19,13 @@ def test_yara_adapter_webshell_detection(tmp_path: Path):
             "description": "Generic PHP web shell patterns",
             "author": "Florian Roth",
             "severity": "HIGH",
-            "reference": "https://github.com/Neo23x0/signature-base"
+            "reference": "https://github.com/Neo23x0/signature-base",
         },
         "strings": [
             {"identifier": "$s1", "offset": 42, "data": "eval($_POST"},
-            {"identifier": "$s2", "offset": 108, "data": "base64_decode"}
+            {"identifier": "$s2", "offset": 108, "data": "base64_decode"},
         ],
-        "file": "/var/www/html/upload/shell.php"
+        "file": "/var/www/html/upload/shell.php",
     }
     f = tmp_path / "yara.json"
     write(f, data)
@@ -55,12 +55,10 @@ def test_yara_adapter_apt_detection(tmp_path: Path):
             "description": "Cozy Bear APT indicators",
             "author": "CISA",
             "severity": "CRITICAL",
-            "reference": "https://www.cisa.gov/apt29"
+            "reference": "https://www.cisa.gov/apt29",
         },
-        "strings": [
-            {"identifier": "$magic", "offset": 0, "data": "MZ"}
-        ],
-        "file": "/tmp/suspicious.exe"
+        "strings": [{"identifier": "$magic", "offset": 0, "data": "MZ"}],
+        "file": "/tmp/suspicious.exe",
     }
     f = tmp_path / "yara.json"
     write(f, data)
@@ -83,10 +81,10 @@ def test_yara_adapter_ransomware_detection(tmp_path: Path):
         "meta": {
             "description": "WannaCry ransomware indicators",
             "author": "Security Researcher",
-            "severity": "CRITICAL"
+            "severity": "CRITICAL",
         },
         "strings": [],
-        "file": "/downloads/malware.bin"
+        "file": "/downloads/malware.bin",
     }
     f = tmp_path / "yara.json"
     write(f, data)
@@ -105,34 +103,28 @@ def test_yara_adapter_multiple_matches(tmp_path: Path):
             "rule": "webshell_aspx",
             "namespace": "default",
             "tags": ["webshell"],
-            "meta": {
-                "description": "ASPX web shell",
-                "severity": "HIGH"
-            },
-            "strings": [{"identifier": "$s1", "offset": 10, "data": "ProcessStartInfo"}],
-            "file": "/inetpub/wwwroot/shell.aspx"
+            "meta": {"description": "ASPX web shell", "severity": "HIGH"},
+            "strings": [
+                {"identifier": "$s1", "offset": 10, "data": "ProcessStartInfo"}
+            ],
+            "file": "/inetpub/wwwroot/shell.aspx",
         },
         {
             "rule": "cryptominer_xmrig",
             "namespace": "default",
             "tags": ["cryptominer", "medium"],
-            "meta": {
-                "description": "XMRig cryptominer",
-                "severity": "MEDIUM"
-            },
+            "meta": {"description": "XMRig cryptominer", "severity": "MEDIUM"},
             "strings": [],
-            "file": "/usr/bin/xmrig"
+            "file": "/usr/bin/xmrig",
         },
         {
             "rule": "trojan_generic",
             "namespace": "default",
             "tags": ["trojan"],
-            "meta": {
-                "description": "Generic trojan patterns"
-            },
+            "meta": {"description": "Generic trojan patterns"},
             "strings": [],
-            "file": "/tmp/trojan.exe"
-        }
+            "file": "/tmp/trojan.exe",
+        },
     ]
     f = tmp_path / "yara.json"
     write(f, data)
@@ -151,30 +143,10 @@ def test_yara_adapter_multiple_matches(tmp_path: Path):
 def test_yara_adapter_severity_inference(tmp_path: Path):
     """Test YARA adapter severity inference from tags when no explicit severity."""
     data = [
-        {
-            "rule": "rule_critical",
-            "tags": ["apt"],
-            "meta": {},
-            "strings": []
-        },
-        {
-            "rule": "rule_high",
-            "tags": ["webshell"],
-            "meta": {},
-            "strings": []
-        },
-        {
-            "rule": "rule_medium",
-            "tags": ["suspicious"],
-            "meta": {},
-            "strings": []
-        },
-        {
-            "rule": "rule_default",
-            "tags": [],
-            "meta": {},
-            "strings": []
-        }
+        {"rule": "rule_critical", "tags": ["apt"], "meta": {}, "strings": []},
+        {"rule": "rule_high", "tags": ["webshell"], "meta": {}, "strings": []},
+        {"rule": "rule_medium", "tags": ["suspicious"], "meta": {}, "strings": []},
+        {"rule": "rule_default", "tags": [], "meta": {}, "strings": []},
     ]
     f = tmp_path / "yara.json"
     write(f, data)
@@ -194,10 +166,8 @@ def test_yara_adapter_namespace_tagging(tmp_path: Path):
         "rule": "custom_rule",
         "namespace": "custom_rules",
         "tags": ["test"],
-        "meta": {
-            "description": "Test rule"
-        },
-        "strings": []
+        "meta": {"description": "Test rule"},
+        "strings": [],
     }
     f = tmp_path / "yara.json"
     write(f, data)
@@ -214,10 +184,8 @@ def test_yara_adapter_no_file_path(tmp_path: Path):
         "rule": "test_rule",
         "namespace": "default",
         "tags": [],
-        "meta": {
-            "description": "Test"
-        },
-        "strings": []
+        "meta": {"description": "Test"},
+        "strings": [],
     }
     f = tmp_path / "yara.json"
     write(f, data)
@@ -256,10 +224,8 @@ def test_yara_adapter_compliance_enrichment(tmp_path: Path):
         "rule": "malware_test",
         "namespace": "default",
         "tags": ["malware"],
-        "meta": {
-            "description": "Test malware rule"
-        },
-        "strings": []
+        "meta": {"description": "Test malware rule"},
+        "strings": [],
     }
     f = tmp_path / "yara.json"
     write(f, data)

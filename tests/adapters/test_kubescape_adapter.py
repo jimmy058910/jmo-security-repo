@@ -20,18 +20,18 @@ def test_kubescape_adapter_basic_finding(tmp_path: Path):
                     "description": "Containers running in privileged mode",
                     "scoreFactor": 9,
                     "failedResources": ["pod-123"],
-                    "remediation": "Remove privileged: true from container spec"
+                    "remediation": "Remove privileged: true from container spec",
                 }
-            }
+            },
         },
         "resources": [
             {
                 "resourceID": "pod-123",
                 "kind": "Pod",
                 "name": "nginx-pod",
-                "namespace": "default"
+                "namespace": "default",
             }
-        ]
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -59,17 +59,13 @@ def test_kubescape_adapter_critical_severity(tmp_path: Path):
                     "description": "Cluster allows anonymous access",
                     "scoreFactor": 10,
                     "failedResources": ["cluster-1"],
-                    "remediation": "Disable anonymous access"
+                    "remediation": "Disable anonymous access",
                 }
             }
         },
         "resources": [
-            {
-                "resourceID": "cluster-1",
-                "kind": "Cluster",
-                "name": "prod-cluster"
-            }
-        ]
+            {"resourceID": "cluster-1", "kind": "Cluster", "name": "prod-cluster"}
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -91,7 +87,7 @@ def test_kubescape_adapter_multiple_failed_resources(tmp_path: Path):
                     "description": "Containers mounting hostPath volumes",
                     "scoreFactor": 7,
                     "failedResources": ["pod-1", "pod-2", "pod-3"],
-                    "remediation": "Avoid hostPath mounts"
+                    "remediation": "Avoid hostPath mounts",
                 }
             }
         },
@@ -100,21 +96,21 @@ def test_kubescape_adapter_multiple_failed_resources(tmp_path: Path):
                 "resourceID": "pod-1",
                 "kind": "Pod",
                 "name": "app-1",
-                "namespace": "production"
+                "namespace": "production",
             },
             {
                 "resourceID": "pod-2",
                 "kind": "Pod",
                 "name": "app-2",
-                "namespace": "production"
+                "namespace": "production",
             },
             {
                 "resourceID": "pod-3",
                 "kind": "Pod",
                 "name": "app-3",
-                "namespace": "staging"
-            }
-        ]
+                "namespace": "staging",
+            },
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -136,7 +132,7 @@ def test_kubescape_adapter_no_namespace(tmp_path: Path):
                     "name": "ClusterRole permissions",
                     "description": "Excessive ClusterRole permissions",
                     "scoreFactor": 6,
-                    "failedResources": ["role-123"]
+                    "failedResources": ["role-123"],
                 }
             }
         },
@@ -144,10 +140,10 @@ def test_kubescape_adapter_no_namespace(tmp_path: Path):
             {
                 "resourceID": "role-123",
                 "kind": "ClusterRole",
-                "name": "admin-role"
+                "name": "admin-role",
                 # No namespace field
             }
-        ]
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -169,7 +165,7 @@ def test_kubescape_adapter_low_severity(tmp_path: Path):
                     "name": "Label best practices",
                     "description": "Missing recommended labels",
                     "scoreFactor": 2,
-                    "failedResources": ["pod-456"]
+                    "failedResources": ["pod-456"],
                 }
             }
         },
@@ -178,9 +174,9 @@ def test_kubescape_adapter_low_severity(tmp_path: Path):
                 "resourceID": "pod-456",
                 "kind": "Deployment",
                 "name": "web-app",
-                "namespace": "default"
+                "namespace": "default",
             }
-        ]
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -200,11 +196,11 @@ def test_kubescape_adapter_no_failed_resources(tmp_path: Path):
                     "name": "Passing control",
                     "description": "This control passed",
                     "scoreFactor": 8,
-                    "failedResources": []  # No failures
+                    "failedResources": [],  # No failures
                 }
             }
         },
-        "resources": []
+        "resources": [],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -222,11 +218,11 @@ def test_kubescape_adapter_missing_resource_details(tmp_path: Path):
                 "C-0007": {
                     "name": "Test control",
                     "scoreFactor": 5,
-                    "failedResources": ["unknown-resource"]
+                    "failedResources": ["unknown-resource"],
                 }
             }
         },
-        "resources": []  # Resource not in map
+        "resources": [],  # Resource not in map
     }
     f = tmp_path / "kubescape.json"
     write(f, data)
@@ -240,12 +236,7 @@ def test_kubescape_adapter_missing_resource_details(tmp_path: Path):
 
 def test_kubescape_adapter_empty_controls(tmp_path: Path):
     """Test Kubescape adapter with empty controls."""
-    data = {
-        "summaryDetails": {
-            "controls": {}
-        },
-        "resources": []
-    }
+    data = {"summaryDetails": {"controls": {}}, "resources": []}
     f = tmp_path / "kubescape.json"
     write(f, data)
     adapter = KubescapeAdapter()
@@ -274,17 +265,13 @@ def test_kubescape_adapter_compliance_enrichment(tmp_path: Path):
                     "name": "RBAC enabled",
                     "description": "Ensure RBAC is enabled",
                     "scoreFactor": 9,
-                    "failedResources": ["cluster-1"]
+                    "failedResources": ["cluster-1"],
                 }
-            }
+            },
         },
         "resources": [
-            {
-                "resourceID": "cluster-1",
-                "kind": "Cluster",
-                "name": "test-cluster"
-            }
-        ]
+            {"resourceID": "cluster-1", "kind": "Cluster", "name": "test-cluster"}
+        ],
     }
     f = tmp_path / "kubescape.json"
     write(f, data)

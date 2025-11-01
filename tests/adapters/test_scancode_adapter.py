@@ -12,12 +12,7 @@ def write(p: Path, obj):
 def test_scancode_adapter_mit_license(tmp_path: Path):
     """Test ScanCode adapter with MIT license detection."""
     data = {
-        "headers": [
-            {
-                "tool_name": "scancode-toolkit",
-                "tool_version": "32.0.0"
-            }
-        ],
+        "headers": [{"tool_name": "scancode-toolkit", "tool_version": "32.0.0"}],
         "files": [
             {
                 "path": "src/main.py",
@@ -30,13 +25,13 @@ def test_scancode_adapter_mit_license(tmp_path: Path):
                             {
                                 "score": 100.0,
                                 "rule_identifier": "mit_1.RULE",
-                                "license_expression": "mit"
+                                "license_expression": "mit",
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -65,15 +60,12 @@ def test_scancode_adapter_gpl_license(tmp_path: Path):
                         "license_expression": "gpl-3.0",
                         "identifier": "gpl-67890",
                         "matches": [
-                            {
-                                "score": 95.5,
-                                "rule_identifier": "gpl-3.0_1.RULE"
-                            }
-                        ]
+                            {"score": 95.5, "rule_identifier": "gpl-3.0_1.RULE"}
+                        ],
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -98,11 +90,11 @@ def test_scancode_adapter_copyright_statement(tmp_path: Path):
                     {
                         "value": "Copyright (c) 2023 Acme Corporation",
                         "start_line": 5,
-                        "end_line": 5
+                        "end_line": 5,
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -126,20 +118,17 @@ def test_scancode_adapter_license_and_copyright(tmp_path: Path):
                 "path": "LICENSE",
                 "type": "file",
                 "license_detections": [
-                    {
-                        "license_expression": "apache-2.0",
-                        "matches": [{"score": 100.0}]
-                    }
+                    {"license_expression": "apache-2.0", "matches": [{"score": 100.0}]}
                 ],
                 "copyrights": [
                     {
                         "value": "Copyright 2024 Example Inc.",
                         "start_line": 1,
-                        "end_line": 1
+                        "end_line": 1,
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -162,23 +151,17 @@ def test_scancode_adapter_multiple_files(tmp_path: Path):
                 "path": "src/app.js",
                 "type": "file",
                 "license_detections": [
-                    {
-                        "license_expression": "mit",
-                        "matches": [{"score": 100.0}]
-                    }
-                ]
+                    {"license_expression": "mit", "matches": [{"score": 100.0}]}
+                ],
             },
             {
                 "path": "src/utils.js",
                 "type": "file",
                 "license_detections": [
-                    {
-                        "license_expression": "bsd-3-clause",
-                        "matches": [{"score": 98.0}]
-                    }
-                ]
-            }
-        ]
+                    {"license_expression": "bsd-3-clause", "matches": [{"score": 98.0}]}
+                ],
+            },
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -199,23 +182,17 @@ def test_scancode_adapter_skip_directories(tmp_path: Path):
                 "path": "src",
                 "type": "directory",  # Should be skipped
                 "license_detections": [
-                    {
-                        "license_expression": "mit",
-                        "matches": [{"score": 100.0}]
-                    }
-                ]
+                    {"license_expression": "mit", "matches": [{"score": 100.0}]}
+                ],
             },
             {
                 "path": "src/main.py",
                 "type": "file",
                 "license_detections": [
-                    {
-                        "license_expression": "mit",
-                        "matches": [{"score": 100.0}]
-                    }
-                ]
-            }
-        ]
+                    {"license_expression": "mit", "matches": [{"score": 100.0}]}
+                ],
+            },
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -229,10 +206,7 @@ def test_scancode_adapter_skip_directories(tmp_path: Path):
 
 def test_scancode_adapter_empty_files(tmp_path: Path):
     """Test ScanCode adapter with empty files array."""
-    data = {
-        "headers": [{"tool_version": "32.0.0"}],
-        "files": []
-    }
+    data = {"headers": [{"tool_version": "32.0.0"}], "files": []}
     f = tmp_path / "scancode.json"
     write(f, data)
     adapter = ScancodeAdapter()
@@ -250,9 +224,9 @@ def test_scancode_adapter_no_detections(tmp_path: Path):
                 "path": "test.txt",
                 "type": "file",
                 "license_detections": [],
-                "copyrights": []
+                "copyrights": [],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)
@@ -281,13 +255,10 @@ def test_scancode_adapter_compliance_enrichment(tmp_path: Path):
                 "path": "LICENSE",
                 "type": "file",
                 "license_detections": [
-                    {
-                        "license_expression": "gpl-3.0",
-                        "matches": [{"score": 100.0}]
-                    }
-                ]
+                    {"license_expression": "gpl-3.0", "matches": [{"score": 100.0}]}
+                ],
             }
-        ]
+        ],
     }
     f = tmp_path / "scancode.json"
     write(f, data)

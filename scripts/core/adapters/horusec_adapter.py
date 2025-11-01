@@ -166,7 +166,9 @@ def _load_horusec_internal(path: str | Path) -> List[Dict[str, Any]]:
         severity = normalize_severity(severity_raw)
 
         # Build message
-        message = details if details else f"Security vulnerability detected: {vuln_type}"
+        message = (
+            details if details else f"Security vulnerability detected: {vuln_type}"
+        )
 
         # Build title
         title = vuln_type if vuln_type else vuln_id
@@ -179,7 +181,9 @@ def _load_horusec_internal(path: str | Path) -> List[Dict[str, Any]]:
         # Horusec vulnerabilities often don't have direct CWE mappings in output
         # but they reference security best practices
         if security_tool:
-            references.append(f"https://docs.horusec.io/docs/vulnerabilities/{security_tool.lower()}/")
+            references.append(
+                f"https://docs.horusec.io/docs/vulnerabilities/{security_tool.lower()}/"
+            )
 
         # Build tags
         tags = ["sast", "horusec", "multi-language"]
@@ -199,7 +203,11 @@ def _load_horusec_internal(path: str | Path) -> List[Dict[str, Any]]:
                 tags.append("hardcoded-secret")
 
         # Build remediation
-        remediation = details if details else "Review and remediate the identified security vulnerability according to OWASP best practices."
+        remediation = (
+            details
+            if details
+            else "Review and remediate the identified security vulnerability according to OWASP best practices."
+        )
 
         # Build finding dict
         finding = {

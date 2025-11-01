@@ -169,9 +169,12 @@ def scan_url(
             akto_cmd_list = [
                 "akto",
                 "test",
-                "--url", url,
-                "--output", str(akto_out),
-                "--format", "json",
+                "--url",
+                url,
+                "--output",
+                str(akto_out),
+                "--format",
+                "json",
                 *akto_flags,
             ]
             tool_defs.append(
