@@ -226,8 +226,6 @@ special_tools:
     notes: >
       v1.0.0 - MANUAL INSTALLATION REQUIRED (complex Android SDK dependencies).
       Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.
-      v1.0.0 - MANUAL INSTALLATION REQUIRED (complex Android SDK dependencies).
-      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.
   akto:
     version: 1.0.0
     github_repo: akto-api-security/akto
@@ -239,7 +237,6 @@ special_tools:
       v1.0.0 - MANUAL INSTALLATION REQUIRED (requires separate Docker service).
       Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.
     docker_ready: false
-    notes: 'v1.0.0 - MANUAL INSTALLATION REQUIRED (requires separate Docker service). Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.'
   yara:
     version: 4.5.2
     github_repo: VirusTotal/yara
