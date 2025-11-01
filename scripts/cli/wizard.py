@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from scripts.core.exceptions import ToolExecutionException
-from scripts.core.config import load_config
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_generators import (
     generate_github_actions,
@@ -51,8 +50,6 @@ from scripts.cli.wizard_flows.target_configurators import (
     configure_k8s_target as _configure_k8s,
 )
 from scripts.cli.wizard_flows.telemetry_helper import (
-    prompt_telemetry_opt_in,
-    save_telemetry_preference,
     send_wizard_telemetry,
 )
 

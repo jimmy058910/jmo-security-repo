@@ -31,7 +31,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import fingerprint
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -208,7 +208,7 @@ def _load_mobsf_internal(path: str | Path) -> List[Dict[str, Any]]:
                         f"https://cwe.mitre.org/data/definitions/{cwe}.html"
                     )
                 if owasp:
-                    references.append(f"https://owasp.org/www-project-mobile-top-10/")
+                    references.append("https://owasp.org/www-project-mobile-top-10/")
 
                 # Build tags
                 tags = ["mobile-security", "sast"]
