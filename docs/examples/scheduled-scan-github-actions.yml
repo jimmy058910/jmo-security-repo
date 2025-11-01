@@ -10,7 +10,7 @@
 #
 # Generated with: jmo schedule create + jmo schedule export
 
-name: JMo Security Scan: nightly-deep
+name: "JMo Security Scan: nightly-deep"
 
 on:
   schedule:
@@ -64,7 +64,7 @@ jobs:
 #                  "type": "section",
 #                  "text": {
 #                    "type": "mrkdwn",
-#                    "text": "Security scan *nightly-deep* failed\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+#                    "text": "🚨 Security scan *nightly-deep* failed"
 #                  }
 #                }
 #              ]
