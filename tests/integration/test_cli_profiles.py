@@ -83,13 +83,12 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Pretend semgrep exists, others do not
-    def fake_which(tool: str) -> bool:
-        return tool == "semgrep"
+    # Mock shutil.which to simulate semgrep being installed
+    import shutil
+    def fake_which(tool: str):
+        return "/usr/bin/semgrep" if tool == "semgrep" else None
 
-    # Mock tool_exists to simulate semgrep being installed
-    from scripts.cli import scan_utils
-    monkeypatch.setattr(scan_utils, "tool_exists", lambda t: t == "semgrep")
+    monkeypatch.setattr(shutil, "which", fake_which)
 
     calls = []
 
