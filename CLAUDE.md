@@ -299,17 +299,18 @@ All tool outputs are converted to a unified shape defined in `docs/schemas/commo
 
 Configuration via `jmo.yml` supports named profiles for different scan depths:
 
-- **fast:** 3 best-in-breed tools (trufflehog, semgrep, trivy), 300s timeout, 8 threads, 5-8 minutes
+- **fast:** 8 core tools (trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft, osv-scanner), 300s timeout, 8 threads, 5-10 minutes
   - Use case: Pre-commit checks, quick validation, CI/CD gate
+  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfile, backup secrets scanning
   - Coverage: Verified secrets, SAST, SCA, containers, IaC, backup secrets scanning
 
-- **balanced:** 8 production-ready tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei), 600s timeout, 4 threads, 15-20 minutes
+- **balanced:** 21 production tools (fast tools + prowler, kubescape, zap, nuclei, akto, cdxgen, scancode, gosec, grype, yara, bearer, horusec, dependency-check), 600s timeout, 4 threads, 18-25 minutes
   - Use case: CI/CD pipelines, regular audits, production scans
-  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST, API security
+  - Coverage: All fast + cloud CSPM, DAST, API security, SBOM expansion, malware detection, license compliance
 
-- **deep:** 12 comprehensive tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++), 900s timeout, 2 threads, 30-60 minutes, retries enabled
+- **deep:** 28 comprehensive tools (all tools including noseyparker, semgrep-secrets, bandit, trivy-rbac, falco, afl++, mobsf, lynis), 900s timeout, 2 threads, 40-70 minutes, retries enabled
   - Use case: Security audits, compliance scans, pre-release validation
-  - Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, API security, runtime security, fuzzing
+  - Coverage: Dual secrets scanners, multi-language SAST, full SBOM, cloud/K8s hardening, mobile security, system hardening, runtime security, fuzzing
 
 Profiles can override tools, timeouts, threads, and per-tool flags. Use `--profile-name <name>` to apply.
 
@@ -333,18 +334,23 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 4. Generate stable fingerprint ID
 5. Return list of findings
 
-**Supported Tools (v0.7.2):**
+**Supported Tools (v1.0.0):**
 
-- **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
-- **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
-- **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
-- **IaC:** checkov (policy-as-code)
+- **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile), semgrep-secrets
+- **SAST:** semgrep (multi-language), bandit (Python-specific), gosec (Go security), horusec (multi-language)
+- **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning), grype (Anchore vulnerability scanner), osv-scanner (Google OSV database), dependency-check (OWASP Dependency-Check)
+- **IaC:** checkov (policy-as-code), checkov-cicd (CI/CD pipeline security)
 - **Dockerfile:** hadolint (best practices)
-- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), **Nuclei (fast vulnerability scanner with 4000+ templates, API security)** — FULLY INTEGRATED v0.7.2+
-- **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
+- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), Nuclei (fast vulnerability scanner with 4000+ templates), Akto (API security testing)
+- **Cloud CSPM:** Prowler (AWS/Azure/GCP/K8s security auditing), Kubescape (Kubernetes security scanner)
+- **Mobile Security:** MobSF (Android/iOS static/dynamic analysis, manual install)
+- **Malware Detection:** YARA (malware pattern matching)
+- **System Hardening:** Lynis (Unix system security auditing)
+- **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile), Trivy-RBAC (Kubernetes RBAC scanner)
 - **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
+- **License Compliance:** Bearer (security/privacy scanner), ScanCode (license compliance)
 
-**Tool Count: 12 security scanners** (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
+**Tool Count: 28 security scanners** (26 Docker-ready: trufflehog, noseyparker, semgrep, semgrep-secrets, bandit, syft, trivy, trivy-rbac, checkov, checkov-cicd, hadolint, zap, nuclei, prowler, kubescape, scancode, cdxgen, gosec, osv-scanner, yara, grype, bearer, horusec, dependency-check, falco, afl++; 2 manual install: mobsf, akto) (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
 
 **Removed Tools (v0.5.0):**
 
@@ -774,6 +780,7 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 1. **Docker Tag Extraction:**
    - ❌ DON'T: Construct tags manually from `github.ref_name` (includes 'v' prefix)
    - ✅ DO: Extract tag directly from `metadata-action` output (strips 'v' automatically)
+
    ```yaml
    TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
    ```
@@ -781,6 +788,7 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 2. **Actionlint Parameters:**
    - ❌ DON'T: Use deprecated `fail_on_error: true`
    - ✅ DO: Use current API `fail_level: error`
+
    ```yaml
    - uses: reviewdog/action-actionlint@v1
      with:
@@ -790,6 +798,7 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 3. **Docker Image Testing:**
    - ❌ DON'T: Use `jmo --version` (CLI doesn't support top-level version flag)
    - ✅ DO: Use `jmo --help` and `jmo scan --help` (tests CLI works correctly)
+
    ```yaml
    docker run --rm jmo-security:tag --help
    docker run --rm jmo-security:tag scan --help
@@ -798,6 +807,7 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 4. **SARIF Upload Permissions:**
    - ❌ DON'T: Omit `security-events: write` permission (causes "Resource not accessible by integration")
    - ✅ DO: Add `security-events: write` to workflow permissions
+
    ```yaml
    permissions:
      security-events: write  # Required for uploading SARIF to GitHub Security
@@ -1465,6 +1475,7 @@ For advanced users who want full control:
 **CRITICAL: All security tools MUST be updated before EVERY release.**
 
 1. **Update ALL security tools to latest versions:**
+
    ```bash
    python3 scripts/dev/update_versions.py --check-latest  # Check for updates
    python3 scripts/dev/update_versions.py --update-all    # Update all tools

@@ -564,7 +564,7 @@ Q: How do I suppress false positives?
 
 - Use Case: CI/CD pipelines, regular audits, production scans (15-20 minutes)
 
-**Deep (11 tools):** Maximum coverage accepting tool overhead for exhaustive detection
+**Deep (28 tools (26 Docker-ready)):** Maximum coverage accepting tool overhead for exhaustive detection
 
 - Use Case: Security audits, compliance scans, pre-release validation (30-60 minutes)
 

@@ -115,6 +115,112 @@
 
 # Changelog
 
+## [1.0.0] - 2025-11-01
+
+### 🚀 Major Release: Tool Ecosystem Expansion (12 → 28 Security Tools)
+
+#### Added
+
+**16 New Security Tool Adapters:**
+
+- **Secrets Scanning:** semgrep-secrets (Semgrep secrets rules, complements TruffleHog)
+- **SAST:** gosec (Go security scanner), horusec (multi-language SAST), bearer (security/privacy scanner)
+- **SBOM:** cdxgen (universal SBOM generator, CycloneDX format), scancode (license compliance & code scanning)
+- **SCA:** grype (Anchore vulnerability scanner), osv-scanner (Google OSV database), dependency-check (OWASP Dependency-Check)
+- **IaC:** checkov-cicd (Checkov CI/CD pipeline security)
+- **Cloud CSPM:** prowler (AWS/Azure/GCP/K8s security auditing), kubescape (Kubernetes security scanner)
+- **DAST:** akto (API security testing, business logic flaws)
+- **Mobile Security:** mobsf (Mobile Security Framework, Android/iOS analysis, manual install)
+- **Malware Detection:** yara (malware pattern matching, web shells/backdoors/cryptominers)
+- **System Hardening:** lynis (Unix system security auditing, CIS baseline checks)
+- **Runtime Security:** trivy-rbac (Trivy RBAC scanner, Kubernetes RBAC misconfiguration)
+
+**4 Optimized Docker Variants:**
+
+- **Full** (1.97 GB): 26 Docker-ready tools for comprehensive audits (40-70 min)
+- **Balanced** (1.41 GB, NEW): 21 tools for production CI/CD (18-25 min)
+- **Slim** (557 MB, redesigned): 15 cloud-focused tools (IaC, K8s, containers)
+- **Fast** (502 MB, NEW): 8 tools for CI/CD gates, pre-commit hooks (5-10 min)
+
+**Phase 1 Docker Optimizations (155 MB savings):**
+
+1. Nuclei template filtering: 4000+ → 1200 templates (65 MB saved)
+2. Python bytecode cleanup: **pycache** removal (40 MB saved)
+3. Binary stripping: strip all binaries (15 MB saved)
+4. Java runtime cleanup: Remove man pages, docs, locales (30 MB saved)
+5. .dockerignore exclusions: Git metadata, tests, dev-only (5 MB saved)
+
+**Documentation:**
+
+- Added [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md): Comprehensive guide for MobSF and Akto setup (369 lines)
+- Updated README.md, QUICKSTART.md, USER_GUIDE.md, DOCKER_HUB_README.md with 28-tool coverage
+- Updated CLAUDE.md with plugin architecture patterns and v1.0.0 tool list
+
+#### Changed
+
+**Profile Rebalancing:**
+
+- **fast:** 3 → 8 tools (trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft, osv-scanner)
+- **balanced:** 8 → 21 tools (fast + cloud CSPM, DAST, API security, SBOM expansion, malware)
+- **deep:** 12 → 28 tools (all tools including mobile, fuzzing, runtime, system hardening)
+
+**Docker Strategy:**
+
+- Old: 3 variants (full 2.49 GB, slim 1.93 GB, alpine 721 MB)
+- New: 4 purpose-built variants (21% smaller Full image, better variant naming)
+
+**Tool Count:**
+
+- v0.7.2: 12 tools
+- v1.0.0: 28 tools (26 Docker-ready, 2 manual install)
+- Security categories: 7 → 11 (added Cloud CSPM, Mobile, Malware, System Hardening)
+
+#### Testing
+
+- 272 adapter tests passing (16 new adapters × 17 test cases each)
+- 91 integration tests passing (71 non-Docker + 20 Docker variant tests)
+- Coverage maintained at ≥85% (CI requirement)
+
+#### Impact
+
+**Security Coverage:**
+
+- 133% more tools (12 → 28)
+- 11 security categories covered (was 7)
+- New capabilities: Cloud CSPM, mobile security, malware detection, system hardening
+
+**Docker Efficiency:**
+
+- 21% smaller Full image (2.49 GB → 1.97 GB)
+- 4 purpose-built variants vs. 3 generic ones
+- Faster CI/CD: Fast variant (502 MB) vs. old Alpine (721 MB)
+
+**Developer Experience:**
+
+- Clear variant selection (Fast/Balanced/Slim/Full)
+- Profile-based scanning (auto-selects correct tools)
+- Comprehensive manual installation docs for advanced tools
+
+#### Files Modified
+
+**53 files total:**
+
+- 16 new adapters: `scripts/core/adapters/*_adapter.py`
+- 16 new test suites: `tests/adapters/test_*_adapter.py`
+- 4 Docker variants: `Dockerfile`, `Dockerfile.balanced`, `Dockerfile.slim`, `Dockerfile.fast`
+- Core integration: `scripts/cli/scan_jobs/repository_scanner.py`, `scripts/cli/scan_jobs/url_scanner.py`, `scripts/cli/wizard.py`
+- Configuration: `versions.yaml`, `jmo.yml`
+- Documentation: `docs/MANUAL_INSTALLATION.md`, `DOCKER_HUB_README.md`, `README.md`, `QUICKSTART.md`, `USER_GUIDE.md`, `CLAUDE.md`
+- CI/CD: `.github/workflows/release.yml` (4-variant build matrix), `.dockerignore`
+
+#### Related
+
+- Implementation Plan: `dev-only/1.0.0/IMPLEMENTATION_MASTER_PLAN.md`
+- Tool Specifications: `dev-only/TOOLS-1.0.0.md`
+- Version Roadmap: `dev-only/VERSION_ROADMAP_1.0.0.md`
+
+---
+
 For the release process, see docs/RELEASE.md.
 
 ## 0.8.0 (2025-10-28)
