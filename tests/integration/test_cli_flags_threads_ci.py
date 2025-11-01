@@ -44,7 +44,9 @@ def test_per_tool_flags_passed_semgrep(tmp_path: Path, monkeypatch):
         return result
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
-    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+    # Mock tool_exists to simulate semgrep being installed
+    from scripts.cli import scan_utils
+    monkeypatch.setattr(scan_utils, "tool_exists", lambda t: t == "semgrep")
     monkeypatch.setattr(subprocess, "run", mock_run)
 
     args = types.SimpleNamespace(
