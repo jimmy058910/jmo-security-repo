@@ -8,7 +8,6 @@ Tests EPSSClient functionality including:
 - Error handling
 """
 
-import json
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -47,9 +46,9 @@ def mock_epss_response():
                 "cve": "CVE-2024-1234",
                 "epss": "0.12345",
                 "percentile": "0.85432",
-                "date": "2024-10-01"
+                "date": "2024-10-01",
             }
-        ]
+        ],
     }
 
 
@@ -66,21 +65,21 @@ def mock_epss_bulk_response():
                 "cve": "CVE-2024-1234",
                 "epss": "0.12345",
                 "percentile": "0.85432",
-                "date": "2024-10-01"
+                "date": "2024-10-01",
             },
             {
                 "cve": "CVE-2024-5678",
                 "epss": "0.95000",
                 "percentile": "0.99999",
-                "date": "2024-10-01"
+                "date": "2024-10-01",
             },
             {
                 "cve": "CVE-2024-9999",
                 "epss": "0.00100",
                 "percentile": "0.10000",
-                "date": "2024-10-01"
-            }
-        ]
+                "date": "2024-10-01",
+            },
+        ],
     }
 
 
@@ -90,10 +89,7 @@ class TestEPSSScore:
     def test_create_epss_score(self):
         """Test creating EPSSScore object."""
         score = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
 
         assert score.cve == "CVE-2024-1234"
@@ -104,16 +100,10 @@ class TestEPSSScore:
     def test_epss_score_equality(self):
         """Test EPSSScore equality comparison."""
         score1 = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
         score2 = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
 
         assert score1 == score2
@@ -144,7 +134,7 @@ class TestEPSSClient:
 
         assert result is not None
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_score_from_api(self, mock_get, epss_client, mock_epss_response):
         """Test fetching score from API when not cached."""
         mock_response = Mock()
@@ -164,7 +154,7 @@ class TestEPSSClient:
         mock_get.assert_called_once()
         assert "CVE-2024-1234" in mock_get.call_args[0][0]
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_score_from_cache(self, mock_get, epss_client, mock_epss_response):
         """Test retrieving score from cache on second call."""
         mock_response = Mock()
@@ -183,7 +173,7 @@ class TestEPSSClient:
         # API should only be called once
         assert mock_get.call_count == 1
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_score_not_found(self, mock_get, epss_client):
         """Test handling of CVE not found in API."""
         mock_response = Mock()
@@ -195,7 +185,7 @@ class TestEPSSClient:
 
         assert score is None
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_score_api_error(self, mock_get, epss_client, capsys):
         """Test handling of API errors."""
         mock_get.side_effect = requests.exceptions.RequestException("API Error")
@@ -208,7 +198,7 @@ class TestEPSSClient:
         captured = capsys.readouterr()
         assert "Warning: Failed to fetch EPSS score" in captured.out
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_scores_bulk(self, mock_get, epss_client, mock_epss_bulk_response):
         """Test bulk fetching of multiple scores."""
         mock_response = Mock()
@@ -231,15 +221,14 @@ class TestEPSSClient:
         # Verify bulk API was called once
         mock_get.assert_called_once()
 
-    @patch('requests.get')
-    def test_get_scores_bulk_mixed_cache(self, mock_get, epss_client, mock_epss_response):
+    @patch("requests.get")
+    def test_get_scores_bulk_mixed_cache(
+        self, mock_get, epss_client, mock_epss_response
+    ):
         """Test bulk fetching with some scores already cached."""
         # Cache one score manually
         cached_score = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
         epss_client._cache_score(cached_score)
 
@@ -252,9 +241,9 @@ class TestEPSSClient:
                     "cve": "CVE-2024-5678",
                     "epss": "0.95000",
                     "percentile": "0.99999",
-                    "date": "2024-10-01"
+                    "date": "2024-10-01",
                 }
-            ]
+            ],
         }
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
@@ -274,10 +263,7 @@ class TestEPSSClient:
     def test_cache_ttl_validation(self, epss_client):
         """Test cache TTL expiration."""
         score = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
 
         # Cache score
@@ -293,7 +279,7 @@ class TestEPSSClient:
         expired_time = datetime.now() - timedelta(days=8)  # 8 days ago (TTL is 7 days)
         cursor.execute(
             "UPDATE epss_scores SET cached_at = ? WHERE cve = ?",
-            (expired_time.isoformat(), score.cve)
+            (expired_time.isoformat(), score.cve),
         )
         conn.commit()
         conn.close()
@@ -301,15 +287,14 @@ class TestEPSSClient:
         # Should be invalid after expiration
         assert not epss_client._is_cache_valid(score)
 
-    @patch('requests.get')
-    def test_cache_ttl_triggers_refresh(self, mock_get, epss_client, mock_epss_response):
+    @patch("requests.get")
+    def test_cache_ttl_triggers_refresh(
+        self, mock_get, epss_client, mock_epss_response
+    ):
         """Test that expired cache triggers API refresh."""
         # Cache score with expired timestamp
         score = EPSSScore(
-            cve="CVE-2024-1234",
-            epss=0.12345,
-            percentile=0.85432,
-            date="2024-10-01"
+            cve="CVE-2024-1234", epss=0.12345, percentile=0.85432, date="2024-10-01"
         )
         epss_client._cache_score(score)
 
@@ -319,7 +304,7 @@ class TestEPSSClient:
         expired_time = datetime.now() - timedelta(days=8)
         cursor.execute(
             "UPDATE epss_scores SET cached_at = ? WHERE cve = ?",
-            (expired_time.isoformat(), score.cve)
+            (expired_time.isoformat(), score.cve),
         )
         conn.commit()
         conn.close()
@@ -341,7 +326,7 @@ class TestEPSSClient:
         # Create first client and cache a score
         client1 = EPSSClient(cache_dir=temp_cache_dir)
 
-        with patch('requests.get') as mock_get:
+        with patch("requests.get") as mock_get:
             mock_response = Mock()
             mock_response.json.return_value = mock_epss_response
             mock_response.raise_for_status = Mock()
@@ -352,7 +337,7 @@ class TestEPSSClient:
         # Create second client (new instance, same cache)
         client2 = EPSSClient(cache_dir=temp_cache_dir)
 
-        with patch('requests.get') as mock_get2:
+        with patch("requests.get") as mock_get2:
             score2 = client2.get_score("CVE-2024-1234")
 
             # Should use cache, not call API
@@ -360,7 +345,7 @@ class TestEPSSClient:
 
         assert score1 == score2
 
-    @patch('requests.get')
+    @patch("requests.get")
     def test_get_scores_bulk_api_error(self, mock_get, epss_client, capsys):
         """Test handling of bulk API errors."""
         mock_get.side_effect = requests.exceptions.RequestException("Bulk API Error")

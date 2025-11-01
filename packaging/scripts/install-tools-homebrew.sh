@@ -2,15 +2,15 @@
 # Install all JMo Security external tools via Homebrew
 # Works on macOS and Linux (with Linuxbrew)
 
-set -e  # Exit on error
+set -e # Exit on error
 
 echo "🔧 Installing JMo Security external tools via Homebrew..."
 echo ""
 
 # Check if Homebrew is installed
-if ! command -v brew &> /dev/null; then
-    echo "❌ Homebrew not found. Install from: https://brew.sh"
-    exit 1
+if ! command -v brew &>/dev/null; then
+  echo "❌ Homebrew not found. Install from: https://brew.sh"
+  exit 1
 fi
 
 echo "✅ Homebrew found: $(brew --version | head -1)"
@@ -18,17 +18,17 @@ echo ""
 
 # Function to install a tool
 install_tool() {
-    local tool_name="$1"
-    local brew_formula="$2"
-    local description="$3"
+  local tool_name="$1"
+  local brew_formula="$2"
+  local description="$3"
 
-    echo "📦 Installing $tool_name ($description)..."
-    if brew install "$brew_formula" 2>&1; then
-        echo "   ✅ $tool_name installed"
-    else
-        echo "   ⚠️  $tool_name failed to install (may already be installed)"
-    fi
-    echo ""
+  echo "📦 Installing $tool_name ($description)..."
+  if brew install "$brew_formula" 2>&1; then
+    echo "   ✅ $tool_name installed"
+  else
+    echo "   ⚠️  $tool_name failed to install (may already be installed)"
+  fi
+  echo ""
 }
 
 # Install tools in order

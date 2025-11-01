@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, List
+from typing import List, Union, Dict, Any
 
 from scripts.core.common_finding import (
     extract_code_snippet,
@@ -50,7 +50,7 @@ class SemgrepAdapter(AdapterPlugin):
     @property
     def metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
-        return self.__class__._plugin_metadata
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
     def parse(self, output_path: Path) -> List[Finding]:
         """Parse Semgrep JSON output and return normalized findings.
@@ -130,19 +130,18 @@ class SemgrepAdapter(AdapterPlugin):
             extra = r.get("extra", {})
 
             # Remediation with autofix
-            remediation: str | dict[str, Any] = (
-                "Review and remediate per rule guidance."
-            )
+            # v1.1.0: Return dict for autofix, string otherwise
+            remediation: Union[str, Dict[str, Any]] = "Review and remediate per rule guidance."
             autofix = extra.get("fix")
             if autofix:
+                remediation_steps = [
+                    "Apply the suggested fix above",
+                    "Test the changes",
+                    "Commit the fix",
+                ]
                 remediation = {
-                    "summary": msg,
                     "fix": autofix,
-                    "steps": [
-                        "Apply the suggested fix above",
-                        "Test the changes",
-                        "Commit the fix",
-                    ],
+                    "steps": remediation_steps,
                 }
 
             # Risk metadata (CWE, OWASP, confidence)

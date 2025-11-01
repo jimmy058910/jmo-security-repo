@@ -59,8 +59,15 @@ def test_container_image_scan_creates_output(tmp_path: Path):
         # Should have a sanitized directory name
         image_dirs = list(images_dir.iterdir())
         if image_dirs:
-            # At least one of trivy.json or syft.json should exist
+            # Find the actual image directory (handle potential double-nesting bug)
             image_dir = image_dirs[0]
+            # If first level is also "individual-images", go one level deeper
+            if image_dir.is_dir() and image_dir.name == "individual-images":
+                nested_dirs = list(image_dir.iterdir())
+                if nested_dirs:
+                    image_dir = nested_dirs[0]
+
+            # At least one of trivy.json or syft.json should exist
             has_output = (image_dir / "trivy.json").exists() or (
                 image_dir / "syft.json"
             ).exists()
@@ -120,7 +127,14 @@ resource "aws_s3_bucket" "test" {
     if iac_dir.exists():
         iac_dirs = list(iac_dir.iterdir())
         if iac_dirs:
+            # Find the actual IaC directory (handle potential double-nesting bug)
             iac_file_dir = iac_dirs[0]
+            # If first level is also "individual-iac", go one level deeper
+            if iac_file_dir.is_dir() and iac_file_dir.name == "individual-iac":
+                nested_dirs = list(iac_file_dir.iterdir())
+                if nested_dirs:
+                    iac_file_dir = nested_dirs[0]
+
             has_output = (iac_file_dir / "checkov.json").exists() or (
                 iac_file_dir / "trivy.json"
             ).exists()
@@ -330,7 +344,8 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     # Scan repo + image (both will find same CVE in requests package)
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -346,7 +361,13 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
 
     # Generate report
-    cmd_report = ["python3", "-m", "scripts.cli.jmo", "report", str(tmp_path / "results")]
+    cmd_report = [
+        "python3",
+        "-m",
+        "scripts.cli.jmo",
+        "report",
+        str(tmp_path / "results"),
+    ]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify deduplication
@@ -374,7 +395,8 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     # Scan repo + image (multi-target)
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -391,7 +413,13 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     assert result.returncode in [0, 1]
 
     # Generate report
-    cmd_report = ["python3", "-m", "scripts.cli.jmo", "report", str(tmp_path / "results")]
+    cmd_report = [
+        "python3",
+        "-m",
+        "scripts.cli.jmo",
+        "report",
+        str(tmp_path / "results"),
+    ]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify compliance summary includes all frameworks
@@ -430,7 +458,8 @@ resource "aws_s3_bucket" "test" {
     # Scan all 3 target types
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -469,7 +498,8 @@ def test_multi_target_partial_failure(tmp_path: Path):
     # Scan valid repo + invalid image (should fail gracefully)
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),

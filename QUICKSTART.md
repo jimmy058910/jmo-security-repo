@@ -20,7 +20,7 @@ winget install jmo.jmo-security
 jmotools wizard  # Start scanning!
 ```
 
-### Alternative Paths:
+### Alternative Paths
 
 1. **Have Docker?** → [Option 2: Docker](#option-2--docker-zero-installation) (60 seconds)
 2. **Have Python + pip?** → [Install JMo first](#-installation-in-2-minutes), then [Option 3: CLI Wrapper](#option-3--cli-wrapper-commands-local-install)
@@ -45,6 +45,7 @@ winget install jmo.jmo-security
 ```
 
 **Benefits:**
+
 - ✅ One command install
 - ✅ Automatic updates (`brew upgrade` / `winget upgrade`)
 - ✅ Clean uninstall (`brew uninstall` / `winget uninstall`)

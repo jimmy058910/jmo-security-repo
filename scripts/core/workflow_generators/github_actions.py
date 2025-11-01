@@ -38,11 +38,9 @@ class GitHubActionsGenerator:
             "on": self._generate_triggers(schedule),
             "permissions": {
                 "contents": "read",
-                "security-events": "write"  # Required for SARIF upload
+                "security-events": "write",  # Required for SARIF upload
             },
-            "jobs": {
-                "security-scan": self._generate_job(schedule)
-            }
+            "jobs": {"security-scan": self._generate_job(schedule)},
         }
 
         return yaml.dump(workflow, sort_keys=False, default_flow_style=False)
@@ -69,7 +67,7 @@ class GitHubActionsGenerator:
         """
         return {
             "schedule": [{"cron": schedule.spec.schedule}],
-            "workflow_dispatch": {}  # Allow manual triggers
+            "workflow_dispatch": {},  # Allow manual triggers
         }
 
     def _generate_job(self, schedule: ScanSchedule) -> Dict[str, Any]:
@@ -81,19 +79,18 @@ class GitHubActionsGenerator:
         Returns:
             dict: Complete job configuration
         """
-        job = {
-            "runs-on": "ubuntu-latest",
-            "steps": [
-                self._checkout_step(),
-                self._scan_step(schedule),
-                self._upload_results_step(schedule),
-                self._upload_sarif_step(),
-            ]
-        }
+        steps: List[Dict[str, Any]] = [
+            self._checkout_step(),
+            self._scan_step(schedule),
+            self._upload_results_step(schedule),
+            self._upload_sarif_step(),
+        ]
 
         # Add notification steps if enabled
         if schedule.spec.jobTemplate.notifications.get("enabled"):
-            job["steps"].extend(self._notification_steps(schedule))
+            steps.extend(self._notification_steps(schedule))
+
+        job = {"runs-on": "ubuntu-latest", "steps": steps}
 
         return job
 
@@ -103,10 +100,7 @@ class GitHubActionsGenerator:
         Returns:
             dict: Checkout step configuration
         """
-        return {
-            "name": "Checkout code",
-            "uses": "actions/checkout@v4"
-        }
+        return {"name": "Checkout code", "uses": "actions/checkout@v4"}
 
     def _scan_step(self, schedule: ScanSchedule) -> Dict[str, Any]:
         """Generate JMo scan step using Docker image.
@@ -121,7 +115,7 @@ class GitHubActionsGenerator:
 
         return {
             "name": "Run JMo Security Scan",
-            "run": f"docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest {args}"
+            "run": f"docker run --rm -v $(pwd):/workspace ghcr.io/jimmy058910/jmo-security:latest {args}",
         }
 
     def _build_scan_args(self, schedule: ScanSchedule) -> str:
@@ -233,9 +227,9 @@ class GitHubActionsGenerator:
             "with": {
                 "name": f"jmo-results-{schedule.metadata.name}-${{{{ github.run_number }}}}",
                 "path": "results/summaries/",
-                "retention-days": retention_days
+                "retention-days": retention_days,
             },
-            "if": "always()"
+            "if": "always()",
         }
 
     def _upload_sarif_step(self) -> Dict[str, Any]:
@@ -247,10 +241,8 @@ class GitHubActionsGenerator:
         return {
             "name": "Upload SARIF to GitHub Security",
             "uses": "github/codeql-action/upload-sarif@v3",
-            "with": {
-                "sarif_file": "results/summaries/findings.sarif"
-            },
-            "if": "always()"
+            "with": {"sarif_file": "results/summaries/findings.sarif"},
+            "if": "always()",
         }
 
     def _notification_steps(self, schedule: ScanSchedule) -> List[Dict[str, Any]]:
@@ -269,27 +261,31 @@ class GitHubActionsGenerator:
             if channel["type"] == "slack":
                 # Failure notification
                 if "failure" in channel.get("events", []):
-                    steps.append({
-                        "name": "Notify Slack on failure",
-                        "if": "failure()",
-                        "uses": "slackapi/slack-github-action@v1",
-                        "with": {
-                            "webhook-url": "${{ secrets.SLACK_WEBHOOK_URL }}",
-                            "payload": self._slack_payload(schedule, "failure")
+                    steps.append(
+                        {
+                            "name": "Notify Slack on failure",
+                            "if": "failure()",
+                            "uses": "slackapi/slack-github-action@v1",
+                            "with": {
+                                "webhook-url": "${{ secrets.SLACK_WEBHOOK_URL }}",
+                                "payload": self._slack_payload(schedule, "failure"),
+                            },
                         }
-                    })
+                    )
 
                 # Success notification
                 if "success" in channel.get("events", []):
-                    steps.append({
-                        "name": "Notify Slack on success",
-                        "if": "success()",
-                        "uses": "slackapi/slack-github-action@v1",
-                        "with": {
-                            "webhook-url": "${{ secrets.SLACK_WEBHOOK_URL }}",
-                            "payload": self._slack_payload(schedule, "success")
+                    steps.append(
+                        {
+                            "name": "Notify Slack on success",
+                            "if": "success()",
+                            "uses": "slackapi/slack-github-action@v1",
+                            "with": {
+                                "webhook-url": "${{ secrets.SLACK_WEBHOOK_URL }}",
+                                "payload": self._slack_payload(schedule, "success"),
+                            },
                         }
-                    })
+                    )
 
         return steps
 
@@ -319,10 +315,10 @@ class GitHubActionsGenerator:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"{message}\nRun: <${{{{ github.server_url }}}}/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}|View Details>"
-                    }
+                        "text": f"{message}\nRun: <${{{{ github.server_url }}}}/${{{{ github.repository }}}}/actions/runs/${{{{ github.run_id }}}}|View Details>",
+                    },
                 }
-            ]
+            ],
         }
 
         return json.dumps(payload)

@@ -43,6 +43,7 @@ jmotools fast --repos-dir C:\Projects
 ```
 
 **Tools included:**
+
 - ✅ TruffleHog (verified secrets)
 - ✅ Trivy (vulnerabilities, misconfigs)
 - ⚠️ Semgrep (90% of rules work, some Linux-specific rules skipped)
@@ -58,6 +59,7 @@ jmotools balanced --repos-dir C:\Projects
 ```
 
 **Tools included:**
+
 - ✅ TruffleHog, Trivy, Syft, Checkov, Hadolint, Nuclei, Bandit (7/8 work)
 - ⚠️ ZAP (requires Docker or complex Java setup)
 
@@ -73,6 +75,7 @@ jmotools wizard --docker --profile balanced
 **Time:** 30-60 minutes | **Tools:** 12 comprehensive tools
 
 **Tools NOT available natively:**
+
 - ❌ Nosey Parker (deep secrets)
 - ❌ Falco (runtime security)
 - ❌ AFL++ (fuzzing)
@@ -101,7 +104,7 @@ jmotools wizard --docker --profile deep
    ```
 
 2. **Install Docker Desktop:**
-   - Download from: https://www.docker.com/products/docker-desktop
+   - Download from: <https://www.docker.com/products/docker-desktop>
    - Enable WSL2 integration in Docker Desktop settings
 
 3. **Install JMo Security (choose one):**
@@ -126,6 +129,7 @@ jmotools wizard --docker --profile deep
    ```
 
 **Why this is best:**
+
 - ✅ All 12 security tools available
 - ✅ Consistent with Linux/macOS experience
 - ✅ Native Windows CLI with Docker backend
@@ -155,6 +159,7 @@ jmotools wizard --docker --profile deep
    ```
 
 **Limitations:**
+
 - ❌ No Nosey Parker (deep secrets scanning)
 - ❌ No Falco (runtime security)
 - ❌ No AFL++ (fuzzing)
@@ -162,12 +167,14 @@ jmotools wizard --docker --profile deep
 - ⚠️ Some Semgrep rules skip on Windows
 
 **When to use:**
+
 - Quick validation scans
 - Pre-commit hooks (fast profile)
 - CI/CD where Docker not available
 - Learning JMo Security basics
 
 **NOT recommended for:**
+
 - Production security audits
 - Compliance scanning
 - Comprehensive vulnerability assessment
@@ -244,6 +251,7 @@ jmotools setup --check
 ### Q: Why don't all tools work on Windows?
 
 **A:** Many security tools are built for Linux and rely on:
+
 - Linux kernel features (eBPF for Falco)
 - POSIX APIs (AFL++ fuzzing)
 - Linux package ecosystems
@@ -254,6 +262,7 @@ Windows is a secondary platform for most security tools.
 ### Q: Will Windows support improve in the future?
 
 **A:** Unlikely for some tools:
+
 - **Falco:** Requires eBPF (Linux kernel only)
 - **AFL++:** Requires Linux kernel for fuzzing
 - **Nosey Parker:** Rust team prioritizes Linux/macOS
@@ -267,6 +276,7 @@ Windows is a secondary platform for most security tools.
 ### Q: Does Winget install all 12 tools?
 
 **A:** ❌ No. Winget installs **only the JMo Security CLI**. You must:
+
 - Install tools separately (7 work natively), OR
 - Use Docker mode (all 12 tools included)
 
@@ -284,6 +294,7 @@ jmotools fast --repos-dir C:\Projects
 ### Q: Can I mix native tools and Docker?
 
 **A:** ⚠️ Not recommended. JMo runs tools either:
+
 - All native (local binaries)
 - All Docker (containerized)
 
@@ -293,7 +304,7 @@ jmotools fast --repos-dir C:\Projects
 
 ## 🎓 Best Practices for Windows Users
 
-### ✅ DO:
+### ✅ DO
 
 1. **Use WSL2 + Docker Desktop** for production scans
 2. **Use fast profile** if running native Windows only
@@ -303,7 +314,7 @@ jmotools fast --repos-dir C:\Projects
    jmotools setup --check
    ```
 
-### ❌ DON'T:
+### ❌ DON'T
 
 1. **Don't use deep profile on native Windows** - will fail
 2. **Don't expect 100% tool parity** with Linux/macOS on native Windows
@@ -314,9 +325,9 @@ jmotools fast --repos-dir C:\Projects
 
 ## 📚 Additional Resources
 
-- **Docker Desktop for Windows:** https://docs.docker.com/desktop/install/windows-install/
-- **WSL2 Installation:** https://learn.microsoft.com/en-us/windows/wsl/install
-- **Scoop Package Manager:** https://scoop.sh/ (for tool installation)
+- **Docker Desktop for Windows:** <https://docs.docker.com/desktop/install/windows-install/>
+- **WSL2 Installation:** <https://learn.microsoft.com/en-us/windows/wsl/install>
+- **Scoop Package Manager:** <https://scoop.sh/> (for tool installation)
 - **JMo Security Docker Guide:** [../docs/DOCKER_README.md](../docs/DOCKER_README.md)
 
 ---
@@ -337,6 +348,7 @@ jmotools fast --repos-dir C:\Projects --allow-missing-tools
 ### Issue: ZAP fails to start
 
 **Solution:** ZAP requires Java. Either:
+
 1. Install Java JRE 11+, OR
 2. Use Docker mode:
    ```powershell

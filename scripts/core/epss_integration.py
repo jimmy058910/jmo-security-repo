@@ -26,6 +26,7 @@ class EPSSScore:
         percentile: Percentile among all CVEs (0.0-1.0)
         date: Score date in YYYY-MM-DD format
     """
+
     cve: str
     epss: float  # 0.0 - 1.0 (probability of exploit in next 30 days)
     percentile: float  # 0.0 - 1.0 (percentile among all CVEs)
@@ -66,7 +67,8 @@ class EPSSClient:
         conn = sqlite3.connect(self.cache_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS epss_scores (
                 cve TEXT PRIMARY KEY,
                 epss REAL,
@@ -74,7 +76,8 @@ class EPSSClient:
                 date TEXT,
                 cached_at TEXT
             )
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -148,22 +151,19 @@ class EPSSClient:
         Returns:
             EPSSScore object or None if not found
         """
-        response = requests.get(
-            f"{self.API_URL}?cve={cve}",
-            timeout=10
-        )
+        response = requests.get(f"{self.API_URL}?cve={cve}", timeout=10)
         response.raise_for_status()
 
         data = response.json()
-        if data.get('total', 0) == 0:
+        if data.get("total", 0) == 0:
             return None
 
-        entry = data['data'][0]
+        entry = data["data"][0]
         return EPSSScore(
-            cve=entry['cve'],
-            epss=float(entry['epss']),
-            percentile=float(entry['percentile']),
-            date=entry['date']
+            cve=entry["cve"],
+            epss=float(entry["epss"]),
+            percentile=float(entry["percentile"]),
+            date=entry["date"],
         )
 
     def _fetch_bulk_from_api(self, cves: List[str]) -> Dict[str, EPSSScore]:
@@ -178,22 +178,19 @@ class EPSSClient:
             Dictionary mapping CVE IDs to EPSSScore objects
         """
         # EPSS API accepts comma-separated CVE list in GET request
-        cve_list = ','.join(cves)
-        response = requests.get(
-            f"{self.API_URL}?cve={cve_list}",
-            timeout=30
-        )
+        cve_list = ",".join(cves)
+        response = requests.get(f"{self.API_URL}?cve={cve_list}", timeout=30)
         response.raise_for_status()
 
         data = response.json()
         scores = {}
 
-        for entry in data.get('data', []):
+        for entry in data.get("data", []):
             score = EPSSScore(
-                cve=entry['cve'],
-                epss=float(entry['epss']),
-                percentile=float(entry['percentile']),
-                date=entry['date']
+                cve=entry["cve"],
+                epss=float(entry["epss"]),
+                percentile=float(entry["percentile"]),
+                date=entry["date"],
             )
             scores[score.cve] = score
 
@@ -213,7 +210,7 @@ class EPSSClient:
 
         cursor.execute(
             "SELECT epss, percentile, date, cached_at FROM epss_scores WHERE cve = ?",
-            (cve,)
+            (cve,),
         )
         row = cursor.fetchone()
         conn.close()
@@ -221,12 +218,7 @@ class EPSSClient:
         if not row:
             return None
 
-        return EPSSScore(
-            cve=cve,
-            epss=row[0],
-            percentile=row[1],
-            date=row[2]
-        )
+        return EPSSScore(cve=cve, epss=row[0], percentile=row[1], date=row[2])
 
     def _cache_score(self, score: EPSSScore):
         """Cache score in SQLite.
@@ -237,10 +229,19 @@ class EPSSClient:
         conn = sqlite3.connect(self.cache_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO epss_scores (cve, epss, percentile, date, cached_at)
             VALUES (?, ?, ?, ?, ?)
-        """, (score.cve, score.epss, score.percentile, score.date, datetime.now().isoformat()))
+        """,
+            (
+                score.cve,
+                score.epss,
+                score.percentile,
+                score.date,
+                datetime.now().isoformat(),
+            ),
+        )
 
         conn.commit()
         conn.close()

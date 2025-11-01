@@ -16,10 +16,10 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import List, Union
 
 import yaml
-from croniter import croniter
+from croniter import croniter  # type: ignore[import-untyped]
 
 from scripts.core.schedule_manager import (
     ScheduleManager,
@@ -132,9 +132,9 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
                 {
                     "type": "slack",
                     "url": args.slack_webhook,
-                    "events": ["failure", "success"]
+                    "events": ["failure", "success"],
                 }
-            ]
+            ],
         }
 
     # Create schedule object
@@ -180,13 +180,17 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
     if args.backend == "github-actions":
         _info("")
         _info("Next steps:")
-        _info(f"  1. Export workflow: jmo schedule export {args.name} > .github/workflows/jmo-{args.name}.yml")
-        _info(f"  2. Commit and push to GitHub")
+        _info(
+            f"  1. Export workflow: jmo schedule export {args.name} > .github/workflows/jmo-{args.name}.yml"
+        )
+        _info("  2. Commit and push to GitHub")
     elif args.backend == "gitlab-ci":
         _info("")
         _info("Next steps:")
-        _info(f"  1. Export workflow: jmo schedule export {args.name} >> .gitlab-ci.yml")
-        _info(f"  2. Commit and push to GitLab")
+        _info(
+            f"  1. Export workflow: jmo schedule export {args.name} >> .gitlab-ci.yml"
+        )
+        _info("  2. Commit and push to GitLab")
     elif args.backend == "local-cron":
         _info("")
         _info("Next steps:")
@@ -294,6 +298,7 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
     backend = args.backend if args.backend else schedule.spec.backend.type
 
     # Generate workflow
+    generator: Union[GitHubActionsGenerator, GitLabCIGenerator]
     if backend == "github-actions":
         generator = GitHubActionsGenerator()
         workflow = generator.generate(schedule)
@@ -301,7 +306,9 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
         generator = GitLabCIGenerator()
         workflow = generator.generate(schedule)
     else:
-        _error(f"Cannot export backend type '{backend}' (use github-actions or gitlab-ci)")
+        _error(
+            f"Cannot export backend type '{backend}' (use github-actions or gitlab-ci)"
+        )
         return 1
 
     # Output
@@ -309,7 +316,7 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
         Path(args.output).write_text(workflow)
         _success(f"Exported to {args.output}")
     else:
-        print(workflow, end='')
+        print(workflow, end="")
 
     return 0
 
@@ -409,6 +416,7 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
 
 
 # Utility functions for colored output
+
 
 def _print_schedules_table(schedules: List[ScanSchedule]) -> None:
     """Print schedules in table format."""

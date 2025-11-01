@@ -40,7 +40,7 @@ class HadolintAdapter(AdapterPlugin):
     @property
     def metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
-        return self.__class__._plugin_metadata
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
     def parse(self, output_path: Path) -> List[Finding]:
         """Parse tool output and return normalized findings.
@@ -79,10 +79,6 @@ class HadolintAdapter(AdapterPlugin):
             findings.append(finding)
 
         return findings
-
-
-def _load_hadolint_internal(path: str | Path) -> List[Dict[str, Any]]:
-    """Internal function that returns dicts (refactored from original load_hadolint)."""
 
 
 def _load_hadolint_internal(path: str | Path) -> List[Dict[str, Any]]:

@@ -47,7 +47,9 @@ def configure_repo_target(target_config_class: Any, print_step_fn: Callable) -> 
     for key, desc in modes:
         print(f"  [{key:10}] {desc}")
 
-    mode = _prompter.prompt_choice("\nSelect mode:", modes, default="repos-dir")
+    mode = _prompter.prompt_choice(
+        "\nSelect mode:", [k for k, _ in modes], default="repos-dir"
+    )
     config.repo_mode = mode
 
     if mode == "tsv":
@@ -108,7 +110,9 @@ def configure_image_target(target_config_class: Any, print_step_fn: Callable) ->
     for key, desc in modes:
         print(f"  [{key:10}] {desc}")
 
-    mode = _prompter.prompt_choice("\nSelect mode:", modes, default="single")
+    mode = _prompter.prompt_choice(
+        "\nSelect mode:", [k for k, _ in modes], default="single"
+    )
 
     if mode == "single":
         config.image_name = _prompt_text(
@@ -169,7 +173,7 @@ def configure_iac_target(target_config_class: Any, print_step_fn: Callable) -> A
                 print(f"  [{key:15}] {desc}")
 
             iac_type = _prompter.prompt_choice(
-                "\nSelect type:", types, default=detected_type
+                "\nSelect type:", [k for k, _ in types], default=detected_type
             )
             config.iac_type = iac_type
             return config
@@ -194,7 +198,9 @@ def configure_url_target(target_config_class: Any, print_step_fn: Callable) -> A
     for key, desc in modes:
         print(f"  [{key:10}] {desc}")
 
-    mode = _prompter.prompt_choice("\nSelect mode:", modes, default="single")
+    mode = _prompter.prompt_choice(
+        "\nSelect mode:", [k for k, _ in modes], default="single"
+    )
 
     if mode == "single":
         while True:
@@ -278,7 +284,9 @@ def configure_gitlab_target(target_config_class: Any, print_step_fn: Callable) -
     for key, desc in modes:
         print(f"  [{key:10}] {desc}")
 
-    mode = _prompter.prompt_choice("\nSelect scope:", modes, default="repo")
+    mode = _prompter.prompt_choice(
+        "\nSelect scope:", [k for k, _ in modes], default="repo"
+    )
 
     if mode == "repo":
         config.gitlab_repo = _prompt_text(
@@ -343,7 +351,9 @@ def configure_k8s_target(target_config_class: Any, print_step_fn: Callable) -> A
     for key, desc in modes:
         print(f"  [{key:10}] {desc}")
 
-    mode = _prompter.prompt_choice("\nSelect scope:", modes, default="single")
+    mode = _prompter.prompt_choice(
+        "\nSelect scope:", [k for k, _ in modes], default="single"
+    )
 
     if mode == "single":
         config.k8s_namespace = _prompt_text("Namespace name", default="default")

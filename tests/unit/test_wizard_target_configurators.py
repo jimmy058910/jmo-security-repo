@@ -17,9 +17,8 @@ Architecture Note:
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, call, mock_open, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.cli.wizard_flows.target_configurators import (
     configure_gitlab_target,
@@ -39,9 +38,13 @@ def test_configure_repo_target_single_repo():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="/path/to/repo"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="/path/to/repo"
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
         mock_validate.return_value = Path("/path/to/repo")
 
@@ -62,10 +65,15 @@ def test_configure_repo_target_repos_dir_with_detected_repos():
     mock_repo1 = MagicMock(name="repo1")
     mock_repo2 = MagicMock(name="repo2")
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators._detector") as mock_detector, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="/path/to/repos-dir"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators._detector"
+    ) as mock_detector, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="/path/to/repos-dir"
+    ):
         mock_prompter.prompt_choice.return_value = "repos-dir"
         mock_validate.return_value = Path("/path/to/repos-dir")
         mock_detector.detect_repos.return_value = [mock_repo1, mock_repo2]
@@ -83,10 +91,15 @@ def test_configure_repo_target_repos_dir_no_repos_continue():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators._detector") as mock_detector, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="/path/to/repos-dir"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators._detector"
+    ) as mock_detector, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="/path/to/repos-dir"
+    ):
         mock_prompter.prompt_choice.return_value = "repos-dir"
         mock_prompter.prompt_yes_no.return_value = True  # Continue anyway
         mock_validate.return_value = Path("/path/to/repos-dir")
@@ -107,10 +120,15 @@ def test_configure_repo_target_repos_dir_no_repos_retry():
 
     mock_repo = MagicMock(name="repo1")
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators._detector") as mock_detector, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", side_effect=["/bad/path", "/good/path"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators._detector"
+    ) as mock_detector, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["/bad/path", "/good/path"]
+    ):
         mock_prompter.prompt_choice.return_value = "repos-dir"
         # First attempt: no repos, decline; second attempt: success
         mock_prompter.prompt_yes_no.return_value = False
@@ -129,8 +147,11 @@ def test_configure_repo_target_tsv_mode():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("builtins.input", side_effect=["./repos.tsv", "repos-tsv"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "builtins.input", side_effect=["./repos.tsv", "repos-tsv"]
+    ):
         mock_prompter.prompt_choice.return_value = "tsv"
 
         result = configure_repo_target(mock_config, mock_print_step)
@@ -146,9 +167,13 @@ def test_configure_repo_target_targets_mode():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="./targets.txt"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="./targets.txt"
+    ):
         mock_prompter.prompt_choice.return_value = "targets"
         mock_validate.return_value = Path("./targets.txt")
 
@@ -164,9 +189,13 @@ def test_configure_repo_target_empty_path_retry():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", side_effect=["", "/valid/path"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["", "/valid/path"]
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
         mock_validate.return_value = Path("/valid/path")
 
@@ -180,9 +209,13 @@ def test_configure_repo_target_invalid_path_retry():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", side_effect=["/bad/path", "/good/path"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["/bad/path", "/good/path"]
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
         mock_validate.side_effect = [None, Path("/good/path")]
 
@@ -200,8 +233,9 @@ def test_configure_image_target_single_mode():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("builtins.input", return_value="myapp:v1.0"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch("builtins.input", return_value="myapp:v1.0"):
         mock_prompter.prompt_choice.return_value = "single"
 
         result = configure_image_target(mock_config, mock_print_step)
@@ -215,8 +249,9 @@ def test_configure_image_target_single_mode_default():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("builtins.input", return_value=""):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch("builtins.input", return_value=""):
         mock_prompter.prompt_choice.return_value = "single"
 
         result = configure_image_target(mock_config, mock_print_step)
@@ -232,9 +267,13 @@ def test_configure_image_target_batch_mode():
 
     images_content = "nginx:latest\nmyapp:v1.0\n# comment\n\nredis:alpine"
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="./images.txt"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="./images.txt"
+    ):
         mock_prompter.prompt_choice.return_value = "batch"
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = images_content
@@ -253,9 +292,13 @@ def test_configure_image_target_batch_invalid_file_retry():
 
     images_content = "nginx:latest\nmyapp:v1.0"
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", side_effect=["/bad/file", "./images.txt"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["/bad/file", "./images.txt"]
+    ):
         mock_prompter.prompt_choice.return_value = "batch"
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = images_content
@@ -275,10 +318,15 @@ def test_configure_iac_target_terraform():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("scripts.cli.wizard_flows.target_configurators.detect_iac_type") as mock_detect, \
-         patch("builtins.input", return_value="./infrastructure.tfstate"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "scripts.cli.wizard_flows.target_configurators.detect_iac_type"
+    ) as mock_detect, patch(
+        "builtins.input", return_value="./infrastructure.tfstate"
+    ):
         mock_validate.return_value = Path("./infrastructure.tfstate")
         mock_detect.return_value = "terraform"
         mock_prompter.prompt_choice.return_value = "terraform"
@@ -295,10 +343,15 @@ def test_configure_iac_target_cloudformation():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("scripts.cli.wizard_flows.target_configurators.detect_iac_type") as mock_detect, \
-         patch("builtins.input", return_value="./template.yaml"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "scripts.cli.wizard_flows.target_configurators.detect_iac_type"
+    ) as mock_detect, patch(
+        "builtins.input", return_value="./template.yaml"
+    ):
         mock_validate.return_value = Path("./template.yaml")
         mock_detect.return_value = "cloudformation"
         mock_prompter.prompt_choice.return_value = "cloudformation"
@@ -315,10 +368,15 @@ def test_configure_iac_target_k8s_manifest():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("scripts.cli.wizard_flows.target_configurators.detect_iac_type") as mock_detect, \
-         patch("builtins.input", return_value="./deployment.yaml"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "scripts.cli.wizard_flows.target_configurators.detect_iac_type"
+    ) as mock_detect, patch(
+        "builtins.input", return_value="./deployment.yaml"
+    ):
         mock_validate.return_value = Path("./deployment.yaml")
         mock_detect.return_value = "k8s-manifest"
         mock_prompter.prompt_choice.return_value = "k8s-manifest"
@@ -335,10 +393,15 @@ def test_configure_iac_target_override_detected_type():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("scripts.cli.wizard_flows.target_configurators.detect_iac_type") as mock_detect, \
-         patch("builtins.input", return_value="./config.yaml"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "scripts.cli.wizard_flows.target_configurators.detect_iac_type"
+    ) as mock_detect, patch(
+        "builtins.input", return_value="./config.yaml"
+    ):
         mock_validate.return_value = Path("./config.yaml")
         mock_detect.return_value = "k8s-manifest"
         mock_prompter.prompt_choice.return_value = "cloudformation"  # Override
@@ -353,10 +416,15 @@ def test_configure_iac_target_invalid_path_retry():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("scripts.cli.wizard_flows.target_configurators.detect_iac_type") as mock_detect, \
-         patch("builtins.input", side_effect=["/bad/path", "./good.tfstate"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "scripts.cli.wizard_flows.target_configurators.detect_iac_type"
+    ) as mock_detect, patch(
+        "builtins.input", side_effect=["/bad/path", "./good.tfstate"]
+    ):
         mock_validate.side_effect = [None, Path("./good.tfstate")]
         mock_detect.return_value = "terraform"
         mock_prompter.prompt_choice.return_value = "terraform"
@@ -375,9 +443,13 @@ def test_configure_url_target_single_mode_reachable():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_url") as mock_validate, \
-         patch("builtins.input", return_value="https://myapp.com"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_url"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="https://myapp.com"
+    ):
         mock_prompter.prompt_choice.return_value = "single"
         mock_validate.return_value = True
 
@@ -392,9 +464,13 @@ def test_configure_url_target_single_mode_unreachable_use_anyway():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_url") as mock_validate, \
-         patch("builtins.input", return_value="https://unreachable.com"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_url"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="https://unreachable.com"
+    ):
         mock_prompter.prompt_choice.return_value = "single"
         mock_prompter.prompt_yes_no.return_value = True
         mock_validate.return_value = False
@@ -410,9 +486,13 @@ def test_configure_url_target_single_mode_unreachable_retry():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_url") as mock_validate, \
-         patch("builtins.input", side_effect=["https://bad.com", "https://good.com"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_url"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["https://bad.com", "https://good.com"]
+    ):
         mock_prompter.prompt_choice.return_value = "single"
         mock_prompter.prompt_yes_no.return_value = False  # Don't use bad URL
         mock_validate.side_effect = [False, True]
@@ -430,9 +510,13 @@ def test_configure_url_target_batch_mode():
 
     urls_content = "https://app1.com\nhttps://app2.com\n# comment\n\nhttps://app3.com"
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", return_value="./urls.txt"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", return_value="./urls.txt"
+    ):
         mock_prompter.prompt_choice.return_value = "batch"
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = urls_content
@@ -451,9 +535,13 @@ def test_configure_url_target_batch_invalid_file_retry():
 
     urls_content = "https://app.com"
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_path") as mock_validate, \
-         patch("builtins.input", side_effect=["/bad/file", "./urls.txt"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_path"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["/bad/file", "./urls.txt"]
+    ):
         mock_prompter.prompt_choice.return_value = "batch"
         mock_path = MagicMock(spec=Path)
         mock_path.read_text.return_value = urls_content
@@ -470,8 +558,9 @@ def test_configure_url_target_api_mode():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("builtins.input", return_value="./openapi.yaml"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch("builtins.input", return_value="./openapi.yaml"):
         mock_prompter.prompt_choice.return_value = "api"
 
         result = configure_url_target(mock_config, mock_print_step)
@@ -488,9 +577,14 @@ def test_configure_gitlab_target_repo_mode_with_env_token():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.os.getenv", return_value="token123"), \
-         patch("builtins.input", side_effect=["https://gitlab.com", "mygroup/myrepo"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.os.getenv",
+        return_value="token123",
+    ), patch(
+        "builtins.input", side_effect=["https://gitlab.com", "mygroup/myrepo"]
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
 
         result = configure_gitlab_target(mock_config, mock_print_step)
@@ -506,9 +600,14 @@ def test_configure_gitlab_target_repo_mode_manual_token():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None), \
-         patch("builtins.input", side_effect=["https://gitlab.com", "manual_token", "mygroup/myrepo"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None
+    ), patch(
+        "builtins.input",
+        side_effect=["https://gitlab.com", "manual_token", "mygroup/myrepo"],
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
 
         result = configure_gitlab_target(mock_config, mock_print_step)
@@ -522,9 +621,13 @@ def test_configure_gitlab_target_repo_mode_no_token():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None), \
-         patch("builtins.input", side_effect=["https://gitlab.com", "", "mygroup/myrepo"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.os.getenv", return_value=None
+    ), patch(
+        "builtins.input", side_effect=["https://gitlab.com", "", "mygroup/myrepo"]
+    ):
         mock_prompter.prompt_choice.return_value = "repo"
 
         result = configure_gitlab_target(mock_config, mock_print_step)
@@ -540,9 +643,14 @@ def test_configure_gitlab_target_group_mode():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.os.getenv", return_value="token123"), \
-         patch("builtins.input", side_effect=["https://gitlab.com", "mygroup"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.os.getenv",
+        return_value="token123",
+    ), patch(
+        "builtins.input", side_effect=["https://gitlab.com", "mygroup"]
+    ):
         mock_prompter.prompt_choice.return_value = "group"
 
         result = configure_gitlab_target(mock_config, mock_print_step)
@@ -559,7 +667,9 @@ def test_configure_k8s_target_kubectl_not_found():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value=None):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which", return_value=None
+    ):
         result = configure_k8s_target(mock_config, mock_print_step)
 
         assert result.type == "k8s"
@@ -572,10 +682,17 @@ def test_configure_k8s_target_single_namespace_valid_context():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value="/usr/bin/kubectl"), \
-         patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_k8s_context", return_value=True), \
-         patch("builtins.input", side_effect=["minikube", "default"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which",
+        return_value="/usr/bin/kubectl",
+    ), patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_k8s_context",
+        return_value=True,
+    ), patch(
+        "builtins.input", side_effect=["minikube", "default"]
+    ):
         mock_prompter.prompt_choice.return_value = "single"
 
         result = configure_k8s_target(mock_config, mock_print_step)
@@ -590,10 +707,17 @@ def test_configure_k8s_target_all_namespaces():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value="/usr/bin/kubectl"), \
-         patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_k8s_context", return_value=True), \
-         patch("builtins.input", return_value="minikube"):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which",
+        return_value="/usr/bin/kubectl",
+    ), patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_k8s_context",
+        return_value=True,
+    ), patch(
+        "builtins.input", return_value="minikube"
+    ):
         mock_prompter.prompt_choice.return_value = "all"
 
         result = configure_k8s_target(mock_config, mock_print_step)
@@ -608,10 +732,17 @@ def test_configure_k8s_target_invalid_context_use_anyway():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value="/usr/bin/kubectl"), \
-         patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_k8s_context", return_value=False), \
-         patch("builtins.input", side_effect=["invalid-context", "default"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which",
+        return_value="/usr/bin/kubectl",
+    ), patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_k8s_context",
+        return_value=False,
+    ), patch(
+        "builtins.input", side_effect=["invalid-context", "default"]
+    ):
         mock_prompter.prompt_choice.return_value = "single"
         mock_prompter.prompt_yes_no.return_value = True
 
@@ -626,10 +757,16 @@ def test_configure_k8s_target_invalid_context_retry():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value="/usr/bin/kubectl"), \
-         patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_k8s_context") as mock_validate, \
-         patch("builtins.input", side_effect=["bad-context", "good-context", "default"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which",
+        return_value="/usr/bin/kubectl",
+    ), patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_k8s_context"
+    ) as mock_validate, patch(
+        "builtins.input", side_effect=["bad-context", "good-context", "default"]
+    ):
         mock_prompter.prompt_choice.return_value = "single"
         mock_prompter.prompt_yes_no.return_value = False
         mock_validate.side_effect = [False, True]
@@ -645,10 +782,17 @@ def test_configure_k8s_target_current_context():
     mock_config = MagicMock()
     mock_print_step = MagicMock()
 
-    with patch("scripts.cli.wizard_flows.target_configurators.shutil.which", return_value="/usr/bin/kubectl"), \
-         patch("scripts.cli.wizard_flows.target_configurators._prompter") as mock_prompter, \
-         patch("scripts.cli.wizard_flows.target_configurators.validate_k8s_context", return_value=True), \
-         patch("builtins.input", side_effect=["current", "kube-system"]):
+    with patch(
+        "scripts.cli.wizard_flows.target_configurators.shutil.which",
+        return_value="/usr/bin/kubectl",
+    ), patch(
+        "scripts.cli.wizard_flows.target_configurators._prompter"
+    ) as mock_prompter, patch(
+        "scripts.cli.wizard_flows.target_configurators.validate_k8s_context",
+        return_value=True,
+    ), patch(
+        "builtins.input", side_effect=["current", "kube-system"]
+    ):
         mock_prompter.prompt_choice.return_value = "single"
 
         result = configure_k8s_target(mock_config, mock_print_step)

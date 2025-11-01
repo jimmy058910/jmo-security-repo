@@ -17,12 +17,9 @@ Architecture Note:
 - Tests use mock workflow generators for export tests
 """
 
-import io
 import json
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-from typing import Any, Dict, Optional
+from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 import yaml
@@ -144,7 +141,9 @@ def sample_schedule():
 
 def test_cmd_schedule_routes_to_create():
     """Test cmd_schedule routes to create subcommand."""
-    args = create_mock_args(schedule_action="create", name="test", cron="0 2 * * *", repos_dir="~/repos")
+    args = create_mock_args(
+        schedule_action="create", name="test", cron="0 2 * * *", repos_dir="~/repos"
+    )
 
     with patch("scripts.cli.schedule_commands._cmd_schedule_create") as mock_create:
         mock_create.return_value = 0
@@ -218,7 +217,9 @@ def test_cmd_schedule_routes_to_uninstall():
     """Test cmd_schedule routes to uninstall subcommand."""
     args = create_mock_args(schedule_action="uninstall", name="test")
 
-    with patch("scripts.cli.schedule_commands._cmd_schedule_uninstall") as mock_uninstall:
+    with patch(
+        "scripts.cli.schedule_commands._cmd_schedule_uninstall"
+    ) as mock_uninstall:
         mock_uninstall.return_value = 0
         result = cmd_schedule(args)
 
@@ -264,7 +265,9 @@ def test_cmd_schedule_unknown_action():
 
 def test_cmd_schedule_exception_handling():
     """Test cmd_schedule handles exceptions gracefully."""
-    args = create_mock_args(schedule_action="create", name="test", cron="0 2 * * *", repos_dir="~/repos")
+    args = create_mock_args(
+        schedule_action="create", name="test", cron="0 2 * * *", repos_dir="~/repos"
+    )
 
     with patch("scripts.cli.schedule_commands._cmd_schedule_create") as mock_create:
         mock_create.side_effect = ValueError("Test error")
@@ -297,7 +300,7 @@ def test_create_schedule_success():
         mock_manager.create = MagicMock()
 
         with patch("scripts.cli.schedule_commands._success") as mock_success:
-            with patch("scripts.cli.schedule_commands._info") as mock_info:
+            with patch("scripts.cli.schedule_commands._info") as _mock_info:
                 result = _cmd_schedule_create(args, mock_manager)
 
     assert result == 0
@@ -380,7 +383,10 @@ def test_create_schedule_with_images():
     # Verify targets include images
     create_call = mock_manager.create.call_args[0][0]
     assert "images" in create_call.spec.jobTemplate.targets
-    assert create_call.spec.jobTemplate.targets["images"] == ["nginx:latest", "redis:alpine"]
+    assert create_call.spec.jobTemplate.targets["images"] == [
+        "nginx:latest",
+        "redis:alpine",
+    ]
 
 
 def test_create_schedule_with_slack_notifications():
@@ -418,7 +424,9 @@ def test_list_schedules_table_format(sample_schedule):
         mock_manager = MockManager.return_value
         mock_manager.list.return_value = [sample_schedule]
 
-        with patch("scripts.cli.schedule_commands._print_schedules_table") as mock_print:
+        with patch(
+            "scripts.cli.schedule_commands._print_schedules_table"
+        ) as mock_print:
             result = _cmd_schedule_list(args, mock_manager)
 
     assert result == 0
@@ -472,7 +480,9 @@ def test_list_schedules_with_label_filter(sample_schedule):
         mock_manager = MockManager.return_value
         mock_manager.list.return_value = [sample_schedule]
 
-        with patch("scripts.cli.schedule_commands._print_schedules_table") as mock_print:
+        with patch(
+            "scripts.cli.schedule_commands._print_schedules_table"
+        ) as mock_print:
             result = _cmd_schedule_list(args, mock_manager)
 
     assert result == 0
@@ -792,7 +802,9 @@ def test_install_schedule_unsupported_platform(sample_schedule):
         mock_manager.get.return_value = sample_schedule
 
         with patch("scripts.cli.schedule_commands.CronInstaller") as MockInstaller:
-            MockInstaller.side_effect = UnsupportedPlatformError("Windows not supported")
+            MockInstaller.side_effect = UnsupportedPlatformError(
+                "Windows not supported"
+            )
 
             with patch("scripts.cli.schedule_commands._error") as mock_error:
                 result = _cmd_schedule_install(args, mock_manager)
@@ -811,7 +823,9 @@ def test_install_schedule_cron_not_available(sample_schedule):
 
         with patch("scripts.cli.schedule_commands.CronInstaller") as MockInstaller:
             mock_installer = MockInstaller.return_value
-            mock_installer.install.side_effect = CronNotAvailableError("crontab not found")
+            mock_installer.install.side_effect = CronNotAvailableError(
+                "crontab not found"
+            )
 
             with patch("scripts.cli.schedule_commands._error") as mock_error:
                 result = _cmd_schedule_install(args, mock_manager)
@@ -1023,7 +1037,7 @@ def test_validate_schedule_no_targets(sample_schedule):
         mock_manager = MockManager.return_value
         mock_manager.get.return_value = sample_schedule
 
-        with patch("scripts.cli.schedule_commands._success") as mock_success:
+        with patch("scripts.cli.schedule_commands._success") as _mock_success:
             with patch("scripts.cli.schedule_commands._error") as mock_error:
                 result = _cmd_schedule_validate(args, mock_manager)
 
@@ -1041,7 +1055,7 @@ def test_validate_schedule_unknown_backend(sample_schedule):
         mock_manager = MockManager.return_value
         mock_manager.get.return_value = sample_schedule
 
-        with patch("scripts.cli.schedule_commands._success") as mock_success:
+        with patch("scripts.cli.schedule_commands._success") as _mock_success:
             with patch("scripts.cli.schedule_commands._error") as mock_error:
                 result = _cmd_schedule_validate(args, mock_manager)
 

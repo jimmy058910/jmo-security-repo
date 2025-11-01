@@ -85,7 +85,7 @@ gh run watch
 
 The WinGet releaser action requires a fork to submit PRs from.
 
-1. Go to https://github.com/microsoft/winget-pkgs
+1. Go to <https://github.com/microsoft/winget-pkgs>
 
 2. Click **Fork** (top right)
 
@@ -258,7 +258,7 @@ gh release upload v0.9.0 ../../dist/jmo-security-0.9.0-win64.exe
 **Fix:**
 
 1. Delete any existing fork under wrong account
-2. Fork https://github.com/microsoft/winget-pkgs under repository owner account
+2. Fork <https://github.com/microsoft/winget-pkgs> under repository owner account
 3. Re-run workflow
 
 ### Homebrew PR Rejected: "Formula already up-to-date"
@@ -310,13 +310,13 @@ gh run download <run-id>
 
 **Homebrew:**
 
-- PR list: https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security
-- Formula: https://github.com/Homebrew/homebrew-core/blob/master/Formula/j/jmo-security.rb
+- PR list: <https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security>
+- Formula: <https://github.com/Homebrew/homebrew-core/blob/master/Formula/j/jmo-security.rb>
 
 **WinGet:**
 
-- PR list: https://github.com/microsoft/winget-pkgs/pulls?q=is%3Apr+jmo-security
-- Manifest: https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/jmo/jmo-security
+- PR list: <https://github.com/microsoft/winget-pkgs/pulls?q=is%3Apr+jmo-security>
+- Manifest: <https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/jmo/jmo-security>
 
 ### Verify Package Installation After Merge
 
@@ -395,4 +395,4 @@ After completing setup:
 3. **Document any issues** for future improvements
 4. **Set calendar reminders** for annual token rotation
 
-**Questions or issues?** Open an issue at https://github.com/jimmy058910/jmo-security-repo/issues
+**Questions or issues?** Open an issue at <https://github.com/jimmy058910/jmo-security-repo/issues>

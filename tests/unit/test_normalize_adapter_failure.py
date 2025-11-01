@@ -1,6 +1,5 @@
 from pathlib import Path
 import json
-import os
 
 from scripts.core import normalize_and_report as nr
 from scripts.core.exceptions import AdapterParseException
@@ -197,6 +196,7 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
 
 def test_safe_load_file_not_found(tmp_path: Path):
     """Test FileNotFoundError handler in _safe_load (lines 199-200)."""
+
     # Create a mock loader function that raises FileNotFoundError
     def mock_loader(path):
         if not path.exists():
@@ -226,6 +226,7 @@ def test_safe_load_adapter_parse_exception(tmp_path: Path, monkeypatch):
 
 def test_safe_load_permission_error(tmp_path: Path):
     """Test OSError/PermissionError handler in _safe_load (lines 207-208)."""
+
     # Create a mock loader that raises PermissionError
     def mock_loader(path):
         # Simulate permission error reading file

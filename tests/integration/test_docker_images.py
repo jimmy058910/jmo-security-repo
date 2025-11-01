@@ -311,6 +311,16 @@ class TestDockerBuild:
     @pytest.mark.parametrize("variant", ["slim"])  # Only test slim for speed
     def test_build_slim_image(self, docker_check, variant: str):
         """Test building the slim Docker image."""
+        # Check if Docker buildx is available (WSL2 requirement)
+        buildx_check = subprocess.run(
+            ["docker", "buildx", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if buildx_check.returncode != 0:
+            pytest.skip("Docker buildx not available (required for multi-platform builds)")
+
         dockerfile = "Dockerfile" if variant == "full" else f"Dockerfile.{variant}"
         dockerfile_path = Path(__file__).parent.parent.parent / dockerfile
 

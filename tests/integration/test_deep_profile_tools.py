@@ -30,7 +30,8 @@ def test_deep_profile_includes_all_tools(tmp_path):
     # Run deep profile scan
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -75,7 +76,8 @@ def test_deep_profile_falco_output(tmp_path):
 
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -109,7 +111,8 @@ def test_deep_profile_aflplusplus_output(tmp_path):
 
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -139,7 +142,8 @@ def test_deep_profile_graceful_degradation(tmp_path):
     # Run deep profile with --allow-missing-tools
     cmd = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -168,7 +172,8 @@ def test_deep_profile_report_aggregation(tmp_path):
     # Run deep profile scan
     cmd_scan = [
         "python3",
-        "-m", "scripts.cli.jmo",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -181,7 +186,13 @@ def test_deep_profile_report_aggregation(tmp_path):
     subprocess.run(cmd_scan, capture_output=True, timeout=240)
 
     # Generate report
-    cmd_report = ["python3", "-m", "scripts.cli.jmo", "report", str(tmp_path / "results")]
+    cmd_report = [
+        "python3",
+        "-m",
+        "scripts.cli.jmo",
+        "report",
+        str(tmp_path / "results"),
+    ]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify aggregated findings

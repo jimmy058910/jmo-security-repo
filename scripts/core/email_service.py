@@ -39,7 +39,7 @@ try:
 
     RESEND_AVAILABLE = True
 except ImportError:
-    resend = None  # Set to None for test mocking
+    resend = None  # type: ignore[assignment]  # Set to None for test mocking
     RESEND_AVAILABLE = False
 
 # Configuration
@@ -313,7 +313,7 @@ def send_welcome_email(
             ],
         }
 
-        response = resend.Emails.send(params)
+        response = resend.Emails.send(params)  # type: ignore[arg-type]
 
         # Resend returns a dict with 'id' on success
         return bool(

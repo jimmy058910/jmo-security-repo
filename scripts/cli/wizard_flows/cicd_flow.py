@@ -21,11 +21,17 @@ class CICDFlow(BaseWizardFlow):
         github_actions = list(ci_dir.glob(".github/workflows/*.yml")) + list(
             ci_dir.glob(".github/workflows/*.yaml")
         )
-        gitlab_ci = ci_dir / ".gitlab-ci.yml" if (ci_dir / ".gitlab-ci.yml").exists() else None
-        jenkinsfile = ci_dir / "Jenkinsfile" if (ci_dir / "Jenkinsfile").exists() else None
+        gitlab_ci = (
+            ci_dir / ".gitlab-ci.yml" if (ci_dir / ".gitlab-ci.yml").exists() else None
+        )
+        jenkinsfile = (
+            ci_dir / "Jenkinsfile" if (ci_dir / "Jenkinsfile").exists() else None
+        )
 
         # Detect images referenced in pipelines
-        pipeline_images = self._detect_images_from_ci(github_actions, gitlab_ci, jenkinsfile)
+        pipeline_images = self._detect_images_from_ci(
+            github_actions, gitlab_ci, jenkinsfile
+        )
 
         return {
             "github_actions": github_actions,
@@ -49,7 +55,9 @@ class CICDFlow(BaseWizardFlow):
         self._print_detected_pipelines(self.detected_targets)
 
         # Use fast profile for CI/CD by default
-        self.prompter.print_info("Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)")
+        self.prompter.print_info(
+            "Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)"
+        )
         profile = self.prompter.prompt_choice(
             "Select scan profile:",
             choices=["fast", "balanced"],
@@ -64,9 +72,11 @@ class CICDFlow(BaseWizardFlow):
         # Scan pipeline images
         num_images = len(self.detected_targets.get("pipeline_images", []))
         if num_images > 0:
-            self.prompter.print_info(f"Found {num_images} container images in pipeline definitions")
+            self.prompter.print_info(
+                f"Found {num_images} container images in pipeline definitions"
+            )
             scan_pipeline_images = self.prompter.prompt_yes_no(
-                f"Scan container images referenced in pipelines?", default=True
+                "Scan container images referenced in pipelines?", default=True
             )
         else:
             scan_pipeline_images = False
@@ -112,7 +122,9 @@ class CICDFlow(BaseWizardFlow):
             items.append("Jenkins: Jenkinsfile detected")
 
         if targets.get("pipeline_images"):
-            items.append(f"Container images: {len(targets['pipeline_images'])} found in pipelines")
+            items.append(
+                f"Container images: {len(targets['pipeline_images'])} found in pipelines"
+            )
 
         if items:
             self.prompter.print_summary_box("🔍 Detected CI/CD Pipelines", items)
@@ -214,7 +226,9 @@ class CICDFlow(BaseWizardFlow):
                 content = jenkinsfile.read_text()
                 import re
 
-                for match in re.finditer(r"docker\.image\(['\"]([^'\"]+)['\"]\)", content):
+                for match in re.finditer(
+                    r"docker\.image\(['\"]([^'\"]+)['\"]\)", content
+                ):
                     images.append(match.group(1))
             except (FileNotFoundError, UnicodeDecodeError):
                 pass

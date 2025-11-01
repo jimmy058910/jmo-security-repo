@@ -6,7 +6,7 @@ Distribution packaging for Homebrew (macOS/Linux) and Winget (Windows).
 
 ## 📂 Directory Structure
 
-```
+```text
 packaging/
 ├── README.md                           # This file
 ├── TESTING.md                          # Comprehensive testing guide
@@ -81,6 +81,7 @@ brew audit --strict --online jmo-security
 ### Auto-Update Workflow
 
 GitHub Actions workflow automatically updates formula on new releases:
+
 - Workflow: `.github/workflows/update-homebrew-formula.yml`
 - Triggers: `release.published`, `workflow_dispatch`
 - Updates: Tarball URL, SHA256
@@ -95,7 +96,7 @@ GitHub Actions workflow automatically updates formula on new releases:
 - **Windows 10+** or **Windows Server 2019+**
 - **Python 3.10+** (for build script)
 - **PyInstaller:** `pip install pyinstaller`
-- **NSIS:** https://nsis.sourceforge.io/Download (add to PATH)
+- **NSIS:** <https://nsis.sourceforge.io/Download> (add to PATH)
 
 ### Building Windows Installer
 
@@ -165,6 +166,7 @@ winget uninstall jmo.jmo-security
 ### Auto-Update Workflow
 
 GitHub Actions workflow automatically updates manifest on new releases:
+
 - Workflow: `.github/workflows/update-winget-manifest.yml`
 - Triggers: `release.published`, `workflow_dispatch`
 - Updates: Installer URLs, SHA256 hashes
@@ -237,6 +239,7 @@ GitHub Actions workflow automatically updates manifest on new releases:
 See [TESTING.md](TESTING.md) for comprehensive testing guide.
 
 **Quick checklist:**
+
 - [ ] Homebrew: Install, scan, upgrade, uninstall (macOS/Linux)
 - [ ] Winget: Install, scan, upgrade, uninstall (Windows)
 - [ ] Cross-platform: Feature parity verified
@@ -248,23 +251,23 @@ See [TESTING.md](TESTING.md) for comprehensive testing guide.
 
 ### Homebrew
 
-- **Formula Cookbook:** https://docs.brew.sh/Formula-Cookbook
-- **Python for Formula Authors:** https://docs.brew.sh/Python-for-Formula-Authors
-- **How to Open a PR:** https://docs.brew.sh/How-To-Open-a-Homebrew-Pull-Request
-- **homebrew-core:** https://github.com/Homebrew/homebrew-core
+- **Formula Cookbook:** <https://docs.brew.sh/Formula-Cookbook>
+- **Python for Formula Authors:** <https://docs.brew.sh/Python-for-Formula-Authors>
+- **How to Open a PR:** <https://docs.brew.sh/How-To-Open-a-Homebrew-Pull-Request>
+- **homebrew-core:** <https://github.com/Homebrew/homebrew-core>
 
 ### Winget
 
-- **Manifest Schema:** https://github.com/microsoft/winget-cli/blob/master/schemas/JSON/manifests/v1.6.0/
-- **Contribution Guide:** https://github.com/microsoft/winget-pkgs/blob/master/CONTRIBUTING.md
-- **winget-create:** https://github.com/microsoft/winget-create
-- **winget-pkgs:** https://github.com/microsoft/winget-pkgs
+- **Manifest Schema:** <https://github.com/microsoft/winget-cli/blob/master/schemas/JSON/manifests/v1.6.0/>
+- **Contribution Guide:** <https://github.com/microsoft/winget-pkgs/blob/master/CONTRIBUTING.md>
+- **winget-create:** <https://github.com/microsoft/winget-create>
+- **winget-pkgs:** <https://github.com/microsoft/winget-pkgs>
 
 ### PyInstaller / NSIS
 
-- **PyInstaller Manual:** https://pyinstaller.org/en/stable/
-- **NSIS Documentation:** https://nsis.sourceforge.io/Docs/
-- **NSIS Examples:** https://nsis.sourceforge.io/Examples/
+- **PyInstaller Manual:** <https://pyinstaller.org/en/stable/>
+- **NSIS Documentation:** <https://nsis.sourceforge.io/Docs/>
+- **NSIS Examples:** <https://nsis.sourceforge.io/Examples/>
 
 ---
 

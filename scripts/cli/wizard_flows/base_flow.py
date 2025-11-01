@@ -5,13 +5,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import re
 import subprocess  # nosec B404
-import yaml  # type: ignore
+import yaml
 
 
 class TargetDetector:
     """Unified target detection for wizard workflows."""
 
-    def detect_repos(self, search_dir: Path = None) -> List[Path]:
+    def detect_repos(self, search_dir: Optional[Path] = None) -> List[Path]:
         """Detect Git repositories in directory.
 
         Args:
@@ -23,7 +23,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        repos = []
+        repos: List[Path] = []
         if not search_dir.exists():
             return repos
 
@@ -33,7 +33,7 @@ class TargetDetector:
 
         return repos
 
-    def detect_images(self, search_dir: Path = None) -> List[str]:
+    def detect_images(self, search_dir: Optional[Path] = None) -> List[str]:
         """Detect container images from docker-compose.yml, Dockerfiles.
 
         Args:
@@ -69,7 +69,7 @@ class TargetDetector:
 
         return list(set(images))  # Deduplicate
 
-    def detect_iac(self, search_dir: Path = None) -> List[Path]:
+    def detect_iac(self, search_dir: Optional[Path] = None) -> List[Path]:
         """Detect IaC files (Terraform, CloudFormation, K8s).
 
         Args:
@@ -81,7 +81,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        iac_files = []
+        iac_files: List[Path] = []
 
         # Terraform
         iac_files.extend(search_dir.glob("**/*.tf"))
@@ -97,7 +97,7 @@ class TargetDetector:
 
         return iac_files
 
-    def detect_web_apps(self, search_dir: Path = None) -> List[str]:
+    def detect_web_apps(self, search_dir: Optional[Path] = None) -> List[str]:
         """Detect web applications (infer from config files).
 
         Args:
@@ -131,7 +131,7 @@ class TargetDetector:
 
         return list(set(urls))
 
-    def detect_package_files(self, search_dir: Path = None) -> List[Path]:
+    def detect_package_files(self, search_dir: Optional[Path] = None) -> List[Path]:
         """Detect package manifest files across languages.
 
         Args:
@@ -143,7 +143,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        package_files = []
+        package_files: List[Path] = []
 
         # Python
         package_files.extend(search_dir.glob("**/requirements.txt"))
@@ -175,7 +175,7 @@ class TargetDetector:
 
         return list(set(package_files))
 
-    def detect_lock_files(self, search_dir: Path = None) -> List[Path]:
+    def detect_lock_files(self, search_dir: Optional[Path] = None) -> List[Path]:
         """Detect lock files for reproducible dependency scans.
 
         Args:
@@ -187,7 +187,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        lock_files = []
+        lock_files: List[Path] = []
 
         # Python
         lock_files.extend(search_dir.glob("**/requirements-lock.txt"))
@@ -442,7 +442,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_makefile_target
 
-        generate_makefile_target(command, output_path)
+        generate_makefile_target(command, output_path)  # type: ignore[arg-type]
 
     def generate_github_actions(self, command: List[str], output_path: Path) -> None:
         """Generate GitHub Actions workflow.
@@ -453,7 +453,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_github_actions
 
-        generate_github_actions(command, output_path)
+        generate_github_actions(command, output_path)  # type: ignore[arg-type]
 
     def generate_shell_script(self, command: List[str], output_path: Path) -> None:
         """Generate shell script.
@@ -464,7 +464,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_shell_script
 
-        generate_shell_script(command, output_path)
+        generate_shell_script(command, output_path)  # type: ignore[arg-type]
 
 
 class BaseWizardFlow(ABC):
@@ -530,7 +530,9 @@ class BaseWizardFlow(ABC):
         # Store targets for workflows to access
         self.detected_targets = targets
 
-        self.prompter.print_success(f"Detected {sum(len(v) if isinstance(v, list) else 1 for v in targets.values() if v)} targets")
+        self.prompter.print_success(
+            f"Detected {sum(len(v) if isinstance(v, list) else 1 for v in targets.values() if v)} targets"
+        )
 
         # Step 2: User input (workflow-specific)
         self.prompter.print_step(2, total_steps, "Gathering configuration options...")
@@ -565,7 +567,9 @@ class BaseWizardFlow(ABC):
             if result.returncode == 0:
                 self.prompter.print_success("Scan completed successfully!")
             else:
-                self.prompter.print_error(f"Scan completed with errors (exit code {result.returncode})")
+                self.prompter.print_error(
+                    f"Scan completed with errors (exit code {result.returncode})"
+                )
             return result.returncode
         except Exception as e:
             self.prompter.print_error(f"Scan failed: {e}")

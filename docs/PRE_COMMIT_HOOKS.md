@@ -26,6 +26,7 @@ pre-commit run <hook-id> --all-files
 ### Auto-Execution
 
 Once installed, hooks run automatically:
+
 - **On `git commit`:** All hooks for staged files
 - **On `git push`:** Pre-push checks (Python imports, critical validation)
 
@@ -36,6 +37,7 @@ Once installed, hooks run automatically:
 ### Active Hooks (23 total)
 
 #### File Format Validation
+
 1. **trailing-whitespace** — Remove trailing whitespace
 2. **end-of-file-fixer** — Ensure files end with newline
 3. **mixed-line-ending** — Normalize line endings (LF only)
@@ -44,29 +46,36 @@ Once installed, hooks run automatically:
 6. **check-toml** — Validate TOML syntax (pyproject.toml)
 
 #### Security
+
 7. **detect-private-key** — Prevent committing private keys
 8. **check-added-large-files** — Block files >10MB
 9. **bandit** — Python security linter (scripts/ only, strict config)
 
 #### Code Quality - Python
+
 10. **ruff** — Fast Python linter (auto-fix enabled)
 11. **black** — Python formatter (opinionated)
 12. **mypy** — Type checker (scripts/ only)
 
 #### Code Quality - Shell
+
 13. **shellcheck** — Shell script linter
 14. **shfmt** — Shell script formatter
 
 #### Code Quality - YAML
+
 15. **yamllint** — Strict YAML linting (schema-agnostic)
 
 #### Code Quality - Markdown
+
 16. **markdownlint** — Markdown linting (accessibility, rendering)
 
 #### CI/CD Validation
+
 17. **actionlint** — Validate GitHub Actions workflows
 
 #### Dependency Management (v0.7.1+)
+
 18. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.10+
 
 ---
@@ -78,6 +87,7 @@ Once installed, hooks run automatically:
 **Purpose:** Ensures `requirements-dev.txt` is always compiled with Python 3.10+ to match CI/CD environments.
 
 **Behavior:**
+
 1. Triggers when `requirements-dev.in` is modified
 2. Detects active Python version
 3. If Python <3.10, **automatically re-executes with Python 3.11/3.10/3.12**
@@ -108,6 +118,7 @@ $ git commit -m "deps: update pytest"
 **Why This Matters:**
 
 Before v0.7.1, running `make deps-compile` with Python 3.8 would cause:
+
 - 5 dependency conflicts
 - 4 package downgrades
 - CI incompatibility (CI uses Python 3.10/3.11/3.12)
@@ -117,11 +128,13 @@ Now, the hook automatically uses the correct Python version, preventing these is
 ### bandit (Security)
 
 **Configuration:** `bandit.yaml`
+
 - **Strict mode:** All security checks enabled
 - **Skipped in tests:** B101 (assert usage), B404 (import subprocess)
 - **Exit codes:** Fails on HIGH/CRITICAL findings only
 
 **Example findings:**
+
 - Hardcoded passwords/secrets
 - SQL injection risks
 - Shell injection risks
@@ -132,10 +145,12 @@ Now, the hook automatically uses the correct Python version, preventing these is
 ### mypy (Type Checking)
 
 **Scope:** `scripts/` only (not tests)
+
 - **Config:** `pyproject.toml`
 - **Additional deps:** `types-PyYAML`
 
 **Common fixes:**
+
 - Add type hints: `def foo(x: int) -> str:`
 - Use `Optional[T]` for nullable values
 - Use `Any` sparingly
@@ -143,12 +158,14 @@ Now, the hook automatically uses the correct Python version, preventing these is
 ### actionlint (GitHub Actions)
 
 **Validates:**
+
 - Workflow syntax
 - Job dependencies
 - Matrix configurations
 - Expression syntax
 
 **Common issues:**
+
 - Undefined secrets: `${{ secrets.MISSING_SECRET }}`
 - Invalid shell: `shell: bash` vs `shell: sh`
 - Missing `if` conditions
@@ -189,11 +206,13 @@ SKIP=deps-compile,mypy git commit -m "WIP: draft changes"
 ```
 
 **When to skip:**
+
 - Emergency hotfixes (revert later)
 - WIP commits (clean up before push)
 - Dependency updates (when you know Python version is correct)
 
 **Never skip:**
+
 - Security hooks (detect-private-key, bandit)
 - Dependency compilation (unless you manually verified Python 3.10+)
 
@@ -322,6 +341,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs hooks automatically:
 ```
 
 **Differences from local:**
+
 - **All files checked** (not just staged files)
 - **Fails CI if any hook fails**
 - **Cached for speed** (pre-commit cache persisted)
@@ -441,7 +461,7 @@ repos:
 4. **Use pre-commit.ci** (cloud-based):
    - Offloads hook execution to CI
    - Free for public repos
-   - See https://pre-commit.ci/
+   - See <https://pre-commit.ci/>
 
 ---
 
@@ -450,16 +470,19 @@ repos:
 ### What We Fixed
 
 **Before v0.7.1:**
+
 - `deps-compile` hook used active Python (often 3.8 in venvs)
 - Caused dependency conflicts and downgrades
 - Required manual `SKIP=deps-compile` or `python3.11 -m piptools compile`
 
 **After v0.7.1:**
+
 - Hook auto-detects and re-executes with Python 3.10+
 - Prevents dependency mismatches automatically
 - Zero manual intervention required
 
 **Impact:**
+
 - **Time saved:** 5-10 minutes per dependency update (no manual debugging)
 - **Error prevention:** Catches Python version issues before commit
 - **Developer experience:** Seamless workflow regardless of active Python
@@ -475,7 +498,7 @@ repos:
 
 ## References
 
-- **Pre-commit Documentation:** https://pre-commit.com/
+- **Pre-commit Documentation:** <https://pre-commit.com/>
 - **Hook Configuration:** [.pre-commit-config.yaml](../.pre-commit-config.yaml)
 - **Dependency Management:** [docs/DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
 - **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)

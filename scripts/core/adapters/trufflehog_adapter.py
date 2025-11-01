@@ -92,7 +92,7 @@ class TruffleHogAdapter(AdapterPlugin):
     @property
     def metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
-        return self.__class__._plugin_metadata
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
     def parse(self, output_path: Path) -> List[Finding]:
         """Parse TruffleHog JSON/NDJSON output and return normalized findings.

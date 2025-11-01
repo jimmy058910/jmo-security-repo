@@ -26,7 +26,7 @@ set -euo pipefail
 PROFILE="${JMO_PROFILE:-balanced}"
 REPOS_DIR="${JMO_REPOS_DIR:-$HOME/repos}"
 RESULTS_DIR="${JMO_RESULTS_DIR:-$HOME/jmo-results/$(date +%Y-%m-%d)}"
-SLACK_WEBHOOK="${SLACK_WEBHOOK_URL:-}"
+SLACK_WEBHOOK="${SLACK_WEBHOOK_URL-}"
 
 # Logging
 LOG_FILE="/var/log/jmo-security/scan-$(date +%Y-%m-%d).log"
@@ -42,35 +42,35 @@ echo "========================================="
 
 # Run scan
 if jmo scan \
-    --profile "$PROFILE" \
-    --repos-dir "$REPOS_DIR" \
-    --results-dir "$RESULTS_DIR" \
-    --allow-missing-tools \
-    --human-logs; then
+  --profile "$PROFILE" \
+  --repos-dir "$REPOS_DIR" \
+  --results-dir "$RESULTS_DIR" \
+  --allow-missing-tools \
+  --human-logs; then
 
-    echo "✅ Scan completed successfully"
+  echo "✅ Scan completed successfully"
 
-    # Generate summary
-    cat "$RESULTS_DIR/summaries/SUMMARY.md"
+  # Generate summary
+  cat "$RESULTS_DIR/summaries/SUMMARY.md"
 
-    # Optional: Send success notification to Slack
-    if [ -n "$SLACK_WEBHOOK" ]; then
-        curl -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\": \"✅ JMo Security Scan completed successfully\"}" \
-            "$SLACK_WEBHOOK"
-    fi
+  # Optional: Send success notification to Slack
+  if [ -n "$SLACK_WEBHOOK" ]; then
+    curl -X POST -H 'Content-Type: application/json' \
+      -d '{"text": "✅ JMo Security Scan completed successfully"}' \
+      "$SLACK_WEBHOOK"
+  fi
 
 else
-    echo "❌ Scan failed with exit code $?"
+  echo "❌ Scan failed with exit code $?"
 
-    # Optional: Send failure notification to Slack
-    if [ -n "$SLACK_WEBHOOK" ]; then
-        curl -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\": \"🚨 JMo Security Scan failed - check logs at $LOG_FILE\"}" \
-            "$SLACK_WEBHOOK"
-    fi
+  # Optional: Send failure notification to Slack
+  if [ -n "$SLACK_WEBHOOK" ]; then
+    curl -X POST -H 'Content-Type: application/json' \
+      -d "{\"text\": \"🚨 JMo Security Scan failed - check logs at $LOG_FILE\"}" \
+      "$SLACK_WEBHOOK"
+  fi
 
-    exit 1
+  exit 1
 fi
 
 # Optional: Cleanup old results (keep last 7 days)

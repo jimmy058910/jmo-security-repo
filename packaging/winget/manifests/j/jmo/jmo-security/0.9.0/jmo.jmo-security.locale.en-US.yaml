@@ -112,7 +112,8 @@ ReleaseNotes: |-
   • Comprehensive testing (≥85% coverage maintained)
 
   Breaking Changes:
-  • None (100% backward compatible with v0.8.0)
+  • CLI Consolidation: jmotools command removed - use 'jmo wizard', 'jmo fast', etc.
+  • Migration: jmotools wizard → jmo wizard, jmotools fast → jmo fast
 
   Full Changelog: https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md
 ReleaseNotesUrl: https://github.com/jimmy058910/jmo-security-repo/releases/tag/v0.9.0

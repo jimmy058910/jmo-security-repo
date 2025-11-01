@@ -143,6 +143,9 @@ class PluginLoader:
                 continue
 
             for plugin_file in search_path.glob("*_adapter.py"):
+                # Skip base_adapter.py (abstract base class, not a plugin)
+                if plugin_file.name == "base_adapter.py":
+                    continue
                 try:
                     self._load_plugin(plugin_file)
                     loaded_count += 1

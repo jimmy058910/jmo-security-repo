@@ -109,8 +109,8 @@ RUN AFL_VERSION="4.21c" && \
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 11 pre-installed scanners + multi-target scanning (v0.6.1 optimized)"
-LABEL org.opencontainers.image.version="0.6.1"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 12 pre-installed scanners + plugin system + schedule management (v0.9.0)"
+LABEL org.opencontainers.image.version="0.9.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"

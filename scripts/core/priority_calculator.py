@@ -33,6 +33,7 @@ class PriorityScore:
         kev_due_date: Remediation due date if in KEV catalog
         components: Breakdown of score components for transparency
     """
+
     finding_id: str
     priority: float  # 0-100
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW, INFO
@@ -40,7 +41,9 @@ class PriorityScore:
     epss_percentile: Optional[float] = None
     is_kev: bool = False
     kev_due_date: Optional[str] = None
-    components: Dict[str, float] = field(default_factory=dict)  # Breakdown of score components
+    components: Dict[str, float] = field(
+        default_factory=dict
+    )  # Breakdown of score components
 
 
 class PriorityCalculator:
@@ -64,6 +67,7 @@ class PriorityCalculator:
             cache_dir: Optional cache directory for EPSS/KEV data
         """
         from pathlib import Path
+
         cache_path = Path(cache_dir) if cache_dir else None
 
         self.epss_client = EPSSClient(cache_dir=cache_path)
@@ -88,14 +92,8 @@ class PriorityCalculator:
             PriorityScore object with calculated priority and components
         """
         # Base severity score
-        severity_scores = {
-            'CRITICAL': 10,
-            'HIGH': 7,
-            'MEDIUM': 4,
-            'LOW': 2,
-            'INFO': 1
-        }
-        severity_score = severity_scores.get(finding.get('severity', 'MEDIUM'), 4)
+        severity_scores = {"CRITICAL": 10, "HIGH": 7, "MEDIUM": 4, "LOW": 2, "INFO": 1}
+        severity_score = severity_scores.get(finding.get("severity", "MEDIUM"), 4)
 
         # Extract CVE IDs
         cves = self._extract_cves(finding)
@@ -127,32 +125,31 @@ class PriorityCalculator:
 
         # Calculate priority
         raw_priority = (
-            severity_score *
-            epss_multiplier *
-            kev_multiplier *
-            reachability_multiplier
+            severity_score * epss_multiplier * kev_multiplier * reachability_multiplier
         ) / 1.5
 
         # Normalize to 0-100 scale
         priority = min(100.0, raw_priority * 5.0)
 
         return PriorityScore(
-            finding_id=finding['id'],
+            finding_id=finding["id"],
             priority=priority,
-            severity=finding.get('severity', 'MEDIUM'),
+            severity=finding.get("severity", "MEDIUM"),
             epss=epss_score,
             epss_percentile=epss_percentile,
             is_kev=is_kev,
             kev_due_date=kev_due_date,
             components={
-                'severity_score': severity_score,
-                'epss_multiplier': epss_multiplier,
-                'kev_multiplier': kev_multiplier,
-                'reachability_multiplier': reachability_multiplier,
-            }
+                "severity_score": severity_score,
+                "epss_multiplier": epss_multiplier,
+                "kev_multiplier": kev_multiplier,
+                "reachability_multiplier": reachability_multiplier,
+            },
         )
 
-    def calculate_priorities_bulk(self, findings: List[Dict]) -> Dict[str, PriorityScore]:
+    def calculate_priorities_bulk(
+        self, findings: List[Dict]
+    ) -> Dict[str, PriorityScore]:
         """Calculate priorities for multiple findings (bulk).
 
         Uses bulk EPSS API to reduce API calls when processing many findings.
@@ -169,16 +166,16 @@ class PriorityCalculator:
         for finding in findings:
             cves = self._extract_cves(finding)
             all_cves.extend(cves)
-            finding_cves[finding['id']] = cves
+            finding_cves[finding["id"]] = cves
 
         # Bulk fetch EPSS scores (reduces API calls)
-        epss_scores = self.epss_client.get_scores_bulk(list(set(all_cves)))
+        _ = self.epss_client.get_scores_bulk(list(set(all_cves)))  # Pre-warm cache
 
         # Calculate priorities
         priorities = {}
         for finding in findings:
             priority = self.calculate_priority(finding)
-            priorities[finding['id']] = priority
+            priorities[finding["id"]] = priority
 
         return priorities
 
@@ -199,28 +196,41 @@ class PriorityCalculator:
         cves = []
 
         # Check raw field
-        if 'raw' in finding and isinstance(finding['raw'], dict):
-            raw = finding['raw']
+        if "raw" in finding and isinstance(finding["raw"], dict):
+            raw = finding["raw"]
 
             # Common CVE field names
-            cve_fields = ['cve', 'cveId', 'cve_id', 'CVE', 'vulnerabilityID', 'VulnerabilityID']
+            cve_fields = [
+                "cve",
+                "cveId",
+                "cve_id",
+                "CVE",
+                "vulnerabilityID",
+                "VulnerabilityID",
+            ]
             for field_name in cve_fields:
                 if field_name in raw:
                     cve_value = raw[field_name]
-                    if isinstance(cve_value, str) and cve_value.startswith('CVE-'):
+                    if isinstance(cve_value, str) and cve_value.startswith("CVE-"):
                         cves.append(cve_value)
                     elif isinstance(cve_value, list):
-                        cves.extend([c for c in cve_value if isinstance(c, str) and c.startswith('CVE-')])
+                        cves.extend(
+                            [
+                                c
+                                for c in cve_value
+                                if isinstance(c, str) and c.startswith("CVE-")
+                            ]
+                        )
 
         # Check ruleId (some tools use CVE as rule ID)
-        rule_id = finding.get('ruleId', '')
-        if isinstance(rule_id, str) and rule_id.startswith('CVE-'):
+        rule_id = finding.get("ruleId", "")
+        if isinstance(rule_id, str) and rule_id.startswith("CVE-"):
             cves.append(rule_id)
 
         # Check message for CVE references
-        message = finding.get('message', '')
+        message = finding.get("message", "")
         if isinstance(message, str):
-            cve_pattern = r'CVE-\d{4}-\d{4,7}'
+            cve_pattern = r"CVE-\d{4}-\d{4,7}"
             cves.extend(re.findall(cve_pattern, message))
 
         return list(set(cves))  # Deduplicate

@@ -265,7 +265,9 @@ def _add_profile_args(subparsers, profile_name: str, description: str):
     target_group.add_argument(
         "--repos-dir", help="Directory whose immediate subfolders are repos to scan"
     )
-    target_group.add_argument("--targets", help="File listing repo paths (one per line)")
+    target_group.add_argument(
+        "--targets", help="File listing repo paths (one per line)"
+    )
 
     # Scan configuration
     profile_parser.add_argument(
@@ -273,7 +275,9 @@ def _add_profile_args(subparsers, profile_name: str, description: str):
         default="results",
         help="Results directory (default: results)",
     )
-    profile_parser.add_argument("--threads", type=int, default=None, help="Override threads")
+    profile_parser.add_argument(
+        "--threads", type=int, default=None, help="Override threads"
+    )
     profile_parser.add_argument(
         "--timeout",
         type=int,
@@ -293,7 +297,9 @@ def _add_profile_args(subparsers, profile_name: str, description: str):
         action="store_true",
         help="Fail if tools are missing (disable stubs)",
     )
-    profile_parser.add_argument("--human-logs", action="store_true", help="Human-friendly logs")
+    profile_parser.add_argument(
+        "--human-logs", action="store_true", help="Human-friendly logs"
+    )
     profile_parser.add_argument(
         "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
     )
@@ -382,63 +388,116 @@ def _add_schedule_args(subparsers):
     schedule_parser = subparsers.add_parser(
         "schedule",
         help="Manage scheduled security scans",
-        description="Manage scheduled scans using CI/CD or local cron"
+        description="Manage scheduled scans using CI/CD or local cron",
     )
-    schedule_subparsers = schedule_parser.add_subparsers(dest="schedule_action", required=True)
+    schedule_subparsers = schedule_parser.add_subparsers(
+        dest="schedule_action", required=True
+    )
 
     # CREATE
     create_parser = schedule_subparsers.add_parser("create", help="Create new schedule")
     create_parser.add_argument("--name", required=True, help="Schedule name")
-    create_parser.add_argument("--cron", required=True, help="Cron expression (e.g., '0 2 * * *')")
-    create_parser.add_argument("--profile", required=True, choices=["fast", "balanced", "deep"], help="Scan profile")
+    create_parser.add_argument(
+        "--cron", required=True, help="Cron expression (e.g., '0 2 * * *')"
+    )
+    create_parser.add_argument(
+        "--profile",
+        required=True,
+        choices=["fast", "balanced", "deep"],
+        help="Scan profile",
+    )
     create_parser.add_argument("--repos-dir", help="Repository directory to scan")
-    create_parser.add_argument("--image", action="append", help="Container image to scan (can specify multiple)")
-    create_parser.add_argument("--url", action="append", help="Web URL to scan (can specify multiple)")
-    create_parser.add_argument("--backend", default="github-actions", choices=["github-actions", "gitlab-ci", "local-cron"], help="Backend type")
-    create_parser.add_argument("--timezone", default="UTC", help="Timezone for schedule (default: UTC)")
+    create_parser.add_argument(
+        "--image",
+        action="append",
+        help="Container image to scan (can specify multiple)",
+    )
+    create_parser.add_argument(
+        "--url", action="append", help="Web URL to scan (can specify multiple)"
+    )
+    create_parser.add_argument(
+        "--backend",
+        default="github-actions",
+        choices=["github-actions", "gitlab-ci", "local-cron"],
+        help="Backend type",
+    )
+    create_parser.add_argument(
+        "--timezone", default="UTC", help="Timezone for schedule (default: UTC)"
+    )
     create_parser.add_argument("--description", help="Human-readable description")
-    create_parser.add_argument("--label", action="append", help="Label in KEY=VALUE format")
-    create_parser.add_argument("--slack-webhook", help="Slack webhook URL for notifications")
+    create_parser.add_argument(
+        "--label", action="append", help="Label in KEY=VALUE format"
+    )
+    create_parser.add_argument(
+        "--slack-webhook", help="Slack webhook URL for notifications"
+    )
 
     # LIST
     list_parser = schedule_subparsers.add_parser("list", help="List schedules")
-    list_parser.add_argument("--format", choices=["table", "json", "yaml"], default="table", help="Output format")
-    list_parser.add_argument("--label", action="append", help="Filter by label (KEY=VALUE)")
+    list_parser.add_argument(
+        "--format",
+        choices=["table", "json", "yaml"],
+        default="table",
+        help="Output format",
+    )
+    list_parser.add_argument(
+        "--label", action="append", help="Filter by label (KEY=VALUE)"
+    )
 
     # GET
     get_parser = schedule_subparsers.add_parser("get", help="Get schedule details")
     get_parser.add_argument("name", help="Schedule name")
-    get_parser.add_argument("--format", choices=["json", "yaml"], default="yaml", help="Output format")
+    get_parser.add_argument(
+        "--format", choices=["json", "yaml"], default="yaml", help="Output format"
+    )
 
     # UPDATE
     update_parser = schedule_subparsers.add_parser("update", help="Update schedule")
     update_parser.add_argument("name", help="Schedule name")
     update_parser.add_argument("--cron", help="New cron expression")
-    update_parser.add_argument("--profile", choices=["fast", "balanced", "deep"], help="New scan profile")
-    update_parser.add_argument("--suspend", action="store_true", help="Suspend schedule")
+    update_parser.add_argument(
+        "--profile", choices=["fast", "balanced", "deep"], help="New scan profile"
+    )
+    update_parser.add_argument(
+        "--suspend", action="store_true", help="Suspend schedule"
+    )
     update_parser.add_argument("--resume", action="store_true", help="Resume schedule")
 
     # EXPORT
-    export_parser = schedule_subparsers.add_parser("export", help="Export workflow file")
+    export_parser = schedule_subparsers.add_parser(
+        "export", help="Export workflow file"
+    )
     export_parser.add_argument("name", help="Schedule name")
-    export_parser.add_argument("--backend", choices=["github-actions", "gitlab-ci"], help="Override backend type")
+    export_parser.add_argument(
+        "--backend",
+        choices=["github-actions", "gitlab-ci"],
+        help="Override backend type",
+    )
     export_parser.add_argument("--output", "-o", help="Output file (default: stdout)")
 
     # INSTALL
-    install_parser = schedule_subparsers.add_parser("install", help="Install to local cron (Linux/macOS only)")
+    install_parser = schedule_subparsers.add_parser(
+        "install", help="Install to local cron (Linux/macOS only)"
+    )
     install_parser.add_argument("name", help="Schedule name")
 
     # UNINSTALL
-    uninstall_parser = schedule_subparsers.add_parser("uninstall", help="Remove from local cron")
+    uninstall_parser = schedule_subparsers.add_parser(
+        "uninstall", help="Remove from local cron"
+    )
     uninstall_parser.add_argument("name", help="Schedule name")
 
     # DELETE
     delete_parser = schedule_subparsers.add_parser("delete", help="Delete schedule")
     delete_parser.add_argument("name", help="Schedule name")
-    delete_parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+    delete_parser.add_argument(
+        "--force", action="store_true", help="Skip confirmation prompt"
+    )
 
     # VALIDATE
-    validate_parser = schedule_subparsers.add_parser("validate", help="Validate schedule configuration")
+    validate_parser = schedule_subparsers.add_parser(
+        "validate", help="Validate schedule configuration"
+    )
     validate_parser.add_argument("name", help="Schedule name")
 
     return schedule_parser
@@ -478,7 +537,9 @@ Documentation: https://docs.jmotools.com
     # Beginner-friendly commands
     _add_wizard_args(sub)
     _add_profile_args(sub, "fast", "Quick scan with 3 best-in-class tools (5-8 min)")
-    _add_profile_args(sub, "balanced", "Balanced scan with 8 production-ready tools (15-20 min)")
+    _add_profile_args(
+        sub, "balanced", "Balanced scan with 8 production-ready tools (15-20 min)"
+    )
     _add_profile_args(sub, "full", "Comprehensive scan with all 12 tools (30-60 min)")
     _add_setup_args(sub)
 
@@ -968,7 +1029,13 @@ def cmd_scan(args) -> int:
     # Track scan start time for telemetry
     import time
 
+    from scripts.core.telemetry import should_show_telemetry_banner, show_telemetry_banner
+
     scan_start_time = time.time()
+
+    # Show telemetry banner on first 3 scans (opt-out model)
+    if should_show_telemetry_banner():
+        show_telemetry_banner(mode="cli")
 
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
@@ -1209,10 +1276,11 @@ def cmd_wizard(args):
 
 def cmd_setup(args):
     """Run tool verification and installation."""
-    import shutil
     import subprocess  # nosec B404 - needed for tool installation
 
-    script = Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+    script = (
+        Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
+    )
     if not script.exists():
         sys.stderr.write(f"ERROR: Tool setup script not found: {script}\n")
         return 1
@@ -1293,7 +1361,9 @@ def _open_results(args):
 
     # Allowlist for safety
     allowed_openers = {"xdg-open", "open", "start"}
-    opener_name = os.path.basename(opener) if opener and os.path.isabs(opener) else opener
+    opener_name = (
+        os.path.basename(opener) if opener and os.path.isabs(opener) else opener
+    )
 
     if opener and opener_name in allowed_openers:
         for p in paths:

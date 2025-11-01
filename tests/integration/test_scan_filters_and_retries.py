@@ -38,7 +38,8 @@ exclude: ["test-*"]
     # Run scan with config
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repos-dir",
         str(tmp_path / "repos"),
@@ -82,7 +83,8 @@ retries: 2
     # Run scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(repo),
@@ -124,7 +126,8 @@ tools: [semgrep, trivy]
     # Run scan
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(repo),
@@ -163,7 +166,8 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
     # Run scan with --allow-missing-tools
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(repo),
@@ -174,15 +178,26 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
         "--allow-missing-tools",  # Create stubs for missing tools
     ]
 
-    # Hide security tools from PATH while preserving python3
+    # Hide security tools from PATH while preserving python
     # Keep only python's directory in PATH to force all security tools to be "missing"
     python_dir = str(Path(sys.executable).parent)
+
+    # Ensure python3 is available by using sys.executable directly
+    # Some systems have python3.11 but not python3 symlink
+    test_env = {
+        "PATH": python_dir,
+        "PYTHONPATH": ".",
+    }
+
+    # Use sys.executable instead of relying on 'python3' being in PATH
+    cmd[0] = sys.executable  # Replace 'python3' with actual python executable
+
     result = subprocess.run(
         cmd,
         timeout=30,
         capture_output=True,
         text=True,
-        env={"PATH": python_dir, "PYTHONPATH": "."},
+        env=test_env,
     )
     assert result.returncode == 0, f"Scan failed: {result.stderr}"
 
@@ -225,7 +240,8 @@ tools: [trufflehog]
     # Run scan with invalid JMO_THREADS value
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(repo),

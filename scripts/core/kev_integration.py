@@ -30,6 +30,7 @@ class KEVEntry:
         required_action: Required action for federal agencies
         due_date: Remediation due date for federal agencies (YYYY-MM-DD)
     """
+
     cve: str
     vendor: str
     product: str
@@ -75,7 +76,7 @@ class KEVClient:
         # Check cache
         if self.cache_path.exists() and self._is_cache_valid():
             try:
-                with open(self.cache_path, 'r', encoding='utf-8') as f:
+                with open(self.cache_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.catalog = self._parse_catalog(data)
                     return
@@ -97,7 +98,7 @@ class KEVClient:
         data = response.json()
 
         # Cache catalog
-        with open(self.cache_path, 'w', encoding='utf-8') as f:
+        with open(self.cache_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
         self.catalog = self._parse_catalog(data)
@@ -113,16 +114,16 @@ class KEVClient:
         """
         catalog = {}
 
-        for vuln in data.get('vulnerabilities', []):
+        for vuln in data.get("vulnerabilities", []):
             entry = KEVEntry(
-                cve=vuln['cveID'],
-                vendor=vuln['vendorProject'],
-                product=vuln['product'],
-                vulnerability_name=vuln['vulnerabilityName'],
-                date_added=vuln['dateAdded'],
-                short_description=vuln['shortDescription'],
-                required_action=vuln['requiredAction'],
-                due_date=vuln.get('dueDate', '')
+                cve=vuln["cveID"],
+                vendor=vuln["vendorProject"],
+                product=vuln["product"],
+                vulnerability_name=vuln["vulnerabilityName"],
+                date_added=vuln["dateAdded"],
+                short_description=vuln["shortDescription"],
+                required_action=vuln["requiredAction"],
+                due_date=vuln.get("dueDate", ""),
             )
             catalog[entry.cve] = entry
 
@@ -168,14 +169,14 @@ class KEVClient:
             return {}
 
         try:
-            with open(self.cache_path, 'r', encoding='utf-8') as f:
+            with open(self.cache_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return {
-                    'title': data.get('title', ''),
-                    'catalog_version': data.get('catalogVersion', ''),
-                    'date_released': data.get('dateReleased', ''),
-                    'count': data.get('count', 0),
-                    'total_cves': len(self.catalog)
+                    "title": data.get("title", ""),
+                    "catalog_version": data.get("catalogVersion", ""),
+                    "date_released": data.get("dateReleased", ""),
+                    "count": data.get("count", 0),
+                    "total_cves": len(self.catalog),
                 }
         except (json.JSONDecodeError, IOError):
             return {}

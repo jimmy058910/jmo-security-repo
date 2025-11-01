@@ -356,7 +356,6 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 
 When local binary is missing/fails, automatically falls back to Docker-based runner via `scripts/core/run_noseyparker_docker.sh`. Requires Docker installed and `ghcr.io/praetorian-inc/noseyparker:latest` image.
 
-
 ### Plugin Architecture (v0.9.0+)
 
 **All tool adapters use a plugin architecture introduced in v0.9.0** for faster development, independent updates, and hot-reload during development.

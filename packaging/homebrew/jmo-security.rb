@@ -76,13 +76,14 @@ class JmoSecurity < Formula
       🎉 JMo Security v#{version} is ready to use!
 
       Quick Start:
-        jmotools wizard              # Interactive guided scanning
-        jmotools wizard --yes        # Non-interactive with defaults
-        jmo scan --help              # See all scan options
+        jmo wizard                   # Interactive guided scanning
+        jmo wizard --yes             # Non-interactive with defaults
+        jmo fast --repo ./myapp      # Fast scan (3 tools, 5-8 min)
+        jmo balanced --repos-dir ~/repos  # Balanced scan (8 tools, 15-20 min)
 
       🐳 Zero-Installation Option (Recommended):
         Use Docker mode for instant scanning with all 12 security tools:
-        jmotools wizard --docker     # Auto-detects Docker and runs in container
+        jmo wizard --docker          # Auto-detects Docker and runs in container
 
       🔧 Optional: Install Security Tools Locally (Faster Scans):
         JMo orchestrates these external tools. Choose one:
@@ -119,11 +120,11 @@ class JmoSecurity < Formula
         Discord: https://discord.gg/jmotools (coming soon)
 
       What's New in v0.9.0:
-        ✅ Plugin system for tool adapters (75% faster integration)
-        ✅ Refactored architecture (50% code reduction)
-        ✅ Homebrew packaging (you're using it now!)
-        ✅ Improved multi-target scanning
-        ✅ Enhanced CLI with hot-reload support
+        ✅ CLI consolidation: jmotools merged into jmo (simpler UX)
+        ✅ Schedule management: automated scans via cron or CI/CD
+        ✅ Plugin system for adapters (75% faster tool integration)
+        ✅ Windows installer with NSIS (WinGet support)
+        ✅ Enhanced beginner-friendly commands (wizard, fast, balanced, full)
 
     EOS
   end
@@ -131,12 +132,15 @@ class JmoSecurity < Formula
   test do
     # Test that CLI commands are available
     assert_match "JMo Security", shell_output("#{bin}/jmo --help")
-    assert_match "wizard", shell_output("#{bin}/jmotools --help")
+    assert_match "wizard", shell_output("#{bin}/jmo --help")
 
-    # Test basic functionality
-    system bin/"jmotools", "wizard", "--help"
+    # Test beginner-friendly commands
+    system bin/"jmo", "wizard", "--help"
+    system bin/"jmo", "fast", "--help"
+    system bin/"jmo", "balanced", "--help"
+    system bin/"jmo", "schedule", "--help"
 
-    # Test plugin system
+    # Test advanced commands
     output = shell_output("#{bin}/jmo scan --help")
     assert_match "profile", output
 

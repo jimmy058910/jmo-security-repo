@@ -11,10 +11,8 @@ Test Categories:
 - generate_command_list() integration tests
 """
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import patch
 
-import pytest
 
 from scripts.cli.wizard import (
     TargetConfig,
@@ -35,10 +33,7 @@ from scripts.cli.wizard import (
 # =============================================================================
 
 
-def create_mock_target_config(
-    target_type: str = "repo",
-    **kwargs
-) -> TargetConfig:
+def create_mock_target_config(target_type: str = "repo", **kwargs) -> TargetConfig:
     """Create mock TargetConfig for testing."""
     config = TargetConfig()
     config.type = target_type
@@ -124,7 +119,9 @@ def test_select_target_type_k8s(mock_choice):
 def test_configure_repo_target_delegates_correctly(mock_configure):
     """Test configure_repo_target() delegates to target_configurators module."""
     # Setup mock return value
-    expected_config = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test")
+    expected_config = create_mock_target_config(
+        "repo", repo_mode="repos-dir", repo_path="/test"
+    )
     mock_configure.return_value = expected_config
 
     # Call wrapper function
@@ -180,9 +177,7 @@ def test_configure_url_target_delegates_correctly(mock_configure):
 def test_configure_gitlab_target_delegates_correctly(mock_configure):
     """Test configure_gitlab_target() delegates to target_configurators module."""
     expected_config = create_mock_target_config(
-        "gitlab",
-        gitlab_url="https://gitlab.com",
-        gitlab_repo="org/repo"
+        "gitlab", gitlab_url="https://gitlab.com", gitlab_repo="org/repo"
     )
     mock_configure.return_value = expected_config
 
@@ -215,7 +210,9 @@ def test_generate_command_list_repo_target():
     """Test command generation for repository target."""
     config = WizardConfig()
     config.profile = "balanced"
-    config.target = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test/repos")
+    config.target = create_mock_target_config(
+        "repo", repo_mode="repos-dir", repo_path="/test/repos"
+    )
     config.use_docker = False
 
     result = generate_command_list(config)
@@ -305,7 +302,9 @@ def test_generate_command_list_docker_mode():
 
 def test_target_config_to_dict_repo():
     """Test TargetConfig serialization for repository target."""
-    config = create_mock_target_config("repo", repo_mode="repos-dir", repo_path="/test/repos")
+    config = create_mock_target_config(
+        "repo", repo_mode="repos-dir", repo_path="/test/repos"
+    )
 
     result = config.to_dict()
 

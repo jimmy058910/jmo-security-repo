@@ -285,6 +285,74 @@ Before pushing Docker images:
 - [ ] Run E2E tests U9, U10, U11 with local images
 - [ ] Verify image sizes are reasonable
 
+## Package Manager Testing (v0.9.0+)
+
+Before submitting Homebrew/WinGet PRs, test the packages locally.
+
+### Test Homebrew Formula
+
+```bash
+# Install from local formula
+brew install --build-from-source packaging/homebrew/jmo-security.rb
+
+# Verify installation
+jmo --help
+jmo scan --help
+
+# Verify wrapper commands work
+jmotools wizard --help
+jmotools fast --help
+
+# Run formula tests
+brew test jmo-security
+
+# Audit formula (checks best practices)
+brew audit --strict --online jmo-security
+
+# Test upgrade path (if updating existing formula)
+brew upgrade jmo-security
+
+# Cleanup
+brew uninstall jmo-security
+```
+
+### Test WinGet Package (Windows)
+
+```powershell
+# Build installer
+python packaging/windows/build_installer.py --version 0.9.0
+
+# Validate manifest
+wingetcreate validate packaging/winget/manifests/j/jmo/jmo-security/0.9.0
+
+# Install from local manifest
+winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/0.9.0
+
+# Verify installation
+jmo --help
+jmo scan --help
+
+# Test upgrade path
+winget upgrade jmo.jmo-security
+
+# Cleanup
+winget uninstall jmo.jmo-security
+```
+
+### Pre-release Package Manager Checklist
+
+Before submitting to Homebrew/WinGet:
+
+- [ ] Test local formula/manifest installation
+- [ ] Verify CLI works (`jmo --help`, `jmotools wizard --help`)
+- [ ] Test upgrade path from previous version
+- [ ] Run `brew audit` (macOS) or `wingetcreate validate` (Windows)
+- [ ] Verify all dependencies bundled correctly
+- [ ] Test on fresh system (VM or Docker container)
+- [ ] Check package size is reasonable
+
+**Complete packaging guide:** [packaging/README.md](packaging/README.md) | [packaging/TESTING.md](packaging/TESTING.md)
+
 ## Git workflow
 
 - Create a feature branch from `main`.

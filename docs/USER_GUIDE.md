@@ -66,11 +66,59 @@ If you're brand new, you can also use the beginner‑friendly wrapper `jmotools`
 
 See [CHANGELOG.md](../CHANGELOG.md) for complete details.
 
+## Package Manager Installation (v0.9.0+)
+
+### Homebrew (macOS/Linux)
+
+**Easiest installation method - zero Python setup required:**
+
+```bash
+brew install jmo-security
+jmo --help
+```
+
+**Benefits:**
+
+- Zero Python setup required
+- Automatic dependency management
+- System-wide installation
+- Auto-updates via `brew upgrade`
+
+### WinGet (Windows 10+)
+
+**One-command installation for Windows:**
+
+```powershell
+winget install jmo.jmo-security
+jmo --help
+```
+
+**Benefits:**
+
+- One-command install
+- Bundled Python runtime
+- System PATH integration
+- Auto-updates via `winget upgrade`
+
+**Complete packaging guide:** [packaging/README.md](../packaging/README.md)
+
 ## Quick start (2 minutes)
 
 Prereqs: Linux, WSL, or macOS with Python 3.10+ recommended (3.8+ supported).
 
 1. Install the CLI
+
+**Option 1: Package Manager (Recommended)**
+
+```bash
+# macOS/Linux
+brew install jmo-security
+
+# Windows
+winget install jmo.jmo-security
+```
+
+**Option 2: Python Package**
 
 ```bash
 # Preferred (isolated):
@@ -949,6 +997,205 @@ Full privacy policy and data handling details:
 
 **Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
+
+## Plugin System (v0.9.0+)
+
+**Extensible architecture for custom security tool integrations**
+
+JMo Security uses a plugin-based architecture for all security tool adapters, enabling hot-reload during development, independent updates, and community-contributed integrations.
+
+### Overview
+
+All 12 security tools (TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++) are implemented as plugins using a standardized API.
+
+**Key Benefits:**
+
+- ✅ **Hot-Reload** - Edit adapter code without reinstalling JMo
+- ✅ **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
+- ✅ **Independent Updates** - Ship adapter improvements without core releases
+- ✅ **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
+- ✅ **Performance** - <100ms plugin loading overhead for all 12 adapters
+
+### CLI Commands
+
+**List all loaded plugins:**
+
+```bash
+jmo adapters list
+
+# Output:
+# Loaded 12 adapter plugins:
+#   trivy           v1.0.0    Adapter for Aqua Security Trivy vulnerability scanner
+#   semgrep         v1.0.0    Adapter for Semgrep multi-language SAST scanner
+#   trufflehog      v1.0.0    Adapter for TruffleHog verified secrets detection
+#   syft            v1.0.0    Adapter for Anchore Syft SBOM generator
+#   checkov         v1.0.0    Adapter for Bridgecrew Checkov IaC scanner
+#   hadolint        v1.0.0    Adapter for Hadolint Dockerfile linter
+#   zap             v1.0.0    Adapter for OWASP ZAP DAST scanner
+#   nuclei          v1.0.0    Adapter for ProjectDiscovery Nuclei vulnerability scanner
+#   bandit          v1.0.0    Adapter for PyCQA Bandit Python SAST scanner
+#   noseyparker     v1.0.0    Adapter for Nosey Parker secrets scanner
+#   falco           v1.0.0    Adapter for Falco runtime security monitor
+#   aflplusplus     v1.0.0    Adapter for AFL++ fuzzer
+```
+
+**Validate custom adapter:**
+
+```bash
+jmo adapters validate ~/.jmo/adapters/custom_tool_adapter.py
+
+# Output:
+# ✅ Valid plugin: /home/user/.jmo/adapters/custom_tool_adapter.py
+#   Plugin: custom-tool v1.0.0
+#   Metadata: OK
+#   Methods: OK (parse, get_fingerprint)
+#   Dependencies: OK
+```
+
+### Creating Custom Adapters
+
+**Plugin Search Paths:**
+
+1. `~/.jmo/adapters/` - User plugins (highest priority)
+2. `scripts/core/adapters/` - Built-in plugins (12 official adapters)
+
+**Quick Example:**
+
+```python
+# ~/.jmo/adapters/snyk_adapter.py
+from pathlib import Path
+from typing import List
+from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata, adapter_plugin
+import json
+
+@adapter_plugin(PluginMetadata(
+    name="snyk",  # CRITICAL: Must match snyk.json filename
+    version="1.0.0",
+    author="Your Name",
+    description="Adapter for Snyk SCA scanner",
+    tool_name="snyk",
+    schema_version="1.2.0",
+    output_format="json",
+    exit_codes={0: "clean", 1: "findings", 2: "error"}
+))
+class SnykAdapter(AdapterPlugin):
+    @property
+    def metadata(self):
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> List[Finding]:
+        """Parse Snyk JSON output and return CommonFinding objects"""
+        if not output_path.exists():
+            return []
+        
+        findings = []
+        with open(output_path) as f:
+            data = json.load(f)
+        
+        for vuln in data.get("vulnerabilities", []):
+            finding = Finding(
+                schemaVersion="1.2.0",
+                id="",  # Will be auto-generated
+                ruleId=vuln["id"],
+                severity=vuln["severity"].upper(),
+                tool={
+                    "name": "snyk",
+                    "version": data.get("version", "unknown")
+                },
+                location={
+                    "path": vuln.get("from", ["unknown"])[0],
+                    "startLine": 1
+                },
+                message=vuln["title"],
+                description=vuln.get("description", ""),
+                remediation=vuln.get("fixedIn", "No fix available"),
+                references=[{"url": vuln.get("url", "")}],
+                raw=vuln  # Original Snyk payload
+            )
+            findings.append(finding)
+        
+        return findings
+```
+
+**Testing Your Adapter:**
+
+```bash
+# 1. Validate adapter
+jmo adapters validate ~/.jmo/adapters/snyk_adapter.py
+
+# 2. Run scan with your adapter
+jmo scan --repo ./myapp --tools snyk --results-dir results
+
+# 3. Verify findings
+jmo report results --human-logs
+```
+
+**Hot-Reload Workflow:**
+
+```bash
+# Edit adapter (no reinstall needed)
+vim ~/.jmo/adapters/snyk_adapter.py
+
+# Run tests immediately - plugin auto-reloads
+pytest tests/adapters/test_snyk_adapter.py -v
+
+# Scan with updated adapter
+jmo scan --repo ./myapp --tools snyk
+```
+
+### Plugin Architecture Details
+
+**Components:**
+
+1. **plugin_api.py** - Base classes and decorators
+   - `Finding` dataclass (CommonFinding schema v1.2.0)
+   - `PluginMetadata` dataclass
+   - `AdapterPlugin` abstract base class
+   - `@adapter_plugin` decorator
+
+2. **plugin_loader.py** - Auto-discovery and loading
+   - `PluginRegistry` (register/get/list/unregister)
+   - `PluginLoader` (search paths, hot-reload)
+   - Global functions: `discover_adapters()`, `get_plugin_registry()`
+
+3. **normalize_and_report.py** - Integration point
+   - Dynamically discovers adapters via `discover_adapters()`
+   - Loads tool outputs using plugin registry
+   - No hard-coded imports
+
+**Performance:**
+
+- Plugin loading: <10ms per adapter (~100ms total for 12 adapters)
+- Hot-reload: Instant (no cache clearing needed)
+- Memory overhead: Minimal (~5 MB for all 12 plugins)
+
+### Advanced Usage
+
+**Disable specific plugins:**
+
+```python
+# Custom script to unregister plugins
+from scripts.core.plugin_loader import get_plugin_registry
+
+registry = get_plugin_registry()
+registry.unregister("obsolete-tool")  # Remove from registry
+```
+
+**List plugins programmatically:**
+
+```python
+from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+
+discover_adapters()
+registry = get_plugin_registry()
+
+for name, plugin_class in registry.list().items():
+    meta = plugin_class._plugin_metadata
+    print(f"{meta.name} v{meta.version}: {meta.description}")
+```
+
+**Complete guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters) | [.claude/skills/jmo-adapter-generator/SKILL.md](../.claude/skills/jmo-adapter-generator/SKILL.md)
+
 ## Schedule Management (v0.8.0+)
 
 **Automate recurring security scans with Kubernetes-inspired scheduling**
@@ -1006,39 +1253,52 @@ print(f"✅ Created schedule: {schedule.metadata.name}")
 print(f"📅 Next run: {schedule.status.nextScheduleTime}")
 ```
 
-### Schedule CLI Commands (Planned)
+### Schedule CLI Commands (v0.9.0+)
 
-The following CLI commands are planned for future releases:
+**Status:** Implemented for GitLab CI backend. GitHub Actions and local cron support in active development.
+
+**Available commands:**
 
 ```bash
 # Create schedule
-jmo schedule create weekly-scan \
-  --cron "0 2 * * 1" \
-  --profile balanced \
+jmo schedule create nightly-deep \
+  --cron "0 2 * * *" \
+  --profile deep \
+  --repos-dir ~/repos \
   --backend gitlab-ci \
-  --slack-webhook "$SLACK_WEBHOOK_URL"
+  --description "Nightly deep security audit"
 
 # List all schedules
 jmo schedule list
 
 # Get specific schedule
-jmo schedule get weekly-scan
+jmo schedule get nightly-deep
 
 # Update schedule
-jmo schedule update weekly-scan --cron "0 3 * * 1"
+jmo schedule update nightly-deep --profile balanced
 
 # Delete schedule
-jmo schedule delete weekly-scan
+jmo schedule delete nightly-deep --force
 
-# Export to GitLab CI YAML
-jmo schedule export weekly-scan > .gitlab-ci.yml
+# Export to GitLab CI
+jmo schedule export nightly-deep --backend gitlab-ci > .gitlab-ci.yml
 
-# Suspend/resume
-jmo schedule suspend weekly-scan
-jmo schedule resume weekly-scan
+# Suspend/resume (coming soon)
+jmo schedule suspend nightly-deep
+jmo schedule resume nightly-deep
 ```
 
-**Current implementation:** Use Python API directly (see [docs/SCHEDULE_GUIDE.md](SCHEDULE_GUIDE.md))
+**Supported backends:**
+
+| Backend | Status | Platform |
+|---------|--------|----------|
+| **gitlab-ci** | ✅ Complete | GitLab CI/CD |
+| **github-actions** | 🚧 In development | GitHub Actions |
+| **local-cron** | 🚧 Partial | Linux/macOS cron |
+
+**Complete guide:** [docs/SCHEDULE_GUIDE.md](SCHEDULE_GUIDE.md)
+
+**Python API:** For programmatic access, use the ScheduleManager API (see below)
 
 ### Managing Schedules
 

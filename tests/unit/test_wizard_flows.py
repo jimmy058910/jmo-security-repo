@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Tests for wizard workflow classes."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 
 from scripts.cli.wizard_flows import (
-    BaseWizardFlow,
     RepoFlow,
     EntireStackFlow,
     CICDFlow,
@@ -178,7 +175,9 @@ class TestRepoFlow:
         repo_dir.mkdir()
         (repo_dir / ".git").mkdir()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = RepoFlow()
             targets = flow.detect_targets()
 
@@ -234,7 +233,9 @@ services:
         # Create IaC
         (tmp_path / "main.tf").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = EntireStackFlow()
             targets = flow.detect_targets()
 
@@ -249,7 +250,9 @@ services:
         """Test recommendation generation when Dockerfile exists."""
         (tmp_path / "Dockerfile").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = EntireStackFlow()
             targets = {"images": [], "repos": [], "iac": [], "web": []}
             recommendations = flow._generate_recommendations(targets)
@@ -261,7 +264,9 @@ services:
         """Test recommendation generation when terraform directory exists."""
         (tmp_path / "terraform").mkdir()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = EntireStackFlow()
             targets = {"images": [], "repos": [], "iac": [], "web": []}
             recommendations = flow._generate_recommendations(targets)
@@ -297,7 +302,9 @@ class TestCICDFlow:
         workflows_dir.mkdir(parents=True)
         (workflows_dir / "ci.yml").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = CICDFlow()
             targets = flow.detect_targets()
 
@@ -308,7 +315,9 @@ class TestCICDFlow:
         """Test detection of GitLab CI."""
         (tmp_path / ".gitlab-ci.yml").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = CICDFlow()
             targets = flow.detect_targets()
 
@@ -325,7 +334,9 @@ jobs:
         workflow_file = tmp_path / "ci.yml"
         workflow_file.write_text(workflow_content)
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = CICDFlow()
             images = flow._detect_images_from_ci([workflow_file], None, None)
 
@@ -343,7 +354,9 @@ test:
         gitlab_file = tmp_path / ".gitlab-ci.yml"
         gitlab_file.write_text(gitlab_content)
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = CICDFlow()
             images = flow._detect_images_from_ci([], gitlab_file, None)
 
@@ -405,7 +418,9 @@ class TestDependencyFlow:
         (tmp_path / "requirements.txt").touch()
         (tmp_path / "poetry.lock").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = DependencyFlow()
             targets = flow.detect_targets()
 
@@ -419,7 +434,9 @@ class TestDependencyFlow:
         (tmp_path / "package.json").touch()
         (tmp_path / "package-lock.json").touch()
 
-        with patch("scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path):
+        with patch(
+            "scripts.cli.wizard_flows.base_flow.Path.cwd", return_value=tmp_path
+        ):
             flow = DependencyFlow()
             targets = flow.detect_targets()
 

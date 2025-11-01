@@ -143,6 +143,98 @@ See [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-targ
 
 ---
 
+---
+
+### 📅 Schedule Automated Scans (v0.9.0)
+
+**Automate recurring security scans with Kubernetes-inspired scheduling:**
+
+- ✅ **Cron-based scheduling** with standard 5-field syntax (`0 2 * * *`)
+- ✅ **GitLab CI integration** with automatic workflow generation
+- ✅ **Slack notifications** for scan success/failure
+- ✅ **Persistent storage** in `~/.jmo/schedules.json` with secure permissions
+- 🚧 **GitHub Actions support** (CLI commands available, workflow generation in development)
+- 🚧 **Local cron installation** (basic functionality, being polished)
+
+**Quick example:**
+
+```bash
+# Create weekly deep scan schedule
+jmo schedule create weekly-scan \
+  --cron "0 2 * * 1" \
+  --profile deep \
+  --repos-dir ~/repos \
+  --backend gitlab-ci \
+  --description "Weekly comprehensive security audit"
+
+# Export to .gitlab-ci.yml
+jmo schedule export weekly-scan --backend gitlab-ci > .gitlab-ci.yml
+
+# List all schedules
+jmo schedule list
+```
+
+**Complete guide:** [QUICKSTART.md — Schedule Automated Scans](QUICKSTART.md#-schedule-automated-scans-new-in-v090) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md)
+
+---
+
+### 🎯 Intelligent Risk Prioritization (v0.9.0)
+
+**Smart vulnerability triage with exploit prediction and active exploitation detection:**
+
+- ✅ **EPSS Integration** - Exploit Prediction Scoring System from FIRST.org API
+  - Predicts likelihood of exploitation in next 30 days (0-100% probability)
+  - Example: CVE-2024-1234 with EPSS 89.2% = High exploitation risk
+  - Updates daily from official EPSS feed
+- ✅ **CISA KEV Detection** - Known Exploited Vulnerabilities catalog tracking
+  - Flags CVEs actively exploited in the wild
+  - Automatically prioritizes KEV findings to CRITICAL
+  - Updated weekly from CISA catalog
+- ✅ **Priority Score Calculation** - Unified 0-100 risk score combining:
+  - Base severity (CVSS score)
+  - EPSS probability (exploitation likelihood)
+  - KEV status (actively exploited = +50 points)
+  - Formula: `priority = (severity * 40) + (epss * 30) + (kev * 30)`
+- ✅ **SQLite Caching** - Fast local cache with <50ms lookup latency
+  - 30-day cache TTL for EPSS scores
+  - Weekly refresh for KEV catalog
+  - Offline fallback to severity-only scoring
+
+**Real-World Example:**
+
+```bash
+# Scan repository with EPSS/KEV enrichment (automatic)
+jmo scan --repo ./myapp --results-dir results
+jmo report results --human-logs
+
+# SUMMARY.md shows priority scores:
+# Priority Score 95/100: CVE-2024-1234 (CRITICAL, EPSS: 89.2%, KEV: Yes)
+#   → Actively exploited, fix immediately
+#
+# Priority Score 72/100: CVE-2024-5678 (HIGH, EPSS: 45.3%, KEV: No)
+#   → High exploitation probability, fix soon
+#
+# Priority Score 28/100: CVE-2023-9999 (MEDIUM, EPSS: 2.1%, KEV: No)
+#   → Low exploitation risk, schedule for next sprint
+```
+
+**Priority Thresholds:**
+
+| Score | Risk Level | Action | Example |
+|-------|------------|--------|---------|
+| 90-100 | **CRITICAL** | Fix immediately (24-48 hours) | KEV CVEs, EPSS >80% |
+| 70-89 | **HIGH** | Fix within 1 week | EPSS 40-80%, HIGH severity |
+| 50-69 | **MEDIUM** | Fix within 1 month | EPSS 10-40%, MEDIUM severity |
+| 0-49 | **LOW** | Schedule for next quarter | EPSS <10%, LOW severity |
+
+**Dashboard Integration:**
+
+- Priority scores visible in `dashboard.html` with color-coded badges
+- `SUMMARY.md` sorted by priority (highest risk first)
+- CSV export includes priority scores for custom filtering
+
+**Complete guide:** [docs/USER_GUIDE.md — EPSS/KEV Risk Prioritization](docs/USER_GUIDE.md#epsskev-risk-prioritization-v090) | [QUICKSTART.md](QUICKSTART.md#epsskev-risk-prioritization-new-in-v090)
+
 ### v0.5.0 - Tool Suite Consolidation (October 2025)
 
 **Tool Suite Consolidation (ROADMAP #3):**

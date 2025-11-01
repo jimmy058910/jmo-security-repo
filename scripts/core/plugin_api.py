@@ -15,7 +15,7 @@ NOT for community plugin development.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import hashlib
 
 
@@ -37,7 +37,7 @@ class Finding:
     message: str = ""
     title: Optional[str] = None
     description: Optional[str] = None
-    remediation: Optional[str] = None
+    remediation: Optional[Union[str, Dict[str, Any]]] = None  # v1.1.0: Can be dict with autofix
     references: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     cvss: Optional[Dict[str, Any]] = None
@@ -180,8 +180,8 @@ def adapter_plugin(metadata: PluginMetadata):
         Decorator function that attaches metadata to class
     """
 
-    def decorator(cls):
-        cls._plugin_metadata = metadata
+    def decorator(cls: type) -> type:
+        cls._plugin_metadata = metadata  # type: ignore[attr-defined]
         return cls
 
     return decorator

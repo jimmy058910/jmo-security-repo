@@ -73,15 +73,18 @@ Execute scan? [Y/n]: y
 ### Visual Elements
 
 **Unicode Box Drawing:**
+
 - Elegant headers with double-line borders: `╔═╗║╚╝`
 - Summary boxes with single-line borders: `┌─└│`
 
 **Progress Bars:**
+
 - Filled blocks: `████` (completed)
 - Empty blocks: `░░░░` (remaining)
 - Percentage display: `[████████░░░░] 40%`
 
 **Status Icons:**
+
 - ✅ Success messages
 - ⚠️ Warnings (production deployments, missing files)
 - ℹ️ Informational messages
@@ -90,6 +93,7 @@ Execute scan? [Y/n]: y
 - • List bullet points
 
 **Color Coding:**
+
 - Cyan: Headers, borders, progress bars
 - Green: Success messages, checkmarks
 - Yellow: Warnings
@@ -186,6 +190,7 @@ Clear profile comparison before selection:
 **Use Case:** Scan a single repository for secrets, vulnerabilities, and code issues
 
 **Auto-Detection:**
+
 - Detects if current directory is a Git repository
 - Detects programming language and package managers
 
@@ -198,6 +203,7 @@ jmotools wizard
 ```
 
 **Artifacts Generated:**
+
 - Basic Makefile with `security-scan`, `security-report`, `security-clean` targets
 - Optional GitHub Actions workflow
 - Optional shell script
@@ -209,12 +215,14 @@ jmotools wizard
 **Use Case:** Scan everything in current directory (repos + containers + IaC + web apps)
 
 **Auto-Detection:**
+
 - All Git repositories
 - Container images (from Dockerfile, docker-compose.yml, K8s manifests)
 - IaC files (Terraform, CloudFormation, K8s)
 - Web applications (from package.json, docker-compose ports)
 
 **Smart Recommendations:**
+
 - "Found Dockerfile → build image first: `docker build -t myapp .`"
 - "Found terraform/ directory → initialize: `terraform init && terraform plan`"
 - "Found .gitlab-ci.yml → scan GitLab repositories with `--gitlab-repo`"
@@ -231,7 +239,8 @@ jmotools wizard
 ```
 
 **Detected Output Example:**
-```
+
+```text
 🔍 Detected targets:
   ✓ 3 repositories
   ✓ 2 container images (nginx:latest, postgres:14)
@@ -244,6 +253,7 @@ jmotools wizard
 ```
 
 **Artifacts Generated:**
+
 - Comprehensive Makefile with 8 targets:
   - `security-scan-all` - Scan entire stack
   - `security-scan-repos` - Repositories only
@@ -264,6 +274,7 @@ jmotools wizard
 **Use Case:** Audit CI/CD pipeline security (GitHub Actions, GitLab CI, Jenkins)
 
 **Auto-Detection:**
+
 - CI pipeline files (.github/workflows/, .gitlab-ci.yml, Jenkinsfile)
 - Container images referenced in pipelines
 - Secrets in pipeline files
@@ -279,6 +290,7 @@ jmotools wizard
 ```
 
 **Artifacts Generated:**
+
 - Makefile with 6 CI/CD-specific targets:
   - `security-audit-ci` - Full CI/CD audit
   - `security-audit-fast` - Fast check (for pipelines)
@@ -297,6 +309,7 @@ jmotools wizard
 **Use Case:** Run final security checks before deploying to production
 
 **Auto-Detection:**
+
 - Deployment targets (IaC, container images, K8s manifests)
 - Environment (staging vs production) from:
   - Environment variables (ENVIRONMENT, NODE_ENV, etc.)
@@ -304,6 +317,7 @@ jmotools wizard
   - Kubernetes namespace declarations
 
 **Environment-Aware Defaults:**
+
 - **Staging:** balanced profile, fail on HIGH
 - **Production:** deep profile, fail on CRITICAL
 
@@ -323,6 +337,7 @@ jmotools wizard
 ```
 
 **Artifacts Generated:**
+
 - Makefile with deployment gates:
   - `security-check-staging` - Staging gate (fail on HIGH+)
   - `security-check-production` - Production gate (fail on CRITICAL)
@@ -340,6 +355,7 @@ jmotools wizard
 **Use Case:** Focus on SBOM generation and dependency vulnerability scanning
 
 **Auto-Detection:**
+
 - Package manifests (14 types): Python, JavaScript, Go, Rust, Java, Ruby, .NET
 - Lock files (9 types): poetry.lock, package-lock.json, yarn.lock, go.sum, etc.
 - Container images (for SBOM extraction)
@@ -364,6 +380,7 @@ jmotools wizard
 ```
 
 **Artifacts Generated:**
+
 - Basic Makefile with dependency-focused targets
 - GitHub Actions workflow using syft + trivy
 - GitLab CI pipeline for dependency scanning

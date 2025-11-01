@@ -135,7 +135,8 @@ def test_noseyparker_docker_fallback(tmp_path: Path):
     out_base = tmp_path / "results"
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(repo),

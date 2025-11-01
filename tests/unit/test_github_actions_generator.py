@@ -171,12 +171,16 @@ def test_notification_steps():
     assert "Notify Slack on success" in step_names
 
     # Verify failure step uses failure() condition
-    failure_step = [s for s in job["steps"] if s["name"] == "Notify Slack on failure"][0]
+    failure_step = [s for s in job["steps"] if s["name"] == "Notify Slack on failure"][
+        0
+    ]
     assert failure_step["if"] == "failure()"
     assert failure_step["uses"] == "slackapi/slack-github-action@v1"
 
     # Verify success step uses success() condition
-    success_step = [s for s in job["steps"] if s["name"] == "Notify Slack on success"][0]
+    success_step = [s for s in job["steps"] if s["name"] == "Notify Slack on success"][
+        0
+    ]
     assert success_step["if"] == "success()"
 
 
@@ -276,7 +280,7 @@ def test_yaml_formatting(basic_schedule):
 
     # Parse and re-serialize to verify validity
     workflow = yaml.safe_load(workflow_yaml)
-    re_serialized = yaml.dump(workflow)
+    _ = yaml.dump(workflow)  # Verify it can be re-serialized
 
     assert workflow is not None
     assert isinstance(workflow, dict)
@@ -313,6 +317,8 @@ def test_actionlint_validation(basic_schedule):
         )
 
         # Should pass without errors
-        assert result.returncode == 0, f"actionlint failed: {result.stdout}\n{result.stderr}"
+        assert (
+            result.returncode == 0
+        ), f"actionlint failed: {result.stdout}\n{result.stderr}"
     finally:
         temp_file.unlink()

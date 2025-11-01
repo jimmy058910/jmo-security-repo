@@ -10,7 +10,7 @@ Comprehensive testing documentation for Homebrew and Winget packaging.
 
 - **macOS:** 13 (Ventura) or later, OR 14 (Sonoma) or later
 - **Linux:** Ubuntu 22.04+ or Debian 11+
-- Homebrew installed: https://brew.sh
+- Homebrew installed: <https://brew.sh>
 
 ### Test Matrix
 
@@ -362,6 +362,7 @@ Test that Homebrew and Winget installations produce consistent behavior.
 | Schedule management | ⬜ | ⬜ | ⬜ | 📋 |
 
 **PASS CRITERIA:**
+
 - ✅ All features work identically across platforms
 - ✅ Same CLI commands produce same outputs
 - ✅ Same configuration files work across platforms
@@ -404,23 +405,29 @@ Test that Homebrew and Winget installations produce consistent behavior.
 ### Homebrew Issues
 
 **Issue:** `Error: jmo-security: unknown or unsupported macOS version`
+
 - **Solution:** Update formula's `depends_on` to support older macOS versions
 
 **Issue:** `Error: SHA256 mismatch`
+
 - **Solution:** Recalculate SHA256 with `sha256sum` and update formula
 
 **Issue:** `Error: Python not found`
+
 - **Solution:** Ensure `depends_on "python@3.10"` is in formula
 
 ### Winget Issues
 
 **Issue:** `Installer hash does not match`
+
 - **Solution:** Recalculate SHA256 and update manifest
 
 **Issue:** `Installation failed: Access denied`
+
 - **Solution:** Run installer as user (not admin), Winget uses user scope
 
 **Issue:** `PATH not updated after install`
+
 - **Solution:** Restart Command Prompt/PowerShell after installation
 
 ---

@@ -11,15 +11,13 @@ Architecture Note:
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
-import pytest
 
 from scripts.cli.wizard_flows.repo_flow import RepoFlow
 from scripts.cli.wizard_flows.telemetry_helper import (
     prompt_telemetry_opt_in,
     save_telemetry_preference,
-    send_wizard_telemetry,
 )
 
 
@@ -60,8 +58,9 @@ def test_repo_flow_prompt_user_balanced_with_artifacts():
     flow = RepoFlow()
     flow.detected_targets = {"repos": [Path("repo1")]}
 
-    with patch.object(flow.prompter, "prompt_choice", return_value="balanced"), \
-         patch.object(flow.prompter, "prompt_yes_no", return_value=True):
+    with patch.object(
+        flow.prompter, "prompt_choice", return_value="balanced"
+    ), patch.object(flow.prompter, "prompt_yes_no", return_value=True):
         options = flow.prompt_user()
 
         assert options["profile"] == "balanced"
@@ -73,8 +72,9 @@ def test_repo_flow_prompt_user_fast_no_artifacts():
     flow = RepoFlow()
     flow.detected_targets = {"repos": []}
 
-    with patch.object(flow.prompter, "prompt_choice", return_value="fast"), \
-         patch.object(flow.prompter, "prompt_yes_no", return_value=False):
+    with patch.object(
+        flow.prompter, "prompt_choice", return_value="fast"
+    ), patch.object(flow.prompter, "prompt_yes_no", return_value=False):
         options = flow.prompt_user()
 
         assert options["profile"] == "fast"
@@ -86,8 +86,9 @@ def test_repo_flow_prompt_user_deep_profile():
     flow = RepoFlow()
     flow.detected_targets = {"repos": []}
 
-    with patch.object(flow.prompter, "prompt_choice", return_value="deep"), \
-         patch.object(flow.prompter, "prompt_yes_no", return_value=True):
+    with patch.object(
+        flow.prompter, "prompt_choice", return_value="deep"
+    ), patch.object(flow.prompter, "prompt_yes_no", return_value=True):
         options = flow.prompt_user()
 
         assert options["profile"] == "deep"
@@ -232,6 +233,7 @@ def test_telemetry_save_preference_enabled(tmp_path, capsys):
 
     # Verify content
     import yaml
+
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
@@ -249,6 +251,7 @@ def test_telemetry_save_preference_disabled(tmp_path, capsys):
 
     # Verify content
     import yaml
+
     with open(config_path) as f:
         config = yaml.safe_load(f)
 
@@ -265,6 +268,7 @@ def test_telemetry_save_preference_updates_existing(tmp_path):
     # Create initial config
     initial_config = {"tools": ["trivy", "semgrep"], "profile": "balanced"}
     import yaml
+
     with open(config_path, "w") as f:
         yaml.dump(initial_config, f)
 
@@ -291,6 +295,7 @@ def test_telemetry_save_preference_handles_invalid_yaml(tmp_path, capsys):
     save_telemetry_preference(config_path, enabled=True)
 
     import yaml
+
     with open(config_path) as f:
         config = yaml.safe_load(f)
 

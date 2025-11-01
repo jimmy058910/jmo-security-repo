@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .base_flow import BaseWizardFlow
 
@@ -40,7 +40,7 @@ class DeploymentFlow(BaseWizardFlow):
         environment = self.prompter.prompt_choice(
             "Deployment environment:",
             choices=["staging", "production"],
-            default=detected_env,
+            default=str(detected_env) if detected_env else "staging",
         )
 
         # Production deployment warning
@@ -52,14 +52,20 @@ class DeploymentFlow(BaseWizardFlow):
                 "All container images scanned",
                 "Infrastructure-as-Code validated",
             ]
-            self.prompter.print_summary_box("⚠️  Production Deployment Requirements", prod_requirements)
+            self.prompter.print_summary_box(
+                "⚠️  Production Deployment Requirements", prod_requirements
+            )
 
         # Profile selection based on environment
         profile_default = "deep" if environment == "production" else "balanced"
         if environment == "production":
-            self.prompter.print_warning("Production deployments require 'deep' profile (30-60 min)")
+            self.prompter.print_warning(
+                "Production deployments require 'deep' profile (30-60 min)"
+            )
         else:
-            self.prompter.print_info("Staging deployments typically use 'balanced' profile (15-20 min)")
+            self.prompter.print_info(
+                "Staging deployments typically use 'balanced' profile (15-20 min)"
+            )
 
         profile = self.prompter.prompt_choice(
             "Select scan profile:",

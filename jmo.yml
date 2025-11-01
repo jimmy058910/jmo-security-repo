@@ -1,205 +1,121 @@
-# Default config for scanning and reporting
-# tools: default tool set (fallback when no profile selected)
-# outputs: which reporter formats to emit
-# fail_on: optional severity threshold to exit non-zero (CRITICAL/HIGH/MEDIUM/LOW/INFO)
-
-# Curated default (v0.5.0): Consolidated tool suite for optimal coverage
-# Categories:
-# - Secrets: trufflehog (verified secrets, 95% false positive reduction)
-# - SAST: semgrep (multi-language), bandit (Python-specific, deep only)
-# - SBOM+Vuln/Misconfig: syft + trivy (comprehensive scanning)
-# - IaC: checkov (policy-as-code)
-# - Dockerfile: hadolint (best practices)
-# - DAST: zap (OWASP ZAP for runtime vulnerabilities)
-# - Runtime Security: falco (container/K8s monitoring, deep only)
-# - Fuzzing: afl++ (coverage-guided fuzzing, deep only)
-#
-# Removed Tools (v0.5.0):
-# - gitleaks: Replaced by trufflehog (better verification, fewer false positives)
-# - tfsec: Deprecated since 2021, functionality merged into trivy
-# - osv-scanner: Trivy provides superior container/dependency scanning
-
-tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
-outputs: [json, md, yaml, html, sarif]
-fail_on: ""
-
+tools:
+- trufflehog
+- semgrep
+- syft
+- trivy
+- checkov
+- hadolint
+- zap
+- nuclei
+outputs:
+- json
+- md
+- yaml
+- html
+- sarif
+fail_on: ''
 default_profile: balanced
-
 profiles:
-  # Fast Profile: 3 best-in-breed tools (5-8 minutes)
-  # Coverage: Secrets (verified), SAST, SCA, containers, IaC, backup secrets
-  # Use Case: Pre-commit checks, quick validation, CI/CD gate
   fast:
-    tools: [trufflehog, semgrep, trivy]
+    tools:
+    - trufflehog
+    - semgrep
+    - trivy
     threads: 8
     timeout: 300
     per_tool:
       semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+        flags:
+        - --exclude
+        - node_modules
+        - --exclude
+        - .git
       trivy:
-        flags: ["--no-progress", "--scanners", "vuln,secret,misconfig"]
-
-  # Balanced Profile: 8 production-ready tools (15-20 minutes)
-  # Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST, API security
-  # Use Case: CI/CD pipelines, regular audits, production scans
+        flags:
+        - --no-progress
+        - --scanners
+        - vuln,secret,misconfig
   balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
+    tools:
+    - trufflehog
+    - semgrep
+    - syft
+    - trivy
+    - checkov
+    - hadolint
+    - zap
+    - nuclei
     threads: 4
     timeout: 600
     per_tool:
       semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+        flags:
+        - --exclude
+        - node_modules
+        - --exclude
+        - .git
       trivy:
-        flags: ["--no-progress"]
+        flags:
+        - --no-progress
       zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
+        flags:
+        - -config
+        - api.disablekey=true
+        - -config
+        - spider.maxDuration=5
       nuclei:
         timeout: 600
-        flags: ["-severity", "critical,high,medium"]
-
-  # Deep Profile: 12 comprehensive tools (30-60 minutes)
-  # Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, API security, runtime, fuzzing
-  # Use Case: Security audits, compliance scans, pre-release validation
+        flags:
+        - -severity
+        - critical,high,medium
   deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++]
+    tools:
+    - trufflehog
+    - noseyparker
+    - semgrep
+    - bandit
+    - syft
+    - trivy
+    - checkov
+    - hadolint
+    - zap
+    - nuclei
+    - falco
+    - afl++
     threads: 2
     timeout: 900
     retries: 1
     per_tool:
       semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
+        flags:
+        - --exclude
+        - node_modules
+        - --exclude
+        - .git
       trivy:
-        flags: ["--no-progress"]
+        flags:
+        - --no-progress
       zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=10"]
+        flags:
+        - -config
+        - api.disablekey=true
+        - -config
+        - spider.maxDuration=10
       nuclei:
         timeout: 900
-        flags: ["-severity", "critical,high,medium,low"]
+        flags:
+        - -severity
+        - critical,high,medium,low
       noseyparker:
         timeout: 1200
       afl++:
         timeout: 1800
-        flags: ["-m", "none"]  # Disable memory limit
-
-# =============================================================================
-# Security Gates Examples
-# =============================================================================
-# Security gates define failure criteria for CI/CD pipelines. Use fail_on to
-# set hard fail thresholds, or configure per-profile gates for different stages.
-#
-# Gate Types:
-# 1. Hard Fails: Block deployment/merge on critical issues
-# 2. Soft Warnings: Flag for review but allow deployment
-# 3. Manual Review: Require human approval for specific findings
-#
-# Example Usage:
-#
-# # Hard fail on CRITICAL or HIGH in production pipelines:
-# fail_on: "HIGH"
-#
-# # Soft warning for MEDIUM (informational, no exit code):
-# fail_on: ""  # Empty means no gating
-#
-# # Per-profile gates (different stages have different thresholds):
-# profiles:
-#   ci-pr:
-#     fail_on: "CRITICAL"  # Only block PRs on critical issues
-#   ci-main:
-#     fail_on: "HIGH"      # Stricter gate for main branch
-#   ci-release:
-#     fail_on: "MEDIUM"    # Most strict for releases
-#
-# CI/CD Integration Examples:
-#
-# Example 1: GitHub Actions - Hard Fail on HIGH+
-# ----------------------------------------------
-# jobs:
-#   security-scan:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - name: Run Security Scan
-#         run: |
-#           pip install jmo-security
-#           jmo ci --repo . --profile-name fast --fail-on HIGH
-#
-# Example 2: GitLab CI - Soft Warning with Manual Review
-# -------------------------------------------------------
-# security-scan:
-#   stage: test
-#   script:
-#     - pip install jmo-security
-#     - jmo ci --repo . --profile-name balanced --fail-on ""
-#     - |
-#       if [ $(jq '.findings | length' results/summaries/findings.json) -gt 0 ]; then
-#         echo "⚠️ Security findings detected. Review required."
-#       fi
-#   artifacts:
-#     reports:
-#       sast: results/summaries/findings.sarif
-#   allow_failure: true  # Soft warning
-#
-# Example 3: Jenkins - Gate with Threshold Count
-# -----------------------------------------------
-# stage('Security Scan') {
-#   steps {
-#     sh 'pip install jmo-security'
-#     sh 'jmo ci --repo . --profile-name balanced --fail-on HIGH'
-#     script {
-#       def findings = readJSON file: 'results/summaries/findings.json'
-#       def highCount = findings.findings.count { it.severity == 'HIGH' }
-#       if (highCount > 5) {
-#         error("Security gate failed: ${highCount} HIGH findings exceed threshold of 5")
-#       }
-#     }
-#   }
-# }
-#
-# Example 4: Multi-Stage Gates (Fast → Balanced → Deep)
-# ------------------------------------------------------
-# profiles:
-#   ci-fast:
-#     tools: [trufflehog, semgrep, trivy]
-#     fail_on: "CRITICAL"  # Only block on critical (5-8 min)
-#   ci-balanced:
-#     tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
-#     fail_on: "HIGH"      # Block on HIGH+ (15-20 min)
-#   ci-deep:
-#     tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
-#     fail_on: "MEDIUM"    # Most strict (30-60 min, nightly)
-#
-# Example 5: Conditional Gates Based on Branch
-# ---------------------------------------------
-# - name: Security Scan with Branch-Specific Gates
-#   run: |
-#     if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-#       jmo ci --repo . --profile-name balanced --fail-on HIGH
-#     elif [[ "${{ github.ref }}" == "refs/tags/v*" ]]; then
-#       jmo ci --repo . --profile-name deep --fail-on MEDIUM
-#     else
-#       jmo ci --repo . --profile-name fast --fail-on CRITICAL
-#     fi
-#
-# Suppression Integration (Manual Review Workflow):
-# --------------------------------------------------
-# Use jmo.suppress.yml to manually approve accepted risks:
-#
-# suppressions:
-#   - id: "fingerprint-abc123"
-#     reason: "False positive, verified with security team"
-#     expires: "2025-12-31"  # Optional expiration
-#   - id: "fingerprint-xyz789"
-#     reason: "Accepted risk: Demo code only, not in production"
-#
-# Recommended Gates by Environment:
-# ----------------------------------
-# Development/PR:       fail_on: "CRITICAL"  (fast feedback, block showstoppers)
-# Staging/Pre-Prod:     fail_on: "HIGH"      (comprehensive coverage)
-# Production/Release:   fail_on: "MEDIUM"    (strictest, all risks reviewed)
-# Nightly Deep Audits:  fail_on: "LOW"       (exhaustive, informational)
-
-# Profiling thread recommendations (used when --profile flag set)
+        flags:
+        - -m
+        - none
 profiling:
   min_threads: 2
   max_threads: 8
   default_threads: 4
+telemetry:
+  enabled: true

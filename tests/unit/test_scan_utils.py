@@ -13,10 +13,8 @@ Tests cover:
 
 import json
 import subprocess
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 from scripts.cli.scan_utils import tool_exists, write_stub, run_cmd, TOOL_INSTALL_HINTS
 
@@ -37,8 +35,7 @@ def test_tool_exists_found():
 
 def test_tool_exists_not_found_with_hint():
     """Test tool_exists returns False and logs hint when tool not found."""
-    with patch("shutil.which") as mock_which, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("shutil.which") as mock_which, patch("logging.getLogger") as mock_logger:
         mock_which.return_value = None
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
@@ -58,8 +55,7 @@ def test_tool_exists_not_found_with_hint():
 
 def test_tool_exists_not_found_without_hint():
     """Test tool_exists handles unknown tool without specific hint."""
-    with patch("shutil.which") as mock_which, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("shutil.which") as mock_which, patch("logging.getLogger") as mock_logger:
         mock_which.return_value = None
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
@@ -221,16 +217,10 @@ def test_write_stub_creates_parent_directories(tmp_path):
 def test_run_cmd_success_no_capture():
     """Test run_cmd successful execution without capturing stdout."""
     with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="output",
-            stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout="output", stderr="")
 
         rc, stdout, stderr, attempts = run_cmd(
-            ["echo", "test"],
-            timeout=30,
-            capture_stdout=False
+            ["echo", "test"], timeout=30, capture_stdout=False
         )
 
         assert rc == 0
@@ -243,15 +233,11 @@ def test_run_cmd_success_with_capture():
     """Test run_cmd successful execution with stdout capture."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="command output",
-            stderr="some warning"
+            returncode=0, stdout="command output", stderr="some warning"
         )
 
         rc, stdout, stderr, attempts = run_cmd(
-            ["trivy", "scan"],
-            timeout=30,
-            capture_stdout=True
+            ["trivy", "scan"], timeout=30, capture_stdout=True
         )
 
         assert rc == 0
@@ -264,16 +250,14 @@ def test_run_cmd_with_ok_rcs_accepts_nonzero():
     """Test run_cmd accepts non-zero exit codes in ok_rcs tuple."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
-            returncode=1,
-            stdout="findings detected",
-            stderr=""
+            returncode=1, stdout="findings detected", stderr=""
         )
 
         rc, stdout, stderr, attempts = run_cmd(
             ["semgrep", "scan"],
             timeout=30,
             capture_stdout=True,
-            ok_rcs=(0, 1, 2)  # Semgrep uses 0=clean, 1=findings, 2=errors
+            ok_rcs=(0, 1, 2),  # Semgrep uses 0=clean, 1=findings, 2=errors
         )
 
         assert rc == 1
@@ -288,15 +272,10 @@ def test_run_cmd_timeout_expired():
     """Test run_cmd handles TimeoutExpired exception."""
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(
-            cmd=["slow-command"],
-            timeout=5
+            cmd=["slow-command"], timeout=5
         )
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["slow-command"],
-            timeout=5,
-            retries=0
-        )
+        rc, stdout, stderr, attempts = run_cmd(["slow-command"], timeout=5, retries=0)
 
         assert rc == 124  # Timeout exit code
         assert stdout == ""
@@ -306,19 +285,16 @@ def test_run_cmd_timeout_expired():
 
 def test_run_cmd_timeout_with_retry():
     """Test run_cmd retries after timeout, then succeeds."""
-    with patch("subprocess.run") as mock_run, \
-         patch("time.sleep"):  # Skip actual sleep delays
+    with patch("subprocess.run") as mock_run, patch(
+        "time.sleep"
+    ):  # Skip actual sleep delays
         # First attempt: timeout, second attempt: success
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd=["cmd"], timeout=5),
-            MagicMock(returncode=0, stdout="", stderr="")
+            MagicMock(returncode=0, stdout="", stderr=""),
         ]
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["cmd"],
-            timeout=5,
-            retries=1
-        )
+        rc, stdout, stderr, attempts = run_cmd(["cmd"], timeout=5, retries=1)
 
         assert rc == 0
         assert attempts == 2
@@ -329,19 +305,14 @@ def test_run_cmd_timeout_with_retry():
 
 def test_run_cmd_retries_on_failure_then_success():
     """Test run_cmd retries command failures, succeeds on second attempt."""
-    with patch("subprocess.run") as mock_run, \
-         patch("time.sleep"):  # Skip actual sleep
+    with patch("subprocess.run") as mock_run, patch("time.sleep"):  # Skip actual sleep
         # First attempt: fail (rc=1), second attempt: success (rc=0)
         mock_run.side_effect = [
             MagicMock(returncode=1, stdout="", stderr="error"),
-            MagicMock(returncode=0, stdout="", stderr="")
+            MagicMock(returncode=0, stdout="", stderr=""),
         ]
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["flaky-tool"],
-            timeout=30,
-            retries=1
-        )
+        rc, stdout, stderr, attempts = run_cmd(["flaky-tool"], timeout=30, retries=1)
 
         assert rc == 0
         assert attempts == 2
@@ -349,19 +320,18 @@ def test_run_cmd_retries_on_failure_then_success():
 
 def test_run_cmd_retries_exhausted():
     """Test run_cmd returns failure after exhausting retries."""
-    with patch("subprocess.run") as mock_run, \
-         patch("time.sleep"):
+    with patch("subprocess.run") as mock_run, patch("time.sleep"):
         # All attempts fail
         mock_run.side_effect = [
             MagicMock(returncode=1, stdout="", stderr="error"),
             MagicMock(returncode=1, stdout="", stderr="error"),
-            MagicMock(returncode=1, stdout="", stderr="error")
+            MagicMock(returncode=1, stdout="", stderr="error"),
         ]
 
         rc, stdout, stderr, attempts = run_cmd(
             ["unreliable-tool"],
             timeout=30,
-            retries=2  # 1 initial + 2 retries = 3 total
+            retries=2,  # 1 initial + 2 retries = 3 total
         )
 
         assert rc == 1
@@ -372,17 +342,10 @@ def test_run_cmd_no_retry_on_acceptable_rc():
     """Test run_cmd doesn't retry when returncode in ok_rcs."""
     with patch("subprocess.run") as mock_run:
         # First call returns 1 (acceptable), should NOT retry
-        mock_run.return_value = MagicMock(
-            returncode=1,
-            stdout="",
-            stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
 
         rc, stdout, stderr, attempts = run_cmd(
-            ["semgrep"],
-            timeout=30,
-            retries=2,
-            ok_rcs=(0, 1)
+            ["semgrep"], timeout=30, retries=2, ok_rcs=(0, 1)
         )
 
         assert rc == 1
@@ -395,16 +358,13 @@ def test_run_cmd_no_retry_on_acceptable_rc():
 
 def test_run_cmd_file_not_found_error():
     """Test run_cmd handles FileNotFoundError (command not in PATH)."""
-    with patch("subprocess.run") as mock_run, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("subprocess.run") as mock_run, patch("logging.getLogger") as mock_logger:
         mock_run.side_effect = FileNotFoundError("command not found")
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
         rc, stdout, stderr, attempts = run_cmd(
-            ["nonexistent-tool"],
-            timeout=30,
-            retries=0
+            ["nonexistent-tool"], timeout=30, retries=0
         )
 
         assert rc == 1
@@ -418,16 +378,13 @@ def test_run_cmd_file_not_found_error():
 
 def test_run_cmd_permission_error():
     """Test run_cmd handles PermissionError."""
-    with patch("subprocess.run") as mock_run, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("subprocess.run") as mock_run, patch("logging.getLogger") as mock_logger:
         mock_run.side_effect = PermissionError("permission denied")
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
         rc, stdout, stderr, attempts = run_cmd(
-            ["restricted-tool"],
-            timeout=30,
-            retries=0
+            ["restricted-tool"], timeout=30, retries=0
         )
 
         assert rc == 1
@@ -439,17 +396,12 @@ def test_run_cmd_permission_error():
 
 def test_run_cmd_os_error():
     """Test run_cmd handles generic OSError."""
-    with patch("subprocess.run") as mock_run, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("subprocess.run") as mock_run, patch("logging.getLogger") as mock_logger:
         mock_run.side_effect = OSError("system error")
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["tool"],
-            timeout=30,
-            retries=0
-        )
+        rc, stdout, stderr, attempts = run_cmd(["tool"], timeout=30, retries=0)
 
         assert rc == 1
         assert "system error" in stderr or "OSError" in stderr
@@ -458,22 +410,15 @@ def test_run_cmd_os_error():
 
 def test_run_cmd_called_process_error():
     """Test run_cmd handles CalledProcessError."""
-    with patch("subprocess.run") as mock_run, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("subprocess.run") as mock_run, patch("logging.getLogger") as mock_logger:
         error = subprocess.CalledProcessError(
-            returncode=2,
-            cmd=["tool"],
-            stderr="tool error"
+            returncode=2, cmd=["tool"], stderr="tool error"
         )
         mock_run.side_effect = error
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["tool"],
-            timeout=30,
-            retries=0
-        )
+        rc, stdout, stderr, attempts = run_cmd(["tool"], timeout=30, retries=0)
 
         assert rc == 2
         assert "non-zero exit status" in stderr or "CalledProcessError" in stderr
@@ -485,17 +430,12 @@ def test_run_cmd_called_process_error():
 
 def test_run_cmd_unexpected_exception():
     """Test run_cmd handles unexpected exceptions."""
-    with patch("subprocess.run") as mock_run, \
-         patch("logging.getLogger") as mock_logger:
+    with patch("subprocess.run") as mock_run, patch("logging.getLogger") as mock_logger:
         mock_run.side_effect = RuntimeError("unexpected error")
         mock_log = MagicMock()
         mock_logger.return_value = mock_log
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["tool"],
-            timeout=30,
-            retries=0
-        )
+        rc, stdout, stderr, attempts = run_cmd(["tool"], timeout=30, retries=0)
 
         assert rc == 1
         assert "unexpected error" in stderr or "RuntimeError" in stderr
@@ -512,20 +452,15 @@ def test_run_cmd_unexpected_exception():
 
 def test_run_cmd_sleep_between_retries():
     """Test run_cmd sleeps between retry attempts."""
-    with patch("subprocess.run") as mock_run, \
-         patch("time.sleep") as mock_sleep:
+    with patch("subprocess.run") as mock_run, patch("time.sleep") as mock_sleep:
         # Fail twice, succeed on third
         mock_run.side_effect = [
             MagicMock(returncode=1, stdout="", stderr=""),
             MagicMock(returncode=1, stdout="", stderr=""),
-            MagicMock(returncode=0, stdout="", stderr="")
+            MagicMock(returncode=0, stdout="", stderr=""),
         ]
 
-        rc, stdout, stderr, attempts = run_cmd(
-            ["tool"],
-            timeout=30,
-            retries=2
-        )
+        rc, stdout, stderr, attempts = run_cmd(["tool"], timeout=30, retries=2)
 
         assert rc == 0
         assert attempts == 3
@@ -546,9 +481,18 @@ def test_run_cmd_sleep_between_retries():
 def test_tool_install_hints_complete():
     """Test TOOL_INSTALL_HINTS contains all supported tools."""
     expected_tools = [
-        "trufflehog", "semgrep", "trivy", "syft", "checkov",
-        "hadolint", "nuclei", "bandit", "noseyparker", "zap",
-        "falco", "afl++"
+        "trufflehog",
+        "semgrep",
+        "trivy",
+        "syft",
+        "checkov",
+        "hadolint",
+        "nuclei",
+        "bandit",
+        "noseyparker",
+        "zap",
+        "falco",
+        "afl++",
     ]
 
     for tool in expected_tools:

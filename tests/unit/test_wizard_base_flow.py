@@ -15,10 +15,8 @@ Architecture Note:
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.cli.wizard_flows.base_flow import (
-    ArtifactGenerator,
     BaseWizardFlow,
     PromptHelper,
     TargetDetector,

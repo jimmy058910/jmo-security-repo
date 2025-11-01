@@ -19,9 +19,9 @@ ReleaseDate: 2026-09-30
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/jimmy058910/jmo-security-repo/releases/download/v0.9.0/jmo-security-0.9.0-win64.exe
-    InstallerSha256: INSERT_SHA256_HERE  # Will be filled by build script
+    InstallerSha256: 133e9b46243a05cac91fd19cf79b935c52e55878b88c321b93bb0f2c6e0abdb7  # Will be filled by build script
   - Architecture: arm64
     InstallerUrl: https://github.com/jimmy058910/jmo-security-repo/releases/download/v0.9.0/jmo-security-0.9.0-arm64.exe
-    InstallerSha256: INSERT_SHA256_HERE  # Will be filled if ARM64 build available
+    InstallerSha256: 133e9b46243a05cac91fd19cf79b935c52e55878b88c321b93bb0f2c6e0abdb7  # Will be filled if ARM64 build available
 ManifestType: installer
 ManifestVersion: 1.6.0

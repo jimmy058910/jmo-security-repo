@@ -395,32 +395,38 @@ def select_target_type() -> str:
 # Target configuration functions now delegated to target_configurators module
 def configure_repo_target() -> TargetConfig:
     """Configure repository scanning (delegates to target_configurators module)."""
-    return _configure_repo(TargetConfig, _print_step)
+    config = _configure_repo(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_image_target() -> TargetConfig:
     """Configure container image scanning (delegates to target_configurators module)."""
-    return _configure_image(TargetConfig, _print_step)
+    config = _configure_image(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_iac_target() -> TargetConfig:
     """Configure IaC file scanning (delegates to target_configurators module)."""
-    return _configure_iac(TargetConfig, _print_step)
+    config = _configure_iac(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_url_target() -> TargetConfig:
     """Configure web URL scanning (delegates to target_configurators module)."""
-    return _configure_url(TargetConfig, _print_step)
+    config = _configure_url(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_gitlab_target() -> TargetConfig:
     """Configure GitLab scanning (delegates to target_configurators module)."""
-    return _configure_gitlab(TargetConfig, _print_step)
+    config = _configure_gitlab(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_k8s_target() -> TargetConfig:
     """Configure Kubernetes scanning (delegates to target_configurators module)."""
-    return _configure_k8s(TargetConfig, _print_step)
+    config = _configure_k8s(TargetConfig, _print_step)
+    return config  # type: ignore[no-any-return]
 
 
 def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]:
@@ -682,33 +688,17 @@ def run_wizard(
     """
     import time
 
+    from scripts.core.telemetry import should_show_telemetry_banner, show_telemetry_banner
+
     wizard_start_time = time.time()
 
     _print_header("JMo Security Wizard")
     print("Welcome! This wizard will guide you through your first security scan.")
     print("Press Ctrl+C at any time to cancel.")
 
-    # Check if telemetry preference already set
-    config_path = Path("jmo.yml")
-    telemetry_enabled = False
-    if config_path.exists():
-        try:
-            cfg = load_config(str(config_path))
-            telemetry_set = hasattr(cfg, "telemetry") and hasattr(
-                cfg.telemetry, "enabled"
-            )
-            if not telemetry_set and not yes:
-                # First run: prompt for telemetry
-                telemetry_enabled = prompt_telemetry_opt_in()
-                # Save preference to jmo.yml
-                save_telemetry_preference(config_path, telemetry_enabled)
-        except Exception as e:
-            logger.debug(f"Config loading failed during telemetry check: {e}")
-    elif not yes:
-        # No config file exists, prompt for telemetry
-        telemetry_enabled = prompt_telemetry_opt_in()
-        # Create minimal jmo.yml with telemetry preference
-        save_telemetry_preference(config_path, telemetry_enabled)
+    # Show telemetry banner on first 3 wizard runs (opt-out model)
+    if should_show_telemetry_banner():
+        show_telemetry_banner(mode="wizard")
 
     config = WizardConfig()
 

@@ -42,7 +42,9 @@ class RepoFlow(BaseWizardFlow):
         )
 
         # Ask about artifact generation
-        self.prompter.print_info("Artifacts: Makefile targets, GitHub Actions workflows, shell scripts")
+        self.prompter.print_info(
+            "Artifacts: Makefile targets, GitHub Actions workflows, shell scripts"
+        )
         emit_artifacts = self.prompter.prompt_yes_no(
             "Generate reusable artifacts?", default=True
         )

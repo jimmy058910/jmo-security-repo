@@ -22,12 +22,13 @@
 
 ## Overview
 
-JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to help prioritize features, identify common failures, and improve user experience. Telemetry is:
+JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to help prioritize features, identify common failures, and improve user experience. Telemetry is:
 
-- **Disabled by default** — Requires explicit user consent
+- **Enabled by default** — Users can opt-out anytime (see below)
+- **Auto-disabled in CI/CD** — Never collects in automation environments
 - **100% anonymous** — No personally identifiable information (PII)
 - **Open source** — Collection and storage code is public
-- **User-controlled** — Can be disabled at any time
+- **User-controlled** — Easy opt-out via env var or config
 - **Minimal** — Only essential usage data, no sensitive findings
 
 **Inspiration:** We follow industry best practices from Homebrew, VS Code, npm, and pip.
@@ -40,24 +41,24 @@ JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to h
 
 ### Core Principles
 
-1. **Opt-In Only** — Telemetry is disabled by default. Users must explicitly enable it.
+1. **Opt-Out Model (v0.7.1+)** — Telemetry enabled by default, users can easily opt-out. Auto-disables in CI/CD.
 2. **Anonymous by Design** — No user names, IP addresses, repository names, or finding details.
 3. **Minimal Collection** — Only data necessary to improve the tool.
 4. **Transparent Storage** — Data stored in privacy-respecting infrastructure (GitHub Gist → Cloudflare D1).
 5. **Public Reports** — Quarterly transparency reports with aggregated statistics.
-6. **User Control** — Easy to disable, no hidden trackers.
+6. **User Control** — Easy opt-out via environment variable or config, no hidden trackers.
 
 ### Industry Benchmarks
 
 | Tool | Telemetry Model | Default State |
 |------|-----------------|---------------|
-| Homebrew | Opt-in, anonymous | Disabled |
-| VS Code | Opt-in, anonymous | **Enabled** (can disable) |
-| npm | Opt-in, anonymous | Disabled |
+| Homebrew | Opt-out, anonymous | **Enabled** |
+| VS Code | Opt-out, anonymous | **Enabled** (can disable) |
+| npm | Opt-out, anonymous | **Enabled** |
 | pip | No telemetry | N/A |
-| **JMo Security** | Opt-in, anonymous | **Disabled** |
+| **JMo Security** | Opt-out, anonymous | **Enabled** (v0.7.1+) |
 
-**Rationale:** We choose opt-in (disabled by default) because security tools handle sensitive data. Trust is paramount.
+**Rationale:** Opt-out provides better data for feature prioritization (80-90% vs 5-15% adoption) while respecting user privacy. Auto-disables in CI/CD environments. Users see informative banner on first 3 scans.
 
 ---
 

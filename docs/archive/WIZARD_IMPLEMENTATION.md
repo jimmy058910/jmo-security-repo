@@ -76,6 +76,7 @@ Six-step guided flow:
 #### 2. Non-Interactive Mode (`--yes`)
 
 For automation and scripting:
+
 - Uses smart defaults (balanced profile, current directory)
 - Auto-detects Docker if available
 - Skips all prompts
@@ -84,6 +85,7 @@ For automation and scripting:
 #### 3. Docker Mode Integration (`--docker`)
 
 Leverages completed ROADMAP #1:
+
 - Zero-installation path for beginners
 - Forces Docker execution if available
 - Generates Docker-optimized workflows
@@ -95,7 +97,7 @@ Leverages completed ROADMAP #1:
 ```makefile
 .PHONY: security-scan
 security-scan:
-	jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 --timeout 600
+ jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 --timeout 600
 ```
 
 **Shell Script** (`--emit-script`):
@@ -106,6 +108,7 @@ jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 -
 ```
 
 **GitHub Actions Workflow** (`--emit-gha`):
+
 - Native variant: Includes Python setup and tool installation
 - Docker variant: Uses container with pre-installed tools
 - Both include SARIF upload and artifact storage
@@ -125,6 +128,7 @@ jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 -
 ### Test Coverage
 
 **18 unit tests** covering:
+
 - ✅ Profile definitions and validation
 - ✅ Configuration serialization
 - ✅ Command generation (native & Docker)
@@ -138,6 +142,7 @@ jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 -
 - ✅ CPU detection fallback
 
 **Integration Testing:**
+
 - Tested manually with `--yes` flag
 - Verified Makefile generation
 - Verified shell script generation
@@ -145,6 +150,7 @@ jmotools balanced --repos-dir /path/to/repos --results-dir results --threads 4 -
 - All artifacts validated for syntax correctness
 
 **Full Test Suite:**
+
 - 140 tests passed (includes existing tests)
 - 11 skipped (expected Docker/tool tests)
 - 0 failures
@@ -219,25 +225,30 @@ Based on profile characteristics:
 ## Success Criteria (from ROADMAP #2)
 
 ✅ **Wizard completes scan from 3+ entry modes**
+
 - ✅ Interactive mode
 - ✅ Non-interactive mode (`--yes`)
 - ✅ Docker mode (`--docker`)
 - ✅ Artifact generation modes (Makefile/shell/GHA)
 
 ✅ **Generated command reproduces wizard run**
+
 - Command preview shown before execution
 - Can copy/paste for future runs
 
 ✅ **Outputs opened/printed with severity counts**
+
 - Auto-opens `dashboard.html` and `SUMMARY.md`
 - Results directory printed to terminal
 
 ✅ **Non-interactive mode works (`--yes` flag)**
+
 - Uses smart defaults
 - No prompts
 - Perfect for automation
 
 **Bonus Deliverables (Beyond Original Spec):**
+
 - ✅ Docker mode integration
 - ✅ System capability detection
 - ✅ CPU-based thread recommendations
@@ -319,6 +330,7 @@ jmotools wizard
 ## Future Enhancements (Not in Scope)
 
 Potential future improvements:
+
 1. Save/load wizard presets
 2. Interactive profile customization
 3. Tool-specific configuration prompts
@@ -348,6 +360,7 @@ Potential future improvements:
 The Interactive Wizard successfully delivers on all ROADMAP #2 objectives and exceeds original specifications with Docker mode integration and comprehensive artifact generation.
 
 **Impact:**
+
 - ✅ Lowers barrier to entry for new users
 - ✅ Provides power-user features (artifact generation)
 - ✅ Integrates seamlessly with existing CLI
@@ -355,6 +368,7 @@ The Interactive Wizard successfully delivers on all ROADMAP #2 objectives and ex
 - ✅ Production-ready documentation
 
 **Next Steps:**
+
 - Monitor user adoption and feedback
 - Consider adding wizard usage telemetry (optional)
 - Potential enhancement: preset save/load functionality

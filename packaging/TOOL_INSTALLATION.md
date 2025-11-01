@@ -223,6 +223,7 @@ docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Benefits:**
+
 - ✅ All 12 security tools included
 - ✅ Zero setup required
 - ✅ Consistent environment across platforms
@@ -239,7 +240,8 @@ jmotools setup --check
 ```
 
 **Expected output:**
-```
+
+```text
 ✅ TruffleHog: v3.63.0 detected
 ✅ Semgrep: v1.45.0 detected
 ✅ Trivy: v0.49.0 detected
@@ -276,6 +278,7 @@ jmotools setup --check
 | AFL++ | ❌ | ✅ | ❌ | ✅ |
 
 **Legend:**
+
 - ✅ Full native support
 - ⚠️ Limited support (complex setup or some features unavailable)
 - ❌ Not available natively (use Docker)

@@ -6,7 +6,6 @@ Windows is not supported (use GitHub Actions or GitLab CI instead).
 
 import platform
 import subprocess
-from pathlib import Path
 from typing import List
 
 from scripts.core.schedule_manager import ScanSchedule
@@ -14,16 +13,19 @@ from scripts.core.schedule_manager import ScanSchedule
 
 class UnsupportedPlatformError(Exception):
     """Platform does not support local cron."""
+
     pass
 
 
 class CronNotAvailableError(Exception):
     """Cron is not available on this system."""
+
     pass
 
 
 class CronInstallError(Exception):
     """Failed to install cron entry."""
+
     pass
 
 
@@ -122,7 +124,7 @@ class CronInstaller:
 
         for line in current:
             if line.startswith(self.MARKER_START):
-                name = line[len(self.MARKER_START):].strip()
+                name = line[len(self.MARKER_START) :].strip()
                 schedules.append(name)
 
         return schedules
@@ -138,13 +140,12 @@ class CronInstaller:
         """
         try:
             result = subprocess.run(
-                ["crontab", "-l"],
-                capture_output=True,
-                text=True,
-                check=False
+                ["crontab", "-l"], capture_output=True, text=True, check=False
             )
             if result.returncode == 0:
-                return result.stdout.strip().split("\n") if result.stdout.strip() else []
+                return (
+                    result.stdout.strip().split("\n") if result.stdout.strip() else []
+                )
             return []
         except FileNotFoundError:
             raise CronNotAvailableError("crontab command not found")
@@ -169,13 +170,15 @@ class CronInstaller:
                 input=content,
                 text=True,
                 capture_output=True,
-                check=True
+                check=True,
             )
             return result.returncode == 0
         except subprocess.CalledProcessError as e:
             raise CronInstallError(f"Failed to install crontab: {e.stderr}")
 
-    def _remove_schedule_entries(self, lines: List[str], schedule_name: str) -> List[str]:
+    def _remove_schedule_entries(
+        self, lines: List[str], schedule_name: str
+    ) -> List[str]:
         """Remove all lines for a specific schedule.
 
         Uses marker-based approach to safely remove entries without

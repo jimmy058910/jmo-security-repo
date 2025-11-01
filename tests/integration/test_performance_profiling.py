@@ -26,7 +26,8 @@ def test_profile_flag_generates_timings(tmp_path):
     # Run scan with --profile flag (via report command)
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -41,7 +42,8 @@ def test_profile_flag_generates_timings(tmp_path):
     # Generate report with profiling
     cmd_report = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "report",
         str(tmp_path / "results"),
         "--profile",
@@ -69,7 +71,8 @@ def test_timings_data_structure(tmp_path):
 
     cmd_scan = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -83,7 +86,8 @@ def test_timings_data_structure(tmp_path):
 
     cmd_report = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "report",
         str(tmp_path / "results"),
         "--profile",
@@ -123,7 +127,8 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
     # Run CI command with --profile flag
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "ci",
         "--repo",
         str(test_repo),
@@ -160,7 +165,8 @@ def test_profile_without_flag_no_timings(tmp_path):
     # Run scan
     cmd_scan = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -175,7 +181,8 @@ def test_profile_without_flag_no_timings(tmp_path):
     # Generate report WITHOUT --profile flag
     cmd_report = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "report",
         str(tmp_path / "results"),
     ]
@@ -201,7 +208,8 @@ def test_timings_thread_recommendation(tmp_path):
 
     cmd_scan = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -215,7 +223,8 @@ def test_timings_thread_recommendation(tmp_path):
 
     cmd_report = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "report",
         str(tmp_path / "results"),
         "--profile",
@@ -243,7 +252,8 @@ def test_timings_json_is_valid_json(tmp_path):
 
     cmd = [
         "python3",
-        "scripts/cli/jmo.py",
+        "-m",
+        "scripts.cli.jmo",
         "ci",
         "--repo",
         str(test_repo),

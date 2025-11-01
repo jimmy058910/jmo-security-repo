@@ -9,7 +9,6 @@ Tests cover:
 - Unsupported platform error (Windows)
 """
 
-import platform
 import subprocess
 from unittest.mock import patch, MagicMock
 import pytest
@@ -234,7 +233,9 @@ def test_cron_install_error(sample_schedule):
         # crontab -l succeeds, crontab - fails
         mock_run.side_effect = [
             MagicMock(returncode=0, stdout=""),  # crontab -l
-            subprocess.CalledProcessError(1, "crontab", stderr="Permission denied"),  # crontab -
+            subprocess.CalledProcessError(
+                1, "crontab", stderr="Permission denied"
+            ),  # crontab -
         ]
 
         installer = CronInstaller()

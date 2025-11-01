@@ -4,6 +4,7 @@ Smoke tests for jmo CLI (consolidated from jmotools in v0.9.0).
 Note: jmotools was consolidated into jmo in v0.9.0 Feature #1.
 All beginner-friendly commands (wizard, fast, balanced, full, setup) are now under jmo.
 """
+
 import subprocess
 import sys
 

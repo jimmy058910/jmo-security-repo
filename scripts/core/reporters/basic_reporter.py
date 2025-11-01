@@ -319,14 +319,21 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         high_epss_findings = [
             f
             for f in priority_findings
-            if (f.get("priority", {}).get("epss") or 0) > 0.5  # >50% exploit probability
-            and not f.get("priority", {}).get("is_kev", False)  # Exclude KEV (already shown)
+            if (f.get("priority", {}).get("epss") or 0)
+            > 0.5  # >50% exploit probability
+            and not f.get("priority", {}).get(
+                "is_kev", False
+            )  # Exclude KEV (already shown)
         ]
 
         if high_epss_findings:
-            lines.append(f"### 📊 High Exploit Probability: {len(high_epss_findings)} CVEs")
+            lines.append(
+                f"### 📊 High Exploit Probability: {len(high_epss_findings)} CVEs"
+            )
             lines.append("")
-            lines.append("CVEs with >50% probability of being exploited in the next 30 days:")
+            lines.append(
+                "CVEs with >50% probability of being exploited in the next 30 days:"
+            )
             lines.append("")
 
             # Sort by EPSS score

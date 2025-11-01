@@ -18,7 +18,9 @@ if TYPE_CHECKING:
     pass
 
 
-def generate_makefile_target(config: Any, command: str, workflow_type: str = "repo") -> str:
+def generate_makefile_target(
+    config: Any, command: str, workflow_type: str = "repo"
+) -> str:
     """
     Generate a Makefile target for security scanning.
 
@@ -523,7 +525,9 @@ security-scan:
 """
 
 
-def generate_docker_compose(workflow_type: str = "repo", profile: str = "balanced") -> str:
+def generate_docker_compose(
+    workflow_type: str = "repo", profile: str = "balanced"
+) -> str:
     """
     Generate a docker-compose.yml for security scanning.
 

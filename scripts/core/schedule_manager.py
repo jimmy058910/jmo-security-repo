@@ -7,7 +7,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any
-from croniter import croniter
+from croniter import croniter  # type: ignore[import-untyped]
 
 
 @dataclass
@@ -165,7 +165,9 @@ class ScanSchedule:
             ),
             spec=ScheduleSpec(
                 schedule=cron,
-                backend=BackendConfig(type=backend, config=kwargs.pop("backend_config", {})),
+                backend=BackendConfig(
+                    type=backend, config=kwargs.pop("backend_config", {})
+                ),
                 jobTemplate=JobTemplateSpec(
                     profile=profile,
                     targets=targets,

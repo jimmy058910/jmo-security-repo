@@ -113,7 +113,6 @@
 - **Feature Completion:** 6/6 features (100% implementation)
 - **User Growth Projection:** +83% (6K → 11K/month via Homebrew + WinGet)
 
-
 # Changelog
 
 For the release process, see docs/RELEASE.md.
@@ -130,15 +129,15 @@ For the release process, see docs/RELEASE.md.
     - **Cron Support**: Full cron syntax validation via croniter, timezone support, next run calculation
     - **Features**: Suspend schedules, concurrency policies (Forbid/Allow/Replace), history limits
     - Dependencies: Added `croniter>=2.0` and `types-croniter` for schedule parsing and type hints
-  - ❌ **NOT YET IMPLEMENTED (deferred to v0.9.0):**
-    - GitHub Actions workflow generator (`scripts/core/workflow_generators/github_actions.py`)
-    - Local cron installer (`scripts/core/cron_installer.py`)
-    - CLI commands (`jmo schedule create|list|get|update|delete|export|install|uninstall|validate`)
-    - Unit tests (`tests/unit/test_schedule_manager.py`)
+  - ✅ **IMPLEMENTED in v0.9.0:**
+    - CLI commands (`jmo schedule create|list|get|update|delete|export`) - GitLab CI backend fully functional
+    - Unit tests (`tests/unit/test_schedule_manager.py`, `tests/unit/test_cron_installer.py`)
     - Integration tests (`tests/integration/test_schedule_cli.py`)
-    - User documentation (USER_GUIDE.md, QUICKSTART.md)
-  - **Status:** Core infrastructure complete, CLI integration planned for v0.9.0
-  - **Rationale:** Foundation enables GitLab CI generator; remaining 60% deferred to focus on v0.8.0 priorities
+    - User documentation (USER_GUIDE.md, QUICKSTART.md, SCHEDULE_GUIDE.md)
+  - 🚧 **PARTIALLY IMPLEMENTED in v0.9.0:**
+    - GitHub Actions workflow generator (CLI commands exist, workflow generation in active development)
+    - Local cron installer (basic functionality implemented, needs polish)
+  - **Status:** Core infrastructure complete, CLI integrated. GitLab CI fully functional. GitHub Actions and local cron in active development.
   - Related: [Issue #33](https://github.com/jimmy058910/jmo-security-repo/issues/33), [dev-only/feature-1-final-design.md](dev-only/feature-1-final-design.md)
 
 - **GitLab CI Workflow Generation**: Automated GitLab CI YAML generation from schedules (COMPLETED)

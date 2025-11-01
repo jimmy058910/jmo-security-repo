@@ -42,7 +42,8 @@ class EntireStackFlow(BaseWizardFlow):
 
         # Artifact generation option
         emit_artifacts = self.prompter.prompt_yes_no(
-            "\nGenerate reusable artifacts (Makefile, GHA, docker-compose)?", default=True
+            "\nGenerate reusable artifacts (Makefile, GHA, docker-compose)?",
+            default=True,
         )
 
         # Parallel scanning option

@@ -17,9 +17,8 @@ import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from scripts.cli.wizard_flows.validators import (
     validate_path,
@@ -83,6 +82,7 @@ def test_validate_path_relative_to_absolute(tmp_path):
 
     # Change to tmp_path and use relative path
     import os
+
     old_cwd = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -248,13 +248,15 @@ def test_detect_iac_type_cloudformation_name(tmp_path):
 def test_detect_iac_type_cloudformation_content(tmp_path):
     """Test detect_iac_type recognizes CloudFormation by content."""
     iac_file = tmp_path / "template.yaml"
-    iac_file.write_text("""
+    iac_file.write_text(
+        """
 AWSTemplateFormatVersion: '2010-09-09'
 Description: My CloudFormation template
 Resources:
   MyBucket:
     Type: AWS::S3::Bucket
-""")
+"""
+    )
 
     result = detect_iac_type(iac_file)
 
@@ -264,14 +266,16 @@ Resources:
 def test_detect_iac_type_k8s_manifest_content(tmp_path):
     """Test detect_iac_type recognizes K8s manifest by content."""
     iac_file = tmp_path / "deployment.yaml"
-    iac_file.write_text("""
+    iac_file.write_text(
+        """
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx
 spec:
   replicas: 3
-""")
+"""
+    )
 
     result = detect_iac_type(iac_file)
 
@@ -358,8 +362,7 @@ def test_validate_k8s_context_current_valid():
     with patch("shutil.which", return_value="/usr/bin/kubectl"):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="minikube\ndocker-desktop\n"
+                returncode=0, stdout="minikube\ndocker-desktop\n"
             )
 
             result = validate_k8s_context("current")
@@ -383,8 +386,7 @@ def test_validate_k8s_context_specific_exists():
     with patch("shutil.which", return_value="/usr/bin/kubectl"):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="minikube\ndocker-desktop\nprod-cluster\n"
+                returncode=0, stdout="minikube\ndocker-desktop\nprod-cluster\n"
             )
 
             result = validate_k8s_context("prod-cluster")
@@ -397,8 +399,7 @@ def test_validate_k8s_context_specific_not_exists():
     with patch("shutil.which", return_value="/usr/bin/kubectl"):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="minikube\ndocker-desktop\n"
+                returncode=0, stdout="minikube\ndocker-desktop\n"
             )
 
             result = validate_k8s_context("nonexistent")

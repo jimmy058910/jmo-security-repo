@@ -207,11 +207,11 @@ def _safe_load_plugin(
             except (KeyError, TypeError, AttributeError) as e:
                 logger.debug(f"Failed to record profiling timing: {e}")
             # Convert Finding objects to dicts
-            return [vars(f) for f in findings]
+            return [f.to_dict() for f in findings]
         else:
             findings = adapter.parse(path)
             # Convert Finding objects to dicts
-            return [vars(f) for f in findings]
+            return [f.to_dict() for f in findings]
 
     except FileNotFoundError:
         logger.debug(f"Tool output not found: {path}")

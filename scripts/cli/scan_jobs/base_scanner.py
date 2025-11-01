@@ -3,8 +3,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TYPE_CHECKING
 import re
+
+if TYPE_CHECKING:
+    from scripts.cli.scan_orchestrator import ScanConfig
 
 
 @dataclass

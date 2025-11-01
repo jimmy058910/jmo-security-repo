@@ -20,10 +20,12 @@ Created 3 optimized Docker images for different use cases:
 | `Dockerfile.alpine` | Alpine | ~150MB | 6 core | Minimal footprint, resource-constrained |
 
 **Tools included:**
+
 - **Full:** gitleaks, trufflehog, noseyparker (Docker), semgrep, bandit, syft, trivy, checkov, tfsec, hadolint, osv-scanner, shellcheck, shfmt, ruff
 - **Slim/Alpine:** gitleaks, semgrep, syft, trivy, checkov, hadolint
 
 **Multi-architecture support:**
+
 - `linux/amd64` (x86_64)
 - `linux/arm64` (Apple Silicon, ARM servers)
 
@@ -32,6 +34,7 @@ Created 3 optimized Docker images for different use cases:
 **File:** `.github/workflows/docker-build.yml`
 
 **Features:**
+
 - Multi-platform builds using Docker Buildx
 - Automated push to GitHub Container Registry
 - Build matrix: 3 variants × 2 platforms = 6 images
@@ -43,6 +46,7 @@ Created 3 optimized Docker images for different use cases:
 - Caching for faster builds
 
 **Triggers:**
+
 - Push to main branch
 - Tag creation (`v*` tags)
 - Pull requests (build only, no push)
@@ -53,6 +57,7 @@ Created 3 optimized Docker images for different use cases:
 **File:** `docker-compose.yml`
 
 **Services:**
+
 - `jmo-scan`: Full scan with balanced profile
 - `jmo-ci`: CI mode with threshold gating
 - `jmo-slim`: Slim variant for fast scans
@@ -63,6 +68,7 @@ Created 3 optimized Docker images for different use cases:
 ### 4. Build Infrastructure
 
 **.dockerignore**
+
 - Optimized to exclude 60+ unnecessary patterns
 - Reduces build context by ~90%
 - Faster builds and smaller images
@@ -77,12 +83,14 @@ docker-push           # Push to registry
 ```
 
 **Configuration:**
+
 - Configurable registry, org, image name, tag via environment variables
 - Default: `ghcr.io/jimmy058910/jmo-security`
 
 ### 5. Comprehensive Documentation
 
 **docs/DOCKER_README.md** (2,400+ lines)
+
 - Quick start guide
 - Image variant comparison
 - Usage examples (10+ scenarios)
@@ -97,6 +105,7 @@ docker-push           # Push to registry
 - Image verification with Cosign
 
 **docs/examples/github-actions-docker.yml** (500+ lines)
+
 - 8 complete workflow examples:
   1. Basic security scan
   2. CI mode with gating
@@ -108,6 +117,7 @@ docker-push           # Push to registry
   8. Differential scan (placeholder for Item 4)
 
 **README.md updates:**
+
 - New Docker Quick Start section at top
 - Image variant table
 - CI/CD integration snippets (GitHub Actions, GitLab CI)
@@ -116,6 +126,7 @@ docker-push           # Push to registry
 ### 6. Testing
 
 **tests/integration/test_docker_images.py** (400+ lines)
+
 - Comprehensive Docker image testing
 - Tests per variant:
   - Image existence check
@@ -131,6 +142,7 @@ docker-push           # Push to registry
 ### 7. CHANGELOG Entry
 
 Documented all changes in [CHANGELOG.md](../CHANGELOG.md):
+
 - Feature overview
 - Image specifications
 - Usage examples
@@ -165,6 +177,7 @@ Documented all changes in [CHANGELOG.md](../CHANGELOG.md):
 ### Multi-Architecture Support
 
 **Approach:**
+
 - Single Dockerfile works for both architectures
 - Architecture detection via `ARG TARGETARCH`
 - Conditional logic for architecture-specific downloads
@@ -181,17 +194,20 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
 ### Registry Distribution
 
 **GitHub Container Registry (Primary):**
+
 - Public access: `ghcr.io/jimmy058910/jmo-security`
 - OIDC authentication (no token needed in CI)
 - Free for public repositories
 - Integrated with GitHub Security
 
 **Docker Hub (Planned):**
+
 - Configuration ready, commented out in workflow
 - Requires `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets
 - README sync workflow prepared
 
 **Tags:**
+
 - `latest` - Latest main branch (full variant)
 - `slim` - Latest slim variant
 - `alpine` - Latest alpine variant
@@ -264,6 +280,7 @@ docker-compose run --rm jmo-scan scan --repo /scan --profile deep
 | Alpine | 6-8 min | 9-12 min |
 
 **Optimization strategies:**
+
 - GitHub Actions cache reduces rebuilds by ~50%
 - Parallel builds across variants
 - Layer caching for common dependencies
@@ -277,6 +294,7 @@ docker-compose run --rm jmo-scan scan --repo /scan --profile deep
 | Alpine | ~60MB | ~150MB |
 
 **Size breakdown (Full):**
+
 - Base OS: ~80MB
 - Python + tools: ~200MB
 - Security binaries: ~220MB
@@ -293,6 +311,7 @@ docker-compose run --rm jmo-scan scan --repo /scan --profile deep
 ### Backward Compatibility
 
 All existing workflows continue to work:
+
 - Local installations unchanged
 - CLI interface identical
 - Configuration files compatible
@@ -322,6 +341,7 @@ All existing workflows continue to work:
 ### Image Security
 
 **Practices:**
+
 - Official base images (Ubuntu 22.04, Alpine 3.18)
 - Pinned tool versions (reproducible builds)
 - Trivy scanning in CI (HIGH/CRITICAL gate)
@@ -340,6 +360,7 @@ cosign verify ghcr.io/jimmy058910/jmo-security:latest \
 ### Runtime Security
 
 **Recommendations:**
+
 - Run as non-root: `docker run --user $(id -u):$(id -g)`
 - Read-only volumes: `-v $(pwd):/scan:ro`
 - Limited capabilities if needed
@@ -348,6 +369,7 @@ cosign verify ghcr.io/jimmy058910/jmo-security:latest \
 ### Vulnerability Management
 
 **Process:**
+
 1. Trivy scans images on every build
 2. HIGH/CRITICAL findings uploaded to GitHub Security
 3. Weekly scheduled scans of latest images
@@ -365,14 +387,17 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan ...
 ```
 
 **Large images:**
+
 - Use slim/alpine variants
 - Clean up old images: `docker system prune`
 
 **Slow builds:**
+
 - Use GitHub Actions cache
 - Build only needed variants
 
 **ARM64 issues:**
+
 - Ensure QEMU installed for cross-platform builds
 - Some tools may have limited ARM support
 
@@ -432,6 +457,7 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan ...
 ### Files Created/Modified
 
 **New files (10):**
+
 1. `Dockerfile` - Full image
 2. `Dockerfile.slim` - Slim variant
 3. `Dockerfile.alpine` - Alpine variant
@@ -444,6 +470,7 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan ...
 10. `docs/DOCKER_IMPLEMENTATION.md` - This document
 
 **Modified files (3):**
+
 1. `README.md` - Added Docker Quick Start section
 2. `Makefile` - Added docker-* targets
 3. `CHANGELOG.md` - Documented changes
@@ -452,15 +479,16 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan ...
 
 ### External Resources
 
-- Docker documentation: https://docs.docker.com
-- GitHub Container Registry: https://ghcr.io
-- Docker Buildx: https://docs.docker.com/buildx/
-- Trivy scanner: https://trivy.dev
-- Cosign: https://sigstore.dev
+- Docker documentation: <https://docs.docker.com>
+- GitHub Container Registry: <https://ghcr.io>
+- Docker Buildx: <https://docs.docker.com/buildx/>
+- Trivy scanner: <https://trivy.dev>
+- Cosign: <https://sigstore.dev>
 
 ### Team Knowledge
 
 **Skills demonstrated:**
+
 - Multi-stage Dockerfile optimization
 - Multi-architecture builds
 - GitHub Actions workflows
@@ -471,6 +499,7 @@ docker run --rm --user $(id -u):$(id -g) -v $(pwd):/scan ...
 ## Conclusion
 
 The Docker All-in-One implementation successfully achieves all goals from ROADMAP Item 1:
+
 - Removes installation friction
 - Enables immediate CI/CD usage
 - Provides broadest impact for new users
@@ -479,6 +508,7 @@ The Docker All-in-One implementation successfully achieves all goals from ROADMA
 **Status:** ✅ Production-ready
 
 **Next steps:**
+
 - Monitor adoption and gather feedback
 - Proceed to Item 2: Interactive Wizard
 

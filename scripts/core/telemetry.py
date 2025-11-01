@@ -54,13 +54,15 @@ def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
     """
     Check if telemetry is enabled in config or environment variable.
 
+    OPT-OUT MODEL (v0.7.1+): Telemetry enabled by default, users can disable.
+
     Environment variable override (for CI/CD):
         JMO_TELEMETRY_DISABLE=1 → Force disable
 
     Config check:
-        telemetry.enabled: true → Enable
-        telemetry.enabled: false → Disable
-        (missing) → Default: false (opt-in only)
+        telemetry.enabled: false → Disable (user opted out)
+        telemetry.enabled: true → Enable (explicit)
+        (missing) → Default: TRUE (opt-out model)
 
     Args:
         config: JMo configuration dict (from jmo.yml)
@@ -68,12 +70,23 @@ def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
     Returns:
         True if telemetry is enabled, False otherwise
     """
-    # Environment variable override (CI/CD)
+    # Environment variable override (CI/CD and user opt-out)
     if os.environ.get("JMO_TELEMETRY_DISABLE") == "1":
         return False
 
-    # Config check (default: False, opt-in only)
-    enabled: bool = bool(config.get("telemetry", {}).get("enabled", False))
+    # Auto-disable in CI/CD environments
+    if detect_ci_environment():
+        return False
+
+    # Config check (default: True, opt-out model)
+    # If config explicitly sets enabled: false, respect user choice
+    telemetry_config = config.get("telemetry", {})
+    if "enabled" in telemetry_config:
+        enabled: bool = bool(telemetry_config["enabled"])
+    else:
+        # No config = default enabled (opt-out)
+        enabled = True
+
     return enabled
 
 
@@ -293,6 +306,62 @@ def detect_ci_environment() -> bool:
     ]
 
     return any(os.environ.get(var) for var in ci_vars)
+
+
+def should_show_telemetry_banner() -> bool:
+    """
+    Check if telemetry banner should be shown (first scan/wizard run only).
+
+    Returns:
+        True if banner should be shown, False otherwise
+    """
+    try:
+        if SCAN_COUNT_FILE.exists():
+            count = int(SCAN_COUNT_FILE.read_text().strip())
+        else:
+            count = 0
+
+        # Show banner on first scan only
+        return count == 0
+    except Exception:
+        return False
+
+
+def show_telemetry_banner(mode: str = "cli") -> None:
+    """
+    Display telemetry opt-out banner on first CLI scan or wizard run only.
+
+    Args:
+        mode: "cli" or "wizard" to customize messaging
+    """
+    print()
+    print("=" * 70)
+    print("📊 Anonymous Usage Analytics")
+    print("=" * 70)
+    print("JMo Security collects anonymous usage data to improve the tool.")
+    print()
+    print("✅ What we collect:")
+    print("   • Tool usage (which scanners ran)")
+    print("   • Scan duration (bucketed: <5min, 5-15min, etc.)")
+    print("   • Execution mode (CLI/Docker/Wizard)")
+    print("   • Platform (Linux/macOS/Windows)")
+    print("   • JMo version (e.g., 0.9.0)")
+    print()
+    print("❌ What we DON'T collect:")
+    print("   • Repository names, file paths, or URLs")
+    print("   • Finding details, secrets, or vulnerabilities")
+    print("   • IP addresses or personally identifiable information")
+    print()
+    print("🔒 Privacy: 100% anonymous (random UUID, no PII)")
+    print("🌐 Policy: https://jmotools.com/privacy")
+    print()
+    print("💡 Opt-out anytime:")
+    print("   • Set: export JMO_TELEMETRY_DISABLE=1")
+    print("   • Edit jmo.yml: telemetry.enabled: false")
+    print()
+    print("This notice shows once only.")
+    print("=" * 70)
+    print()
 
 
 def infer_scan_frequency() -> Optional[str]:

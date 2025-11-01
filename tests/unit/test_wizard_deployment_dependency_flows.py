@@ -13,7 +13,6 @@ Architecture Note:
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from scripts.cli.wizard_flows.dependency_flow import DependencyFlow
 from scripts.cli.wizard_flows.deployment_flow import DeploymentFlow
@@ -27,7 +26,9 @@ def test_deployment_detect_targets(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     # Create test files
-    (tmp_path / "docker-compose.yml").write_text("services:\n  web:\n    image: nginx:latest")
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  web:\n    image: nginx:latest"
+    )
     (tmp_path / "main.tf").touch()
     (tmp_path / "package.json").write_text('{"name": "app"}')
 
@@ -170,7 +171,12 @@ def test_deployment_print_detected_targets_with_iac(capsys):
     """Test _print_detected_deployment_targets with IaC files."""
     flow = DeploymentFlow()
     targets = {
-        "iac": [Path("main.tf"), Path("variables.tf"), Path("outputs.tf"), Path("providers.tf")]
+        "iac": [
+            Path("main.tf"),
+            Path("variables.tf"),
+            Path("outputs.tf"),
+            Path("providers.tf"),
+        ]
     }
 
     flow._print_detected_deployment_targets(targets)
@@ -273,7 +279,9 @@ def test_dependency_detect_targets(tmp_path, monkeypatch):
     (tmp_path / "package.json").write_text('{"name": "app"}')
     (tmp_path / "requirements.txt").write_text("flask==2.0.0")
     (tmp_path / "package-lock.json").write_text('{"lockfileVersion": 2}')
-    (tmp_path / "docker-compose.yml").write_text("services:\n  web:\n    image: python:3.10")
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  web:\n    image: python:3.10"
+    )
 
     flow = DependencyFlow()
     targets = flow.detect_targets()

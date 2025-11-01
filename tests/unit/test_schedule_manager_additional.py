@@ -12,8 +12,6 @@ Architecture Note:
 - Covers CRUD operations comprehensively
 """
 
-from pathlib import Path
-
 import pytest
 
 from scripts.core.schedule_manager import ScanSchedule, ScheduleManager
@@ -262,7 +260,9 @@ def test_schedule_manager_to_dict_from_dict_round_trip(tmp_path):
     assert restored.metadata.name == original.metadata.name
     assert restored.spec.schedule == original.spec.schedule
     assert restored.spec.jobTemplate.profile == original.spec.jobTemplate.profile
-    assert restored.spec.jobTemplate.targets.get("repos_dir") == original.spec.jobTemplate.targets.get("repos_dir")
+    assert restored.spec.jobTemplate.targets.get(
+        "repos_dir"
+    ) == original.spec.jobTemplate.targets.get("repos_dir")
     assert restored.spec.backend.type == original.spec.backend.type
     # description field doesn't exist in v0.9.0 Kubernetes-style schema - skip
     assert restored.metadata.labels == original.metadata.labels

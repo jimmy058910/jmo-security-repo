@@ -165,7 +165,7 @@ def test_generate_cron_entry_with_all_iac_types(basic_schedule):
         "iac": {
             "terraform_state": "infra.tfstate",
             "cloudformation": "template.yaml",
-            "k8s_manifest": "deployment.yaml"
+            "k8s_manifest": "deployment.yaml",
         }
     }
 
@@ -195,9 +195,7 @@ def test_generate_cron_entry_with_web_urls(basic_schedule):
 
 def test_generate_cron_entry_with_api_spec(basic_schedule):
     """Test _generate_cron_entry with API spec target."""
-    basic_schedule.spec.jobTemplate.targets = {
-        "web": {"api_spec": "openapi.yaml"}
-    }
+    basic_schedule.spec.jobTemplate.targets = {"web": {"api_spec": "openapi.yaml"}}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -208,10 +206,7 @@ def test_generate_cron_entry_with_api_spec(basic_schedule):
 def test_generate_cron_entry_with_web_urls_and_api_spec(basic_schedule):
     """Test _generate_cron_entry with both URLs and API spec."""
     basic_schedule.spec.jobTemplate.targets = {
-        "web": {
-            "urls": ["https://example.com"],
-            "api_spec": "openapi.yaml"
-        }
+        "web": {"urls": ["https://example.com"], "api_spec": "openapi.yaml"}
     }
 
     installer = CronInstaller()
@@ -226,9 +221,7 @@ def test_generate_cron_entry_with_web_urls_and_api_spec(basic_schedule):
 
 def test_generate_cron_entry_with_gitlab_repo(basic_schedule):
     """Test _generate_cron_entry with GitLab repository target."""
-    basic_schedule.spec.jobTemplate.targets = {
-        "gitlab": {"repo": "mygroup/myrepo"}
-    }
+    basic_schedule.spec.jobTemplate.targets = {"gitlab": {"repo": "mygroup/myrepo"}}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -238,9 +231,7 @@ def test_generate_cron_entry_with_gitlab_repo(basic_schedule):
 
 def test_generate_cron_entry_with_gitlab_group(basic_schedule):
     """Test _generate_cron_entry with GitLab group target."""
-    basic_schedule.spec.jobTemplate.targets = {
-        "gitlab": {"group": "mygroup"}
-    }
+    basic_schedule.spec.jobTemplate.targets = {"gitlab": {"group": "mygroup"}}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -251,10 +242,7 @@ def test_generate_cron_entry_with_gitlab_group(basic_schedule):
 def test_generate_cron_entry_with_gitlab_repo_and_group(basic_schedule):
     """Test _generate_cron_entry with both GitLab repo and group."""
     basic_schedule.spec.jobTemplate.targets = {
-        "gitlab": {
-            "repo": "mygroup/myrepo",
-            "group": "anothergroup"
-        }
+        "gitlab": {"repo": "mygroup/myrepo", "group": "anothergroup"}
     }
 
     installer = CronInstaller()
@@ -269,9 +257,7 @@ def test_generate_cron_entry_with_gitlab_repo_and_group(basic_schedule):
 
 def test_generate_cron_entry_with_k8s_context(basic_schedule):
     """Test _generate_cron_entry with Kubernetes context target."""
-    basic_schedule.spec.jobTemplate.targets = {
-        "kubernetes": {"context": "prod"}
-    }
+    basic_schedule.spec.jobTemplate.targets = {"kubernetes": {"context": "prod"}}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -282,10 +268,7 @@ def test_generate_cron_entry_with_k8s_context(basic_schedule):
 def test_generate_cron_entry_with_k8s_namespace(basic_schedule):
     """Test _generate_cron_entry with Kubernetes namespace."""
     basic_schedule.spec.jobTemplate.targets = {
-        "kubernetes": {
-            "context": "prod",
-            "namespace": "default"
-        }
+        "kubernetes": {"context": "prod", "namespace": "default"}
     }
 
     installer = CronInstaller()
@@ -298,10 +281,7 @@ def test_generate_cron_entry_with_k8s_namespace(basic_schedule):
 def test_generate_cron_entry_with_k8s_all_namespaces(basic_schedule):
     """Test _generate_cron_entry with all_namespaces flag."""
     basic_schedule.spec.jobTemplate.targets = {
-        "kubernetes": {
-            "context": "prod",
-            "all_namespaces": True
-        }
+        "kubernetes": {"context": "prod", "all_namespaces": True}
     }
 
     installer = CronInstaller()
@@ -317,9 +297,7 @@ def test_generate_cron_entry_with_k8s_all_namespaces(basic_schedule):
 
 def test_generate_cron_entry_with_allow_missing_tools(basic_schedule):
     """Test _generate_cron_entry with allow_missing_tools option."""
-    basic_schedule.spec.jobTemplate.options = {
-        "allow_missing_tools": True
-    }
+    basic_schedule.spec.jobTemplate.options = {"allow_missing_tools": True}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -329,9 +307,7 @@ def test_generate_cron_entry_with_allow_missing_tools(basic_schedule):
 
 def test_generate_cron_entry_with_threads_option(basic_schedule):
     """Test _generate_cron_entry with threads option."""
-    basic_schedule.spec.jobTemplate.options = {
-        "threads": 8
-    }
+    basic_schedule.spec.jobTemplate.options = {"threads": 8}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -341,9 +317,7 @@ def test_generate_cron_entry_with_threads_option(basic_schedule):
 
 def test_generate_cron_entry_with_fail_on_option(basic_schedule):
     """Test _generate_cron_entry with fail_on option."""
-    basic_schedule.spec.jobTemplate.options = {
-        "fail_on": "HIGH"
-    }
+    basic_schedule.spec.jobTemplate.options = {"fail_on": "HIGH"}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -356,7 +330,7 @@ def test_generate_cron_entry_with_all_options(basic_schedule):
     basic_schedule.spec.jobTemplate.options = {
         "allow_missing_tools": True,
         "threads": 4,
-        "fail_on": "CRITICAL"
+        "fail_on": "CRITICAL",
     }
 
     installer = CronInstaller()
@@ -372,9 +346,7 @@ def test_generate_cron_entry_with_all_options(basic_schedule):
 
 def test_generate_cron_entry_with_custom_results_dir(basic_schedule):
     """Test _generate_cron_entry with custom results base directory."""
-    basic_schedule.spec.jobTemplate.results = {
-        "base_dir": "/var/jmo-scans"
-    }
+    basic_schedule.spec.jobTemplate.results = {"base_dir": "/var/jmo-scans"}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
@@ -404,16 +376,14 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
         "iac": {"terraform_state": "infra.tfstate"},
         "web": {"urls": ["https://example.com"]},
         "gitlab": {"repo": "mygroup/myrepo"},
-        "kubernetes": {"context": "prod", "namespace": "default"}
+        "kubernetes": {"context": "prod", "namespace": "default"},
     }
     basic_schedule.spec.jobTemplate.options = {
         "allow_missing_tools": True,
         "threads": 2,
-        "fail_on": "HIGH"
+        "fail_on": "HIGH",
     }
-    basic_schedule.spec.jobTemplate.results = {
-        "base_dir": "/var/scans"
-    }
+    basic_schedule.spec.jobTemplate.results = {"base_dir": "/var/scans"}
 
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)

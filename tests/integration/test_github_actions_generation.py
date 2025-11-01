@@ -82,7 +82,7 @@ def test_workflow_file_validity():
 
 @pytest.mark.skipif(
     subprocess.run(["which", "actionlint"], capture_output=True).returncode != 0,
-    reason="actionlint not installed"
+    reason="actionlint not installed",
 )
 def test_actionlint_validation():
     """Test that workflow passes actionlint validation (if actionlint available)."""
@@ -127,7 +127,9 @@ def test_actionlint_validation():
         )
 
         # Should pass without errors
-        assert result.returncode == 0, f"actionlint failed:\n{result.stdout}\n{result.stderr}"
+        assert (
+            result.returncode == 0
+        ), f"actionlint failed:\n{result.stdout}\n{result.stderr}"
     finally:
         temp_file.unlink()
 

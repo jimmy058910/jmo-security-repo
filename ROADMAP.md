@@ -106,6 +106,7 @@ This roadmap tracks planned enhancements for the JMo Security Audit Tool Suite. 
 | 3 | Cross-Tool Deduplication Enhancement | 2-3 weeks | 📋 Planned | [#51](https://github.com/jimmy058910/jmo-security-repo/issues/51) |
 | 4 | Policy-as-Code Integration (OPA) | 3-4 weeks | 📋 Planned | [#35](https://github.com/jimmy058910/jmo-security-repo/issues/35) |
 | 5 | **Docker Image Optimization Phase 2** | 2-3 weeks | 📋 Planned | [#48](https://github.com/jimmy058910/jmo-security-repo/issues/48) |
+
 **Supporting Features:**
 
 - Supply Chain Attestation (SLSA) — [#36](https://github.com/jimmy058910/jmo-security-repo/issues/36)
