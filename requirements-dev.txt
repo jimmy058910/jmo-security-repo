@@ -20,7 +20,6 @@ click==8.3.0
 coverage[toml]==7.11.0
     # via pytest-cov
 croniter==6.0.0
-requests==2.32.3
     # via -r requirements-dev.in
 distlib==0.4.0
     # via virtualenv
