@@ -295,6 +295,7 @@ jmotools wizard
 ```
 
 **Why use package managers?**
+
 - ✅ **One command install** - No Python/dependency setup required
 - ✅ **Automatic updates** - `brew upgrade` or `winget upgrade`
 - ✅ **System integration** - Added to PATH automatically
@@ -388,11 +389,12 @@ cat results/summaries/SUMMARY.md  # Quick text overview
 
 ```bash
 
-**Three image variants available:**
+**Four image variants available (v1.0.0):**
 
-- `latest` (~500MB) - All 12 scanners included
-- `slim` (~200MB) - Core 6 scanners for CI/CD
-- `alpine` (~150MB) - Minimal footprint
+- `latest` / `full` (~1.97 GB) - 26 Docker-ready tools for comprehensive scanning
+- `balanced` (~1.41 GB) - 21 tools for production CI/CD pipelines
+- `slim` (~557 MB) - 15 cloud-focused tools (IaC, K8s, containers)
+- `fast` (~502 MB) - 8 tools for CI/CD gates and pre-commit hooks
 
 **Why Docker?**
 
@@ -462,12 +464,14 @@ Note: Under the hood, wrapper commands verify your OS/tools, optionally clone fr
 **Time:** 30 seconds | **Tools:** All scanners ready to use
 
 **macOS / Linux (Homebrew):**
+
 ```bash
 brew install jmo-security
 jmotools wizard  # Start scanning immediately
 ```
 
 **Windows (Winget):**
+
 ```powershell
 winget install jmo.jmo-security
 jmotools wizard  # Start scanning immediately
@@ -586,6 +590,7 @@ make verify-env
 **Recommended Setup for Windows Users:**
 
 1. **Install WSL2** (Windows Subsystem for Linux 2)
+
    ```powershell
    # Run in PowerShell as Administrator
    wsl --install
@@ -597,6 +602,7 @@ make verify-env
    - Ensure "Use the WSL 2 based engine" is checked
 
 3. **Run JMo Security in WSL2**
+
    ```bash
    # Open WSL2 terminal (Ubuntu)
    wsl
@@ -767,8 +773,22 @@ This project provides an automated framework for conducting thorough security au
   - Live web URLs (DAST)
   - GitLab repos (verified secrets)
   - Kubernetes clusters (live audits)
-- ✅ **Multi-Tool Scanning**: Curated set covering secrets (trufflehog verified, noseyparker), SAST (semgrep, bandit), SBOM+vuln/misconfig (syft+trivy), IaC (checkov), Dockerfile (hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++)
-  - **v0.5.0 Update:** Removed deprecated tools (gitleaks, tfsec, osv-scanner), added DAST/runtime/fuzzing capabilities
+- ✅ **28 Security Tools** (26 Docker-ready): Comprehensive coverage across 11 security categories
+  - **Secrets**: TruffleHog (verified), Nosey Parker, Semgrep-Secrets
+  - **SAST**: Semgrep, Bandit, Gosec, Horusec
+  - **SBOM**: Syft, CDXgen, ScanCode
+  - **SCA**: Trivy, Grype, OSV-Scanner, Dependency-Check
+  - **IaC**: Checkov, Checkov-CICD
+  - **Cloud CSPM**: Prowler, Kubescape
+  - **DAST**: OWASP ZAP, Nuclei, Akto*
+  - **Dockerfile**: Hadolint
+  - **Mobile**: MobSF*
+  - **Malware**: YARA
+  - **System**: Lynis
+  - **Runtime**: Trivy-RBAC, Falco
+  - **Fuzzing**: AFL++
+  - **License**: Bearer
+  - *Manual installation required (v1.0.0) - see [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md)
 - ⏰ **Schedule Management (v0.8.0)**: Kubernetes-inspired scan scheduling with GitLab CI generation
   - Cron-based scheduling with local persistence (`~/.jmo/schedules.json`)
   - GitLab CI workflow generation with Slack notifications

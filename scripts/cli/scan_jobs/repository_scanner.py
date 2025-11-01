@@ -3,7 +3,9 @@ Repository Scanner
 
 Scans local Git repositories using multiple security tools.
 
-Fully Implemented Tools (11 total for deep profile):
+Fully Implemented Tools (28 total for v1.0.0):
+
+Core Tools (11):
 1. TruffleHog: Verified secrets scanning
 2. Nosey Parker: Deep secrets detection (multi-phase: init/scan/report, Docker fallback)
 3. Semgrep: Static analysis (SAST)
@@ -16,11 +18,35 @@ Fully Implemented Tools (11 total for deep profile):
 10. Falco: Runtime security monitoring (validates Falco rule files)
 11. AFL++: Coverage-guided fuzzing (analyzes compiled binaries)
 
+v1.0.0 New Tools (17):
+12. Checkov CI/CD: GitHub Actions workflow security
+13. Gosec: Go security analyzer
+14. OSV-Scanner: Open source vulnerability detection
+15. cdxgen: SBOM and dependency analysis
+16. ScanCode: License and copyright scanner
+17. Kubescape: Kubernetes security scanner
+18. Bearer: Data security and privacy scanner
+19. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+20. YARA: Malware detection
+21. Grype: Vulnerability scanner for containers/filesystems
+22. MobSF: Mobile Security Framework (Android/iOS)
+23. Lynis: System hardening and security auditing
+24. Trivy RBAC: Kubernetes RBAC security assessment
+25. Semgrep Secrets: Hardcoded credentials detection
+26. Horusec: Multi-language SAST (18+ languages)
+27. Dependency-Check: OWASP SCA for known vulnerabilities
+28. Akto: API Security testing (URL scanner only)
+
 Special Tool Behaviors:
 - Nosey Parker: Multi-phase execution (init → scan → report) with automatic Docker fallback
 - ZAP: Scans static web files when present; writes stub if no web files found
 - Falco: Validates Falco rule files when present; writes stub if no rules found
 - AFL++: Fuzzes binaries when found; writes stub if no fuzzable binaries found
+- Prowler: Only runs if cloud config files (*.tf, *.tfvars, cloudformation.yaml) detected
+- MobSF: Only runs if mobile app files (*.apk, *.ipa) detected
+- Lynis: System-level scanner - writes stub for repository scans
+- Trivy RBAC: Only runs if Kubernetes manifests detected
+- Akto: Only available in URL scanner (requires live API endpoints)
 
 Integrates with ToolRunner for parallel execution and resilient error handling.
 """
@@ -579,6 +605,485 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("afl++", afl_out)
             statuses["afl++"] = True
+
+    # ========== v1.0.0 New Tools (17 total) ==========
+
+    # Checkov CI/CD: GitHub Actions workflow scanning
+    if "checkov-cicd" in tools:
+        checkov_cicd_out = out_dir / "checkov-cicd.json"
+        if _tool_exists("checkov"):
+            checkov_cicd_flags = get_tool_flags("checkov-cicd")
+            checkov_cicd_cmd = [
+                "checkov",
+                "--framework",
+                "github_actions",
+                "--output",
+                "json",
+                "--output-file",
+                str(checkov_cicd_out),
+                *checkov_cicd_flags,
+                "--directory",
+                str(repo / ".github" / "workflows"),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="checkov-cicd",
+                    command=checkov_cicd_cmd,
+                    output_file=checkov_cicd_out,
+                    timeout=get_tool_timeout("checkov-cicd", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("checkov-cicd", checkov_cicd_out)
+            statuses["checkov-cicd"] = True
+
+    # Gosec: Go security analyzer
+    if "gosec" in tools:
+        gosec_out = out_dir / "gosec.json"
+        if _tool_exists("gosec"):
+            gosec_flags = get_tool_flags("gosec")
+            gosec_cmd = [
+                "gosec",
+                "-fmt=json",
+                f"-out={gosec_out}",
+                *gosec_flags,
+                str(repo / "..."),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="gosec",
+                    command=gosec_cmd,
+                    output_file=gosec_out,
+                    timeout=get_tool_timeout("gosec", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("gosec", gosec_out)
+            statuses["gosec"] = True
+
+    # OSV-Scanner: Vulnerability scanner for open source
+    if "osv-scanner" in tools:
+        osv_out = out_dir / "osv.json"
+        if _tool_exists("osv-scanner"):
+            osv_flags = get_tool_flags("osv-scanner")
+            osv_cmd = [
+                "osv-scanner",
+                "--format",
+                "json",
+                "--output",
+                str(osv_out),
+                *osv_flags,
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="osv-scanner",
+                    command=osv_cmd,
+                    output_file=osv_out,
+                    timeout=get_tool_timeout("osv-scanner", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("osv-scanner", osv_out)
+            statuses["osv-scanner"] = True
+
+    # cdxgen: SBOM and dependency analysis
+    if "cdxgen" in tools:
+        cdxgen_out = out_dir / "cdxgen.json"
+        if _tool_exists("cdxgen"):
+            cdxgen_flags = get_tool_flags("cdxgen")
+            cdxgen_cmd = [
+                "cdxgen",
+                "-o",
+                str(cdxgen_out),
+                *cdxgen_flags,
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="cdxgen",
+                    command=cdxgen_cmd,
+                    output_file=cdxgen_out,
+                    timeout=get_tool_timeout("cdxgen", timeout),
+                    retries=retries,
+                    ok_return_codes=(0,),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("cdxgen", cdxgen_out)
+            statuses["cdxgen"] = True
+
+    # ScanCode: License and copyright scanner
+    if "scancode" in tools:
+        scancode_out = out_dir / "scancode.json"
+        if _tool_exists("scancode"):
+            scancode_flags = get_tool_flags("scancode")
+            scancode_cmd = [
+                "scancode",
+                "--json",
+                str(scancode_out),
+                *scancode_flags,
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="scancode",
+                    command=scancode_cmd,
+                    output_file=scancode_out,
+                    timeout=get_tool_timeout("scancode", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("scancode", scancode_out)
+            statuses["scancode"] = True
+
+    # Kubescape: Kubernetes security scanner
+    if "kubescape" in tools:
+        kubescape_out = out_dir / "kubescape.json"
+        if _tool_exists("kubescape"):
+            kubescape_flags = get_tool_flags("kubescape")
+            kubescape_cmd = [
+                "kubescape",
+                "scan",
+                str(repo),
+                "--format",
+                "json",
+                "--output",
+                str(kubescape_out),
+                *kubescape_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="kubescape",
+                    command=kubescape_cmd,
+                    output_file=kubescape_out,
+                    timeout=get_tool_timeout("kubescape", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("kubescape", kubescape_out)
+            statuses["kubescape"] = True
+
+    # Bearer: Data security and privacy scanner
+    if "bearer" in tools:
+        bearer_out = out_dir / "bearer.json"
+        if _tool_exists("bearer"):
+            bearer_flags = get_tool_flags("bearer")
+            bearer_cmd = [
+                "bearer",
+                "scan",
+                str(repo),
+                "--format",
+                "json",
+                "--output",
+                str(bearer_out),
+                *bearer_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="bearer",
+                    command=bearer_cmd,
+                    output_file=bearer_out,
+                    timeout=get_tool_timeout("bearer", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("bearer", bearer_out)
+            statuses["bearer"] = True
+
+    # Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+    # Note: Prowler scans cloud infrastructure, not code repositories
+    # For repository scanning, we only run if cloud config files are detected
+    if "prowler" in tools:
+        prowler_out = out_dir / "prowler.json"
+        # Check for cloud config files (terraform, cloudformation, etc.)
+        cloud_files = (
+            list(repo.glob("**/*.tf"))
+            + list(repo.glob("**/*.tfvars"))
+            + list(repo.glob("**/cloudformation.yaml"))
+            + list(repo.glob("**/cloudformation.json"))
+        )
+        if cloud_files and _tool_exists("prowler"):
+            prowler_flags = get_tool_flags("prowler")
+            # Run Prowler in configuration scanning mode
+            prowler_cmd = [
+                "prowler",
+                "--output-formats",
+                "json",
+                "--output-directory",
+                str(out_dir),
+                "--output-filename",
+                "prowler",
+                *prowler_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="prowler",
+                    command=prowler_cmd,
+                    output_file=prowler_out,
+                    timeout=get_tool_timeout("prowler", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1, 3),  # 0=clean, 1=findings, 3=no credentials
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools or not cloud_files:
+            _write_stub("prowler", prowler_out)
+            statuses["prowler"] = True
+
+    # YARA: Malware detection
+    if "yara" in tools:
+        yara_out = out_dir / "yara.json"
+        if _tool_exists("yara"):
+            yara_flags = get_tool_flags("yara")
+            # Use built-in rules or user-provided rules
+            rules_path = per_tool_config.get("yara", {}).get(
+                "rules_path", "/usr/share/yara/rules"
+            )
+            yara_cmd = [
+                "yara",
+                "-r",  # Recursive
+                "-w",  # Disable warnings
+                "-s",  # Print matched strings
+                *yara_flags,
+                str(rules_path),
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="yara",
+                    command=yara_cmd,
+                    output_file=yara_out,
+                    timeout=get_tool_timeout("yara", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=True,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("yara", yara_out)
+            statuses["yara"] = True
+
+    # Grype: Vulnerability scanner for containers and filesystems
+    if "grype" in tools:
+        grype_out = out_dir / "grype.json"
+        if _tool_exists("grype"):
+            grype_flags = get_tool_flags("grype")
+            grype_cmd = [
+                "grype",
+                f"dir:{repo}",
+                "-o",
+                "json",
+                *grype_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="grype",
+                    command=grype_cmd,
+                    output_file=grype_out,
+                    timeout=get_tool_timeout("grype", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=True,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("grype", grype_out)
+            statuses["grype"] = True
+
+    # MobSF: Mobile Security Framework (Android/iOS)
+    # Note: Only runs if APK/IPA files are detected
+    if "mobsf" in tools:
+        mobsf_out = out_dir / "mobsf.json"
+        # Check for mobile app files
+        mobile_files = list(repo.glob("**/*.apk")) + list(repo.glob("**/*.ipa"))
+        if mobile_files and _tool_exists("mobsf"):
+            mobsf_flags = get_tool_flags("mobsf")
+            mobile_file = mobile_files[0]  # Scan first found mobile app
+            mobsf_cmd = [
+                "mobsf",
+                "-f",
+                str(mobile_file),
+                "-o",
+                str(mobsf_out),
+                *mobsf_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="mobsf",
+                    command=mobsf_cmd,
+                    output_file=mobsf_out,
+                    timeout=get_tool_timeout("mobsf", timeout),
+                    retries=retries,
+                    ok_return_codes=(0,),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools or not mobile_files:
+            _write_stub("mobsf", mobsf_out)
+            statuses["mobsf"] = True
+
+    # Lynis: System hardening and security auditing
+    # Note: Lynis scans the local system, not code repositories
+    # For repository scanning, we write a stub
+    if "lynis" in tools:
+        lynis_out = out_dir / "lynis.json"
+        if allow_missing_tools:
+            _write_stub("lynis", lynis_out)
+            statuses["lynis"] = True
+
+    # Trivy RBAC: Kubernetes RBAC security assessment
+    # Note: Requires K8s manifests in repository
+    if "trivy-rbac" in tools:
+        trivy_rbac_out = out_dir / "trivy-rbac.json"
+        # Check for K8s manifests
+        k8s_manifests = (
+            list(repo.glob("**/*deployment*.yaml"))
+            + list(repo.glob("**/*service*.yaml"))
+            + list(repo.glob("**/k8s/**/*.yaml"))
+        )
+        if k8s_manifests and _tool_exists("trivy"):
+            trivy_rbac_flags = get_tool_flags("trivy-rbac")
+            trivy_rbac_cmd = [
+                "trivy",
+                "config",
+                "--format",
+                "json",
+                "--output",
+                str(trivy_rbac_out),
+                "--scanners",
+                "config",
+                *trivy_rbac_flags,
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="trivy-rbac",
+                    command=trivy_rbac_cmd,
+                    output_file=trivy_rbac_out,
+                    timeout=get_tool_timeout("trivy-rbac", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools or not k8s_manifests:
+            _write_stub("trivy-rbac", trivy_rbac_out)
+            statuses["trivy-rbac"] = True
+
+    # Semgrep Secrets: Hardcoded credentials detection
+    if "semgrep-secrets" in tools:
+        semgrep_secrets_out = out_dir / "semgrep-secrets.json"
+        if _tool_exists("semgrep"):
+            semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
+            semgrep_secrets_cmd = [
+                "semgrep",
+                "--config",
+                "p/secrets",
+                "--json",
+                "--output",
+                str(semgrep_secrets_out),
+                *semgrep_secrets_flags,
+                str(repo),
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="semgrep-secrets",
+                    command=semgrep_secrets_cmd,
+                    output_file=semgrep_secrets_out,
+                    timeout=get_tool_timeout("semgrep-secrets", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1, 2),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("semgrep-secrets", semgrep_secrets_out)
+            statuses["semgrep-secrets"] = True
+
+    # Horusec: Multi-language SAST scanner (18+ languages)
+    if "horusec" in tools:
+        horusec_out = out_dir / "horusec.json"
+        if _tool_exists("horusec"):
+            horusec_flags = get_tool_flags("horusec")
+            horusec_cmd = [
+                "horusec",
+                "start",
+                "-p",
+                str(repo),
+                "-o",
+                "json",
+                "-O",
+                str(horusec_out),
+                *horusec_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="horusec",
+                    command=horusec_cmd,
+                    output_file=horusec_out,
+                    timeout=get_tool_timeout("horusec", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("horusec", horusec_out)
+            statuses["horusec"] = True
+
+    # Dependency-Check: OWASP SCA for known vulnerabilities
+    if "dependency-check" in tools:
+        dependency_check_out = out_dir / "dependency-check.json"
+        if _tool_exists("dependency-check"):
+            dependency_check_flags = get_tool_flags("dependency-check")
+            dependency_check_cmd = [
+                "dependency-check",
+                "--project",
+                name,
+                "--scan",
+                str(repo),
+                "--format",
+                "JSON",
+                "--out",
+                str(dependency_check_out),
+                *dependency_check_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="dependency-check",
+                    command=dependency_check_cmd,
+                    output_file=dependency_check_out,
+                    timeout=get_tool_timeout("dependency-check", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("dependency-check", dependency_check_out)
+            statuses["dependency-check"] = True
+
+    # ========== End of v1.0.0 New Tools ==========
 
     # Execute all tools with ToolRunner
     if tool_defs:

@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from scripts.core.exceptions import ToolExecutionException
-from scripts.core.config import load_config
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_generators import (
     generate_github_actions,
@@ -51,8 +50,6 @@ from scripts.cli.wizard_flows.target_configurators import (
     configure_k8s_target as _configure_k8s,
 )
 from scripts.cli.wizard_flows.telemetry_helper import (
-    prompt_telemetry_opt_in,
-    save_telemetry_preference,
     send_wizard_telemetry,
 )
 
@@ -62,55 +59,94 @@ logger = logging.getLogger(__name__)
 # Version (from pyproject.toml)
 __version__ = "0.7.1"
 
-# Profile definitions with resource estimates (v0.5.0)
+# Profile definitions with resource estimates (v1.0.0)
 PROFILES = {
     "fast": {
         "name": "Fast",
-        "description": "Speed + coverage with 3 best-in-breed tools",
-        "tools": ["trufflehog", "semgrep", "trivy"],
+        "description": "Quick scans with 8 core tools (secrets, SAST, SCA, IaC)",
+        "tools": [
+            "trufflehog",
+            "semgrep",
+            "trivy",
+            "checkov",
+            "checkov-cicd",
+            "hadolint",
+            "syft",
+            "osv-scanner",
+        ],
         "timeout": 300,
         "threads": 8,
-        "est_time": "5-8 minutes",
+        "est_time": "5-10 minutes",
         "use_case": "Pre-commit checks, quick validation, CI/CD gate",
     },
     "balanced": {
         "name": "Balanced",
-        "description": "Production-ready with DAST and comprehensive coverage",
+        "description": "Production CI/CD with 21 tools (cloud, API, DAST, license)",
         "tools": [
             "trufflehog",
             "semgrep",
             "syft",
             "trivy",
             "checkov",
+            "checkov-cicd",
             "hadolint",
             "zap",
             "nuclei",
+            "prowler",
+            "kubescape",
+            "akto",
+            "scancode",
+            "cdxgen",
+            "gosec",
+            "osv-scanner",
+            "yara",
+            "grype",
+            "bearer",
+            "horusec",
+            "dependency-check",
         ],
         "timeout": 600,
         "threads": 4,
-        "est_time": "15-20 minutes",
+        "est_time": "18-25 minutes",
         "use_case": "CI/CD pipelines, regular audits, production scans",
     },
     "deep": {
         "name": "Deep",
-        "description": "Maximum coverage with runtime monitoring and fuzzing",
+        "description": "Comprehensive audits with all 28 tools (mobile, fuzzing, runtime)",
         "tools": [
             "trufflehog",
             "noseyparker",
             "semgrep",
+            "semgrep-secrets",
             "bandit",
             "syft",
             "trivy",
+            "trivy-rbac",
             "checkov",
+            "checkov-cicd",
             "hadolint",
             "zap",
             "nuclei",
+            "prowler",
+            "kubescape",
+            "akto",
+            "scancode",
+            "cdxgen",
+            "gosec",
+            "osv-scanner",
+            "yara",
+            "grype",
+            "bearer",
+            "horusec",
+            "dependency-check",
             "falco",
             "afl++",
+            "mobsf",
+            "lynis",
         ],
         "timeout": 900,
         "threads": 2,
-        "est_time": "30-60 minutes",
+        "est_time": "40-70 minutes",
         "use_case": "Security audits, compliance scans, pre-release validation",
     },
 }
@@ -688,7 +724,10 @@ def run_wizard(
     """
     import time
 
-    from scripts.core.telemetry import should_show_telemetry_banner, show_telemetry_banner
+    from scripts.core.telemetry import (
+        should_show_telemetry_banner,
+        show_telemetry_banner,
+    )
 
     wizard_start_time = time.time()
 

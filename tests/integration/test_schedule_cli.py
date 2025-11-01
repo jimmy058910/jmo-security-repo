@@ -23,6 +23,9 @@ pytestmark = pytest.mark.skipif(
     platform.system() == "Windows", reason="Local cron not supported on Windows"
 )
 
+# Dynamically determine repository root for cross-platform compatibility
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _get_test_env(tmp_path: Path) -> dict:
     """Create isolated test environment with proper HOME and PYTHONPATH.
@@ -43,7 +46,7 @@ def _get_test_env(tmp_path: Path) -> dict:
     user_site = site.getusersitepackages()
 
     # Add user site-packages to PYTHONPATH if it's not already in sys.path
-    pythonpath_parts = ["/mnt/c/Projects/jmo-security-repo"]
+    pythonpath_parts = [str(REPO_ROOT)]
     if user_site:
         pythonpath_parts.append(user_site)
 
@@ -85,7 +88,7 @@ def test_schedule_create_list_delete(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -105,7 +108,7 @@ def test_schedule_create_list_delete(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -128,7 +131,7 @@ def test_schedule_create_list_delete(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -150,7 +153,7 @@ def test_schedule_create_list_delete(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -170,7 +173,7 @@ def test_schedule_create_list_delete(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -203,7 +206,7 @@ def test_schedule_export_github_actions(tmp_path):
         ],
         capture_output=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     # Export workflow
@@ -219,7 +222,7 @@ def test_schedule_export_github_actions(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -265,7 +268,7 @@ def test_schedule_export_gitlab_ci(tmp_path):
         ],
         capture_output=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     # Export workflow with backend override
@@ -283,7 +286,7 @@ def test_schedule_export_gitlab_ci(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     assert result.returncode == 0
@@ -330,7 +333,7 @@ def test_schedule_install_local_cron(tmp_path):
         ],
         capture_output=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     # Install to cron
@@ -346,7 +349,7 @@ def test_schedule_install_local_cron(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     # May fail if crontab not available
@@ -376,7 +379,7 @@ def test_schedule_install_local_cron(tmp_path):
             capture_output=True,
             text=True,
             env=env,
-            cwd="/mnt/c/Projects/jmo-security-repo",
+            cwd=str(REPO_ROOT),
         )
 
         assert uninstall_result.returncode == 0
@@ -410,7 +413,7 @@ def test_schedule_label_filtering(tmp_path):
         ],
         capture_output=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     subprocess.run(
@@ -435,7 +438,7 @@ def test_schedule_label_filtering(tmp_path):
         ],
         capture_output=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     # List all schedules
@@ -452,7 +455,7 @@ def test_schedule_label_filtering(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     schedules = json.loads(result.stdout)
@@ -474,7 +477,7 @@ def test_schedule_label_filtering(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     schedules = json.loads(result.stdout)
@@ -497,7 +500,7 @@ def test_schedule_label_filtering(tmp_path):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/mnt/c/Projects/jmo-security-repo",
+        cwd=str(REPO_ROOT),
     )
 
     schedules = json.loads(result.stdout)

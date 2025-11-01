@@ -1,10 +1,10 @@
-# JMo Security Suite - Slim Docker Image
-# Base: Ubuntu 22.04 with core security tools only
-# Size: ~400MB (optimized from ~700MB) | Tools: 7 core scanners (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap) - v0.6.1
-# v0.6.1: Docker optimization (multi-stage builds, layer caching, Trivy DB pre-download)
+# JMo Security Suite - Slim Docker Image (v1.0.0)
+# Base: Ubuntu 22.04 with 15 cloud-focused security tools
+# Size: ~557 MB (optimized) | Tools: 15 scanners (cloud CSPM + core SAST/SCA) | Multi-arch: amd64, arm64
+# v1.0.0: Slim variant - Cloud/K8s optimized (Prowler, Kubescape, Trivy, Checkov, etc.)
 
 #
-# Stage 1: Builder - Download and extract tools
+# Stage 1: Builder - Download 15 cloud-focused tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download TruffleHog
+# Download TruffleHog (Secrets)
 RUN TRUFFLEHOG_VERSION="3.90.12" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
@@ -27,35 +27,28 @@ RUN TRUFFLEHOG_VERSION="3.90.12" && \
     mv /tmp/trufflehog /usr/local/bin/trufflehog && \
     chmod +x /usr/local/bin/trufflehog
 
-# Download Syft
+# Download Syft (SBOM)
 RUN SYFT_VERSION="1.36.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
-# Download Trivy
+# Download Trivy (SCA + Vuln)
 RUN TRIVY_VERSION="0.67.2" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
-# Download Hadolint
+# Download Hadolint (Dockerfile)
 RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
     curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
     chmod +x /usr/local/bin/hadolint
 
-# Download OWASP ZAP
-RUN ZAP_VERSION="2.16.1" && \
-    wget -q "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
-    -O /tmp/zap.tar.gz && \
-    tar -xzf /tmp/zap.tar.gz -C /opt && \
-    mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
-
-# Download Nuclei
+# Download Nuclei (DAST + API)
 RUN NUCLEI_VERSION="3.4.10" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
@@ -64,15 +57,70 @@ RUN NUCLEI_VERSION="3.4.10" && \
     unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
     chmod +x /usr/local/bin/nuclei && \
     rm /tmp/nuclei.zip && \
-    nuclei -update-templates -silent
+    nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
+
+# Download Prowler (Cloud CSPM)
+RUN PROWLER_VERSION="4.0.0" && \
+    PROWLER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/prowler-cloud/prowler/releases/download/${PROWLER_VERSION}/prowler-${PROWLER_VERSION}-linux-${PROWLER_ARCH}.zip" \
+    -o /tmp/prowler.zip && \
+    unzip -q /tmp/prowler.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/prowler && \
+    rm /tmp/prowler.zip
+
+# Download Kubescape (K8s Security)
+RUN KUBESCAPE_VERSION="3.0.19" && \
+    KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
+    -o /usr/local/bin/kubescape && \
+    chmod +x /usr/local/bin/kubescape
+
+# Download OSV-Scanner (SCA)
+RUN OSV_VERSION="1.10.1" && \
+    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_${OSV_VERSION}_linux_${OSV_ARCH}" \
+    -o /usr/local/bin/osv-scanner && \
+    chmod +x /usr/local/bin/osv-scanner
+
+# Download Grype (SCA + Vuln)
+RUN GRYPE_VERSION="0.91.0" && \
+    GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
+    -o /tmp/grype.tar.gz && \
+    tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
+    chmod +x /usr/local/bin/grype
+
+# Download Bearer (Data Privacy)
+RUN BEARER_VERSION="1.50.0" && \
+    BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
+    -o /tmp/bearer.tar.gz && \
+    tar -xzf /tmp/bearer.tar.gz -C /usr/local/bin bearer && \
+    chmod +x /usr/local/bin/bearer
+
+# Download Dependency-Check (License + SCA)
+RUN DC_VERSION="11.1.1" && \
+    wget -q "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
+    -O /tmp/dependency-check.zip && \
+    unzip -q /tmp/dependency-check.zip -d /opt && \
+    mv /opt/dependency-check /opt/dependency-check-cli && \
+    rm /tmp/dependency-check.zip
+
+# Download Horusec (Multi-language SAST)
+RUN HORUSEC_VERSION="2.9.0" && \
+    HORUSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/ZupIT/horusec/releases/download/v${HORUSEC_VERSION}/horusec_linux_${HORUSEC_ARCH}" \
+    -o /usr/local/bin/horusec && \
+    chmod +x /usr/local/bin/horusec
 
 #
-# Stage 2: Runtime - Minimal runtime environment
+# Stage 2: Runtime - Cloud-optimized with 15 tools
 #
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
-LABEL org.opencontainers.image.description="Lightweight security audit toolkit with 7 core scanners + multi-target scanning (v0.6.1 optimized)"
+LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners for AWS/Azure/GCP/K8s (v1.0.0)"
+LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -83,68 +131,99 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/root/.local/bin:${PATH}" \
     DOCKER_CONTAINER=1
 
-# Install ONLY runtime dependencies (no curl, wget, tar)
-# Combined in single RUN to reduce layers, with aggressive cache cleanup
+# Install runtime dependencies (no Node.js for slim variant)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     git \
     ca-certificates \
     jq \
+    shellcheck \
     openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Upgrade pip and install Python tools in single layer with cache cleanup
+# Clean Java runtime
+RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
+    /usr/lib/jvm/java-17-openjdk-*/legal \
+    /usr/share/doc \
+    /usr/share/man \
+    /usr/share/locale
+
+# Install Python tools
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
     semgrep==1.141.0 \
-    checkov==3.2.488 && \
-    find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    checkov==3.2.488 \
+    ruff==0.14.2 \
+    yara-python==4.5.2 \
+    prowler==4.0.0 \
+    horusec-cli==2.9.0 \
+    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Copy compiled binaries from builder stage
-ARG TARGETARCH
+# Copy binaries from builder
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
-COPY --from=builder /opt/zaproxy /opt/zaproxy
+COPY --from=builder /usr/local/bin/prowler /usr/local/bin/prowler
+COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
+COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
+COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
+COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
+COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
+COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
 
-# Create ZAP symlink
-RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
-    chmod +x /usr/local/bin/zap
+# Binary stripping
+RUN strip /usr/local/bin/trufflehog \
+    /usr/local/bin/syft \
+    /usr/local/bin/trivy \
+    /usr/local/bin/hadolint \
+    /usr/local/bin/nuclei \
+    /usr/local/bin/osv-scanner \
+    /usr/local/bin/grype \
+    /usr/local/bin/bearer \
+    /usr/local/bin/horusec \
+    2>/dev/null || true
 
-# REMOVED: Trivy DB pre-download (adds 800MB to image size)
-# Instead, use volume mounting for persistent caching across scans
-# Mark Trivy cache directory as volume for persistence
-VOLUME ["/root/.cache/trivy"]
+# Create symlinks
+RUN ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
+    chmod +x /usr/local/bin/dependency-check
+
+VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
 
 WORKDIR /scan
 
-# Copy JMo Security Suite
 COPY . /opt/jmo-security/
+RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
-# Install JMo (minimal, no reporting extras) with cache cleanup
+# Install JMo (minimal, no reporting extras for slim variant)
 RUN cd /opt/jmo-security && \
     python3 -m pip install --no-cache-dir -e . && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify core tools
-RUN echo "=== Verifying core tools ===" && \
-    python3 --version && \
+# Verify 15 slim tools
+RUN echo "=== Verifying 15 cloud-focused tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
     syft version && \
     trivy --version && \
-    hadolint --version && \
     checkov --version && \
-    zap -version && \
+    hadolint --version && \
     nuclei -version && \
-    echo "=== Core tools verified ==="
+    prowler --version && \
+    kubescape version && \
+    osv-scanner --version && \
+    grype version && \
+    bearer version && \
+    dependency-check --version && \
+    horusec version && \
+    shellcheck --version && \
+    echo "=== All 15 slim tools verified ==="
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]
@@ -152,6 +231,4 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage examples:
-# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:0.6.1-slim scan --repo /scan --profile balanced
-# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy ghcr.io/jimmy058910/jmo-security:0.6.1-slim ci --repo /scan --fail-on HIGH
+# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:1.0.0-slim scan --aws-account 123456789012 --profile cloud

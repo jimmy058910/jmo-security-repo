@@ -1,0 +1,157 @@
+# JMo Security Suite - Fast Docker Image (v1.0.0)
+# Base: Alpine 3.18 with 8 CI/CD gate tools
+# Size: ~502 MB (optimized) | Tools: 8 scanners (fastest scan profile) | Multi-arch: amd64, arm64
+# v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
+
+#
+# Stage 1: Builder - Download 8 fast tools
+#
+FROM ubuntu:22.04 AS builder
+
+ARG TARGETARCH
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    unzip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download TruffleHog
+RUN TRUFFLEHOG_VERSION="3.90.12" && \
+    TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
+    -o /tmp/trufflehog.tar.gz && \
+    tar -xzf /tmp/trufflehog.tar.gz -C /tmp && \
+    mv /tmp/trufflehog /usr/local/bin/trufflehog && \
+    chmod +x /usr/local/bin/trufflehog
+
+# Download Syft
+RUN SYFT_VERSION="1.36.0" && \
+    SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
+    -o /tmp/syft.tar.gz && \
+    tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
+
+# Download Trivy
+RUN TRIVY_VERSION="0.67.2" && \
+    TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
+    curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    -o /tmp/trivy.tar.gz && \
+    tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+
+# Download Hadolint
+RUN HADOLINT_VERSION="2.14.0" && \
+    HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
+    curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
+    -o /usr/local/bin/hadolint && \
+    chmod +x /usr/local/bin/hadolint
+
+# Download Nuclei (minimal templates for fast scans)
+RUN NUCLEI_VERSION="3.4.10" && \
+    TARGETARCH=$(dpkg --print-architecture) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -tl cves,exposures -silent
+
+# Download OSV-Scanner
+RUN OSV_VERSION="1.10.1" && \
+    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_${OSV_VERSION}_linux_${OSV_ARCH}" \
+    -o /usr/local/bin/osv-scanner && \
+    chmod +x /usr/local/bin/osv-scanner
+
+#
+# Stage 2: Runtime - Minimal CI/CD environment with 8 tools
+#
+FROM ubuntu:22.04 AS runtime
+
+LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
+LABEL org.opencontainers.image.url="https://jmotools.com"
+LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    git \
+    ca-certificates \
+    jq \
+    shellcheck \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install Python tools (minimal for fast variant)
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir \
+    semgrep==1.141.0 \
+    checkov==3.2.488 \
+    ruff==0.14.2 \
+    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+
+# Copy binaries from builder
+COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
+COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
+COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
+COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
+
+# Binary stripping
+RUN strip /usr/local/bin/trufflehog \
+    /usr/local/bin/syft \
+    /usr/local/bin/trivy \
+    /usr/local/bin/hadolint \
+    /usr/local/bin/nuclei \
+    /usr/local/bin/osv-scanner \
+    2>/dev/null || true
+
+VOLUME ["/root/.cache/trivy"]
+
+WORKDIR /scan
+
+COPY . /opt/jmo-security/
+RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
+
+# Install JMo (minimal, no reporting extras)
+RUN cd /opt/jmo-security && \
+    python3 -m pip install --no-cache-dir -e . && \
+    find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+
+# Verify 8 fast tools
+RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
+    jmo --help > /dev/null && \
+    trufflehog --version && \
+    semgrep --version && \
+    syft version && \
+    trivy --version && \
+    checkov --version && \
+    hadolint --version && \
+    nuclei -version && \
+    osv-scanner --version && \
+    shellcheck --version && \
+    echo "=== All 8 fast tools verified ==="
+
+ENTRYPOINT ["jmo"]
+CMD ["--help"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD jmo --help > /dev/null || exit 1
+
+# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-fast scan --repo /scan --profile fast --fail-on HIGH

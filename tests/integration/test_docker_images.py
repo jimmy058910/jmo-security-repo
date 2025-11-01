@@ -319,7 +319,9 @@ class TestDockerBuild:
             timeout=10,
         )
         if buildx_check.returncode != 0:
-            pytest.skip("Docker buildx not available (required for multi-platform builds)")
+            pytest.skip(
+                "Docker buildx not available (required for multi-platform builds)"
+            )
 
         dockerfile = "Dockerfile" if variant == "full" else f"Dockerfile.{variant}"
         dockerfile_path = Path(__file__).parent.parent.parent / dockerfile

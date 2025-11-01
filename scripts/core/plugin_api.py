@@ -37,7 +37,9 @@ class Finding:
     message: str = ""
     title: Optional[str] = None
     description: Optional[str] = None
-    remediation: Optional[Union[str, Dict[str, Any]]] = None  # v1.1.0: Can be dict with autofix
+    remediation: Optional[Union[str, Dict[str, Any]]] = (
+        None  # v1.1.0: Can be dict with autofix
+    )
     references: List[str] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     cvss: Optional[Dict[str, Any]] = None

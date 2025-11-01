@@ -23,6 +23,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from scripts.core.telemetry import (
     bucket_duration,
@@ -36,6 +37,34 @@ from scripts.core.telemetry import (
     _send_event_async,
     _get_gist_content,
 )
+
+
+# ========== Fixtures ==========
+
+
+@pytest.fixture
+def clear_ci_env(monkeypatch):
+    """Clear all CI environment variables to test non-CI behavior.
+
+    detect_ci_environment() checks 9 different CI env vars:
+    - CI, GITHUB_ACTIONS, GITLAB_CI, JENKINS_URL, BUILD_ID,
+      CIRCLECI, TRAVIS, TF_BUILD, BITBUCKET_PIPELINE_UUID
+
+    Tests that expect telemetry to be enabled must clear ALL of these,
+    otherwise detect_ci_environment() returns True and telemetry is disabled.
+    """
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
+        monkeypatch.delenv(var, raising=False)
 
 
 # ========== Test Category 1: Anonymous ID Management ==========
@@ -96,7 +125,7 @@ def test_get_anonymous_id_creates_parent_directory(tmp_path: Path, monkeypatch):
 # ========== Test Category 2: Telemetry Enablement Logic ==========
 
 
-def test_is_telemetry_enabled_when_config_enabled(monkeypatch):
+def test_is_telemetry_enabled_when_config_enabled(clear_ci_env, monkeypatch):
     """Test is_telemetry_enabled() returns True when config enabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 
@@ -112,17 +141,17 @@ def test_is_telemetry_enabled_when_config_disabled(monkeypatch):
     assert is_telemetry_enabled(config) is False
 
 
-def test_is_telemetry_enabled_default_false_when_missing(monkeypatch):
-    """Test is_telemetry_enabled() defaults to False when config missing (opt-in)."""
+def test_is_telemetry_enabled_default_true_when_missing(clear_ci_env, monkeypatch):
+    """Test is_telemetry_enabled() defaults to True when config missing (opt-out model v0.7.1+)."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 
-    # No telemetry key in config
+    # No telemetry key in config - should default to True (opt-out)
     config = {}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
-    # Empty telemetry object
+    # Empty telemetry object - should default to True (opt-out)
     config = {"telemetry": {}}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
 
 def test_is_telemetry_enabled_env_var_override(monkeypatch):
@@ -134,7 +163,7 @@ def test_is_telemetry_enabled_env_var_override(monkeypatch):
     assert is_telemetry_enabled(config) is False
 
 
-def test_is_telemetry_enabled_env_var_no_override_when_not_1(monkeypatch):
+def test_is_telemetry_enabled_env_var_no_override_when_not_1(clear_ci_env, monkeypatch):
     """Test JMO_TELEMETRY_DISABLE with values other than '1' don't disable."""
     monkeypatch.setenv("JMO_TELEMETRY_DISABLE", "0")
 
@@ -181,7 +210,7 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
 
 
 @patch("scripts.core.telemetry.threading.Thread")
-def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
+def test_send_event_spawns_background_thread(mock_thread, clear_ci_env, monkeypatch):
     """Test send_event() spawns daemon background thread."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
     monkeypatch.setattr(
@@ -693,7 +722,7 @@ def test_business_metrics_in_event_payload(tmp_path: Path, monkeypatch):
 # ========== Test Category 8: Edge Cases and Error Handling ==========
 
 
-def test_send_event_with_empty_metadata(monkeypatch):
+def test_send_event_with_empty_metadata(clear_ci_env, monkeypatch):
     """Test send_event() handles empty metadata dict."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
     monkeypatch.setattr(

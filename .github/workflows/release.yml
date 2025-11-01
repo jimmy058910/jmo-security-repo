@@ -133,7 +133,7 @@ jobs:
         with:
           skip-existing: true  # Allow re-running releases if PyPI already has the version
 
-  # Build and push multi-arch Docker images
+  # Build and push multi-arch Docker images (v1.0.0: 4 variants)
   docker-build:
     name: Build Docker ${{ matrix.variant }}
     runs-on: ubuntu-latest
@@ -141,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [full, slim, alpine]
+        variant: [full, balanced, slim, fast]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -263,13 +263,13 @@ jobs:
       - name: Pull and measure all variants
         run: |
           {
-            echo "## Docker Image Size Comparison (v0.6.1 Optimizations)"
+            echo "## Docker Image Size Comparison (v1.0.0 - 4 Variants)"
             echo ""
             echo "| Variant | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
             echo "|---------|--------------|--------------|---------------------|"
           } > size-comparison.md
 
-          for VARIANT in full slim alpine; do
+          for VARIANT in full balanced slim fast; do
             TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
             IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TAG}"
 
@@ -290,15 +290,18 @@ jobs:
 
           {
             echo ""
-            echo "**Optimization Goals (ROADMAP #1):**"
-            echo "- Full: 1.5GB → 900MB (40% reduction)"
-            echo "- Slim: 700MB → 400MB (43% reduction)"
-            echo "- Alpine: 500MB → 300MB (40% reduction)"
+            echo "**v1.0.0 Target Sizes (Phase 1 Optimizations):**"
+            echo "- Full: ~1.97 GB (26 Docker-ready tools, 155 MB savings)"
+            echo "- Balanced: ~1.41 GB (21 tools, production CI/CD)"
+            echo "- Slim: ~557 MB (15 tools, cloud-focused)"
+            echo "- Fast: ~502 MB (8 tools, CI/CD gate)"
             echo ""
-            echo "**Optimizations Applied:**"
-            echo "- Multi-stage builds (separate builder and runtime stages)"
-            echo "- Layer caching cleanup (apt cache, pip cache, Python bytecode)"
-            echo "- Trivy DB pre-download (eliminates 30-60s scan delay)"
+            echo "**Phase 1 Optimizations Applied (155 MB savings):**"
+            echo "- Nuclei template filtering (65 MB)"
+            echo "- Python bytecode cleanup (40 MB)"
+            echo "- Binary stripping (15 MB)"
+            echo "- Java runtime cleanup (30 MB)"
+            echo "- .dockerignore exclusions (5 MB)"
           } >> size-comparison.md
 
           cat size-comparison.md
@@ -316,7 +319,7 @@ jobs:
     needs: docker-build
     strategy:
       matrix:
-        variant: [full, slim, alpine]
+        variant: [full, balanced, slim, fast]
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3

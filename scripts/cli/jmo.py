@@ -1029,7 +1029,10 @@ def cmd_scan(args) -> int:
     # Track scan start time for telemetry
     import time
 
-    from scripts.core.telemetry import should_show_telemetry_banner, show_telemetry_banner
+    from scripts.core.telemetry import (
+        should_show_telemetry_banner,
+        show_telemetry_banner,
+    )
 
     scan_start_time = time.time()
 
