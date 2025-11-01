@@ -99,7 +99,9 @@ def test_get_anonymous_id_creates_parent_directory(tmp_path: Path, monkeypatch):
 def test_is_telemetry_enabled_when_config_enabled(monkeypatch):
     """Test is_telemetry_enabled() returns True when config enabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
-    monkeypatch.delenv("CI", raising=False)  # Clear CI env var to test non-CI behavior
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
     config = {"telemetry": {"enabled": True}}
     assert is_telemetry_enabled(config) is True
@@ -116,7 +118,9 @@ def test_is_telemetry_enabled_when_config_disabled(monkeypatch):
 def test_is_telemetry_enabled_default_true_when_missing(monkeypatch):
     """Test is_telemetry_enabled() defaults to True when config missing (opt-out model v0.7.1+)."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
-    monkeypatch.delenv("CI", raising=False)  # Clear CI env var to test non-CI behavior
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
     # No telemetry key in config - should default to True (opt-out)
     config = {}
@@ -139,7 +143,9 @@ def test_is_telemetry_enabled_env_var_override(monkeypatch):
 def test_is_telemetry_enabled_env_var_no_override_when_not_1(monkeypatch):
     """Test JMO_TELEMETRY_DISABLE with values other than '1' don't disable."""
     monkeypatch.setenv("JMO_TELEMETRY_DISABLE", "0")
-    monkeypatch.delenv("CI", raising=False)  # Clear CI env var to test non-CI behavior
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
 
     config = {"telemetry": {"enabled": True}}
     assert is_telemetry_enabled(config) is True  # Not disabled
