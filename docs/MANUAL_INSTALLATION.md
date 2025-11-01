@@ -294,5 +294,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2025-11-01 (v1.0.0)  
+**Last Updated**: 2025-11-01 (v1.0.0)
 **Questions?**: [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)

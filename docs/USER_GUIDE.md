@@ -1090,11 +1090,11 @@ class SnykAdapter(AdapterPlugin):
         """Parse Snyk JSON output and return CommonFinding objects"""
         if not output_path.exists():
             return []
-        
+
         findings = []
         with open(output_path) as f:
             data = json.load(f)
-        
+
         for vuln in data.get("vulnerabilities", []):
             finding = Finding(
                 schemaVersion="1.2.0",
@@ -1116,7 +1116,7 @@ class SnykAdapter(AdapterPlugin):
                 raw=vuln  # Original Snyk payload
             )
             findings.append(finding)
-        
+
         return findings
 ```
 
