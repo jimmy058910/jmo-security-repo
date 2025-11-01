@@ -193,6 +193,9 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
 def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
     """Test send_event() spawns daemon background thread."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+    # Clear all CI environment variables that detect_ci_environment() checks
+    for var in ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS_URL", "BUILD_ID", "CIRCLECI", "TRAVIS", "TF_BUILD", "BITBUCKET_PIPELINE_UUID"]:
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
