@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import List, Union
 
 import yaml
-from croniter import croniter  # type: ignore[import-untyped]
+from croniter import croniter
 
 from scripts.core.schedule_manager import (
     ScheduleManager,

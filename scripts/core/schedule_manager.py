@@ -7,7 +7,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any
-from croniter import croniter  # type: ignore[import-untyped]
+from croniter import croniter
 
 
 @dataclass
