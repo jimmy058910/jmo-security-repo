@@ -1,24 +1,21 @@
-# JMo Security Suite - All-in-One Docker Image (Full - v1.0.0)
-# Base: Ubuntu 22.04 with ALL 28 security tools pre-installed
-# Size: ~1.97 GB (optimized) | Tools: 26 Docker-ready scanners (28 total, 2 require manual install - see docs/MANUAL_INSTALLATION.md) | Multi-arch: amd64, arm64
-# v1.0.0: Feature #1 - Added 16 new tools (26 Docker-ready, 2 manual: MobSF, Akto) (Prowler, Kubescape, Gosec, Grype, OSV-Scanner, Bearer, ScanCode, cdxgen, Lynis, MobSF, Akto, YARA, Dependency-Check, Horusec, Semgrep-Secrets, Trivy-RBAC)
+# JMo Security Suite - Balanced Docker Image (v1.0.0)
+# Base: Ubuntu 22.04 with 21 production-ready security tools
+# Size: ~1.41 GB (optimized) | Tools: 21 scanners | Multi-arch: amd64, arm64
+# v1.0.0: Balanced variant - Excludes specialized tools (Noseyparker, Bandit, Semgrep-Secrets, Trivy-RBAC, Falco, AFL++, MobSF, Lynis)
 
 #
-# Stage 1: Builder - Download and extract ALL 28 tools
+# Stage 1: Builder - Download and extract 21 tools (exclude 7 specialized)
 #
 FROM ubuntu:22.04 AS builder
 
 ARG TARGETARCH
 
-# Install build dependencies (curl, tar, wget for downloads + build tools for AFL++)
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
     ca-certificates \
-    build-essential \
-    clang \
-    llvm \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
@@ -50,30 +47,6 @@ RUN HADOLINT_VERSION="2.14.0" && \
     curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
     chmod +x /usr/local/bin/hadolint
-
-# Download shfmt (Shell formatting)
-RUN SHFMT_VERSION="3.12.0" && \
-    SHFMT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_${SHFMT_ARCH}" \
-    -o /usr/local/bin/shfmt && \
-    chmod +x /usr/local/bin/shfmt
-
-# Download Falcoctl (Runtime Security)
-RUN FALCOCTL_VERSION="0.11.4" && \
-    FALCOCTL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_${FALCOCTL_ARCH}.tar.gz" \
-    -o /tmp/falcoctl.tar.gz && \
-    tar -xzf /tmp/falcoctl.tar.gz -C /usr/local/bin falcoctl && \
-    chmod +x /usr/local/bin/falcoctl
-
-# Download Nosey Parker (Secrets - Backup)
-RUN NP_VERSION="0.24.0" && \
-    NP_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
-    curl -sSL "https://github.com/praetorian-inc/noseyparker/releases/download/v${NP_VERSION}/noseyparker-v${NP_VERSION}-${NP_ARCH}-unknown-linux-musl.tar.gz" \
-    -o /tmp/noseyparker.tar.gz && \
-    tar -xzf /tmp/noseyparker.tar.gz -C /tmp && \
-    mv /tmp/bin/noseyparker /usr/local/bin/noseyparker && \
-    chmod +x /usr/local/bin/noseyparker
 
 # Download OWASP ZAP (DAST)
 RUN ZAP_VERSION="2.16.1" && \
@@ -140,13 +113,6 @@ RUN BEARER_VERSION="1.50.0" && \
     tar -xzf /tmp/bearer.tar.gz -C /usr/local/bin bearer && \
     chmod +x /usr/local/bin/bearer
 
-# Download Lynis (System Hardening)
-RUN LYNIS_VERSION="3.1.3" && \
-    curl -sSL "https://github.com/CISOfy/lynis/archive/refs/tags/${LYNIS_VERSION}.tar.gz" \
-    -o /tmp/lynis.tar.gz && \
-    tar -xzf /tmp/lynis.tar.gz -C /opt && \
-    mv /opt/lynis-${LYNIS_VERSION} /opt/lynis
-
 # Download OWASP Dependency-Check (SCA + License)
 RUN DC_VERSION="11.1.1" && \
     wget -q "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
@@ -162,38 +128,25 @@ RUN HORUSEC_VERSION="2.9.0" && \
     -o /usr/local/bin/horusec && \
     chmod +x /usr/local/bin/horusec
 
-# Build AFL++ (Fuzzing)
-RUN AFL_VERSION="4.34c" && \
-    curl -sSL "https://github.com/AFLplusplus/AFLplusplus/archive/refs/tags/v${AFL_VERSION}.tar.gz" \
-    -o /tmp/aflplusplus.tar.gz && \
-    tar -xzf /tmp/aflplusplus.tar.gz -C /tmp && \
-    cd /tmp/AFLplusplus-${AFL_VERSION} && \
-    make -j$(nproc) && \
-    make install && \
-    cd / && \
-    rm -rf /tmp/aflplusplus.tar.gz /tmp/AFLplusplus-${AFL_VERSION}
-
 #
-# Stage 2: Runtime - Complete runtime environment with ALL tools
+# Stage 2: Runtime - Production-ready runtime with 21 tools
 #
 FROM ubuntu:22.04 AS runtime
 
-LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 28 pre-installed scanners + plugin system + schedule management (v1.0.0)"
+LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
+LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 21 scanners optimized for CI/CD pipelines (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
 LABEL org.opencontainers.image.licenses="MIT"
 
-# Prevent interactive prompts during apt installation
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PATH="/root/.local/bin:${PATH}" \
     DOCKER_CONTAINER=1
 
-# Install ONLY runtime dependencies (no curl, wget, tar, build-essential)
-# Combined in single RUN to reduce layers, with aggressive cache cleanup
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -214,12 +167,9 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/share/man \
     /usr/share/locale
 
-# Upgrade pip, setuptools, wheel and install Python tools in single layer
-# Use --no-cache-dir to prevent pip cache bloat
-# Clean __pycache__ and .pyc files immediately after install (Phase 1: 40 MB savings)
+# Install Python tools (Phase 1: 40 MB bytecode cleanup)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    bandit==1.8.6 \
     semgrep==1.141.0 \
     checkov==3.2.488 \
     ruff==0.14.2 \
@@ -230,19 +180,16 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Install Node.js tools (cdxgen)
+# Install Node.js tools
 RUN npm install -g @cyclonedx/cdxgen@10.15.7 && \
     npm cache clean --force
 
-# Copy compiled binaries from builder stage
+# Copy binaries from builder stage
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
 COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
-COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
-COPY --from=builder /usr/local/bin/falcoctl /usr/local/bin/falcoctl
-COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
 COPY --from=builder /usr/local/bin/prowler /usr/local/bin/prowler
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
@@ -251,15 +198,9 @@ COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /opt/zaproxy /opt/zaproxy
-COPY --from=builder /opt/lynis /opt/lynis
 COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
 
-# Copy AFL++ binaries (compiled in builder stage)
-COPY --from=builder /usr/local/bin/afl-* /usr/local/bin/
-COPY --from=builder /usr/local/lib/afl /usr/local/lib/afl
-COPY --from=builder /usr/local/share/afl /usr/local/share/afl
-
-# Binary stripping (Phase 1 optimization: 15 MB savings)
+# Binary stripping (Phase 1: 15 MB savings)
 RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/syft \
     /usr/local/bin/trivy \
@@ -272,85 +213,53 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/horusec \
     2>/dev/null || true
 
-# Create symlinks for easier invocation
+# Create symlinks
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap && \
-    ln -s /opt/lynis/lynis /usr/local/bin/lynis && \
-    chmod +x /usr/local/bin/lynis && \
     ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
     chmod +x /usr/local/bin/dependency-check
 
-# Mark cache directories as volumes for persistence
 VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
 
-# Create working directory
 WORKDIR /scan
 
-# Copy JMo Security Suite source code
 COPY . /opt/jmo-security/
-
-# Copy default config to WORKDIR for profile loading
 RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
-# Install JMo Security Suite with optional reporting dependencies
-# Clean up pip cache and bytecode immediately after install (Phase 1: 40 MB savings)
+# Install JMo with reporting dependencies
 RUN cd /opt/jmo-security && \
     python3 -m pip install --no-cache-dir -e ".[reporting]" && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify ALL 28 tools are installed and accessible
-RUN echo "=== Verifying ALL 28 tools ===" && \
-    python3 --version && \
+# Verify 21 tools
+RUN echo "=== Verifying 21 balanced tools ===" && \
     jmo --help > /dev/null && \
-    jmotools --help > /dev/null && \
     trufflehog --version && \
-    noseyparker --version && \
     semgrep --version && \
-    bandit --version && \
     syft version && \
     trivy --version && \
     checkov --version && \
     hadolint --version && \
     zap -version && \
     nuclei -version && \
-    falcoctl version && \
-    (afl-fuzz -h > /dev/null 2>&1 || true) && \
-    shellcheck --version && \
-    shfmt --version && \
     prowler --version && \
     kubescape version && \
     gosec --version && \
     grype version && \
     osv-scanner --version && \
     bearer version && \
-    lynis --version && \
     dependency-check --version && \
     horusec version && \
     scancode --version && \
     cdxgen --version && \
-    echo "=== All 28 tools verified ==="
+    shellcheck --version && \
+    echo "=== All 21 balanced tools verified ==="
 
-# Set default entrypoint to jmo CLI
 ENTRYPOINT ["jmo"]
-
-# Default command: show help
 CMD ["--help"]
 
-# Health check: verify jmo command works
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage examples (documented in metadata):
-# Basic scan (deep profile, all 28 tools):
-# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-full scan --repo /scan --results /scan/results --profile deep
-#
-# CI mode with caching (30s faster on subsequent runs):
-# docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy -v grype-cache:/root/.cache/grype \
-#   ghcr.io/jimmy058910/jmo-security:1.0.0-full ci --repo /scan --fail-on HIGH --profile
-#
-# v1.0.0 Optimizations:
-# - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
-# - Phase 1 optimizations: Nuclei template filtering (65 MB), Python bytecode cleanup (40 MB), binary stripping (15 MB), Java cleanup (30 MB), Git metadata exclusion (5 MB)
-# - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
-# - Tool count: 12 → 28 tools (26 Docker-ready, 2 manual install)
+# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-balanced scan --repo /scan --profile balanced

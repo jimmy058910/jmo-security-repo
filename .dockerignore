@@ -1,126 +1,80 @@
-# JMo Security Suite - Docker Build Ignore
-# Exclude unnecessary files from Docker context to speed up builds
+# JMo Security Docker Build Exclusions (Phase 1 Optimization: 5 MB savings)
+# Prevents copying unnecessary files to Docker build context
 
-# Python bytecode and caches
+# Version control
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Development and testing
+dev-only/
+tests/
+test-data/
+*.test.js
+*.spec.py
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Virtual environments
-.venv/
-.venv-*/
-venv/
-ENV/
-env/
-.post-release-venv/
-
-# Testing and coverage
+*.pyc
+*.pyo
+*.pyd
 .pytest_cache/
 .coverage
-.coverage.*
-coverage.xml
-htmlcov/
 .tox/
-.hypothesis/
-*.cover
-.cache
-nosetests.xml
+htmlcov/
 
-# Type checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
-.pytype/
-
-# Linting and formatting
-.ruff_cache/
+# Documentation (not needed in runtime image)
+*.md
+!README.md
+docs/screenshots/
+docs/examples/*.png
+docs/examples/*.jpg
 
 # IDE and editor files
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
 .DS_Store
 
-# Git
-.git/
-.gitignore
-.gitattributes
+# CI/CD (not needed in image)
+.github/workflows/
+.pre-commit-config.yaml
+.pre-commit-hooks.yaml
+.yamllint
+.ruff.toml
+.bandit
 
-# GitHub
-.github/
-
-# CI/CD artifacts
+# Build artifacts
+*.egg-info/
 dist/
 build/
-*.egg-info/
-.eggs/
-
-# Documentation (not needed in runtime image)
-docs/
-*.md
-!README.md
-LICENSE
-
-# Test files
-tests/
-samples/
-
-# Development tools
-.pre-commit-config.yaml
-.editorconfig
-.yamllint.yaml
-.markdownlint.json
-.markdownlintignore
-bandit.yaml
-codecov.yml
-.coveragerc
-.guardrails-allowlist
-
-# Archives and temporary files
-archive/
-ai-search/
+*.whl
 *.tar.gz
-*.zip
-*.log
-*.tmp
+node_modules/
+package-lock.json
 
-# Results directories (don't include in image)
+# Results and logs (not needed in base image)
 results/
-output/
-scans/
+*.log
+*.out
+*.err
 
-# Local configuration overrides
-jmo.local.yml
-jmo.suppress.local.yml
-.env
-.env.local
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
 
-# Development dependencies file
-requirements-dev.in
-requirements-dev.txt
+# OS files
+Thumbs.db
+.DS_Store
 
-# Business documents
-BUSINESS_MODEL.md
-ROADMAP.md
-CHANGELOG.md
-CONTRIBUTING.md
-QUICKSTART.md
-TEST.md
-SAMPLE_OUTPUTS.md
-
-# Docker files (don't need them inside the image)
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-
-# Makefiles (development only)
-Makefile
-
-# Claude AI context
-.claude/
-CLAUDE.md
+# Keep critical files (override exclusions)
+!.dockerignore
+!Dockerfile*
+!pyproject.toml
+!jmo.yml
+!versions.yaml
