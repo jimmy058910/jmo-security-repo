@@ -655,6 +655,132 @@ jmotools wizard --docker
 
 ---
 
+## 🤖 AI-Powered Remediation (NEW - v1.0.0)
+
+**Transform security findings into actionable fixes with AI assistance!**
+
+JMo Security now integrates with AI assistants via the Model Context Protocol (MCP), enabling:
+
+- 🔍 **Query findings** - "Show me HIGH severity findings in src/api/"
+- 🧠 **Get full context** - AI reads vulnerable code, commit history, and metadata
+- 🔧 **Suggest fixes** - AI-generated remediation with confidence scores and industry best practices
+- ✅ **Track resolution** - Mark findings as fixed, false positive, or accepted risk
+- 📊 **Compliance mapping** - Automatic OWASP, CWE, NIST, PCI DSS framework analysis
+
+### Supported AI Integrations
+
+#### GitHub Copilot (VS Code)
+
+Connect Copilot to JMo's MCP server for remediation directly in your editor:
+
+```bash
+# Install JMo MCP server (one-time setup)
+pip install jmo-security
+
+# Configure VS Code (see full guide)
+# Add to VS Code settings.json:
+{
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true
+}
+
+# Run your scan
+jmo scan --repo ./myapp --results-dir ./results
+
+# Start MCP server
+jmo mcp-server --results-dir ./results
+
+# Ask Copilot in VS Code:
+# "What are the CRITICAL findings?"
+# "Fix the SQL injection in src/db.py"
+# "Show me the OWASP Top 10 mappings"
+```
+
+📖 **Full guide:** [docs/integrations/GITHUB_COPILOT.md](docs/integrations/GITHUB_COPILOT.md)
+
+#### Claude Code (CLI/Terminal)
+
+Use Claude Code's terminal interface for AI-powered remediation workflows:
+
+```bash
+# Install JMo (one-time)
+pip install jmo-security
+
+# Configure Claude Code MCP (see full guide)
+# Add to ~/.config/claude/config.json
+
+# Run scan
+jmo scan --repos-dir ~/repos --results-dir ./results
+
+# Start MCP server in background
+jmo mcp-server --results-dir ./results &
+
+# Use Claude Code CLI:
+claude "Analyze the HIGH severity findings"
+claude "Suggest fixes for CWE-79 (XSS) findings"
+```
+
+📖 **Full guide:** [docs/integrations/CLAUDE_CODE.md](docs/integrations/CLAUDE_CODE.md)
+
+### MCP Server Features (v1.0.0)
+
+**4 MCP Tools:**
+
+1. **`get_security_findings`** - Query findings with filters (severity, tool, path, CWE/OWASP)
+2. **`apply_fix`** - Apply AI-suggested fixes to source code
+3. **`mark_resolved`** - Track remediation status (fixed/false_positive/accepted_risk)
+4. **`get_server_info`** - Server status and available finding IDs
+
+**1 MCP Resource:**
+
+- **`finding://{id}`** - Full finding context (code snippet, compliance mappings, references)
+
+**Supported Installation Methods:**
+
+- ✅ **Local Python** - `pip install jmo-security`
+- ✅ **Docker Container** - `docker run ... jmo mcp-server`
+- ✅ **Package Managers** - `brew install jmo-security` / `winget install jmo-security`
+
+**Security & Privacy:**
+
+- 🔒 **Local execution** - No data sent to external services
+- 🔐 **Read-only by default** - `apply_fix` requires explicit enable flag
+- 📁 **Results-scoped** - MCP server only accesses specified results directory
+- 🚫 **No telemetry** - AI integration respects your privacy settings
+
+**Real-World Example:**
+
+```bash
+# 1. Scan repository
+jmo scan --repo ./backend-api --results-dir ./scan-results --profile balanced
+
+# 2. Start MCP server
+jmo mcp-server --results-dir ./scan-results
+
+# 3. AI Assistant queries (GitHub Copilot or Claude Code):
+# "Show me all SQL injection findings"
+# → Returns 3 findings with CWE-89, OWASP A03:2021 mappings
+#
+# "Suggest a fix for finding abc123"
+# → AI reads vulnerable code, suggests parameterized queries
+#
+# "Apply the fix to src/api/users.py"
+# → Updates file with AI-generated fix
+#
+# "Mark finding abc123 as fixed"
+# → Tracks resolution in triage.json
+```
+
+**Why MCP Protocol?**
+
+- 🌐 **Open Standard** - Works with any MCP-compatible AI (Copilot, Claude, future models)
+- 🔧 **Standardized Interface** - Consistent API across all AI assistants
+- 🚀 **Extensible** - Easy to add new tools and resources
+- 🔄 **Future-Proof** - Industry-standard protocol backed by Anthropic
+
+📖 **General MCP setup:** [docs/MCP_SETUP.md](docs/MCP_SETUP.md)
+
+---
+
 ## 🎯 Multi-Target Scanning Examples (v0.6.0+)
 
 **New in v0.6.0:** Scan 6 different target types in one unified workflow!

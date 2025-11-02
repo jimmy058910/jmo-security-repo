@@ -1214,9 +1214,13 @@ If a failure isn’t listed here, click into the failed step logs in GitHub Acti
 
 1. **Review all CRITICAL findings** - These require immediate action
 2. **Rotate any verified secrets** - Use the tool comparison report to understand findings
-3. **Implement pre-commit hooks** - Prevent future issues (see README.md)
-4. **Schedule regular audits** - Weekly or monthly depending on activity
-5. **Track metrics over time** - Monitor security posture improvement
+3. **Enable AI Remediation (Optional - v1.0.0+)** - Get AI-powered fix suggestions
+   - **GitHub Copilot**: [docs/integrations/GITHUB_COPILOT.md](docs/integrations/GITHUB_COPILOT.md)
+   - **Claude Code**: [docs/integrations/CLAUDE_CODE.md](docs/integrations/CLAUDE_CODE.md)
+   - AI analyzes findings, suggests fixes, and tracks resolution
+4. **Implement pre-commit hooks** - Prevent future issues (see README.md)
+5. **Schedule regular audits** - Weekly or monthly depending on activity
+6. **Track metrics over time** - Monitor security posture improvement
 
 ## Advanced Usage
 

@@ -12,3 +12,6 @@ mypy
 types-PyYAML
 croniter
 types-croniter
+
+# MCP Server dependencies (Feature #2: AI Remediation)
+mcp[cli]>=1.0.0  # Official Anthropic MCP SDK with FastMCP framework

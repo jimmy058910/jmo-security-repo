@@ -1708,6 +1708,486 @@ CVSS: 7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)
 - **All v1.1.0 fields are optional**: Adapters gracefully degrade if fields missing
 - **Progressive enhancement**: Dashboard detects schema version and enables features accordingly
 
+## AI Integration (v1.0.0+)
+
+**AI-Powered Remediation via Model Context Protocol (MCP)**
+
+JMo Security integrates with AI assistants to accelerate vulnerability remediation. The MCP server provides AI with structured access to scan results, enabling intelligent analysis, fix suggestions, and remediation tracking.
+
+### Overview
+
+**What is MCP?**
+
+Model Context Protocol (MCP) is an open standard for connecting AI assistants to external data sources and tools. JMo's MCP server exposes security findings through a standardized API that works with GitHub Copilot, Claude Code, and any MCP-compatible AI.
+
+**Key Benefits:**
+
+- 🔍 **Query findings by severity, tool, CWE, OWASP, or path patterns**
+- 🧠 **Get full context** - AI reads vulnerable code, commit history, and compliance mappings
+- 🔧 **Suggest fixes** - AI generates remediation code based on industry best practices
+- ✅ **Track resolution** - Mark findings as fixed, false positive, or accepted risk
+- 📊 **Compliance analysis** - Automatic OWASP, CWE, NIST, PCI DSS, CIS framework mapping
+
+### Integration Options
+
+JMo Security supports two primary AI integrations:
+
+#### 1. GitHub Copilot (VS Code)
+
+**Best for:** Developers who use VS Code and GitHub Copilot for daily coding
+
+**Quick Setup:**
+
+```bash
+# 1. Install JMo Security (if not already installed)
+pip install jmo-security
+
+# 2. Configure VS Code settings.json
+{
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.mcp.servers": {
+    "jmo-security": {
+      "command": "jmo",
+      "args": ["mcp-server", "--results-dir", "./results"]
+    }
+  }
+}
+
+# 3. Run a scan
+jmo scan --repo ./myapp --results-dir ./results --profile balanced
+
+# 4. Ask Copilot in VS Code:
+# "What are the CRITICAL findings?"
+# "Fix the SQL injection in src/api/db.py"
+# "Show compliance mappings for finding abc123"
+```
+
+**Features:**
+
+- In-editor remediation suggestions
+- One-click fix application
+- Contextual code analysis
+- Real-time finding queries
+
+📖 **Complete guide:** [docs/integrations/GITHUB_COPILOT.md](integrations/GITHUB_COPILOT.md)
+
+#### 2. Claude Code (CLI/Terminal)
+
+**Best for:** Terminal-first workflows, automation scripts, CI/CD integration
+
+**Quick Setup:**
+
+```bash
+# 1. Install JMo Security
+pip install jmo-security
+
+# 2. Configure Claude Code MCP (~/.config/claude/config.json)
+{
+  "mcpServers": {
+    "jmo-security": {
+      "command": "jmo",
+      "args": ["mcp-server", "--results-dir", "./results"]
+    }
+  }
+}
+
+# 3. Run scan
+jmo scan --repos-dir ~/repos --results-dir ./results
+
+# 4. Start MCP server in background
+jmo mcp-server --results-dir ./results &
+
+# 5. Use Claude Code CLI
+claude "Analyze HIGH severity findings in src/api/"
+claude "Suggest fixes for CWE-79 (XSS) findings"
+```
+
+**Features:**
+
+- Terminal-native workflow
+- Batch remediation scripting
+- CI/CD integration
+- Offline-first operation
+
+📖 **Complete guide:** [docs/integrations/CLAUDE_CODE.md](integrations/CLAUDE_CODE.md)
+
+### MCP Server Features
+
+**4 MCP Tools:**
+
+1. **`get_security_findings`** - Query findings with filters
+   - Filters: `severity`, `tool`, `path`, `cwe`, `owasp`, `limit`, `offset`
+   - Returns: Array of CommonFinding objects with full metadata
+   - Example: `get_security_findings(severity="HIGH", path="src/api/*")`
+
+2. **`apply_fix`** - Apply AI-suggested remediation to source code
+   - Parameters: `finding_id`, `fix_content`, `dry_run`
+   - Requires: `--enable-fixes` flag (read-only by default)
+   - Validates: Syntax checking before applying changes
+
+3. **`mark_resolved`** - Track remediation status
+   - Parameters: `finding_id`, `status`, `comment`
+   - Status options: `fixed`, `false_positive`, `accepted_risk`
+   - Persists: Saves to `results/triage.json`
+
+4. **`get_server_info`** - Server status and metadata
+   - Returns: Total findings count, available finding IDs, scan timestamp
+   - Used for: AI context and health checks
+
+**1 MCP Resource:**
+
+- **`finding://{id}`** - Full finding context including:
+  - Source code snippet (20 lines of context)
+  - Compliance framework mappings (OWASP, CWE, NIST, PCI DSS, CIS, ATT&CK)
+  - Remediation guidance and references
+  - Tool-specific metadata (CVSS scores, confidence ratings, etc.)
+
+### Configuration
+
+**Environment Variables:**
+
+```bash
+# Results directory (required)
+export MCP_RESULTS_DIR="./results"
+
+# Repository root for code context (optional)
+export MCP_REPO_ROOT="$(pwd)"
+
+# Enable write operations (apply_fix tool)
+export MCP_ENABLE_FIXES="true"
+
+# Logging level
+export MCP_LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
+```
+
+**Command-Line Flags:**
+
+```bash
+# Start MCP server
+jmo mcp-server --results-dir ./results
+
+# Enable fix suggestions (DANGEROUS - allows code modification)
+jmo mcp-server --results-dir ./results --enable-fixes
+
+# Custom repository root
+jmo mcp-server --results-dir ./results --repo-root /path/to/repo
+
+# Debug logging
+jmo mcp-server --results-dir ./results --log-level DEBUG
+```
+
+### Usage Examples
+
+#### Query Findings by Severity
+
+```python
+# AI Assistant (GitHub Copilot or Claude Code):
+"Show me all CRITICAL findings"
+
+# MCP call:
+get_security_findings(severity="CRITICAL")
+
+# Returns:
+[
+  {
+    "id": "abc123...",
+    "severity": "CRITICAL",
+    "ruleId": "aws-credentials",
+    "tool": {"name": "trufflehog", "version": "3.63.0"},
+    "location": {"path": "config.yml", "startLine": 10},
+    "message": "Hardcoded AWS credentials detected",
+    "cwe": ["CWE-798"],
+    "compliance": {
+      "owaspTop10_2021": ["A02:2021"],
+      "nistCsf2_0": ["PR.AC-1"],
+      ...
+    }
+  }
+]
+```
+
+#### Get Full Context for a Finding
+
+```python
+# AI Assistant:
+"Show me the code around finding abc123"
+
+# MCP resource access:
+finding://abc123
+
+# Returns:
+{
+  "finding": {...},  # Full CommonFinding object
+  "codeContext": "5:   def authenticate(user):\n6:     # VULNERABLE CODE\n7:     password = 'hardcoded123'\n...",
+  "remediation": {
+    "summary": "Remove hardcoded credentials",
+    "suggestions": ["Use environment variables", "Implement secrets manager"],
+    "references": ["OWASP Secrets Management Cheat Sheet"]
+  }
+}
+```
+
+#### Apply AI-Suggested Fix
+
+```python
+# AI Assistant:
+"Fix the SQL injection in src/api/users.py"
+
+# Step 1: AI analyzes vulnerable code
+finding://def456  # Get context
+
+# Step 2: AI generates fix
+fix_content = """
+def get_user(user_id):
+    # Use parameterized query to prevent SQL injection
+    query = "SELECT * FROM users WHERE id = %s"
+    cursor.execute(query, (user_id,))
+    return cursor.fetchone()
+"""
+
+# Step 3: Apply fix (requires --enable-fixes)
+apply_fix(finding_id="def456", fix_content=fix_content, dry_run=False)
+
+# Step 4: Mark as fixed
+mark_resolved(finding_id="def456", status="fixed", comment="Applied parameterized query")
+```
+
+#### Compliance Framework Analysis
+
+```python
+# AI Assistant:
+"Which findings map to OWASP A02:2021 (Cryptographic Failures)?"
+
+# MCP call:
+get_security_findings(owasp="A02:2021")
+
+# Returns findings with:
+compliance.owaspTop10_2021 = ["A02:2021"]
+```
+
+### Security & Privacy
+
+**Read-Only by Default:**
+
+- MCP server starts in **read-only mode**
+- `get_security_findings`, `get_server_info`, `finding://` resource are always safe
+- `apply_fix` requires explicit `--enable-fixes` flag (dangerous)
+
+**Local Execution:**
+
+- All data stays on your machine
+- No external API calls (except AI assistant communication)
+- Works offline after initial scan
+
+**Results Directory Scoping:**
+
+- MCP server only accesses specified `--results-dir`
+- Cannot read files outside results directory (unless `--repo-root` provided)
+- Repository root (`--repo-root`) used only for code context display
+
+**Telemetry:**
+
+- MCP integration respects JMo's telemetry settings
+- If telemetry disabled (`JMO_TELEMETRY=0`), MCP server sends no analytics
+- See [docs/TELEMETRY.md](TELEMETRY.md) for privacy policy
+
+### Installation Methods
+
+**Local Python (Recommended):**
+
+```bash
+pip install jmo-security
+jmo mcp-server --results-dir ./results
+```
+
+**Docker Container:**
+
+```bash
+docker run -it --rm \
+  -v "$(pwd)/results:/results:ro" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  mcp-server --results-dir /results
+```
+
+**Package Managers:**
+
+```bash
+# macOS/Linux
+brew install jmo-security
+jmo mcp-server --results-dir ./results
+
+# Windows
+winget install jmo.jmo-security
+jmo mcp-server --results-dir ./results
+```
+
+### Troubleshooting
+
+**Error: "Results directory not found"**
+
+```bash
+# Verify results directory exists
+ls -la ./results/summaries/findings.json
+
+# If missing, run a scan first
+jmo scan --repo ./myapp --results-dir ./results
+```
+
+**Error: "Permission denied when applying fix"**
+
+```bash
+# Fix requires explicit enable flag
+jmo mcp-server --results-dir ./results --enable-fixes
+
+# Ensure you have write permissions to source files
+chmod u+w src/api/users.py
+```
+
+**Error: "MCP server not responding"**
+
+```bash
+# Check server is running
+ps aux | grep "jmo mcp-server"
+
+# Check logs with debug mode
+jmo mcp-server --results-dir ./results --log-level DEBUG
+
+# Verify AI assistant configuration
+# GitHub Copilot: Check VS Code settings.json
+# Claude Code: Check ~/.config/claude/config.json
+```
+
+**No findings returned:**
+
+```bash
+# Verify findings.json exists and is valid
+cat results/summaries/findings.json | jq
+
+# Check MCP server can read results
+jmo mcp-server --results-dir ./results --log-level DEBUG
+# Look for "Loaded X findings from results/summaries/findings.json"
+```
+
+### Advanced Configuration
+
+**Custom Repository Root:**
+
+By default, MCP server uses current directory as repository root. Specify custom path for multi-repo workflows:
+
+```bash
+jmo mcp-server \
+  --results-dir ./results \
+  --repo-root /path/to/actual/repo
+```
+
+**Multiple Results Directories:**
+
+Scan multiple projects and aggregate findings:
+
+```bash
+# Scan multiple projects
+jmo scan --repo ./backend --results-dir ./results-backend
+jmo scan --repo ./frontend --results-dir ./results-frontend
+
+# Start MCP server pointing to specific project
+jmo mcp-server --results-dir ./results-backend
+# Or switch to frontend
+jmo mcp-server --results-dir ./results-frontend
+```
+
+**CI/CD Integration:**
+
+Run MCP server in CI to enable AI-assisted triage:
+
+```yaml
+# .github/workflows/security-scan.yml
+- name: Run security scan
+  run: jmo scan --repo . --results-dir ./results --profile balanced
+
+- name: Start MCP server for AI triage
+  run: jmo mcp-server --results-dir ./results &
+
+- name: AI-assisted remediation (optional)
+  run: |
+    # Use AI to suggest fixes for CRITICAL findings
+    claude "Review CRITICAL findings and suggest fixes"
+```
+
+### Real-World Workflow Example
+
+**Scenario:** Triage 50 security findings from a recent scan
+
+**Traditional Workflow (Manual):**
+
+1. Open `dashboard.html` (2 minutes)
+2. Filter by severity (1 minute)
+3. Click each finding to read details (30 seconds × 15 findings = 7.5 minutes)
+4. Search for vulnerability documentation (3 minutes per finding × 15 = 45 minutes)
+5. Write fix code (10 minutes per finding × 15 = 150 minutes)
+6. Test fixes (5 minutes per finding × 15 = 75 minutes)
+
+**Total: ~4.5 hours**
+
+**AI-Assisted Workflow (MCP):**
+
+1. Open AI assistant (30 seconds)
+2. Ask: "Show me CRITICAL findings" (10 seconds)
+3. For each finding, ask: "Suggest a fix for finding abc123" (30 seconds × 15 = 7.5 minutes)
+4. Review AI-generated fixes (2 minutes per finding × 15 = 30 minutes)
+5. Apply fixes with `apply_fix` tool (30 seconds × 15 = 7.5 minutes)
+6. Test fixes (5 minutes per finding × 15 = 75 minutes)
+
+**Total: ~2 hours (56% time savings)**
+
+**Additional Benefits:**
+
+- AI explains CWE/OWASP context automatically
+- Suggests alternative remediation approaches
+- Highlights compliance requirements (PCI DSS, NIST CSF)
+- Tracks which findings are fixed vs. false positives
+
+### Integration Best Practices
+
+**1. Always Run Scans First:**
+
+MCP server requires existing scan results. Run `jmo scan` before starting MCP server.
+
+**2. Use Read-Only Mode for Exploration:**
+
+Default read-only mode is safe for exploring findings. Only enable `--enable-fixes` when actively applying remediation.
+
+**3. Verify AI-Generated Fixes:**
+
+Always review AI-suggested code before applying. Use `dry_run=true` to preview changes.
+
+**4. Track Remediation Status:**
+
+Use `mark_resolved` to track which findings are fixed, false positives, or accepted risks. This persists to `results/triage.json` for audit trails.
+
+**5. Scope to Specific Results:**
+
+Use `--results-dir` to point MCP server at specific scan results. Avoid mixing results from different projects.
+
+**6. Monitor MCP Server Logs:**
+
+Use `--log-level DEBUG` to troubleshoot integration issues. Logs show which tools are called and what data is returned.
+
+### Future Enhancements (Roadmap)
+
+- 🚧 **Multi-results aggregation** - Query findings across multiple scans
+- 🚧 **Batch fix application** - Apply fixes to multiple findings at once
+- 🚧 **Fix validation** - Automatic testing of AI-generated fixes
+- 🚧 **Remediation templates** - Pre-built fix patterns for common vulnerabilities
+- 🚧 **Historical tracking** - Trend analysis of remediation velocity
+
+### Additional Resources
+
+- **General MCP Setup:** [docs/MCP_SETUP.md](MCP_SETUP.md)
+- **GitHub Copilot Integration:** [docs/integrations/GITHUB_COPILOT.md](integrations/GITHUB_COPILOT.md)
+- **Claude Code Integration:** [docs/integrations/CLAUDE_CODE.md](integrations/CLAUDE_CODE.md)
+- **MCP Protocol Spec:** <https://modelcontextprotocol.io/>
+- **CommonFinding Schema:** [docs/schemas/common_finding.v1.json](schemas/common_finding.v1.json)
+
 ## OS notes (installing tools)
 
 Run `make verify-env` to detect your OS/WSL and see smart install hints. Typical options:
