@@ -3,6 +3,7 @@
 .venv-pypi/
 .tmp-venv-pypi/
 .post-release-venv/
+venv*/
 
 # Coverage artifacts
 .coverage*
