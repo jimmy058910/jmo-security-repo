@@ -27,6 +27,7 @@ class TestRateLimitingBasics:
         """Test that requests are allowed when rate limiting disabled."""
         # Mock environment: rate limiting disabled
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+
             @require_auth_and_rate_limit
             def test_func():
                 return "success"
@@ -43,6 +44,7 @@ class TestRateLimitingBasics:
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
             with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 5):
                 with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.0):
+
                     @require_auth_and_rate_limit
                     def test_func():
                         return "success"
@@ -63,6 +65,7 @@ class TestRateLimitingBasics:
         # Mock environment: rate limiting enabled
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
             with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 100):
+
                 @require_auth_and_rate_limit
                 def test_func():
                     return "success"
@@ -79,6 +82,7 @@ class TestRateLimitingBasics:
     def test_decorator_preserves_function_metadata(self):
         """Test that decorator preserves function name and docstring."""
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+
             @require_auth_and_rate_limit
             def test_func():
                 """Test function docstring."""
@@ -91,6 +95,7 @@ class TestRateLimitingBasics:
     def test_decorator_with_arguments(self):
         """Test that decorator works with functions that have arguments."""
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+
             @require_auth_and_rate_limit
             def test_func(arg1, arg2, kwarg1=None):
                 """Test function with args."""
@@ -107,6 +112,7 @@ class TestRateLimitingBasics:
         with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
             with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 10):
                 with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.5):
+
                     @require_auth_and_rate_limit
                     def test_func():
                         return "success"
@@ -138,6 +144,7 @@ class TestAuthenticationInfrastructure:
         with mock.patch.dict(os.environ, {"JMO_MCP_API_KEYS": test_keys}):
             # Re-import to trigger initialization
             import importlib
+
             importlib.reload(server_module)
 
             # Verify hashes are computed (infrastructure ready)

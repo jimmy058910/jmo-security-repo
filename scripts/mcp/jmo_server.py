@@ -92,7 +92,11 @@ _findings_loader: FindingsLoader | None = None
 _context_extractor: SourceContextExtractor | None = None
 
 # Initialize rate limiter (if enabled)
-rate_limiter = RateLimiter(capacity=RATE_LIMIT_CAPACITY, refill_rate=RATE_LIMIT_REFILL_RATE) if RATE_LIMIT_ENABLED else None
+rate_limiter = (
+    RateLimiter(capacity=RATE_LIMIT_CAPACITY, refill_rate=RATE_LIMIT_REFILL_RATE)
+    if RATE_LIMIT_ENABLED
+    else None
+)
 
 
 def require_auth_and_rate_limit(func):
@@ -116,6 +120,7 @@ def require_auth_and_rate_limit(func):
     Raises:
         ValueError: If rate limit exceeded
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         client_id = "anonymous"
@@ -126,7 +131,9 @@ def require_auth_and_rate_limit(func):
         # Rate limiting check
         if rate_limiter:
             if not rate_limiter.check_rate_limit(client_id):
-                logger.warning(f"{func.__name__}: Rate limit exceeded (client: {client_id})")
+                logger.warning(
+                    f"{func.__name__}: Rate limit exceeded (client: {client_id})"
+                )
                 raise ValueError(
                     f"Rate limit exceeded. Try again later. "
                     f"(Limit: {RATE_LIMIT_CAPACITY} burst, {RATE_LIMIT_REFILL_RATE}/s refill)"
