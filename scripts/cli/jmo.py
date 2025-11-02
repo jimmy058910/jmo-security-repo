@@ -5,7 +5,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from scripts.core.exceptions import (
     ConfigurationException,
@@ -36,14 +36,14 @@ logger = logging.getLogger(__name__)
 __version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
 
 
-def _merge_dict(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     out = dict(a) if a else {}
     if b:
         out.update(b)
     return out
 
 
-def _effective_scan_settings(args) -> Dict[str, Any]:
+def _effective_scan_settings(args) -> dict[str, Any]:
     """Compute effective scan settings from CLI, config, and optional profile.
 
     Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool
@@ -882,7 +882,7 @@ def _show_kofi_reminder(args) -> None:
     config_path.parent.mkdir(exist_ok=True)
 
     # Load existing config
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
     if config_path.exists():
         try:
             import yaml
@@ -928,7 +928,7 @@ def _show_kofi_reminder(args) -> None:
         )
 
 
-def _get_max_workers(args, eff: Dict, cfg) -> Optional[int]:
+def _get_max_workers(args, eff: dict, cfg) -> int | None:
     """
     Determine max_workers from CLI args, effective settings, env var, or config.
 

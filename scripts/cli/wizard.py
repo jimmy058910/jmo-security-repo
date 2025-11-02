@@ -22,7 +22,7 @@ import logging
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
 
 from scripts.core.exceptions import ToolExecutionException
 from scripts.cli.cpu_utils import get_cpu_count
@@ -167,7 +167,7 @@ def _prompt_text(question: str, default: str = "") -> str:
 
 
 def _prompt_choice(
-    question: str, choices: List[Tuple[str, str]], default: str = ""
+    question: str, choices: list[tuple[str, str]], default: str = ""
 ) -> str:
     """
     Prompt user for a choice from a list (legacy wrapper).
@@ -215,7 +215,7 @@ def _prompt_choice(
 _prompt_yes_no = _prompter.prompt_yes_no  # Direct delegation to PromptHelper
 
 
-def _select_mode(title: str, modes: List[Tuple[str, str]], default: str = "") -> str:
+def _select_mode(title: str, modes: list[tuple[str, str]], default: str = "") -> str:
     """
     Helper to select from modes with consistent formatting.
 
@@ -286,7 +286,7 @@ class TargetConfig:
         self.k8s_namespace: str = ""
         self.k8s_all_namespaces: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "type": self.type,
@@ -319,13 +319,13 @@ class WizardConfig:
         self.use_docker: bool = False
         self.target: TargetConfig = TargetConfig()
         self.results_dir: str = "results"
-        self.threads: Optional[int] = None
-        self.timeout: Optional[int] = None
+        self.threads: int | None = None
+        self.timeout: int | None = None
         self.fail_on: str = ""
         self.allow_missing_tools: bool = True
         self.human_logs: bool = True
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "profile": self.profile,
@@ -347,7 +347,7 @@ def select_profile() -> str:
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
         name = cast(str, info["name"])
-        tools = cast(List[str], info["tools"])
+        tools = cast(list[str], info["tools"])
         print(f"\n  {_colorize(name, 'bold')} ({key})")
         print(f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}")
         print(f"    Time: {info['est_time']}")
@@ -465,7 +465,7 @@ def configure_k8s_target() -> TargetConfig:
     return config  # type: ignore[no-any-return]
 
 
-def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]:
+def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
     """
     Step 5: Configure advanced options.
 
@@ -478,7 +478,7 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
     cpu_count = get_cpu_count()
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_tools = cast(List[str], profile_info["tools"])
+    profile_tools = cast(list[str], profile_info["tools"])
 
     print("\nProfile defaults:")
     print(f"  Threads: {profile_threads}")
@@ -575,7 +575,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
     profile_est_time = cast(str, profile_info["est_time"])
-    profile_tools = cast(List[str], profile_info["tools"])
+    profile_tools = cast(list[str], profile_info["tools"])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
     print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
@@ -705,9 +705,9 @@ def execute_scan(config: WizardConfig) -> int:
 def run_wizard(
     yes: bool = False,
     force_docker: bool = False,
-    emit_make: Optional[str] = None,
-    emit_script: Optional[str] = None,
-    emit_gha: Optional[str] = None,
+    emit_make: str | None = None,
+    emit_script: str | None = None,
+    emit_gha: str | None = None,
 ) -> int:
     """
     Run the interactive wizard.

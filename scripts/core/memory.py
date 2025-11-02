@@ -46,7 +46,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ VALID_NAMESPACES = {
 }
 
 # Cache loaded schemas
-_SCHEMAS_CACHE: Optional[Dict[str, Any]] = None
+_SCHEMAS_CACHE: dict[str, Any] | None = None
 
 
 class MemoryError(Exception):
@@ -137,7 +137,7 @@ def _validate_key(key: str) -> None:
         raise InvalidKeyError(f"Invalid memory key '{key}': contains unsafe characters")
 
 
-def _load_schemas() -> Dict[str, Any]:
+def _load_schemas() -> dict[str, Any]:
     """
     Load and cache JSON schemas from .jmo/memory/schemas.json.
 
@@ -169,7 +169,7 @@ def _load_schemas() -> Dict[str, Any]:
         return _SCHEMAS_CACHE
 
 
-def _validate_data(namespace: str, data: Dict[str, Any]) -> None:
+def _validate_data(namespace: str, data: dict[str, Any]) -> None:
     """
     Validate memory data against JSON schema.
 
@@ -205,8 +205,8 @@ def _validate_data(namespace: str, data: Dict[str, Any]) -> None:
 
 
 def query_memory(
-    namespace: str, key: str, default: Optional[Dict[str, Any]] = None
-) -> Optional[Dict[str, Any]]:
+    namespace: str, key: str, default: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
     """
     Query memory for cached pattern.
 
@@ -248,7 +248,7 @@ def query_memory(
         logger.warning(f"Error parsing memory {namespace}/{key}: {e}")
         return default
 
-    except (FileNotFoundError, IOError, OSError) as e:
+    except (FileNotFoundError, OSError) as e:
         logger.warning(f"Error loading memory {namespace}/{key}: {e}")
         return default
 
@@ -256,7 +256,7 @@ def query_memory(
 def store_memory(
     namespace: str,
     key: str,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     overwrite: bool = True,
     validate: bool = False,
 ) -> bool:
@@ -320,7 +320,7 @@ def store_memory(
         logger.debug(f"Memory stored: {namespace}/{key}")
         return True
 
-    except (IOError, OSError, PermissionError) as e:
+    except (OSError, PermissionError) as e:
         logger.error(f"Error storing memory {namespace}/{key}: {e}")
         return False
 
@@ -328,7 +328,7 @@ def store_memory(
 def update_memory(
     namespace: str,
     key: str,
-    updates: Dict[str, Any],
+    updates: dict[str, Any],
     create_if_missing: bool = False,
     validate: bool = False,
 ) -> bool:
@@ -382,7 +382,7 @@ def update_memory(
     return store_memory(namespace, key, merged, overwrite=True, validate=validate)
 
 
-def list_memory(namespace: str, pattern: Optional[str] = None) -> List[str]:
+def list_memory(namespace: str, pattern: str | None = None) -> list[str]:
     """
     List all memory keys in a namespace.
 
@@ -453,7 +453,7 @@ def delete_memory(namespace: str, key: str) -> bool:
         logger.debug(f"Memory deleted: {namespace}/{key}")
         return True
 
-    except (IOError, OSError, PermissionError) as e:
+    except (OSError, PermissionError) as e:
         logger.error(f"Error deleting memory {namespace}/{key}: {e}")
         return False
 
@@ -501,14 +501,14 @@ def clear_namespace(namespace: str, confirm: bool = False) -> int:
             try:
                 memory_file.unlink()
                 count += 1
-            except (IOError, OSError, PermissionError) as e:
+            except (OSError, PermissionError) as e:
                 logger.error(f"Error deleting {memory_file.name}: {e}")
 
     logger.info(f"Cleared {count} memory entries from {namespace}/")
     return count
 
 
-def memory_stats() -> Dict[str, Any]:
+def memory_stats() -> dict[str, Any]:
     """
     Get memory system statistics.
 

@@ -30,8 +30,9 @@ def temp_cache_dir(tmp_path):
 @pytest.fixture
 def priority_calculator(temp_cache_dir):
     """Create PriorityCalculator with mocked clients."""
-    with patch("scripts.core.priority_calculator.EPSSClient"), patch(
-        "scripts.core.priority_calculator.KEVClient"
+    with (
+        patch("scripts.core.priority_calculator.EPSSClient"),
+        patch("scripts.core.priority_calculator.KEVClient"),
     ):
         return PriorityCalculator(cache_dir=str(temp_cache_dir))
 

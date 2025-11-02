@@ -12,7 +12,7 @@ This test suite achieves 95%+ coverage by testing:
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 # ========== Test Fixtures ==========
@@ -25,7 +25,7 @@ def create_finding(
     path: str = "test.py",
     start_line: int = 1,
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Helper to create a CommonFinding for testing."""
     finding = {
         "schemaVersion": "1.2.0",

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ except ImportError as e:  # optional dependency
     yaml = None  # type: ignore[assignment]
 
 
-def write_yaml(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_yaml(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     if yaml is None:
         raise RuntimeError("PyYAML not installed. Install with: pip install pyyaml")
     p = Path(out_path)

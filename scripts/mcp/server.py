@@ -28,7 +28,6 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 
 # NOTE: This import will fail until mcp[cli] is installed
 # To install: pip install "mcp[cli]" or uv add "mcp[cli]"
@@ -63,8 +62,8 @@ logger.info(f"Repository root: {REPO_ROOT.resolve()}")
 mcp = FastMCP("JMo Security")
 
 # Initialize utilities (lazy-loaded on first use to handle missing files gracefully)
-_findings_loader: Optional[FindingsLoader] = None
-_context_extractor: Optional[SourceContextExtractor] = None
+_findings_loader: FindingsLoader | None = None
+_context_extractor: SourceContextExtractor | None = None
 
 
 def get_findings_loader() -> FindingsLoader:
@@ -90,10 +89,10 @@ def get_context_extractor() -> SourceContextExtractor:
 
 @mcp.tool()
 def get_security_findings(
-    severity: Optional[list[str]] = None,
-    tool: Optional[str] = None,
-    rule_id: Optional[str] = None,
-    path: Optional[str] = None,
+    severity: list[str] | None = None,
+    tool: str | None = None,
+    rule_id: str | None = None,
+    path: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
@@ -276,7 +275,7 @@ def apply_fix(
 def mark_resolved(
     finding_id: str,
     resolution: str,
-    comment: Optional[str] = None,
+    comment: str | None = None,
 ) -> dict:
     """
     Mark a security finding as resolved.

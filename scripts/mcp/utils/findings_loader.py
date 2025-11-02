@@ -7,7 +7,7 @@ filters for MCP tool queries.
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class FindingsLoader:
                 f"Run a scan first: jmo scan --repo <path>"
             )
 
-    def load_findings(self) -> List[Dict[str, Any]]:
+    def load_findings(self) -> list[dict[str, Any]]:
         """
         Load all findings from findings.json.
 
@@ -46,7 +46,7 @@ class FindingsLoader:
             json.JSONDecodeError: If findings.json is invalid JSON
         """
         try:
-            with open(self.findings_file, "r", encoding="utf-8") as f:
+            with open(self.findings_file, encoding="utf-8") as f:
                 findings = json.load(f)
 
             # findings.json is a list of findings
@@ -65,14 +65,14 @@ class FindingsLoader:
 
     def filter_findings(
         self,
-        findings: List[Dict[str, Any]],
-        severity: Optional[List[str]] = None,
-        tool: Optional[str] = None,
-        rule_id: Optional[str] = None,
-        path: Optional[str] = None,
+        findings: list[dict[str, Any]],
+        severity: list[str] | None = None,
+        tool: str | None = None,
+        rule_id: str | None = None,
+        path: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Filter findings based on criteria.
 
@@ -125,7 +125,7 @@ class FindingsLoader:
         )
         return filtered
 
-    def get_finding_by_id(self, finding_id: str) -> Optional[Dict[str, Any]]:
+    def get_finding_by_id(self, finding_id: str) -> dict[str, Any] | None:
         """
         Get a single finding by fingerprint ID.
 
@@ -154,7 +154,7 @@ class FindingsLoader:
         findings = self.load_findings()
         return len(findings)
 
-    def get_severity_distribution(self) -> Dict[str, int]:
+    def get_severity_distribution(self) -> dict[str, int]:
         """
         Get distribution of findings by severity.
 

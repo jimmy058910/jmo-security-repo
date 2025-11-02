@@ -13,7 +13,6 @@ on actual threats instead of theoretical vulnerabilities.
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 
 from scripts.core.epss_integration import EPSSClient
 from scripts.core.kev_integration import KEVClient
@@ -37,11 +36,11 @@ class PriorityScore:
     finding_id: str
     priority: float  # 0-100
     severity: str  # CRITICAL, HIGH, MEDIUM, LOW, INFO
-    epss: Optional[float] = None  # 0.0-1.0
-    epss_percentile: Optional[float] = None
+    epss: float | None = None  # 0.0-1.0
+    epss_percentile: float | None = None
     is_kev: bool = False
-    kev_due_date: Optional[str] = None
-    components: Dict[str, float] = field(
+    kev_due_date: str | None = None
+    components: dict[str, float] = field(
         default_factory=dict
     )  # Breakdown of score components
 
@@ -60,7 +59,7 @@ class PriorityCalculator:
         ...     print(f"URGENT: KEV exploit! Priority: {priority.priority:.1f}/100")
     """
 
-    def __init__(self, cache_dir: Optional[str] = None):
+    def __init__(self, cache_dir: str | None = None):
         """Initialize priority calculator.
 
         Args:
@@ -73,7 +72,7 @@ class PriorityCalculator:
         self.epss_client = EPSSClient(cache_dir=cache_path)
         self.kev_client = KEVClient(cache_dir=cache_path)
 
-    def calculate_priority(self, finding: Dict) -> PriorityScore:
+    def calculate_priority(self, finding: dict) -> PriorityScore:
         """Calculate priority score for a finding.
 
         Formula:
@@ -148,8 +147,8 @@ class PriorityCalculator:
         )
 
     def calculate_priorities_bulk(
-        self, findings: List[Dict]
-    ) -> Dict[str, PriorityScore]:
+        self, findings: list[dict]
+    ) -> dict[str, PriorityScore]:
         """Calculate priorities for multiple findings (bulk).
 
         Uses bulk EPSS API to reduce API calls when processing many findings.
@@ -179,7 +178,7 @@ class PriorityCalculator:
 
         return priorities
 
-    def _extract_cves(self, finding: Dict) -> List[str]:
+    def _extract_cves(self, finding: dict) -> list[str]:
         """Extract CVE IDs from finding.
 
         Looks for CVEs in multiple locations:

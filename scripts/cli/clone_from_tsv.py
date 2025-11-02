@@ -24,7 +24,6 @@ import csv
 import subprocess  # nosec B404 - this CLI intentionally shells out to git
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
 def log(msg: str, level: str = "INFO", human: bool = True) -> None:
@@ -51,14 +50,13 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
 
 
 def run(
-    cmd: List[str], cwd: Optional[Path] = None, ok_rcs: Tuple[int, ...] = (0,)
-) -> Tuple[int, str, str]:
+    cmd: list[str], cwd: Path | None = None, ok_rcs: tuple[int, ...] = (0,)
+) -> tuple[int, str, str]:
     try:
         cp = subprocess.run(  # nosec B603 - command is list-based, constructed by this tool; shell=False
             cmd,
             cwd=str(cwd) if cwd else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -92,7 +90,7 @@ def ensure_unshallowed(repo_dir: Path) -> None:
     run(["git", "fetch", "--all", "--tags", "--prune"], cwd=repo_dir)
 
 
-def clone_or_update(url: str, dest_root: Path) -> Optional[Path]:
+def clone_or_update(url: str, dest_root: Path) -> Path | None:
     # Derive a stable folder path like <dest_root>/<owner>/<repo>
     try:
         # Strip trailing .git for folder naming
@@ -124,8 +122,8 @@ def clone_or_update(url: str, dest_root: Path) -> Optional[Path]:
     return target
 
 
-def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
-    urls: List[str] = []
+def parse_tsv(tsv_path: Path, max_count: int | None) -> list[str]:
+    urls: list[str] = []
     with tsv_path.open("r", encoding="utf-8") as f:
         # Sniff delimiter; default to tab
         sample = f.read(4096)
@@ -154,7 +152,7 @@ def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
     return urls
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Clone repos listed in a TSV and emit a jmo targets file"
     )
@@ -193,7 +191,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         log("No repository URLs found in TSV", "ERROR")
         return 2
 
-    paths: List[Path] = []
+    paths: list[Path] = []
     for url in urls:
         p = clone_or_update(url, dest)
         if p:

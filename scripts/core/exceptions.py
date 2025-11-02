@@ -19,7 +19,7 @@ Related:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JmoSecurityException(Exception):
@@ -97,7 +97,7 @@ class FingerprintCollisionException(JmoSecurityException):
     """
 
     def __init__(
-        self, fingerprint: str, finding1: Dict[str, Any], finding2: Dict[str, Any]
+        self, fingerprint: str, finding1: dict[str, Any], finding2: dict[str, Any]
     ):
         self.fingerprint = fingerprint
         self.finding1 = finding1
@@ -162,7 +162,7 @@ class ConfigurationException(JmoSecurityException):
         ...     raise ConfigurationException("timeout", "must be non-negative")
     """
 
-    def __init__(self, field: str, reason: str, path: Optional[Path] = None):
+    def __init__(self, field: str, reason: str, path: Path | None = None):
         self.field = field
         self.reason = reason
         self.path = path
@@ -198,9 +198,9 @@ class ToolExecutionException(JmoSecurityException):
     def __init__(
         self,
         tool: str,
-        command: List[str],
+        command: list[str],
         return_code: int,
-        stderr: Optional[str] = None,
+        stderr: str | None = None,
     ):
         self.tool = tool
         self.command = command

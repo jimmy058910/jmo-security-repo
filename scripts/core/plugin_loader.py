@@ -16,7 +16,6 @@ Search order:
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Dict, List, Type, Optional
 import logging
 
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata
@@ -34,11 +33,11 @@ class PluginRegistry:
 
     def __init__(self):
         """Initialize empty plugin registry."""
-        self._plugins: Dict[str, Type[AdapterPlugin]] = {}
-        self._metadata: Dict[str, PluginMetadata] = {}
+        self._plugins: dict[str, type[AdapterPlugin]] = {}
+        self._metadata: dict[str, PluginMetadata] = {}
 
     def register(
-        self, name: str, plugin_class: Type[AdapterPlugin], metadata: PluginMetadata
+        self, name: str, plugin_class: type[AdapterPlugin], metadata: PluginMetadata
     ):
         """Register a plugin.
 
@@ -67,7 +66,7 @@ class PluginRegistry:
             return True
         return False
 
-    def get(self, name: str) -> Optional[Type[AdapterPlugin]]:
+    def get(self, name: str) -> type[AdapterPlugin] | None:
         """Get plugin class by name.
 
         Args:
@@ -78,7 +77,7 @@ class PluginRegistry:
         """
         return self._plugins.get(name)
 
-    def get_metadata(self, name: str) -> Optional[PluginMetadata]:
+    def get_metadata(self, name: str) -> PluginMetadata | None:
         """Get plugin metadata by name.
 
         Args:
@@ -89,7 +88,7 @@ class PluginRegistry:
         """
         return self._metadata.get(name)
 
-    def list_plugins(self) -> List[str]:
+    def list_plugins(self) -> list[str]:
         """List all registered plugin names.
 
         Returns:
@@ -97,7 +96,7 @@ class PluginRegistry:
         """
         return list(self._plugins.keys())
 
-    def get_all_metadata(self) -> Dict[str, PluginMetadata]:
+    def get_all_metadata(self) -> dict[str, PluginMetadata]:
         """Get metadata for all plugins.
 
         Returns:
@@ -117,7 +116,7 @@ class PluginLoader:
     loading AdapterPlugin subclasses from them.
     """
 
-    def __init__(self, registry: Optional[PluginRegistry] = None):
+    def __init__(self, registry: PluginRegistry | None = None):
         """Initialize plugin loader.
 
         Args:

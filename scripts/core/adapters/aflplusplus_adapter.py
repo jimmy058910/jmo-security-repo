@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
@@ -77,7 +77,7 @@ class AFLPlusPlusAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse tool output and return normalized findings.
 
         Args:
@@ -116,7 +116,7 @@ class AFLPlusPlusAdapter(AdapterPlugin):
         return findings
 
 
-def _load_aflplusplus_internal(path: str | Path) -> List[Dict[str, Any]]:
+def _load_aflplusplus_internal(path: str | Path) -> list[dict[str, Any]]:
     """Load and normalize AFL++ JSON output.
 
     Expected JSON structure:
@@ -154,7 +154,7 @@ def _load_aflplusplus_internal(path: str | Path) -> List[Dict[str, Any]]:
     if not isinstance(data, dict):
         return []
 
-    findings: List[Dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
 
     # Extract crashes
     crashes = data.get("crashes", [])

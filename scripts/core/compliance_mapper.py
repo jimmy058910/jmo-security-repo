@@ -20,7 +20,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # =============================================================================
 # CWE Top 25 2024 Most Dangerous Software Weaknesses
@@ -923,7 +923,7 @@ CWE_TO_MITRE_ATTACK = {
 # =============================================================================
 
 
-def get_tool_category(tool_name: str, tags: List[str]) -> Optional[str]:
+def get_tool_category(tool_name: str, tags: list[str]) -> str | None:
     """Determine tool category for framework mapping.
 
     Args:
@@ -966,7 +966,7 @@ def get_tool_category(tool_name: str, tags: List[str]) -> Optional[str]:
     return None
 
 
-def map_cwe_to_owasp_top10_2021(cwes: List[str]) -> List[str]:
+def map_cwe_to_owasp_top10_2021(cwes: list[str]) -> list[str]:
     """Map CWE IDs to OWASP Top 10 2021 categories.
 
     Args:
@@ -985,7 +985,7 @@ def map_cwe_to_owasp_top10_2021(cwes: List[str]) -> List[str]:
     return sorted(list(owasp_categories))
 
 
-def map_cwe_to_top25_2024(cwes: List[str]) -> List[Dict[str, Any]]:
+def map_cwe_to_top25_2024(cwes: list[str]) -> list[dict[str, Any]]:
     """Map CWE IDs to CWE Top 25 2024 with rank and category.
 
     Args:
@@ -1014,7 +1014,7 @@ def map_cwe_to_top25_2024(cwes: List[str]) -> List[Dict[str, Any]]:
     return top25_entries
 
 
-def map_to_cis_controls_v8_1(tool_name: str, tags: List[str]) -> List[Dict[str, str]]:
+def map_to_cis_controls_v8_1(tool_name: str, tags: list[str]) -> list[dict[str, str]]:
     """Map finding to CIS Controls v8.1.
 
     Args:
@@ -1031,8 +1031,8 @@ def map_to_cis_controls_v8_1(tool_name: str, tags: List[str]) -> List[Dict[str, 
 
 
 def map_to_nist_csf_2_0(
-    tool_name: str, tags: List[str], cwes: List[str]
-) -> List[Dict[str, str]]:
+    tool_name: str, tags: list[str], cwes: list[str]
+) -> list[dict[str, str]]:
     """Map finding to NIST CSF 2.0.
 
     Args:
@@ -1069,8 +1069,8 @@ def map_to_nist_csf_2_0(
 
 
 def map_to_pci_dss_4_0(
-    tool_name: str, tags: List[str], cwes: List[str]
-) -> List[Dict[str, str]]:
+    tool_name: str, tags: list[str], cwes: list[str]
+) -> list[dict[str, str]]:
     """Map finding to PCI DSS 4.0 requirements.
 
     Args:
@@ -1107,8 +1107,8 @@ def map_to_pci_dss_4_0(
 
 
 def map_to_mitre_attack(
-    tool_name: str, tags: List[str], cwes: List[str], rule_id: str
-) -> List[Dict[str, str]]:
+    tool_name: str, tags: list[str], cwes: list[str], rule_id: str
+) -> list[dict[str, str]]:
     """Map finding to MITRE ATT&CK techniques.
 
     Args:
@@ -1152,7 +1152,7 @@ def map_to_mitre_attack(
     return unique_mappings
 
 
-def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> List[str]:
+def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> list[str]:
     """Map tool-specific rule ID to OWASP Top 10 2021.
 
     Args:
@@ -1167,7 +1167,7 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> List[str]:
     if tool not in TOOL_RULE_TO_OWASP_TOP10_2021:
         return []
 
-    tool_mappings: Dict[str, Any] = TOOL_RULE_TO_OWASP_TOP10_2021[tool]  # type: ignore[assignment]
+    tool_mappings: dict[str, Any] = TOOL_RULE_TO_OWASP_TOP10_2021[tool]  # type: ignore[assignment]
 
     # Check for exact match
     if rule_id in tool_mappings:
@@ -1200,7 +1200,7 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> List[str]:
     return []
 
 
-def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
+def enrich_finding_with_compliance(finding: dict[str, Any]) -> dict[str, Any]:
     """Enrich a CommonFinding with compliance framework mappings.
 
     This function adds the "compliance" field to a CommonFinding dict, mapping the finding
@@ -1223,7 +1223,7 @@ def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
     cwes = risk.get("cwe", []) if isinstance(risk, dict) else []
 
     # Initialize compliance dict
-    compliance: Dict[str, Any] = {}
+    compliance: dict[str, Any] = {}
 
     # OWASP Top 10 2021
     owasp_categories = set()
@@ -1276,8 +1276,8 @@ def enrich_finding_with_compliance(finding: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def enrich_findings_with_compliance(
-    findings: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    findings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Enrich a list of findings with compliance framework mappings.
 
     Args:

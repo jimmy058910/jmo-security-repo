@@ -97,9 +97,9 @@ main() {
   elif [[ $current_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     is_release_commit=true
     echo -e "${YELLOW}ℹ️  Detected release tag: $current_tag${NC}"
-  elif [[ $current_branch == "dev" ]] || [[ $current_branch =~ ^feature/ ]]; then
+  elif [[ $current_branch == "dev" ]] || [[ $current_branch =~ ^(feature|refactor)/ ]]; then
     is_release_commit=true
-    echo -e "${YELLOW}ℹ️  Detected dev/feature branch: $current_branch (skipping version check)${NC}"
+    echo -e "${YELLOW}ℹ️  Detected dev/feature/refactor branch: $current_branch (skipping version check)${NC}"
   fi
 
   # Check if PyPI matches local

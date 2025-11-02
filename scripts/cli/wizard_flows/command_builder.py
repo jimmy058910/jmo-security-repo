@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from scripts.cli.wizard import TargetConfig, WizardConfig
 
 
-def build_repo_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for repository targets."""
     args = []
 
@@ -34,7 +34,7 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> List[str]
     return args
 
 
-def build_image_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_image_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for container image targets."""
     args = []
 
@@ -53,7 +53,7 @@ def build_image_args(target: TargetConfig, use_docker: bool = False) -> List[str
     return args
 
 
-def build_iac_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_iac_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for IaC targets."""
     args = []
 
@@ -71,7 +71,7 @@ def build_iac_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
     return args
 
 
-def build_url_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_url_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for web URL targets."""
     args = []
 
@@ -89,7 +89,7 @@ def build_url_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
     return args
 
 
-def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for GitLab targets."""
     args = []
 
@@ -105,7 +105,7 @@ def build_gitlab_args(target: TargetConfig, use_docker: bool = False) -> List[st
     return args
 
 
-def build_k8s_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
+def build_k8s_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
     """Build command arguments for Kubernetes targets."""
     args = []
 
@@ -119,7 +119,7 @@ def build_k8s_args(target: TargetConfig, use_docker: bool = False) -> List[str]:
     return args
 
 
-def build_command_parts(config: WizardConfig) -> List[str]:
+def build_command_parts(config: WizardConfig) -> list[str]:
     """
     Build complete command parts from wizard configuration.
 
@@ -183,7 +183,7 @@ def build_command_parts(config: WizardConfig) -> List[str]:
     return cmd_parts
 
 
-def _get_target_args_with_volumes(target: TargetConfig, use_docker: bool) -> List[str]:
+def _get_target_args_with_volumes(target: TargetConfig, use_docker: bool) -> list[str]:
     """Get target-specific arguments including volume mounts for Docker."""
     if target.type == "repo":
         return build_repo_args(target, use_docker)

@@ -15,7 +15,7 @@ NOT for community plugin development.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union
+from typing import Any
 import hashlib
 
 
@@ -32,23 +32,21 @@ class Finding:
     id: str = ""  # Fingerprint for deduplication
     ruleId: str = ""
     severity: str = ""  # CRITICAL|HIGH|MEDIUM|LOW|INFO
-    tool: Dict[str, str] = field(default_factory=dict)  # {name, version}
-    location: Dict[str, Any] = field(default_factory=dict)  # {path, startLine, endLine}
+    tool: dict[str, str] = field(default_factory=dict)  # {name, version}
+    location: dict[str, Any] = field(default_factory=dict)  # {path, startLine, endLine}
     message: str = ""
-    title: Optional[str] = None
-    description: Optional[str] = None
-    remediation: Optional[Union[str, Dict[str, Any]]] = (
-        None  # v1.1.0: Can be dict with autofix
-    )
-    references: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
-    cvss: Optional[Dict[str, Any]] = None
-    risk: Optional[Dict[str, Any]] = None
-    compliance: Optional[Dict[str, Any]] = None
-    context: Optional[Dict[str, Any]] = None
-    raw: Optional[Dict[str, Any]] = None
+    title: str | None = None
+    description: str | None = None
+    remediation: str | dict[str, Any] | None = None  # v1.1.0: Can be dict with autofix
+    references: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    cvss: dict[str, Any] | None = None
+    risk: dict[str, Any] | None = None
+    compliance: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    raw: dict[str, Any] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert Finding to dictionary, excluding None values.
 
         Returns:
@@ -74,10 +72,10 @@ class PluginMetadata:
     author: str = "JMo Security"
     description: str = ""
     tool_name: str = ""  # Name of security tool this adapter wraps
-    tool_version: Optional[str] = None
+    tool_version: str | None = None
     schema_version: str = "1.2.0"  # CommonFinding schema version
     output_format: str = "json"  # json|ndjson|yaml|xml
-    exit_codes: Dict[int, str] = field(
+    exit_codes: dict[int, str] = field(
         default_factory=dict
     )  # {0: 'clean', 1: 'findings'}
 
@@ -108,7 +106,7 @@ class AdapterPlugin(ABC):
         pass
 
     @abstractmethod
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse tool output and return normalized findings.
 
         Args:

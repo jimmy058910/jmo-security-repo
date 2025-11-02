@@ -20,7 +20,7 @@ import re
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 # ============================================================================
@@ -48,7 +48,7 @@ def get_local_readme(readme_path: Path = Path("README.md")) -> str:
     return readme_path.read_text(encoding="utf-8")
 
 
-def extract_badges(content: str) -> List[str]:
+def extract_badges(content: str) -> list[str]:
     """Extract badge lines from README content."""
     lines = content.splitlines()
     badges = []
@@ -60,8 +60,8 @@ def extract_badges(content: str) -> List[str]:
 
 
 def compare_badges(
-    local_badges: List[str], remote_badges: List[str]
-) -> Tuple[List[str], List[str]]:
+    local_badges: list[str], remote_badges: list[str]
+) -> tuple[list[str], list[str]]:
     """Compare local and remote badges, return differences."""
     local_set = set(local_badges)
     remote_set = set(remote_badges)
@@ -72,7 +72,7 @@ def compare_badges(
     return sorted(missing_on_remote), sorted(extra_on_remote)
 
 
-def check_pypi_issues(local_content: str, pypi_content: str) -> List[Dict[str, str]]:
+def check_pypi_issues(local_content: str, pypi_content: str) -> list[dict[str, str]]:
     """Check for known PyPI-specific consistency issues."""
     issues = []
 
@@ -115,7 +115,7 @@ def check_pypi_issues(local_content: str, pypi_content: str) -> List[Dict[str, s
 # ============================================================================
 
 
-def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> Optional[str]:
+def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> str | None:
     """
     Fetch README from Docker Hub API.
 
@@ -147,7 +147,7 @@ def get_dockerhub_readme(repo: str = "jmogaming/jmo-security") -> Optional[str]:
 
 def check_dockerhub_local_consistency(
     local_dockerhub_readme: str,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """Check Docker Hub README for common issues."""
     issues = []
 
@@ -190,7 +190,7 @@ def check_dockerhub_local_consistency(
     return issues
 
 
-def check_dockerhub_sync_config() -> List[Dict[str, str]]:
+def check_dockerhub_sync_config() -> list[dict[str, str]]:
     """Check if Docker Hub sync is configured in GitHub Actions."""
     issues = []
 
@@ -253,7 +253,7 @@ def check_dockerhub_sync_config() -> List[Dict[str, str]]:
 # ============================================================================
 
 
-def validate_pypi(args) -> Tuple[bool, List[Dict]]:
+def validate_pypi(args) -> tuple[bool, list[dict]]:
     """Validate PyPI README consistency."""
     print("\n" + "=" * 60)
     print("📦 PyPI README Validation")
@@ -317,7 +317,7 @@ def validate_pypi(args) -> Tuple[bool, List[Dict]]:
     return False, all_issues
 
 
-def validate_dockerhub(args) -> Tuple[bool, List[Dict]]:
+def validate_dockerhub(args) -> tuple[bool, list[dict]]:
     """Validate Docker Hub README consistency and configuration."""
     if not args.check_dockerhub:
         return True, []  # Skip if not requested

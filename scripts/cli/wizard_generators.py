@@ -12,7 +12,7 @@ Functions:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     pass
@@ -202,7 +202,7 @@ set -euo pipefail
 """
 
 
-def generate_github_actions(config: Any, profiles: Dict[str, Any]) -> str:
+def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
     """
     Generate a GitHub Actions workflow for security scanning.
 
@@ -351,7 +351,7 @@ jobs:
             scan_cmd_lines.append(f"--fail-on {config.fail_on}")
         scan_cmd = " \\\n            ".join(scan_cmd_lines)
 
-        profile_tools = cast(List[str], profile_info["tools"])
+        profile_tools = cast(list[str], profile_info["tools"])
         tools_list = ", ".join(profile_tools)
 
         # Add secrets note if needed

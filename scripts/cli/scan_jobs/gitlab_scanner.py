@@ -40,7 +40,6 @@ import shutil
 import tempfile
 import yaml
 from pathlib import Path
-from typing import Dict, List, Tuple, Set
 
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image
@@ -48,7 +47,7 @@ from .image_scanner import scan_image
 logger = logging.getLogger(__name__)
 
 
-def _discover_container_images(repo_path: Path) -> Set[str]:
+def _discover_container_images(repo_path: Path) -> set[str]:
     """
     Discover container images referenced in repository files.
 
@@ -63,7 +62,7 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
     Returns:
         Set of discovered image names (e.g., 'nginx:latest', 'python:3.11-slim')
     """
-    images: Set[str] = set()
+    images: set[str] = set()
 
     # Pattern 1: Dockerfile FROM lines
     # FROM nginx:latest
@@ -93,7 +92,7 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
     #     image: nginx:latest
     for compose_file in repo_path.rglob("docker-compose*.y*ml"):
         try:
-            with open(compose_file, "r", encoding="utf-8") as f:
+            with open(compose_file, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             if isinstance(data, dict) and "services" in data:
                 services = data["services"]
@@ -120,7 +119,7 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
         repo_path.rglob("*.k8s.yml")
     ):
         try:
-            with open(k8s_file, "r", encoding="utf-8") as f:
+            with open(k8s_file, encoding="utf-8") as f:
                 # K8s manifests can contain multiple documents
                 docs = yaml.safe_load_all(f)
                 for doc in docs:
@@ -146,16 +145,16 @@ def _discover_container_images(repo_path: Path) -> Set[str]:
 
 
 def scan_gitlab_repo(
-    gitlab_info: Dict[str, str],
+    gitlab_info: dict[str, str],
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
     retries: int,
-    per_tool_config: Dict,
+    per_tool_config: dict,
     allow_missing_tools: bool,
     tool_exists_func=None,
     write_stub_func=None,
-) -> Tuple[str, Dict[str, bool]]:
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a GitLab repo by cloning it and running the full repository scanner.
 
@@ -222,8 +221,7 @@ def scan_gitlab_repo(
         # Run clone with timeout
         result = subprocess.run(
             clone_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=timeout,
             check=False,
         )

@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
@@ -74,7 +74,7 @@ class AktoAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse tool output and return normalized findings.
 
         Args:
@@ -113,7 +113,7 @@ class AktoAdapter(AdapterPlugin):
         return findings
 
 
-def _load_akto_internal(path: str | Path) -> List[Dict[str, Any]]:
+def _load_akto_internal(path: str | Path) -> list[dict[str, Any]]:
     """Internal function to parse Akto JSON output.
 
     Args:
@@ -134,7 +134,7 @@ def _load_akto_internal(path: str | Path) -> List[Dict[str, Any]]:
         logger.warning(f"Failed to parse Akto JSON: {path}")
         return []
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
 
     # Akto JSON structure: {"testingRunResults": [...]}
     if not isinstance(data, dict):

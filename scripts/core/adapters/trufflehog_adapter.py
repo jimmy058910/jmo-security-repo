@@ -15,7 +15,8 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any
+from collections.abc import Iterable
 
 from scripts.core.common_finding import normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
@@ -29,7 +30,7 @@ from scripts.core.plugin_api import (
 logger = logging.getLogger(__name__)
 
 
-def _flatten(obj: Any) -> Iterable[Dict[str, Any]]:
+def _flatten(obj: Any) -> Iterable[dict[str, Any]]:
     if obj is None:
         return
     if isinstance(obj, dict):
@@ -39,7 +40,7 @@ def _flatten(obj: Any) -> Iterable[Dict[str, Any]]:
             yield from _flatten(item)
 
 
-def _iter_trufflehog(path: Path) -> Iterable[Dict[str, Any]]:
+def _iter_trufflehog(path: Path) -> Iterable[dict[str, Any]]:
     raw = path.read_text(encoding="utf-8", errors="ignore")
     if not raw.strip():
         return
@@ -94,7 +95,7 @@ class TruffleHogAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse TruffleHog JSON/NDJSON output and return normalized findings.
 
         Args:
@@ -106,7 +107,7 @@ class TruffleHogAdapter(AdapterPlugin):
         if not output_path.exists():
             return []
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
 
         for f in _iter_trufflehog(output_path):
             detector = str(f.get("DetectorName") or f.get("Detector") or "Unknown")

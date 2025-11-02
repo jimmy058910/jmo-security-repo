@@ -10,7 +10,6 @@ import shutil
 import subprocess  # nosec B404: imported for controlled, vetted CLI invocations
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # Installation hints for supported security tools
 TOOL_INSTALL_HINTS = {
@@ -79,12 +78,12 @@ def write_stub(tool: str, out_path: Path) -> None:
 
 
 def run_cmd(
-    cmd: List[str],
+    cmd: list[str],
     timeout: int,
     retries: int = 0,
     capture_stdout: bool = False,
-    ok_rcs: Optional[Tuple[int, ...]] = None,
-) -> Tuple[int, str, str, int]:
+    ok_rcs: tuple[int, ...] | None = None,
+) -> tuple[int, str, str, int]:
     """Run a command with timeout and optional retries.
 
     Args:
@@ -102,7 +101,7 @@ def run_cmd(
     logger = logging.getLogger(__name__)
     attempts = max(0, retries) + 1
     used_attempts = 0
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     rc = 1
 
     for i in range(attempts):

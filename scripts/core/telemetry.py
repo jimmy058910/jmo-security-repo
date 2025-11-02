@@ -14,7 +14,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib import request
 from urllib.error import URLError, HTTPError
 
@@ -50,7 +50,7 @@ def get_anonymous_id() -> str:
     return anon_id
 
 
-def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
+def is_telemetry_enabled(config: dict[str, Any]) -> bool:
     """
     Check if telemetry is enabled in config or environment variable.
 
@@ -92,8 +92,8 @@ def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
 
 def send_event(
     event_type: str,
-    metadata: Dict[str, Any],
-    config: Dict[str, Any],
+    metadata: dict[str, Any],
+    config: dict[str, Any],
     version: str = "0.7.0",
 ) -> None:
     """
@@ -122,7 +122,7 @@ def send_event(
     ).start()
 
 
-def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -> None:
+def _send_event_async(event_type: str, metadata: dict[str, Any], version: str) -> None:
     """
     Send event to telemetry endpoint (background thread).
 
@@ -364,7 +364,7 @@ def show_telemetry_banner(mode: str = "cli") -> None:
     print()
 
 
-def infer_scan_frequency() -> Optional[str]:
+def infer_scan_frequency() -> str | None:
     """
     Infer scan frequency based on local scan count.
 

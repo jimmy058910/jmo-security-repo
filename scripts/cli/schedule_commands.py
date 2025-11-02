@@ -16,7 +16,6 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Union
 
 import yaml
 from croniter import croniter
@@ -298,7 +297,7 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
     backend = args.backend if args.backend else schedule.spec.backend.type
 
     # Generate workflow
-    generator: Union[GitHubActionsGenerator, GitLabCIGenerator]
+    generator: GitHubActionsGenerator | GitLabCIGenerator
     if backend == "github-actions":
         generator = GitHubActionsGenerator()
         workflow = generator.generate(schedule)
@@ -418,7 +417,7 @@ def _cmd_schedule_validate(args, manager: ScheduleManager) -> int:
 # Utility functions for colored output
 
 
-def _print_schedules_table(schedules: List[ScanSchedule]) -> None:
+def _print_schedules_table(schedules: list[ScanSchedule]) -> None:
     """Print schedules in table format."""
     if not schedules:
         _info("No schedules found")

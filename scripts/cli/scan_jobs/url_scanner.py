@@ -12,7 +12,7 @@ Integrates with ToolRunner for execution management.
 import re
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Dict, List, Tuple, Callable, Optional
+from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
@@ -21,14 +21,14 @@ from ..scan_utils import tool_exists, write_stub
 def scan_url(
     url: str,
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
     retries: int,
-    per_tool_config: Dict,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    tool_exists_func: Callable[[str], bool] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a live web URL with DAST tools (ZAP and Nuclei).
 
@@ -51,7 +51,7 @@ def scan_url(
     _tool_exists = tool_exists_func or tool_exists
     _write_stub = write_stub_func or write_stub
 
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
     # Validate URL scheme - only HTTP(S) allowed for DAST scanning
@@ -79,7 +79,7 @@ def scan_url(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -199,7 +199,7 @@ def scan_url(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     for result in results:
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)

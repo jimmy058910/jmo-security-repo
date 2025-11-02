@@ -52,7 +52,7 @@ Integrates with ToolRunner for parallel execution and resilient error handling.
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Callable, Optional
+from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
@@ -61,14 +61,14 @@ from ..scan_utils import tool_exists, write_stub
 def scan_repository(
     repo: Path,
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
     retries: int,
-    per_tool_config: Dict,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    tool_exists_func: Callable[[str], bool] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a Git repository with multiple security tools.
 
@@ -87,7 +87,7 @@ def scan_repository(
         Tuple of (repo_name, statuses_dict)
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
     # Use provided functions or defaults
@@ -107,7 +107,7 @@ def scan_repository(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -1101,7 +1101,7 @@ def scan_repository(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     noseyparker_phases = {"init": False, "scan": False, "report": False}
 
     for result in results:

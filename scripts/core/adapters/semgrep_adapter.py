@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List, Union, Dict, Any
+from typing import Any
 
 from scripts.core.common_finding import (
     extract_code_snippet,
@@ -52,7 +52,7 @@ class SemgrepAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse Semgrep JSON output and return normalized findings.
 
         Args:
@@ -77,7 +77,7 @@ class SemgrepAdapter(AdapterPlugin):
         if not isinstance(results, list):
             return []
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
         tool_version = str(
             (data.get("version") if isinstance(data, dict) else None) or "unknown"
         )
@@ -131,7 +131,7 @@ class SemgrepAdapter(AdapterPlugin):
 
             # Remediation with autofix
             # v1.1.0: Return dict for autofix, string otherwise
-            remediation: Union[str, Dict[str, Any]] = (
+            remediation: str | dict[str, Any] = (
                 "Review and remediate per rule guidance."
             )
             autofix = extra.get("fix")

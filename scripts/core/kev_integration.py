@@ -11,7 +11,6 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import requests
 
@@ -57,7 +56,7 @@ class KEVClient:
     CATALOG_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     CACHE_TTL_DAYS = 1  # Refresh daily
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Path | None = None):
         """Initialize KEV client.
 
         Args:
@@ -68,7 +67,7 @@ class KEVClient:
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.cache_path = cache_dir / "kev_catalog.json"
-        self.catalog: Dict[str, KEVEntry] = {}
+        self.catalog: dict[str, KEVEntry] = {}
         self._load_catalog()
 
     def _load_catalog(self):
@@ -76,11 +75,11 @@ class KEVClient:
         # Check cache
         if self.cache_path.exists() and self._is_cache_valid():
             try:
-                with open(self.cache_path, "r", encoding="utf-8") as f:
+                with open(self.cache_path, encoding="utf-8") as f:
                     data = json.load(f)
                     self.catalog = self._parse_catalog(data)
                     return
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 print(f"Warning: Failed to load KEV cache: {e}")
                 # Fall through to download fresh catalog
 
@@ -103,7 +102,7 @@ class KEVClient:
 
         self.catalog = self._parse_catalog(data)
 
-    def _parse_catalog(self, data: dict) -> Dict[str, KEVEntry]:
+    def _parse_catalog(self, data: dict) -> dict[str, KEVEntry]:
         """Parse KEV catalog JSON.
 
         Args:
@@ -140,7 +139,7 @@ class KEVClient:
         """
         return cve in self.catalog
 
-    def get_entry(self, cve: str) -> Optional[KEVEntry]:
+    def get_entry(self, cve: str) -> KEVEntry | None:
         """Get KEV entry for CVE.
 
         Args:
@@ -151,7 +150,7 @@ class KEVClient:
         """
         return self.catalog.get(cve)
 
-    def get_all_cves(self) -> List[str]:
+    def get_all_cves(self) -> list[str]:
         """Get all CVEs in KEV catalog.
 
         Returns:
@@ -169,7 +168,7 @@ class KEVClient:
             return {}
 
         try:
-            with open(self.cache_path, "r", encoding="utf-8") as f:
+            with open(self.cache_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return {
                     "title": data.get("title", ""),
@@ -178,7 +177,7 @@ class KEVClient:
                     "count": data.get("count", 0),
                     "total_cves": len(self.catalog),
                 }
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             return {}
 
     def refresh_catalog(self):

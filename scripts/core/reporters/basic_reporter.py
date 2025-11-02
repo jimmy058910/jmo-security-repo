@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 SEV_EMOJI = {
@@ -20,7 +20,7 @@ SEV_EMOJI = {
 }
 
 
-def write_json(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_json(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
@@ -42,7 +42,7 @@ def _truncate_path(path: str, max_len: int = 50) -> str:
     return f"{path[:keep]}...{path[-keep:]}"
 
 
-def _get_top_issue_summary(findings_for_file: List[Dict[str, Any]]) -> str:
+def _get_top_issue_summary(findings_for_file: list[dict[str, Any]]) -> str:
     """Generate a summary of top issue for a file."""
     if not findings_for_file:
         return "N/A"
@@ -59,7 +59,7 @@ def _get_top_issue_summary(findings_for_file: List[Dict[str, Any]]) -> str:
     return display_rule
 
 
-def _get_remediation_priorities(findings: List[Dict[str, Any]]) -> List[str]:
+def _get_remediation_priorities(findings: list[dict[str, Any]]) -> list[str]:
     """Generate top 3-5 actionable remediation priorities."""
     priorities = []
 
@@ -157,9 +157,9 @@ def _get_remediation_priorities(findings: List[Dict[str, Any]]) -> List[str]:
     return priorities[:5]  # Limit to top 5
 
 
-def _get_category_summary(findings: List[Dict[str, Any]]) -> Dict[str, int]:
+def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
     """Group findings by category based on tags."""
-    categories: Dict[str, int] = defaultdict(int)
+    categories: dict[str, int] = defaultdict(int)
 
     for f in findings:
         tags = f.get("tags", [])
@@ -203,7 +203,7 @@ def _get_category_summary(findings: List[Dict[str, Any]]) -> Dict[str, int]:
     return dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
 
 
-def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
+def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
     """Generate enhanced markdown summary with actionable insights."""
     total = len(findings)
     sev_counts = Counter(f.get("severity", "INFO") for f in findings)
@@ -230,7 +230,7 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         lines.append("")
 
         # Group by file
-        file_findings: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        file_findings: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for f in findings:
             path = f.get("location", {}).get("path", "unknown")
             file_findings[path].append(f)
@@ -379,7 +379,7 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         lines.append("## By Tool")
         lines.append("")
 
-        tool_severity: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        tool_severity: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for f in findings:
             tool_name = f.get("tool", {}).get("name", "unknown")
             severity = f.get("severity", "INFO")
@@ -444,7 +444,7 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def write_markdown(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(to_markdown_summary(findings), encoding="utf-8")

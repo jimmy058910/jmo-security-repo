@@ -26,7 +26,7 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from ..constants import (
     SCHEMA_VERSION_CURRENT,
@@ -64,7 +64,7 @@ class BaseAdapter(ABC):
         self.tool_name = tool_name
         self.tool_version = tool_version
 
-    def load(self, output_file: Path) -> List[Dict[str, Any]]:
+    def load(self, output_file: Path) -> list[dict[str, Any]]:
         """
         Load tool output and convert to CommonFinding format.
 
@@ -113,7 +113,7 @@ class BaseAdapter(ABC):
         return common_findings
 
     @abstractmethod
-    def _parse_output(self, output_file: Path) -> List[Dict[str, Any]]:
+    def _parse_output(self, output_file: Path) -> list[dict[str, Any]]:
         """
         Parse tool-specific JSON output.
 
@@ -135,7 +135,7 @@ class BaseAdapter(ABC):
         pass
 
     @abstractmethod
-    def _extract_finding(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_finding(self, raw: dict[str, Any]) -> dict[str, Any]:
         """
         Extract CommonFinding fields from raw finding.
 
@@ -180,7 +180,7 @@ class BaseAdapter(ABC):
         """
         pass
 
-    def _generate_fingerprint(self, finding: Dict[str, Any]) -> str:
+    def _generate_fingerprint(self, finding: dict[str, Any]) -> str:
         """
         Generate stable fingerprint ID for deduplication.
 
@@ -248,7 +248,7 @@ class BaseAdapter(ABC):
         return severity_map.get(severity_upper, "INFO")
 
 
-def load_json_file(path: Path) -> Dict[str, Any]:
+def load_json_file(path: Path) -> dict[str, Any]:
     """
     Helper function to load JSON file safely.
 
@@ -263,5 +263,5 @@ def load_json_file(path: Path) -> Dict[str, Any]:
         json.JSONDecodeError: If file is not valid JSON
     """
     with open(path, encoding="utf-8") as f:
-        data: Dict[str, Any] = json.load(f)
+        data: dict[str, Any] = json.load(f)
         return data

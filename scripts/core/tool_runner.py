@@ -9,7 +9,7 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Any
+from typing import Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import subprocess
@@ -37,11 +37,11 @@ class ToolDefinition:
     """
 
     name: str
-    command: List[str]
-    output_file: Optional[Path]
+    command: list[str]
+    output_file: Path | None
     timeout: int = 600
     retries: int = 0
-    ok_return_codes: Tuple[int, ...] = (0, 1)
+    ok_return_codes: tuple[int, ...] = (0, 1)
     capture_stdout: bool = False
 
     def __post_init__(self):
@@ -81,7 +81,7 @@ class ToolResult:
     stderr: str = ""
     attempts: int = 1
     duration: float = 0.0
-    output_file: Optional[Path] = None
+    output_file: Path | None = None
     capture_stdout: bool = False
     error_message: str = ""
 
@@ -89,7 +89,7 @@ class ToolResult:
         """Check if tool execution was successful."""
         return self.status == "success"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "tool": self.tool,
@@ -130,7 +130,7 @@ class ToolRunner:
         ...     print(f"{result.tool}: {result.status}")
     """
 
-    def __init__(self, tools: List[ToolDefinition], max_workers: int = 4):
+    def __init__(self, tools: list[ToolDefinition], max_workers: int = 4):
         """
         Initialize ToolRunner.
 
@@ -257,7 +257,7 @@ class ToolRunner:
             error_message=last_error,
         )
 
-    def run_all_parallel(self) -> List[ToolResult]:
+    def run_all_parallel(self) -> list[ToolResult]:
         """
         Run all tools in parallel using ThreadPoolExecutor.
 
@@ -267,7 +267,7 @@ class ToolRunner:
         Returns:
             List of ToolResult objects (one per tool)
         """
-        results: List[ToolResult] = []
+        results: list[ToolResult] = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tool executions
@@ -312,7 +312,7 @@ class ToolRunner:
 
         return results
 
-    def run_all_serial(self) -> List[ToolResult]:
+    def run_all_serial(self) -> list[ToolResult]:
         """
         Run all tools serially (one at a time).
 
@@ -323,7 +323,7 @@ class ToolRunner:
         """
         return [self.run_tool(tool) for tool in self.tools]
 
-    def get_summary(self, results: List[ToolResult]) -> Dict[str, Any]:
+    def get_summary(self, results: list[ToolResult]) -> dict[str, Any]:
         """
         Generate summary statistics from tool results.
 
@@ -353,10 +353,10 @@ class ToolRunner:
 
 
 def run_tools(
-    tools: List[ToolDefinition],
+    tools: list[ToolDefinition],
     max_workers: int = 4,
     parallel: bool = True,
-) -> List[ToolResult]:
+) -> list[ToolResult]:
     """
     Convenience function to run tools with default ToolRunner.
 
