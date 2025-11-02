@@ -4,11 +4,257 @@ This guide explains how to set up and use Model Context Protocol (MCP) servers w
 
 ## Overview
 
-MCP servers extend Claude Code's capabilities by providing additional context and tools. This project uses three MCP servers:
+MCP servers extend Claude Code's capabilities by providing additional context and tools. This guide covers two types of MCP servers:
 
+**JMo Security MCP Server** (provided by this project):
+- **AI Remediation Orchestration** - Query security findings, apply fixes, track resolutions
+
+**Third-Party MCP Servers** (optional integrations):
 1. **Context7** - Up-to-date code documentation for libraries and frameworks
 2. **GitHub** - GitHub API integration for repos, issues, PRs, and more
 3. **Chrome DevTools** - Browser automation and debugging capabilities
+
+## JMo Security MCP Server (AI Remediation)
+
+The JMo Security MCP server enables AI-powered security remediation workflows. It provides tools for querying findings, applying fixes, and tracking resolutions.
+
+### Features
+
+- 🔍 **Query Security Findings** - Filter and paginate scan results
+- 🔧 **Apply Fixes** - AI-suggested patches with dry-run preview
+- ✅ **Track Resolutions** - Mark findings as resolved with reason
+- 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default)
+- 🔐 **Authentication** - API key validation (optional, for production)
+
+### Quick Start
+
+**Development Mode (No Authentication):**
+
+```bash
+# Run MCP server with default settings
+uv run mcp dev scripts/mcp/server.py
+
+# Or via environment variables
+export MCP_RESULTS_DIR=./results
+export MCP_REPO_ROOT=.
+uv run mcp dev scripts/mcp/server.py
+```
+
+**Production Mode (With Authentication + Rate Limiting):**
+
+```bash
+# Set API keys (comma-separated)
+export JMO_MCP_API_KEYS="key1,key2,key3"
+
+# Enable rate limiting (default: enabled)
+export JMO_MCP_RATE_LIMIT_ENABLED="true"
+export JMO_MCP_RATE_LIMIT_CAPACITY="100"        # Burst capacity
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="1.67"    # Tokens/sec (100 req/min)
+
+# Run server
+export MCP_RESULTS_DIR=./results
+export MCP_REPO_ROOT=.
+uv run mcp dev scripts/mcp/server.py
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_RESULTS_DIR` | `./results` | Path to JMo Security scan results |
+| `MCP_REPO_ROOT` | `.` | Path to repository root (for source context) |
+| `JMO_MCP_API_KEYS` | *(empty)* | Comma-separated API keys for authentication |
+| `JMO_MCP_RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
+| `JMO_MCP_RATE_LIMIT_CAPACITY` | `100` | Burst capacity (max requests before throttling) |
+| `JMO_MCP_RATE_LIMIT_REFILL_RATE` | `1.67` | Tokens per second (1.67 = 100 req/min) |
+
+### Available Tools
+
+#### 1. `get_security_findings`
+
+Query security findings with filters and pagination.
+
+**Parameters:**
+- `severity`: Filter by severity levels (e.g., `["HIGH", "CRITICAL"]`)
+- `tool`: Filter by tool name (e.g., `"semgrep"`, `"trivy"`)
+- `rule_id`: Filter by rule ID (e.g., `"CWE-79"`)
+- `path`: Filter by file path (substring match)
+- `limit`: Maximum findings to return (default: 100, max: 1000)
+- `offset`: Pagination offset (default: 0)
+
+**Example:**
+
+```python
+# Get all HIGH and CRITICAL findings
+get_security_findings(severity=["HIGH", "CRITICAL"], limit=10)
+
+# Get findings from semgrep in src/api
+get_security_findings(tool="semgrep", path="src/api")
+```
+
+#### 2. `apply_fix`
+
+Apply AI-suggested fix patch to resolve a security finding.
+
+**Parameters:**
+- `finding_id`: Fingerprint ID of the finding
+- `patch`: Unified diff patch (git diff format)
+- `confidence`: AI confidence score (0.0-1.0)
+- `explanation`: Human-readable explanation of the fix
+- `dry_run`: Preview patch without applying (default: False)
+
+**Example:**
+
+```python
+# Step 1: Preview patch
+apply_fix(
+    finding_id="fingerprint-abc123",
+    patch="diff --git a/src/app.js...\n-  res.send(userInput)\n+  res.send(sanitize(userInput))",
+    confidence=0.95,
+    explanation="Added sanitization to prevent XSS",
+    dry_run=True
+)
+
+# Step 2: Apply if preview looks good
+apply_fix(..., dry_run=False)
+```
+
+#### 3. `mark_resolved`
+
+Mark a security finding as resolved without applying a patch.
+
+**Parameters:**
+- `finding_id`: Fingerprint ID of the finding
+- `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`, `risk_accepted`)
+- `comment`: Optional comment explaining the resolution
+
+**Example:**
+
+```python
+mark_resolved(
+    finding_id="fingerprint-abc123",
+    resolution="false_positive",
+    comment="This is a test file, not production code"
+)
+```
+
+#### 4. `get_server_info`
+
+Get server configuration and status.
+
+**Returns:**
+- Server name, version, MCP version
+- Rate limiting configuration
+- Total findings count
+- Findings file status
+
+### Rate Limiting
+
+Rate limiting uses a **token bucket algorithm** with burst capacity and sustained rate:
+
+- **Burst Capacity:** Maximum requests allowed in a burst (default: 100)
+- **Refill Rate:** Tokens added per second (default: 1.67 = 100 req/min)
+- **Per-Client:** Separate buckets for each client (by API key or IP)
+
+**Examples:**
+
+```bash
+# High-traffic production (1000 req/min)
+export JMO_MCP_RATE_LIMIT_CAPACITY="1000"
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="16.67"
+
+# Low-traffic development (10 req/min)
+export JMO_MCP_RATE_LIMIT_CAPACITY="10"
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="0.167"
+
+# Disable rate limiting (development only)
+export JMO_MCP_RATE_LIMIT_ENABLED="false"
+```
+
+### Authentication (v1.0.2+)
+
+**Note:** Full authentication enforcement awaits FastMCP middleware support (v1.0.2). Currently, only rate limiting is enforced.
+
+**Infrastructure Ready:**
+- API keys are SHA-256 hashed on server startup
+- Decorator pattern applied to all MCP tools
+- Authentication checks will be enabled when FastMCP adds middleware hooks
+
+**Setting API Keys:**
+
+```bash
+# Generate secure keys (example)
+export JMO_MCP_API_KEYS="$(openssl rand -hex 32),$(openssl rand -hex 32)"
+
+# Or use static keys
+export JMO_MCP_API_KEYS="prod-key-1,prod-key-2,prod-key-3"
+```
+
+**Security Best Practices:**
+- ✅ Use long, random keys (≥32 bytes)
+- ✅ Rotate keys regularly (quarterly minimum)
+- ✅ Store keys in environment variables, not files
+- ✅ Use different keys per environment (dev/staging/prod)
+- ❌ Never commit keys to version control
+
+### Client Configuration
+
+To use the JMo Security MCP server in Claude Code, add to `.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jmo-security": {
+      "command": "uv",
+      "args": ["run", "mcp", "dev", "scripts/mcp/server.py"],
+      "env": {
+        "MCP_RESULTS_DIR": "./results",
+        "MCP_REPO_ROOT": ".",
+        "JMO_MCP_RATE_LIMIT_ENABLED": "true",
+        "JMO_MCP_RATE_LIMIT_CAPACITY": "100",
+        "JMO_MCP_RATE_LIMIT_REFILL_RATE": "1.67"
+      },
+      "description": "JMo Security AI remediation orchestration"
+    }
+  }
+}
+```
+
+### Troubleshooting
+
+**Error:** `MCP SDK not installed`
+
+**Solution:**
+
+```bash
+pip install 'mcp[cli]>=1.0.0'
+# or
+uv add 'mcp[cli]>=1.0.0'
+```
+
+**Error:** `No scan results found`
+
+**Solution:** Run a scan first to generate `results/summaries/findings.json`:
+
+```bash
+jmo scan --repo . --profile balanced
+```
+
+**Error:** `Rate limit exceeded`
+
+**Solution:** Increase capacity or wait for tokens to refill:
+
+```bash
+# Option 1: Increase capacity
+export JMO_MCP_RATE_LIMIT_CAPACITY="200"
+
+# Option 2: Disable temporarily (dev only)
+export JMO_MCP_RATE_LIMIT_ENABLED="false"
+```
+
+---
+
+## Third-Party MCP Servers
 
 ## Configuration Method
 
