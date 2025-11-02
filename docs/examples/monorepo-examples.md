@@ -5,7 +5,7 @@
 ## Scope
 
 This document provides examples for verifying and scanning **monorepos**, which include multiple applications and shared components.
-It demonstrates how to apply JMo Security’s verification wizard using both the --repos-dir and --targets options, showing how profiles (ast, alanced, and deep) can be used to adjust scan depth and performance based on workflow needs.
+It demonstrates how to apply JMo Security’s verification wizard using both the --repos-dir and --targets options, showing how profiles (fast, alanced, and deep) can be used to adjust scan depth and performance based on workflow needs.
 
 ## Profiles
 
