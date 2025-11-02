@@ -16,8 +16,8 @@ import pytest
 from unittest import mock
 
 # Import the decorator and configuration
-from scripts.mcp.jmo_server import require_auth_and_rate_limit
-from scripts.mcp.utils.rate_limiter import RateLimiter
+from scripts.jmo_mcp.jmo_server import require_auth_and_rate_limit
+from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
 
 
 class TestRateLimitingBasics:
@@ -26,7 +26,7 @@ class TestRateLimitingBasics:
     def test_no_rate_limiter_allows_all(self):
         """Test that requests are allowed when rate limiting disabled."""
         # Mock environment: rate limiting disabled
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", None):
 
             @require_auth_and_rate_limit
             def test_func():
@@ -41,9 +41,11 @@ class TestRateLimitingBasics:
         limiter = RateLimiter(capacity=5, refill_rate=0.0)  # 5 requests max
 
         # Mock environment: rate limiting enabled
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
-            with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 5):
-                with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.0):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", limiter):
+            with mock.patch("scripts.jmo_mcp.jmo_server.RATE_LIMIT_CAPACITY", 5):
+                with mock.patch(
+                    "scripts.jmo_mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.0
+                ):
 
                     @require_auth_and_rate_limit
                     def test_func():
@@ -63,8 +65,8 @@ class TestRateLimitingBasics:
         limiter = RateLimiter(capacity=100, refill_rate=0.0)  # 100 burst
 
         # Mock environment: rate limiting enabled
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
-            with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 100):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", limiter):
+            with mock.patch("scripts.jmo_mcp.jmo_server.RATE_LIMIT_CAPACITY", 100):
 
                 @require_auth_and_rate_limit
                 def test_func():
@@ -81,7 +83,7 @@ class TestRateLimitingBasics:
 
     def test_decorator_preserves_function_metadata(self):
         """Test that decorator preserves function name and docstring."""
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", None):
 
             @require_auth_and_rate_limit
             def test_func():
@@ -94,7 +96,7 @@ class TestRateLimitingBasics:
 
     def test_decorator_with_arguments(self):
         """Test that decorator works with functions that have arguments."""
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", None):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", None):
 
             @require_auth_and_rate_limit
             def test_func(arg1, arg2, kwarg1=None):
@@ -109,9 +111,11 @@ class TestRateLimitingBasics:
         """Test that error message includes rate limit configuration."""
         limiter = RateLimiter(capacity=10, refill_rate=0.5)
 
-        with mock.patch("scripts.mcp.jmo_server.rate_limiter", limiter):
-            with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_CAPACITY", 10):
-                with mock.patch("scripts.mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.5):
+        with mock.patch("scripts.jmo_mcp.jmo_server.rate_limiter", limiter):
+            with mock.patch("scripts.jmo_mcp.jmo_server.RATE_LIMIT_CAPACITY", 10):
+                with mock.patch(
+                    "scripts.jmo_mcp.jmo_server.RATE_LIMIT_REFILL_RATE", 0.5
+                ):
 
                     @require_auth_and_rate_limit
                     def test_func():
@@ -137,7 +141,7 @@ class TestAuthenticationInfrastructure:
     def test_api_keys_hashed_populated(self):
         """Test that API_KEYS_HASHED is populated from environment."""
         # This test verifies the infrastructure is ready for future enforcement
-        import scripts.mcp.jmo_server as server_module
+        import scripts.jmo_mcp.jmo_server as server_module
 
         # Mock environment with API keys
         test_keys = "key1,key2,key3"
@@ -154,7 +158,7 @@ class TestAuthenticationInfrastructure:
 
     def test_auth_logging_configuration(self):
         """Test that auth configuration is logged correctly."""
-        import scripts.mcp.jmo_server as server_module
+        import scripts.jmo_mcp.jmo_server as server_module
 
         # Verify configuration variables exist
         assert hasattr(server_module, "API_KEYS_HASHED")

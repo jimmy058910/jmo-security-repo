@@ -1404,7 +1404,7 @@ def cmd_mcp_server(args):
 
     try:
         # Import MCP server (lazy import to avoid startup cost)
-        from scripts.mcp.jmo_server import mcp
+        from scripts.jmo_mcp.jmo_server import mcp
 
         # Log server start info
         sys.stderr.write("Starting JMo Security MCP Server...\n")

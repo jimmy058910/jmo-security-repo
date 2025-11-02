@@ -13,7 +13,7 @@ import time
 import threading
 import pytest
 
-from scripts.mcp.utils.rate_limiter import TokenBucket, RateLimiter
+from scripts.jmo_mcp.utils.rate_limiter import TokenBucket, RateLimiter
 
 
 class TestTokenBucket:

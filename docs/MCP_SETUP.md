@@ -32,12 +32,12 @@ The JMo Security MCP server enables AI-powered security remediation workflows. I
 
 ```bash
 # Run MCP server with default settings
-uv run mcp dev scripts/mcp/server.py
+uv run mcp dev scripts/jmo_mcp/server.py
 
 # Or via environment variables
 export MCP_RESULTS_DIR=./results
 export MCP_REPO_ROOT=.
-uv run mcp dev scripts/mcp/server.py
+uv run mcp dev scripts/jmo_mcp/server.py
 ```
 
 **Production Mode (With Authentication + Rate Limiting):**
@@ -54,7 +54,7 @@ export JMO_MCP_RATE_LIMIT_REFILL_RATE="1.67"    # Tokens/sec (100 req/min)
 # Run server
 export MCP_RESULTS_DIR=./results
 export MCP_REPO_ROOT=.
-uv run mcp dev scripts/mcp/server.py
+uv run mcp dev scripts/jmo_mcp/server.py
 ```
 
 ### Environment Variables
@@ -206,7 +206,7 @@ To use the JMo Security MCP server in Claude Code, add to `.claude/mcp.json`:
   "mcpServers": {
     "jmo-security": {
       "command": "uv",
-      "args": ["run", "mcp", "dev", "scripts/mcp/server.py"],
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
       "env": {
         "MCP_RESULTS_DIR": "./results",
         "MCP_REPO_ROOT": ".",

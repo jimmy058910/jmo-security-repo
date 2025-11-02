@@ -8,7 +8,7 @@ Coverage target: ≥90%
 from pathlib import Path
 import pytest
 
-from scripts.mcp.utils.source_context import SourceContextExtractor
+from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
 
 
 class TestSourceContextExtractorInit:

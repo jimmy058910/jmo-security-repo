@@ -13,7 +13,7 @@ Architecture:
 
 Usage:
     # Development mode (stdio transport)
-    uv run mcp dev scripts/mcp/server.py
+    uv run mcp dev scripts/jmo_mcp/jmo_server.py
 
     # Production mode (via jmo CLI)
     jmo mcp-server --results-dir ./results --repo-root .
@@ -46,9 +46,9 @@ except ImportError:
         "  uv add 'mcp[cli]>=1.0.0'"
     )
 
-from scripts.mcp.utils.findings_loader import FindingsLoader
-from scripts.mcp.utils.source_context import SourceContextExtractor
-from scripts.mcp.utils.rate_limiter import RateLimiter
+from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
+from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
+from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
 
 # Configure logging
 logging.basicConfig(
