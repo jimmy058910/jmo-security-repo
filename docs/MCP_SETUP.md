@@ -7,9 +7,11 @@ This guide explains how to set up and use Model Context Protocol (MCP) servers w
 MCP servers extend Claude Code's capabilities by providing additional context and tools. This guide covers two types of MCP servers:
 
 **JMo Security MCP Server** (provided by this project):
+
 - **AI Remediation Orchestration** - Query security findings, apply fixes, track resolutions
 
 **Third-Party MCP Servers** (optional integrations):
+
 1. **Context7** - Up-to-date code documentation for libraries and frameworks
 2. **GitHub** - GitHub API integration for repos, issues, PRs, and more
 3. **Chrome DevTools** - Browser automation and debugging capabilities
@@ -75,6 +77,7 @@ uv run mcp dev scripts/jmo_mcp/server.py
 Query security findings with filters and pagination.
 
 **Parameters:**
+
 - `severity`: Filter by severity levels (e.g., `["HIGH", "CRITICAL"]`)
 - `tool`: Filter by tool name (e.g., `"semgrep"`, `"trivy"`)
 - `rule_id`: Filter by rule ID (e.g., `"CWE-79"`)
@@ -97,6 +100,7 @@ get_security_findings(tool="semgrep", path="src/api")
 Apply AI-suggested fix patch to resolve a security finding.
 
 **Parameters:**
+
 - `finding_id`: Fingerprint ID of the finding
 - `patch`: Unified diff patch (git diff format)
 - `confidence`: AI confidence score (0.0-1.0)
@@ -124,6 +128,7 @@ apply_fix(..., dry_run=False)
 Mark a security finding as resolved without applying a patch.
 
 **Parameters:**
+
 - `finding_id`: Fingerprint ID of the finding
 - `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`, `risk_accepted`)
 - `comment`: Optional comment explaining the resolution
@@ -143,6 +148,7 @@ mark_resolved(
 Get server configuration and status.
 
 **Returns:**
+
 - Server name, version, MCP version
 - Rate limiting configuration
 - Total findings count
@@ -176,6 +182,7 @@ export JMO_MCP_RATE_LIMIT_ENABLED="false"
 **Note:** Full authentication enforcement awaits FastMCP middleware support (v1.0.2). Currently, only rate limiting is enforced.
 
 **Infrastructure Ready:**
+
 - API keys are SHA-256 hashed on server startup
 - Decorator pattern applied to all MCP tools
 - Authentication checks will be enabled when FastMCP adds middleware hooks
@@ -191,6 +198,7 @@ export JMO_MCP_API_KEYS="prod-key-1,prod-key-2,prod-key-3"
 ```
 
 **Security Best Practices:**
+
 - ✅ Use long, random keys (≥32 bytes)
 - ✅ Rotate keys regularly (quarterly minimum)
 - ✅ Store keys in environment variables, not files
