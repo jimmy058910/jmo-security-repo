@@ -422,7 +422,7 @@ def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
         # 1. Query findings by CWE ID
         # 2. Query findings by file path
         # 3. Rank by similarity
-        related_findings = []
+        related_findings: list[dict[str, str]] = []
 
         logger.info(f"get_finding_context: retrieved context for {finding_id}")
 

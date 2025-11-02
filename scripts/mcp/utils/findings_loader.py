@@ -168,7 +168,7 @@ class FindingsLoader:
             Dictionary mapping severity → count
         """
         findings = self.load_findings()
-        distribution = {}
+        distribution: dict[str, int] = {}
 
         for finding in findings:
             severity = finding.get("severity", "UNKNOWN")
