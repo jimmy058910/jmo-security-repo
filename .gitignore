@@ -111,3 +111,4 @@ scripts/api/.vercel/
 
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
+venv-*
