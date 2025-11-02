@@ -185,11 +185,19 @@ make tools
 | [TEST.md](../TEST.md) | Testing guide | Contributors |
 | [RELEASE.md](RELEASE.md) | Release process | Maintainers |
 
+### AI Integrations (NEW - v1.0.0)
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [**MCP Quick Reference**](MCP_QUICK_REFERENCE.md) | **One-page MCP cheat sheet (installation, queries, troubleshooting)** | **Everyone** |
+| [**GitHub Copilot Integration**](integrations/GITHUB_COPILOT.md) | **MCP setup for VS Code Copilot** | **Everyone** |
+| [**Claude Code Integration**](integrations/CLAUDE_CODE.md) | **MCP setup for Claude Code CLI** | **Everyone** |
+
 ### Technical References
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [MCP Setup](MCP_SETUP.md) | MCP server integration | Advanced |
+| [MCP Setup](MCP_SETUP.md) | MCP server integration (general) | Advanced |
 | [CommonFinding Schema](schemas/common_finding.v1.json) | Data schema spec | Developers |
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
 | [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |

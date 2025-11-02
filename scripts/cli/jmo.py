@@ -503,6 +503,51 @@ def _add_schedule_args(subparsers):
     return schedule_parser
 
 
+def _add_mcp_args(subparsers):
+    """Add 'mcp-server' subcommand arguments for AI remediation server."""
+    mcp_parser = subparsers.add_parser(
+        "mcp-server",
+        help="Start MCP server for AI-powered remediation (GitHub Copilot, Claude Code, etc.)",
+        description="""
+Start JMo Security MCP Server for AI-powered remediation orchestration.
+
+The MCP server provides a standardized interface for AI tools to query security
+findings and suggest fixes. Supports GitHub Copilot, Claude Code, OpenAI Codex,
+and any MCP-compatible client.
+
+Usage:
+    # Development mode (stdio transport for Claude Desktop)
+    uv run mcp dev scripts/mcp/server.py
+
+    # Production mode (via jmo CLI)
+    jmo mcp-server --results-dir ./results --repo-root .
+
+Environment Variables:
+    MCP_RESULTS_DIR: Path to results directory (overrides --results-dir)
+    MCP_REPO_ROOT: Path to repository root (overrides --repo-root)
+    MCP_API_KEY: API key for authentication (optional, dev mode if not set)
+
+See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
+        """,
+    )
+    mcp_parser.add_argument(
+        "--results-dir",
+        default="./results",
+        help="Path to results directory (default: ./results)",
+    )
+    mcp_parser.add_argument(
+        "--repo-root",
+        default=".",
+        help="Path to repository root (default: current directory)",
+    )
+    mcp_parser.add_argument(
+        "--api-key",
+        help="API key for authentication (optional, enables production mode)",
+    )
+    _add_logging_args(mcp_parser)
+    return mcp_parser
+
+
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
     ap = argparse.ArgumentParser(
@@ -522,6 +567,7 @@ ADVANCED COMMANDS:
   report              Aggregate findings and emit reports
   ci                  Scan + report with failure thresholds (for CI/CD)
   adapters            Manage adapter plugins
+  mcp-server          Start MCP server for AI-powered remediation
 
 QUICK START:
   jmo wizard                         # Interactive guided scanning
@@ -549,6 +595,7 @@ Documentation: https://docs.jmotools.com
     _add_ci_args(sub)
     _add_adapters_args(sub)
     _add_schedule_args(sub)
+    _add_mcp_args(sub)
 
     try:
         return ap.parse_args()
@@ -1337,6 +1384,63 @@ def cmd_profile(args, profile_name: str):
     return exit_code
 
 
+def cmd_mcp_server(args):
+    """Start MCP server for AI-powered remediation."""
+    import os
+    from pathlib import Path
+
+    # Set environment variables for MCP server configuration
+    os.environ["MCP_RESULTS_DIR"] = str(Path(args.results_dir).resolve())
+    os.environ["MCP_REPO_ROOT"] = str(Path(args.repo_root).resolve())
+
+    if args.api_key:
+        os.environ["MCP_API_KEY"] = args.api_key
+
+    # Configure logging based on args
+    if args.human_logs:
+        os.environ["MCP_HUMAN_LOGS"] = "1"
+    if args.log_level:
+        os.environ["MCP_LOG_LEVEL"] = args.log_level
+
+    try:
+        # Import MCP server (lazy import to avoid startup cost)
+        from scripts.mcp.server import mcp
+
+        # Log server start info
+        sys.stderr.write("Starting JMo Security MCP Server...\n")
+        sys.stderr.write(f"Results directory: {os.environ['MCP_RESULTS_DIR']}\n")
+        sys.stderr.write(f"Repository root: {os.environ['MCP_REPO_ROOT']}\n")
+        sys.stderr.write("Transport: stdio (for Claude Desktop, GitHub Copilot)\n")
+        sys.stderr.write("\nServer ready. AI tools can now connect.\n")
+        sys.stderr.write("Press Ctrl+C to stop.\n\n")
+
+        # Run MCP server (blocking call - uses stdio transport by default)
+        mcp.run()
+
+        return 0
+
+    except ImportError as e:
+        sys.stderr.write("ERROR: MCP SDK not installed.\n")
+        sys.stderr.write("Install with: pip install 'mcp[cli]>=1.0.0'\n")
+        sys.stderr.write("Or: uv add 'mcp[cli]>=1.0.0'\n")
+        sys.stderr.write(f"\nDetails: {e}\n")
+        return 1
+    except FileNotFoundError as e:
+        sys.stderr.write("ERROR: Scan results not found.\n")
+        sys.stderr.write("Run a scan first: jmo scan --repo <path>\n")
+        sys.stderr.write(f"\nDetails: {e}\n")
+        return 1
+    except KeyboardInterrupt:
+        sys.stderr.write("\n\nMCP server stopped by user.\n")
+        return 0
+    except Exception as e:
+        sys.stderr.write(f"ERROR: MCP server failed: {e}\n")
+        import traceback
+
+        traceback.print_exc()
+        return 1
+
+
 def _open_results(args):
     """Open scan results in browser/editor."""
     import os
@@ -1407,6 +1511,8 @@ def main():
         return cmd_adapters(args)
     elif args.cmd == "schedule":
         return cmd_schedule(args)
+    elif args.cmd == "mcp-server":
+        return cmd_mcp_server(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1
