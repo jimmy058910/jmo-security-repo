@@ -1407,12 +1407,12 @@ def cmd_mcp_server(args):
         from scripts.mcp.server import mcp
 
         # Log server start info
-        sys.stderr.write(f"Starting JMo Security MCP Server...\n")
+        sys.stderr.write("Starting JMo Security MCP Server...\n")
         sys.stderr.write(f"Results directory: {os.environ['MCP_RESULTS_DIR']}\n")
         sys.stderr.write(f"Repository root: {os.environ['MCP_REPO_ROOT']}\n")
-        sys.stderr.write(f"Transport: stdio (for Claude Desktop, GitHub Copilot)\n")
-        sys.stderr.write(f"\nServer ready. AI tools can now connect.\n")
-        sys.stderr.write(f"Press Ctrl+C to stop.\n\n")
+        sys.stderr.write("Transport: stdio (for Claude Desktop, GitHub Copilot)\n")
+        sys.stderr.write("\nServer ready. AI tools can now connect.\n")
+        sys.stderr.write("Press Ctrl+C to stop.\n\n")
 
         # Run MCP server (blocking call - uses stdio transport by default)
         mcp.run()
@@ -1420,18 +1420,18 @@ def cmd_mcp_server(args):
         return 0
 
     except ImportError as e:
-        sys.stderr.write(f"ERROR: MCP SDK not installed.\n")
-        sys.stderr.write(f"Install with: pip install 'mcp[cli]>=1.0.0'\n")
-        sys.stderr.write(f"Or: uv add 'mcp[cli]>=1.0.0'\n")
+        sys.stderr.write("ERROR: MCP SDK not installed.\n")
+        sys.stderr.write("Install with: pip install 'mcp[cli]>=1.0.0'\n")
+        sys.stderr.write("Or: uv add 'mcp[cli]>=1.0.0'\n")
         sys.stderr.write(f"\nDetails: {e}\n")
         return 1
     except FileNotFoundError as e:
-        sys.stderr.write(f"ERROR: Scan results not found.\n")
-        sys.stderr.write(f"Run a scan first: jmo scan --repo <path>\n")
+        sys.stderr.write("ERROR: Scan results not found.\n")
+        sys.stderr.write("Run a scan first: jmo scan --repo <path>\n")
         sys.stderr.write(f"\nDetails: {e}\n")
         return 1
     except KeyboardInterrupt:
-        sys.stderr.write(f"\n\nMCP server stopped by user.\n")
+        sys.stderr.write("\n\nMCP server stopped by user.\n")
         return 0
     except Exception as e:
         sys.stderr.write(f"ERROR: MCP server failed: {e}\n")

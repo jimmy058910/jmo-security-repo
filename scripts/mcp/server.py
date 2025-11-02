@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 RESULTS_DIR = Path(os.getenv("MCP_RESULTS_DIR", "./results"))
 REPO_ROOT = Path(os.getenv("MCP_REPO_ROOT", "."))
 
-logger.info(f"MCP Server initialized")
+logger.info("MCP Server initialized")
 logger.info(f"Results directory: {RESULTS_DIR.resolve()}")
 logger.info(f"Repository root: {REPO_ROOT.resolve()}")
 
