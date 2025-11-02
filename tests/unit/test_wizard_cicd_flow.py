@@ -250,11 +250,12 @@ def test_prompt_user_fast_profile_no_images():
         "pipeline_images": [],
     }
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="fast"
-    ), patch.object(
-        flow.prompter, "prompt_yes_no", side_effect=[True, True]
-    ) as _mock_yes_no:
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="fast"),
+        patch.object(
+            flow.prompter, "prompt_yes_no", side_effect=[True, True]
+        ) as _mock_yes_no,
+    ):
         options = flow.prompt_user()
 
         assert options["profile"] == "fast"
@@ -272,9 +273,10 @@ def test_prompt_user_with_pipeline_images():
         "pipeline_images": ["python:3.10", "postgres:14"],
     }
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="balanced"
-    ), patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]):
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="balanced"),
+        patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]),
+    ):
         options = flow.prompt_user()
 
         assert options["profile"] == "balanced"
@@ -289,9 +291,10 @@ def test_prompt_user_with_github_actions():
         "pipeline_images": [],
     }
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="fast"
-    ), patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]):
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="fast"),
+        patch.object(flow.prompter, "prompt_yes_no", side_effect=[True, True, True]),
+    ):
         options = flow.prompt_user()
 
         assert options["check_permissions"] is True

@@ -58,9 +58,10 @@ def test_repo_flow_prompt_user_balanced_with_artifacts():
     flow = RepoFlow()
     flow.detected_targets = {"repos": [Path("repo1")]}
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="balanced"
-    ), patch.object(flow.prompter, "prompt_yes_no", return_value=True):
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="balanced"),
+        patch.object(flow.prompter, "prompt_yes_no", return_value=True),
+    ):
         options = flow.prompt_user()
 
         assert options["profile"] == "balanced"
@@ -72,9 +73,10 @@ def test_repo_flow_prompt_user_fast_no_artifacts():
     flow = RepoFlow()
     flow.detected_targets = {"repos": []}
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="fast"
-    ), patch.object(flow.prompter, "prompt_yes_no", return_value=False):
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="fast"),
+        patch.object(flow.prompter, "prompt_yes_no", return_value=False),
+    ):
         options = flow.prompt_user()
 
         assert options["profile"] == "fast"
@@ -86,9 +88,10 @@ def test_repo_flow_prompt_user_deep_profile():
     flow = RepoFlow()
     flow.detected_targets = {"repos": []}
 
-    with patch.object(
-        flow.prompter, "prompt_choice", return_value="deep"
-    ), patch.object(flow.prompter, "prompt_yes_no", return_value=True):
+    with (
+        patch.object(flow.prompter, "prompt_choice", return_value="deep"),
+        patch.object(flow.prompter, "prompt_yes_no", return_value=True),
+    ):
         options = flow.prompt_user()
 
         assert options["profile"] == "deep"

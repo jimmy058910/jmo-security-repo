@@ -138,8 +138,9 @@ class TestUrlScanner:
 
     def test_scan_url_with_tool_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True
+        with (
+            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
+            patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -238,9 +239,12 @@ class TestUrlScanner:
             stub_calls.append((tool_name, str(output_path)))
             output_path.write_text("{}")
 
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists",
-            side_effect=mock_tool_exists,
+        with (
+            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
+            patch(
+                "scripts.cli.scan_jobs.url_scanner.tool_exists",
+                side_effect=mock_tool_exists,
+            ),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -266,8 +270,9 @@ class TestUrlScanner:
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True
+        with (
+            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
+            patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner

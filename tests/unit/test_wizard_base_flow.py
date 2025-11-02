@@ -556,9 +556,10 @@ def test_base_wizard_flow_execute_success():
     """Test BaseWizardFlow execute with successful scan."""
     flow = ConcreteWizardFlow()
 
-    with patch.object(flow.prompter, "confirm", return_value=True), patch(
-        "subprocess.run"
-    ) as mock_run:
+    with (
+        patch.object(flow.prompter, "confirm", return_value=True),
+        patch("subprocess.run") as mock_run,
+    ):
         mock_run.return_value = MagicMock(returncode=0)
 
         result = flow.execute()
@@ -600,9 +601,10 @@ def test_base_wizard_flow_execute_scan_failure():
     """Test BaseWizardFlow execute with scan failure."""
     flow = ConcreteWizardFlow()
 
-    with patch.object(flow.prompter, "confirm", return_value=True), patch(
-        "subprocess.run"
-    ) as mock_run:
+    with (
+        patch.object(flow.prompter, "confirm", return_value=True),
+        patch("subprocess.run") as mock_run,
+    ):
         mock_run.return_value = MagicMock(returncode=2)
 
         result = flow.execute()
@@ -614,9 +616,10 @@ def test_base_wizard_flow_execute_exception():
     """Test BaseWizardFlow execute handles exceptions."""
     flow = ConcreteWizardFlow()
 
-    with patch.object(flow.prompter, "confirm", return_value=True), patch(
-        "subprocess.run"
-    ) as mock_run:
+    with (
+        patch.object(flow.prompter, "confirm", return_value=True),
+        patch("subprocess.run") as mock_run,
+    ):
         mock_run.side_effect = Exception("Command failed")
 
         result = flow.execute()

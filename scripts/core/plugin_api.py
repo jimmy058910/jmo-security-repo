@@ -37,9 +37,7 @@ class Finding:
     message: str = ""
     title: str | None = None
     description: str | None = None
-    remediation: str | dict[str, Any] | None = (
-        None  # v1.1.0: Can be dict with autofix
-    )
+    remediation: str | dict[str, Any] | None = None  # v1.1.0: Can be dict with autofix
     references: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     cvss: dict[str, Any] | None = None

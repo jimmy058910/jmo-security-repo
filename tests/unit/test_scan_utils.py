@@ -285,8 +285,9 @@ def test_run_cmd_timeout_expired():
 
 def test_run_cmd_timeout_with_retry():
     """Test run_cmd retries after timeout, then succeeds."""
-    with patch("subprocess.run") as mock_run, patch(
-        "time.sleep"
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("time.sleep"),
     ):  # Skip actual sleep delays
         # First attempt: timeout, second attempt: success
         mock_run.side_effect = [
