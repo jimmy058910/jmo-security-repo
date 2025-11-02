@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import pytest
 
-from scripts.mcp.utils.findings_loader import FindingsLoader
+from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
 
 
 class TestFindingsLoaderInit:

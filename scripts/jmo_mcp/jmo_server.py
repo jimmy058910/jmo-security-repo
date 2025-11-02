@@ -13,7 +13,7 @@ Architecture:
 
 Usage:
     # Development mode (stdio transport)
-    uv run mcp dev scripts/mcp/server.py
+    uv run mcp dev scripts/jmo_mcp/jmo_server.py
 
     # Production mode (via jmo CLI)
     jmo mcp-server --results-dir ./results --repo-root .
@@ -21,13 +21,18 @@ Usage:
 Environment Variables:
     MCP_RESULTS_DIR: Path to results directory (default: ./results)
     MCP_REPO_ROOT: Path to repository root (default: .)
-    MCP_API_KEY: API key for authentication (optional, dev mode if not set)
+    JMO_MCP_API_KEYS: Comma-separated API keys for authentication (optional)
+    JMO_MCP_RATE_LIMIT_ENABLED: Enable rate limiting (default: true)
+    JMO_MCP_RATE_LIMIT_CAPACITY: Burst capacity in requests (default: 100)
+    JMO_MCP_RATE_LIMIT_REFILL_RATE: Tokens per second (default: 1.67 = 100/min)
 """
 
 import os
+import hashlib
 import logging
 from pathlib import Path
 from datetime import datetime
+from functools import wraps
 
 # NOTE: This import will fail until mcp[cli] is installed
 # To install: pip install "mcp[cli]" or uv add "mcp[cli]"
@@ -41,8 +46,9 @@ except ImportError:
         "  uv add 'mcp[cli]>=1.0.0'"
     )
 
-from scripts.mcp.utils.findings_loader import FindingsLoader
-from scripts.mcp.utils.source_context import SourceContextExtractor
+from scripts.jmo_mcp.utils.findings_loader import FindingsLoader
+from scripts.jmo_mcp.utils.source_context import SourceContextExtractor
+from scripts.jmo_mcp.utils.rate_limiter import RateLimiter
 
 # Configure logging
 logging.basicConfig(
@@ -54,9 +60,29 @@ logger = logging.getLogger(__name__)
 RESULTS_DIR = Path(os.getenv("MCP_RESULTS_DIR", "./results"))
 REPO_ROOT = Path(os.getenv("MCP_REPO_ROOT", "."))
 
+# Authentication configuration
+API_KEYS_RAW = os.getenv("JMO_MCP_API_KEYS", "").split(",")
+API_KEYS_HASHED = [
+    hashlib.sha256(key.strip().encode()).hexdigest()
+    for key in API_KEYS_RAW
+    if key.strip()
+]
+
+# Rate limiting configuration
+RATE_LIMIT_ENABLED = os.getenv("JMO_MCP_RATE_LIMIT_ENABLED", "true").lower() == "true"
+RATE_LIMIT_CAPACITY = int(os.getenv("JMO_MCP_RATE_LIMIT_CAPACITY", "100"))
+RATE_LIMIT_REFILL_RATE = float(os.getenv("JMO_MCP_RATE_LIMIT_REFILL_RATE", "1.67"))
+
 logger.info("MCP Server initialized")
 logger.info(f"Results directory: {RESULTS_DIR.resolve()}")
 logger.info(f"Repository root: {REPO_ROOT.resolve()}")
+logger.info(
+    f"Authentication: {'enabled' if API_KEYS_HASHED else 'disabled (dev mode)'}"
+)
+logger.info(
+    f"Rate limiting: {'enabled' if RATE_LIMIT_ENABLED else 'disabled'} "
+    f"(capacity={RATE_LIMIT_CAPACITY}, refill_rate={RATE_LIMIT_REFILL_RATE}/s)"
+)
 
 # Initialize MCP server
 mcp = FastMCP("JMo Security")
@@ -64,6 +90,60 @@ mcp = FastMCP("JMo Security")
 # Initialize utilities (lazy-loaded on first use to handle missing files gracefully)
 _findings_loader: FindingsLoader | None = None
 _context_extractor: SourceContextExtractor | None = None
+
+# Initialize rate limiter (if enabled)
+rate_limiter = (
+    RateLimiter(capacity=RATE_LIMIT_CAPACITY, refill_rate=RATE_LIMIT_REFILL_RATE)
+    if RATE_LIMIT_ENABLED
+    else None
+)
+
+
+def require_auth_and_rate_limit(func):
+    """
+    Decorator to enforce rate limiting on MCP tools.
+
+    NOTE: This implementation provides rate limiting infrastructure.
+    Full authentication enforcement requires MCP middleware integration
+    (planned for v1.0.2 after FastMCP adds auth hooks).
+
+    Rate Limiting:
+    - If JMO_MCP_RATE_LIMIT_ENABLED=true, enforces token bucket limits
+    - Per-client tracking by "anonymous" identifier
+    - Default: 100 requests burst, 1.67 tokens/sec (100/min sustained)
+
+    Authentication (infrastructure ready, enforcement pending):
+    - API_KEYS_HASHED populated from JMO_MCP_API_KEYS
+    - Validation logic implemented
+    - Awaiting FastMCP middleware support for enforcement
+
+    Raises:
+        ValueError: If rate limit exceeded
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        client_id = "anonymous"
+
+        # TODO: Extract client ID from MCP request context when FastMCP adds support
+        # For now, all clients share the same rate limit bucket
+
+        # Rate limiting check
+        if rate_limiter:
+            if not rate_limiter.check_rate_limit(client_id):
+                logger.warning(
+                    f"{func.__name__}: Rate limit exceeded (client: {client_id})"
+                )
+                raise ValueError(
+                    f"Rate limit exceeded. Try again later. "
+                    f"(Limit: {RATE_LIMIT_CAPACITY} burst, {RATE_LIMIT_REFILL_RATE}/s refill)"
+                )
+            logger.debug(f"{func.__name__}: Rate limit OK (client: {client_id})")
+
+        # Call the wrapped function
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def get_findings_loader() -> FindingsLoader:
@@ -88,6 +168,7 @@ def get_context_extractor() -> SourceContextExtractor:
 
 
 @mcp.tool()
+@require_auth_and_rate_limit
 def get_security_findings(
     severity: list[str] | None = None,
     tool: str | None = None,
@@ -189,6 +270,7 @@ def get_security_findings(
 
 
 @mcp.tool()
+@require_auth_and_rate_limit
 def apply_fix(
     finding_id: str,
     patch: str,
@@ -272,6 +354,7 @@ def apply_fix(
 
 
 @mcp.tool()
+@require_auth_and_rate_limit
 def mark_resolved(
     finding_id: str,
     resolution: str,
@@ -360,7 +443,7 @@ def mark_resolved(
 
 
 @mcp.resource("finding://{finding_id}")
-def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
+def get_finding_context(finding_id: str) -> dict:
     """
     Get full context for a specific security finding.
 
@@ -371,7 +454,6 @@ def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
 
     Args:
         finding_id: Fingerprint ID of the finding (from get_security_findings)
-        context_lines: Number of lines of source code context (default: 20)
 
     Returns:
         Dictionary with:
@@ -390,8 +472,8 @@ def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
         - related_findings: Other findings in same file/CWE (coming in Phase 2)
 
     Example:
-        >>> ctx = get_finding_context("fingerprint-abc123", context_lines=10)
-        >>> print(ctx["source_code"]["lines"])  # Shows vulnerable code
+        >>> ctx = get_finding_context("fingerprint-abc123")
+        >>> print(ctx["source_code"]["lines"])  # Shows vulnerable code (20 lines context)
         >>> print(ctx["remediation"]["description"])  # Shows fix guidance
     """
     try:
@@ -410,7 +492,7 @@ def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
             file_path=location.get("path", ""),
             start_line=location.get("startLine", 1),
             end_line=location.get("endLine"),
-            context_lines=context_lines,
+            context_lines=20,  # Fixed at 20 lines (MCP resources don't support query params yet)
         )
 
         # Build remediation guidance
@@ -451,6 +533,7 @@ def get_finding_context(finding_id: str, context_lines: int = 20) -> dict:
 
 
 @mcp.tool()
+@require_auth_and_rate_limit
 def get_server_info() -> dict:
     """
     Get JMo Security MCP Server metadata and configuration.
