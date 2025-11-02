@@ -119,7 +119,7 @@ class TestGetContext:
         # Default is 20 lines
         # File is small, so should get entire file
         assert "#!/usr/bin/env python3" in context["lines"]
-        assert 'eval(user_input)' in context["lines"]
+        assert "eval(user_input)" in context["lines"]
 
     def test_get_context_file_not_found(self, repo_root_with_files: Path):
         """Test extracting context for non-existent file."""
@@ -209,43 +209,48 @@ class TestLanguageDetection:
         context = extractor.get_context("Dockerfile", 1)
         assert context["language"] == "dockerfile"
 
-    @pytest.mark.parametrize("file_path,expected_language", [
-        ("test.ts", "typescript"),
-        ("test.tsx", "typescript"),
-        ("test.jsx", "javascript"),
-        ("test.go", "go"),
-        ("test.rs", "rust"),
-        ("test.rb", "ruby"),
-        ("test.php", "php"),
-        ("test.java", "java"),
-        ("test.c", "c"),
-        ("test.cpp", "cpp"),
-        ("test.cc", "cpp"),
-        ("test.h", "c"),
-        ("test.hpp", "cpp"),
-        ("test.cs", "csharp"),
-        ("test.swift", "swift"),
-        ("test.kt", "kotlin"),
-        ("test.sh", "bash"),
-        ("test.bash", "bash"),
-        ("test.zsh", "zsh"),
-        ("test.ps1", "powershell"),
-        ("test.yml", "yaml"),
-        ("test.yaml", "yaml"),
-        ("test.json", "json"),
-        ("test.xml", "xml"),
-        ("test.toml", "toml"),
-        ("test.html", "html"),
-        ("test.css", "css"),
-        ("test.scss", "scss"),
-        ("test.sql", "sql"),
-        ("test.tf", "terraform"),
-        ("test.md", "markdown"),
-        ("Makefile", "makefile"),
-        (".gitignore", "gitignore"),
-        (".env", "dotenv"),
-    ])
-    def test_detect_language_comprehensive(self, tmp_path: Path, file_path: str, expected_language: str):
+    @pytest.mark.parametrize(
+        "file_path,expected_language",
+        [
+            ("test.ts", "typescript"),
+            ("test.tsx", "typescript"),
+            ("test.jsx", "javascript"),
+            ("test.go", "go"),
+            ("test.rs", "rust"),
+            ("test.rb", "ruby"),
+            ("test.php", "php"),
+            ("test.java", "java"),
+            ("test.c", "c"),
+            ("test.cpp", "cpp"),
+            ("test.cc", "cpp"),
+            ("test.h", "c"),
+            ("test.hpp", "cpp"),
+            ("test.cs", "csharp"),
+            ("test.swift", "swift"),
+            ("test.kt", "kotlin"),
+            ("test.sh", "bash"),
+            ("test.bash", "bash"),
+            ("test.zsh", "zsh"),
+            ("test.ps1", "powershell"),
+            ("test.yml", "yaml"),
+            ("test.yaml", "yaml"),
+            ("test.json", "json"),
+            ("test.xml", "xml"),
+            ("test.toml", "toml"),
+            ("test.html", "html"),
+            ("test.css", "css"),
+            ("test.scss", "scss"),
+            ("test.sql", "sql"),
+            ("test.tf", "terraform"),
+            ("test.md", "markdown"),
+            ("Makefile", "makefile"),
+            (".gitignore", "gitignore"),
+            (".env", "dotenv"),
+        ],
+    )
+    def test_detect_language_comprehensive(
+        self, tmp_path: Path, file_path: str, expected_language: str
+    ):
         """Test comprehensive language detection for all supported languages."""
         repo_root = tmp_path / "repo"
         repo_root.mkdir()
@@ -286,7 +291,7 @@ class TestGetFullFileContent:
         assert result["path"] == "src/app.py"
         assert result["language"] == "python"
         assert "#!/usr/bin/env python3" in result["content"]
-        assert 'eval(user_input)' in result["content"]
+        assert "eval(user_input)" in result["content"]
         assert result["line_count"] == 12  # Actual line count from fixture
 
     def test_get_full_file_content_javascript(self, repo_root_with_files: Path):
@@ -336,7 +341,9 @@ class TestEdgeCases:
         repo_root.mkdir()
 
         unicode_file = repo_root / "unicode.py"
-        unicode_file.write_text("# -*- coding: utf-8 -*-\n# Comment with émojis 🔥\nprint('Hello 世界')\n")
+        unicode_file.write_text(
+            "# -*- coding: utf-8 -*-\n# Comment with émojis 🔥\nprint('Hello 世界')\n"
+        )
 
         extractor = SourceContextExtractor(repo_root)
         context = extractor.get_context("unicode.py", 3)
@@ -431,7 +438,9 @@ class TestEdgeCases:
         special_file.write_text("print('test')\n")
 
         extractor = SourceContextExtractor(repo_root)
-        context = extractor.get_context("dir with spaces/sub-dir_123/file-name_123.py", 1)
+        context = extractor.get_context(
+            "dir with spaces/sub-dir_123/file-name_123.py", 1
+        )
 
         assert context["path"] == "dir with spaces/sub-dir_123/file-name_123.py"
         assert "print('test')" in context["lines"]

@@ -255,9 +255,14 @@ def apply_fix(
         # 4. Rollback mechanism if tests fail
         # 5. Update .jmo/fix-history.json
 
-        logger.warning(f"apply_fix: patch application not yet implemented (finding: {finding_id})")
+        logger.warning(
+            f"apply_fix: patch application not yet implemented (finding: {finding_id})"
+        )
 
-        return {"success": False, "error": "Patch application not yet implemented (coming in Phase 2)"}
+        return {
+            "success": False,
+            "error": "Patch application not yet implemented (coming in Phase 2)",
+        }
 
     except ValueError as e:
         logger.error(f"apply_fix validation error: {e}")

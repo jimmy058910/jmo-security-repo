@@ -94,17 +94,13 @@ class FindingsLoader:
         if severity:
             severity_set = {s.upper() for s in severity}
             filtered = [
-                f
-                for f in filtered
-                if f.get("severity", "").upper() in severity_set
+                f for f in filtered if f.get("severity", "").upper() in severity_set
             ]
 
         # Filter by tool
         if tool:
             filtered = [
-                f
-                for f in filtered
-                if f.get("tool", {}).get("name", "") == tool
+                f for f in filtered if f.get("tool", {}).get("name", "") == tool
             ]
 
         # Filter by rule ID
@@ -114,9 +110,7 @@ class FindingsLoader:
         # Filter by path (substring match)
         if path:
             filtered = [
-                f
-                for f in filtered
-                if path in f.get("location", {}).get("path", "")
+                f for f in filtered if path in f.get("location", {}).get("path", "")
             ]
 
         # Get total before pagination

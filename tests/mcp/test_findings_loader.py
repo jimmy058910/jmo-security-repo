@@ -39,7 +39,9 @@ class TestFindingsLoaderInit:
 class TestLoadFindings:
     """Test loading findings from JSON file."""
 
-    def test_load_findings_success(self, results_dir_with_findings: Path, sample_findings: list):
+    def test_load_findings_success(
+        self, results_dir_with_findings: Path, sample_findings: list
+    ):
         """Test successful loading of findings."""
         loader = FindingsLoader(results_dir_with_findings)
         findings = loader.load_findings()
@@ -271,7 +273,9 @@ class TestGetFindingById:
 class TestGetTotalCount:
     """Test getting total count of findings."""
 
-    def test_get_total_count(self, results_dir_with_findings: Path, sample_findings: list):
+    def test_get_total_count(
+        self, results_dir_with_findings: Path, sample_findings: list
+    ):
         """Test getting total count matches findings."""
         loader = FindingsLoader(results_dir_with_findings)
 
@@ -330,26 +334,30 @@ class TestGetSeverityDistribution:
         summaries_dir.mkdir(parents=True)
 
         findings_file = summaries_dir / "findings.json"
-        findings_file.write_text(json.dumps([
-            {
-                "schemaVersion": "1.2.0",
-                "id": "test-1",
-                "severity": "HIGH",
-                "ruleId": "test-rule",
-                "tool": {"name": "test", "version": "1.0"},
-                "location": {"path": "test.py", "startLine": 1},
-                "message": "Test finding",
-            },
-            {
-                "schemaVersion": "1.2.0",
-                "id": "test-2",
-                "severity": "HIGH",
-                "ruleId": "test-rule",
-                "tool": {"name": "test", "version": "1.0"},
-                "location": {"path": "test.py", "startLine": 2},
-                "message": "Test finding 2",
-            },
-        ]))
+        findings_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "schemaVersion": "1.2.0",
+                        "id": "test-1",
+                        "severity": "HIGH",
+                        "ruleId": "test-rule",
+                        "tool": {"name": "test", "version": "1.0"},
+                        "location": {"path": "test.py", "startLine": 1},
+                        "message": "Test finding",
+                    },
+                    {
+                        "schemaVersion": "1.2.0",
+                        "id": "test-2",
+                        "severity": "HIGH",
+                        "ruleId": "test-rule",
+                        "tool": {"name": "test", "version": "1.0"},
+                        "location": {"path": "test.py", "startLine": 2},
+                        "message": "Test finding 2",
+                    },
+                ]
+            )
+        )
 
         loader = FindingsLoader(results_dir)
         distribution = loader.get_severity_distribution()
@@ -390,6 +398,7 @@ class TestEdgeCases:
 
         # Mock open to raise PermissionError
         import builtins
+
         original_open = builtins.open
 
         def mock_open(*args, **kwargs):
@@ -433,16 +442,20 @@ class TestEdgeCases:
 
         # Create finding missing 'tool' field
         findings_file = summaries_dir / "findings.json"
-        findings_file.write_text(json.dumps([
-            {
-                "id": "test-1",
-                "severity": "HIGH",
-                "ruleId": "test-rule",
-                # Missing 'tool' field
-                "location": {"path": "test.py", "startLine": 1},
-                "message": "Test finding",
-            }
-        ]))
+        findings_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "test-1",
+                        "severity": "HIGH",
+                        "ruleId": "test-rule",
+                        # Missing 'tool' field
+                        "location": {"path": "test.py", "startLine": 1},
+                        "message": "Test finding",
+                    }
+                ]
+            )
+        )
 
         loader = FindingsLoader(results_dir)
         findings = loader.load_findings()

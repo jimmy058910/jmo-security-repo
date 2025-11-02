@@ -43,9 +43,7 @@ def sample_findings() -> List[Dict[str, Any]]:
             },
             "compliance": {
                 "owaspTop10_2021": ["A03:2021"],
-                "cweTop25_2024": [
-                    {"id": "CWE-79", "rank": 2, "category": "Injection"}
-                ],
+                "cweTop25_2024": [{"id": "CWE-79", "rank": 2, "category": "Injection"}],
             },
         },
         {
@@ -76,9 +74,7 @@ def sample_findings() -> List[Dict[str, Any]]:
             },
             "compliance": {
                 "owaspTop10_2021": ["A03:2021"],
-                "cweTop25_2024": [
-                    {"id": "CWE-89", "rank": 3, "category": "Injection"}
-                ],
+                "cweTop25_2024": [{"id": "CWE-89", "rank": 3, "category": "Injection"}],
             },
         },
         {
@@ -164,7 +160,9 @@ def sample_findings() -> List[Dict[str, Any]]:
 
 
 @pytest.fixture
-def results_dir_with_findings(tmp_path: Path, sample_findings: List[Dict[str, Any]]) -> Path:
+def results_dir_with_findings(
+    tmp_path: Path, sample_findings: List[Dict[str, Any]]
+) -> Path:
     """Create a temporary results directory with findings.json."""
     results_dir = tmp_path / "results"
     summaries_dir = results_dir / "summaries"
