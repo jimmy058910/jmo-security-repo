@@ -27,6 +27,8 @@ Environment Variables:
     JMO_MCP_RATE_LIMIT_REFILL_RATE: Tokens per second (default: 1.67 = 100/min)
 """
 
+from __future__ import annotations
+
 import os
 import hashlib
 import logging

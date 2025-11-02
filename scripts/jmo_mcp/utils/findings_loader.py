@@ -5,6 +5,8 @@ This module provides utilities for reading findings.json and applying
 filters for MCP tool queries.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any

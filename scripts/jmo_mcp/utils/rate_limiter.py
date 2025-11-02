@@ -5,6 +5,8 @@ Provides per-client rate limiting to prevent abuse while allowing
 burst traffic. Configurable capacity and refill rate.
 """
 
+from __future__ import annotations
+
 import time
 from collections import defaultdict
 from threading import Lock

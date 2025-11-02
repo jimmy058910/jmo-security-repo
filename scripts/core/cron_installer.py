@@ -4,6 +4,8 @@ Installs ScanSchedule objects to system crontab on Linux/macOS.
 Windows is not supported (use GitHub Actions or GitLab CI instead).
 """
 
+from __future__ import annotations
+
 import platform
 import subprocess
 

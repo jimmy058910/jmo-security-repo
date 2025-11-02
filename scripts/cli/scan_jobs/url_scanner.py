@@ -9,6 +9,8 @@ Scans live web applications and APIs using:
 Integrates with ToolRunner for execution management.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 from urllib.parse import urlparse

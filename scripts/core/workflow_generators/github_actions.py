@@ -3,6 +3,8 @@
 Generates .github/workflows/*.yml files from ScanSchedule objects.
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 

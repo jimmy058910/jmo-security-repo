@@ -1,5 +1,7 @@
 """Schedule management following Kubernetes CronJob API patterns."""
 
+from __future__ import annotations
+
 import json
 import os
 import uuid

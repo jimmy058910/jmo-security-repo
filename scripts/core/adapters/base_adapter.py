@@ -22,6 +22,8 @@ Usage:
             ...
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from abc import ABC, abstractmethod

@@ -18,6 +18,8 @@ Related:
     - ACTION_PLAN.md Task 3.3: Exception Handling Refactor
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 

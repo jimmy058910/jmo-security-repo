@@ -12,6 +12,8 @@ IMPORTANT: This is for JMo Security's internal tool management,
 NOT for community plugin development.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path

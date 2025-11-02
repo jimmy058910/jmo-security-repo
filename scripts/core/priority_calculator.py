@@ -11,6 +11,8 @@ Priority formula combines real-world exploit data with severity to focus
 on actual threats instead of theoretical vulnerabilities.
 """
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
 

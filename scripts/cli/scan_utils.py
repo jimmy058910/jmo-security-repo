@@ -4,6 +4,8 @@ Utilities for scan jobs.
 Centralized utility functions used by scan job modules.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import shutil

@@ -42,6 +42,8 @@ See Also:
     - dev-only/hybrid-implementation-files/07-memory-integration-guide.md
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from datetime import datetime

@@ -8,6 +8,8 @@ Scans container images using:
 Integrates with ToolRunner for execution management.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 from collections.abc import Callable

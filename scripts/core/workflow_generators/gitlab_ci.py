@@ -1,5 +1,7 @@
 """Generate GitLab CI workflow files from ScanSchedule specs."""
 
+from __future__ import annotations
+
 from typing import Any
 from scripts.core.schedule_manager import ScanSchedule
 

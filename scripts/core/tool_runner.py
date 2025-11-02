@@ -7,6 +7,8 @@ with timeout, retry, and status tracking capabilities.
 Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_scan().
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

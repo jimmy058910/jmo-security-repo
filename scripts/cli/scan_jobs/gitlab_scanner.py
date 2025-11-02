@@ -32,6 +32,8 @@ Plus container image discovery and scanning:
 Integrates with repository_scanner and image_scanner for comprehensive coverage.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import re
