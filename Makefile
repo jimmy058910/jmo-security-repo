@@ -359,5 +359,3 @@ metrics: collect-metrics
 verify-badges:
 	@echo "🏷️  Verifying PyPI badge versions..."
 	@bash scripts/dev/verify_badges.sh
-
-
