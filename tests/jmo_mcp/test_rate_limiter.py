@@ -11,7 +11,6 @@ Tests:
 
 import time
 import threading
-import pytest
 
 from scripts.jmo_mcp.utils.rate_limiter import TokenBucket, RateLimiter
 
