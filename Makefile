@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
+.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -30,6 +30,7 @@ help:
 	@echo "  uv-sync      - Sync dev deps with uv if installed (alternative to pip-tools)"
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
+	@echo "  install-git-hooks  - Install git hooks (pre-push with Python 3.11 support)"
 	@echo "  smoke-ai   - Run AI repo finder smoke test (creates TSV/CSV/JSONL in ai-search/smoke)"
 	@echo "  capture-screenshot - Render dashboard.html from RESULTS_DIR and save PNG via headless Chromium"
 	@echo "  screenshots-demo  - Produce demo results from samples/fixtures/infra-demo (stubs allowed), render dashboard, capture PNG"
@@ -153,6 +154,19 @@ pre-commit-install:
 
 pre-commit-run:
 	@if command -v pre-commit >/dev/null 2>&1; then pre-commit run --all-files; else echo 'pre-commit not found. Run: make dev-deps'; fi
+
+install-git-hooks:
+	@echo "Installing git hooks..."
+	@if [ ! -d .git ]; then \
+		echo "ERROR: Not a git repository"; exit 1; \
+	fi
+	@if [ -f hooks/pre-push ]; then \
+		cp hooks/pre-push .git/hooks/pre-push; \
+		chmod +x .git/hooks/pre-push; \
+		echo "✅ Installed pre-push hook (uses Python 3.11 for modern type hints)"; \
+	else \
+		echo "ERROR: hooks/pre-push not found"; exit 1; \
+	fi
 
 # Convenience target: install dev deps and the package in editable mode so
 # `from scripts...` imports work without tweaking PYTHONPATH.
@@ -345,3 +359,4 @@ metrics: collect-metrics
 verify-badges:
 	@echo "🏷️  Verifying PyPI badge versions..."
 	@bash scripts/dev/verify_badges.sh
+
