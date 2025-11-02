@@ -39,7 +39,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from datetime import datetime, timezone
 
 try:
@@ -84,18 +84,18 @@ def err(msg: str) -> None:
     print(f"{RED}[err]{NC} {msg}", file=sys.stderr)
 
 
-def load_versions() -> Dict:
+def load_versions() -> dict:
     """Load versions.yaml."""
     if not VERSIONS_YAML.exists():
         err(f"versions.yaml not found at {VERSIONS_YAML}")
         sys.exit(1)
 
     with open(VERSIONS_YAML) as f:
-        data: Dict[Any, Any] = yaml.safe_load(f) or {}
+        data: dict[Any, Any] = yaml.safe_load(f) or {}
         return data
 
 
-def save_versions(data: Dict) -> None:
+def save_versions(data: dict) -> None:
     """Save versions.yaml with updated timestamp."""
     # Update version history
     if "version_history" not in data:
@@ -116,7 +116,7 @@ def save_versions(data: Dict) -> None:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
-def get_latest_github_release(repo: str) -> Optional[str]:
+def get_latest_github_release(repo: str) -> str | None:
     """Get latest release version from GitHub using gh CLI."""
     try:
         result = subprocess.run(
@@ -134,7 +134,7 @@ def get_latest_github_release(repo: str) -> Optional[str]:
         return None
 
 
-def get_latest_pypi_version(package: str) -> Optional[str]:
+def get_latest_pypi_version(package: str) -> str | None:
     """Get latest version from PyPI."""
     try:
         result = subprocess.run(
@@ -150,7 +150,7 @@ def get_latest_pypi_version(package: str) -> Optional[str]:
         return None
 
 
-def check_latest_versions() -> Dict[str, Tuple[str, str, bool]]:
+def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
     """
     Check for latest versions of all tools.
 

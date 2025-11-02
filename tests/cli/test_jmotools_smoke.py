@@ -13,8 +13,7 @@ def run(args):
     """Run jmo CLI command (consolidated from jmotools in v0.9.0)."""
     return subprocess.run(
         [sys.executable, "-m", "scripts.cli.jmo", *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

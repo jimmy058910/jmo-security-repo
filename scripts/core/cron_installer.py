@@ -6,7 +6,6 @@ Windows is not supported (use GitHub Actions or GitLab CI instead).
 
 import platform
 import subprocess
-from typing import List
 
 from scripts.core.schedule_manager import ScanSchedule
 
@@ -105,7 +104,7 @@ class CronInstaller:
 
         return self._set_crontab(filtered)
 
-    def list_installed(self) -> List[str]:
+    def list_installed(self) -> list[str]:
         """List all JMo schedules in crontab.
 
         Returns:
@@ -129,7 +128,7 @@ class CronInstaller:
 
         return schedules
 
-    def _get_crontab(self) -> List[str]:
+    def _get_crontab(self) -> list[str]:
         """Get current crontab as list of lines.
 
         Returns:
@@ -150,7 +149,7 @@ class CronInstaller:
         except FileNotFoundError:
             raise CronNotAvailableError("crontab command not found")
 
-    def _set_crontab(self, lines: List[str]) -> bool:
+    def _set_crontab(self, lines: list[str]) -> bool:
         """Set crontab from list of lines.
 
         Args:
@@ -177,8 +176,8 @@ class CronInstaller:
             raise CronInstallError(f"Failed to install crontab: {e.stderr}")
 
     def _remove_schedule_entries(
-        self, lines: List[str], schedule_name: str
-    ) -> List[str]:
+        self, lines: list[str], schedule_name: str
+    ) -> list[str]:
         """Remove all lines for a specific schedule.
 
         Uses marker-based approach to safely remove entries without

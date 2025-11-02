@@ -9,7 +9,6 @@ REFACTORED: v0.9.0 - Now uses plugin architecture
 from __future__ import annotations
 import json
 from pathlib import Path
-from typing import List
 
 from scripts.core.common_finding import (
     extract_code_snippet,
@@ -44,7 +43,7 @@ class TrivyAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse Trivy JSON output and return normalized findings.
 
         Args:
@@ -69,7 +68,7 @@ class TrivyAdapter(AdapterPlugin):
         if not isinstance(results, list):
             return []
 
-        findings: List[Finding] = []
+        findings: list[Finding] = []
         tool_version = str(data.get("Version") or "unknown")
 
         for r in results:

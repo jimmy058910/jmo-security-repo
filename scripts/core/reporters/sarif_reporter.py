@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 SARIF_VERSION = "2.1.0"
 
 
-def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert normalized findings to SARIF 2.1.0 format.
 
     Args:
@@ -27,7 +27,7 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         SARIF document as dict
     """
-    rules: Dict[str, Dict[str, Any]] = {}
+    rules: dict[str, dict[str, Any]] = {}
     results = []
 
     for idx, f in enumerate(findings):
@@ -181,7 +181,7 @@ def _severity_to_level(sev: str | None) -> str:
     return "note"
 
 
-def write_sarif(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_sarif(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     """Write findings to SARIF 2.1.0 JSON file.
 
     Args:

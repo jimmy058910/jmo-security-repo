@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
 
-def write_html(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     total = len(findings)

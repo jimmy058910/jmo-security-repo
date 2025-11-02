@@ -33,7 +33,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # ANSI colors for output
 GREEN = "\033[92m"
@@ -43,7 +42,7 @@ BLUE = "\033[94m"
 RESET = "\033[0m"
 
 
-def find_python_310_plus() -> Optional[str]:
+def find_python_310_plus() -> str | None:
     """Find Python 3.10+ interpreter on the system."""
     # Candidates to try (in order of preference)
     candidates = [
@@ -73,7 +72,7 @@ def find_python_310_plus() -> Optional[str]:
     return None
 
 
-def get_python_version() -> Tuple[int, int]:
+def get_python_version() -> tuple[int, int]:
     """Get current Python version as (major, minor)."""
     return (sys.version_info.major, sys.version_info.minor)
 
@@ -128,7 +127,7 @@ def validate_python_version(
     return True
 
 
-def check_requirements_txt_python_version(req_file: Path) -> Tuple[bool, str]:
+def check_requirements_txt_python_version(req_file: Path) -> tuple[bool, str]:
     """Check Python version used to compile requirements-dev.txt."""
     if not req_file.exists():
         return False, "File not found"
@@ -199,7 +198,7 @@ def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int
         return 1
 
 
-def check_pip_conflicts() -> Tuple[bool, List[str]]:
+def check_pip_conflicts() -> tuple[bool, list[str]]:
     """Check for dependency conflicts using pip check."""
     try:
         result = subprocess.run(
@@ -222,7 +221,7 @@ def check_pip_conflicts() -> Tuple[bool, List[str]]:
         return False, [str(e)]
 
 
-def check_outdated_packages() -> List[Dict[str, str]]:
+def check_outdated_packages() -> list[dict[str, str]]:
     """Check for outdated packages using pip list --outdated."""
     try:
         result = subprocess.run(
@@ -255,10 +254,10 @@ def check_outdated_packages() -> List[Dict[str, str]]:
 
 def compare_requirements(
     old_file: Path, new_file: Path
-) -> Tuple[List[str], List[str], List[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     """Compare old and new requirements files to detect changes."""
 
-    def parse_requirements(file_path: Path) -> Dict[str, str]:
+    def parse_requirements(file_path: Path) -> dict[str, str]:
         """Parse requirements file into dict of package: version."""
         packages: dict[str, str] = {}
         if not file_path.exists():

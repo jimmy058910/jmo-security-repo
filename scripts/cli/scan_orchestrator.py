@@ -9,7 +9,7 @@ Created as part of PHASE 1 refactoring to extract orchestration logic from cmd_s
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
+from typing import Any
 import fnmatch
 
 
@@ -27,12 +27,12 @@ class ScanTargets:
         k8s_resources: List of Kubernetes resource info dicts
     """
 
-    repos: List[Path] = field(default_factory=list)
-    images: List[str] = field(default_factory=list)
-    iac_files: List[Tuple[str, Path]] = field(default_factory=list)
-    urls: List[str] = field(default_factory=list)
-    gitlab_repos: List[Dict[str, str]] = field(default_factory=list)
-    k8s_resources: List[Dict[str, str]] = field(default_factory=list)
+    repos: list[Path] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
+    iac_files: list[tuple[str, Path]] = field(default_factory=list)
+    urls: list[str] = field(default_factory=list)
+    gitlab_repos: list[dict[str, str]] = field(default_factory=list)
+    k8s_resources: list[dict[str, str]] = field(default_factory=list)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -60,7 +60,7 @@ class ScanTargets:
             f"{len(self.k8s_resources)} K8s resources"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "repos": [str(r) for r in self.repos],
@@ -89,13 +89,13 @@ class ScanConfig:
         allow_missing_tools: Allow scan to continue if tools missing
     """
 
-    tools: List[str]
+    tools: list[str]
     results_dir: Path
     timeout: int = 600
     retries: int = 0
-    max_workers: Optional[int] = None
-    include_patterns: List[str] = field(default_factory=list)
-    exclude_patterns: List[str] = field(default_factory=list)
+    max_workers: int | None = None
+    include_patterns: list[str] = field(default_factory=list)
+    exclude_patterns: list[str] = field(default_factory=list)
     allow_missing_tools: bool = False
 
     def __post_init__(self):
@@ -172,7 +172,7 @@ class ScanOrchestrator:
 
         return targets
 
-    def _discover_repos(self, args) -> List[Path]:
+    def _discover_repos(self, args) -> list[Path]:
         """
         Discover local Git repositories from CLI arguments.
 
@@ -181,7 +181,7 @@ class ScanOrchestrator:
         - --repos-dir: Directory containing multiple repos
         - --targets: File with list of repository paths
         """
-        repos: List[Path] = []
+        repos: list[Path] = []
 
         # Single repository
         if getattr(args, "repo", None):
@@ -210,7 +210,7 @@ class ScanOrchestrator:
 
         return repos
 
-    def _discover_images(self, args) -> List[str]:
+    def _discover_images(self, args) -> list[str]:
         """
         Discover container images from CLI arguments.
 
@@ -218,7 +218,7 @@ class ScanOrchestrator:
         - --image: Single container image
         - --images-file: File with list of image names
         """
-        images: List[str] = []
+        images: list[str] = []
 
         # Single image
         if getattr(args, "image", None):
@@ -236,7 +236,7 @@ class ScanOrchestrator:
 
         return images
 
-    def _discover_iac_files(self, args) -> List[Tuple[str, Path]]:
+    def _discover_iac_files(self, args) -> list[tuple[str, Path]]:
         """
         Discover IaC files from CLI arguments.
 
@@ -245,7 +245,7 @@ class ScanOrchestrator:
         - "cloudformation": CloudFormation templates
         - "k8s": Kubernetes manifests
         """
-        iac_files: List[Tuple[str, Path]] = []
+        iac_files: list[tuple[str, Path]] = []
 
         # Terraform state files
         if getattr(args, "terraform_state", None):
@@ -267,7 +267,7 @@ class ScanOrchestrator:
 
         return iac_files
 
-    def _discover_urls(self, args) -> List[str]:
+    def _discover_urls(self, args) -> list[str]:
         """
         Discover web URLs from CLI arguments.
 
@@ -275,7 +275,7 @@ class ScanOrchestrator:
         - --url: Single URL
         - --urls-file: File with list of URLs
         """
-        urls: List[str] = []
+        urls: list[str] = []
 
         # Single URL
         if getattr(args, "url", None):
@@ -293,7 +293,7 @@ class ScanOrchestrator:
 
         return urls
 
-    def _discover_gitlab_repos(self, args) -> List[Dict[str, str]]:
+    def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
         Discover GitLab repositories from CLI arguments.
 
@@ -304,7 +304,7 @@ class ScanOrchestrator:
         Returns:
             List of dicts with keys: full_path, url, token, repo, group, name
         """
-        gitlab_repos: List[Dict[str, str]] = []
+        gitlab_repos: list[dict[str, str]] = []
 
         # Single GitLab repository
         if getattr(args, "gitlab_repo", None):
@@ -342,7 +342,7 @@ class ScanOrchestrator:
 
         return gitlab_repos
 
-    def _discover_k8s_resources(self, args) -> List[Dict[str, str]]:
+    def _discover_k8s_resources(self, args) -> list[dict[str, str]]:
         """
         Discover Kubernetes resources from CLI arguments.
 
@@ -354,7 +354,7 @@ class ScanOrchestrator:
         Returns:
             List of dicts with keys: context, namespace, name
         """
-        k8s_resources: List[Dict[str, str]] = []
+        k8s_resources: list[dict[str, str]] = []
 
         if getattr(args, "k8s_context", None):
             context = args.k8s_context
@@ -388,7 +388,7 @@ class ScanOrchestrator:
 
         return k8s_resources
 
-    def _filter_repos(self, repos: List[Path]) -> List[Path]:
+    def _filter_repos(self, repos: list[Path]) -> list[Path]:
         """
         Apply include/exclude patterns to repository list.
 
@@ -493,7 +493,7 @@ class ScanOrchestrator:
 
         return 4  # Default
 
-    def get_summary(self, targets: ScanTargets) -> Dict[str, Any]:
+    def get_summary(self, targets: ScanTargets) -> dict[str, Any]:
         """
         Generate summary of orchestration configuration.
 
@@ -521,8 +521,8 @@ class ScanOrchestrator:
         }
 
     def scan_all(
-        self, targets: ScanTargets, per_tool_config: Dict, progress_callback=None
-    ) -> List[Tuple[str, Dict[str, bool]]]:
+        self, targets: ScanTargets, per_tool_config: dict, progress_callback=None
+    ) -> list[tuple[str, dict[str, bool]]]:
         """
         Execute scans on all discovered targets in parallel.
 

@@ -1,6 +1,6 @@
 """Single repository workflow."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from .base_flow import BaseWizardFlow
 
@@ -8,7 +8,7 @@ from .base_flow import BaseWizardFlow
 class RepoFlow(BaseWizardFlow):
     """Scan single repository workflow."""
 
-    def detect_targets(self) -> Dict[str, List]:
+    def detect_targets(self) -> dict[str, list]:
         """Detect repositories in current directory.
 
         Returns:
@@ -16,7 +16,7 @@ class RepoFlow(BaseWizardFlow):
         """
         return {"repos": self.detector.detect_repos()}
 
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt for profile and artifact generation options.
 
         Returns:
@@ -51,7 +51,7 @@ class RepoFlow(BaseWizardFlow):
 
         return {"profile": profile, "emit_artifacts": emit_artifacts}
 
-    def _print_detected_repos(self, targets: Dict) -> None:
+    def _print_detected_repos(self, targets: dict) -> None:
         """Print summary of detected repositories."""
         items = []
 
@@ -67,7 +67,7 @@ class RepoFlow(BaseWizardFlow):
         else:
             self.prompter.print_warning("No repositories detected in current directory")
 
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build jmo scan command for single repository.
 
         Args:

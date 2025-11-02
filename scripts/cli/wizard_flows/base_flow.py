@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 import re
 import subprocess  # nosec B404
 import yaml
@@ -11,7 +11,7 @@ import yaml
 class TargetDetector:
     """Unified target detection for wizard workflows."""
 
-    def detect_repos(self, search_dir: Optional[Path] = None) -> List[Path]:
+    def detect_repos(self, search_dir: Path | None = None) -> list[Path]:
         """Detect Git repositories in directory.
 
         Args:
@@ -23,7 +23,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        repos: List[Path] = []
+        repos: list[Path] = []
         if not search_dir.exists():
             return repos
 
@@ -33,7 +33,7 @@ class TargetDetector:
 
         return repos
 
-    def detect_images(self, search_dir: Optional[Path] = None) -> List[str]:
+    def detect_images(self, search_dir: Path | None = None) -> list[str]:
         """Detect container images from docker-compose.yml, Dockerfiles.
 
         Args:
@@ -69,7 +69,7 @@ class TargetDetector:
 
         return list(set(images))  # Deduplicate
 
-    def detect_iac(self, search_dir: Optional[Path] = None) -> List[Path]:
+    def detect_iac(self, search_dir: Path | None = None) -> list[Path]:
         """Detect IaC files (Terraform, CloudFormation, K8s).
 
         Args:
@@ -81,7 +81,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        iac_files: List[Path] = []
+        iac_files: list[Path] = []
 
         # Terraform
         iac_files.extend(search_dir.glob("**/*.tf"))
@@ -97,7 +97,7 @@ class TargetDetector:
 
         return iac_files
 
-    def detect_web_apps(self, search_dir: Optional[Path] = None) -> List[str]:
+    def detect_web_apps(self, search_dir: Path | None = None) -> list[str]:
         """Detect web applications (infer from config files).
 
         Args:
@@ -131,7 +131,7 @@ class TargetDetector:
 
         return list(set(urls))
 
-    def detect_package_files(self, search_dir: Optional[Path] = None) -> List[Path]:
+    def detect_package_files(self, search_dir: Path | None = None) -> list[Path]:
         """Detect package manifest files across languages.
 
         Args:
@@ -143,7 +143,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        package_files: List[Path] = []
+        package_files: list[Path] = []
 
         # Python
         package_files.extend(search_dir.glob("**/requirements.txt"))
@@ -175,7 +175,7 @@ class TargetDetector:
 
         return list(set(package_files))
 
-    def detect_lock_files(self, search_dir: Optional[Path] = None) -> List[Path]:
+    def detect_lock_files(self, search_dir: Path | None = None) -> list[Path]:
         """Detect lock files for reproducible dependency scans.
 
         Args:
@@ -187,7 +187,7 @@ class TargetDetector:
         if search_dir is None:
             search_dir = Path.cwd()
 
-        lock_files: List[Path] = []
+        lock_files: list[Path] = []
 
         # Python
         lock_files.extend(search_dir.glob("**/requirements-lock.txt"))
@@ -329,7 +329,7 @@ class PromptHelper:
         """
         print(self.colorize(f"{self.ICONS['cross']} {message}", "red"))
 
-    def print_summary_box(self, title: str, items: List[str]) -> None:
+    def print_summary_box(self, title: str, items: list[str]) -> None:
         """Print a summary box with items.
 
         Args:
@@ -344,7 +344,7 @@ class PromptHelper:
         print()
 
     def prompt_choice(
-        self, question: str, choices: List[str], default: Optional[str] = None
+        self, question: str, choices: list[str], default: str | None = None
     ) -> str:
         """Prompt user to select from choices.
 
@@ -433,7 +433,7 @@ class PromptHelper:
 class ArtifactGenerator:
     """Generate reusable scan artifacts (Makefile, GHA, scripts)."""
 
-    def generate_makefile(self, command: List[str], output_path: Path) -> None:
+    def generate_makefile(self, command: list[str], output_path: Path) -> None:
         """Generate Makefile with scan target.
 
         Args:
@@ -444,7 +444,7 @@ class ArtifactGenerator:
 
         generate_makefile_target(command, output_path)  # type: ignore[arg-type]
 
-    def generate_github_actions(self, command: List[str], output_path: Path) -> None:
+    def generate_github_actions(self, command: list[str], output_path: Path) -> None:
         """Generate GitHub Actions workflow.
 
         Args:
@@ -455,7 +455,7 @@ class ArtifactGenerator:
 
         generate_github_actions(command, output_path)  # type: ignore[arg-type]
 
-    def generate_shell_script(self, command: List[str], output_path: Path) -> None:
+    def generate_shell_script(self, command: list[str], output_path: Path) -> None:
         """Generate shell script.
 
         Args:
@@ -470,7 +470,7 @@ class ArtifactGenerator:
 class BaseWizardFlow(ABC):
     """Abstract base class for wizard workflows."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize workflow.
 
         Args:
@@ -482,7 +482,7 @@ class BaseWizardFlow(ABC):
         self.prompter = PromptHelper()
 
     @abstractmethod
-    def detect_targets(self) -> Dict[str, List]:
+    def detect_targets(self) -> dict[str, list]:
         """Detect scannable targets for this workflow.
 
         Returns:
@@ -491,7 +491,7 @@ class BaseWizardFlow(ABC):
         pass
 
     @abstractmethod
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt user for workflow-specific options.
 
         Returns:
@@ -500,7 +500,7 @@ class BaseWizardFlow(ABC):
         pass
 
     @abstractmethod
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build jmo scan command from targets and options.
 
         Args:

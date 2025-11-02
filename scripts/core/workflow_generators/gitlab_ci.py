@@ -1,6 +1,6 @@
 """Generate GitLab CI workflow files from ScanSchedule specs."""
 
-from typing import Dict, Any, List
+from typing import Any
 from scripts.core.schedule_manager import ScanSchedule
 
 
@@ -32,7 +32,7 @@ class GitLabCIGenerator:
 
         return self._to_yaml(schedule, workflow)
 
-    def _generate_variables(self, schedule: ScanSchedule) -> Dict[str, str]:
+    def _generate_variables(self, schedule: ScanSchedule) -> dict[str, str]:
         """Generate global variables.
 
         Args:
@@ -53,7 +53,7 @@ class GitLabCIGenerator:
 
         return {"RESULTS_DIR": f"{base_dir}/{expanded_path}"}
 
-    def _generate_security_scan_job(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _generate_security_scan_job(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate security-scan job definition.
 
         Args:
@@ -104,7 +104,7 @@ class GitLabCIGenerator:
             return f"{hours}h"
         return f"{minutes}m"
 
-    def _generate_script(self, schedule: ScanSchedule) -> List[str]:
+    def _generate_script(self, schedule: ScanSchedule) -> list[str]:
         """Generate script commands for security scan.
 
         Args:
@@ -165,7 +165,7 @@ class GitLabCIGenerator:
 
         return commands
 
-    def _generate_artifacts(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _generate_artifacts(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate artifacts configuration.
 
         Args:
@@ -189,7 +189,7 @@ class GitLabCIGenerator:
 
         return artifacts
 
-    def _generate_rules(self, schedule: ScanSchedule) -> List[Dict[str, Any]]:
+    def _generate_rules(self, schedule: ScanSchedule) -> list[dict[str, Any]]:
         """Generate job execution rules.
 
         Args:
@@ -206,7 +206,7 @@ class GitLabCIGenerator:
 
     def _generate_notification_jobs(
         self, schedule: ScanSchedule
-    ) -> Dict[str, Dict[str, Any]]:
+    ) -> dict[str, dict[str, Any]]:
         """Generate notification jobs (Slack, etc.).
 
         Args:
@@ -257,8 +257,8 @@ class GitLabCIGenerator:
         return jobs
 
     def _generate_slack_script(
-        self, schedule: ScanSchedule, channel: Dict[str, Any], event: str
-    ) -> List[str]:
+        self, schedule: ScanSchedule, channel: dict[str, Any], event: str
+    ) -> list[str]:
         """Generate Slack notification script.
 
         Args:
@@ -330,7 +330,7 @@ class GitLabCIGenerator:
             f"  -d '{payload_json}'",
         ]
 
-    def _to_yaml(self, schedule: ScanSchedule, data: Dict) -> str:
+    def _to_yaml(self, schedule: ScanSchedule, data: dict) -> str:
         """Convert dict to properly formatted YAML string.
 
         Args:

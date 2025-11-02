@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 try:
     import jsonschema
@@ -17,7 +17,7 @@ def load_schema() -> Any:
     return json.loads(schema_path.read_text(encoding="utf-8"))
 
 
-def validate_findings(findings: List[dict]) -> bool:
+def validate_findings(findings: list[dict]) -> bool:
     if jsonschema is None:
         # If jsonschema isn't installed, skip validation but return True
         return True

@@ -31,7 +31,7 @@ class Severity(str, Enum):
     INFO = "INFO"
 
     @classmethod
-    def from_string(cls, value: str | None) -> "Severity":
+    def from_string(cls, value: str | None) -> Severity:
         """Parse severity from string with fallback to INFO.
 
         Args:

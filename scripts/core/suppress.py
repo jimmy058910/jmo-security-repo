@@ -5,7 +5,6 @@ import datetime as dt
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -21,9 +20,9 @@ except ImportError as e:
 class Suppression:
     id: str
     reason: str = ""
-    expires: Optional[str] = None  # ISO date or date object (YAML auto-parses dates)
+    expires: str | None = None  # ISO date or date object (YAML auto-parses dates)
 
-    def is_active(self, now: Optional[dt.date] = None) -> bool:
+    def is_active(self, now: dt.date | None = None) -> bool:
         if not self.expires:
             return True
         try:
@@ -46,7 +45,7 @@ class Suppression:
         return today <= exp
 
 
-def load_suppressions(path: Optional[str]) -> Dict[str, Suppression]:
+def load_suppressions(path: str | None) -> dict[str, Suppression]:
     """Load suppressions from YAML file.
 
     Supports both 'suppressions' (recommended) and 'suppress' (backward compat) keys.
@@ -77,8 +76,8 @@ def load_suppressions(path: Optional[str]) -> Dict[str, Suppression]:
 
 
 def filter_suppressed(
-    findings: List[dict], suppressions: Dict[str, Suppression]
-) -> List[dict]:
+    findings: list[dict], suppressions: dict[str, Suppression]
+) -> list[dict]:
     out = []
     for f in findings:
         sid = f.get("id")

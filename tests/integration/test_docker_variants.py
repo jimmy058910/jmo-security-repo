@@ -18,7 +18,6 @@ Related:
 
 import shutil
 import subprocess
-from typing import List, Tuple
 
 import pytest
 
@@ -48,7 +47,7 @@ def _docker_image_exists(image: str) -> bool:
 
 # ========== Configuration ==========
 
-DOCKER_VARIANTS: List[Tuple[str, str, List[str]]] = [
+DOCKER_VARIANTS: list[tuple[str, str, list[str]]] = [
     # (image_tag, profile, expected_tools)
     (
         "jmo-security:latest",
@@ -106,7 +105,7 @@ IMAGE_SIZE_RANGES = {
     DOCKER_VARIANTS,
     ids=lambda x: x[0] if isinstance(x, tuple) else str(x),
 )
-def test_docker_variant_help(image: str, _: str, __: List[str]):
+def test_docker_variant_help(image: str, _: str, __: list[str]):
     """Test all variants support --help command."""
     if not _docker_image_exists(image):
         pytest.skip(f"Docker image {image} not available locally")
@@ -124,7 +123,7 @@ def test_docker_variant_help(image: str, _: str, __: List[str]):
     DOCKER_VARIANTS,
     ids=lambda x: x[0] if isinstance(x, tuple) else str(x),
 )
-def test_docker_variant_scan_help(image: str, _: str, __: List[str]):
+def test_docker_variant_scan_help(image: str, _: str, __: list[str]):
     """Test all variants support scan --help command."""
     if not _docker_image_exists(image):
         pytest.skip(f"Docker image {image} not available locally")
@@ -146,7 +145,7 @@ def test_docker_variant_scan_help(image: str, _: str, __: List[str]):
     ids=lambda x: x[0] if isinstance(x, tuple) else str(x),
 )
 def test_docker_variant_tools_present(
-    image: str, profile: str, expected_tools: List[str]
+    image: str, profile: str, expected_tools: list[str]
 ):
     """Test each variant has tools for its profile."""
     if not _docker_image_exists(image):
@@ -296,7 +295,7 @@ def test_docker_alpine_excludes_deep_only_tools():
         ("jmo-security:alpine", IMAGE_SIZE_RANGES["jmo-security:alpine"]),
     ],
 )
-def test_docker_variant_size(image: str, size_range: Tuple[int, int]):
+def test_docker_variant_size(image: str, size_range: tuple[int, int]):
     """Test image sizes are within expected ranges."""
     if not _docker_image_exists(image):
         pytest.skip(f"Docker image {image} not available locally")

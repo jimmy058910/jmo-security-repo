@@ -308,7 +308,7 @@ def test_detect_iac_type_io_error_handling(tmp_path):
     iac_file.write_text("content")
 
     # Mock read_text to raise IOError
-    with patch.object(Path, "read_text", side_effect=IOError("Permission denied")):
+    with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
         result = detect_iac_type(iac_file)
 
     # Should return default for YAML

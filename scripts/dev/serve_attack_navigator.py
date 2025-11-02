@@ -256,7 +256,7 @@ def serve_and_open(json_file: Path):
 
     # Load layer JSON
     try:
-        with open(json_file, "r") as f:
+        with open(json_file) as f:
             layer_data = json.load(f)
     except Exception as e:
         print(f"❌ Error loading JSON: {e}")

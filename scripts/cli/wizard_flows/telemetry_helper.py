@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def send_wizard_telemetry(
     wizard_start_time: float,
     config: Any,
     version: str,
-    artifact_type: Optional[str] = None,
+    artifact_type: str | None = None,
 ) -> None:
     """
     Send wizard.completed telemetry event.

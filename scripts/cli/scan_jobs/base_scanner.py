@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 import re
 
 if TYPE_CHECKING:
@@ -16,11 +16,11 @@ class ScanResult:
 
     target_id: str  # Path, URL, image name, etc.
     target_type: str  # 'repo', 'image', 'iac', 'url', 'gitlab', 'k8s'
-    tool_statuses: Dict[str, bool]  # {'trivy': True, 'syft': False}
-    output_files: Dict[str, Path]  # {'trivy': Path('trivy.json')}
-    errors: List[str]  # Error messages
+    tool_statuses: dict[str, bool]  # {'trivy': True, 'syft': False}
+    output_files: dict[str, Path]  # {'trivy': Path('trivy.json')}
+    errors: list[str]  # Error messages
     duration: float  # Seconds
-    metadata: Dict[str, Any]  # Target-specific metadata
+    metadata: dict[str, Any]  # Target-specific metadata
 
 
 class BaseScanner(ABC):
@@ -36,7 +36,7 @@ class BaseScanner(ABC):
 
     @abstractmethod
     def scan(
-        self, target: Any, results_dir: Path, tools: List[str], args: Any
+        self, target: Any, results_dir: Path, tools: list[str], args: Any
     ) -> ScanResult:
         """Execute scan on target.
 
@@ -52,7 +52,7 @@ class BaseScanner(ABC):
         pass
 
     @abstractmethod
-    def get_applicable_tools(self, tools: List[str]) -> List[str]:
+    def get_applicable_tools(self, tools: list[str]) -> list[str]:
         """Filter tools list to those applicable for this target type.
 
         Args:

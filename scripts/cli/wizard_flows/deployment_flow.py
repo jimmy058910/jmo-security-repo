@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .base_flow import BaseWizardFlow
 
@@ -10,7 +10,7 @@ from .base_flow import BaseWizardFlow
 class DeploymentFlow(BaseWizardFlow):
     """Pre-deployment security validation workflow."""
 
-    def detect_targets(self) -> Dict[str, Any]:
+    def detect_targets(self) -> dict[str, Any]:
         """Detect deployment-relevant targets.
 
         Returns:
@@ -23,7 +23,7 @@ class DeploymentFlow(BaseWizardFlow):
             "environment": self._detect_environment(),
         }
 
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt for deployment-specific options with environment-aware recommendations.
 
         Returns:
@@ -87,7 +87,7 @@ class DeploymentFlow(BaseWizardFlow):
             "fail_on": fail_threshold,
         }
 
-    def _print_detected_deployment_targets(self, targets: Dict) -> None:
+    def _print_detected_deployment_targets(self, targets: dict) -> None:
         """Print summary of detected deployment targets."""
         items = []
 
@@ -115,7 +115,7 @@ class DeploymentFlow(BaseWizardFlow):
         else:
             self.prompter.print_warning("No deployment targets detected")
 
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build pre-deployment scan command.
 
         Args:

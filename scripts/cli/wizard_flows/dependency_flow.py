@@ -1,7 +1,7 @@
 """Dependency security audit workflow."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .base_flow import BaseWizardFlow
 
@@ -9,7 +9,7 @@ from .base_flow import BaseWizardFlow
 class DependencyFlow(BaseWizardFlow):
     """SBOM generation and dependency vulnerability scanning workflow."""
 
-    def detect_targets(self) -> Dict[str, Any]:
+    def detect_targets(self) -> dict[str, Any]:
         """Detect dependency-relevant targets.
 
         Returns:
@@ -25,7 +25,7 @@ class DependencyFlow(BaseWizardFlow):
             "images": images,
         }
 
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt for dependency-specific options.
 
         Returns:
@@ -54,7 +54,7 @@ class DependencyFlow(BaseWizardFlow):
             "check_licenses": check_licenses,
         }
 
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build dependency audit scan command.
 
         Args:
@@ -78,7 +78,7 @@ class DependencyFlow(BaseWizardFlow):
 
         return cmd
 
-    def _print_detected_dependencies(self, targets: Dict) -> None:
+    def _print_detected_dependencies(self, targets: dict) -> None:
         """Print summary of detected package managers and files."""
         items = []
 

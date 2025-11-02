@@ -9,7 +9,7 @@ Integrates with ToolRunner for execution management.
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Callable, Optional
+from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..scan_utils import tool_exists, write_stub
@@ -19,14 +19,14 @@ def scan_iac_file(
     iac_type: str,
     iac_path: Path,
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
     retries: int,
-    per_tool_config: Dict,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    tool_exists_func: Callable[[str], bool] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan an IaC file with checkov and trivy.
 
@@ -50,7 +50,7 @@ def scan_iac_file(
     _tool_exists = tool_exists_func or tool_exists
     _write_stub = write_stub_func or write_stub
 
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
     # Use filename as directory name
@@ -67,7 +67,7 @@ def scan_iac_file(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -142,7 +142,7 @@ def scan_iac_file(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     for result in results:
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)

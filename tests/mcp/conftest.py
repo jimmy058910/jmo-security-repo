@@ -6,12 +6,12 @@ Provides sample findings data, temporary directories, and mock utilities.
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 import pytest
 
 
 @pytest.fixture
-def sample_findings() -> List[Dict[str, Any]]:
+def sample_findings() -> list[dict[str, Any]]:
     """Sample findings data for testing (CommonFinding schema v1.2.0)."""
     return [
         {
@@ -161,7 +161,7 @@ def sample_findings() -> List[Dict[str, Any]]:
 
 @pytest.fixture
 def results_dir_with_findings(
-    tmp_path: Path, sample_findings: List[Dict[str, Any]]
+    tmp_path: Path, sample_findings: list[dict[str, Any]]
 ) -> Path:
     """Create a temporary results directory with findings.json."""
     results_dir = tmp_path / "results"

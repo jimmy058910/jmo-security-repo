@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
@@ -57,7 +57,7 @@ class BanditAdapter(AdapterPlugin):
         """Return plugin metadata."""
         return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
 
-    def parse(self, output_path: Path) -> List[Finding]:
+    def parse(self, output_path: Path) -> list[Finding]:
         """Parse tool output and return normalized findings.
 
         Args:
@@ -96,7 +96,7 @@ class BanditAdapter(AdapterPlugin):
         return findings
 
 
-def _load_bandit_internal(path: str | Path) -> List[Dict[str, Any]]:
+def _load_bandit_internal(path: str | Path) -> list[dict[str, Any]]:
     p = Path(path)
     if not p.exists():
         return []

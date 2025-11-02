@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from scripts.core.exceptions import AdapterParseException
 
@@ -39,14 +39,14 @@ from scripts.core.priority_calculator import PriorityCalculator
 logger = logging.getLogger(__name__)
 
 # When profiling is enabled (env JMO_PROFILE=1), this will be populated with per-job timings
-PROFILE_TIMINGS: Dict[str, Any] = {
+PROFILE_TIMINGS: dict[str, Any] = {
     "jobs": [],  # list of {"tool": str, "path": str, "seconds": float, "count": int}
     "meta": {},  # miscellaneous metadata like max_workers
 }
 
 
-def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
-    findings: List[Dict[str, Any]] = []
+def gather_results(results_dir: Path) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
 
     # Discover and load all adapter plugins
     plugin_count = discover_adapters()
@@ -176,7 +176,7 @@ def gather_results(results_dir: Path) -> List[Dict[str, Any]]:
 
 def _safe_load_plugin(
     plugin_class, path: Path, profiling: bool = False
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Load findings using plugin architecture (v0.9.0+).
 
     Args:
@@ -227,7 +227,7 @@ def _safe_load_plugin(
         return []
 
 
-def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, Any]]:
+def _safe_load(loader, path: Path, profiling: bool = False) -> list[dict[str, Any]]:
     """DEPRECATED: Legacy loader function for backward compatibility.
 
     This function will be removed in v1.0.0.
@@ -236,7 +236,7 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
     try:
         if profiling:
             t0 = time.perf_counter()
-            res: List[Dict[str, Any]] = loader(path)
+            res: list[dict[str, Any]] = loader(path)
             dt = time.perf_counter() - t0
             try:
                 PROFILE_TIMINGS["jobs"].append(
@@ -252,7 +252,7 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
                 logger.debug(f"Failed to record profiling timing: {e}")
             return res
         else:
-            result: List[Dict[str, Any]] = loader(path)
+            result: list[dict[str, Any]] = loader(path)
             return result
     except FileNotFoundError:
         # Tool output file missing (expected with --allow-missing-tools)
@@ -273,8 +273,8 @@ def _safe_load(loader, path: Path, profiling: bool = False) -> List[Dict[str, An
 
 
 def _build_syft_indexes(
-    findings: List[Dict[str, Any]],
-) -> tuple[Dict[str, List[Dict[str, str]]], Dict[str, List[Dict[str, str]]]]:
+    findings: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, str]]], dict[str, list[dict[str, str]]]]:
     """Build indexes of Syft packages by file path and lowercase package name.
 
     Args:
@@ -285,8 +285,8 @@ def _build_syft_indexes(
         - by_path: Dict mapping file paths to list of package dicts
         - by_name: Dict mapping lowercase package names to list of package dicts
     """
-    by_path: Dict[str, List[Dict[str, str]]] = {}
-    by_name: Dict[str, List[Dict[str, str]]] = {}
+    by_path: dict[str, list[dict[str, str]]] = {}
+    by_name: dict[str, list[dict[str, str]]] = {}
 
     for f in findings:
         if not isinstance(f, dict):
@@ -317,10 +317,10 @@ def _build_syft_indexes(
 
 
 def _find_sbom_match(
-    trivy_finding: Dict[str, Any],
-    by_path: Dict[str, List[Dict[str, str]]],
-    by_name: Dict[str, List[Dict[str, str]]],
-) -> Optional[Dict[str, str]]:
+    trivy_finding: dict[str, Any],
+    by_path: dict[str, list[dict[str, str]]],
+    by_name: dict[str, list[dict[str, str]]],
+) -> dict[str, str] | None:
     """Find matching SBOM package for a Trivy finding.
 
     Args:
@@ -360,7 +360,7 @@ def _find_sbom_match(
         return candidates[0]
 
 
-def _attach_sbom_context(finding: Dict[str, Any], match: Dict[str, str]) -> None:
+def _attach_sbom_context(finding: dict[str, Any], match: dict[str, str]) -> None:
     """Attach SBOM context and package tag to a finding.
 
     Args:
@@ -382,7 +382,7 @@ def _attach_sbom_context(finding: Dict[str, Any], match: Dict[str, str]) -> None
         tags.append(tag_val)
 
 
-def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
+def _enrich_trivy_with_syft(findings: list[dict[str, Any]]) -> None:
     """Best-effort enrichment: attach SBOM package context from Syft to Trivy findings.
 
     Strategy:
@@ -407,7 +407,7 @@ def _enrich_trivy_with_syft(findings: List[Dict[str, Any]]) -> None:
             _attach_sbom_context(f, match)
 
 
-def _enrich_with_priority(findings: List[Dict[str, Any]]) -> None:
+def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:
     """Enrich findings with priority scores using EPSS and CISA KEV data.
 
     Adds a 'priority' field to each finding containing:

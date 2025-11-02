@@ -31,7 +31,7 @@ Example:
 
 import os
 import sys
-from typing import Optional, Literal
+from typing import Literal
 
 # Check if resend is available
 try:
@@ -362,7 +362,7 @@ def validate_email(email: str) -> bool:
     return True
 
 
-def get_subscriber_count() -> Optional[int]:
+def get_subscriber_count() -> int | None:
     """Get current subscriber count from Resend.
 
     Returns:

@@ -1,7 +1,7 @@
 """CI/CD security audit workflow."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base_flow import BaseWizardFlow
 
@@ -9,7 +9,7 @@ from .base_flow import BaseWizardFlow
 class CICDFlow(BaseWizardFlow):
     """CI/CD pipeline security audit workflow."""
 
-    def detect_targets(self) -> Dict[str, Any]:
+    def detect_targets(self) -> dict[str, Any]:
         """Detect CI/CD-relevant targets.
 
         Returns:
@@ -43,7 +43,7 @@ class CICDFlow(BaseWizardFlow):
             "iac": self.detector.detect_iac(),
         }
 
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt for CI/CD-specific options.
 
         Returns:
@@ -103,7 +103,7 @@ class CICDFlow(BaseWizardFlow):
             "emit_workflow": emit_workflow,
         }
 
-    def _print_detected_pipelines(self, targets: Dict) -> None:
+    def _print_detected_pipelines(self, targets: dict) -> None:
         """Print summary of detected CI/CD pipeline files."""
         items = []
 
@@ -131,7 +131,7 @@ class CICDFlow(BaseWizardFlow):
         else:
             self.prompter.print_warning("No CI/CD pipeline files detected")
 
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build CI/CD-optimized scan command.
 
         Args:
@@ -164,10 +164,10 @@ class CICDFlow(BaseWizardFlow):
 
     def _detect_images_from_ci(
         self,
-        github_actions: List[Path],
-        gitlab_ci: Optional[Path],
-        jenkinsfile: Optional[Path],
-    ) -> List[str]:
+        github_actions: list[Path],
+        gitlab_ci: Path | None,
+        jenkinsfile: Path | None,
+    ) -> list[str]:
         """Extract container images referenced in CI pipeline files.
 
         Args:

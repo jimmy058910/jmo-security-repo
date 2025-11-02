@@ -7,13 +7,13 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
-from typing import Any, Dict, List, Set
+from typing import Any
 
 
 def parse_json_safe(filepath):
     """Safely parse JSON file with error handling"""
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
             return data
     except (json.JSONDecodeError, FileNotFoundError) as e:
@@ -74,7 +74,7 @@ def parse_trufflehog(filepath):
             "description": f"Found {item.get('DetectorName', 'secret')}",
         }
 
-    findings: List[Dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
 
     try:
         raw_content = Path(filepath).read_text().strip()
@@ -247,10 +247,10 @@ def calculate_metrics(results_dir):
 
     repos_dir = Path(results_dir) / "individual-repos"
 
-    all_findings: List[Dict[str, Any]] = []
-    repo_stats: List[Dict[str, Any]] = []
+    all_findings: list[dict[str, Any]] = []
+    repo_stats: list[dict[str, Any]] = []
     # Initialize tool stats explicitly to avoid type ambiguity and ensure stable keys
-    tool_stats: Dict[str, Dict[str, Any]] = {
+    tool_stats: dict[str, dict[str, Any]] = {
         "gitleaks": {"count": 0, "repos": set()},
         "trufflehog": {"count": 0, "repos": set()},
         "semgrep": {"count": 0, "repos": set()},
@@ -299,7 +299,7 @@ def calculate_metrics(results_dir):
             if findings:
                 gitleaks_stats = tool_stats["gitleaks"]
                 gitleaks_stats["count"] = gitleaks_stats["count"] + len(findings)
-                gitleaks_repos: Set[str] = gitleaks_stats["repos"]
+                gitleaks_repos: set[str] = gitleaks_stats["repos"]
                 gitleaks_repos.add(repo_name)
 
         trufflehog_file = repo_dir / "trufflehog.json"
@@ -312,7 +312,7 @@ def calculate_metrics(results_dir):
             if findings:
                 trufflehog_stats = tool_stats["trufflehog"]
                 trufflehog_stats["count"] = trufflehog_stats["count"] + len(findings)
-                trufflehog_repos: Set[str] = trufflehog_stats["repos"]
+                trufflehog_repos: set[str] = trufflehog_stats["repos"]
                 trufflehog_repos.add(repo_name)
 
         semgrep_file = repo_dir / "semgrep.json"
@@ -325,7 +325,7 @@ def calculate_metrics(results_dir):
             if findings:
                 semgrep_stats = tool_stats["semgrep"]
                 semgrep_stats["count"] = semgrep_stats["count"] + len(findings)
-                semgrep_repos: Set[str] = semgrep_stats["repos"]
+                semgrep_repos: set[str] = semgrep_stats["repos"]
                 semgrep_repos.add(repo_name)
 
         noseyparker_file = repo_dir / "noseyparker.json"
@@ -338,7 +338,7 @@ def calculate_metrics(results_dir):
             if findings:
                 noseyparker_stats = tool_stats["noseyparker"]
                 noseyparker_stats["count"] = noseyparker_stats["count"] + len(findings)
-                noseyparker_repos: Set[str] = noseyparker_stats["repos"]
+                noseyparker_repos: set[str] = noseyparker_stats["repos"]
                 noseyparker_repos.add(repo_name)
 
         repo_findings["total"] = sum(
@@ -353,7 +353,7 @@ def calculate_metrics(results_dir):
         repo_stats.append({"name": repo_name, **repo_findings})
 
     # Calculate severity distribution
-    severity_counts: Dict[str, int] = defaultdict(int)
+    severity_counts: dict[str, int] = defaultdict(int)
     for finding in all_findings:
         severity_counts[finding.get("severity", "UNKNOWN")] += 1
 
@@ -364,7 +364,7 @@ def calculate_metrics(results_dir):
     unique_types = set(f.get("type", "unknown") for f in all_findings)
 
     # Convert repo sets to sorted lists for display and potential JSON compatibility
-    normalized_tool_stats: Dict[str, Dict[str, Any]] = {
+    normalized_tool_stats: dict[str, dict[str, Any]] = {
         tool: {
             "count": stats["count"],
             "repos": sorted(list(stats["repos"])),

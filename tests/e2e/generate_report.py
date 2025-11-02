@@ -14,20 +14,19 @@ import sys
 import csv
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
 
 
-def load_results(csv_path: Path) -> List[Dict[str, str]]:
+def load_results(csv_path: Path) -> list[dict[str, str]]:
     """Load test results from CSV file."""
     results = []
-    with open(csv_path, "r") as f:
+    with open(csv_path) as f:
         reader = csv.DictReader(f)
         for row in reader:
             results.append(row)
     return results
 
 
-def calculate_stats(results: List[Dict[str, str]]) -> Dict[str, int]:
+def calculate_stats(results: list[dict[str, str]]) -> dict[str, int]:
     """Calculate test statistics."""
     stats = {
         "total": len(results),
@@ -59,7 +58,7 @@ def format_duration(seconds_str: str) -> str:
         return "0s"
 
 
-def categorize_tests(results: List[Dict[str, str]]) -> Dict[str, List[Dict[str, str]]]:
+def categorize_tests(results: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
     """Categorize tests by suite (Ubuntu, macOS, Windows, Advanced)."""
     categories = {
         "Ubuntu": [],
@@ -84,9 +83,9 @@ def categorize_tests(results: List[Dict[str, str]]) -> Dict[str, List[Dict[str, 
 
 def generate_markdown_report(
     csv_path: Path,
-    results: List[Dict[str, str]],
-    stats: Dict[str, int],
-    categories: Dict[str, List[Dict[str, str]]],
+    results: list[dict[str, str]],
+    stats: dict[str, int],
+    categories: dict[str, list[dict[str, str]]],
 ) -> str:
     """Generate markdown test report."""
     report = []
@@ -251,7 +250,7 @@ def generate_markdown_report(
 
 
 def print_console_summary(
-    stats: Dict[str, int], categories: Dict[str, List[Dict[str, str]]]
+    stats: dict[str, int], categories: dict[str, list[dict[str, str]]]
 ):
     """Print colorful console summary."""
     # ANSI colors

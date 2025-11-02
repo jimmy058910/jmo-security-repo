@@ -10,7 +10,7 @@ This test suite achieves 95%+ coverage by testing:
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from scripts.core.reporters.compliance_reporter import (
     write_attack_navigator_json,
@@ -25,11 +25,11 @@ def create_finding(
     message: str = "Test finding",
     path: str = "test.py",
     line: int = 10,
-    compliance: Optional[Dict[str, Any]] = None,
+    compliance: dict[str, Any] | None = None,
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Helper to create a test finding with compliance mappings."""
-    finding: Dict[str, Any] = {
+    finding: dict[str, Any] = {
         "schemaVersion": "1.2.0",
         "id": f"test-{rule_id}",
         "ruleId": rule_id,

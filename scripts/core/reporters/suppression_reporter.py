@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
 
 from scripts.core.suppress import Suppression
 
 
 def write_suppression_report(
-    suppressed_ids: List[str],
-    suppressions: Dict[str, Suppression],
+    suppressed_ids: list[str],
+    suppressions: dict[str, Suppression],
     out_path: str | Path,
 ) -> None:
     p = Path(out_path)

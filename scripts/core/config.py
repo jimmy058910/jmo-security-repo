@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Any, TYPE_CHECKING, Any as AnyType
+from typing import Any, TYPE_CHECKING, Any as AnyType
 
 if TYPE_CHECKING:
     import yaml as YamlModule
@@ -13,12 +13,12 @@ else:
     except ImportError:
         YamlModule = None  # type: ignore[assignment]
 
-yaml: Optional[AnyType] = YamlModule
+yaml: AnyType | None = YamlModule
 
 
 @dataclass
 class Config:
-    tools: List[str] = field(
+    tools: list[str] = field(
         default_factory=lambda: [
             "trufflehog",
             "semgrep",
@@ -29,17 +29,17 @@ class Config:
             "zap",
         ]
     )
-    outputs: List[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
+    outputs: list[str] = field(default_factory=lambda: ["json", "md", "yaml", "html"])
     fail_on: str = ""
-    threads: Optional[int | str] = None  # int for explicit count, 'auto' for detection
-    include: List[str] = field(default_factory=list)
-    exclude: List[str] = field(default_factory=list)
-    timeout: Optional[int] = None
+    threads: int | str | None = None  # int for explicit count, 'auto' for detection
+    include: list[str] = field(default_factory=list)
+    exclude: list[str] = field(default_factory=list)
+    timeout: int | None = None
     log_level: str = "INFO"
     # Advanced
-    default_profile: Optional[str] = None
-    profiles: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    per_tool: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    default_profile: str | None = None
+    profiles: dict[str, dict[str, Any]] = field(default_factory=dict)
+    per_tool: dict[str, dict[str, Any]] = field(default_factory=dict)
     retries: int = 0
     # Profiling thread recommendations (used when --profile flag set)
     profiling_min_threads: int = 2
@@ -47,7 +47,7 @@ class Config:
     profiling_default_threads: int = 4
 
 
-def load_config(path: Optional[str]) -> Config:
+def load_config(path: str | None) -> Config:
     if not path:
         return Config()
     p = Path(path)

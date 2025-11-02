@@ -9,7 +9,7 @@ This test suite achieves 95%+ coverage by testing:
 """
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 
@@ -34,13 +34,13 @@ class MockResendEmails:
     """Mock Resend Emails API."""
 
     def __init__(
-        self, should_fail: bool = False, exception: Optional[Exception] = None
+        self, should_fail: bool = False, exception: Exception | None = None
     ):
         self.should_fail = should_fail
         self.exception = exception
-        self.last_params: Optional[Dict[str, Any]] = None
+        self.last_params: dict[str, Any] | None = None
 
-    def send(self, params: Dict[str, Any]):
+    def send(self, params: dict[str, Any]):
         """Mock send method."""
         self.last_params = params
 

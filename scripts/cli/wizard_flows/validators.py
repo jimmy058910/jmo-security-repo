@@ -8,12 +8,11 @@ import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
+def validate_path(path_str: str, must_exist: bool = True) -> Path | None:
     """
     Validate and expand a path.
 
@@ -103,7 +102,7 @@ def detect_iac_type(file_path: Path) -> str:
             # CloudFormation templates have AWSTemplateFormatVersion or Resources
             if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
                 return "cloudformation"
-        except (IOError, OSError) as e:
+        except OSError as e:
             logger.debug(
                 f"Skipping IaC file {file_path}: I/O error - {type(e).__name__}: {e}"
             )

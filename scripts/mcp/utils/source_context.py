@@ -5,7 +5,7 @@ Provides surrounding code context for AI tools to analyze and suggest fixes.
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,9 +27,9 @@ class SourceContextExtractor:
         self,
         file_path: str,
         start_line: int,
-        end_line: Optional[int] = None,
+        end_line: int | None = None,
         context_lines: int = 20,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get source code context around a finding.
 
@@ -64,7 +64,7 @@ class SourceContextExtractor:
             }
 
         try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(full_path, encoding="utf-8", errors="replace") as f:
                 all_lines = f.readlines()
 
             # Calculate context window
@@ -212,7 +212,7 @@ class SourceContextExtractor:
 
         return language_map.get(ext, "unknown")
 
-    def get_full_file_content(self, file_path: str) -> Dict[str, Any]:
+    def get_full_file_content(self, file_path: str) -> dict[str, Any]:
         """
         Get entire file content (for smaller files).
 
@@ -233,7 +233,7 @@ class SourceContextExtractor:
             }
 
         try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(full_path, encoding="utf-8", errors="replace") as f:
                 content = f.read()
 
             language = self._detect_language(file_path)

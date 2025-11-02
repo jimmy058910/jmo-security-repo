@@ -11,7 +11,6 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import requests
 
@@ -49,7 +48,7 @@ class EPSSClient:
     API_URL = "https://api.first.org/data/v1/epss"
     CACHE_TTL_DAYS = 7
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Path | None = None):
         """Initialize EPSS client.
 
         Args:
@@ -82,7 +81,7 @@ class EPSSClient:
         conn.commit()
         conn.close()
 
-    def get_score(self, cve: str) -> Optional[EPSSScore]:
+    def get_score(self, cve: str) -> EPSSScore | None:
         """Get EPSS score for a CVE (cache first, then API).
 
         Args:
@@ -107,7 +106,7 @@ class EPSSClient:
 
         return None
 
-    def get_scores_bulk(self, cves: List[str]) -> Dict[str, EPSSScore]:
+    def get_scores_bulk(self, cves: list[str]) -> dict[str, EPSSScore]:
         """Get EPSS scores for multiple CVEs (bulk API call).
 
         Uses bulk API endpoint to fetch scores for multiple CVEs in a single
@@ -142,7 +141,7 @@ class EPSSClient:
 
         return scores
 
-    def _fetch_from_api(self, cve: str) -> Optional[EPSSScore]:
+    def _fetch_from_api(self, cve: str) -> EPSSScore | None:
         """Fetch EPSS score from API.
 
         Args:
@@ -166,7 +165,7 @@ class EPSSClient:
             date=entry["date"],
         )
 
-    def _fetch_bulk_from_api(self, cves: List[str]) -> Dict[str, EPSSScore]:
+    def _fetch_bulk_from_api(self, cves: list[str]) -> dict[str, EPSSScore]:
         """Fetch multiple EPSS scores from API.
 
         EPSS API supports bulk queries by passing comma-separated CVE list.
@@ -196,7 +195,7 @@ class EPSSClient:
 
         return scores
 
-    def _get_cached_score(self, cve: str) -> Optional[EPSSScore]:
+    def _get_cached_score(self, cve: str) -> EPSSScore | None:
         """Get score from SQLite cache.
 
         Args:

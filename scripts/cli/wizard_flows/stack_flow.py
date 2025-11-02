@@ -1,7 +1,7 @@
 """Entire development stack workflow."""
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .base_flow import BaseWizardFlow
 
@@ -9,7 +9,7 @@ from .base_flow import BaseWizardFlow
 class EntireStackFlow(BaseWizardFlow):
     """Scan entire development stack (repos + images + IaC + web)."""
 
-    def detect_targets(self) -> Dict[str, List]:
+    def detect_targets(self) -> dict[str, list]:
         """Detect all target types in current directory.
 
         Returns:
@@ -22,7 +22,7 @@ class EntireStackFlow(BaseWizardFlow):
             "web": self.detector.detect_web_apps(),
         }
 
-    def prompt_user(self) -> Dict[str, Any]:
+    def prompt_user(self) -> dict[str, Any]:
         """Prompt for profile selection with smart recommendations.
 
         Returns:
@@ -57,7 +57,7 @@ class EntireStackFlow(BaseWizardFlow):
             "parallel": parallel_scan,
         }
 
-    def build_command(self, targets: Dict, options: Dict) -> List[str]:
+    def build_command(self, targets: dict, options: dict) -> list[str]:
         """Build jmo scan command for entire stack.
 
         Args:
@@ -90,7 +90,7 @@ class EntireStackFlow(BaseWizardFlow):
 
         return cmd
 
-    def _generate_recommendations(self, targets: Dict) -> List[str]:
+    def _generate_recommendations(self, targets: dict) -> list[str]:
         """Generate smart recommendations based on detected targets.
 
         Args:

@@ -4,7 +4,7 @@ Generates .github/workflows/*.yml files from ScanSchedule objects.
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 
@@ -56,7 +56,7 @@ class GitHubActionsGenerator:
         """
         return f"JMo Security Scan: {schedule.metadata.name}"
 
-    def _generate_triggers(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _generate_triggers(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate workflow triggers (cron + manual dispatch).
 
         Args:
@@ -70,7 +70,7 @@ class GitHubActionsGenerator:
             "workflow_dispatch": {},  # Allow manual triggers
         }
 
-    def _generate_job(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _generate_job(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate security-scan job definition.
 
         Args:
@@ -79,7 +79,7 @@ class GitHubActionsGenerator:
         Returns:
             dict: Complete job configuration
         """
-        steps: List[Dict[str, Any]] = [
+        steps: list[dict[str, Any]] = [
             self._checkout_step(),
             self._scan_step(schedule),
             self._upload_results_step(schedule),
@@ -94,7 +94,7 @@ class GitHubActionsGenerator:
 
         return job
 
-    def _checkout_step(self) -> Dict[str, Any]:
+    def _checkout_step(self) -> dict[str, Any]:
         """Generate repository checkout step.
 
         Returns:
@@ -102,7 +102,7 @@ class GitHubActionsGenerator:
         """
         return {"name": "Checkout code", "uses": "actions/checkout@v4"}
 
-    def _scan_step(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _scan_step(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate JMo scan step using Docker image.
 
         Args:
@@ -210,7 +210,7 @@ class GitHubActionsGenerator:
 
         return " ".join(args)
 
-    def _upload_results_step(self, schedule: ScanSchedule) -> Dict[str, Any]:
+    def _upload_results_step(self, schedule: ScanSchedule) -> dict[str, Any]:
         """Generate artifact upload step.
 
         Args:
@@ -232,7 +232,7 @@ class GitHubActionsGenerator:
             "if": "always()",
         }
 
-    def _upload_sarif_step(self) -> Dict[str, Any]:
+    def _upload_sarif_step(self) -> dict[str, Any]:
         """Generate SARIF upload step for GitHub Security.
 
         Returns:
@@ -245,7 +245,7 @@ class GitHubActionsGenerator:
             "if": "always()",
         }
 
-    def _notification_steps(self, schedule: ScanSchedule) -> List[Dict[str, Any]]:
+    def _notification_steps(self, schedule: ScanSchedule) -> list[dict[str, Any]]:
         """Generate Slack/email notification steps.
 
         Args:
