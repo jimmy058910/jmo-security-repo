@@ -12,7 +12,7 @@ def get_user_by_id(user_id):
     Returns:
         User record or None
     """
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
 
     # VULNERABLE: SQL injection via f-string formatting (line 15)
@@ -27,7 +27,7 @@ def get_user_by_id(user_id):
 
 def safe_get_user_by_id(user_id):
     """Safe version using parameterized queries"""
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
 
     # SAFE: Parameterized query
