@@ -1,5 +1,7 @@
 """Single repository workflow."""
 
+from __future__ import annotations
+
 from typing import Any
 
 from .base_flow import BaseWizardFlow

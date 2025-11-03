@@ -8,6 +8,8 @@ Scans IaC files using:
 Integrates with ToolRunner for execution management.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from collections.abc import Callable
 

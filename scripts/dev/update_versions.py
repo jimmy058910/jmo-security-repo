@@ -33,6 +33,8 @@ Exit codes:
   2: Missing dependencies
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import re

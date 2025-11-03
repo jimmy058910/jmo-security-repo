@@ -1,0 +1,16 @@
+# Production configuration
+
+database:
+  host: prod-db.example.com
+  api_key: sk-1234567890abcdef1234567890abcdef  # VULNERABLE: Hardcoded secret (line 5)
+  port: 5432
+  name: production_db
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  debug: false
+
+logging:
+  level: info
+  format: json

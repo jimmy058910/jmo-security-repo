@@ -7,6 +7,8 @@ Privacy-first, opt-in anonymous usage telemetry using GitHub Gist backend.
 Reference: docs/TELEMETRY_IMPLEMENTATION_GUIDE.md
 """
 
+from __future__ import annotations
+
 import json
 import os
 import platform

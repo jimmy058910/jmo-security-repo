@@ -4,6 +4,8 @@ Extract source code context for security findings.
 Provides surrounding code context for AI tools to analyze and suggest fixes.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 import logging

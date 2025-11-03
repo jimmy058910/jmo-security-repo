@@ -7,6 +7,8 @@ filtering repositories, and coordinating multi-target scans.
 Created as part of PHASE 1 refactoring to extract orchestration logic from cmd_scan().
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any

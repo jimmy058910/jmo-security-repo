@@ -7,6 +7,8 @@ Uses SQLite caching with 7-day TTL to reduce API calls and improve performance.
 API Documentation: https://www.first.org/epss/api
 """
 
+from __future__ import annotations
+
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta

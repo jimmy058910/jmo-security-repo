@@ -12,6 +12,8 @@ This module implements all 8 schedule subcommands:
 - validate: Validate schedule configuration
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from datetime import datetime

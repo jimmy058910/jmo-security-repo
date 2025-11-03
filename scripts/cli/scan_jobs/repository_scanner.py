@@ -51,6 +51,8 @@ Special Tool Behaviors:
 Integrates with ToolRunner for parallel execution and resilient error handling.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from collections.abc import Callable
 

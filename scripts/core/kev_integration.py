@@ -7,6 +7,8 @@ in the wild. Uses JSON caching with daily refresh to stay current.
 KEV Catalog: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta

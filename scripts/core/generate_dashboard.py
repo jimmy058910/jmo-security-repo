@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # generate_dashboard.py - Create HTML dashboard with metrics
 
+from __future__ import annotations
+
 import json
 import html
 import sys
