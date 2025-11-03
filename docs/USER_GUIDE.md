@@ -108,7 +108,7 @@ Prereqs: Linux, WSL, or macOS with Python 3.10+ recommended (3.8+ supported).
 
 1. Install the CLI
 
-**Option 1: Package Manager (Recommended)**
+### Option 1: Package Manager (Recommended)
 
 ```bash
 # macOS/Linux
@@ -118,7 +118,7 @@ brew install jmo-security
 winget install jmo.jmo-security
 ```
 
-**Option 2: Python Package**
+### Option 2: Python Package
 
 ```bash
 # Preferred (isolated):
@@ -1003,7 +1003,7 @@ Full privacy policy and data handling details:
 
 ## Plugin System (v0.9.0+)
 
-**Extensible architecture for custom security tool integrations**
+### Extensible architecture for custom security tool integrations
 
 JMo Security uses a plugin-based architecture for all security tool adapters, enabling hot-reload during development, independent updates, and community-contributed integrations.
 
@@ -1201,7 +1201,7 @@ for name, plugin_class in registry.list().items():
 
 ## Schedule Management (v0.8.0+)
 
-**Automate recurring security scans with Kubernetes-inspired scheduling**
+### Automate recurring security scans with Kubernetes-inspired scheduling
 
 JMo Security v0.8.0 introduces a comprehensive schedule management system for automated, recurring scans with:
 
@@ -1710,11 +1710,11 @@ CVSS: 7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)
 
 ## AI Integration (v1.0.0+)
 
-**AI-Powered Remediation via Model Context Protocol (MCP)**
+### AI-Powered Remediation via Model Context Protocol (MCP)
 
 JMo Security integrates with AI assistants to accelerate vulnerability remediation. The MCP server provides AI with structured access to scan results, enabling intelligent analysis, fix suggestions, and remediation tracking.
 
-### Overview
+### MCP Overview
 
 **What is MCP?**
 
@@ -2023,7 +2023,7 @@ jmo mcp-server --results-dir ./results
 
 ### Troubleshooting
 
-**Error: "Results directory not found"**
+#### Error: "Results directory not found"
 
 ```bash
 # Verify results directory exists
@@ -2033,7 +2033,7 @@ ls -la ./results/summaries/findings.json
 jmo scan --repo ./myapp --results-dir ./results
 ```
 
-**Error: "Permission denied when applying fix"**
+#### Error: "Permission denied when applying fix"
 
 ```bash
 # Fix requires explicit enable flag
@@ -2043,7 +2043,7 @@ jmo mcp-server --results-dir ./results --enable-fixes
 chmod u+w src/api/users.py
 ```
 
-**Error: "MCP server not responding"**
+#### Error: "MCP server not responding"
 
 ```bash
 # Check server is running
@@ -2068,7 +2068,7 @@ jmo mcp-server --results-dir ./results --log-level DEBUG
 # Look for "Loaded X findings from results/summaries/findings.json"
 ```
 
-### Advanced Configuration
+### MCP Advanced Configuration
 
 **Custom Repository Root:**
 
@@ -2126,7 +2126,7 @@ Run MCP server in CI to enable AI-assisted triage:
 5. Write fix code (10 minutes per finding × 15 = 150 minutes)
 6. Test fixes (5 minutes per finding × 15 = 75 minutes)
 
-**Total: ~4.5 hours**
+#### Total: ~4.5 hours
 
 **AI-Assisted Workflow (MCP):**
 
@@ -2137,7 +2137,7 @@ Run MCP server in CI to enable AI-assisted triage:
 5. Apply fixes with `apply_fix` tool (30 seconds × 15 = 7.5 minutes)
 6. Test fixes (5 minutes per finding × 15 = 75 minutes)
 
-**Total: ~2 hours (56% time savings)**
+#### Total: ~2 hours (56% time savings)
 
 **Additional Benefits:**
 
@@ -2187,6 +2187,483 @@ Use `--log-level DEBUG` to troubleshoot integration issues. Logs show which tool
 - **Claude Code Integration:** [docs/integrations/CLAUDE_CODE.md](integrations/CLAUDE_CODE.md)
 - **MCP Protocol Spec:** <https://modelcontextprotocol.io/>
 - **CommonFinding Schema:** [docs/schemas/common_finding.v1.json](schemas/common_finding.v1.json)
+
+## Historical Storage (v1.0.0+)
+
+**Track security scans over time for trend analysis, regression detection, and compliance reporting.**
+
+### Historical Storage Overview
+
+The Historical Storage feature stores scan results in a local SQLite database, enabling:
+
+- **Trend Analysis**: Track finding counts over time (critical/high/medium/low)
+- **Regression Detection**: Compare current scan with previous runs
+- **Compliance Reporting**: Prove security posture improvements over time
+- **Dashboard Data Layer**: Future support for time-series visualizations
+- **Multi-Branch Tracking**: Compare security across dev/staging/prod branches
+
+**Key Features:**
+
+- 🗄️ **SQLite Database**: Zero-configuration, file-based storage (`.jmo/history.db`)
+- 🔍 **Full Finding History**: Stores all CommonFinding v1.2.0 fields with compliance mappings
+- 📊 **Automatic Aggregation**: Severity counts updated via database triggers
+- 🌲 **Git Integration**: Tracks commit hash, branch, tag, dirty status
+- 🔧 **CI/CD Metadata**: Captures CI provider, build ID, environment variables
+- 🎯 **Multi-Target Support**: Works across all 6 target types (repos, images, IaC, URLs, GitLab, K8s)
+
+### Historical Storage Quick Start
+
+**Auto-store during scan (recommended):**
+
+```bash
+# Store scan results automatically after completion
+jmo scan --repo ./myapp --profile balanced --store-history
+
+# Custom database location
+jmo scan --repo ./myapp --profile balanced --store-history --history-db ./scans.db
+```
+
+**Manual storage after scanning:**
+
+```bash
+# Run scan first
+jmo scan --repo ./myapp --profile balanced --results-dir ./results
+
+# Store results manually
+jmo history store --results-dir ./results --profile balanced
+
+# Specify database path
+jmo history store --results-dir ./results --profile balanced --db ./scans.db
+```
+
+### Historical Storage CLI Commands
+
+#### `jmo history store`
+
+**Store scan results in history database.**
+
+```bash
+jmo history store --results-dir RESULTS_DIR [OPTIONS]
+```
+
+**Options:**
+
+- `--results-dir DIR` - Results directory containing `summaries/findings.json` (REQUIRED)
+- `--profile PROFILE` - Profile name (fast/balanced/deep, default: balanced)
+- `--commit HASH` - Git commit hash (auto-detected if in Git repo)
+- `--branch NAME` - Git branch name (auto-detected if in Git repo)
+- `--tag TAG` - Git tag (auto-detected if in Git repo)
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+jmo history store --results-dir ./results --profile balanced --branch main
+```
+
+#### `jmo history list`
+
+**List stored scans with summary statistics.**
+
+```bash
+jmo history list [OPTIONS]
+```
+
+**Options:**
+
+- `--branch NAME` - Filter by Git branch
+- `--profile PROFILE` - Filter by profile (fast/balanced/deep)
+- `--since TIMESTAMP` - Filter by timestamp (Unix epoch or ISO 8601 format)
+- `--limit N` - Limit results (default: 50)
+- `--json` - Output as JSON instead of table
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+# List all scans
+jmo history list
+
+# List scans on main branch
+jmo history list --branch main
+
+# List last 10 scans in JSON format
+jmo history list --limit 10 --json
+
+# List scans since yesterday (Unix timestamp)
+jmo history list --since 1730592000
+```
+
+**Sample Output:**
+
+```text
++-------------+---------------------+----------+-----------+------------+------------+--------+----------------+
+| Scan ID     | Timestamp           | Branch   | Profile   |   Findings |   Critical |   High | Duration (s)   |
++=============+=====================+==========+===========+============+============+========+================+
+| a1b2c3d4... | 2025-11-02 14:30:15 | main     | balanced  |         42 |          3 |     12 | 245.2          |
+| e5f6g7h8... | 2025-11-01 09:15:42 | main     | balanced  |         38 |          2 |     10 | 238.7          |
+| i9j0k1l2... | 2025-10-31 16:20:03 | dev      | fast      |         15 |          0 |      5 | 89.3           |
++-------------+---------------------+----------+-----------+------------+------------+--------+----------------+
+```
+
+#### `jmo history show`
+
+**Show detailed information for a specific scan.**
+
+```bash
+jmo history show SCAN_ID [OPTIONS]
+```
+
+**Arguments:**
+
+- `SCAN_ID` - Full or partial UUID (e.g., `a1b2c3d4` or full `a1b2c3d4-...`)
+
+**Options:**
+
+- `--json` - Output as JSON
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+# Show scan details (accepts partial UUID)
+jmo history show a1b2c3d4
+
+# Full output in JSON
+jmo history show a1b2c3d4-5e6f-7890-abcd-1234567890ab --json
+```
+
+**Sample Output:**
+
+```text
+Scan ID:       a1b2c3d4-5e6f-7890-abcd-1234567890ab
+Timestamp:     2025-11-02 14:30:15 (1730559015)
+Profile:       balanced
+Branch:        main
+Commit:        abc1234567890def
+Tag:           v1.2.3
+Dirty:         No
+
+Targets:       myapp, backend-api
+Target Type:   repos
+Tools:         trivy, semgrep, trufflehog, checkov
+
+Findings:      42 total
+  - CRITICAL:  3
+  - HIGH:      12
+  - MEDIUM:    18
+  - LOW:       9
+  - INFO:      0
+
+Metadata:
+  - Hostname:  builder-01
+  - Username:  ci-user
+  - CI Provider: github-actions
+  - Build ID:  67890
+  - Duration:  245.2 seconds
+```
+
+#### `jmo history query`
+
+**Query findings across stored scans.**
+
+```bash
+jmo history query [OPTIONS]
+```
+
+**Options:**
+
+- `--scan-id ID` - Filter by specific scan (full or partial UUID)
+- `--severity LEVEL` - Filter by severity (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+- `--rule-id ID` - Filter by rule ID (e.g., CVE-2024-1234, CWE-79)
+- `--path PATTERN` - Filter by file path pattern (supports wildcards)
+- `--limit N` - Limit results (default: 100)
+- `--json` - Output as JSON
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+# All critical findings
+jmo history query --severity CRITICAL
+
+# Findings in specific file
+jmo history query --path "src/auth/*.py"
+
+# Findings for specific rule
+jmo history query --rule-id CVE-2024-9999
+
+# Combined filters
+jmo history query --severity HIGH --path "src/*" --limit 50
+```
+
+#### `jmo history prune`
+
+**Remove old scans from history database.**
+
+```bash
+jmo history prune [OPTIONS]
+```
+
+**Options:**
+
+- `--older-than SECONDS` - Delete scans older than N seconds
+- `--keep-scans N` - Keep only the N most recent scans
+- `--dry-run` - Show what would be deleted without deleting
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+# Delete scans older than 90 days (7776000 seconds)
+jmo history prune --older-than 7776000
+
+# Keep only last 100 scans
+jmo history prune --keep-scans 100
+
+# Preview what would be deleted
+jmo history prune --older-than 2592000 --dry-run
+```
+
+#### `jmo history export`
+
+**Export scan history to JSON file.**
+
+```bash
+jmo history export OUTPUT_FILE [OPTIONS]
+```
+
+**Arguments:**
+
+- `OUTPUT_FILE` - Path to output JSON file
+
+**Options:**
+
+- `--scan-id ID` - Export specific scan only
+- `--include-findings` - Include full finding details (default: metadata only)
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+# Export all scan metadata
+jmo history export scans.json
+
+# Export specific scan with findings
+jmo history export scan-a1b2c3d4.json --scan-id a1b2c3d4 --include-findings
+```
+
+#### `jmo history stats`
+
+**Show database statistics and trends.**
+
+```bash
+jmo history stats [OPTIONS]
+```
+
+**Options:**
+
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Example:**
+
+```bash
+jmo history stats
+```
+
+**Sample Output:**
+
+```text
+Database: .jmo/history.db
+Size:     2.4 MB
+────────────────────────────────────────────────────────────
+Scans:            127
+Findings:         3,842
+Date Range:       2024-08-15 to 2025-11-02
+
+Scans by Profile:
+  balanced      89 scans
+  fast          28 scans
+  deep          10 scans
+
+Findings by Severity:
+  CRITICAL        42  (1.1%)
+  HIGH           385  (10.0%)
+  MEDIUM         892  (23.2%)
+  LOW          1,823  (47.4%)
+  INFO           700  (18.2%)
+
+Top Tools:
+  trivy                   1,245 findings
+  semgrep                   982 findings
+  trufflehog                615 findings
+  checkov                   412 findings
+```
+
+### Database Schema
+
+The history database uses SQLite with the following schema:
+
+**Tables:**
+
+- `scans` - Scan metadata (timestamp, profile, branch, tools, severity counts, CI metadata)
+- `findings` - Individual findings (fingerprint, severity, rule, location, message, full CommonFinding JSON)
+- `compliance_mappings` - Framework mappings (OWASP, CWE, CIS, NIST, PCI-DSS, MITRE ATT&CK)
+- `schema_version` - Database schema version for migrations
+
+**Key Features:**
+
+- **Foreign Key Constraints**: CASCADE deletion (deleting scan removes findings)
+- **Automatic Triggers**: Severity counts auto-updated on INSERT/UPDATE/DELETE
+- **Indices**: Optimized for common queries (timestamp DESC, branch, severity, rule_id)
+- **Views**: `latest_scan_by_branch`, `finding_history` for quick queries
+- **WAL Mode**: Write-Ahead Logging for concurrency and crash resilience
+
+**Database Location:**
+
+- Default: `.jmo/history.db` (relative to working directory)
+- Custom: Use `--db PATH` or `--history-db PATH` flags
+- CI/CD: Recommended `.jmo/` directory (gitignored by default)
+
+### Workflow Examples
+
+#### Daily Development Workflow
+
+```bash
+# Morning: Baseline scan
+jmo scan --repo ./myapp --profile balanced --store-history --branch dev
+
+# Afternoon: After changes
+jmo scan --repo ./myapp --profile balanced --store-history --branch dev
+
+# Compare with previous scan
+jmo history list --branch dev --limit 2
+```
+
+#### Pre-Release Compliance Workflow
+
+```bash
+# Run comprehensive scan before release
+jmo scan --repo ./myapp --profile deep --store-history --tag v1.2.3
+
+# Generate compliance report
+jmo history query --severity CRITICAL --json > critical-findings.json
+
+# Verify no critical findings
+if [ $(jq '.findings | length' critical-findings.json) -gt 0 ]; then
+  echo "FAIL: Critical findings detected"
+  exit 1
+fi
+```
+
+#### Multi-Branch Comparison
+
+```bash
+# Scan production branch
+jmo scan --repo ./myapp --profile balanced --store-history --branch main
+
+# Scan staging branch
+jmo scan --repo ./myapp --profile balanced --store-history --branch staging
+
+# Compare results
+jmo history list --branch main --limit 1
+jmo history list --branch staging --limit 1
+```
+
+#### Historical Trend Analysis
+
+```bash
+# Weekly scans stored over 3 months
+jmo scan --repo ./myapp --profile balanced --store-history
+
+# View trends
+jmo history list --branch main --limit 12  # Last 12 scans
+
+# Export for external analysis
+jmo history export --include-findings monthly-report.json
+```
+
+### CI/CD Integration
+
+**GitHub Actions:**
+
+```yaml
+- name: Run security scan with history
+  run: |
+    jmo scan --repo . --profile balanced --store-history
+
+    # Upload database as artifact for trend tracking
+    tar -czf history-db.tar.gz .jmo/history.db
+
+- name: Upload history database
+  uses: actions/upload-artifact@v4
+  with:
+    name: scan-history
+    path: history-db.tar.gz
+    retention-days: 90
+```
+
+**GitLab CI:**
+
+```yaml
+security_scan:
+  script:
+    - jmo scan --repo . --profile balanced --store-history --db scans.db
+    - jmo history stats --db scans.db
+  artifacts:
+    paths:
+      - scans.db
+    expire_in: 3 months
+```
+
+### Best Practices
+
+1. **Use `--store-history` flag** for automatic storage (no manual `history store` needed)
+2. **Consistent profiles** - Use same profile for trend comparisons (balanced vs balanced)
+3. **Regular pruning** - Run `jmo history prune` monthly to limit database size
+4. **Git integration** - Run scans in Git repos for automatic branch/commit tracking
+5. **CI artifact storage** - Upload `.jmo/history.db` as CI artifact for persistence
+6. **Database backups** - Back up `.jmo/history.db` before major schema changes
+
+### Troubleshooting Historical Storage
+
+#### Issue: "Database is locked" error
+
+- Cause: Multiple processes writing to database simultaneously
+- Fix: Ensure only one scan writes at a time, or use separate database files
+
+#### Issue: "No findings.json found"
+
+- Cause: Trying to store before report phase completes
+- Fix: Ensure `jmo report` completes before `jmo history store`, or use `--store-history` flag which handles timing automatically
+
+#### Issue: Database growing too large
+
+- Cause: Hundreds of scans accumulating
+- Fix: Run `jmo history prune --keep-scans 100` to retain last 100 scans
+
+#### Issue: Git context not captured
+
+- Cause: Not running scan in Git repository
+- Fix: Run scans from Git repo root, or manually specify `--branch` and `--commit`
+
+### Historical Storage Future Enhancements
+
+- 📊 **Time-series dashboard** - Interactive charts showing trends over time (v1.0.0 Feature #9)
+- 🔄 **Automated comparisons** - Diff between scans with highlighted regressions (v1.0.0 Feature #3)
+- 📈 **Metrics API** - REST API for external monitoring systems (v1.1.0+)
+- 🏷️ **Custom tags** - Label scans with custom metadata (environment, team, project) (v1.1.0+)
+- 🔔 **Alert thresholds** - Notify when findings exceed baselines (v1.1.0+)
+- 📥 **Import command** - `jmo history import` for loading external scan data (v1.1.0+)
+- 🔄 **Schema migrations** - Automatic database upgrades for future versions (v1.1.0+)
+
+**For Developers:** The history database API (`scripts/core/history_db.py`) is designed for extensibility. Future features can use:
+
+- `list_scans(branch, since, profile)` - Time-series data for trend analysis
+- `get_findings_for_scan(scan_id, severity)` - Finding details for comparisons
+- `get_database_stats()` - Aggregate statistics for dashboards
+
+See [scripts/core/history_db.py](../scripts/core/history_db.py) for complete API documentation.
 
 ## OS notes (installing tools)
 
@@ -2777,9 +3254,9 @@ Common failure modes in `.github/workflows/tests.yml` and how to fix them:
   - Symptom: Step passes on one OS but fails on another.
   - Tips: Confirm tool availability/paths on macOS (Homebrew), line endings, and case‑sensitive paths. Use conditional install steps if needed.
 
-If the failure isn’t listed, expand the step logs in GitHub Actions for detailed stderr/stdout. When opening an issue, include the exact failing step and error snippet.
+If the failure isn't listed, expand the step logs in GitHub Actions for detailed stderr/stdout. When opening an issue, include the exact failing step and error snippet.
 
-## Troubleshooting
+## General Troubleshooting
 
 ### Enhanced Debug Logging (v0.7.1+)
 

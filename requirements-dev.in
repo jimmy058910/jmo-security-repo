@@ -10,6 +10,7 @@ jsonschema
 pre-commit
 mypy
 types-PyYAML
+types-tabulate
 croniter
 types-croniter
 

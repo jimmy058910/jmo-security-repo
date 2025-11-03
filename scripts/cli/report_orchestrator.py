@@ -232,4 +232,43 @@ def cmd_report(args, _log_fn) -> int:
         "INFO",
         f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
     )
+
+    # Auto-storage hook: Store scan in history database if requested
+    if getattr(args, "store_history", False):
+        try:
+            from scripts.core.history_db import store_scan as db_store_scan
+
+            history_db_path = getattr(args, "history_db", None)
+            if history_db_path:
+                history_db_path = Path(history_db_path)
+            else:
+                history_db_path = Path(".jmo/history.db")
+
+            # Get profile name from config
+            profile_name = (
+                getattr(args, "profile_name", None) or cfg.default_profile or "balanced"
+            )
+
+            # Get tools from config
+            tools = getattr(cfg, "tools", [])
+
+            # Store scan in history database
+            scan_id = db_store_scan(
+                results_dir=results_dir,
+                profile=profile_name,
+                tools=tools,
+                db_path=history_db_path,
+            )
+
+            _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
+            _log_fn(args, "INFO", f"Database: {history_db_path}")
+
+        except FileNotFoundError as e:
+            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
+        except Exception as e:
+            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
+            import traceback
+
+            traceback.print_exc()
+
     return code

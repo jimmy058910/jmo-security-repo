@@ -55,6 +55,9 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.profile_name = getattr(a, "profile_name", None)
             self.log_level = getattr(a, "log_level", None)
             self.human_logs = getattr(a, "human_logs", False)
+            # History database flags
+            self.store_history = getattr(a, "store_history", False)
+            self.history_db = getattr(a, "history_db", None)
 
     # Run scan phase
     cmd_scan_fn(ScanArgs(args))
@@ -81,6 +84,10 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.html = getattr(a, "html", False)
             self.sarif = getattr(a, "sarif", False)
             self.yaml = getattr(a, "yaml", False)
+            # History database flags
+            self.store_history = getattr(a, "store_history", False)
+            self.history_db = getattr(a, "history_db", None)
+            self.profile_name = getattr(a, "profile_name", None)
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log

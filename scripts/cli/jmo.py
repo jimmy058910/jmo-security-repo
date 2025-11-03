@@ -14,6 +14,7 @@ from scripts.core.config import load_config
 from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.schedule_commands import cmd_schedule
+from scripts.cli.history_commands import cmd_history
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
@@ -158,6 +159,16 @@ def _add_scan_config_args(parser):
         "--profile-name",
         default=None,
         help="Optional profile name from config.profiles to apply for scanning",
+    )
+    parser.add_argument(
+        "--store-history",
+        action="store_true",
+        help="Store scan results in history database (.jmo/history.db) after completion",
+    )
+    parser.add_argument(
+        "--history-db",
+        default=None,
+        help="Path to history database (default: .jmo/history.db)",
     )
 
 
@@ -548,6 +559,171 @@ See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
     return mcp_parser
 
 
+def _add_history_args(subparsers):
+    """Add 'history' subcommand arguments for historical scan management."""
+    history_parser = subparsers.add_parser(
+        "history",
+        help="Manage historical scan database (store, query, analyze trends)",
+        description="""
+Manage historical scan database for trend analysis and security posture tracking.
+
+The history database stores all scans in SQLite for:
+- Historical comparison (track security improvements over time)
+- Machine-readable diffs (identify new/resolved findings between scans)
+- Trend analysis (multi-scan intelligence and regression detection)
+- Compliance tracking (demonstrate security improvements for audits)
+
+Database Location: .jmo/history.db (default)
+
+Usage Examples:
+    # Manually store a completed scan
+    jmo history store --results-dir ./results --profile balanced
+
+    # List recent scans
+    jmo history list --limit 10
+
+    # Show detailed scan information
+    jmo history show abc123
+
+    # Query scans by branch
+    jmo history list --branch main
+
+    # Show database statistics
+    jmo history stats
+
+    # Delete scans older than 90 days
+    jmo history prune --older-than 90d
+
+    # Export all scans as JSON
+    jmo history export --format json > history.json
+
+See: docs/HISTORY_GUIDE.md for complete documentation.
+        """,
+    )
+    history_subparsers = history_parser.add_subparsers(dest="history_command")
+
+    # Common arguments
+    def add_db_arg(parser):
+        parser.add_argument(
+            "--db",
+            default=None,
+            help="Path to SQLite database (default: .jmo/history.db)",
+        )
+
+    # STORE
+    store_parser = history_subparsers.add_parser(
+        "store", help="Manually store a completed scan"
+    )
+    store_parser.add_argument(
+        "--results-dir",
+        required=True,
+        help="Path to results directory (must contain summaries/findings.json)",
+    )
+    store_parser.add_argument(
+        "--profile",
+        default="balanced",
+        choices=["fast", "balanced", "deep"],
+        help="Scan profile that was used (default: balanced)",
+    )
+    store_parser.add_argument(
+        "--commit", help="Git commit hash (optional, auto-detected if not provided)"
+    )
+    store_parser.add_argument(
+        "--branch", help="Git branch name (optional, auto-detected if not provided)"
+    )
+    store_parser.add_argument(
+        "--tag", help="Git tag (optional, auto-detected if not provided)"
+    )
+    add_db_arg(store_parser)
+
+    # LIST
+    list_parser = history_subparsers.add_parser("list", help="List all scans")
+    list_parser.add_argument("--branch", help="Filter by branch name")
+    list_parser.add_argument(
+        "--profile",
+        choices=["fast", "balanced", "deep"],
+        help="Filter by profile",
+    )
+    list_parser.add_argument(
+        "--since", help="Filter by time delta (e.g., 7d, 30d, 90d)"
+    )
+    list_parser.add_argument(
+        "--limit", type=int, default=50, help="Maximum number of results (default: 50)"
+    )
+    list_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    add_db_arg(list_parser)
+
+    # SHOW
+    show_parser = history_subparsers.add_parser(
+        "show", help="Show detailed scan information"
+    )
+    show_parser.add_argument(
+        "scan_id", help="Scan UUID (full or partial, e.g., 'abc123')"
+    )
+    show_parser.add_argument(
+        "--findings", action="store_true", help="Include all findings in output"
+    )
+    show_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    add_db_arg(show_parser)
+
+    # QUERY
+    query_parser = history_subparsers.add_parser(
+        "query", help="Execute custom SQL query"
+    )
+    query_parser.add_argument("query", help="SQL query to execute")
+    query_parser.add_argument(
+        "--format",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    add_db_arg(query_parser)
+
+    # PRUNE
+    prune_parser = history_subparsers.add_parser("prune", help="Delete old scans")
+    prune_parser.add_argument(
+        "--older-than",
+        required=True,
+        help="Delete scans older than time delta (e.g., 30d, 90d, 180d)",
+    )
+    prune_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be deleted without actually deleting",
+    )
+    prune_parser.add_argument(
+        "--force", action="store_true", help="Skip confirmation prompt"
+    )
+    add_db_arg(prune_parser)
+
+    # EXPORT
+    export_parser = history_subparsers.add_parser(
+        "export", help="Export scans to JSON/CSV"
+    )
+    export_parser.add_argument(
+        "--scan-id", help="Export specific scan by UUID (optional)"
+    )
+    export_parser.add_argument(
+        "--since", help="Export scans from time delta (e.g., 30d)"
+    )
+    export_parser.add_argument(
+        "--format",
+        choices=["json", "csv"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    add_db_arg(export_parser)
+
+    # STATS
+    stats_parser = history_subparsers.add_parser(
+        "stats", help="Show database statistics"
+    )
+    stats_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    add_db_arg(stats_parser)
+
+    return history_parser
+
+
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
     ap = argparse.ArgumentParser(
@@ -596,6 +772,7 @@ Documentation: https://docs.jmotools.com
     _add_adapters_args(sub)
     _add_schedule_args(sub)
     _add_mcp_args(sub)
+    _add_history_args(sub)
 
     try:
         return ap.parse_args()
@@ -1513,6 +1690,8 @@ def main():
         return cmd_schedule(args)
     elif args.cmd == "mcp-server":
         return cmd_mcp_server(args)
+    elif args.cmd == "history":
+        return cmd_history(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1
