@@ -155,6 +155,11 @@ class PolicyEngine:
             input_file = Path(f.name)
 
         try:
+            # Extract package name from policy file
+            package_name = self._extract_package_name(policy_path)
+            if not package_name:
+                package_name = "data.jmo.policy"  # Fallback to root namespace
+
             # Evaluate policy using OPA eval
             result = subprocess.run(
                 [
@@ -166,7 +171,7 @@ class PolicyEngine:
                     str(input_file),
                     "--format",
                     "json",
-                    "data.jmo.policy",  # Standard namespace
+                    package_name,  # Use policy-specific package
                 ],
                 capture_output=True,
                 text=True,
@@ -298,6 +303,30 @@ class PolicyEngine:
         input_data = test_data.get("metadata", {})
 
         return self.evaluate(findings, policy_path, input_data)
+
+    def _extract_package_name(self, policy_path: Path) -> Optional[str]:
+        """Extract package declaration from Rego policy file.
+
+        Args:
+            policy_path: Path to .rego policy file
+
+        Returns:
+            Package name in data.* format (e.g., "data.jmo.policy.secrets"), or None
+        """
+        try:
+            content = policy_path.read_text()
+            import re
+
+            # Look for package declaration (e.g., "package jmo.policy.secrets")
+            match = re.search(r"^\s*package\s+([\w.]+)", content, re.MULTILINE)
+            if match:
+                package = match.group(1)
+                # Convert to data.* format (package jmo.policy.secrets → data.jmo.policy.secrets)
+                return f"data.{package}"
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to extract package name from {policy_path}: {e}")
+            return None
 
     def get_metadata(self, policy_path: Path) -> Dict[str, Any]:
         """Extract metadata from Rego policy file.

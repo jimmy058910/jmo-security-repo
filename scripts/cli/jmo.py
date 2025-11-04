@@ -237,6 +237,12 @@ def _add_report_args(subparsers):
         default=None,
         help="Override worker threads for aggregation (default: auto)",
     )
+    rp.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
     _add_logging_args(rp)
     # Accept --allow-missing-tools for symmetry with scan (no-op during report)
     rp.add_argument(
