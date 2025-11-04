@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 # Import packaging for version comparison
 try:
@@ -369,8 +369,8 @@ class PolicyEngine:
                     expressions = output["result"][0].get("expressions", [])
                     if expressions and len(expressions) > 0:
                         metadata = expressions[0].get("value")
-                        if metadata:
-                            return metadata
+                        if metadata and isinstance(metadata, dict):
+                            return cast(Dict[str, Any], metadata)
 
             # Fallback: parse file manually for metadata
             content = policy_path.read_text()

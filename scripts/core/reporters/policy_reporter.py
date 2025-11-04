@@ -152,7 +152,7 @@ def write_policy_json(
         logger.info("No policy results to write")
         return
 
-    data = {
+    data: Dict[str, Any] = {
         "schemaVersion": "1.0.0",
         "policies": [],
     }
