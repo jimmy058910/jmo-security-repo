@@ -15,7 +15,6 @@ from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.history_commands import cmd_history
-from scripts.cli.policy_commands import add_policy_subparser, handle_policy_command
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
@@ -781,7 +780,7 @@ Documentation: https://docs.jmotools.com
     _add_schedule_args(sub)
     _add_mcp_args(sub)
     _add_history_args(sub)
-    add_policy_subparser(sub)  # Policy-as-Code commands
+    # add_policy_subparser(sub)  # Policy-as-Code commands (TODO: restore when policy feature is ready)
 
     try:
         return ap.parse_args()
@@ -1701,8 +1700,8 @@ def main():
         return cmd_mcp_server(args)
     elif args.cmd == "history":
         return cmd_history(args)
-    elif args.cmd == "policy":
-        return handle_policy_command(args)
+    # elif args.cmd == "policy":
+    #     return handle_policy_command(args)  # TODO: restore when policy feature is ready
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1
