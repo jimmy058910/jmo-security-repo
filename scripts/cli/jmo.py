@@ -236,6 +236,12 @@ def _add_report_args(subparsers):
         default=None,
         help="Override worker threads for aggregation (default: auto)",
     )
+    rp.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
     _add_logging_args(rp)
     # Accept --allow-missing-tools for symmetry with scan (no-op during report)
     rp.add_argument(
@@ -765,6 +771,7 @@ ADVANCED COMMANDS:
   report              Aggregate findings and emit reports
   ci                  Scan + report with failure thresholds (for CI/CD)
   adapters            Manage adapter plugins
+  policy              Policy-as-Code management (install, validate, test, list, show)
   mcp-server          Start MCP server for AI-powered remediation
 
 QUICK START:
@@ -795,6 +802,7 @@ Documentation: https://docs.jmotools.com
     _add_schedule_args(sub)
     _add_mcp_args(sub)
     _add_history_args(sub)
+    # add_policy_subparser(sub)  # Policy-as-Code commands (TODO: restore when policy feature is ready)
 
     try:
         return ap.parse_args()
@@ -1714,6 +1722,8 @@ def main():
         return cmd_mcp_server(args)
     elif args.cmd == "history":
         return cmd_history(args)
+    # elif args.cmd == "policy":
+    #     return handle_policy_command(args)  # TODO: restore when policy feature is ready
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1

@@ -143,6 +143,48 @@ def cmd_report(args, _log_fn) -> int:
         _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
         logger.debug(f"Compliance data formatting error: {e}")
 
+    # Evaluate and write policy reports (v1.0.0 Feature #5: Policy-as-Code)
+    policy_names = getattr(args, "policies", None) or []
+    if policy_names:
+        try:
+            from scripts.core.reporters.policy_reporter import (
+                evaluate_policies,
+                write_policy_report,
+                write_policy_json,
+                write_policy_summary_md,
+            )
+
+            builtin_dir = Path(__file__).parent.parent.parent / "policies" / "builtin"
+            user_dir = Path.home() / ".jmo" / "policies"
+
+            _log_fn(
+                args,
+                "INFO",
+                f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
+            )
+            policy_results = evaluate_policies(
+                findings, policy_names, builtin_dir, user_dir
+            )
+
+            if policy_results:
+                write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
+                write_policy_json(policy_results, out_dir / "policy_results.json")
+                write_policy_summary_md(policy_results, out_dir / "POLICY_SUMMARY.md")
+                _log_fn(
+                    args,
+                    "INFO",
+                    f"Policy evaluation complete: {sum(1 for r in policy_results.values() if r.passed)}/{len(policy_results)} passed",
+                )
+        except ImportError as e:
+            _log_fn(args, "DEBUG", f"Policy reporter unavailable: {e}")
+            logger.debug(f"Policy reporter import error: {e}")
+        except (OSError, PermissionError) as e:
+            _log_fn(args, "DEBUG", f"Failed to write policy reports: {e}")
+            logger.debug(f"Policy report write failed: {e}")
+        except Exception as e:
+            _log_fn(args, "ERROR", f"Policy evaluation failed: {e}")
+            logger.error(f"Policy evaluation error: {e}", exc_info=True)
+
     # Write profiling data
     if args.profile:
         try:
