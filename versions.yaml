@@ -266,6 +266,17 @@ special_tools:
     update_check: gh api repos/ZupIT/horusec/releases/latest
     critical: false
     notes: 'v1.0.0 - Alternative SAST for broad language coverage'
+  opa:
+    version: 0.70.0
+    github_repo: open-policy-agent/opa
+    description: Open Policy Agent (policy-as-code engine)
+    release_pattern: opa_linux_{arch}_static
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/open-policy-agent/opa/releases/latest
+    critical: true
+    notes: 'v1.0.0 - Policy-as-Code feature (Feature #5)'
 docker_images:
   ubuntu:
     version: '22.04'
