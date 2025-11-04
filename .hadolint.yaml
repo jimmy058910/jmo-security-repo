@@ -1,0 +1,14 @@
+# .hadolint.yaml - Hadolint configuration for JMo Security Dockerfiles
+ignored:
+  # DL3006: Always tag the version of an image explicitly
+  # Suppressed: We manage tool versions centrally via versions.yaml
+  - DL3006
+  
+  # DL3018: Pin versions in apk add
+  # Suppressed: Some Alpine base images don't support version pinning
+  - DL3018
+  
+  # DL3008: Pin versions in apt-get install
+  # Suppressed: Some Debian base images don't support version pinning
+  - DL3008
+# Keep all other rules enabled for security best practices
