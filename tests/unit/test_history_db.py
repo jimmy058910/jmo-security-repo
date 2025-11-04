@@ -1146,6 +1146,780 @@ class TestEdgeCases:
             )
 
 
+class TestComputeDiff:
+    """Test compute_diff() function for comparing two scans."""
+
+    def test_compute_diff_basic(self, tmp_path):
+        """Test basic diff between two scans with some changes."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Create results directory with findings for scan 1
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings_1 = {
+            "findings": [
+                {
+                    "id": "finding1",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0001",
+                    "location": {"path": "app.py", "startLine": 10},
+                    "message": "Vulnerability A",
+                },
+                {
+                    "id": "finding2",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G101",
+                    "location": {"path": "app.py", "startLine": 20},
+                    "message": "Issue B",
+                },
+                {
+                    "id": "finding3",
+                    "severity": "LOW",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0003",
+                    "location": {"path": "app.py", "startLine": 30},
+                    "message": "Issue C",
+                },
+                {
+                    "id": "finding4",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0004",
+                    "location": {"path": "lib.py", "startLine": 5},
+                    "message": "Issue D",
+                },
+                {
+                    "id": "finding5",
+                    "severity": "CRITICAL",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0005",
+                    "location": {"path": "lib.py", "startLine": 15},
+                    "message": "Critical issue E",
+                },
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
+
+        # Store scan 1
+        scan_id_1 = store_scan(
+            results_dir_1, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+        )
+
+        # Create results directory with findings for scan 2
+        # Scan 2: 3 unchanged (finding1, finding2, finding3), 1 resolved (finding5), 2 new (finding6, finding7)
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+
+        findings_2 = {
+            "findings": [
+                # Unchanged from scan 1
+                {
+                    "id": "finding1",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0001",
+                    "location": {"path": "app.py", "startLine": 10},
+                    "message": "Vulnerability A",
+                },
+                {
+                    "id": "finding2",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G101",
+                    "location": {"path": "app.py", "startLine": 20},
+                    "message": "Issue B",
+                },
+                {
+                    "id": "finding3",
+                    "severity": "LOW",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0003",
+                    "location": {"path": "app.py", "startLine": 30},
+                    "message": "Issue C",
+                },
+                # New findings
+                {
+                    "id": "finding6",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0006",
+                    "location": {"path": "new.py", "startLine": 1},
+                    "message": "New vulnerability",
+                },
+                {
+                    "id": "finding7",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G201",
+                    "location": {"path": "new.py", "startLine": 10},
+                    "message": "New issue",
+                },
+                # finding4 and finding5 resolved (not present in scan 2)
+            ]
+        }
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
+
+        # Store scan 2
+        scan_id_2 = store_scan(
+            results_dir_2, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+        )
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        # Compute diff
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Expected: {"new": 2, "resolved": 2, "unchanged": 3}
+        assert len(diff["new"]) == 2
+        assert len(diff["resolved"]) == 2
+        assert len(diff["unchanged"]) == 3
+
+        # Verify new findings
+        new_ids = {f["fingerprint"] for f in diff["new"]}
+        assert "finding6" in new_ids
+        assert "finding7" in new_ids
+
+        # Verify resolved findings
+        resolved_ids = {f["fingerprint"] for f in diff["resolved"]}
+        assert "finding4" in resolved_ids
+        assert "finding5" in resolved_ids
+
+        # Verify unchanged findings
+        unchanged_ids = {f["fingerprint"] for f in diff["unchanged"]}
+        assert "finding1" in unchanged_ids
+        assert "finding2" in unchanged_ids
+        assert "finding3" in unchanged_ids
+
+    def test_compute_diff_identical_scans(self, tmp_path):
+        """Test diff when scans are identical."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings = {
+            "findings": [
+                {
+                    "id": "finding1",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0001",
+                    "location": {"path": "app.py", "startLine": 10},
+                    "message": "Vulnerability",
+                },
+                {
+                    "id": "finding2",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G101",
+                    "location": {"path": "app.py", "startLine": 20},
+                    "message": "Issue",
+                },
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings))
+
+        scan_id_1 = store_scan(
+            results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path
+        )
+
+        # Create identical scan 2
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings))
+
+        scan_id_2 = store_scan(
+            results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path
+        )
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Expected: {"new": 0, "resolved": 0, "unchanged": 2}
+        assert len(diff["new"]) == 0
+        assert len(diff["resolved"]) == 0
+        assert len(diff["unchanged"]) == 2
+
+    def test_compute_diff_all_new(self, tmp_path):
+        """Test diff when first scan is empty."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Scan 1: 0 findings
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+        (summaries_dir_1 / "findings.json").write_text(json.dumps({"findings": []}))
+
+        scan_id_1 = store_scan(
+            results_dir_1, profile="fast", tools=["trivy"], db_path=db_path
+        )
+
+        # Scan 2: 5 findings
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+
+        findings_2 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-000{i}",
+                    "location": {"path": "app.py", "startLine": i * 10},
+                    "message": f"Vulnerability {i}",
+                }
+                for i in range(1, 6)
+            ]
+        }
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
+
+        scan_id_2 = store_scan(
+            results_dir_2, profile="fast", tools=["trivy"], db_path=db_path
+        )
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Expected: {"new": 5, "resolved": 0, "unchanged": 0}
+        assert len(diff["new"]) == 5
+        assert len(diff["resolved"]) == 0
+        assert len(diff["unchanged"]) == 0
+
+    def test_compute_diff_all_resolved(self, tmp_path):
+        """Test diff when second scan is clean."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Scan 1: 5 findings
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings_1 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-000{i}",
+                    "location": {"path": "app.py", "startLine": i * 10},
+                    "message": f"Vulnerability {i}",
+                }
+                for i in range(1, 6)
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
+
+        scan_id_1 = store_scan(
+            results_dir_1, profile="fast", tools=["trivy"], db_path=db_path
+        )
+
+        # Scan 2: 0 findings
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+        (summaries_dir_2 / "findings.json").write_text(json.dumps({"findings": []}))
+
+        scan_id_2 = store_scan(
+            results_dir_2, profile="fast", tools=["trivy"], db_path=db_path
+        )
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Expected: {"new": 0, "resolved": 5, "unchanged": 0}
+        assert len(diff["new"]) == 0
+        assert len(diff["resolved"]) == 5
+        assert len(diff["unchanged"]) == 0
+
+    def test_compute_diff_fingerprint_matching(self, tmp_path):
+        """Test that fingerprint-based matching works correctly."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Scan 1
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings_1 = {
+            "findings": [
+                {
+                    "id": "finding1",  # Same fingerprint
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0001",
+                    "location": {"path": "app.py", "startLine": 10},
+                    "message": "Vulnerability",
+                },
+                {
+                    "id": "finding2",  # Different fingerprint (will be resolved)
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G101",
+                    "location": {"path": "old.py", "startLine": 20},
+                    "message": "Old issue",
+                },
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
+
+        scan_id_1 = store_scan(
+            results_dir_1, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+        )
+
+        # Scan 2
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+
+        findings_2 = {
+            "findings": [
+                {
+                    "id": "finding1",  # Same fingerprint (unchanged)
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": "CVE-2024-0001",
+                    "location": {"path": "app.py", "startLine": 10},
+                    "message": "Vulnerability",
+                },
+                {
+                    "id": "finding3",  # Different fingerprint (new)
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep"},
+                    "ruleId": "G201",
+                    "location": {"path": "new.py", "startLine": 30},
+                    "message": "New issue",
+                },
+            ]
+        }
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
+
+        scan_id_2 = store_scan(
+            results_dir_2, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+        )
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Verify fingerprint matching
+        assert len(diff["unchanged"]) == 1
+        assert diff["unchanged"][0]["fingerprint"] == "finding1"
+
+        assert len(diff["resolved"]) == 1
+        assert diff["resolved"][0]["fingerprint"] == "finding2"
+
+        assert len(diff["new"]) == 1
+        assert diff["new"][0]["fingerprint"] == "finding3"
+
+    def test_compute_diff_invalid_scan_ids(self, tmp_path):
+        """Test error handling for invalid scan IDs."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Import compute_diff
+        from scripts.core.history_db import compute_diff
+
+        conn = get_connection(db_path)
+
+        # Test with invalid scan IDs
+        with pytest.raises(ValueError, match="Invalid scan ID"):
+            compute_diff(conn, "nonexistent-scan-1", "nonexistent-scan-2")
+
+        conn.close()
+
+
+class TestGetTrendSummary:
+    """Test get_trend_summary() for trend analysis."""
+
+    def test_get_trend_summary_30_days(self, tmp_path, monkeypatch):
+        """Test trend summary over 30 days with multiple scans."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Mock time to control timestamp
+        current_time = int(time.time())
+
+        # Create 10 scans over 30 days with varying findings
+        scan_ids = []
+        for i in range(10):
+            # Create scan i days ago (ensure all are in the past)
+            days_ago = 29 - (i * 3)  # Scans at day 29, 26, 23, 20, 17, 14, 11, 8, 5, 2
+            scan_time = current_time - (days_ago * 86400) - 3600  # Subtract 1 hour to ensure it's in the past
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+
+            # Vary findings count (showing improvement over time)
+            finding_count = 20 - i  # 20, 19, 18, ... 11 findings
+            critical_count = max(0, 5 - (i // 2))  # 5, 5, 4, 4, 3, 3, 2, 2, 1, 1
+            high_count = max(0, 10 - i)  # 10, 9, 8, ... 1
+
+            findings = {
+                "findings": [
+                    {
+                        "id": f"finding{i}_{j}",
+                        "severity": "CRITICAL" if j < critical_count else ("HIGH" if j < critical_count + high_count else "MEDIUM"),
+                        "tool": {"name": "trivy"},
+                        "ruleId": f"CVE-2024-{j:04d}" if j < 5 else f"G{j}",
+                        "location": {"path": "app.py", "startLine": j * 10},
+                        "message": f"Finding {j}",
+                    }
+                    for j in range(finding_count)
+                ]
+            }
+            (summaries_dir / "findings.json").write_text(json.dumps(findings))
+
+            # Store scan with mocked timestamp
+            with patch("time.time", return_value=scan_time):
+                scan_id = store_scan(
+                    results_dir,
+                    profile="balanced",
+                    tools=["trivy"],
+                    db_path=db_path,
+                    branch="main",
+                )
+                scan_ids.append(scan_id)
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        # Get trend summary
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "main", days=30)
+        conn.close()
+
+        # Verify structure
+        assert trend is not None
+        assert "scan_count" in trend
+        assert "date_range" in trend
+        assert "severity_trends" in trend
+        assert "top_rules" in trend
+        assert "improvement_metrics" in trend
+
+        # Verify scan count
+        assert trend["scan_count"] == 10
+
+        # Verify date range
+        assert "start" in trend["date_range"]
+        assert "end" in trend["date_range"]
+
+        # Verify severity trends (should have arrays)
+        assert "CRITICAL" in trend["severity_trends"]
+        assert "HIGH" in trend["severity_trends"]
+        assert len(trend["severity_trends"]["CRITICAL"]) == 10
+
+        # Verify improvement metrics (findings decreasing)
+        assert trend["improvement_metrics"]["trend"] == "improving"
+        assert trend["improvement_metrics"]["total_change"] < -5  # More than 5 fewer findings
+
+    def test_get_trend_summary_empty_branch(self, tmp_path):
+        """Test trend when no scans exist for branch."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "nonexistent", days=30)
+        conn.close()
+
+        # Expected: None
+        assert trend is None
+
+    def test_get_trend_summary_single_scan(self, tmp_path):
+        """Test trend with only one scan (no trend possible)."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+
+        findings = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-000{i}",
+                    "location": {"path": "app.py", "startLine": i * 10},
+                    "message": f"Vulnerability {i}",
+                }
+                for i in range(5)
+            ]
+        }
+        (summaries_dir / "findings.json").write_text(json.dumps(findings))
+
+        store_scan(
+            results_dir, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+        )
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "main", days=30)
+        conn.close()
+
+        # Should return data but with insufficient_data trend
+        assert trend is not None
+        assert trend["scan_count"] == 1
+        assert trend["improvement_metrics"]["trend"] == "insufficient_data"
+
+    def test_get_trend_summary_improvement(self, tmp_path, monkeypatch):
+        """Test trend showing security improvement."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        current_time = int(time.time())
+
+        # Scan 1: 100 findings (50 CRITICAL, 50 HIGH) - 30 days ago
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings_1 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "CRITICAL" if i < 50 else "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-{i:04d}",
+                    "location": {"path": "app.py", "startLine": i},
+                    "message": f"Finding {i}",
+                }
+                for i in range(100)
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
+
+        with patch("time.time", return_value=current_time - (30 * 86400)):
+            store_scan(
+                results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            )
+
+        # Scan 2: 80 findings (40 CRITICAL, 40 HIGH) - 20 days ago
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+
+        findings_2 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "CRITICAL" if i < 40 else "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-{i:04d}",
+                    "location": {"path": "app.py", "startLine": i},
+                    "message": f"Finding {i}",
+                }
+                for i in range(80)
+            ]
+        }
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
+
+        with patch("time.time", return_value=current_time - (20 * 86400)):
+            store_scan(
+                results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            )
+
+        # Scan 3: 60 findings (30 CRITICAL, 30 HIGH) - 10 days ago
+        results_dir_3 = tmp_path / "results3"
+        summaries_dir_3 = results_dir_3 / "summaries"
+        summaries_dir_3.mkdir(parents=True)
+
+        findings_3 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "CRITICAL" if i < 30 else "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-{i:04d}",
+                    "location": {"path": "app.py", "startLine": i},
+                    "message": f"Finding {i}",
+                }
+                for i in range(60)
+            ]
+        }
+        (summaries_dir_3 / "findings.json").write_text(json.dumps(findings_3))
+
+        with patch("time.time", return_value=current_time - (10 * 86400)):
+            store_scan(
+                results_dir_3, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            )
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "main", days=30)
+        conn.close()
+
+        # Expected: improvement_metrics.trend = "improving"
+        assert trend["improvement_metrics"]["trend"] == "improving"
+        assert trend["improvement_metrics"]["total_change"] == 60 - 100  # -40
+        assert trend["improvement_metrics"]["critical_change"] == 30 - 50  # -20
+        assert trend["improvement_metrics"]["high_change"] == 30 - 50  # -20
+
+    def test_get_trend_summary_degradation(self, tmp_path, monkeypatch):
+        """Test trend showing security degradation."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        current_time = int(time.time())
+
+        # Scan 1: 50 findings - 30 days ago
+        results_dir_1 = tmp_path / "results1"
+        summaries_dir_1 = results_dir_1 / "summaries"
+        summaries_dir_1.mkdir(parents=True)
+
+        findings_1 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-{i:04d}",
+                    "location": {"path": "app.py", "startLine": i},
+                    "message": f"Finding {i}",
+                }
+                for i in range(50)
+            ]
+        }
+        (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
+
+        with patch("time.time", return_value=current_time - (30 * 86400)):
+            store_scan(
+                results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            )
+
+        # Scan 2: 100 findings - now (degrading)
+        results_dir_2 = tmp_path / "results2"
+        summaries_dir_2 = results_dir_2 / "summaries"
+        summaries_dir_2.mkdir(parents=True)
+
+        findings_2 = {
+            "findings": [
+                {
+                    "id": f"finding{i}",
+                    "severity": "HIGH",
+                    "tool": {"name": "trivy"},
+                    "ruleId": f"CVE-2024-{i:04d}",
+                    "location": {"path": "app.py", "startLine": i},
+                    "message": f"Finding {i}",
+                }
+                for i in range(100)
+            ]
+        }
+        (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
+
+        with patch("time.time", return_value=current_time):
+            store_scan(
+                results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            )
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "main", days=30)
+        conn.close()
+
+        # Expected: improvement_metrics.trend = "degrading"
+        assert trend["improvement_metrics"]["trend"] == "degrading"
+        assert trend["improvement_metrics"]["total_change"] == 100 - 50  # +50
+
+    def test_get_trend_summary_top_rules(self, tmp_path, monkeypatch):
+        """Test that top_rules are ranked by frequency."""
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        current_time = int(time.time())
+
+        # Create 3 scans with rule "CVE-2024-0001" appearing most frequently
+        for scan_idx in range(3):
+            results_dir = tmp_path / f"results{scan_idx}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+
+            findings = {
+                "findings": [
+                    # Rule A appears in all 3 scans (15 times total)
+                    {
+                        "id": f"findingA{scan_idx}_{i}",
+                        "severity": "HIGH",
+                        "tool": {"name": "trivy"},
+                        "ruleId": "CVE-2024-0001",  # Rule A
+                        "location": {"path": f"app{i}.py", "startLine": i},
+                        "message": f"Finding {i}",
+                    }
+                    for i in range(5)
+                ] + [
+                    # Rule B appears less frequently (10 times total)
+                    {
+                        "id": f"findingB{scan_idx}_{i}",
+                        "severity": "MEDIUM",
+                        "tool": {"name": "semgrep"},
+                        "ruleId": "G101",  # Rule B
+                        "location": {"path": f"lib{i}.py", "startLine": i},
+                        "message": f"Finding {i}",
+                    }
+                    for i in range(3 if scan_idx < 2 else 4)  # 3+3+4=10
+                ]
+            }
+            (summaries_dir / "findings.json").write_text(json.dumps(findings))
+
+            with patch("time.time", return_value=current_time - ((3 - scan_idx) * 86400)):
+                store_scan(
+                    results_dir, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path, branch="main"
+                )
+
+        # Import get_trend_summary
+        from scripts.core.history_db import get_trend_summary
+
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, "main", days=7)
+        conn.close()
+
+        # Expected: top_rules[0].rule_id = "CVE-2024-0001" (15 occurrences)
+        assert len(trend["top_rules"]) > 0
+        assert trend["top_rules"][0]["rule_id"] == "CVE-2024-0001"
+        assert trend["top_rules"][0]["count"] >= 15
+
+
 if __name__ == "__main__":
     pytest.main(
         [__file__, "-v", "--cov=scripts.core.history_db", "--cov-report=term-missing"]

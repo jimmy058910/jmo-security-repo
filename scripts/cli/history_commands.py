@@ -27,6 +27,8 @@ from scripts.core.history_db import (
     get_database_stats,
     prune_old_scans,
     store_scan as db_store_scan,
+    compute_diff,
+    get_trend_summary,
     DEFAULT_DB_PATH,
 )
 
@@ -588,6 +590,155 @@ def cmd_history_stats(args) -> int:
         return 1
 
 
+def cmd_history_diff(args) -> int:
+    """
+    Compare two scans and show differences.
+
+    Usage:
+        jmo history diff <scan-id-1> <scan-id-2>
+        jmo history diff abc123 def456 --output json
+    """
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: History database not found: {db_path}\n")
+        return 1
+
+    scan_id_1 = getattr(args, "scan_id_1", None)
+    scan_id_2 = getattr(args, "scan_id_2", None)
+
+    if not scan_id_1 or not scan_id_2:
+        sys.stderr.write("Error: Provide two scan IDs to compare\n")
+        sys.stderr.write("Usage: jmo history diff <scan-id-1> <scan-id-2>\n")
+        return 1
+
+    try:
+        conn = get_connection(db_path)
+        diff = compute_diff(conn, scan_id_1, scan_id_2)
+        conn.close()
+
+        # Output formatting
+        if getattr(args, "json", False):
+            # JSON output
+            sys.stdout.write(json.dumps(diff, indent=2) + "\n")
+        else:
+            # Human-readable summary
+            sys.stdout.write(f"\n🔍 Diff: {scan_id_1[:8]}... → {scan_id_2[:8]}...\n\n")
+            sys.stdout.write(f"✅ New findings:       {len(diff['new'])}\n")
+            sys.stdout.write(f"✅ Resolved findings:  {len(diff['resolved'])}\n")
+            sys.stdout.write(f"⚪ Unchanged findings: {len(diff['unchanged'])}\n")
+
+            if diff["new"]:
+                sys.stdout.write("\n📋 New Findings (top 10):\n")
+                for f in diff["new"][:10]:
+                    severity = f["severity"]
+                    rule_id = f["rule_id"]
+                    path = f["path"]
+                    sys.stdout.write(f"  - {severity:8s} {rule_id:30s} {path}\n")
+                if len(diff["new"]) > 10:
+                    sys.stdout.write(f"  ... and {len(diff['new']) - 10} more\n")
+
+            if diff["resolved"]:
+                sys.stdout.write("\n✅ Resolved Findings (top 10):\n")
+                for f in diff["resolved"][:10]:
+                    severity = f["severity"]
+                    rule_id = f["rule_id"]
+                    path = f["path"]
+                    sys.stdout.write(f"  - {severity:8s} {rule_id:30s} {path}\n")
+                if len(diff["resolved"]) > 10:
+                    sys.stdout.write(f"  ... and {len(diff['resolved']) - 10} more\n")
+
+            sys.stdout.write("\n")
+
+        return 0
+
+    except ValueError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        return 1
+    except Exception as e:
+        sys.stderr.write(f"Error computing diff: {e}\n")
+        import traceback
+
+        traceback.print_exc()
+        return 1
+
+
+def cmd_history_trends(args) -> int:
+    """
+    Show security trends over time for a branch.
+
+    Usage:
+        jmo history trends --branch main --days 30
+        jmo history trends --branch dev --days 90 --output json
+    """
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: History database not found: {db_path}\n")
+        return 1
+
+    branch = getattr(args, "branch", "main")
+    days = getattr(args, "days", 30)
+
+    try:
+        conn = get_connection(db_path)
+        trend = get_trend_summary(conn, branch, days)
+        conn.close()
+
+        if not trend:
+            sys.stdout.write(f"No scans found for branch '{branch}' in last {days} days\n")
+            return 1
+
+        # Output formatting
+        if getattr(args, "json", False):
+            # JSON output
+            sys.stdout.write(json.dumps(trend, indent=2) + "\n")
+        else:
+            # Human-readable summary
+            sys.stdout.write(f"\n📊 Security Trends: {branch} (last {days} days)\n")
+            sys.stdout.write("=" * 70 + "\n\n")
+
+            # Scan count and date range
+            sys.stdout.write(f"Scans analyzed:   {trend['scan_count']}\n")
+            sys.stdout.write(
+                f"Date range:       {trend['date_range']['start'][:10]} to {trend['date_range']['end'][:10]}\n"
+            )
+            sys.stdout.write("\n")
+
+            # Improvement metrics
+            metrics = trend["improvement_metrics"]
+            trend_icon = {
+                "improving": "📈 ✅",
+                "degrading": "📉 ⚠️",
+                "stable": "➡️ 🔵",
+                "insufficient_data": "❓",
+            }.get(metrics["trend"], "❓")
+
+            sys.stdout.write(f"Trend:            {trend_icon} {metrics['trend'].upper()}\n")
+            sys.stdout.write(f"Total change:     {metrics['total_change']:+d} findings\n")
+            sys.stdout.write(f"CRITICAL change:  {metrics['critical_change']:+d}\n")
+            sys.stdout.write(f"HIGH change:      {metrics['high_change']:+d}\n")
+            sys.stdout.write("\n")
+
+            # Top rules
+            if trend["top_rules"]:
+                sys.stdout.write("Top Rules:\n")
+                for i, rule in enumerate(trend["top_rules"][:10], 1):
+                    sys.stdout.write(
+                        f"  {i:2d}. {rule['rule_id']:30s} {rule['severity']:8s} (x{rule['count']})\n"
+                    )
+                sys.stdout.write("\n")
+
+        return 0
+
+    except Exception as e:
+        sys.stderr.write(f"Error getting trends: {e}\n")
+        import traceback
+
+        traceback.print_exc()
+        return 1
+
+
 def cmd_history(args) -> int:
     """Main history command router."""
     subcommand = getattr(args, "history_command", None)
@@ -606,9 +757,13 @@ def cmd_history(args) -> int:
         return cmd_history_export(args)
     elif subcommand == "stats":
         return cmd_history_stats(args)
+    elif subcommand == "diff":
+        return cmd_history_diff(args)
+    elif subcommand == "trends":
+        return cmd_history_trends(args)
     else:
         sys.stderr.write("Error: Unknown history subcommand\n")
         sys.stderr.write(
-            "Usage: jmo history {store|list|show|query|prune|export|stats}\n"
+            "Usage: jmo history {store|list|show|query|prune|export|stats|diff|trends}\n"
         )
         return 1

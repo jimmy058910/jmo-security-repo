@@ -721,6 +721,28 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     stats_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(stats_parser)
 
+    # diff subcommand
+    diff_parser = history_subparsers.add_parser(
+        "diff", help="Compare two scans and show differences"
+    )
+    diff_parser.add_argument("scan_id_1", help="First scan ID (baseline)")
+    diff_parser.add_argument("scan_id_2", help="Second scan ID (comparison)")
+    diff_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    add_db_arg(diff_parser)
+
+    # trends subcommand
+    trends_parser = history_subparsers.add_parser(
+        "trends", help="Show security trends over time for a branch"
+    )
+    trends_parser.add_argument(
+        "--branch", default="main", help="Branch name (default: main)"
+    )
+    trends_parser.add_argument(
+        "--days", type=int, default=30, help="Number of days to analyze (default: 30)"
+    )
+    trends_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    add_db_arg(trends_parser)
+
     return history_parser
 
 

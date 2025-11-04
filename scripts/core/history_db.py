@@ -915,6 +915,184 @@ def get_findings_for_scan(
     return [dict(row) for row in cursor.fetchall()]
 
 
+def compute_diff(
+    conn: sqlite3.Connection,
+    scan_id_1: str,
+    scan_id_2: str,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Compare two scans and identify new, resolved, and unchanged findings.
+
+    Uses fingerprint-based matching to determine if a finding is the same
+    across scans. Fingerprints are stable hashes of (tool, rule, location, message).
+
+    Args:
+        conn: Database connection
+        scan_id_1: First scan ID (baseline)
+        scan_id_2: Second scan ID (comparison)
+
+    Returns:
+        Dictionary with keys "new", "resolved", "unchanged"
+        Each value is a list of findings (dict format)
+
+    Raises:
+        ValueError: If either scan ID doesn't exist
+
+    Example:
+        >>> diff = compute_diff(conn, scan1_id, scan2_id)
+        >>> print(f"New: {len(diff['new'])}, Resolved: {len(diff['resolved'])}")
+    """
+    # 1. Validate scan IDs exist
+    scan_1 = get_scan_by_id(conn, scan_id_1)
+    scan_2 = get_scan_by_id(conn, scan_id_2)
+    if not scan_1 or not scan_2:
+        raise ValueError(f"Invalid scan ID: {scan_id_1 if not scan_1 else scan_id_2}")
+
+    # 2. Get all findings for both scans
+    findings_1 = get_findings_for_scan(conn, scan_id_1)
+    findings_2 = get_findings_for_scan(conn, scan_id_2)
+
+    # 3. Build sets of fingerprints
+    fingerprints_1 = {f["fingerprint"]: f for f in findings_1}
+    fingerprints_2 = {f["fingerprint"]: f for f in findings_2}
+
+    # 4. Compute set differences
+    new_fps = set(fingerprints_2.keys()) - set(fingerprints_1.keys())
+    resolved_fps = set(fingerprints_1.keys()) - set(fingerprints_2.keys())
+    unchanged_fps = set(fingerprints_1.keys()) & set(fingerprints_2.keys())
+
+    # 5. Build result dictionary
+    return {
+        "new": [fingerprints_2[fp] for fp in new_fps],
+        "resolved": [fingerprints_1[fp] for fp in resolved_fps],
+        "unchanged": [fingerprints_2[fp] for fp in unchanged_fps],
+    }
+
+
+def get_trend_summary(
+    conn: sqlite3.Connection,
+    branch: str,
+    days: int = 30,
+) -> Optional[Dict[str, Any]]:
+    """
+    Analyze security trends for a branch over time.
+
+    Computes severity trends, top recurring rules, and improvement metrics.
+
+    Args:
+        conn: Database connection
+        branch: Git branch name (e.g., "main", "dev")
+        days: Number of days to analyze (default: 30)
+
+    Returns:
+        Dictionary with trend data or None if no scans found:
+        {
+            "scan_count": int,
+            "date_range": {"start": ISO timestamp, "end": ISO timestamp},
+            "severity_trends": {
+                "CRITICAL": [counts over time],
+                "HIGH": [...],
+                ...
+            },
+            "top_rules": [
+                {"rule_id": str, "count": int, "severity": str},
+                ...
+            ],
+            "improvement_metrics": {
+                "trend": "improving" | "degrading" | "stable" | "insufficient_data",
+                "total_change": int (negative = improvement),
+                "critical_change": int,
+                "high_change": int
+            }
+        }
+
+    Example:
+        >>> trend = get_trend_summary(conn, "main", days=30)
+        >>> print(trend["improvement_metrics"]["trend"])
+        improving
+    """
+    import time
+
+    # 1. Calculate time window
+    end_time = int(time.time())
+    start_time = end_time - (days * 86400)
+
+    # 2. Query scans in time window for branch
+    cursor = conn.execute(
+        """
+        SELECT id, timestamp, timestamp_iso,
+               total_findings, critical_count, high_count,
+               medium_count, low_count, info_count
+        FROM scans
+        WHERE branch = ? AND timestamp >= ? AND timestamp <= ?
+        ORDER BY timestamp ASC
+        """,
+        (branch, start_time, end_time),
+    )
+    scans = [dict(row) for row in cursor.fetchall()]
+
+    if not scans:
+        return None
+
+    # 3. Build severity trends (time series)
+    severity_trends = {
+        "CRITICAL": [s["critical_count"] for s in scans],
+        "HIGH": [s["high_count"] for s in scans],
+        "MEDIUM": [s["medium_count"] for s in scans],
+        "LOW": [s["low_count"] for s in scans],
+        "INFO": [s["info_count"] for s in scans],
+    }
+
+    # 4. Get top rules (most frequent across all scans)
+    scan_ids = [s["id"] for s in scans]
+    placeholders = ",".join("?" * len(scan_ids))
+    cursor = conn.execute(
+        f"""
+        SELECT rule_id, severity, COUNT(*) as count
+        FROM findings
+        WHERE scan_id IN ({placeholders})
+        GROUP BY rule_id, severity
+        ORDER BY count DESC
+        LIMIT 10
+        """,
+        scan_ids,
+    )
+    top_rules = [dict(row) for row in cursor.fetchall()]
+
+    # 5. Compute improvement metrics
+    if len(scans) >= 2:
+        first_scan = scans[0]
+        last_scan = scans[-1]
+        total_change = last_scan["total_findings"] - first_scan["total_findings"]
+        critical_change = last_scan["critical_count"] - first_scan["critical_count"]
+        high_change = last_scan["high_count"] - first_scan["high_count"]
+
+        if total_change < -5:  # Threshold: 5+ fewer findings
+            trend = "improving"
+        elif total_change > 5:
+            trend = "degrading"
+        else:
+            trend = "stable"
+    else:
+        total_change = 0
+        critical_change = 0
+        high_change = 0
+        trend = "insufficient_data"
+
+    return {
+        "scan_count": len(scans),
+        "date_range": {"start": scans[0]["timestamp_iso"], "end": scans[-1]["timestamp_iso"]},
+        "severity_trends": severity_trends,
+        "top_rules": top_rules,
+        "improvement_metrics": {
+            "trend": trend,
+            "total_change": total_change,
+            "critical_change": critical_change,
+            "high_change": high_change,
+        },
+    }
+
+
 def get_database_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
     """
     Get database statistics.
