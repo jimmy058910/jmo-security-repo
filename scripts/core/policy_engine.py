@@ -24,14 +24,17 @@ from typing import Any, Dict, List, Optional
 # Import packaging for version comparison
 try:
     from packaging.version import Version, parse as _parse_packaging
+
     def parse_version(version: str) -> Any:
         """Parse version using packaging library."""
         return _parse_packaging(version)
+
 except ImportError:
     # Fallback for environments without packaging
     def parse_version(version: str) -> Any:
         """Simple version parser fallback."""
-        return tuple(int(x) for x in version.split('.'))
+        return tuple(int(x) for x in version.split("."))
+
 
 logger = logging.getLogger(__name__)
 
@@ -147,9 +150,7 @@ class PolicyEngine:
         }
 
         # Write input to temporary file
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(input_doc, f)
             input_file = Path(f.name)
 
@@ -159,9 +160,12 @@ class PolicyEngine:
                 [
                     self.opa_binary,
                     "eval",
-                    "-d", str(policy_path),
-                    "-i", str(input_file),
-                    "--format", "json",
+                    "-d",
+                    str(policy_path),
+                    "-i",
+                    str(input_file),
+                    "--format",
+                    "json",
                     "data.jmo.policy",  # Standard namespace
                 ],
                 capture_output=True,
@@ -270,9 +274,7 @@ class PolicyEngine:
         logger.info(f"✅ Policy validation passed: {policy_path.name}")
         return True
 
-    def test_policy(
-        self, policy_path: Path, test_data_path: Path
-    ) -> PolicyResult:
+    def test_policy(self, policy_path: Path, test_data_path: Path) -> PolicyResult:
         """Test policy against sample findings.
 
         Args:
@@ -299,3 +301,80 @@ class PolicyEngine:
         input_data = test_data.get("metadata", {})
 
         return self.evaluate(findings, policy_path, input_data)
+
+    def get_metadata(self, policy_path: Path) -> Dict[str, Any]:
+        """Extract metadata from Rego policy file.
+
+        Reads the policy file and parses the metadata object using OPA eval.
+
+        Args:
+            policy_path: Path to .rego policy file
+
+        Returns:
+            Metadata dictionary (empty if no metadata found)
+
+        Raises:
+            FileNotFoundError: If policy file doesn't exist
+        """
+        if not policy_path.exists():
+            raise FileNotFoundError(f"Policy file not found: {policy_path}")
+
+        try:
+            # Use OPA to evaluate just the metadata
+            result = subprocess.run(
+                [
+                    self.opa_binary,
+                    "eval",
+                    "-d",
+                    str(policy_path),
+                    "--format",
+                    "json",
+                    "data.jmo.policy.metadata",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode == 0:
+                output = json.loads(result.stdout)
+                # OPA eval returns: {"result": [{"expressions": [{"value": {...}}]}]}
+                if output.get("result") and len(output["result"]) > 0:
+                    expressions = output["result"][0].get("expressions", [])
+                    if expressions and len(expressions) > 0:
+                        metadata = expressions[0].get("value")
+                        if metadata:
+                            return metadata
+
+            # Fallback: parse file manually for metadata
+            content = policy_path.read_text()
+            import re
+
+            # Look for metadata object definition
+            match = re.search(
+                r"metadata\s*:=\s*\{([^}]+)\}", content, re.DOTALL | re.MULTILINE
+            )
+            if match:
+                # Basic parsing - extract key-value pairs
+                metadata = {}
+                pairs = match.group(1).split(",")
+                for pair in pairs:
+                    if ":" in pair:
+                        key, value = pair.split(":", 1)
+                        key = key.strip().strip('"')
+                        value = value.strip().strip('",')
+                        # Try to parse as JSON array
+                        if value.startswith("["):
+                            try:
+                                metadata[key] = json.loads(value)
+                            except json.JSONDecodeError:
+                                metadata[key] = value
+                        else:
+                            metadata[key] = value
+                return metadata
+
+            return {}
+
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata from {policy_path}: {e}")
+            return {}
