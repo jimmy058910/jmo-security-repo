@@ -158,7 +158,9 @@ def cmd_report(args, _log_fn) -> int:
             user_dir = Path.home() / ".jmo" / "policies"
 
             _log_fn(
-                args, "INFO", f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}"
+                args,
+                "INFO",
+                f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
             )
             policy_results = evaluate_policies(
                 findings, policy_names, builtin_dir, user_dir

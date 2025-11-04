@@ -85,9 +85,7 @@ def write_policy_report(
     lines = []
     lines.append("# Policy-as-Code Evaluation Report")
     lines.append("")
-    lines.append(
-        f"Evaluated {len(policy_results)} policies against security findings."
-    )
+    lines.append(f"Evaluated {len(policy_results)} policies against security findings.")
     lines.append("")
 
     # Summary table
@@ -195,9 +193,7 @@ def write_policy_summary_md(
     total_violations = sum(r.violation_count for r in policy_results.values())
 
     if failed == 0:
-        lines.append(
-            f"✅ **All {len(policy_results)} policies passed** (0 violations)"
-        )
+        lines.append(f"✅ **All {len(policy_results)} policies passed** (0 violations)")
     else:
         lines.append(
             f"❌ **{failed}/{len(policy_results)} policies failed** ({total_violations} violations)"
