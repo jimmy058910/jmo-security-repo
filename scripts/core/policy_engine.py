@@ -23,10 +23,13 @@ from typing import Any, Dict, List, Optional
 
 # Import packaging for version comparison
 try:
-    from packaging.version import parse as parse_version
+    from packaging.version import Version, parse as _parse_packaging
+    def parse_version(version: str) -> Any:
+        """Parse version using packaging library."""
+        return _parse_packaging(version)
 except ImportError:
     # Fallback for environments without packaging
-    def parse_version(version: str) -> tuple:
+    def parse_version(version: str) -> Any:
         """Simple version parser fallback."""
         return tuple(int(x) for x in version.split('.'))
 
