@@ -11,7 +11,7 @@ License: MIT
 import json
 import logging
 from pathlib import Path
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict
 
 from scripts.core.policy_engine import PolicyEngine, PolicyResult
 

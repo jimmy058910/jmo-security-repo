@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, cast
 
 # Import packaging for version comparison
 try:
-    from packaging.version import Version, parse as _parse_packaging
+    from packaging.version import parse as _parse_packaging
 
     def parse_version(version: str) -> Any:
         """Parse version using packaging library."""
