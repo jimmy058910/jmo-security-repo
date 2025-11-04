@@ -25,13 +25,13 @@ allow if {
 }
 
 # Blocking findings by severity
-blocking_findings[finding] {
+blocking_findings contains finding if {
 	finding := input.findings[_]
 	finding.severity in block_severities
 }
 
 # Dockerfile-specific issues (critical for containers)
-dockerfile_issues[finding] {
+dockerfile_issues contains finding if {
 	finding := input.findings[_]
 	finding.tool.name == "hadolint"
 	finding.severity in ["CRITICAL", "HIGH"]
@@ -39,13 +39,13 @@ dockerfile_issues[finding] {
 }
 
 # Any secrets (verified or not)
-secret_findings[finding] {
+secret_findings contains finding if {
 	finding := input.findings[_]
 	finding.tool.name in ["trufflehog", "noseyparker", "semgrep-secrets"]
 	finding.severity in ["CRITICAL", "HIGH"]
 }
 
-violations[violation] {
+violations contains violation if {
 	finding := blocking_findings[_]
 	violation := {
 		"fingerprint": finding.id,
@@ -56,7 +56,7 @@ violations[violation] {
 	}
 }
 
-violations[violation] {
+violations contains violation if {
 	finding := dockerfile_issues[_]
 	violation := {
 		"fingerprint": finding.id,
@@ -67,7 +67,7 @@ violations[violation] {
 	}
 }
 
-violations[violation] {
+violations contains violation if {
 	finding := secret_findings[_]
 	violation := {
 		"fingerprint": finding.id,
@@ -78,7 +78,7 @@ violations[violation] {
 	}
 }
 
-message := msg {
+message := msg if {
 	count(violations) > 0
 	msg := sprintf("🚫 Production gate FAILED: %d blocking issues", [count(violations)])
 } else := "✅ Production hardening requirements satisfied"

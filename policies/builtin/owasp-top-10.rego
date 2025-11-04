@@ -22,14 +22,14 @@ allow if {
 }
 
 # Collect findings with OWASP mappings
-owasp_findings[finding] {
+owasp_findings contains finding if {
 	finding := input.findings[_]
 	finding.compliance.owaspTop10_2021
 	count(finding.compliance.owaspTop10_2021) > 0
 }
 
 # Generate detailed violations
-violations[violation] {
+violations contains violation if {
 	finding := owasp_findings[_]
 	categories := finding.compliance.owaspTop10_2021
 	violation := {
@@ -44,13 +44,13 @@ violations[violation] {
 }
 
 # Summary message
-message := msg {
+message := msg if {
 	count(violations) > 0
 	msg := sprintf("❌ Found %d OWASP Top 10 violations", [count(violations)])
 } else := "✅ No OWASP Top 10 violations detected"
 
 # Warnings for informational findings
-warnings[warning] {
+warnings contains warning if {
 	finding := owasp_findings[_]
 	finding.severity == "INFO"
 	warning := sprintf("INFO: %s - %s", [finding.ruleId, finding.message])

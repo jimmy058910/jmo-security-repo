@@ -23,7 +23,7 @@ allow if {
 }
 
 # Collect verified secrets
-verified_secrets[finding] {
+verified_secrets contains finding if {
 	finding := input.findings[_]
 	finding.tool.name in secret_tools
 	finding.severity in ["CRITICAL", "HIGH"]
@@ -31,7 +31,7 @@ verified_secrets[finding] {
 	finding.raw.verified == true
 }
 
-violations[violation] {
+violations contains violation if {
 	finding := verified_secrets[_]
 	violation := {
 		"fingerprint": finding.id,
@@ -44,7 +44,7 @@ violations[violation] {
 	}
 }
 
-message := msg {
+message := msg if {
 	count(violations) > 0
 	msg := sprintf("🚨 CRITICAL: Found %d verified secrets - IMMEDIATE ACTION REQUIRED", [count(violations)])
 } else := "✅ No verified secrets detected"

@@ -249,17 +249,14 @@ class PolicyEngine:
             message=message,
         )
 
-    def validate_policy(self, policy_path: Path) -> bool:
+    def validate_policy(self, policy_path: Path) -> tuple[bool, str]:
         """Validate Rego syntax without executing.
 
         Args:
             policy_path: Path to .rego policy file
 
         Returns:
-            True if valid
-
-        Raises:
-            ValueError: If Rego syntax is invalid
+            Tuple of (is_valid, error_message)
         """
         result = subprocess.run(
             [self.opa_binary, "check", str(policy_path)],
@@ -269,10 +266,10 @@ class PolicyEngine:
         )
 
         if result.returncode != 0:
-            raise ValueError(f"Invalid Rego syntax:\n{result.stderr}")
+            return (False, result.stderr.strip())
 
         logger.info(f"✅ Policy validation passed: {policy_path.name}")
-        return True
+        return (True, "")
 
     def test_policy(self, policy_path: Path, test_data_path: Path) -> PolicyResult:
         """Test policy against sample findings.

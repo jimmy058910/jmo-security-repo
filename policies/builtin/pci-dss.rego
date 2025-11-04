@@ -29,14 +29,14 @@ allow if {
 }
 
 # Collect findings mapped to PCI DSS
-pci_findings[finding] {
+pci_findings contains finding if {
 	finding := input.findings[_]
 	finding.compliance.pciDss4_0
 	count(finding.compliance.pciDss4_0) > 0
 }
 
 # Critical violations (block release)
-critical_violations[violation] {
+critical_violations contains violation if {
 	finding := pci_findings[_]
 	finding.severity in ["CRITICAL", "HIGH"]
 	req := finding.compliance.pciDss4_0[_]
@@ -52,7 +52,7 @@ critical_violations[violation] {
 }
 
 # Informational violations (warnings only)
-warnings[warning] {
+warnings contains warning if {
 	finding := pci_findings[_]
 	finding.severity in ["MEDIUM", "LOW"]
 	req := finding.compliance.pciDss4_0[_]
@@ -61,7 +61,7 @@ warnings[warning] {
 
 violations := critical_violations
 
-message := msg {
+message := msg if {
 	count(critical_violations) > 0
 	msg := sprintf("❌ Found %d critical PCI DSS violations", [count(critical_violations)])
 } else := "✅ PCI DSS critical requirements satisfied"

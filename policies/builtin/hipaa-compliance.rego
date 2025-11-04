@@ -34,14 +34,14 @@ allow if {
 }
 
 # Findings with HIPAA-critical CWEs
-hipaa_findings[finding] {
+hipaa_findings contains finding if {
 	finding := input.findings[_]
 	finding.risk.cwe
 	cwe := sprintf("CWE-%d", [finding.risk.cwe])
 	cwe in hipaa_cwes
 }
 
-hipaa_violations[violation] {
+hipaa_violations contains violation if {
 	finding := hipaa_findings[_]
 	finding.severity in ["CRITICAL", "HIGH"]
 	violation := {
@@ -56,7 +56,7 @@ hipaa_violations[violation] {
 }
 
 # Map CWE to HIPAA technical safeguard
-hipaa_safeguard(cwe) := safeguard {
+hipaa_safeguard(cwe) := safeguard if {
 	safeguard_map := {
 		22: "164.312(a)(1) - Access Control",
 		79: "164.312(a)(1) - Access Control",
@@ -74,7 +74,7 @@ hipaa_safeguard(cwe) := safeguard {
 
 violations := hipaa_violations
 
-message := msg {
+message := msg if {
 	count(violations) > 0
 	msg := sprintf("❌ HIPAA violations: %d technical safeguard failures", [count(violations)])
 } else := "✅ HIPAA technical safeguards requirements satisfied"
