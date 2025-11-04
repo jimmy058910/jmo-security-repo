@@ -686,7 +686,9 @@ def cmd_history_trends(args) -> int:
         conn.close()
 
         if not trend:
-            sys.stdout.write(f"No scans found for branch '{branch}' in last {days} days\n")
+            sys.stdout.write(
+                f"No scans found for branch '{branch}' in last {days} days\n"
+            )
             return 1
 
         # Output formatting
@@ -714,8 +716,12 @@ def cmd_history_trends(args) -> int:
                 "insufficient_data": "❓",
             }.get(metrics["trend"], "❓")
 
-            sys.stdout.write(f"Trend:            {trend_icon} {metrics['trend'].upper()}\n")
-            sys.stdout.write(f"Total change:     {metrics['total_change']:+d} findings\n")
+            sys.stdout.write(
+                f"Trend:            {trend_icon} {metrics['trend'].upper()}\n"
+            )
+            sys.stdout.write(
+                f"Total change:     {metrics['total_change']:+d} findings\n"
+            )
             sys.stdout.write(f"CRITICAL change:  {metrics['critical_change']:+d}\n")
             sys.stdout.write(f"HIGH change:      {metrics['high_change']:+d}\n")
             sys.stdout.write("\n")

@@ -1081,7 +1081,10 @@ def get_trend_summary(
 
     return {
         "scan_count": len(scans),
-        "date_range": {"start": scans[0]["timestamp_iso"], "end": scans[-1]["timestamp_iso"]},
+        "date_range": {
+            "start": scans[0]["timestamp_iso"],
+            "end": scans[-1]["timestamp_iso"],
+        },
         "severity_trends": severity_trends,
         "top_rules": top_rules,
         "improvement_metrics": {

@@ -1207,7 +1207,10 @@ class TestComputeDiff:
 
         # Store scan 1
         scan_id_1 = store_scan(
-            results_dir_1, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+            results_dir_1,
+            profile="balanced",
+            tools=["trivy", "semgrep"],
+            db_path=db_path,
         )
 
         # Create results directory with findings for scan 2
@@ -1267,7 +1270,10 @@ class TestComputeDiff:
 
         # Store scan 2
         scan_id_2 = store_scan(
-            results_dir_2, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+            results_dir_2,
+            profile="balanced",
+            tools=["trivy", "semgrep"],
+            db_path=db_path,
         )
 
         # Import compute_diff
@@ -1491,7 +1497,10 @@ class TestComputeDiff:
         (summaries_dir_1 / "findings.json").write_text(json.dumps(findings_1))
 
         scan_id_1 = store_scan(
-            results_dir_1, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+            results_dir_1,
+            profile="balanced",
+            tools=["trivy", "semgrep"],
+            db_path=db_path,
         )
 
         # Scan 2
@@ -1522,7 +1531,10 @@ class TestComputeDiff:
         (summaries_dir_2 / "findings.json").write_text(json.dumps(findings_2))
 
         scan_id_2 = store_scan(
-            results_dir_2, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path
+            results_dir_2,
+            profile="balanced",
+            tools=["trivy", "semgrep"],
+            db_path=db_path,
         )
 
         # Import compute_diff
@@ -1575,7 +1587,9 @@ class TestGetTrendSummary:
         for i in range(10):
             # Create scan i days ago (ensure all are in the past)
             days_ago = 29 - (i * 3)  # Scans at day 29, 26, 23, 20, 17, 14, 11, 8, 5, 2
-            scan_time = current_time - (days_ago * 86400) - 3600  # Subtract 1 hour to ensure it's in the past
+            scan_time = (
+                current_time - (days_ago * 86400) - 3600
+            )  # Subtract 1 hour to ensure it's in the past
 
             results_dir = tmp_path / f"results{i}"
             summaries_dir = results_dir / "summaries"
@@ -1590,7 +1604,13 @@ class TestGetTrendSummary:
                 "findings": [
                     {
                         "id": f"finding{i}_{j}",
-                        "severity": "CRITICAL" if j < critical_count else ("HIGH" if j < critical_count + high_count else "MEDIUM"),
+                        "severity": (
+                            "CRITICAL"
+                            if j < critical_count
+                            else (
+                                "HIGH" if j < critical_count + high_count else "MEDIUM"
+                            )
+                        ),
                         "tool": {"name": "trivy"},
                         "ruleId": f"CVE-2024-{j:04d}" if j < 5 else f"G{j}",
                         "location": {"path": "app.py", "startLine": j * 10},
@@ -1642,7 +1662,9 @@ class TestGetTrendSummary:
 
         # Verify improvement metrics (findings decreasing)
         assert trend["improvement_metrics"]["trend"] == "improving"
-        assert trend["improvement_metrics"]["total_change"] < -5  # More than 5 fewer findings
+        assert (
+            trend["improvement_metrics"]["total_change"] < -5
+        )  # More than 5 fewer findings
 
     def test_get_trend_summary_empty_branch(self, tmp_path):
         """Test trend when no scans exist for branch."""
@@ -1684,7 +1706,11 @@ class TestGetTrendSummary:
         (summaries_dir / "findings.json").write_text(json.dumps(findings))
 
         store_scan(
-            results_dir, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+            results_dir,
+            profile="balanced",
+            tools=["trivy"],
+            db_path=db_path,
+            branch="main",
         )
 
         # Import get_trend_summary
@@ -1728,7 +1754,11 @@ class TestGetTrendSummary:
 
         with patch("time.time", return_value=current_time - (30 * 86400)):
             store_scan(
-                results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+                results_dir_1,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
             )
 
         # Scan 2: 80 findings (40 CRITICAL, 40 HIGH) - 20 days ago
@@ -1753,7 +1783,11 @@ class TestGetTrendSummary:
 
         with patch("time.time", return_value=current_time - (20 * 86400)):
             store_scan(
-                results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+                results_dir_2,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
             )
 
         # Scan 3: 60 findings (30 CRITICAL, 30 HIGH) - 10 days ago
@@ -1778,7 +1812,11 @@ class TestGetTrendSummary:
 
         with patch("time.time", return_value=current_time - (10 * 86400)):
             store_scan(
-                results_dir_3, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+                results_dir_3,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
             )
 
         # Import get_trend_summary
@@ -1823,7 +1861,11 @@ class TestGetTrendSummary:
 
         with patch("time.time", return_value=current_time - (30 * 86400)):
             store_scan(
-                results_dir_1, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+                results_dir_1,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
             )
 
         # Scan 2: 100 findings - now (degrading)
@@ -1848,7 +1890,11 @@ class TestGetTrendSummary:
 
         with patch("time.time", return_value=current_time):
             store_scan(
-                results_dir_2, profile="balanced", tools=["trivy"], db_path=db_path, branch="main"
+                results_dir_2,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
             )
 
         # Import get_trend_summary
@@ -1887,7 +1933,8 @@ class TestGetTrendSummary:
                         "message": f"Finding {i}",
                     }
                     for i in range(5)
-                ] + [
+                ]
+                + [
                     # Rule B appears less frequently (10 times total)
                     {
                         "id": f"findingB{scan_idx}_{i}",
@@ -1902,9 +1949,15 @@ class TestGetTrendSummary:
             }
             (summaries_dir / "findings.json").write_text(json.dumps(findings))
 
-            with patch("time.time", return_value=current_time - ((3 - scan_idx) * 86400)):
+            with patch(
+                "time.time", return_value=current_time - ((3 - scan_idx) * 86400)
+            ):
                 store_scan(
-                    results_dir, profile="balanced", tools=["trivy", "semgrep"], db_path=db_path, branch="main"
+                    results_dir,
+                    profile="balanced",
+                    tools=["trivy", "semgrep"],
+                    db_path=db_path,
+                    branch="main",
                 )
 
         # Import get_trend_summary
