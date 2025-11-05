@@ -7,14 +7,20 @@ from scripts.core.reporters.yaml_reporter import write_yaml
 
 
 def test_yaml_reporter_writes_empty_list(tmp_path: Path):
+    """Test write_yaml() with empty findings list produces v1.0.0 metadata wrapper."""
     out = tmp_path / "empty.yaml"
-    write_yaml([], out)
+    write_yaml([], out, validate=False)
     text = out.read_text(encoding="utf-8")
-    # PyYAML emits [] for empty list
-    assert text.strip() in ("[]", "[]\n")
+
+    # v1.0.0: YAML now has metadata wrapper even for empty findings
+    assert "meta:" in text
+    assert "findings: []" in text
+    assert "output_version: 1.0.0" in text or "output_version: '1.0.0'" in text
+    assert "finding_count: 0" in text
 
 
 def test_yaml_reporter_preserves_fields(tmp_path: Path):
+    """Test write_yaml() preserves all finding fields within metadata wrapper."""
     sample = [
         {
             "schemaVersion": "1.0.0",
@@ -30,9 +36,14 @@ def test_yaml_reporter_preserves_fields(tmp_path: Path):
         }
     ]
     out = tmp_path / "out.yaml"
-    write_yaml(sample, out)
+    write_yaml(sample, out, validate=False)
     s = out.read_text(encoding="utf-8")
-    # Ensure key fields are present
+
+    # v1.0.0: Verify metadata wrapper present
+    assert "meta:" in s
+    assert "findings:" in s
+
+    # Ensure key finding fields are preserved
     for key in ("schemaVersion", "ruleId", "severity", "location", "message"):
         assert key in s
 

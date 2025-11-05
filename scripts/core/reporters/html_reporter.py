@@ -7,41 +7,73 @@ from typing import Any
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
+# Threshold for inline vs external JSON mode
+# Below this: embed JSON directly in HTML (fast, self-contained)
+# Above this: load JSON via async fetch() (prevents 50-100 MB HTML files)
+INLINE_THRESHOLD = 1000
+
 
 def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+    """
+    Write interactive HTML dashboard with dual-mode support.
+
+    Mode selection:
+    - ≤1000 findings: Inline mode (self-contained HTML, fast loading)
+    - >1000 findings: External mode (async JSON loading, prevents browser freeze)
+
+    Args:
+        findings: List of CommonFinding dicts
+        out_path: Path to write dashboard.html
+    """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     total = len(findings)
     sev_counts = Counter(f.get("severity", "INFO") for f in findings)
-    # Self-contained HTML (no external CDN) with v2 features:
-    # - Expandable rows for code context
-    # - Suggested fixes with copy button
-    # - Grouping by file/rule/tool/severity
-    # - Risk metadata (CWE/OWASP) tooltips and filters
-    # - Triage workflow support
-    # - Enhanced filters with multi-select and patterns
-    # Escape dangerous characters that could break the <script> tag or JavaScript
-    # Must escape AFTER json.dumps to avoid breaking JSON structure
-    # Note: json.dumps already escapes backslashes, quotes, etc. per JSON spec
-    # We only need to escape characters that break HTML <script> context:
-    # 1. </script> breaks out of script tag (CRITICAL: causes premature script closure)
-    # 2. <script> could inject new script tags
-    # 3. <!-- could start HTML comment (breaks in some parsers)
-    # 4. Backticks break JavaScript template literals (if used in JS)
-    data_json = (
-        json.dumps(findings)
-        .replace("</script>", "<\\/script>")  # Prevent script tag breakout
-        .replace(
-            "<script", "<\\script"
-        )  # Prevent script injection (catches <script and <Script)
-        .replace("<!--", "<\\!--")  # Prevent HTML comment injection
-        .replace("`", "\\`")  # Prevent template literal breakout
-    )
+
+    # Generate common HTML elements
     sev_badges = "".join(
         f'<span class="badge sev-{s}">{s}: {sev_counts.get(s, 0)}</span>'
         for s in SEV_ORDER
     )
     sev_options = "".join(f'<option value="{s}">{s}</option>' for s in SEV_ORDER)
+
+    # Decide: Inline vs External mode
+    if total <= INLINE_THRESHOLD:
+        # Mode 1: Inline - Embed JSON directly (self-contained, fast)
+        # Self-contained HTML (no external CDN) with v2 features:
+        # - Expandable rows for code context
+        # - Suggested fixes with copy button
+        # - Grouping by file/rule/tool/severity
+        # - Risk metadata (CWE/OWASP) tooltips and filters
+        # - Triage workflow support
+        # - Enhanced filters with multi-select and patterns
+        # Escape dangerous characters that could break the <script> tag or JavaScript
+        # Must escape AFTER json.dumps to avoid breaking JSON structure
+        # Note: json.dumps already escapes backslashes, quotes, etc. per JSON spec
+        # We only need to escape characters that break HTML <script> context:
+        # 1. </script> breaks out of script tag (CRITICAL: causes premature script closure)
+        # 2. <script> could inject new script tags
+        # 3. <!-- could start HTML comment (breaks in some parsers)
+        # 4. Backticks break JavaScript template literals (if used in JS)
+        data_json = (
+            json.dumps(findings)
+            .replace("</script>", "<\\/script>")  # Prevent script tag breakout
+            .replace(
+                "<script", "<\\script"
+            )  # Prevent script injection (catches <script and <Script)
+            .replace("<!--", "<\\!--")  # Prevent HTML comment injection
+            .replace("`", "\\`")  # Prevent template literal breakout
+        )
+        use_external = False
+    else:
+        # Mode 2: External - Load JSON via fetch() (prevents 50-100 MB HTML files)
+        # Write findings.json separately for async loading
+        findings_json_path = p.parent / "findings.json"
+        findings_json_path.write_text(
+            json.dumps(findings, indent=2), encoding="utf-8"
+        )
+        data_json = None  # Not used in external mode
+        use_external = True
     template = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -187,9 +219,29 @@ h1,h2{margin: 0 0 12px 0}
 .kbd-hint.visible{opacity:0.9}
 kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;font-family:monospace;font-size:10px;box-shadow:0 1px 2px rgba(0,0,0,0.1)}
 #resultCount{display:flex;align-items:center;gap:8px}
+/* Loading spinner animation for external mode */
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+<!-- Loading indicator for external mode (hidden in inline mode) -->
+<div id="loading" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.95); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <div style="text-align:center;">
+    <div style="border:4px solid #f3f3f3; border-top:4px solid #3498db; border-radius:50%; width:50px; height:50px; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
+    <h2 style="color:#333; margin:0 0 8px 0;">Loading Security Findings...</h2>
+    <p style="color:#666; margin:0;">Please wait while we fetch the data</p>
+  </div>
+</div>
+
+<!-- Error message for external mode (hidden by default) -->
+<div id="loadError" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:30px; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.1); max-width:500px; text-align:center; z-index:9999;">
+  <h2 style="color:#e74c3c; margin:0 0 12px 0;">⚠️ Loading Failed</h2>
+  <p style="color:#333; margin:0 0 16px 0;" id="loadErrorMessage">Could not load findings.json</p>
+  <p style="color:#666; font-size:14px; margin:0;">Make sure findings.json is in the same directory as this HTML file.</p>
+</div>
+
+<!-- Main app container (wrapped for external mode visibility control) -->
+<div id="app">
 <div class="header">
   <div>
     <h1>Security Dashboard v2.2 (Priority Intelligence)</h1>
@@ -352,7 +404,10 @@ kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px
 </div>
 
 <script>
-const data = __DATA_JSON__;
+// Dual-mode initialization: inline or external JSON loading
+// __USE_EXTERNAL__ is replaced with 'true' or 'false' by Python
+const useExternal = __USE_EXTERNAL__;
+let data = [];  // Will be populated inline or via fetch()
 let sortKey = '';
 let sortDir = 'asc';
 let groupBy = '';
@@ -1173,11 +1228,51 @@ Please review immediately.`);
   triageFinding(id, 'urgent');
 }
 
-// Initialize: Update summary cards on load
-updateSummaryCards();
+// Dual-mode initialization
+if (useExternal) {
+  // External mode: Load findings.json asynchronously
+  (async function initExternal() {
+    const loadingEl = document.getElementById('loading');
+    const appEl = document.getElementById('app');
+    const errorEl = document.getElementById('loadError');
 
-// Re-render to show initial state
-render();
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (appEl) appEl.style.display = 'none';
+
+    try {
+      const response = await fetch('findings.json');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const json = await response.json();
+
+      // v1.0.0: Extract findings from metadata wrapper
+      data = json.findings;
+
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (appEl) appEl.style.display = 'block';
+
+      // Initialize dashboard
+      updateSummaryCards();
+      render();
+    } catch (err) {
+      console.error('Failed to load findings.json:', err);
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (errorEl) {
+        errorEl.textContent = `Failed to load findings.json: ${err.message}`;
+        errorEl.style.display = 'block';
+      }
+    }
+  })();
+} else {
+  // Inline mode: Data already embedded
+  data = __DATA_JSON__;
+
+  // Initialize dashboard immediately
+  updateSummaryCards();
+  render();
+}
 </script>
 
 <!-- Email Collection CTA (Touch Point #2) -->
@@ -1333,13 +1428,26 @@ render();
     </p>
 </footer>
 
+</div><!-- Close #app wrapper for external mode -->
+
 </body>
 </html>
 """
+    # Template replacements (mode-specific)
     doc = (
         template.replace("__TOTAL__", str(total))
         .replace("__SEV_BADGES__", sev_badges)
         .replace("__SEV_OPTIONS__", sev_options)
-        .replace("__DATA_JSON__", data_json)
+        .replace("__USE_EXTERNAL__", "true" if use_external else "false")
     )
+
+    # Mode-specific data replacement
+    if use_external:
+        # External mode: __DATA_JSON__ placeholder not used (loaded via fetch)
+        # Remove the placeholder to avoid syntax errors
+        doc = doc.replace("data = __DATA_JSON__;", "// Data loaded via fetch()")
+    else:
+        # Inline mode: Embed escaped JSON
+        doc = doc.replace("__DATA_JSON__", data_json)
+
     p.write_text(doc, encoding="utf-8")

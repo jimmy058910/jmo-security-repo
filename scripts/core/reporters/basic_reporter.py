@@ -6,7 +6,9 @@ Basic reporters for CommonFindings: JSON dump and Markdown summary
 from __future__ import annotations
 
 import json
+import platform
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +22,86 @@ SEV_EMOJI = {
 }
 
 
-def write_json(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+def _get_jmo_version() -> str:
+    """Read version from pyproject.toml.
+
+    Returns:
+        Version string (e.g., "1.0.0")
+    """
+    try:
+        # Try tomllib first (Python 3.11+)
+        try:
+            import tomllib
+        except ImportError:
+            # Fallback to tomli for Python 3.10
+            import tomli as tomllib  # type: ignore
+
+        pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            pyproject = tomllib.load(f)
+            return pyproject["project"]["version"]
+    except Exception:
+        # Fallback if pyproject.toml can't be read
+        return "1.0.0"
+
+
+def _generate_metadata(
+    findings: list[dict[str, Any]],
+    scan_id: str | None = None,
+    profile: str | None = None,
+    tools: list[str] | None = None,
+    target_count: int | None = None,
+) -> dict[str, Any]:
+    """Generate metadata block for findings output.
+
+    Args:
+        findings: List of CommonFinding dictionaries
+        scan_id: UUID of the scan (optional)
+        profile: Profile name used (e.g., "balanced")
+        tools: List of tool names used in scan
+        target_count: Number of targets scanned
+
+    Returns:
+        Metadata dictionary with output version, jmo version, timestamp, etc.
+    """
+    return {
+        "output_version": "1.0.0",
+        "jmo_version": _get_jmo_version(),
+        "schema_version": "1.2.0",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "scan_id": scan_id or "",
+        "profile": profile or "",
+        "tools": tools or [],
+        "target_count": target_count or 0,
+        "finding_count": len(findings),
+        "platform": platform.system(),
+    }
+
+
+def write_json(
+    findings: list[dict[str, Any]],
+    out_path: str | Path,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Write findings to JSON file with metadata wrapper.
+
+    Args:
+        findings: List of CommonFinding dictionaries
+        out_path: Output file path
+        metadata: Optional metadata dict (will be auto-generated if not provided)
+    """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
+
+    # Generate default metadata if not provided
+    if metadata is None:
+        metadata = _generate_metadata(findings)
+
+    # Wrap findings in metadata structure (v1.0.0 format)
+    output = {"meta": metadata, "findings": findings}
+
     p.write_text(
-        json.dumps(findings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(output, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
 

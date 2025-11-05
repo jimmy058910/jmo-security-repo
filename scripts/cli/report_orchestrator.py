@@ -17,6 +17,7 @@ from scripts.core.reporters.compliance_reporter import (
     write_compliance_summary,
     write_pci_dss_report,
 )
+from scripts.core.reporters.csv_reporter import write_csv
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.reporters.sarif_reporter import write_sarif
 from scripts.core.reporters.suppression_reporter import write_suppression_report
@@ -112,20 +113,57 @@ def cmd_report(args, _log_fn) -> int:
         after = {f.get("id") for f in findings}
         suppressed_ids = list(before - after)
 
-    # Write reports
+    # Generate metadata for v1.0.0 output format
+    from scripts.core.reporters.basic_reporter import _generate_metadata
+    import uuid
+
+    # Collect scan metadata
+    scan_id = str(uuid.uuid4())
+    profile = getattr(cfg, "default_profile", "") or ""
+    tools_used = []
+
+    # Infer tools from findings
+    for f in findings:
+        tool_name = f.get("tool", {}).get("name", "")
+        if tool_name and tool_name not in tools_used:
+            tools_used.append(tool_name)
+
+    # Count targets scanned
+    target_count = 0
+    for target_dir_name in ["individual-repos", "individual-images", "individual-iac", "individual-web", "individual-gitlab", "individual-k8s"]:
+        target_dir = results_dir / target_dir_name
+        if target_dir.exists():
+            target_count += sum(1 for p in target_dir.iterdir() if p.is_dir())
+
+    metadata = _generate_metadata(
+        findings,
+        scan_id=scan_id,
+        profile=profile,
+        tools=sorted(tools_used),
+        target_count=target_count,
+    )
+
+    # Write reports (v1.0.0: with metadata wrapper)
     if "json" in cfg.outputs:
-        write_json(findings, out_dir / "findings.json")
+        write_json(findings, out_dir / "findings.json", metadata=metadata)
     if "md" in cfg.outputs:
         write_markdown(findings, out_dir / "SUMMARY.md")
     if "yaml" in cfg.outputs:
         try:
-            write_yaml(findings, out_dir / "findings.yaml")
+            write_yaml(findings, out_dir / "findings.yaml", metadata=metadata)
         except RuntimeError as e:
             _log_fn(args, "DEBUG", f"YAML reporter unavailable: {e}")
     if "html" in cfg.outputs:
         write_html(findings, out_dir / "dashboard.html")
     if "sarif" in cfg.outputs:
         write_sarif(findings, out_dir / "findings.sarif")
+    if "csv" in cfg.outputs:
+        # Get CSV configuration from config
+        csv_config = getattr(cfg, "csv", None)
+        csv_columns = None
+        if csv_config and isinstance(csv_config, dict):
+            csv_columns = csv_config.get("columns")
+        write_csv(findings, out_dir / "findings.csv", columns=csv_columns)
     if suppressions:
         write_suppression_report(
             [str(x) for x in suppressed_ids], suppressions, out_dir / "SUPPRESSIONS.md"

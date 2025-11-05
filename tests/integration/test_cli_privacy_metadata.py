@@ -33,6 +33,18 @@ class TestCollectMetadataFlag:
         summaries_dir.mkdir(parents=True)
 
         findings_data = {
+            "meta": {
+                "output_version": "1.0.0",
+                "jmo_version": "0.9.0",
+                "schema_version": "1.2.0",
+                "timestamp": "2025-11-04T12:00:00Z",
+                "scan_id": "test-scan-1",
+                "profile": "balanced",
+                "tools": ["bandit"],
+                "target_count": 1,
+                "finding_count": 1,
+                "platform": "Linux",
+            },
             "findings": [
                 {
                     "schemaVersion": "1.2.0",
@@ -96,6 +108,18 @@ class TestCollectMetadataFlag:
         summaries_dir.mkdir(parents=True)
 
         findings_data = {
+            "meta": {
+                "output_version": "1.0.0",
+                "jmo_version": "0.9.0",
+                "schema_version": "1.2.0",
+                "timestamp": "2025-11-04T12:00:00Z",
+                "scan_id": "test-scan-2",
+                "profile": "fast",
+                "tools": ["checkov"],
+                "target_count": 1,
+                "finding_count": 1,
+                "platform": "Linux",
+            },
             "findings": [
                 {
                     "schemaVersion": "1.2.0",
@@ -163,7 +187,21 @@ class TestCollectMetadataFlag:
         summaries_dir = results_dir / "summaries"
         summaries_dir.mkdir(parents=True)
 
-        findings_data = {"findings": []}
+        findings_data = {
+            "meta": {
+                "output_version": "1.0.0",
+                "jmo_version": "0.9.0",
+                "schema_version": "1.2.0",
+                "timestamp": "2025-11-04T12:00:00Z",
+                "scan_id": "test-scan-3",
+                "profile": "fast",
+                "tools": [],
+                "target_count": 1,
+                "finding_count": 0,
+                "platform": "Linux",
+            },
+            "findings": []
+        }
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps(findings_data), encoding="utf-8")
 

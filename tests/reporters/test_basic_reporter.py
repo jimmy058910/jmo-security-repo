@@ -27,6 +27,7 @@ def test_markdown_summary_counts(tmp_path: Path):
 
 
 def test_write_json_roundtrip(tmp_path: Path):
+    """Test write_json() with v1.0.0 metadata wrapper structure."""
     sample = [
         {
             "schemaVersion": "1.0.0",
@@ -41,6 +42,14 @@ def test_write_json_roundtrip(tmp_path: Path):
     out = tmp_path / "out.json"
     write_json(sample, out)
     s = out.read_text(encoding="utf-8")
+
+    # v1.0.0: JSON now has metadata wrapper {"meta": {...}, "findings": [...]}
+    import json
+    data = json.loads(s)
+    assert "meta" in data
+    assert "findings" in data
+    assert data["findings"] == sample
+    assert data["meta"]["output_version"] == "1.0.0"
     assert "\n" in s and "schemaVersion" in s
 
 

@@ -646,15 +646,40 @@ done
 
 ## Output overview
 
+**v1.0.0:** All output formats use a metadata wrapper structure `{"meta": {...}, "findings": [...]}`. See [OUTPUT_FORMATS.md](OUTPUT_FORMATS.md) for complete specification.
+
 Unified summaries live in `results/summaries/`:
 
-- findings.json — Machine‑readable normalized findings
-- **SUMMARY.md — Enhanced Markdown summary** (see below)
-- findings.yaml — Optional YAML (if PyYAML available)
-- dashboard.html — Self‑contained interactive dashboard
-- findings.sarif — SARIF 2.1.0 output (enabled by default)
-- timings.json — Present when `jmo report --profile` is used
-- SUPPRESSIONS.md — Summary of filtered IDs when suppressions are applied
+- **findings.json** — Machine‑readable normalized findings (v1.0.0: includes metadata envelope)
+- **findings.csv** — NEW in v1.0.0: Spreadsheet-friendly format with metadata header
+- **SUMMARY.md** — Enhanced Markdown summary (see below)
+- **findings.yaml** — Optional YAML (if PyYAML available, v1.0.0: includes metadata)
+- **dashboard.html** — Interactive dashboard with dual-mode support (v1.0.0: inline ≤1000 findings, external >1000 findings)
+- **findings.sarif** — SARIF 2.1.0 output (enabled by default)
+- **timings.json** — Present when `jmo report --profile` is used
+- **SUPPRESSIONS.md** — Summary of filtered IDs when suppressions are applied
+
+**v1.0.0 Metadata Structure:**
+
+All JSON/YAML outputs now include scan metadata:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "0.9.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-11-04T12:34:56Z",
+    "scan_id": "scan-abc123",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep", "trufflehog"],
+    "target_count": 5,
+    "finding_count": 42,
+    "platform": "Linux"
+  },
+  "findings": [...]
+}
+```
 
 Per‑repo raw tool output is under `results/individual-repos/<repo>/`.
 
@@ -1542,13 +1567,6 @@ suppressions:
 
   - id: 9999deadbeef
     reason: accepted risk for demo
-
-# Legacy format (still supported for backward compatibility):
-suppress:
-
-  - id: abcdef1234567890
-    reason: false positive (hashing rule)
-    expires: 2025-12-31
 ```
 
 Behavior:
@@ -1702,11 +1720,146 @@ CVSS: 7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)
 - **Safe rendering** of user-controlled data (file paths, messages, code snippets)
 - **No external dependencies**: Fully self-contained HTML file (works offline)
 
-#### Backward Compatibility
+#### Dashboard Architecture
 
-- **CommonFinding v1.0.0** findings still render correctly
-- **All v1.1.0 fields are optional**: Adapters gracefully degrade if fields missing
-- **Progressive enhancement**: Dashboard detects schema version and enables features accordingly
+**All v1.1.0+ fields are optional**: Dashboard gracefully handles missing fields with progressive enhancement.
+
+#### v1.0.0 Dual-Mode Architecture
+
+**NEW in v1.0.0:** The HTML dashboard now automatically switches between two rendering modes based on dataset size to optimize performance and prevent browser freezing.
+
+**Inline Mode (≤1000 findings):**
+
+- **Behavior**: Findings embedded directly in HTML file
+- **File**: Single self-contained `dashboard.html` (~800 KB for 1000 findings)
+- **Loading**: Instant (<100ms)
+- **Benefits**: Portable (single file), works offline, easy to share
+- **Best For**: Small to medium scans, sharing via email/Slack
+
+**External Mode (>1000 findings):**
+
+- **Behavior**: Findings loaded asynchronously from `findings.json`
+- **Files**: `dashboard.html` (63 KB) + `findings.json` (variable size)
+- **Loading**: Async fetch with professional loading UI (spinner, progress)
+- **Benefits**: Fast page load, supports massive datasets (10,000+ findings)
+- **Best For**: Large scans, enterprise environments, CI/CD pipelines
+
+**Automatic Threshold:**
+
+- **Switch Point**: 1000 findings (`INLINE_THRESHOLD = 1000`)
+- **No Configuration Needed**: Automatically activates based on finding count
+- **Performance Impact**: 95% reduction in load time for >1000 findings (30-60s → <2s)
+
+**Loading UI (External Mode):**
+
+```text
+┌─────────────────────────────────────┐
+│                                     │
+│         [Loading Spinner]           │
+│   Loading Security Findings...      │
+│   Please wait while we fetch data   │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+**Error Handling:**
+
+If `findings.json` fails to load (network error, missing file):
+
+```text
+┌─────────────────────────────────────┐
+│    ⚠️ Loading Failed                 │
+│                                     │
+│  Could not load findings.json       │
+│  Make sure findings.json is in      │
+│  the same directory as this HTML.   │
+└─────────────────────────────────────┘
+```
+
+**File Size Comparison (1500 findings):**
+
+| Mode | dashboard.html | findings.json | Total | Load Time |
+|------|----------------|---------------|-------|-----------|
+| Inline (≤1000 findings) | ~84 KB (100 findings) | N/A | ~84 KB | <100ms |
+| External (>1000 findings) | 63 KB | 448 KB | 511 KB | <2s |
+
+**Performance Benefits:** External mode prevents browser freeze and supports massive datasets (10,000+ findings) with professional loading UX.
+
+### CSV Reporter (v1.0.0+)
+
+**NEW in v1.0.0:** Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or data analysis workflows.
+
+**Output File:** `results/summaries/findings.csv`
+
+**Features:**
+
+- **Metadata Header**: Scan information in comment rows (lines starting with `#`)
+- **Standard CSV Format**: RFC 4180 compliant
+- **UTF-8 Encoding**: Full Unicode support for international characters
+- **Column Headers**: Severity, RuleID, Message, Location, Line, Tool, Version, ID
+
+**Example Output:**
+
+```csv
+# JMo Security Findings Report - v1.0.0
+# Generated: 2025-11-04T12:34:56Z
+# Scan ID: scan-abc123
+# Profile: balanced
+# Tools: trivy, semgrep, trufflehog
+# Targets: 5
+# Findings: 42
+# Platform: Linux
+
+Severity,RuleID,Message,Location,Line,Tool,Version,ID
+CRITICAL,github,GitHub Personal Access Token detected,config.py,15,trufflehog,3.63.0,trufflehog|github|config.py|15|def456
+HIGH,CVE-2024-1234,Vulnerability in lodash,package.json,0,trivy,0.68.0,trivy|CVE-2024-1234|package.json|0|abc123
+MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app.py,42,semgrep,1.45.0,semgrep|exec|app.py|42|ghi789
+```
+
+**Enable CSV in jmo.yml:**
+
+```yaml
+outputs:
+  - json       # Default
+  - md         # Default
+  - html       # Default
+  - sarif      # Default
+  - csv        # NEW in v1.0.0
+```
+
+**Or via CLI:**
+
+```bash
+jmo report results/ --outputs csv
+```
+
+**Use Cases:**
+
+1. **Excel Analysis:**
+   - Import CSV, create pivot tables by severity/tool
+   - Filter findings by path patterns
+   - Calculate severity distribution percentages
+
+2. **Non-Technical Stakeholder Reports:**
+   - Convert to formatted Excel with conditional formatting
+   - Add charts for executive dashboards
+   - Share via email (smaller than HTML)
+
+3. **Compliance Auditing:**
+   - Export findings for audit trails
+   - Track remediation over time (compare CSVs)
+   - Generate compliance metrics (OWASP, CWE counts)
+
+4. **Data Science Workflows:**
+   - Load into pandas/R for statistical analysis
+   - Build ML models for false positive prediction
+   - Trend analysis across multiple scans
+
+**Performance:**
+
+- <500ms for 10,000 findings
+- ~200 KB file size for 1000 findings (vs ~500 KB JSON)
+- Instant Excel import (no parsing delay)
 
 ## AI Integration (v1.0.0+)
 

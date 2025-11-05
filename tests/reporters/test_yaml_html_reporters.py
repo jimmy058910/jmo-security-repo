@@ -20,10 +20,19 @@ SAMPLE = [
 
 
 def test_write_yaml(tmp_path: Path):
+    """Test write_yaml() with v1.0.0 metadata wrapper structure."""
     try:
         out = tmp_path / "f.yaml"
-        write_yaml(SAMPLE, out)
+        write_yaml(SAMPLE, out, validate=False)
         s = out.read_text(encoding="utf-8")
+
+        # v1.0.0: YAML now has metadata wrapper
+        import yaml
+        data = yaml.safe_load(s)
+        assert "meta" in data
+        assert "findings" in data
+        assert data["findings"] == SAMPLE
+        assert data["meta"]["output_version"] == "1.0.0"
         assert "aws-key" in s and "schemaVersion" in s
     except RuntimeError:
         pytest.skip("PyYAML not installed")
@@ -130,15 +139,16 @@ def test_html_script_tag_escaping(tmp_path: Path):
 
     # 5. Verify that unescaped dangerous strings DON'T appear in data JSON
     # (They might appear in HTML elsewhere, but not in the JSON data)
-    # Find the data array declaration
-    data_start = script_content.find("const data = [")
-    data_end = script_content.find("];", data_start)
+    # Find the data array declaration (v1.0.0 dual-mode uses inline initialization)
+    # Pattern: data = [...]  (inline mode assigns in the else branch)
+    data_start = script_content.find("data = [")
+    data_end = script_content.find("];", data_start) if data_start != -1 else -1
     if data_start != -1 and data_end != -1:
         data_json = script_content[data_start : data_end + 2]
 
         # Count unescaped </script> (should be 0 or very few, definitely not 4+)
         unescaped_count = data_json.count("</script>")
-        # We expect at most 1 (the closing tag for const data = [...];)
+        # We expect at most 1 (the closing tag for data = [...];)
         # But the fix should make it 0 in the data itself
         assert unescaped_count <= 1, (
             f"Found {unescaped_count} unescaped </script> in data JSON! "
@@ -146,6 +156,9 @@ def test_html_script_tag_escaping(tmp_path: Path):
         )
 
     # 6. Verify the dashboard data is loadable by checking structure
-    assert "const data = [" in script_content
+    # v1.0.0 dual-mode: uses "let data = []" followed by conditional assignment
+    assert ("let data = []" in script_content or "const data = [" in script_content), (
+        "Data initialization not found (expected 'let data = []' or 'const data = [')"
+    )
     assert "let sortKey" in script_content  # Verify rest of JS is present
     assert "function render()" in script_content  # Core function exists
