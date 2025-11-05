@@ -195,6 +195,167 @@
   - Zero external dependencies (local-first architecture)
   - Future-proof integration (MCP protocol backed by Anthropic)
 
+**Phase 6: SQLite Historical Storage - Security & Privacy (COMPLETE):**
+
+All 6 phases of the SQLite Historical Storage roadmap now complete, marking production-ready milestone.
+
+- **6.1 Secret Redaction** - Prevent sensitive data leakage in historical storage
+  - Added `--no-store-raw-findings` CLI flag to skip storing raw finding data
+  - Automatic secret redaction for secret scanner tools (trufflehog, noseyparker, semgrep-secrets)
+  - Redacts sensitive fields: `Raw`, `RawV2`, `snippet`, `lines`
+  - Non-secret scanners retain full raw data for debugging context
+  - Database schema: `findings.raw_finding` changed from NOT NULL to nullable
+  - Defense-in-depth: Redaction → Encryption → File permissions
+  - Test coverage: 11 new tests (secret redaction, partial storage, null handling)
+
+- **6.2 File Permissions & Encryption** - Secure storage at rest
+  - Added `--encrypt-findings` CLI flag for Fernet symmetric encryption of raw findings
+  - Automatic file permissions: `.jmo/history.db` set to 0o600 (owner-only) on Unix systems
+  - Encryption key via `JMO_ENCRYPTION_KEY` environment variable
+  - SHA-256 key derivation for 32-byte Fernet keys (accepts any length input)
+  - Encrypted data stored as base64 in database, decrypted on retrieval
+  - Test coverage: 13 new tests (encryption roundtrip, key derivation, permission checks)
+
+- **6.3 Privacy-Aware Defaults** - Opt-in PII collection
+  - Added `--collect-metadata` CLI flag for opt-in hostname/username collection
+  - **BREAKING:** Default behavior now privacy-first - hostname/username NOT collected by default
+  - CI metadata (ci_provider, ci_build_id) always collected (non-PII, essential for tracking)
+  - Backward compatible schema (existing databases work without migration)
+  - Test coverage: 7 new tests (metadata collection, opt-in behavior, CI detection)
+
+**Testing Coverage:**
+
+- Total Phase 6 tests: 31 (11 + 13 + 7)
+- Overall history_db.py coverage: 87% (exceeds ≥85% threshold)
+- All history_db tests passing: 106/106
+
+**Documentation:**
+
+- Updated docs/USER_GUIDE.md with 323 lines of security/privacy documentation
+- Added "Security & Privacy Features" section with:
+  - Defense-in-depth overview (redaction → encryption → permissions)
+  - CLI flag reference (--no-store-raw-findings, --encrypt-findings, --collect-metadata)
+  - Security use cases and recommendations
+  - Privacy model explanation
+  - Encryption key management best practices
+- Updated database schema reference (nullable raw_finding column)
+
+**Phase 7: SQLite Historical Storage - Future Integrations (COMPLETE):**
+
+All 7 phases of the SQLite Historical Storage roadmap now complete. Phase 7 adds 9 specialized query functions designed for future integrations with React dashboards, AI-powered remediation systems (MCP Server), and compliance reporting tools.
+
+- **7.1 React Dashboard Helpers** - Optimized queries for interactive web dashboards
+  - `get_dashboard_summary()`: Single-query summary for dashboard components (5-10ms)
+  - `get_timeline_data()`: Time-series data for Recharts line/area charts (10-20ms)
+  - `get_finding_details_batch()`: Batch fetch for lazy loading drill-down views (10-20ms for 100 findings)
+  - `search_findings()`: Full-text search with filters (severity, tool, branch, date range)
+  - All functions optimized for React + Recharts integration
+  - Performance: <50ms response times for dashboard queries
+
+- **7.2 MCP Server Query Helpers** - AI-ready data for remediation suggestions
+  - `get_finding_context()`: Full context for AI remediation (finding + history + similar + compliance)
+  - `get_scan_diff_for_ai()`: AI-optimized diff with priority scoring (1-10) and "likely fix" heuristics
+  - `get_recurring_findings()`: Detect "whack-a-mole" findings indicating systemic issues
+  - Priority scoring formula: Severity (9-10 CRITICAL, 7-8 HIGH) + compliance frameworks (1-2 pts) + recurrence (1 pt)
+  - Use case: Claude suggests fixes based on finding history and compliance impact
+  - Performance: 10-100ms for AI-ready context retrieval
+
+- **7.3 Compliance Reporting Helpers** - Framework-specific summaries and trends
+  - `get_compliance_summary()`: Multi-framework or single-framework compliance summaries
+  - `get_compliance_trend()`: Track compliance improvements over time (improving/degrading/stable)
+  - Supports all 6 frameworks: OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK
+  - Trend insights: "OWASP findings reduced by 40% over 30 days (25 → 15)"
+  - Performance: Single framework 10-20ms, all frameworks 50-100ms
+
+**Testing Coverage:**
+
+- Total Phase 7 tests: 21 (8 React Dashboard + 6 MCP Server + 7 Compliance)
+- Overall history_db.py coverage: 87% (maintained ≥85% threshold)
+- All history_db tests passing: 127/127 (106 Phase 1-6 + 21 Phase 7)
+
+**Documentation:**
+
+- Updated docs/USER_GUIDE.md with 480 lines of Phase 7 documentation (lines 2991-3470)
+- Added "Advanced History Queries (Phase 7)" section with:
+  - Complete API reference for all 9 functions
+  - Performance benchmarks and use cases
+  - React Dashboard integration examples (JavaScript + Python Flask backend)
+  - MCP Server integration examples (Claude AI remediation)
+  - Compliance reporting dashboard example
+  - Future integration examples (Grafana, Slack bots, Jupyter notebooks, SIEM)
+- Performance summary table (all functions <100ms target)
+
+**Use Cases Enabled:**
+
+1. **React Dashboard**: Interactive security dashboards with time-series charts
+2. **AI Remediation**: Claude provides context-aware fix suggestions via MCP Server
+3. **Compliance Tracking**: Automated framework-specific compliance reports with trends
+4. **Priority Triage**: AI-ranked findings by severity + compliance + recurrence
+5. **Process Improvement**: Detect recurring findings indicating systemic issues
+
+**Previous Phase Completion (Earlier Releases):**
+
+- Phase 1 (v0.7.0): Core database schema, scan/finding storage, retrieval APIs
+- Phase 2 (v0.8.0): Git context tracking, multi-target support, statistics
+- Phase 3 (v0.9.0): Historical comparison, trend analysis, diff computation
+- Phase 4 (v0.9.0): Database maintenance (optimize, verify, repair, migrate)
+- Phase 5 (v0.9.0): Performance optimization (batch inserts, indexing, benchmarks)
+- Phase 6 (v1.0.0): Security & privacy (secret redaction, encryption, file permissions, opt-in PII)
+- Phase 7 (v1.0.0): Future integrations (React Dashboard, MCP Server, Compliance Reporting)
+
+**Phase 7: SQLite Historical Storage - Future Integrations (COMPLETE):**
+
+All 7 phases of the SQLite Historical Storage roadmap now complete. Phase 7 adds 9 specialized query functions designed for future integrations with React dashboards, AI-powered remediation systems (MCP Server), and compliance reporting tools.
+
+- **7.1 React Dashboard Helpers** - Optimized queries for interactive web dashboards
+  - `get_dashboard_summary()`: Single-query summary for dashboard components (5-10ms)
+  - `get_timeline_data()`: Time-series data for Recharts line/area charts (10-20ms)
+  - `get_finding_details_batch()`: Batch fetch for lazy loading drill-down views (10-20ms for 100 findings)
+  - `search_findings()`: Full-text search with filters (severity, tool, branch, date range)
+  - All functions optimized for React + Recharts integration
+  - Performance: <50ms response times for dashboard queries
+
+- **7.2 MCP Server Query Helpers** - AI-ready data for remediation suggestions
+  - `get_finding_context()`: Full context for AI remediation (finding + history + similar + compliance)
+  - `get_scan_diff_for_ai()`: AI-optimized diff with priority scoring (1-10) and "likely fix" heuristics
+  - `get_recurring_findings()`: Detect "whack-a-mole" findings indicating systemic issues
+  - Priority scoring formula: Severity (9-10 CRITICAL, 7-8 HIGH) + compliance frameworks (1-2 pts) + recurrence (1 pt)
+  - Use case: Claude suggests fixes based on finding history and compliance impact
+  - Performance: 10-100ms for AI-ready context retrieval
+
+- **7.3 Compliance Reporting Helpers** - Framework-specific summaries and trends
+  - `get_compliance_summary()`: Multi-framework or single-framework compliance summaries
+  - `get_compliance_trend()`: Track compliance improvements over time (improving/degrading/stable)
+  - Supports all 6 frameworks: OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK
+  - Trend insights: "OWASP findings reduced by 40% over 30 days (25 → 15)"
+  - Performance: Single framework 10-20ms, all frameworks 50-100ms
+
+**Testing Coverage:**
+
+- Total Phase 7 tests: 21 (8 React Dashboard + 6 MCP Server + 7 Compliance)
+- Overall history_db.py coverage: 87% (maintained ≥85% threshold)
+- All history_db tests passing: 127/127 (106 Phase 1-6 + 21 Phase 7)
+
+**Documentation:**
+
+- Updated docs/USER_GUIDE.md with 480 lines of Phase 7 documentation (lines 2991-3470)
+- Added "Advanced History Queries (Phase 7)" section with:
+  - Complete API reference for all 9 functions
+  - Performance benchmarks and use cases
+  - React Dashboard integration examples (JavaScript + Python Flask backend)
+  - MCP Server integration examples (Claude AI remediation)
+  - Compliance reporting dashboard example
+  - Future integration examples (Grafana, Slack bots, Jupyter notebooks, SIEM)
+- Performance summary table (all functions <100ms target)
+
+**Use Cases Enabled:**
+
+1. **React Dashboard**: Interactive security dashboards with time-series charts
+2. **AI Remediation**: Claude provides context-aware fix suggestions via MCP Server
+3. **Compliance Tracking**: Automated framework-specific compliance reports with trends
+4. **Priority Triage**: AI-ranked findings by severity + compliance + recurrence
+5. **Process Improvement**: Detect recurring findings indicating systemic issues
+
 #### Changed
 
 **Profile Rebalancing:**
@@ -213,6 +374,88 @@
 - v0.7.2: 12 tools
 - v1.0.0: 28 tools (26 Docker-ready, 2 manual install)
 - Security categories: 7 → 11 (added Cloud CSPM, Mobile, Malware, System Hardening)
+
+**SQLite Historical Storage (Phase 6):**
+
+- Database schema: `findings.raw_finding` column now nullable (was NOT NULL)
+- Default privacy behavior: hostname/username NOT collected by default (use `--collect-metadata` to restore)
+- Encryption support: Opt-in via `--encrypt-findings` flag
+- Secret redaction: Automatic for secret scanners when using historical storage
+
+#### Breaking Changes
+
+##### Phase 6: SQLite Historical Storage - Privacy-First Defaults
+
+1. **Database Schema Change**
+   - **What changed:** `findings.raw_finding` column changed from NOT NULL to nullable
+   - **Impact:** Allows secret redaction and partial storage (`--no-store-raw-findings`)
+   - **Backward compatibility:** ✅ Existing databases work without migration
+   - **Migration required:** ❌ No migration needed
+
+2. **Default Metadata Collection (Privacy-First)**
+   - **What changed:** Hostname/username are NO LONGER collected by default
+   - **Old behavior (v0.9.x):** Automatically collected hostname and username for all scans
+   - **New behavior (v1.0.0):** Privacy-first - metadata collection requires explicit opt-in
+   - **Impact:** Historical scans will not include hostname/username unless `--collect-metadata` flag used
+   - **Rationale:** Align with privacy best practices (GDPR, data minimization principles)
+   - **Migration:** Add `--collect-metadata` to scan commands if you need this data
+
+3. **CI Metadata Still Collected**
+   - **No change:** CI metadata (ci_provider, ci_build_id) always collected (non-PII)
+   - **Rationale:** Essential for tracking scan context in CI/CD environments
+
+**Migration Guide:**
+
+```bash
+# OLD (v0.9.x): Hostname/username automatically collected
+jmo scan --repo ./myapp --enable-history
+
+# NEW (v1.0.0): Privacy-first - add --collect-metadata to restore old behavior
+jmo scan --repo ./myapp --enable-history --collect-metadata
+
+# NEW: Secret redaction (prevent sensitive data leakage)
+jmo scan --repo ./myapp --enable-history --no-store-raw-findings
+
+# NEW: Encryption (secure storage at rest)
+export JMO_ENCRYPTION_KEY="your-secret-key-here"
+jmo scan --repo ./myapp --enable-history --encrypt-findings
+```
+
+**Behavior Comparison:**
+
+| Scan Command | Hostname/Username | Raw Findings | Encrypted | Use Case |
+|--------------|-------------------|--------------|-----------|----------|
+| `jmo scan --enable-history` | ❌ Not collected | ✅ Stored | ❌ No | Privacy-first (default) |
+| `jmo scan --enable-history --collect-metadata` | ✅ Collected | ✅ Stored | ❌ No | Team analytics (opt-in) |
+| `jmo scan --enable-history --no-store-raw-findings` | ❌ Not collected | ❌ Not stored | N/A | Secret redaction |
+| `jmo scan --enable-history --encrypt-findings` | ❌ Not collected | ✅ Encrypted | ✅ Yes | Compliance (SOC 2, ISO 27001) |
+
+**Database Schema Compatibility:**
+
+| Database Version | v0.9.x Code | v1.0.0 Code | Migration Required? |
+|------------------|-------------|-------------|---------------------|
+| Created with v0.9.x | ✅ Works | ✅ Works | ❌ No |
+| Created with v1.0.0 | ❌ Fails (raw_finding NOT NULL) | ✅ Works | ⚠️ Yes (for v0.9.x code) |
+
+**Recommendation:** Upgrade to v1.0.0 before creating new databases. Existing v0.9.x databases will work without changes.
+
+**CLI Flag Summary:**
+
+```bash
+# Phase 6 flags (v1.0.0+)
+jmo scan --no-store-raw-findings     # Skip raw finding storage (secret redaction)
+jmo scan --encrypt-findings          # Encrypt raw findings (requires JMO_ENCRYPTION_KEY)
+jmo scan --collect-metadata          # Opt-in to hostname/username collection
+```
+
+**Rollback Instructions (if needed):**
+
+If you need v0.9.x behavior, downgrade and avoid using `--no-store-raw-findings`:
+
+```bash
+pip install jmo-security==0.9.0
+jmo scan --repo ./myapp --enable-history  # Old behavior: metadata collected, no encryption
+```
 
 #### Testing
 
