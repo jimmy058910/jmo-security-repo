@@ -767,7 +767,9 @@ def cmd_history_optimize(args) -> int:
             sys.stdout.write(f"\n✅ Optimization complete\n\n")
             sys.stdout.write(f"Size before:       {result['size_before_mb']:.2f} MB\n")
             sys.stdout.write(f"Size after:        {result['size_after_mb']:.2f} MB\n")
-            sys.stdout.write(f"Space reclaimed:   {result['space_reclaimed_mb']:.2f} MB\n")
+            sys.stdout.write(
+                f"Space reclaimed:   {result['space_reclaimed_mb']:.2f} MB\n"
+            )
             sys.stdout.write(f"Indices optimized: {result['indices_count']}\n")
 
         return 0
@@ -775,6 +777,7 @@ def cmd_history_optimize(args) -> int:
     except Exception as e:
         sys.stderr.write(f"Error optimizing database: {e}\n")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -806,7 +809,9 @@ def cmd_history_migrate(args) -> int:
             if len(result["applied"]) == 0:
                 sys.stdout.write("\n✅ No pending migrations (already up-to-date)\n")
             else:
-                sys.stdout.write(f"\n✅ Applied {len(result['applied'])} migration(s):\n")
+                sys.stdout.write(
+                    f"\n✅ Applied {len(result['applied'])} migration(s):\n"
+                )
                 for version in result["applied"]:
                     sys.stdout.write(f"  - {version}\n")
                 sys.stdout.write(f"\nFinal version: {result['final_version']}\n")
@@ -822,6 +827,7 @@ def cmd_history_migrate(args) -> int:
     except Exception as e:
         sys.stderr.write(f"Error running migrations: {e}\n")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -856,15 +862,20 @@ def cmd_history_verify(args) -> int:
             if stats:
                 sys.stdout.write(f"\nDatabase Statistics:\n")
                 sys.stdout.write(f"  Scans:          {stats.get('scans_count', 0)}\n")
-                sys.stdout.write(f"  Findings:       {stats.get('findings_count', 0)}\n")
+                sys.stdout.write(
+                    f"  Findings:       {stats.get('findings_count', 0)}\n"
+                )
                 sys.stdout.write(f"  Indices:        {stats.get('indices_count', 0)}\n")
-                sys.stdout.write(f"  Size:           {stats.get('size_mb', 0):.2f} MB\n")
+                sys.stdout.write(
+                    f"  Size:           {stats.get('size_mb', 0):.2f} MB\n"
+                )
 
         return 0 if result["is_valid"] else 1
 
     except Exception as e:
         sys.stderr.write(f"Error verifying database: {e}\n")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -904,7 +915,9 @@ def cmd_history_repair(args) -> int:
             if result["success"]:
                 sys.stdout.write(f"\n✅ Database repair SUCCESSFUL\n\n")
                 sys.stdout.write(f"Backup created:    {result['backup_path']}\n")
-                sys.stdout.write(f"Recovery time:     {result['recovery_time_sec']:.2f}s\n\n")
+                sys.stdout.write(
+                    f"Recovery time:     {result['recovery_time_sec']:.2f}s\n\n"
+                )
                 sys.stdout.write(f"Data recovered:\n")
                 for table, count in result["rows_recovered"].items():
                     sys.stdout.write(f"  {table:20s}: {count}\n")
@@ -913,7 +926,9 @@ def cmd_history_repair(args) -> int:
                 sys.stdout.write(f"Errors:\n")
                 for err in result["errors"]:
                     sys.stdout.write(f"  - {err}\n")
-                sys.stdout.write(f"\nBackup preserved at: {result.get('backup_path', 'N/A')}\n")
+                sys.stdout.write(
+                    f"\nBackup preserved at: {result.get('backup_path', 'N/A')}\n"
+                )
                 return 1
 
         return 0
@@ -921,6 +936,7 @@ def cmd_history_repair(args) -> int:
     except Exception as e:
         sys.stderr.write(f"Error repairing database: {e}\n")
         import traceback
+
         traceback.print_exc()
         return 1
 

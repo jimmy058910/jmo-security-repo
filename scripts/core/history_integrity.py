@@ -123,8 +123,12 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
     try:
         stats = {
             "scans_count": conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0],
-            "findings_count": conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0],
-            "schema_version_count": conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0],
+            "findings_count": conn.execute("SELECT COUNT(*) FROM findings").fetchone()[
+                0
+            ],
+            "schema_version_count": conn.execute(
+                "SELECT COUNT(*) FROM schema_version"
+            ).fetchone()[0],
         }
 
         # Count indices
@@ -215,7 +219,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         findings = conn_old.execute("SELECT * FROM findings").fetchall()
         schema_versions = conn_old.execute("SELECT * FROM schema_version").fetchall()
 
-        logger.info(f"Dumped {len(scans)} scans, {len(findings)} findings, {len(schema_versions)} schema versions")
+        logger.info(
+            f"Dumped {len(scans)} scans, {len(findings)} findings, {len(schema_versions)} schema versions"
+        )
     except Exception as e:
         errors.append(f"Data dump failed: {e}")
         logger.error(f"Data dump failed: {e}")
@@ -253,21 +259,27 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         # Import scans
         if scans:
             # Get column names from PRAGMA table_info
-            scans_columns = [row[1] for row in conn_old.execute("PRAGMA table_info(scans)").fetchall()]
+            scans_columns = [
+                row[1]
+                for row in conn_old.execute("PRAGMA table_info(scans)").fetchall()
+            ]
             placeholders = ", ".join(["?"] * len(scans_columns))
             conn_new.executemany(
                 f"INSERT INTO scans ({', '.join(scans_columns)}) VALUES ({placeholders})",
-                scans
+                scans,
             )
             logger.info(f"Imported {len(scans)} scans")
 
         # Import findings
         if findings:
-            findings_columns = [row[1] for row in conn_old.execute("PRAGMA table_info(findings)").fetchall()]
+            findings_columns = [
+                row[1]
+                for row in conn_old.execute("PRAGMA table_info(findings)").fetchall()
+            ]
             placeholders = ", ".join(["?"] * len(findings_columns))
             conn_new.executemany(
                 f"INSERT INTO findings ({', '.join(findings_columns)}) VALUES ({placeholders})",
-                findings
+                findings,
             )
             logger.info(f"Imported {len(findings)} findings")
 
@@ -277,7 +289,7 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         if schema_versions_to_import:
             conn_new.executemany(
                 "INSERT INTO schema_version (version, applied_at, applied_at_iso) VALUES (?, ?, ?)",
-                schema_versions_to_import
+                schema_versions_to_import,
             )
             logger.info(f"Imported {len(schema_versions_to_import)} schema versions")
 
@@ -301,15 +313,21 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
     try:
         verification = verify_database_integrity(db_path)
         if not verification["is_valid"]:
-            errors.append(f"Post-recovery verification failed: {verification['errors']}")
-            logger.warning(f"Post-recovery verification issues: {verification['errors']}")
+            errors.append(
+                f"Post-recovery verification failed: {verification['errors']}"
+            )
+            logger.warning(
+                f"Post-recovery verification issues: {verification['errors']}"
+            )
     except Exception as e:
         logger.warning(f"Post-recovery verification error: {e}")
 
     rows_recovered = {
         "scans": len(scans),
         "findings": len(findings),
-        "schema_versions": len(schema_versions_to_import) if schema_versions_to_import else 0,
+        "schema_versions": (
+            len(schema_versions_to_import) if schema_versions_to_import else 0
+        ),
     }
 
     recovery_time = time.time() - start_time
@@ -317,7 +335,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
     if len(errors) == 0:
         logger.info(f"✅ Database recovery SUCCEEDED in {recovery_time:.2f}s")
     else:
-        logger.warning(f"⚠️  Database recovery completed with warnings in {recovery_time:.2f}s")
+        logger.warning(
+            f"⚠️  Database recovery completed with warnings in {recovery_time:.2f}s"
+        )
 
     return {
         "success": len(errors) == 0,

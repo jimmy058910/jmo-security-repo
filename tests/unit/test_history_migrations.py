@@ -41,8 +41,9 @@ def test_discover_migrations_finds_all(tmp_path: Path):
     assert len(migrations) >= 1, "Should discover at least 1 migration"
 
     # All returned objects should be Migration instances
-    assert all(isinstance(m, Migration) for m in migrations), \
-        "All discovered items should be Migration instances"
+    assert all(
+        isinstance(m, Migration) for m in migrations
+    ), "All discovered items should be Migration instances"
 
     # Check example migration is found
     versions = [m.version for m in migrations]
@@ -61,8 +62,9 @@ def test_discover_migrations_correct_order(tmp_path: Path):
     versions = [m.version for m in migrations]
 
     # Versions should be in ascending order
-    assert versions == sorted(versions), \
-        f"Migrations not in order: {versions} vs {sorted(versions)}"
+    assert versions == sorted(
+        versions
+    ), f"Migrations not in order: {versions} vs {sorted(versions)}"
 
 
 def test_run_migrations_applies_all(tmp_path: Path):
@@ -86,8 +88,9 @@ def test_run_migrations_applies_all(tmp_path: Path):
     assert len(result["applied"]) >= 1, "Should apply at least 1 migration"
     assert "1.1.0" in result["applied"], "Should apply v1.1.0 migration"
     assert len(result["errors"]) == 0, f"Unexpected errors: {result['errors']}"
-    assert result["final_version"] == "1.1.0", \
-        f"Expected final version 1.1.0, got {result['final_version']}"
+    assert (
+        result["final_version"] == "1.1.0"
+    ), f"Expected final version 1.1.0, got {result['final_version']}"
 
 
 def test_run_migrations_updates_version(tmp_path: Path):
@@ -141,14 +144,17 @@ def test_migration_adds_columns(tmp_path: Path):
     scans_columns = [
         row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()
     ]
-    assert "scan_notes" in scans_columns, "scan_notes column should exist after migration"
+    assert (
+        "scan_notes" in scans_columns
+    ), "scan_notes column should exist after migration"
 
     # Check finding_status column exists in findings table
     findings_columns = [
         row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
     ]
-    assert "finding_status" in findings_columns, \
-        "finding_status column should exist after migration"
+    assert (
+        "finding_status" in findings_columns
+    ), "finding_status column should exist after migration"
 
     # Check index was created
     indices = conn.execute(
@@ -185,5 +191,6 @@ def test_migration_idempotent(tmp_path: Path):
     ]
     # Count how many times scan_notes appears (should be exactly 1)
     scan_notes_count = scans_columns.count("scan_notes")
-    assert scan_notes_count == 1, \
-        f"scan_notes should appear exactly once, found {scan_notes_count} times"
+    assert (
+        scan_notes_count == 1
+    ), f"scan_notes should appear exactly once, found {scan_notes_count} times"

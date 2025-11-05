@@ -100,9 +100,7 @@ class Migration(ABC):
 
 
 def discover_migrations(
-    current_version: str,
-    target_version: str,
-    migrations_dir: Optional[Path] = None
+    current_version: str, target_version: str, migrations_dir: Optional[Path] = None
 ) -> List[Migration]:
     """
     Find all migrations between current and target version.
@@ -143,6 +141,7 @@ def discover_migrations(
         try:
             # Import migration module
             import importlib.util
+
             spec = importlib.util.spec_from_file_location(file.stem, file)
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
@@ -151,9 +150,11 @@ def discover_migrations(
                 # Find Migration class in module
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if (isinstance(attr, type) and
-                        issubclass(attr, Migration) and
-                        attr is not Migration):
+                    if (
+                        isinstance(attr, type)
+                        and issubclass(attr, Migration)
+                        and attr is not Migration
+                    ):
                         migration = attr()
 
                         # Filter by version range (use tuple comparison for proper semver)
@@ -163,7 +164,9 @@ def discover_migrations(
 
                         if current_v < migration_v <= target_v:
                             migrations.append(migration)
-                            logger.debug(f"Discovered migration: {migration.version} from {file}")
+                            logger.debug(
+                                f"Discovered migration: {migration.version} from {file}"
+                            )
                         break
 
         except Exception as e:
@@ -177,8 +180,7 @@ def discover_migrations(
 
 
 def run_migrations(
-    db_path: Path,
-    target_version: Optional[str] = None
+    db_path: Path, target_version: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Apply all pending migrations up to target version.
@@ -234,10 +236,12 @@ def run_migrations(
             "applied": [],
             "errors": [],
             "final_version": current_version,
-            "rollback_performed": False
+            "rollback_performed": False,
         }
 
-    logger.info(f"Found {len(migrations)} migrations to apply: {[m.version for m in migrations]}")
+    logger.info(
+        f"Found {len(migrations)} migrations to apply: {[m.version for m in migrations]}"
+    )
 
     applied: List[str] = []
     errors: List[Dict[str, Any]] = []
@@ -260,8 +264,8 @@ def run_migrations(
                     (
                         migration.version,
                         int(time.time()),
-                        datetime.now(timezone.utc).isoformat()
-                    )
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
                 )
 
             applied.append(migration.version)
@@ -278,17 +282,18 @@ def run_migrations(
                 rollback_performed = True
                 logger.info(f"✅ Rollback of {migration.version} successful")
             except Exception as rollback_error:
-                logger.error(f"❌ Rollback of {migration.version} failed: {rollback_error}")
-                errors.append({
-                    "version": migration.version,
-                    "error": str(e),
-                    "rollback_error": str(rollback_error)
-                })
+                logger.error(
+                    f"❌ Rollback of {migration.version} failed: {rollback_error}"
+                )
+                errors.append(
+                    {
+                        "version": migration.version,
+                        "error": str(e),
+                        "rollback_error": str(rollback_error),
+                    }
+                )
 
-            errors.append({
-                "version": migration.version,
-                "error": str(e)
-            })
+            errors.append({"version": migration.version, "error": str(e)})
 
             # Stop applying further migrations
             break
@@ -299,7 +304,7 @@ def run_migrations(
         "applied": applied,
         "errors": errors,
         "final_version": final_version,
-        "rollback_performed": rollback_performed
+        "rollback_performed": rollback_performed,
     }
 
 
@@ -338,5 +343,5 @@ def _parse_version(version: str) -> tuple[int, int, int]:
     return (
         int(parts[0]) if len(parts) > 0 else 0,
         int(parts[1]) if len(parts) > 1 else 0,
-        int(parts[2]) if len(parts) > 2 else 0
+        int(parts[2]) if len(parts) > 2 else 0,
     )

@@ -52,7 +52,9 @@ class TestSecretRedaction:
         raw_data = json.loads(redacted["raw_finding"])
         assert raw_data["Raw"] == "[REDACTED]"
         assert raw_data["RawV2"] == "[REDACTED]"
-        assert raw_data["Redacted"] == "ghp_1234567890ab***"  # Already redacted, unchanged
+        assert (
+            raw_data["Redacted"] == "ghp_1234567890ab***"
+        )  # Already redacted, unchanged
         assert raw_data["DetectorName"] == "github"  # Non-secret field unchanged
         assert raw_data["Verified"] is True  # Non-secret field unchanged
 
@@ -154,7 +156,10 @@ class TestSecretRedaction:
         raw_data = json.loads(redacted["raw_finding"])
         assert raw_data == finding["raw"]  # Exact match, no changes
         assert raw_data["VulnerabilityID"] == "CVE-2024-1234"
-        assert raw_data["Description"] == "Lodash versions before 4.17.21 are vulnerable..."
+        assert (
+            raw_data["Description"]
+            == "Lodash versions before 4.17.21 are vulnerable..."
+        )
 
     def test_no_store_raw_findings_flag(self):
         """Test that --no-store-raw-findings returns None for raw_finding."""
@@ -248,7 +253,10 @@ class TestSecretRedaction:
             "remediation": "Rotate the token immediately",
             "references": ["https://docs.github.com/en/authentication"],
             "tags": ["secret", "github"],
-            "cvss": {"score": 9.8, "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},
+            "cvss": {
+                "score": 9.8,
+                "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            },
             "risk": {"confidence": "HIGH", "likelihood": "HIGH", "impact": "HIGH"},
             "raw": {"Raw": "ghp_secret", "DetectorName": "github"},
         }

@@ -135,7 +135,9 @@ class TestEncryptFindingsFlag:
         db_path = tmp_path / "test_history.db"
 
         # Act & Assert: Should raise ValueError about missing key
-        with pytest.raises(ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"):
+        with pytest.raises(
+            ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"
+        ):
             store_scan(
                 results_dir=results_dir,
                 profile="fast",

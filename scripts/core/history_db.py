@@ -2102,9 +2102,7 @@ def search_findings(
 
     # Text search (message, path, rule_id)
     if query:
-        where_clauses.append(
-            "(f.message LIKE ? OR f.path LIKE ? OR f.rule_id LIKE ?)"
-        )
+        where_clauses.append("(f.message LIKE ? OR f.path LIKE ? OR f.rule_id LIKE ?)")
         search_pattern = f"%{query}%"
         params.extend([search_pattern, search_pattern, search_pattern])
 
@@ -2318,7 +2316,9 @@ def get_finding_context(
             elif not is_present and was_present:
                 # Finding resolved
                 if first_seen_scan:
-                    days_to_fix = (scan["timestamp"] - first_seen_scan["timestamp"]) // 86400
+                    days_to_fix = (
+                        scan["timestamp"] - first_seen_scan["timestamp"]
+                    ) // 86400
                     remediation_history.append(
                         {
                             "resolved_in_scan": scan["id"],
@@ -2341,7 +2341,9 @@ def get_finding_context(
     if finding.get("cwe_top25"):
         try:
             cwe = json.loads(finding["cwe_top25"])
-            compliance_frameworks.extend([f"CWE-{x['id']}" for x in cwe if isinstance(x, dict)])
+            compliance_frameworks.extend(
+                [f"CWE-{x['id']}" for x in cwe if isinstance(x, dict)]
+            )
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -2489,9 +2491,7 @@ def get_scan_diff_for_ai(
 
     # Context
     time_delta_days = (
-        (scan_2["timestamp"] - scan_1["timestamp"]) // 86400
-        if scan_1 and scan_2
-        else 0
+        (scan_2["timestamp"] - scan_1["timestamp"]) // 86400 if scan_1 and scan_2 else 0
     )
 
     commit_diff = ""
@@ -2718,7 +2718,9 @@ def get_compliance_summary(
                 for item in categories:
                     if isinstance(item, dict):
                         # CWE Top 25 format: [{"id": "79", "name": "...", ...}]
-                        category_key = item.get("id") or item.get("category") or str(item)
+                        category_key = (
+                            item.get("id") or item.get("category") or str(item)
+                        )
                     elif isinstance(item, str):
                         # OWASP/PCI DSS format: ["A01:2021", "A02:2021"]
                         category_key = item
@@ -2976,7 +2978,8 @@ def get_compliance_trend(
 
     # Calculate average findings per scan
     avg_findings_per_scan = (
-        sum(dp["total_findings_with_framework"] for dp in data_points) / len(data_points)
+        sum(dp["total_findings_with_framework"] for dp in data_points)
+        / len(data_points)
         if len(data_points) > 0
         else 0.0
     )

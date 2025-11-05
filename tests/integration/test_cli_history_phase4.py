@@ -250,7 +250,9 @@ def test_cli_history_repair(tmp_path: Path):
     if "Backup created" in stdout:
         # Backup was created, check for .backup suffix
         backup_candidates = list(tmp_path.glob("*.backup"))
-        assert len(backup_candidates) >= 1, f"Backup file should exist in {tmp_path}, found: {list(tmp_path.glob('*'))}"
+        assert (
+            len(backup_candidates) >= 1
+        ), f"Backup file should exist in {tmp_path}, found: {list(tmp_path.glob('*'))}"
 
     # Verify data preserved
     conn2 = get_connection(db_path)

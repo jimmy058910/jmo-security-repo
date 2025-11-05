@@ -204,17 +204,25 @@ class TestCollectMetadataFlag:
         cursor = conn.cursor()
 
         # Scan 1: Privacy mode (NULL metadata)
-        cursor.execute("SELECT hostname, username FROM scans WHERE id = ?", (scan_id_1,))
+        cursor.execute(
+            "SELECT hostname, username FROM scans WHERE id = ?", (scan_id_1,)
+        )
         row1 = cursor.fetchone()
         assert row1[0] is None and row1[1] is None, "Scan 1 should have NULL metadata"
 
         # Scan 2: Metadata collection (populated)
-        cursor.execute("SELECT hostname, username FROM scans WHERE id = ?", (scan_id_2,))
+        cursor.execute(
+            "SELECT hostname, username FROM scans WHERE id = ?", (scan_id_2,)
+        )
         row2 = cursor.fetchone()
-        assert row2[0] is not None and row2[1] is not None, "Scan 2 should have metadata"
+        assert (
+            row2[0] is not None and row2[1] is not None
+        ), "Scan 2 should have metadata"
 
         # Scan 3: Privacy mode (NULL metadata)
-        cursor.execute("SELECT hostname, username FROM scans WHERE id = ?", (scan_id_3,))
+        cursor.execute(
+            "SELECT hostname, username FROM scans WHERE id = ?", (scan_id_3,)
+        )
         row3 = cursor.fetchone()
         assert row3[0] is None and row3[1] is None, "Scan 3 should have NULL metadata"
 

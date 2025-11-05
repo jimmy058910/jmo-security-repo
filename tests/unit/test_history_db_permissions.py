@@ -76,10 +76,14 @@ class TestDatabaseFilePermissions:
         # Verify no group or other permissions
         assert not (file_mode & stat.S_IRGRP), "Group should not have read permission"
         assert not (file_mode & stat.S_IWGRP), "Group should not have write permission"
-        assert not (file_mode & stat.S_IXGRP), "Group should not have execute permission"
+        assert not (
+            file_mode & stat.S_IXGRP
+        ), "Group should not have execute permission"
         assert not (file_mode & stat.S_IROTH), "Others should not have read permission"
         assert not (file_mode & stat.S_IWOTH), "Others should not have write permission"
-        assert not (file_mode & stat.S_IXOTH), "Others should not have execute permission"
+        assert not (
+            file_mode & stat.S_IXOTH
+        ), "Others should not have execute permission"
 
         # Verify owner has read/write
         assert file_mode & stat.S_IRUSR, "Owner should have read permission"

@@ -663,7 +663,12 @@ class TestComplianceHelpers:
         assert trend["framework"] == "owasp"
         assert trend["branch"] == "main"
         assert trend["days"] == 30
-        assert trend["trend"] in ["improving", "degrading", "stable", "insufficient_data"]
+        assert trend["trend"] in [
+            "improving",
+            "degrading",
+            "stable",
+            "insufficient_data",
+        ]
 
         # Verify data points (should have 5 scans)
         assert len(trend["data_points"]) == 5

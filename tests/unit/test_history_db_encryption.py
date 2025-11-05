@@ -121,7 +121,9 @@ class TestRawFindingEncryption:
         raw_json = json.dumps(raw_data)
 
         # Act & Assert: Encryption should raise ValueError
-        with pytest.raises(ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"):
+        with pytest.raises(
+            ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"
+        ):
             encrypt_raw_finding(raw_json)
 
     def test_decrypt_without_key_raises_error(self):
@@ -136,7 +138,9 @@ class TestRawFindingEncryption:
         encrypted_data = "gAAAAABhX..."
 
         # Act & Assert: Decryption should raise ValueError
-        with pytest.raises(ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"):
+        with pytest.raises(
+            ValueError, match="JMO_ENCRYPTION_KEY environment variable not set"
+        ):
             decrypt_raw_finding(encrypted_data)
 
     def test_decrypt_with_wrong_key_raises_error(self):
@@ -182,9 +186,7 @@ class TestRawFindingEncryption:
 
         # Create large raw finding (10KB)
         large_data = {
-            "findings": [
-                {"id": f"finding-{i}", "data": "x" * 100} for i in range(100)
-            ]
+            "findings": [{"id": f"finding-{i}", "data": "x" * 100} for i in range(100)]
         }
         large_json = json.dumps(large_data)
         assert len(large_json) > 10_000  # Verify >10KB

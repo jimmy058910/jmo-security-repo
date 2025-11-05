@@ -154,8 +154,12 @@ class TestPrivacyAwareDefaults:
         assert row[1] is not None, "username should be collected when opt-in"
 
         # Verify they are non-empty strings
-        assert isinstance(row[0], str) and len(row[0]) > 0, "hostname should be non-empty"
-        assert isinstance(row[1], str) and len(row[1]) > 0, "username should be non-empty"
+        assert (
+            isinstance(row[0], str) and len(row[0]) > 0
+        ), "hostname should be non-empty"
+        assert (
+            isinstance(row[1], str) and len(row[1]) > 0
+        ), "username should be non-empty"
 
         conn.close()
 
@@ -256,7 +260,11 @@ class TestPrivacyAwareDefaults:
         row = cursor.fetchone()
 
         assert row is not None
-        assert row[0] is None, "hostname should be NULL (backward compatibility default)"
-        assert row[1] is None, "username should be NULL (backward compatibility default)"
+        assert (
+            row[0] is None
+        ), "hostname should be NULL (backward compatibility default)"
+        assert (
+            row[1] is None
+        ), "username should be NULL (backward compatibility default)"
 
         conn.close()

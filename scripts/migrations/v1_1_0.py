@@ -32,7 +32,9 @@ class Migration_1_0_0_to_1_1_0(Migration):
         New columns must be nullable or have default values.
         """
         # Check if scan_notes column already exists
-        scans_columns = [row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()]
+        scans_columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()
+        ]
         if "scan_notes" not in scans_columns:
             conn.execute(
                 """
@@ -42,7 +44,9 @@ class Migration_1_0_0_to_1_1_0(Migration):
             )
 
         # Check if finding_status column already exists
-        findings_columns = [row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()]
+        findings_columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
+        ]
         if "finding_status" not in findings_columns:
             conn.execute(
                 """
