@@ -29,8 +29,11 @@ from scripts.core.history_db import (
     store_scan as db_store_scan,
     compute_diff,
     get_trend_summary,
+    optimize_database,
     DEFAULT_DB_PATH,
 )
+from scripts.core.history_migrations import run_migrations, get_current_version
+from scripts.core.history_integrity import verify_database_integrity, recover_database
 
 
 def parse_time_delta(delta_str: str) -> int:
@@ -745,6 +748,183 @@ def cmd_history_trends(args) -> int:
         return 1
 
 
+def cmd_history_optimize(args) -> int:
+    """Optimize database performance (VACUUM, ANALYZE)."""
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: Database not found: {db_path}\n")
+        sys.stderr.write("Initialize with: jmo history store --results-dir <path>\n")
+        return 1
+
+    try:
+        sys.stdout.write(f"Optimizing database: {db_path}\n")
+        result = optimize_database(db_path)
+
+        if args.json:
+            sys.stdout.write(json.dumps(result, indent=2) + "\n")
+        else:
+            sys.stdout.write(f"\n✅ Optimization complete\n\n")
+            sys.stdout.write(f"Size before:       {result['size_before_mb']:.2f} MB\n")
+            sys.stdout.write(f"Size after:        {result['size_after_mb']:.2f} MB\n")
+            sys.stdout.write(f"Space reclaimed:   {result['space_reclaimed_mb']:.2f} MB\n")
+            sys.stdout.write(f"Indices optimized: {result['indices_count']}\n")
+
+        return 0
+
+    except Exception as e:
+        sys.stderr.write(f"Error optimizing database: {e}\n")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def cmd_history_migrate(args) -> int:
+    """Apply pending database schema migrations."""
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: Database not found: {db_path}\n")
+        sys.stderr.write("Initialize with: jmo history store --results-dir <path>\n")
+        return 1
+
+    try:
+        current_version = get_current_version(db_path)
+        sys.stdout.write(f"Current schema version: {current_version}\n")
+
+        if args.target_version:
+            sys.stdout.write(f"Target version: {args.target_version}\n")
+        else:
+            sys.stdout.write("Target version: latest (apply all pending)\n")
+
+        sys.stdout.write("\nApplying migrations...\n")
+        result = run_migrations(db_path, args.target_version)
+
+        if args.json:
+            sys.stdout.write(json.dumps(result, indent=2) + "\n")
+        else:
+            if len(result["applied"]) == 0:
+                sys.stdout.write("\n✅ No pending migrations (already up-to-date)\n")
+            else:
+                sys.stdout.write(f"\n✅ Applied {len(result['applied'])} migration(s):\n")
+                for version in result["applied"]:
+                    sys.stdout.write(f"  - {version}\n")
+                sys.stdout.write(f"\nFinal version: {result['final_version']}\n")
+
+            if result["errors"]:
+                sys.stderr.write(f"\n❌ Errors during migration:\n")
+                for err in result["errors"]:
+                    sys.stderr.write(f"  - {err['version']}: {err['error']}\n")
+                return 1
+
+        return 0
+
+    except Exception as e:
+        sys.stderr.write(f"Error running migrations: {e}\n")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def cmd_history_verify(args) -> int:
+    """Verify database integrity (PRAGMA checks)."""
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: Database not found: {db_path}\n")
+        sys.stderr.write("Initialize with: jmo history store --results-dir <path>\n")
+        return 1
+
+    try:
+        sys.stdout.write(f"Verifying database integrity: {db_path}\n")
+        result = verify_database_integrity(db_path)
+
+        if args.json:
+            sys.stdout.write(json.dumps(result, indent=2) + "\n")
+        else:
+            if result["is_valid"]:
+                sys.stdout.write("\n✅ Database integrity verification PASSED\n\n")
+            else:
+                sys.stdout.write("\n❌ Database integrity verification FAILED\n\n")
+                sys.stdout.write(f"Errors found: {len(result['errors'])}\n")
+                for err in result["errors"]:
+                    sys.stdout.write(f"  - {err}\n")
+                sys.stdout.write("\nConsider running: jmo history repair\n")
+
+            # Show stats
+            stats = result.get("stats", {})
+            if stats:
+                sys.stdout.write(f"\nDatabase Statistics:\n")
+                sys.stdout.write(f"  Scans:          {stats.get('scans_count', 0)}\n")
+                sys.stdout.write(f"  Findings:       {stats.get('findings_count', 0)}\n")
+                sys.stdout.write(f"  Indices:        {stats.get('indices_count', 0)}\n")
+                sys.stdout.write(f"  Size:           {stats.get('size_mb', 0):.2f} MB\n")
+
+        return 0 if result["is_valid"] else 1
+
+    except Exception as e:
+        sys.stderr.write(f"Error verifying database: {e}\n")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def cmd_history_repair(args) -> int:
+    """Repair corrupted database (dump/reimport)."""
+    db_path = Path(args.db or DEFAULT_DB_PATH)
+
+    if not db_path.exists():
+        sys.stderr.write(f"Error: Database not found: {db_path}\n")
+        return 1
+
+    # Confirm before proceeding (unless --force)
+    if not args.force:
+        sys.stdout.write(f"\n⚠️  Database Repair\n")
+        sys.stdout.write(f"=" * 70 + "\n\n")
+        sys.stdout.write(f"This will:\n")
+        sys.stdout.write(f"  1. Create a backup: {db_path}.backup\n")
+        sys.stdout.write(f"  2. Dump all data from the current database\n")
+        sys.stdout.write(f"  3. Create a fresh database with the latest schema\n")
+        sys.stdout.write(f"  4. Reimport all dumped data\n\n")
+        sys.stdout.write(f"Continue? [y/N]: ")
+        sys.stdout.flush()
+
+        response = sys.stdin.readline().strip().lower()
+        if response not in ("y", "yes"):
+            sys.stdout.write("Repair cancelled\n")
+            return 0
+
+    try:
+        sys.stdout.write(f"\nRepairing database: {db_path}\n")
+        result = recover_database(db_path)
+
+        if args.json:
+            sys.stdout.write(json.dumps(result, indent=2) + "\n")
+        else:
+            if result["success"]:
+                sys.stdout.write(f"\n✅ Database repair SUCCESSFUL\n\n")
+                sys.stdout.write(f"Backup created:    {result['backup_path']}\n")
+                sys.stdout.write(f"Recovery time:     {result['recovery_time_sec']:.2f}s\n\n")
+                sys.stdout.write(f"Data recovered:\n")
+                for table, count in result["rows_recovered"].items():
+                    sys.stdout.write(f"  {table:20s}: {count}\n")
+            else:
+                sys.stdout.write(f"\n❌ Database repair FAILED\n\n")
+                sys.stdout.write(f"Errors:\n")
+                for err in result["errors"]:
+                    sys.stdout.write(f"  - {err}\n")
+                sys.stdout.write(f"\nBackup preserved at: {result.get('backup_path', 'N/A')}\n")
+                return 1
+
+        return 0
+
+    except Exception as e:
+        sys.stderr.write(f"Error repairing database: {e}\n")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
 def cmd_history(args) -> int:
     """Main history command router."""
     subcommand = getattr(args, "history_command", None)
@@ -767,9 +947,17 @@ def cmd_history(args) -> int:
         return cmd_history_diff(args)
     elif subcommand == "trends":
         return cmd_history_trends(args)
+    elif subcommand == "optimize":
+        return cmd_history_optimize(args)
+    elif subcommand == "migrate":
+        return cmd_history_migrate(args)
+    elif subcommand == "verify":
+        return cmd_history_verify(args)
+    elif subcommand == "repair":
+        return cmd_history_repair(args)
     else:
         sys.stderr.write("Error: Unknown history subcommand\n")
         sys.stderr.write(
-            "Usage: jmo history {store|list|show|query|prune|export|stats|diff|trends}\n"
+            "Usage: jmo history {store|list|show|query|prune|export|stats|diff|trends|optimize|migrate|verify|repair}\n"
         )
         return 1

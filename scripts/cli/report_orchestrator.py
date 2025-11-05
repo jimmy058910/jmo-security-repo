@@ -294,12 +294,20 @@ def cmd_report(args, _log_fn) -> int:
             # Get tools from config
             tools = getattr(cfg, "tools", [])
 
+            # Get security flags (Phase 6 Step 6.1, 6.2, 6.3)
+            no_store_raw = getattr(args, "no_store_raw_findings", False)
+            encrypt_findings = getattr(args, "encrypt_findings", False)
+            collect_metadata = getattr(args, "collect_metadata", False)
+
             # Store scan in history database
             scan_id = db_store_scan(
                 results_dir=results_dir,
                 profile=profile_name,
                 tools=tools,
                 db_path=history_db_path,
+                no_store_raw=no_store_raw,
+                encrypt_findings=encrypt_findings,
+                collect_metadata=collect_metadata,
             )
 
             _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")

@@ -170,6 +170,21 @@ def _add_scan_config_args(parser):
         default=None,
         help="Path to history database (default: .jmo/history.db)",
     )
+    parser.add_argument(
+        "--no-store-raw-findings",
+        action="store_true",
+        help="Don't store raw finding data in history database (security: prevents secret persistence)",
+    )
+    parser.add_argument(
+        "--encrypt-findings",
+        action="store_true",
+        help="Encrypt raw finding data in history database (requires JMO_ENCRYPTION_KEY env var)",
+    )
+    parser.add_argument(
+        "--collect-metadata",
+        action="store_true",
+        help="Collect hostname/username metadata (default: disabled for privacy)",
+    )
 
 
 def _add_logging_args(parser):
@@ -748,6 +763,52 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     )
     trends_parser.add_argument("--json", action="store_true", help="Output as JSON")
     add_db_arg(trends_parser)
+
+    # OPTIMIZE (Phase 4.1)
+    optimize_parser = history_subparsers.add_parser(
+        "optimize", help="Optimize database performance (VACUUM, ANALYZE)"
+    )
+    optimize_parser.add_argument(
+        "--json", action="store_true", help="Output results as JSON"
+    )
+    add_db_arg(optimize_parser)
+
+    # MIGRATE (Phase 4.3)
+    migrate_parser = history_subparsers.add_parser(
+        "migrate", help="Apply pending database schema migrations"
+    )
+    migrate_parser.add_argument(
+        "--target-version",
+        default=None,
+        help="Target schema version (default: apply all pending migrations)",
+    )
+    migrate_parser.add_argument(
+        "--json", action="store_true", help="Output results as JSON"
+    )
+    add_db_arg(migrate_parser)
+
+    # VERIFY (Phase 4.4)
+    verify_parser = history_subparsers.add_parser(
+        "verify", help="Verify database integrity (PRAGMA checks)"
+    )
+    verify_parser.add_argument(
+        "--json", action="store_true", help="Output results as JSON"
+    )
+    add_db_arg(verify_parser)
+
+    # REPAIR (Phase 4.4)
+    repair_parser = history_subparsers.add_parser(
+        "repair", help="Repair corrupted database (dump/reimport)"
+    )
+    repair_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompt and proceed with repair",
+    )
+    repair_parser.add_argument(
+        "--json", action="store_true", help="Output results as JSON"
+    )
+    add_db_arg(repair_parser)
 
     return history_parser
 
