@@ -21,9 +21,13 @@ findings:
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
+
+from scripts.core.reporters.basic_reporter import _generate_metadata
+from scripts.core.reporters.yaml_reporter import write_yaml
 
 # Conditional imports (YAML is optional dependency)
 try:
@@ -33,15 +37,8 @@ try:
 except ImportError:
     YAML_AVAILABLE = False
 
-try:
-    import jsonschema
-
-    JSONSCHEMA_AVAILABLE = True
-except ImportError:
-    JSONSCHEMA_AVAILABLE = False
-
-from scripts.core.reporters.yaml_reporter import write_yaml
-from scripts.core.reporters.basic_reporter import _generate_metadata
+# Check jsonschema availability for optional validation tests
+JSONSCHEMA_AVAILABLE = importlib.util.find_spec("jsonschema") is not None
 
 
 # ============================================================================
