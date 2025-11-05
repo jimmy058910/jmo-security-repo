@@ -374,10 +374,16 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     findings_json = tmp_path / "results" / "summaries" / "findings.json"
     assert findings_json.exists(), "findings.json not generated"
 
-    findings = json.loads(findings_json.read_text())
+    data = json.loads(findings_json.read_text())
+
+    # v1.0.0: findings.json uses metadata wrapper structure
+    assert isinstance(
+        data, dict
+    ), "findings.json should be a dict with metadata wrapper"
+    assert "findings" in data, "findings.json should have 'findings' key"
+    findings = data["findings"]
 
     # Count findings by fingerprint ID
-    # findings.json is now a list of findings directly (not wrapped in {"findings": [...]})
     fingerprints = [f["id"] for f in findings]
     assert len(fingerprints) == len(
         set(fingerprints)

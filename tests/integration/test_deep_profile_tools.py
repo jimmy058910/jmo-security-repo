@@ -199,6 +199,9 @@ def test_deep_profile_report_aggregation(tmp_path):
     findings_json = tmp_path / "results" / "summaries" / "findings.json"
     assert findings_json.exists()
 
-    findings = json.loads(findings_json.read_text())
-    # findings.json is now a list of findings directly (not wrapped in {"findings": [...]})
-    assert isinstance(findings, list)
+    data = json.loads(findings_json.read_text())
+    # v1.0.0: findings.json uses metadata wrapper structure
+    assert isinstance(data, dict)
+    assert "meta" in data
+    assert "findings" in data
+    assert isinstance(data["findings"], list)
