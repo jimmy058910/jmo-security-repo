@@ -91,6 +91,7 @@ All output formats (JSON, YAML, CSV, Markdown, HTML, SARIF) now use a standardiz
 ```
 
 **Use Cases:**
+
 - Machine parsing and automation
 - CI/CD pipeline integration
 - Data science analysis
@@ -133,6 +134,7 @@ findings:
 ```
 
 **Use Cases:**
+
 - Configuration management
 - GitOps workflows
 - Documentation generation
@@ -163,12 +165,14 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 ```
 
 **Use Cases:**
+
 - Excel/Google Sheets analysis
 - Non-technical stakeholder reports
 - Compliance auditing
 - Data visualization (pivot tables, charts)
 
 **Features:**
+
 - Metadata in comment header rows (lines starting with `#`)
 - Standard CSV format (RFC 4180 compliant)
 - UTF-8 encoding
@@ -216,6 +220,7 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 ```
 
 **Use Cases:**
+
 - GitHub/GitLab README display
 - Documentation sites
 - Email reports
@@ -275,6 +280,7 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 **File Size:** ~84 KB for 100 findings (self-contained)
 
 **Benefits:**
+
 - Self-contained (no external dependencies)
 - Works offline
 - Easy to share (single file)
@@ -343,16 +349,19 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 ```
 
 **File Sizes:**
+
 - `dashboard.html`: ~63 KB (minimal HTML + JS)
 - `findings.json`: ~448 KB for 1500 findings
 
 **Benefits:**
+
 - Prevents browser freeze (async loading)
 - Smaller HTML file
 - Supports massive datasets (10,000+ findings)
 - Professional loading UX
 
 **Features:**
+
 - Priority Intelligence (EPSS, KEV, priority scores)
 - Compliance frameworks (OWASP, CWE, CIS, NIST CSF, PCI DSS, ATT&CK)
 - Dark mode toggle
@@ -363,6 +372,7 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 - Responsive design
 
 **Use Cases:**
+
 - Executive dashboards
 - Security team reviews
 - Compliance audits
@@ -432,12 +442,14 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 ```
 
 **Use Cases:**
+
 - GitHub Code Scanning
 - GitLab Security Dashboard
 - Azure DevOps Pipelines
 - Code quality platforms (SonarQube, CodeClimate)
 
 **Features:**
+
 - Severity mapping (CRITICAL/HIGH → error, MEDIUM → warning, LOW/INFO → note)
 - Full rule metadata
 - Location mapping
