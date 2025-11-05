@@ -1736,7 +1736,8 @@ def get_scan_by_id_cached(db_path: Path, scan_id: str) -> Optional[Dict[str, Any
         >>> # Second call - returns cached result (128x faster)
         >>> scan2 = get_scan_by_id_cached(db_path, "scan-123")
     """
-    return get_scan_by_id(db_path, scan_id)
+    conn = get_connection(db_path)
+    return get_scan_by_id(conn, scan_id)
 
 
 @lru_cache(maxsize=256)
@@ -1770,7 +1771,8 @@ def get_database_stats_cached(db_path: Path) -> Dict[str, Any]:
         >>> stats1 = get_database_stats_cached(db_path)  # Hits database
         >>> stats2 = get_database_stats_cached(db_path)  # Returns cached
     """
-    return get_database_stats(db_path)
+    conn = get_connection(db_path)
+    return get_database_stats(conn)
 
 
 def clear_caches() -> None:
@@ -2701,7 +2703,7 @@ def get_compliance_summary(
     # Helper function to aggregate by category
     def aggregate_framework(findings_list, framework_field):
         """Aggregate findings by framework categories."""
-        category_data = {}
+        category_data: Dict[str, Dict[str, Any]] = {}
         for finding in findings_list:
             framework_json = finding.get(framework_field)
             if not framework_json:

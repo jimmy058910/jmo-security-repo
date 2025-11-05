@@ -28,7 +28,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from scripts.core.history_db import get_connection, init_database
 
@@ -68,6 +68,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
     logger.info(f"Verifying database integrity: {db_path}")
 
     # 1. PRAGMA integrity_check (comprehensive corruption detection)
+    integrity_check: Union[str, List[str]]
     try:
         integrity_result = conn.execute("PRAGMA integrity_check").fetchall()
         # Result is [('ok',)] if clean, otherwise list of error messages
@@ -83,6 +84,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
         logger.error(f"Integrity check error: {e}")
 
     # 2. PRAGMA foreign_key_check (orphaned references)
+    foreign_key_check: Union[str, List[str]]
     try:
         # Enable foreign keys for check
         conn.execute("PRAGMA foreign_keys = ON")
@@ -103,6 +105,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
         logger.warning(f"Foreign key check error: {e}")
 
     # 3. PRAGMA quick_check (fast corruption check)
+    quick_check: Union[str, List[str]]
     try:
         quick_result = conn.execute("PRAGMA quick_check").fetchall()
         if len(quick_result) == 1 and quick_result[0][0] == "ok":
