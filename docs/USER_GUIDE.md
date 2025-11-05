@@ -2990,7 +2990,7 @@ See [scripts/core/history_db.py](../scripts/core/history_db.py) for complete API
 
 ### Advanced History Queries (Phase 7)
 
-**Python API for custom integrations: React Dashboard, MCP Server, Compliance Reporting**
+#### Python API for custom integrations: React Dashboard, MCP Server, Compliance Reporting
 
 Phase 7 adds 9 specialized query functions to `scripts/core/history_db.py` designed for future integrations with interactive dashboards, AI-powered remediation systems, and compliance reporting tools.
 
@@ -3317,7 +3317,7 @@ All Phase 7 functions target <100ms response times:
 
 #### Example Use Cases
 
-**Use Case 1: React Dashboard Component**
+##### Use Case 1: React Dashboard Component
 
 ```javascript
 // Dashboard.jsx
@@ -3380,7 +3380,7 @@ def timeline(branch, days=30):
     return jsonify(data)
 ```
 
-**Use Case 2: MCP Server for Claude Integration**
+##### Use Case 2: MCP Server for Claude Integration
 
 ```python
 # mcp_server.py
@@ -3420,7 +3420,7 @@ async def prioritize_findings(scan1: str, scan2: str) -> list:
     ]
 ```
 
-**Use Case 3: Compliance Reporting Dashboard**
+##### Use Case 3: Compliance Reporting Dashboard
 
 ```python
 # compliance_report.py

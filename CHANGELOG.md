@@ -1,3 +1,7 @@
+# Changelog
+
+All notable changes to JMo Security will be documented in this file.
+
 ## 0.9.0 (2025-11-XX)
 
 ### Added
@@ -112,10 +116,6 @@
 - **Test Coverage:** 96.3% pass rate (1,225/1,272 tests passing)
 - **Feature Completion:** 6/6 features (100% implementation)
 - **User Growth Projection:** +83% (6K → 11K/month via Homebrew + WinGet)
-
-# Changelog
-
-## [1.0.0] - 2025-11-01
 
 ### 🚀 Major Release: Tool Ecosystem Expansion (12 → 28 Security Tools)
 
