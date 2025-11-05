@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -55,13 +56,14 @@ def db_with_sample_scans(temp_db):
     Create database with 5 sample scans across 30 days.
 
     Returns:
-        Tuple[Path, sqlite3.Connection, List[str]]: (db_path, conn, scan_ids)
+        Tuple[Path, sqlite3.Connection, List[str], int]: (db_path, conn, scan_ids, current_time)
     """
     init_database(temp_db)
     conn = get_connection(temp_db)
 
     scan_ids = []
-    base_time = int(time.time()) - (30 * 86400)  # 30 days ago
+    current_time = int(time.time())  # Capture current time for consistent mocking
+    base_time = current_time - (30 * 86400)  # 30 days ago
 
     for i in range(5):
         # Create scan metadata
@@ -149,7 +151,7 @@ def db_with_sample_scans(temp_db):
         scan_ids.append(scan_id)
 
     conn.commit()
-    yield temp_db, conn, scan_ids
+    yield temp_db, conn, scan_ids, current_time
 
     conn.close()
 
@@ -258,7 +260,7 @@ class TestReactDashboardHelpers:
 
     def test_get_dashboard_summary(self, db_with_sample_scans):
         """Dashboard summary includes all required sections."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get summary for first scan
         summary = get_dashboard_summary(conn, scan_ids[0])
@@ -308,17 +310,19 @@ class TestReactDashboardHelpers:
 
     def test_get_dashboard_summary_nonexistent_scan(self, db_with_sample_scans):
         """Dashboard summary returns None for nonexistent scan."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         summary = get_dashboard_summary(conn, "nonexistent-scan-id")
         assert summary is None
 
     def test_get_timeline_data(self, db_with_sample_scans):
         """Timeline data formatted for Recharts."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get 30-day timeline for main branch
-        timeline = get_timeline_data(conn, "main", days=30)
+        # Patch time.time() to ensure consistent time window calculation
+        with patch("time.time", return_value=current_time):
+            timeline = get_timeline_data(conn, "main", days=30)
 
         # Verify structure (should have 5 scans across 30 days)
         assert len(timeline) == 5
@@ -344,14 +348,14 @@ class TestReactDashboardHelpers:
 
     def test_get_timeline_data_empty_branch(self, db_with_sample_scans):
         """Timeline data returns empty list for nonexistent branch."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         timeline = get_timeline_data(conn, "nonexistent-branch", days=30)
         assert timeline == []
 
     def test_get_finding_details_batch(self, db_with_sample_scans):
         """Batch fetching returns correct findings."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get first 5 fingerprints from first scan
         fingerprints = [f"fp-0000-{j:04d}" for j in range(5)]
@@ -377,14 +381,14 @@ class TestReactDashboardHelpers:
 
     def test_get_finding_details_batch_empty_list(self, db_with_sample_scans):
         """Batch fetching with empty list returns empty result."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         findings = get_finding_details_batch(conn, [])
         assert findings == []
 
     def test_search_findings(self, db_with_sample_scans):
         """Search + filters work correctly."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Search for "Security issue" (should match all findings)
         findings = search_findings(conn, "Security issue")
@@ -406,7 +410,7 @@ class TestReactDashboardHelpers:
 
     def test_search_findings_with_branch_filter(self, db_with_sample_scans):
         """Search with branch filter works correctly."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Search in main branch
         findings = search_findings(conn, "Security", {"branch": "main", "limit": 50})
@@ -427,7 +431,7 @@ class TestMCPServerHelpers:
 
     def test_get_finding_context(self, db_with_sample_scans):
         """Finding context includes history + similar findings."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get context for a finding
         fingerprint = "fp-0000-0000"
@@ -454,7 +458,7 @@ class TestMCPServerHelpers:
 
     def test_get_finding_context_with_compliance(self, db_with_sample_scans):
         """Finding context extracts compliance frameworks correctly."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get context for finding with compliance data (every 3rd finding has OWASP)
         fingerprint = "fp-0000-0000"  # j=0, has OWASP (j % 3 == 0)
@@ -466,14 +470,14 @@ class TestMCPServerHelpers:
 
     def test_get_finding_context_nonexistent(self, db_with_sample_scans):
         """Finding context returns None for nonexistent finding."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         context = get_finding_context(conn, "nonexistent-fingerprint")
         assert context is None
 
     def test_get_scan_diff_for_ai(self, db_with_sample_scans):
         """AI-ready diff format is correct."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Compare first and last scans
         diff = get_scan_diff_for_ai(conn, scan_ids[0], scan_ids[-1])
@@ -543,7 +547,7 @@ class TestMCPServerHelpers:
 
     def test_get_recurring_findings_empty_result(self, db_with_sample_scans):
         """Recurring findings returns empty list when min_occurrences too high."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # No findings appear 100 times
         recurring = get_recurring_findings(conn, "main", min_occurrences=100)
@@ -560,7 +564,7 @@ class TestComplianceHelpers:
 
     def test_get_compliance_summary_all_frameworks(self, db_with_sample_scans):
         """All 6 frameworks summarized."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         summary = get_compliance_summary(conn, scan_ids[0], "all")
 
@@ -597,7 +601,7 @@ class TestComplianceHelpers:
 
     def test_get_compliance_summary_single_framework(self, db_with_sample_scans):
         """Single framework filtering works."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         summary = get_compliance_summary(conn, scan_ids[0], "owasp")
 
@@ -617,14 +621,14 @@ class TestComplianceHelpers:
 
     def test_get_compliance_summary_nonexistent_scan(self, db_with_sample_scans):
         """Compliance summary raises ValueError for nonexistent scan."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         with pytest.raises(ValueError, match="Scan not found"):
             get_compliance_summary(conn, "nonexistent-scan", "all")
 
     def test_compliance_coverage_percentage(self, db_with_sample_scans):
         """Coverage percentage accurate."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         summary = get_compliance_summary(conn, scan_ids[0], "all")
         coverage = summary["coverage_stats"]
@@ -642,7 +646,7 @@ class TestComplianceHelpers:
 
     def test_get_compliance_trend(self, db_with_sample_scans):
         """Compliance trends calculated correctly."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         # Get OWASP trend for main branch (30 days)
         trend = get_compliance_trend(conn, "main", "owasp", days=30)
@@ -722,7 +726,7 @@ class TestComplianceHelpers:
 
     def test_get_compliance_trend_invalid_framework(self, db_with_sample_scans):
         """Compliance trend raises ValueError for invalid framework."""
-        db_path, conn, scan_ids = db_with_sample_scans
+        db_path, conn, scan_ids, current_time = db_with_sample_scans
 
         with pytest.raises(ValueError, match="Invalid framework"):
             get_compliance_trend(conn, "main", "invalid-framework", days=30)

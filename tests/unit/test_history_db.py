@@ -1823,7 +1823,12 @@ class TestGetTrendSummary:
         from scripts.core.history_db import get_trend_summary
 
         conn = get_connection(db_path)
-        trend = get_trend_summary(conn, "main", days=30)
+
+        # Patch time.time() to ensure consistent time window calculation
+        # get_trend_summary() calls time.time() internally at line 1305
+        with patch("time.time", return_value=current_time):
+            trend = get_trend_summary(conn, "main", days=30)
+
         conn.close()
 
         # Expected: improvement_metrics.trend = "improving"
@@ -1901,7 +1906,11 @@ class TestGetTrendSummary:
         from scripts.core.history_db import get_trend_summary
 
         conn = get_connection(db_path)
-        trend = get_trend_summary(conn, "main", days=30)
+
+        # Patch time.time() to ensure consistent time window calculation
+        with patch("time.time", return_value=current_time):
+            trend = get_trend_summary(conn, "main", days=30)
+
         conn.close()
 
         # Expected: improvement_metrics.trend = "degrading"
@@ -1964,7 +1973,11 @@ class TestGetTrendSummary:
         from scripts.core.history_db import get_trend_summary
 
         conn = get_connection(db_path)
-        trend = get_trend_summary(conn, "main", days=7)
+
+        # Patch time.time() to ensure consistent time window calculation
+        with patch("time.time", return_value=current_time):
+            trend = get_trend_summary(conn, "main", days=7)
+
         conn.close()
 
         # Expected: top_rules[0].rule_id = "CVE-2024-0001" (15 occurrences)
