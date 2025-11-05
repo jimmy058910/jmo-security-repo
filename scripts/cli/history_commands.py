@@ -764,7 +764,7 @@ def cmd_history_optimize(args) -> int:
         if args.json:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
-            sys.stdout.write(f"\n✅ Optimization complete\n\n")
+            sys.stdout.write("\n✅ Optimization complete\n\n")
             sys.stdout.write(f"Size before:       {result['size_before_mb']:.2f} MB\n")
             sys.stdout.write(f"Size after:        {result['size_after_mb']:.2f} MB\n")
             sys.stdout.write(
@@ -817,7 +817,7 @@ def cmd_history_migrate(args) -> int:
                 sys.stdout.write(f"\nFinal version: {result['final_version']}\n")
 
             if result["errors"]:
-                sys.stderr.write(f"\n❌ Errors during migration:\n")
+                sys.stderr.write("\n❌ Errors during migration:\n")
                 for err in result["errors"]:
                     sys.stderr.write(f"  - {err['version']}: {err['error']}\n")
                 return 1
@@ -860,7 +860,7 @@ def cmd_history_verify(args) -> int:
             # Show stats
             stats = result.get("stats", {})
             if stats:
-                sys.stdout.write(f"\nDatabase Statistics:\n")
+                sys.stdout.write("\nDatabase Statistics:\n")
                 sys.stdout.write(f"  Scans:          {stats.get('scans_count', 0)}\n")
                 sys.stdout.write(
                     f"  Findings:       {stats.get('findings_count', 0)}\n"
@@ -890,14 +890,14 @@ def cmd_history_repair(args) -> int:
 
     # Confirm before proceeding (unless --force)
     if not args.force:
-        sys.stdout.write(f"\n⚠️  Database Repair\n")
-        sys.stdout.write(f"=" * 70 + "\n\n")
-        sys.stdout.write(f"This will:\n")
+        sys.stdout.write("\n⚠️  Database Repair\n")
+        sys.stdout.write("=" * 70 + "\n\n")
+        sys.stdout.write("This will:\n")
         sys.stdout.write(f"  1. Create a backup: {db_path}.backup\n")
-        sys.stdout.write(f"  2. Dump all data from the current database\n")
-        sys.stdout.write(f"  3. Create a fresh database with the latest schema\n")
-        sys.stdout.write(f"  4. Reimport all dumped data\n\n")
-        sys.stdout.write(f"Continue? [y/N]: ")
+        sys.stdout.write("  2. Dump all data from the current database\n")
+        sys.stdout.write("  3. Create a fresh database with the latest schema\n")
+        sys.stdout.write("  4. Reimport all dumped data\n\n")
+        sys.stdout.write("Continue? [y/N]: ")
         sys.stdout.flush()
 
         response = sys.stdin.readline().strip().lower()
@@ -913,17 +913,17 @@ def cmd_history_repair(args) -> int:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
             if result["success"]:
-                sys.stdout.write(f"\n✅ Database repair SUCCESSFUL\n\n")
+                sys.stdout.write("\n✅ Database repair SUCCESSFUL\n\n")
                 sys.stdout.write(f"Backup created:    {result['backup_path']}\n")
                 sys.stdout.write(
                     f"Recovery time:     {result['recovery_time_sec']:.2f}s\n\n"
                 )
-                sys.stdout.write(f"Data recovered:\n")
+                sys.stdout.write("Data recovered:\n")
                 for table, count in result["rows_recovered"].items():
                     sys.stdout.write(f"  {table:20s}: {count}\n")
             else:
-                sys.stdout.write(f"\n❌ Database repair FAILED\n\n")
-                sys.stdout.write(f"Errors:\n")
+                sys.stdout.write("\n❌ Database repair FAILED\n\n")
+                sys.stdout.write("Errors:\n")
                 for err in result["errors"]:
                     sys.stdout.write(f"  - {err}\n")
                 sys.stdout.write(

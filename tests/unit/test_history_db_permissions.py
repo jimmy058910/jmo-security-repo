@@ -10,9 +10,7 @@ from __future__ import annotations
 
 import os
 import stat
-from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import get_connection, store_scan
 
@@ -119,7 +117,7 @@ class TestDatabaseFilePermissions:
         (results_dir / "individual-repos" / "test-repo").mkdir(parents=True)
 
         # Act: Store scan (should fix permissions)
-        scan_id = store_scan(
+        _ = store_scan(
             results_dir=results_dir,
             profile="fast",
             tools=["trivy"],

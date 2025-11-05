@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import random
-import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,8 +21,6 @@ import pytest
 
 # Import from history_db module
 from scripts.core.history_db import (
-    DEFAULT_DB_PATH,
-    SCHEMA_VERSION,
     get_connection,
     init_database,
 )

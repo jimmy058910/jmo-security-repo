@@ -301,7 +301,7 @@ def test_index_usage_verified(large_database: Path):
 
     # Print results
     print(f"\n{'='*80}")
-    print(f"Index Usage Verification Results")
+    print("Index Usage Verification Results")
     print(f"{'='*80}")
     print(f"✅ Passed: {len(passed)}/{len(test_cases)}")
     print(f"❌ Failed: {len(failed)}/{len(test_cases)}")
@@ -330,7 +330,7 @@ def test_index_usage_verified(large_database: Path):
         len(failed) == 0
     ), f"{len(failed)} queries not using indices (see output above)"
 
-    print(f"\n✅ Performance Test 4 PASSED: All queries use indices correctly")
+    print("\n✅ Performance Test 4 PASSED: All queries use indices correctly")
 
 
 # Benchmark test (optional - for CI/local profiling)
@@ -414,12 +414,12 @@ def test_benchmark_suite(tmp_path: Path, benchmark_findings: List[Dict[str, Any]
 
     # Benchmark 3: Query scans
     start = time.time()
-    scans = list_scans(conn, limit=100)
+    _ = list_scans(conn, limit=100)
     results["query_100_scans"] = time.time() - start
 
     # Benchmark 4: Get scan by ID
     start = time.time()
-    scan = get_scan_by_id(conn, scan_id)
+    _ = get_scan_by_id(conn, scan_id)
     results["get_scan_by_id"] = time.time() - start
 
     # Print benchmark results

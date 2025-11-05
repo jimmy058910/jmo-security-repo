@@ -14,10 +14,8 @@ Run with: pytest tests/unit/test_history_integrity.py -v
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import get_connection, init_database
 from scripts.core.history_integrity import (

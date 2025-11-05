@@ -18,7 +18,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import init_database, get_connection
 

@@ -8,10 +8,7 @@ Tests that the flag prevents raw finding data from being stored in history datab
 from __future__ import annotations
 
 import json
-import sqlite3
-from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import get_connection, store_scan
 

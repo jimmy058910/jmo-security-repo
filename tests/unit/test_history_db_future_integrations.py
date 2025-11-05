@@ -13,9 +13,7 @@ Test coverage target: ≥85%
 from __future__ import annotations
 
 import json
-import sqlite3
 import time
-from pathlib import Path
 
 import pytest
 
@@ -35,7 +33,6 @@ from scripts.core.history_db import (
     # Core functions for test setup
     get_connection,
     init_database,
-    store_scan,
 )
 
 

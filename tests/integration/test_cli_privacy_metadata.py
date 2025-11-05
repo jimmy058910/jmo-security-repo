@@ -8,10 +8,7 @@ Tests that the flag controls privacy-sensitive metadata collection.
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import get_connection, store_scan
 

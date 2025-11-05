@@ -6,10 +6,7 @@ directly rather than a dict with 'findings' key.
 """
 
 import json
-import tempfile
-from pathlib import Path
 
-import pytest
 
 from scripts.core.history_db import get_connection, init_database, store_scan
 
