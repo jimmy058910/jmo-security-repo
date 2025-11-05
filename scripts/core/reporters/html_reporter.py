@@ -118,6 +118,30 @@ h1,h2{margin: 0 0 12px 0}
 .triage-select{padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px}
 #profile{display:none; margin-top:12px; padding:12px; border:1px dashed #ccc; border-radius:6px;background:#fafafa}
 #profile summary{cursor:pointer;font-weight:600}
+
+
+# ... existing style rules ...
+.triage-select{padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px}
+#profile{display:none; margin-top:12px; padding:12px; border:1px dashed #ccc; border-radius:6px;background:#fafafa}
+#profile summary{cursor:pointer;font-weight:600}
+
+
++ .compliance-badge {
++   display: inline-block;
++   padding: 2px 6px;
++   margin: 4px 2px 0 2px;
++   border-radius: 3px;
++   font-size: 11px;
++   font-weight: bold;
++ }
++ .badge-owasp { background-color: #ff6b6b; color: white; }
++ .badge-cwe { background-color: #4ecdc4; color: white; }
++ .badge-cis { background-color: #95e1d3; color: #333; }
++ .badge-nist { background-color: #a8e6cf; color: #333; }
++ .badge-pci { background-color: #ffd93d; color: #333; }
++ .badge-attack { background-color: #ff9ff3; color: white; }
++ /* END: Added for Compliance Badges (Issue #88) */
+
 @media (max-width: 768px) {
   .header{flex-direction:column;align-items:flex-start;gap:12px}
   .filters > div{flex-direction:column;align-items:flex-start}
@@ -129,6 +153,8 @@ h1,h2{margin: 0 0 12px 0}
   .actions{flex-direction:column}
   .btn{width:100%}
 }
+
+
 .kbd-hint{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,0.8);color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:1000}
 .kbd-hint.visible{opacity:0.9}
 kbd{display:inline-block;padding:2px 6px;border:1px solid #ccc;border-radius:3px;background:#f5f5f5;font-family:monospace;font-size:10px;box-shadow:0 1px 2px rgba(0,0,0,0.1)}
@@ -344,6 +370,40 @@ function matchesFilter(f){
   return true;
 }
 
+// ... existing <script> content ...
+  return (str||'').replace(/[&<>"']/g, m => map[m]);
+}
+
++ function renderComplianceBadges(f) {
++   if (!f.compliance) return '';
++   let badgesHtml = '';
++ 
++   // Map field names (from code) to CSS class and prefix (from issue)
++   const frameworkMap = {
++     'owasp_top_10_2021': { class: 'badge-owasp', prefix: 'OWASP ' },
++     'cwe_top_25_2024':   { class: 'badge-cwe', prefix: 'CWE ' },
++     'cis_controls_v8_1': { class: 'badge-cis', prefix: 'CIS ' },
++     'nist_csf_2_0':    { class: 'badge-nist', prefix: 'NIST ' },
++     'pci_dss_4_0':     { class: 'badge-pci', prefix: 'PCI ' },
++     'mitre_attack_v16_1': { class: 'badge-attack', prefix: 'ATT&CK ' }
++   };
++ 
++   for (const field in frameworkMap) {
++     if (f.compliance[field] && f.compliance[field].length > 0) {
++       const config = frameworkMap[field];
++       f.compliance[field].forEach(item => {
++         badgesHtml += `<span class="compliance-badge ${config.class}">${escapeHtml(config.prefix + item)}</span>`;
++       });
++     }
++   }
++   
++   // Wrap badges in a div if they exist
++   return badgesHtml ? `<div style="margin-top:4px;">${badgesHtml}</div>` : '';
+
+
+function severityRank(s){
+// ... rest of script ...
+
 function filtered(){
   return data.filter(matchesFilter);
 }
@@ -487,7 +547,7 @@ function renderFlat(rows){
       <td>${escapeHtml(f.ruleId)}</td>
       <td>${escapeHtml(f.location?.path)}</td>
       <td>${(f.location?.startLine||0)}</td>
-      <td>${escapeHtml(f.message)}</td>
+      <td>${escapeHtml(f.message)}${renderComplianceBadges(f)}</td>
       <td>${escapeHtml(f.tool?.name)}</td>
       <td><button class="btn" style="padding:2px 6px;font-size:11px" onclick="event.stopPropagation();toggleRow(${idx})">Details</button></td>
     </tr>`;
@@ -529,7 +589,7 @@ function renderGrouped(rows){
         <td>${escapeHtml(f.ruleId)}</td>
         <td>${escapeHtml(f.location?.path)}</td>
         <td>${(f.location?.startLine||0)}</td>
-        <td>${escapeHtml(f.message)}</td>
+        <td>${escapeHtml(f.message)}${renderComplianceBadges(f)}</td>
         <td>${escapeHtml(f.tool?.name)}</td>
         <td><button class="btn" style="padding:2px 6px;font-size:11px" onclick="event.stopPropagation();toggleRow(${globalIdx})">Details</button></td>
       </tr>`;
