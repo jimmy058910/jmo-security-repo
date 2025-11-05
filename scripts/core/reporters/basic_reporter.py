@@ -34,12 +34,12 @@ def _get_jmo_version() -> str:
             import tomllib
         except ImportError:
             # Fallback to tomli for Python 3.10
-            import tomli as tomllib  # type: ignore
+            import tomli as tomllib
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
         with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
-            return pyproject["project"]["version"]
+            return str(pyproject["project"]["version"])
     except Exception:
         # Fallback if pyproject.toml can't be read
         return "1.0.0"

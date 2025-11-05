@@ -1448,6 +1448,7 @@ if (useExternal) {
         doc = doc.replace("data = __DATA_JSON__;", "// Data loaded via fetch()")
     else:
         # Inline mode: Embed escaped JSON
-        doc = doc.replace("__DATA_JSON__", data_json)
+        if data_json is not None:
+            doc = doc.replace("__DATA_JSON__", data_json)
 
     p.write_text(doc, encoding="utf-8")

@@ -18,7 +18,7 @@ except ImportError as e:  # optional dependency
 try:
     import jsonschema
 except ImportError:
-    jsonschema = None  # type: ignore[assignment]
+    jsonschema = None
 
 
 def write_yaml(
