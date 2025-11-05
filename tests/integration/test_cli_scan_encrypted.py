@@ -66,7 +66,7 @@ class TestEncryptFindingsFlag:
                         "Verified": True,
                     },
                 },
-            ]
+            ],
         }
 
         findings_json = summaries_dir / "findings.json"
@@ -149,7 +149,7 @@ class TestEncryptFindingsFlag:
                 "finding_count": 0,
                 "platform": "Linux",
             },
-            "findings": []
+            "findings": [],
         }
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps(findings_data), encoding="utf-8")
@@ -209,7 +209,7 @@ class TestEncryptFindingsFlag:
                         "InstalledVersion": "4.17.19",
                     },
                 }
-            ]
+            ],
         }
 
         findings_json = summaries_dir / "findings.json"
@@ -297,7 +297,7 @@ class TestEncryptFindingsFlag:
                         "Verified": True,
                     },
                 }
-            ]
+            ],
         }
 
         findings_json = summaries_dir / "findings.json"

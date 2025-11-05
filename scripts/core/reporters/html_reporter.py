@@ -69,9 +69,7 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         # Mode 2: External - Load JSON via fetch() (prevents 50-100 MB HTML files)
         # Write findings.json separately for async loading
         findings_json_path = p.parent / "findings.json"
-        findings_json_path.write_text(
-            json.dumps(findings, indent=2), encoding="utf-8"
-        )
+        findings_json_path.write_text(json.dumps(findings, indent=2), encoding="utf-8")
         data_json = None  # Not used in external mode
         use_external = True
     template = r"""<!DOCTYPE html>

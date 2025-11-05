@@ -73,7 +73,9 @@ def compliance_findings() -> list[dict]:
                 "owaspTop10_2021": ["A03:2021"],
                 "cweTop25_2024": [{"id": "CWE-79", "rank": 2, "category": "Web"}],
                 "cisControlsV8_1": [{"control": "16.7", "ig": "IG1"}],
-                "nistCsf2_0": [{"function": "PR", "category": "DS", "subcategory": "PR.DS-5"}],
+                "nistCsf2_0": [
+                    {"function": "PR", "category": "DS", "subcategory": "PR.DS-5"}
+                ],
                 "pciDss4_0": [{"requirement": "6.5.7", "priority": "high"}],
                 "mitreAttack": [{"tactic": "Initial Access", "technique": "T1190"}],
             },

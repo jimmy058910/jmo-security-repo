@@ -28,6 +28,7 @@ def test_write_yaml(tmp_path: Path):
 
         # v1.0.0: YAML now has metadata wrapper
         import yaml
+
         data = yaml.safe_load(s)
         assert "meta" in data
         assert "findings" in data
@@ -157,8 +158,8 @@ def test_html_script_tag_escaping(tmp_path: Path):
 
     # 6. Verify the dashboard data is loadable by checking structure
     # v1.0.0 dual-mode: uses "let data = []" followed by conditional assignment
-    assert ("let data = []" in script_content or "const data = [" in script_content), (
-        "Data initialization not found (expected 'let data = []' or 'const data = [')"
-    )
+    assert (
+        "let data = []" in script_content or "const data = [" in script_content
+    ), "Data initialization not found (expected 'let data = []' or 'const data = [')"
     assert "let sortKey" in script_content  # Verify rest of JS is present
     assert "function render()" in script_content  # Core function exists

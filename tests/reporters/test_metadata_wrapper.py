@@ -302,7 +302,7 @@ def test_write_json_pretty_printed(tmp_path: Path, sample_findings):
     content = out_path.read_text(encoding="utf-8")
 
     # Should have indentation (2 spaces)
-    assert "  \"meta\":" in content or "  \"meta\": {" in content
+    assert '  "meta":' in content or '  "meta": {' in content
     # Should have newlines (not minified)
     assert content.count("\n") > 5
 

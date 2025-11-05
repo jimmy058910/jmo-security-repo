@@ -56,7 +56,7 @@ class TestCollectMetadataFlag:
                     "location": {"path": "test.py", "startLine": 5},
                     "raw": {"issue_text": "Use of assert detected", "test_id": "B101"},
                 }
-            ]
+            ],
         }
 
         findings_json = summaries_dir / "findings.json"
@@ -131,7 +131,7 @@ class TestCollectMetadataFlag:
                     "location": {"path": "main.tf", "startLine": 12},
                     "raw": {"check_id": "CKV_AWS_1", "resource": "aws_s3_bucket.data"},
                 }
-            ]
+            ],
         }
 
         findings_json = summaries_dir / "findings.json"
@@ -200,7 +200,7 @@ class TestCollectMetadataFlag:
                 "finding_count": 0,
                 "platform": "Linux",
             },
-            "findings": []
+            "findings": [],
         }
         findings_json = summaries_dir / "findings.json"
         findings_json.write_text(json.dumps(findings_data), encoding="utf-8")

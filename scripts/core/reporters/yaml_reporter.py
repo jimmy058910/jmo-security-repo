@@ -43,7 +43,9 @@ def write_yaml(
 
     # Optional schema validation
     if validate and jsonschema:
-        schema_path = Path(__file__).parent.parent.parent / "docs/schemas/common_finding.v1.json"
+        schema_path = (
+            Path(__file__).parent.parent.parent / "docs/schemas/common_finding.v1.json"
+        )
         if schema_path.exists():
             try:
                 with open(schema_path) as f:
@@ -52,7 +54,9 @@ def write_yaml(
                     try:
                         jsonschema.validate(instance=finding, schema=schema)
                     except jsonschema.ValidationError as e:
-                        logger.warning(f"Finding {idx} failed schema validation: {e.message}")
+                        logger.warning(
+                            f"Finding {idx} failed schema validation: {e.message}"
+                        )
             except Exception as e:
                 logger.debug(f"Schema validation skipped: {e}")
 

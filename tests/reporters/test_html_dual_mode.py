@@ -212,7 +212,10 @@ def test_external_mode_fetch_error_handling(tmp_path: Path):
     assert "try {" in html_content
     assert "catch (err) {" in html_content
     assert "console.error('Failed to load findings.json:', err);" in html_content
-    assert "errorEl.textContent = `Failed to load findings.json: ${err.message}`" in html_content
+    assert (
+        "errorEl.textContent = `Failed to load findings.json: ${err.message}`"
+        in html_content
+    )
 
 
 def test_inline_mode_no_loading_ui(tmp_path: Path):
@@ -357,7 +360,9 @@ def test_dual_mode_preserves_dashboard_features(tmp_path: Path):
 
         # Verify core dashboard features present
         assert "Security Dashboard v2.2 (Priority Intelligence)" in html_content
-        assert "Priority Summary Cards" in html_content or "summary-cards" in html_content
+        assert (
+            "Priority Summary Cards" in html_content or "summary-cards" in html_content
+        )
         assert "Quick Win" in html_content or "Quick filter" in html_content
         assert "Toggle Theme" in html_content
         assert "Group by:" in html_content
@@ -383,7 +388,9 @@ def test_dual_mode_preserves_dashboard_features(tmp_path: Path):
         (10000, "external"),
     ],
 )
-def test_threshold_decision_parametrized(tmp_path: Path, count: int, expected_mode: str):
+def test_threshold_decision_parametrized(
+    tmp_path: Path, count: int, expected_mode: str
+):
     """
     Parametrized test for threshold decision across various counts.
     """

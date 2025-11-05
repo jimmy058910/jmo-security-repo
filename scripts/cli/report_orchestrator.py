@@ -130,7 +130,14 @@ def cmd_report(args, _log_fn) -> int:
 
     # Count targets scanned
     target_count = 0
-    for target_dir_name in ["individual-repos", "individual-images", "individual-iac", "individual-web", "individual-gitlab", "individual-k8s"]:
+    for target_dir_name in [
+        "individual-repos",
+        "individual-images",
+        "individual-iac",
+        "individual-web",
+        "individual-gitlab",
+        "individual-k8s",
+    ]:
         target_dir = results_dir / target_dir_name
         if target_dir.exists():
             target_count += sum(1 for p in target_dir.iterdir() if p.is_dir())

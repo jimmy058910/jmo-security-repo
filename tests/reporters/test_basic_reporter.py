@@ -45,6 +45,7 @@ def test_write_json_roundtrip(tmp_path: Path):
 
     # v1.0.0: JSON now has metadata wrapper {"meta": {...}, "findings": [...]}
     import json
+
     data = json.loads(s)
     assert "meta" in data
     assert "findings" in data

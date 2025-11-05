@@ -258,7 +258,9 @@ def test_write_yaml_validation_disabled(tmp_path: Path, sample_findings):
     not YAML_AVAILABLE or not JSONSCHEMA_AVAILABLE,
     reason="PyYAML or jsonschema not installed",
 )
-def test_write_yaml_validation_missing_schema(tmp_path: Path, sample_findings, monkeypatch):
+def test_write_yaml_validation_missing_schema(
+    tmp_path: Path, sample_findings, monkeypatch
+):
     """Test write_yaml() handles missing schema file gracefully."""
     out_path = tmp_path / "findings.yaml"
 
@@ -303,7 +305,9 @@ def test_write_yaml_raises_runtime_error_if_yaml_missing(tmp_path: Path, monkeyp
 
 
 @pytest.mark.skipif(not YAML_AVAILABLE, reason="PyYAML not installed")
-def test_yaml_metadata_wrapper_preserves_findings_structure(tmp_path: Path, sample_findings):
+def test_yaml_metadata_wrapper_preserves_findings_structure(
+    tmp_path: Path, sample_findings
+):
     """Test that findings array structure is unchanged (only wrapped)."""
     out_path = tmp_path / "findings.yaml"
 

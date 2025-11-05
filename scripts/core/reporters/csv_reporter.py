@@ -151,9 +151,7 @@ def _extract_row(finding: dict[str, Any], columns: list[str]) -> list[str]:
                 cwe = compliance.get("cweTop25_2024", [])
                 if cwe:
                     # Extract CWE IDs from dicts
-                    cwe_ids = [
-                        c["id"] if isinstance(c, dict) else str(c) for c in cwe
-                    ]
+                    cwe_ids = [c["id"] if isinstance(c, dict) else str(c) for c in cwe]
                     row.append(", ".join(cwe_ids))
                 else:
                     row.append("")
