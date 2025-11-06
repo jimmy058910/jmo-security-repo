@@ -18,7 +18,7 @@ def fixture_path() -> Path:
 
 
 @pytest.fixture
-def sql_injection_cluster(fixture_path) -> list[dict[str, Any]]:
+def sql_injection_cluster(fixture_path):
     """Load SQL injection cluster from fixtures."""
     with open(fixture_path) as f:
         data = json.load(f)

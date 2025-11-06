@@ -451,6 +451,41 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
         lines.append(f"- ⚪ Low Priority (<40): {low_priority}")
         lines.append("")
 
+    # Cross-Tool Consensus (Phase 2 deduplication - v1.0.0)
+    consensus_findings = [f for f in findings if "detected_by" in f and len(f.get("detected_by", [])) > 1]
+    if consensus_findings:
+        lines.append("## Cross-Tool Consensus")
+        lines.append("")
+        lines.append(
+            f"Found {len(consensus_findings)} issue{'s' if len(consensus_findings) > 1 else ''} "
+            f"confirmed by multiple tools (Phase 2 deduplication):"
+        )
+        lines.append("")
+
+        # Sort by number of tools detecting (most consensus first), then severity
+        consensus_findings.sort(
+            key=lambda f: (
+                -len(f.get("detected_by", [])),
+                SEV_ORDER.index(f.get("severity", "INFO")),
+            )
+        )
+
+        for f in consensus_findings[:10]:  # Show top 10 consensus findings
+            detected_by = f.get("detected_by", [])
+            tool_names = [t.get("name", "unknown") for t in detected_by]
+            count = len(tool_names)
+            severity = f.get("severity", "INFO")
+            emoji = _get_severity_emoji(severity)
+            rule_id = f.get("ruleId", "unknown")
+            path = f.get("location", {}).get("path", "unknown")
+
+            lines.append(
+                f"- {emoji} **{rule_id}** ({severity}) - detected by {count} tools: {', '.join(tool_names)}"
+            )
+            lines.append(f"  - File: `{_truncate_path(path)}`")
+
+        lines.append("")
+
     # By Tool (with severity breakdown)
     if findings:
         lines.append("## By Tool")
@@ -458,9 +493,16 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
 
         tool_severity: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for f in findings:
-            tool_name = f.get("tool", {}).get("name", "unknown")
-            severity = f.get("severity", "INFO")
-            tool_severity[tool_name][severity] += 1
+            # For consensus findings, count once per detecting tool
+            if "detected_by" in f:
+                for tool_info in f.get("detected_by", []):
+                    tool_name = tool_info.get("name", "unknown")
+                    severity = f.get("severity", "INFO")
+                    tool_severity[tool_name][severity] += 1
+            else:
+                tool_name = f.get("tool", {}).get("name", "unknown")
+                severity = f.get("severity", "INFO")
+                tool_severity[tool_name][severity] += 1
 
         # Sort tools by total findings
         sorted_tools = sorted(

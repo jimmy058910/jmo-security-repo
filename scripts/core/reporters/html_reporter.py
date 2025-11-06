@@ -126,6 +126,7 @@ h1,h2{margin: 0 0 12px 0}
 .priority-low{background:#7cb342}
 .priority-info{background:#757575}
 .kev-badge{display:inline-block;padding:2px 6px;margin-left:4px;border-radius:8px;background:#ff1744;color:#fff;font-size:10px;font-weight:700;animation:pulse 2s infinite}
+.consensus-badge{display:inline-block;padding:2px 6px;margin-left:4px;border-radius:8px;background:#1976d2;color:#fff;font-size:10px;font-weight:700;border:1px solid #1565c0}
 @keyframes pulse{0%,100%{opacity:1} 50%{opacity:0.7}}
 .priority-sparkline{display:inline-block;height:14px;background:#e0e0e0;border-radius:2px;margin-left:4px;vertical-align:middle}
 .priority-sparkline-fill{height:100%;background:currentColor;border-radius:2px;transition:width 0.3s}
@@ -608,6 +609,20 @@ function renderDetailRow(f){
     html += `</div>`;
   }
 
+  // v1.0.0: Cross-tool consensus details
+  if(f.detected_by && f.detected_by.length > 1){
+    html += '<div class="meta-section"><strong>Cross-Tool Consensus:</strong></div>';
+    html += `<div style="margin-left:8px;padding:12px;border:2px solid #1976d2;border-radius:8px;background:#e3f2fd">`;
+    html += `<div style="color:#1565c0;font-weight:bold;margin-bottom:8px">🔍 Detected by ${f.detected_by.length} security tools</div>`;
+    html += '<div style="font-size:12px;line-height:1.6">';
+    f.detected_by.forEach((tool, idx) => {
+      html += `<div>${idx + 1}. <strong>${escapeHtml(tool.name)}</strong> v${escapeHtml(tool.version||'')}</div>`;
+    });
+    html += '</div>';
+    html += `<div style="margin-top:8px;font-size:11px;color:#666;font-style:italic">Multiple tools detecting the same issue increases confidence in this finding.</div>`;
+    html += `</div>`;
+  }
+
   // Quick Win #4: Enhanced Priority metadata (EPSS/KEV) with visual elements
   if(f.priority){
     html += '<div class="meta-section"><strong>Priority Analysis:</strong></div>';
@@ -779,9 +794,13 @@ function renderFlat(rows){
 
     const priorityBadge = `${medal}<span class="priority-badge ${priorityClass}">${priority.toFixed(0)}</span>`;
     const kevBadge = f.priority?.is_kev ? '<span class="kev-badge" title="CISA KEV: Actively Exploited">KEV</span>' : '';
+    // v1.0.0: Cross-tool consensus badge
+    const consensusBadge = (f.detected_by && f.detected_by.length > 1)
+      ? `<span class="consensus-badge" title="Detected by ${f.detected_by.length} tools: ${f.detected_by.map(t => t.name).join(', ')}">${f.detected_by.length}x</span>`
+      : '';
 
     html += `<tr class="expandable-row" data-idx="${idx}" onclick="toggleRow(${idx})" style="${triagedStyle}">
-      <td>${priorityBadge}${sparkline}${kevBadge}</td>
+      <td>${priorityBadge}${sparkline}${kevBadge}${consensusBadge}</td>
       <td class="sev-${escapeHtml(f.severity)}">${escapeHtml(f.severity)}</td>
       <td>${escapeHtml(f.ruleId)}</td>
       <td>${escapeHtml(f.location?.path)}</td>
@@ -834,9 +853,13 @@ function renderGrouped(rows){
 
       const priorityBadge = `<span class="priority-badge ${priorityClass}">${priority.toFixed(0)}</span>`;
       const kevBadge = f.priority?.is_kev ? '<span class="kev-badge" title="CISA KEV: Actively Exploited">KEV</span>' : '';
+      // v1.0.0: Cross-tool consensus badge
+      const consensusBadge = (f.detected_by && f.detected_by.length > 1)
+        ? `<span class="consensus-badge" title="Detected by ${f.detected_by.length} tools: ${f.detected_by.map(t => t.name).join(', ')}">${f.detected_by.length}x</span>`
+        : '';
 
       html += `<tr class="expandable-row" data-idx="${globalIdx}" onclick="toggleRow(${globalIdx})" style="${triagedStyle}">
-        <td>${priorityBadge}${kevBadge}</td>
+        <td>${priorityBadge}${kevBadge}${consensusBadge}</td>
         <td class="sev-${escapeHtml(f.severity)}">${escapeHtml(f.severity)}</td>
         <td>${escapeHtml(f.ruleId)}</td>
         <td>${escapeHtml(f.location?.path)}</td>

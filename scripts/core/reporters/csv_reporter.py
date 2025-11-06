@@ -23,6 +23,7 @@ DEFAULT_COLUMNS = [
     "line",
     "message",
     "tool",
+    "detected_by",  # v1.0.0: Cross-tool consensus
     "triaged",
 ]
 
@@ -134,6 +135,20 @@ def _extract_row(finding: dict[str, Any], columns: list[str]) -> list[str]:
                 row.append(tool_info.get("name", ""))
             else:
                 row.append("")
+        elif col == "detected_by":
+            # v1.0.0: Cross-tool consensus - show comma-separated tool names
+            detected_by = finding.get("detected_by", [])
+            if detected_by and len(detected_by) > 1:
+                # Consensus finding - show all detecting tools
+                tool_names = [t.get("name", "unknown") for t in detected_by]
+                row.append(", ".join(tool_names))
+            else:
+                # Single tool finding - show the tool from tool field
+                tool_info = finding.get("tool", {})
+                if isinstance(tool_info, dict):
+                    row.append(tool_info.get("name", ""))
+                else:
+                    row.append("")
         elif col == "triaged":
             # TODO: Hook into history DB for triage state (Feature #3)
             # For now, placeholder
