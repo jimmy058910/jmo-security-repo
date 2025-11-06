@@ -420,10 +420,14 @@ networks:
 # docker compose -f docker-compose.trends.yml run --rm -v jmo-history:/data busybox ls -lh /data
 #
 # # Backup history database
-# docker compose -f docker-compose.trends.yml run --rm -v jmo-history:/data -v $(pwd):/backup busybox tar czf /backup/history-backup.tar.gz -C /data .
+# docker compose -f docker-compose.trends.yml run --rm \
+#   -v jmo-history:/data -v $(pwd):/backup busybox \
+#   tar czf /backup/history-backup.tar.gz -C /data .
 #
 # # Restore history database
-# docker compose -f docker-compose.trends.yml run --rm -v jmo-history:/data -v $(pwd):/backup busybox tar xzf /backup/history-backup.tar.gz -C /data
+# docker compose -f docker-compose.trends.yml run --rm \
+#   -v jmo-history:/data -v $(pwd):/backup busybox \
+#   tar xzf /backup/history-backup.tar.gz -C /data
 #
 # ============================================================================
 # Troubleshooting
