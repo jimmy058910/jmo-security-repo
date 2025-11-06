@@ -90,7 +90,7 @@ class TestOIDCTokenAcquisition:
         ci_env = signer._detect_ci_environment()
         assert ci_env == "github"
 
-    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab-jwt-token"})
+    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab-jwt-token"}, clear=True)
     def test_detect_gitlab_ci_environment(self):
         """Test detecting GitLab CI environment."""
         from scripts.core.attestation.signer import SigstoreSigner
