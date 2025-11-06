@@ -139,9 +139,7 @@ def test_all_policies_performance(
     timings = {}
     for policy_name in builtin_policies:
         start = time.perf_counter()
-        evaluate_policies(
-            sample_findings_clean, [policy_name], builtin_dir, user_dir
-        )
+        evaluate_policies(sample_findings_clean, [policy_name], builtin_dir, user_dir)
         elapsed_ms = (time.perf_counter() - start) * 1000
         timings[policy_name] = elapsed_ms
 
