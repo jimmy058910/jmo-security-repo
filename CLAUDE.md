@@ -6,54 +6,89 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 JMo Security Audit Tool Suite is a terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners with a unified Python CLI, normalized outputs, and an HTML dashboard. The project scans repositories for secrets, vulnerabilities, misconfigurations, and security issues using industry-standard tools.
 
+**Current Version:** v0.9.0 (v1.0.0 in development - 6/13 features complete)
+
 **Key Philosophy:**
 
 - Two-phase architecture: **scan** (invoke tools, write raw JSON) → **report** (normalize, dedupe, emit unified outputs)
 - Unified CommonFinding schema with stable fingerprinting for deduplication
 - Profile-based configuration for different scan depths (fast/balanced/deep)
+- **SQLite historical storage** for trend analysis and security posture tracking (v1.0.0)
+- **Machine-readable diffs** for regression detection and PR reviews (v1.0.0)
+- **Statistical trend analysis** with Mann-Kendall validation (v1.0.0)
+- **SQLite historical storage** for trend analysis and security posture tracking (v1.0.0)
+- **Machine-readable diffs** for regression detection and PR reviews (v1.0.0)
+- **Statistical trend analysis** with Mann-Kendall validation (v1.0.0)
 - Resilient to missing tools with fallback mechanisms
+
+## v1.0.0 Development Status
+
+**Progress:** 6/13 features complete (46.2%)
+
+### Completed Features
+
+- ✅ **Feature #1:** New Tools & Adapters (28 scanners)
+- ✅ **Feature #2:** AI Remediation (MCP Server)
+- ✅ **Feature #3:** Machine-Readable Diffs (4 output formats)
+- ✅ **Feature #4:** Trend Analysis (Mann-Kendall, 8 commands)
+- ✅ **Feature #5:** SQLite Historical Storage (13 CLI commands)
+- ✅ **Feature #8:** Output Format Standardization (v1.0.0 metadata wrapper, CSV)
+
+### In Development
+
+- ⏳ Feature #6: Profile Enhancements
+- ⏳ Feature #7: Advanced Filtering
+- ⏳ Feature #9: Interactive Dashboard Improvements
+- ⏳ Feature #10: CI/CD Integration Templates
+- ⏳ Feature #11: Plugin System Enhancements
+- ⏳ Feature #12: Performance Optimization
+- ⏳ Feature #13: Security Hardening
+
+**See [dev-only/1.0.0/STATUS.md](dev-only/1.0.0/STATUS.md) for complete development status.**
 
 ## Core Commands
 
 ### Development Setup
 
 ```bash
-# Install Python dev dependencies
+## Install Python dev dependencies
 make dev-deps
 
-# Install pre-commit hooks (YAML/Actions validation, formatting, linting)
+## Install pre-commit hooks (YAML/Actions validation, formatting, linting)
 make pre-commit-install
 
-# Install external security tools (semgrep, trivy, checkov, etc.)
+## Install external security tools (semgrep, trivy, checkov, etc.)
 make tools
 
-# Verify environment and tool availability
+## Verify environment and tool availability
 make verify-env
 
-# Format code (shfmt, black, ruff)
+## Format code (shfmt, black, ruff)
 make fmt
 
-# Lint code (shellcheck, ruff, bandit, pre-commit)
+## Lint code (shellcheck, ruff, bandit, pre-commit)
 make lint
 
-# Run tests with coverage (CI requires ≥85%)
+## Run tests with coverage (CI requires ≥85%)
 make test
+
 ```
 
 ### Dependency Management
 
 ```bash
-# Compile requirements-dev.in → requirements-dev.txt (pip-tools)
+## Compile requirements-dev.in → requirements-dev.txt (pip-tools)
 make deps-compile
 
-# Sync environment to compiled requirements
+## Sync environment to compiled requirements
 make deps-sync
 
-# Upgrade pip/setuptools/wheel
+## Upgrade pip/setuptools/wheel
 make upgrade-pip
 
-# Alternative: use uv for faster compilation/sync
+## Alternative: use uv for faster compilation/sync
 make uv-sync
+
 ```
 
 ### Version Management (v0.6.1+)
@@ -61,20 +96,21 @@ make uv-sync
 **IMPORTANT: Use the 5-layer version management system to update tool versions.**
 
 ```bash
-# Check current versions
+## Check current versions
 python3 scripts/dev/update_versions.py --report
 
-# Check for available updates
+## Check for available updates
 python3 scripts/dev/update_versions.py --check-latest
 
-# Update a specific tool
+## Update a specific tool
 python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-# Sync all Dockerfiles with versions.yaml
+## Sync all Dockerfiles with versions.yaml
 python3 scripts/dev/update_versions.py --sync
 
-# Validate consistency (CI uses this)
+## Validate consistency (CI uses this)
 python3 scripts/dev/update_versions.py --sync --dry-run
+
 ```
 
 **Key Files:**
@@ -93,78 +129,44 @@ python3 scripts/dev/update_versions.py --sync --dry-run
 4. **Update critical tools within 7 days** — trivy, trufflehog, semgrep, checkov, syft, zap
 5. **Monthly review process** — First Monday: check-latest → review → update → test → commit
 
-**Workflow for Updating Tools:**
-
-```bash
-# Step 1: Check for updates
-python3 scripts/dev/update_versions.py --check-latest
-# Output: [warn] trivy: 0.67.2 → 0.68.0 (UPDATE AVAILABLE)
-
-# Step 2: Review release notes
-gh release view v0.68.0 --repo aquasecurity/trivy
-
-# Step 3: Update versions.yaml
-python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
-
-# Step 4: Sync Dockerfiles
-python3 scripts/dev/update_versions.py --sync
-
-# Step 5: Verify changes
-git diff versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
-
-# Step 6: Test locally
-make docker-build
-
-# Step 7: Commit
-git add versions.yaml Dockerfile*
-git commit -m "deps(tools): update trivy to v0.68.0
-
-- trivy: 0.67.2 → 0.68.0 (CVE database updates)
-
-Related: ROADMAP #14, Issue #46"
-```
-
 **See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) for complete documentation.**
 
 ### Running Scans
 
 ```bash
-# Interactive wizard (recommended for first-time users)
-jmotools wizard
+## Interactive wizard (recommended for first-time users)
+jmo wizard
 
-# Non-interactive wizard with defaults
-jmotools wizard --yes
+## Non-interactive wizard with defaults
+jmo wizard --yes
 
-# Fast scan with wrapper command
-jmotools fast --repos-dir ~/repos
+## Fast scan with profile
+jmo scan --repos-dir ~/repos --profile-name fast
 
-# Balanced scan (default profile)
-jmotools balanced --repos-dir ~/repos
+## Balanced scan (default profile)
+jmo scan --repos-dir ~/repos --profile-name balanced
 
-# Full deep scan
-jmotools full --repos-dir ~/repos
+## Full deep scan
+jmo scan --repos-dir ~/repos --profile-name deep
 
-# Manual scan using Python CLI - Repository scanning
-python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --human-logs
+## Multi-target scanning (v0.6.0+)
+## Scan container images
+jmo scan --image nginx:latest --tools trivy syft
 
-# Multi-target scanning (v0.6.0+)
-# Scan container images
-python3 scripts/cli/jmo.py scan --image nginx:latest --tools trivy syft
+## Scan IaC files
+jmo scan --terraform-state infrastructure.tfstate --tools checkov trivy
 
-# Scan IaC files
-python3 scripts/cli/jmo.py scan --terraform-state infrastructure.tfstate --tools checkov trivy
+## Scan live web URLs (DAST)
+jmo scan --url https://example.com --tools zap
 
-# Scan live web URLs (DAST)
-python3 scripts/cli/jmo.py scan --url https://example.com --tools zap
+## Scan GitLab repositories
+jmo scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
 
-# Scan GitLab repositories
-python3 scripts/cli/jmo.py scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
+## Scan Kubernetes clusters
+jmo scan --k8s-context prod --k8s-all-namespaces --tools trivy
 
-# Scan Kubernetes clusters
-python3 scripts/cli/jmo.py scan --k8s-context prod --k8s-all-namespaces --tools trivy
-
-# Scan multiple target types in one command
-python3 scripts/cli/jmo.py scan \
+## Scan multiple target types in one command
+jmo scan \
   --repo ./myapp \
   --image myapp:latest \
   --terraform-state infrastructure.tfstate \
@@ -173,36 +175,237 @@ python3 scripts/cli/jmo.py scan \
   --k8s-context prod \
   --results-dir ./comprehensive-audit
 
-# Aggregate and report (all target types)
-python3 scripts/cli/jmo.py report ./results --profile --human-logs
+## Aggregate and report (all target types)
+jmo report ./results --profile --human-logs
 
-# CI mode: scan + report + threshold gating (multi-target support)
-python3 scripts/cli/jmo.py ci --image nginx:latest --url https://api.example.com --fail-on HIGH --profile
+## CI mode: scan + report + threshold gating (multi-target support)
+jmo ci --image nginx:latest --url https://api.example.com --fail-on HIGH --profile
+
 ```
+
+### Historical Storage & Trend Analysis (v1.0.0)
+
+**SQLite-based historical tracking for security posture monitoring:**
+
+```bash
+## List all historical scans
+jmo history list
+
+## Show detailed scan information
+jmo history show SCAN_ID
+
+## Compare two scans (diff + statistics)
+jmo history compare SCAN1_ID SCAN2_ID
+
+## Export scan history to JSON
+jmo history export --output scans.json
+
+## Prune old scans (keep last N)
+jmo history prune --keep 50
+
+## Database maintenance
+jmo history vacuum
+jmo history verify
+
+## Trend analysis with statistical validation
+jmo trends analyze --days 30
+jmo trends regressions --threshold 10
+jmo trends score  # Security posture score (0-100)
+jmo trends compare --baseline SCAN_ID
+jmo trends insights --period week
+
+## Developer attribution tracking
+jmo trends developers --top 10
+jmo trends explain --finding-id FINGERPRINT
+
+## Export formats (CSV, Prometheus, Grafana, JSON)
+jmo trends analyze --export csv
+jmo trends analyze --export prometheus
+jmo trends analyze --export grafana
+
+```
+
+**Performance Benchmarks:**
+
+- Single scan insert: <50ms
+- History list (10k scans): <100ms
+- Trend analysis (30 days): <200ms
+- Statistical validation: Mann-Kendall test (p < 0.05 significance)
+
+**Docker Volume Mounting (CRITICAL):**
+
+```bash
+## MUST mount .jmo/history.db for persistence
+docker run --rm \
+  -v $PWD:/scan \
+  -v $PWD/.jmo/history.db:/scan/.jmo/history.db \
+  -v $PWD/results:/results \
+  jmo-security:latest scan --repo /scan
+
+```
+
+### Machine-Readable Diffs (v1.0.0)
+
+**Compare scans to detect regressions, track remediation, automate PR reviews:**
+
+```bash
+## Compare two result directories
+jmo diff results-baseline/ results-current/
+
+## Filter by severity
+jmo diff results-baseline/ results-current/ --severity HIGH CRITICAL
+
+## Show only new findings
+jmo diff results-baseline/ results-current/ --only new
+
+## Generate PR comment (Markdown)
+jmo diff results-baseline/ results-current/ --format md > pr-comment.md
+
+## Interactive HTML report
+jmo diff results-baseline/ results-current/ --format html
+
+## SARIF 2.1.0 diff format
+jmo diff results-baseline/ results-current/ --format sarif
+
+## SQLite-based historical comparison
+jmo diff --scan-id BASELINE_ID --scan-id CURRENT_ID
+
+```
+
+**Four Output Formats:**
+
+1. **JSON (v1.0.0)** — Machine-readable with metadata envelope
+2. **Markdown** — PR/MR comment automation
+3. **HTML** — Interactive dashboard with filters
+4. **SARIF 2.1.0** — Code scanning platforms integration
+
+**CI/CD Integration Examples:**
+
+- GitHub Actions: Post diff as PR comment
+- GitLab CI: Create MR notes with remediation tracking
+- Performance: <500ms for 1000-finding diffs
+
+```bash
+## List all historical scans
+jmo history list
+
+## Show detailed scan information
+jmo history show SCAN_ID
+
+## Compare two scans (diff + statistics)
+jmo history compare SCAN1_ID SCAN2_ID
+
+## Export scan history to JSON
+jmo history export --output scans.json
+
+## Prune old scans (keep last N)
+jmo history prune --keep 50
+
+## Database maintenance
+jmo history vacuum
+jmo history verify
+
+## Trend analysis with statistical validation
+jmo trends analyze --days 30
+jmo trends regressions --threshold 10
+jmo trends score  ## Security posture score (0-100)
+jmo trends compare --baseline SCAN_ID
+jmo trends insights --period week
+
+## Developer attribution tracking
+jmo trends developers --top 10
+jmo trends explain --finding-id FINGERPRINT
+
+## Export formats (CSV, Prometheus, Grafana, JSON)
+jmo trends analyze --export csv
+jmo trends analyze --export prometheus
+jmo trends analyze --export grafana
+```
+
+**Performance Benchmarks:**
+
+- Single scan insert: <50ms
+- History list (10k scans): <100ms
+- Trend analysis (30 days): <200ms
+- Statistical validation: Mann-Kendall test (p < 0.05 significance)
+
+**Docker Volume Mounting (CRITICAL):**
+
+```bash
+## MUST mount .jmo/history.db for persistence
+docker run --rm \
+  -v $PWD:/scan \
+  -v $PWD/.jmo/history.db:/scan/.jmo/history.db \
+  -v $PWD/results:/results \
+  jmo-security:latest scan --repo /scan
+
+```
+
+```bash
+## Compare two result directories
+jmo diff results-baseline/ results-current/
+
+## Filter by severity
+jmo diff results-baseline/ results-current/ --severity HIGH CRITICAL
+
+## Show only new findings
+jmo diff results-baseline/ results-current/ --only new
+
+## Generate PR comment (Markdown)
+jmo diff results-baseline/ results-current/ --format md > pr-comment.md
+
+## Interactive HTML report
+jmo diff results-baseline/ results-current/ --format html
+
+## SARIF 2.1.0 diff format
+jmo diff results-baseline/ results-current/ --format sarif
+
+## SQLite-based historical comparison
+jmo diff --scan-id BASELINE_ID --scan-id CURRENT_ID
+```
+
+**Four Output Formats:**
+
+1. **JSON (v1.0.0)** — Machine-readable with metadata envelope
+2. **Markdown** — PR/MR comment automation
+3. **HTML** — Interactive dashboard with filters
+4. **SARIF 2.1.0** — Code scanning platforms integration
+
+**CI/CD Integration Examples:**
+
+- GitHub Actions: Post diff as PR comment
+- GitLab CI: Create MR notes with remediation tracking
+- Performance: <500ms for 1000-finding diffs
 
 ### Running a Single Test
 
 ```bash
-# Run specific test file
+## Run specific test file
 pytest tests/unit/test_common_and_sarif.py -v
 
-# Run specific test function
+## Run specific test function
 pytest tests/unit/test_common_and_sarif.py::test_write_sarif -v
 
-# Run with coverage
+## Run with coverage
 pytest tests/unit/ --cov=scripts --cov-report=term-missing
 
-# Run adapter tests (useful when adding new tool adapters)
+## Run adapter tests (useful when adding new tool adapters)
 pytest tests/adapters/test_gitleaks_adapter.py -v
 
-# Run integration tests (end-to-end CLI workflows)
+## Run integration tests (end-to-end CLI workflows)
 pytest tests/integration/test_cli_scan_ci.py -v
 
-# Run tests by category
+## Run tests by category
 pytest tests/unit/ -v         # All unit tests
 pytest tests/adapters/ -v     # All adapter tests
 pytest tests/reporters/ -v    # All reporter tests
 pytest tests/integration/ -v  # All integration tests
+
+## Run v1.0.0 feature tests
+pytest tests/unit/test_history_db.py -v       # SQLite storage
+pytest tests/unit/test_diff_engine.py -v      # Diff engine
+pytest tests/unit/test_trend_analyzer.py -v   # Trend analysis
+
 ```
 
 ## Architecture
@@ -212,33 +415,66 @@ pytest tests/integration/ -v  # All integration tests
 ```text
 scripts/
 ├── cli/
-│   ├── jmo.py          # Main CLI entry point (scan/report/ci commands)
-│   ├── jmotools.py     # Wrapper commands (fast/balanced/full/setup)
-│   └── wizard.py       # Interactive wizard for guided scanning
+│   ├── jmo.py                    # Main CLI entry point (scan/report/ci/diff/history/trends)
+│   ├── scan_orchestrator.py     # v0.9.0: Refactored scan orchestration
+│   ├── report_orchestrator.py   # v0.9.0: Refactored report orchestration
+│   ├── ci_orchestrator.py       # v0.9.0: Refactored CI orchestration
+│   ├── diff_commands.py         # v1.0.0: Diff CLI commands
+│   ├── history_commands.py      # v1.0.0: Historical storage CLI
+│   ├── trend_commands.py        # v1.0.0: Trend analysis CLI
+│   ├── schedule_commands.py     # v0.9.0: Scheduled scan management
+│   ├── wizard_flows/            # v0.9.0: Refactored wizard modules
+│   │   ├── base_flow.py         # Core wizard orchestration
+│   │   ├── target_configurators.py  # Target selection flows
+│   │   ├── cicd_flow.py         # CI/CD artifact generation
+│   │   └── ...
+│   └── scan_jobs/               # v0.9.0: Scanner implementations
+│       ├── base_scanner.py      # Abstract scanner base
+│       ├── repository_scanner.py
+│       ├── image_scanner.py
+│       ├── iac_scanner.py
+│       ├── url_scanner.py
+│       ├── gitlab_scanner.py
+│       └── k8s_scanner.py
 ├── core/
 │   ├── normalize_and_report.py  # Aggregation engine: loads tool outputs, dedupes, enriches
-│   ├── config.py       # Config loader for jmo.yml
-│   ├── suppress.py     # Suppression logic (jmo.suppress.yml)
-│   ├── common_finding.py  # CommonFinding schema and fingerprinting
-│   ├── adapters/       # Tool output parsers (gitleaks, semgrep, trivy, etc.)
+│   ├── config.py                # Config loader for jmo.yml
+│   ├── suppress.py              # Suppression logic (jmo.suppress.yml)
+│   ├── common_finding.py        # CommonFinding schema and fingerprinting
+│   ├── history_db.py            # v1.0.0: SQLite historical storage
+│   ├── diff_engine.py           # v1.0.0: Diff computation engine
+│   ├── trend_analyzer.py        # v1.0.0: Statistical trend analysis
+│   ├── developer_attribution.py # v1.0.0: Git blame-based attribution
+│   ├── epss_integration.py      # v0.9.0: EPSS risk scoring
+│   ├── kev_integration.py       # v0.9.0: CISA KEV catalog
+│   ├── email_service.py         # v0.9.0: Email notifications
+│   ├── cron_installer.py        # v0.9.0: Scheduled scans
+│   ├── telemetry.py             # v0.9.0: Anonymous usage metrics
+│   ├── adapters/                # Tool output parsers
 │   │   ├── gitleaks_adapter.py
 │   │   ├── semgrep_adapter.py
 │   │   ├── trivy_adapter.py
 │   │   └── ...
-│   └── reporters/      # Output formatters
-│       ├── basic_reporter.py    # JSON + Markdown
-│       ├── yaml_reporter.py     # YAML (optional, requires PyYAML)
-│       ├── html_reporter.py     # Interactive dashboard
+│   └── reporters/               # Output formatters
+│       ├── basic_reporter.py    # JSON + Markdown (v1.0.0 metadata wrapper)
+│       ├── yaml_reporter.py     # YAML (v1.0.0 metadata wrapper)
+│       ├── html_reporter.py     # Interactive dashboard (v1.0.0 dual-mode)
 │       ├── sarif_reporter.py    # SARIF 2.1.0
+│       ├── csv_reporter.py      # v1.0.0: CSV export
+│       ├── diff_json_reporter.py    # v1.0.0: Diff JSON output
+│       ├── diff_md_reporter.py      # v1.0.0: Diff Markdown (PR comments)
+│       ├── diff_html_reporter.py    # v1.0.0: Diff HTML dashboard
+│       ├── diff_sarif_reporter.py   # v1.0.0: SARIF diff format
 │       └── suppression_reporter.py  # Suppression summary
-└── dev/               # Helper scripts for tool installation and CI
+└── dev/                         # Helper scripts for tool installation and CI
 
 tests/
-├── unit/              # Core logic tests
-├── adapters/          # Adapter tests with fabricated JSON fixtures
-├── reporters/         # Reporter tests
-├── integration/       # End-to-end CLI tests
-└── cli/               # CLI argument and smoke tests
+├── unit/                        # Core logic tests
+├── adapters/                    # Adapter tests with fabricated JSON fixtures
+├── reporters/                   # Reporter tests
+├── integration/                 # End-to-end CLI tests
+└── cli/                         # CLI argument and smoke tests
+
 ```
 
 ### Key Concepts
@@ -264,6 +500,7 @@ tests/
      - `results/individual-k8s/<context>_<namespace>/{tool}.json`
    - Supports timeouts, retries, and per-tool overrides
    - Gracefully handles missing tools with `--allow-missing-tools` (writes empty stubs)
+   - **v1.0.0:** Auto-stores scan to SQLite history database (`.jmo/history.db`)
 
 2. **Report Phase** (`jmo report`):
    - Scans all 6 target type directories for tool outputs
@@ -271,9 +508,10 @@ tests/
    - Normalizes to CommonFinding schema (v1.2.0 with compliance fields)
    - Deduplicates by fingerprint ID across all target types
    - Enriches findings with compliance frameworks (OWASP, CWE, CIS, NIST CSF, PCI DSS, ATT&CK)
+   - **v0.9.0:** Enriches with EPSS risk scores and CISA KEV catalog
    - Enriches Trivy findings with Syft SBOM context
-   - Writes unified outputs: `findings.json`, `SUMMARY.md`, `dashboard.html`, `findings.sarif`, `COMPLIANCE_SUMMARY.md`, etc.
-   - Supports severity-based failure thresholds (`--fail-on HIGH`)
+   - **v1.0.0:** Writes unified outputs with metadata envelope wrapper
+   - **v1.0.0:** Supports severity-based failure thresholds (`--fail-on HIGH`)
 
 **CommonFinding Schema:**
 
@@ -289,11 +527,49 @@ All tool outputs are converted to a unified shape defined in `docs/schemas/commo
   - `pciDss4_0`: Array of PCI DSS 4.0 requirements with priority
   - `mitreAttack`: Array of ATT&CK techniques (tactic, technique, subtechnique)
 - **Risk field (v1.1.0+):** `risk` object with CWE, confidence, likelihood, impact
+- **EPSS field (v0.9.0+):** `epss` object with score, percentile (for CVEs)
+- **KEV field (v0.9.0+):** `kev` boolean indicating CISA Known Exploited Vulnerability
 - **Fingerprinting:** Deterministic ID computed from `tool | ruleId | path | startLine | message[:120]` to enable cross-run deduplication
 - **Schema Versions:**
   - **1.0.0:** Basic finding format
   - **1.1.0:** Added `risk`, `context`, enhanced remediation
   - **1.2.0:** Added `compliance` field (v0.5.1+), auto-enriched during reporting
+
+**v1.0.0 Metadata Wrapper:**
+
+All output formats now include a metadata envelope for machine-parseable context:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "0.9.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-11-05T12:34:56Z",
+    "scan_id": "abc123...",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep", "trufflehog"],
+    "target_count": 5,
+    "finding_count": 42,
+    "platform": {"os": "linux", "python": "3.11.0"}
+  },
+  "findings": [
+    {
+      "schemaVersion": "1.2.0",
+      "id": "fingerprint-abc123",
+      ...
+    }
+  ]
+}
+
+```
+
+**Impact:**
+
+- Version tracking: Know which JMo version produced results
+- Full scan context: Profile, tools, targets in metadata
+- Machine-parseable: CI/CD pipelines can parse metadata
+- Backward compatibility: Access findings via `.findings` field
 
 **Profiles (v0.5.0):**
 
@@ -302,7 +578,6 @@ Configuration via `jmo.yml` supports named profiles for different scan depths:
 - **fast:** 8 core tools (trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft, osv-scanner), 300s timeout, 8 threads, 5-10 minutes
   - Use case: Pre-commit checks, quick validation, CI/CD gate
   - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfile, backup secrets scanning
-  - Coverage: Verified secrets, SAST, SCA, containers, IaC, backup secrets scanning
 
 - **balanced:** 21 production tools (fast tools + prowler, kubescape, zap, nuclei, akto, cdxgen, scancode, gosec, grype, yara, bearer, horusec, dependency-check), 600s timeout, 4 threads, 18-25 minutes
   - Use case: CI/CD pipelines, regular audits, production scans
@@ -316,13 +591,60 @@ Profiles can override tools, timeouts, threads, and per-tool flags. Use `--profi
 
 **Interactive Wizard:**
 
-The wizard (`scripts/cli/wizard.py`) provides guided onboarding for first-time users:
+The wizard (`jmo wizard`) provides guided onboarding for first-time users:
 
 - **Interactive mode:** Step-by-step prompts for profile selection, target configuration, execution mode (Docker/native)
 - **Non-interactive mode:** `--yes` flag uses smart defaults for automation
 - **Artifact generation:** Can emit Makefile targets (`--emit-make-target`), shell scripts (`--emit-script`), or GitHub Actions workflows (`--emit-gha`) for reusable configurations
 - **Docker integration:** Automatically detects Docker availability and offers zero-installation scanning
+- **v1.0.0:** Post-scan prompts for trend analysis, diff generation, historical comparison
 - Auto-opens results dashboard after scan completion
+
+**SQLite Historical Storage (v1.0.0):**
+
+All scans are automatically stored in `.jmo/history.db` for trend analysis:
+
+- **Schema:** 3 tables (scans, findings, trends)
+- **Scan metadata:** Git context (commit, branch, tag), configuration (profile, tools), summary counts
+- **Fingerprint-based deduplication:** Findings tracked across scans via stable IDs
+- **Performance:** <100ms queries for 10k findings, connection pooling, indexed queries
+- **Database location:** `.jmo/history.db` (configurable via `--db-path`)
+- **Docker requirement:** MUST mount volume for persistence (`-v $PWD/.jmo:/scan/.jmo`)
+
+**Machine-Readable Diffs (v1.0.0):**
+
+DiffEngine provides fingerprint-based comparison for regression detection:
+
+- **Algorithm:** O(n) set-based diff using fingerprint IDs
+- **Categories:** New findings, fixed findings, modified findings (severity/compliance changes)
+- **Filtering:** By severity, tool, category, or combination
+- **Four output formats:** JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
+- **Two comparison modes:**
+  - **Directory mode (primary):** Compare `results-A/` vs `results-B/`
+  - **SQLite mode:** Compare historical scans via `--scan-id`
+- **Performance:** <500ms for 1000-finding diffs, <2s for 10K-finding diffs
+- **CI/CD integration:** GitHub Actions, GitLab CI, Jenkins examples
+
+**Trend Analysis (v1.0.0):**
+
+Statistical trend detection with Mann-Kendall validation:
+
+- **Statistical rigor:** Mann-Kendall test (p < 0.05 significance threshold)
+- **Security scoring:** 0-100 scale with letter grades (A-F)
+  - Formula: `100 - (critical×10) - (high×3) - (medium×1)`
+  - Thresholds: A (90-100), B (80-89), C (70-79), D (60-69), F (<60)
+- **Developer attribution:** Git blame-based remediation tracking per developer/team
+- **Export formats:** CSV (Excel), Prometheus (monitoring), Grafana (dashboards), JSON (React apps)
+- **Eight commands:**
+  - `analyze`: Overall trend analysis with statistical validation
+  - `show`: Detailed trend visualization
+  - `regressions`: Detect security regressions (threshold-based)
+  - `score`: Security posture score calculation
+  - `compare`: Compare against baseline scan
+  - `insights`: Actionable insights (weekly/monthly/quarterly)
+  - `explain`: Explain finding lifecycle
+  - `developers`: Developer velocity tracking
+- **Performance:** <100ms for 50 scans, <500ms for 200 scans
 
 ### Tool Adapters
 
@@ -350,7 +672,7 @@ Each adapter in `scripts/core/adapters/` follows this pattern:
 - **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
 - **License Compliance:** Bearer (security/privacy scanner), ScanCode (license compliance)
 
-**Tool Count: 28 security scanners** (26 Docker-ready: trufflehog, noseyparker, semgrep, semgrep-secrets, bandit, syft, trivy, trivy-rbac, checkov, checkov-cicd, hadolint, zap, nuclei, prowler, kubescape, scancode, cdxgen, gosec, osv-scanner, yara, grype, bearer, horusec, dependency-check, falco, afl++; 2 manual install: mobsf, akto) (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
+**Tool Count: 28 security scanners** (26 Docker-ready: trufflehog, noseyparker, semgrep, semgrep-secrets, bandit, syft, trivy, trivy-rbac, checkov, checkov-cicd, hadolint, zap, nuclei, prowler, kubescape, scancode, cdxgen, gosec, osv-scanner, yara, grype, bearer, horusec, dependency-check, falco, afl++; 2 manual install: mobsf, akto)
 
 **Removed Tools (v0.5.0):**
 
@@ -421,6 +743,7 @@ class MyToolAdapter(AdapterPlugin):
         findings = []
         # ... parsing logic ...
         return findings
+
 ```
 
 **Key Requirements:**
@@ -433,40 +756,43 @@ class MyToolAdapter(AdapterPlugin):
 **Hot-Reload During Development:**
 
 ```bash
-# Edit adapter (no reinstall needed)
+## Edit adapter (no reinstall needed)
 vim scripts/core/adapters/trivy_adapter.py
 
-# Run tests immediately - plugin auto-reloads
+## Run tests immediately - plugin auto-reloads
 pytest tests/adapters/test_trivy_adapter.py -v
+
 ```
 
 **CLI Commands for Plugin Management (v0.9.0+):**
 
 ```bash
-# List all loaded plugins
+## List all loaded plugins
 jmo adapters list
-# Output:
-# Loaded 12 adapter plugins:
-#   trivy           v1.0.0    Adapter for Aqua Security Trivy vulnerability scanner
-#   semgrep         v1.0.0    Adapter for Semgrep multi-language SAST scanner
-#   ...
+## Output:
+## Loaded 12 adapter plugins:
+##   trivy           v1.0.0    Adapter for Aqua Security Trivy vulnerability scanner
+##   semgrep         v1.0.0    Adapter for Semgrep multi-language SAST scanner
+##   ...
 
-# Validate a plugin file
+## Validate a plugin file
 jmo adapters validate scripts/core/adapters/mytool_adapter.py
-# Output: ✅ Valid plugin: scripts/core/adapters/mytool_adapter.py
+## Output: ✅ Valid plugin: scripts/core/adapters/mytool_adapter.py
+
 ```
 
 **Testing Adapters:**
 
 ```bash
-# Test single adapter
+## Test single adapter
 pytest tests/adapters/test_mytool_adapter.py -v
 
-# Test all adapters (v0.9.0: 112/113 tests passing)
+## Test all adapters (v0.9.0: 112/113 tests passing)
 pytest tests/adapters/ -v
 
-# Run with coverage (CI requires ≥85%)
+## Run with coverage (CI requires ≥85%)
 pytest tests/adapters/ --cov=scripts.core.adapters --cov-report=term-missing
+
 ```
 
 **Reference Implementations:**
@@ -495,49 +821,30 @@ v0.6.0 expands scanning beyond local Git repositories to 5 additional target typ
 5. **GitLab Repos** (NEW): GitLab-hosted repos via `--gitlab-repo`, `--gitlab-group`
 6. **Kubernetes Clusters** (NEW): Live K8s clusters via `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces`
 
-**Implementation Pattern:**
+**Implementation Pattern (v0.9.0 Refactoring):**
 
-All scan targets follow a consistent pattern in [jmo.py](scripts/cli/jmo.py):
+All scan targets follow a consistent pattern using `ScanOrchestrator`:
 
 ```python
-# 1. Target Collection Function
-def _iter_images(args) -> list[str]:
-    """Collect container images from CLI arguments."""
-    images = []
-    if getattr(args, "image", None):
-        images.append(args.image)
-    if getattr(args, "images_file", None):
-        # Load from file, skip comments/empty lines
-        ...
-    return images
+# 1. Target Collection (via collectors)
+from scripts.cli.target_collectors import ImageCollector
+images = ImageCollector.collect_images(args)
 
-# 2. Scan Job Function (ThreadPoolExecutor)
-def job_image(image: str) -> tuple[str, dict[str, bool]]:
-    """Scan a container image with trivy and syft."""
-    # Sanitize name for directory
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
-    out_dir = results_dir / "individual-images" / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+# 2. Scanner Execution (via scanner classes)
+from scripts.cli.scan_jobs.image_scanner import ImageScanner
+scanner = ImageScanner(scan_config)
+results = scanner.scan_targets(images)
 
-    # Tool invocation
-    if "trivy" in tools:
-        cmd = ["trivy", "image", "-q", "-f", "json", image, "-o", str(out)]
-        rc, _, _, used = _run_cmd(cmd, timeout, retries, ok_rcs=(0, 1))
+# 3. Results Storage
+# - Write to results/individual-images/<image>/{tool}.json
+# - Store in SQLite history database (v1.0.0)
 
-    # Return status
-    return image, statuses
-
-# 3. Parallel Execution
-with ThreadPoolExecutor(max_workers=max_workers) as ex:
-    for image in images:
-        futures.append(ex.submit(job_image, image))
-    for fut in as_completed(futures):
-        name, statuses = fut.result()
-        _log(args, "INFO", f"scanned image {name}: {statuses}")
 ```
 
 **Key Architectural Decisions:**
 
+- **v0.9.0 Refactoring:** Extracted `ScanOrchestrator` for unified orchestration
+- **Scanner classes:** 6 target-specific scanners (Repository, Image, IaC, URL, GitLab, K8s)
 - **Parallel execution:** All target types use ThreadPoolExecutor for concurrent scanning
 - **Consistent logging:** Each scan target type has distinct log prefix (`repo`, `image`, `IaC`, `URL`, `GitLab`, `K8s`)
 - **Directory isolation:** Each target type writes to separate `individual-{type}/` directories
@@ -589,6 +896,7 @@ for target_dir in target_dirs:
     for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
         # Load all tool outputs (trivy, syft, checkov, zap, trufflehog, etc.)
         # Findings deduplicated by fingerprint ID across all targets
+
 ```
 
 **Benefits:**
@@ -601,15 +909,49 @@ for target_dir in target_dirs:
 
 ### Output Formats
 
-Report phase writes to `<results_dir>/summaries/`:
+**v1.0.0 Metadata Wrapper:**
 
-- `findings.json` — Unified normalized findings (machine-readable)
+All output formats now include a metadata envelope:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "0.9.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-11-05T12:34:56Z",
+    "scan_id": "abc123...",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep"],
+    "target_count": 5,
+    "finding_count": 42,
+    "platform": {"os": "linux", "python": "3.11.0"}
+  },
+  "findings": [...]
+}
+
+```
+
+**Report phase writes to `<results_dir>/summaries/`:**
+
+- `findings.json` — Unified normalized findings with v1.0.0 metadata wrapper
 - `SUMMARY.md` — Human-readable summary with severity counts and top rules
-- `findings.yaml` — Optional YAML format (requires `pip install -e ".[reporting]"`)
-- `dashboard.html` — Self-contained interactive HTML dashboard
+- `findings.yaml` — Optional YAML format with v1.0.0 metadata wrapper
+- `dashboard.html` — Self-contained interactive HTML dashboard (dual-mode for >1000 findings)
 - `findings.sarif` — SARIF 2.1.0 for code scanning platforms (GitHub, GitLab, etc.)
+- `findings.csv` — v1.0.0: Spreadsheet-friendly CSV export with metadata header
 - `SUPPRESSIONS.md` — Summary of suppressed findings (when `jmo.suppress.yml` is present)
+- `COMPLIANCE_SUMMARY.md` — Multi-framework compliance mapping
+- `PCI_DSS_COMPLIANCE.md` — PCI DSS 4.0 specific report
+- `attack-navigator.json` — MITRE ATT&CK Navigator layer
 - `timings.json` — Profiling data (when `--profile` flag used)
+
+**v1.0.0 Changes:**
+
+- **Metadata wrapper:** All formats include `{"meta": {...}, "findings": [...]}`
+- **CSV reporter:** New format for Excel/spreadsheet analysis
+- **Dual-mode HTML:** <1000 findings = inline (fast), >1000 findings = external JSON (prevents browser freeze)
+- **Performance:** 95% reduction in dashboard load time for large scans (30-60s → <2s)
 
 ### Configuration
 
@@ -618,10 +960,26 @@ Report phase writes to `<results_dir>/summaries/`:
 ```yaml
 default_profile: balanced
 tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
-outputs: [json, md, yaml, html, sarif]
+outputs: [json, md, yaml, html, sarif, csv]  # v1.0.0: Added CSV
 fail_on: ""  # Optional: CRITICAL/HIGH/MEDIUM/LOW/INFO
 retries: 0   # Global retry count for flaky tools
 threads: 4   # Default parallelism
+
+# v0.9.0: Email notifications
+email:
+  enabled: false
+  provider: resend  # Only provider supported
+  api_key: ${RESEND_API_KEY}
+  from: "security@example.com"
+  to: ["team@example.com"]
+  on_scan_complete: true
+  on_threshold_exceeded: true
+
+# v0.9.0: Scheduled scans
+schedule:
+  enabled: false
+  interval: "0 2 * * *"  # Daily at 2 AM (cron format)
+  profile: "balanced"
 
 profiles:
   fast:
@@ -658,6 +1016,7 @@ per_tool:
   trivy:
     flags: ["--no-progress"]
     timeout: 1200
+
 ```
 
 **jmo.suppress.yml** (optional) filters findings:
@@ -671,14 +1030,22 @@ suppressions:
   - ruleId: "G101"
     path: "tests/*"
     reason: "Test files excluded"
+
 ```
 
 ## Testing Strategy
 
 - **Unit tests** (`tests/unit/`): Core logic, config parsing, helpers
 - **Adapter tests** (`tests/adapters/`): Parse fabricated tool JSON fixtures, validate CommonFinding mapping
-- **Reporter tests** (`tests/reporters/`): Verify output formats (JSON/MD/YAML/HTML/SARIF)
+- **Reporter tests** (`tests/reporters/`): Verify output formats (JSON/MD/YAML/HTML/SARIF/CSV)
 - **Integration tests** (`tests/integration/`): End-to-end CLI flows, profile/thread behavior, CI gating
+- **v1.0.0 feature tests:**
+  - `tests/unit/test_history_db.py` — SQLite storage (100% coverage)
+  - `tests/unit/test_diff_engine.py` — Diff engine (96% coverage)
+  - `tests/unit/test_trend_analyzer.py` — Trend analysis (100% coverage)
+  - `tests/unit/test_developer_attribution.py` — Developer tracking (100% coverage)
+  - `tests/reporters/test_diff_*_reporter.py` — Diff output formats (100% coverage)
+  - `tests/reporters/test_csv_reporter.py` — CSV export (100% coverage)
 
 **Test Patterns:**
 
@@ -686,6 +1053,7 @@ suppressions:
 - Fabricate minimal tool JSONs to test adapters
 - Mock subprocess calls when testing tool invocation logic
 - Assert on specific exit codes for `--fail-on` thresholds
+- **v1.0.0:** Mock `time.time()` for timing-dependent tests (trend analysis)
 
 **Coverage:**
 
@@ -819,6 +1187,54 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
    - Requires secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (PAT with read/write/delete scope)
    - Only run on version tags: `if: startsWith(github.ref, 'refs/tags/v')`
 
+**v1.0.0 CI/CD Integration Examples:**
+
+**GitHub Actions - Diff on PR:**
+
+```yaml
+- name: Scan baseline (main branch)
+  run: jmo scan --repo . --results-dir results-baseline
+
+- name: Scan current (PR branch)
+  run: jmo scan --repo . --results-dir results-current
+
+- name: Generate diff
+  run: jmo diff results-baseline/ results-current/ --format md > diff.md
+
+- name: Post diff as PR comment
+  uses: actions/github-script@v6
+  with:
+    script: |
+      const fs = require('fs');
+      const diff = fs.readFileSync('diff.md', 'utf8');
+      github.rest.issues.createComment({
+        issue_number: context.issue.number,
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        body: diff
+      });
+
+```
+
+**GitLab CI - Trend Analysis with Cache:**
+
+```yaml
+security-scan:
+  script:
+    - jmo scan --repo . --profile-name balanced
+    - jmo trends analyze --export prometheus
+  cache:
+    key: ${CI_PROJECT_ID}
+    paths:
+      - .jmo/history.db
+  artifacts:
+    paths:
+      - results/
+      - .jmo/history.db
+    expire_in: 30 days
+
+```
+
 ## Common Development Tasks
 
 ### Adding a New Tool Adapter
@@ -839,26 +1255,40 @@ When working with release.yml or ci.yml workflows, apply these proven fixes:
 ### Modifying Output Formats
 
 - Reporters live in `scripts/core/reporters/`
-- JSON/Markdown: `basic_reporter.py`
-- YAML: `yaml_reporter.py` (requires PyYAML)
-- HTML: `html_reporter.py` (self-contained template)
+- JSON/Markdown: `basic_reporter.py` (v1.0.0 metadata wrapper)
+- YAML: `yaml_reporter.py` (v1.0.0 metadata wrapper)
+- HTML: `html_reporter.py` (v1.0.0 dual-mode: inline vs external)
 - SARIF: `sarif_reporter.py` (maps to SARIF 2.1.0 schema)
+- CSV: `csv_reporter.py` (v1.0.0: spreadsheet export)
+- **v1.0.0:** All reporters must include metadata wrapper
 - Update `scripts/cli/jmo.py:cmd_report()` to call new reporter
 - Add tests in `tests/reporters/`
 
 ### Changing CLI Behavior
 
 - Main CLI: `scripts/cli/jmo.py`
-- Subcommands: `scan`, `report`, `ci`
+- Subcommands: `scan`, `report`, `ci`, `diff`, `history`, `trends`, `schedule`, `adapters`, `wizard`, `setup`
+- **v0.9.0 refactoring:** Orchestrators extracted to separate files:
+  - `scan_orchestrator.py` — Scan orchestration
+  - `report_orchestrator.py` — Report orchestration
+  - `ci_orchestrator.py` — CI orchestration
+- **v1.0.0 new commands:**
+  - `diff_commands.py` — Diff CLI
+  - `history_commands.py` — Historical storage CLI
+  - `trend_commands.py` — Trend analysis CLI
 - When modifying flags/behavior:
-  1. Update `parse_args()` function
+  1. Update `parse_args()` function in `jmo.py`
   2. Update `README.md`, `QUICKSTART.md`, `SAMPLE_OUTPUTS.md`
   3. Add/update tests in `tests/cli/` and `tests/integration/`
 
 ### Updating Dependencies
 
-- **Runtime deps:** Minimal; declared in `pyproject.toml` under `[project.dependencies]` (currently empty)
-- **Optional deps:** `[project.optional-dependencies]` for reporters (PyYAML, jsonschema)
+- **Runtime deps:** Declared in `pyproject.toml` under `[project.dependencies]`
+  - `PyYAML>=6.0` (required for jmo.yml)
+  - `croniter>=1.0` (v0.9.0: schedule management)
+  - `requests>=2.31.0` (v0.9.0: EPSS/KEV integration)
+  - `scipy>=1.11.0` (v1.0.0: Mann-Kendall statistical test)
+- **Optional deps:** `[project.optional-dependencies]` for reporters (jsonschema), email (resend), MCP (mcp[cli])
 - **Dev deps:** `requirements-dev.in` → compile with `make deps-compile` → commit `requirements-dev.txt`
 - **External tools:** Install via `make tools` (see `scripts/dev/install_tools.sh`)
 - **Pre-commit hooks:** Update with `pre-commit autoupdate`
@@ -962,6 +1392,7 @@ If you want to use a specific skill explicitly:
 
 ```text
 "Use the jmo-profile-optimizer skill to analyze timings.json"
+
 ```
 
 This ensures the exact skill is used, even if the pattern might match multiple skills.
@@ -1003,6 +1434,7 @@ For independent tasks, use Task tool parallelism to achieve 2-3x speedup.
 1. jmo-adapter-generator (2-3 hours)
 2. jmo-test-fabricator (1-2 hours)
 3. jmo-documentation-updater (30-45 min)
+
 ```
 
 **Parallel (New):** 3-4 hours (2x speedup)
@@ -1014,6 +1446,7 @@ Launch 3 agents in parallel:
 - Agent 3: jmo-documentation-updater (docs)
 
 Wait for all to complete → integrate results
+
 ```
 
 ### When to Use Parallel
@@ -1044,6 +1477,7 @@ Fork:
 Join: Combine results
   ↓
 jmo-refactoring-assistant (refactor with full context)
+
 ```
 
 #### Pattern 2: Pipeline (Sequential with Parallel Stages)
@@ -1058,6 +1492,7 @@ Stage 2 (parallel):
   - Agent 2: jmo-documentation-updater (document feature)
   ↓
 Integration: Merge results
+
 ```
 
 **Full Parallel Workflows:** See [dev-only/hybrid-implementation-files/13-parallel-workflows.md](dev-only/hybrid-implementation-files/13-parallel-workflows.md)
@@ -1131,14 +1566,16 @@ JMo Security uses a **hybrid architecture** combining skills (domain-specific wo
 ```text
 coverage-gap-finder (detect gaps) → jmo-test-fabricator (write tests)
 doc-sync-checker (detect drift) → jmo-documentation-updater (fix docs)
+
 ```
 
 #### Pattern 2: Skill → Agent → Skill (Safe Refactoring)
 
-```text
+```bash
 User: "Refactor cmd_scan"
   → dependency-analyzer (analyze impact)
   → jmo-refactoring-assistant (refactor safely)
+
 ```
 
 ### Proactive Agent Triggers
@@ -1164,133 +1601,161 @@ User: "Refactor cmd_scan"
 
 **Full Agent Policy:** See [dev-only/hybrid-implementation-files/03-agent-usage-policy.md](dev-only/hybrid-implementation-files/03-agent-usage-policy.md)
 
-## Memory System (.jmo/memory/)
+## Code-as-Memory System (.mcp-skills/)
 
-JMo Security uses a **lightweight JSON-based memory system** to persist learning across sessions, reducing repeated analysis and speeding up common workflows.
+JMo Security uses a **code-as-memory approach** where your codebase IS the memory. Instead of storing abstractions in JSON files, Claude analyzes actual implementation patterns directly from your code.
 
-### How Memory Works
+### Philosophy: Your Codebase is the Memory
 
-**Automated (80%):**
+**Why this approach:**
 
-- Claude automatically queries memory before re-analyzing patterns
-- Stores findings after skill completion
-- Retrieves cached results for common queries
-- Updates namespace-scoped data
+- ✅ **Always up-to-date** - Code is the source of truth, not stale summaries
+- ✅ **Zero maintenance** - No manual memory updates needed
+- ✅ **Higher fidelity** - Actual patterns > summarized memories
+- ✅ **Natural workflow** - Already how you develop (copy-modify existing adapters)
+- ✅ **98.7% context reduction** - Load only what's needed via MCP
 
-**Manual (20%):**
+**Traditional memory problems solved:**
 
-- Review memory contents: `cat .jmo/memory/adapters/snyk.json`
-- Prune outdated entries: `rm .jmo/memory/adapters/deprecated-tool.json`
-- Override cached data: Edit JSON if analysis was incorrect
-- Analyze trends: `jq '.success_rate' .jmo/memory/*/*.json`
+- ❌ Old memory system: 4 files created in 2 weeks (unused)
+- ❌ Manual updates: Forgot to store patterns after implementation
+- ❌ Stale data: Patterns outdated after refactoring
+- ✅ **New approach:** Always accurate, zero effort
 
-### Memory Directory Structure
-
-```text
-.jmo/memory/
-├── adapters/           # Tool adapter patterns
-│   ├── snyk.json
-│   ├── trivy.json
-│   └── semgrep.json
-├── compliance/         # CWE → framework mappings
-│   ├── cwe-79.json
-│   └── cwe-89.json
-├── profiles/           # Performance optimization history
-│   ├── fast-optimization.json
-│   └── balanced-optimization.json
-├── target-types/       # Multi-target patterns
-│   ├── aws.json
-│   └── npm.json
-├── refactoring/        # Code refactoring decisions
-│   └── cmd_scan.json
-└── security/           # Security fix patterns
-    ├── csrf-protection.json
-    └── path-traversal.json
-```
-
-### What's Stored
-
-✅ **Stored:**
-
-- Tool output patterns (e.g., "Snyk uses `vulnerabilities[]` array")
-- Common pitfalls (e.g., "Trivy exits code 1 on findings")
-- Performance metrics (e.g., "Semgrep averages 45s on 10k LOC")
-- Compliance mappings (e.g., "CWE-79 → OWASP A03:2021")
-
-❌ **NOT Stored:**
-
-- Actual security findings (those go in `results/`)
-- Secrets or credentials
-- Repository names or code snippets
-- Personal data
-
-### Example: Automated Memory Usage
+### MCP Skills Directory
 
 ```bash
-# User: "Add support for Snyk scanner"
+.mcp-skills/
+├── README.md                       # Skills overview
+├── adapter-pattern-analyzer.py     # Extract patterns from existing adapters
+├── test-pattern-matcher.py         # Find test structures to reuse
+├── quick-coverage.py               # Fast coverage check without full suite
+└── (add more skills as needed)
 
-# Claude automatically:
-# 1. Checks: .jmo/memory/adapters/snyk.json (not found)
-# 2. Uses jmo-adapter-generator skill (full workflow)
-# 3. Stores: .jmo/memory/adapters/snyk.json
-#    {
-#      "tool": "snyk",
-#      "output_format": "results[].vulnerabilities[]",
-#      "exit_codes": {"0": "clean", "1": "findings", "2": "error"},
-#      "common_pitfalls": ["Requires auth token", "Large repos timeout"],
-#      "last_updated": "2025-10-21"
-#    }
-
-# Next time: "Update Snyk adapter for v2.0"
-# Claude retrieves .jmo/memory/adapters/snyk.json
-# - Already knows exit codes (skip research)
-# - Already has patterns (faster updates)
-# - 40% time savings
 ```
 
-### Memory Integration by Skill
+### How It Works
 
-| Skill | Memory Namespace | Query Pattern | Time Savings |
-|-------|-----------------|---------------|--------------|
-| jmo-adapter-generator | adapters/ | "Have I added this tool?" | 40% |
-| jmo-compliance-mapper | compliance/ | "What frameworks map?" | 60% |
-| jmo-profile-optimizer | profiles/ | "What optimizations worked?" | 50% |
-| jmo-refactoring-assistant | refactoring/ | "What refactorings done?" | 30% |
-| jmo-security-hardening | security/ | "How did I fix this CWE?" | 45% |
-
-### Manual Memory Management
-
-**Review memory:**
+**1. Pattern Analysis (Automatic)**
 
 ```bash
-cat .jmo/memory/compliance/cwe-79.json
+## When you ask: "Add Snyk scanner"
+## Claude automatically runs:
+python3 .mcp-skills/adapter-pattern-analyzer.py trivy
+
+## Output: Real patterns from actual code
+{
+  "parse_method": {"parameters": "output_path: Path", "return_type": "list[Finding]"},
+  "finding_creation": ["schemaVersion=\"1.2.0\", id=\"\", ruleId=..."],
+  "error_handling": ["try-except blocks", "file existence check"],
+  "imports": ["from scripts.core.common_finding import (", ...]
+}
+
+## Claude uses ACTUAL trivy_adapter.py patterns to create snyk_adapter.py
+
 ```
 
-**Prune old entries (quarterly cleanup):**
+**2. Test Pattern Reuse**
 
 ```bash
-# Remove deprecated tool patterns
-rm .jmo/memory/adapters/gitleaks.json  # Tool removed from JMo
+## Claude runs:
+python3 .mcp-skills/test-pattern-matcher.py trivy
 
-# Future: Memory CLI
-jmotools memory prune --older-than 180d
+## Output: Real test structure
+{
+  "test_count": 12,
+  "fixtures": ["tmp_path", "JSON fixtures: trivy-vuln.json"],
+  "mock_patterns": ["@patch: Path.exists", "@patch: json.load"],
+  "coverage_estimate": "85%+ (comprehensive)"
+}
+
+## Uses actual test_trivy_adapter.py as template
+
 ```
 
-**Override incorrect data:**
+**3. Quick Validation**
 
 ```bash
-# If Claude misidentified a pattern, edit JSON directly
-vim .jmo/memory/adapters/tool.json
+## Fast coverage check after writing new adapter
+python3 .mcp-skills/quick-coverage.py scripts/core/adapters/snyk_adapter.py
+
+## Output:
+{
+  "coverage": "87.5%",
+  "files_analyzed": 1
+}
+
+```
+
+### Example Workflow
+
+```bash
+You: "Add Snyk scanner"
+
+Claude:
+  1. python3 .mcp-skills/adapter-pattern-analyzer.py trivy
+     → Extracts: plugin decorator, Finding creation, error handling
+  2. Reads scripts/core/adapters/trivy_adapter.py directly
+  3. Creates scripts/core/adapters/snyk_adapter.py with ACTUAL patterns
+  4. python3 .mcp-skills/test-pattern-matcher.py trivy
+     → Extracts: fixtures, mocks, assertions
+  5. Reads tests/adapters/test_trivy_adapter.py directly
+  6. Creates tests/adapters/test_snyk_adapter.py with ACTUAL test structure
+  7. python3 .mcp-skills/quick-coverage.py scripts/core/adapters/snyk_adapter.py
+     → Validates: 85%+ coverage achieved
+
+Result: 40-60% time savings, 100% accurate patterns
+
+```
+
+### Benefits Over JSON Memory
+
+| Aspect | Old JSON Memory | New Code-as-Memory |
+|--------|----------------|-------------------|
+| **Accuracy** | Summaries (stale) | Source code (always current) |
+| **Maintenance** | Manual edits | Zero (auto-analysis) |
+| **Usage Rate** | 0% (unused) | 95%+ (natural workflow) |
+| **Time Savings** | 0% (never used) | 40-60% (proven) |
+| **Context Overhead** | Medium | Ultra-low (98.7% reduction) |
+| **Fidelity** | Abstractions | Actual implementations |
+
+### Adding New Skills
+
+Create Python scripts in `.mcp-skills/` that analyze your codebase:
+
+```python
+#!/usr/bin/env python3
+"""
+Example: Compliance Pattern Finder
+
+Finds how existing code maps CWEs to compliance frameworks.
+"""
+import json
+from pathlib import Path
+
+def find_compliance_mappings(cwe_id: str):
+    # Read actual compliance_mapper.py code
+    mapper_code = Path("scripts/core/compliance_mapper.py").read_text()
+
+    # Extract real mappings (not summaries)
+    # ... analysis logic ...
+
+    return {"cwe": cwe_id, "frameworks": [...]}
+
+if __name__ == "__main__":
+    # Use from command line or Claude calls it automatically
+    pass
+
 ```
 
 ### Privacy & Security
 
-- Memory is **gitignored** (never committed)
-- Stored in `.jmo/memory/` (local only)
-- No secrets or PII
-- Safe to delete (regenerates on next use)
+- Skills are **gitignored** in `.mcp-skills/` (optional - can commit if useful)
+- No secrets or PII stored
+- Reads only your local codebase
+- Safe to delete (just helper scripts)
 
-**Full Memory Guide:** See [dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md](dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md)
+**Note:** The `.jmo/` directory still exists for local workspace (scan history via `.jmo/history.db`), but memory system removed.
 
 ## Pre/Post-Operation Hooks
 
@@ -1323,11 +1788,12 @@ Add to `.claude/hooks.json`:
     "description": "Run release-readiness agent before tagging"
   }
 }
+
 ```
 
 ### Hook Execution Flow
 
-```text
+```bash
 User: "Add Snyk adapter"
   ↓
 pre-task hook: make verify-env
@@ -1343,6 +1809,7 @@ post-edit hook: make fmt-file scripts/core/adapters/snyk_adapter.py
 post-task hook: pytest --cov=scripts/core/adapters/snyk_adapter.py
   ↓
 Done (with automated quality checks)
+
 ```
 
 ### Benefits
@@ -1355,14 +1822,15 @@ Done (with automated quality checks)
 ### When to Disable Hooks Temporarily
 
 ```bash
-# For rapid prototyping (skip formatting)
+## For rapid prototyping (skip formatting)
 export SKIP_HOOKS=post-edit
 
-# For large refactors (skip tests until done)
+## For large refactors (skip tests until done)
 export SKIP_HOOKS=post-task
 
-# Re-enable
+## Re-enable
 unset SKIP_HOOKS
+
 ```
 
 **Full Hooks Guide:** See [dev-only/hybrid-implementation-files/10-hooks-configuration.md](dev-only/hybrid-implementation-files/10-hooks-configuration.md)
@@ -1394,7 +1862,7 @@ unset SKIP_HOOKS
 - No shell=True in subprocess calls (use list args)
 - Validate all file paths from user input
 
-### Results Directory Layout (v0.6.0+)
+### Results Directory Layout (v1.0.0)
 
 ```text
 results/
@@ -1422,21 +1890,47 @@ results/
 │   └── <context>_<namespace>/
 │       └── trivy.json
 └── summaries/                 # Aggregated reports (all targets)
-    ├── findings.json          # Unified findings from all target types
+    ├── findings.json          # v1.0.0: Unified findings with metadata wrapper
     ├── SUMMARY.md             # Summary with severity counts
-    ├── findings.yaml          # Optional YAML format
-    ├── dashboard.html         # Interactive dashboard
+    ├── findings.yaml          # v1.0.0: YAML format with metadata wrapper
+    ├── dashboard.html         # v1.0.0: Interactive dashboard (dual-mode)
     ├── findings.sarif         # SARIF 2.1.0 format
+    ├── findings.csv           # v1.0.0: CSV export for spreadsheets
     ├── SUPPRESSIONS.md        # Suppression summary
     ├── COMPLIANCE_SUMMARY.md  # v0.5.1: Multi-framework compliance
     ├── PCI_DSS_COMPLIANCE.md  # v0.5.1: PCI DSS report
     ├── attack-navigator.json  # v0.5.1: MITRE ATT&CK Navigator
     └── timings.json           # Performance profiling (when --profile used)
+
 ```
 
 **Important:** Never change default paths without updating all tests and documentation.
 
-**v0.6.0 Note:** `normalize_and_report.py` automatically scans all 6 target directories. Findings are deduplicated across all target types by fingerprint ID.
+**v1.0.0 Note:** `normalize_and_report.py` automatically scans all 6 target directories. Findings are deduplicated across all target types by fingerprint ID. All outputs include v1.0.0 metadata wrapper.
+
+### SQLite Database Layout (v1.0.0)
+
+```bash
+.jmo/
+└── history.db              # SQLite database
+    ├── schema_version      # Migration tracking
+    ├── scans               # Scan metadata (commit, profile, tools, counts)
+    ├── findings            # Individual findings (fingerprint-based)
+    └── trends              # Pre-computed trend statistics
+
+```
+
+**Critical Docker Requirement:**
+
+```bash
+## MUST mount .jmo/history.db for persistence
+docker run --rm \
+  -v $PWD/.jmo:/scan/.jmo \
+  -v $PWD:/scan \
+  -v $PWD/results:/results \
+  jmo-security:latest scan --repo /scan
+
+```
 
 ## Release Process
 
@@ -1447,10 +1941,11 @@ results/
 Use the automated-release workflow for one-click releases:
 
 ```bash
-# Navigate to GitHub Actions → Automated Release → Run workflow
-# Select:
-#   - Version bump: patch/minor/major
-#   - Changelog entry: "Brief summary of changes"
+## Navigate to GitHub Actions → Automated Release → Run workflow
+## Select:
+##   - Version bump: patch/minor/major
+##   - Changelog entry: "Brief summary of changes"
+
 ```
 
 **What it does automatically:**
@@ -1531,6 +2026,7 @@ The project uses automated weekly tool updates to ensure all security tools stay
 - Run `make test` locally with `--maxfail=1` to stop at first failure
 - Check coverage with `pytest --cov --cov-report=term-missing`
 - Ensure `requirements-dev.txt` is up to date: `make deps-compile`
+- **v1.0.0:** Check for timing-dependent tests (trend analysis, diff engine)
 
 ### Tool Not Found
 
@@ -1552,6 +2048,20 @@ The project uses automated weekly tool updates to ensure all security tools stay
 - Verify `requirements-dev.txt` matches `requirements-dev.in`
 - Pre-commit checks must pass (actionlint, yamllint, etc.)
 
+### SQLite Database Issues (v1.0.0)
+
+- **Database locked:** Close other connections, use `jmo history vacuum`
+- **Corrupted database:** Run `jmo history verify` to check integrity
+- **Permission denied:** Ensure `.jmo/` directory is writable
+- **Docker persistence:** Verify volume mount `-v $PWD/.jmo:/scan/.jmo`
+
+### Diff/Trend Analysis Issues (v1.0.0)
+
+- **No historical data:** Ensure scans stored in SQLite (`jmo history list`)
+- **Diff shows no changes:** Verify fingerprint stability (check `common_finding.py`)
+- **Trend analysis fails:** Check Python 3.10+ (scipy requirement)
+- **Statistical test fails:** Need ≥7 data points for Mann-Kendall test
+
 ## Additional Resources
 
 - **Claude Skills Index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md)** — Complete skill catalog with workflows
@@ -1561,6 +2071,11 @@ The project uses automated weekly tool updates to ensure all security tools stay
 - Testing: [TEST.md](TEST.md)
 - Release Process: [docs/RELEASE.md](docs/RELEASE.md)
 - **Version Management: [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** (v0.6.1+)
+- **v1.0.0 Feature Plans:**
+  - SQLite Storage: [dev-only/1.0.0/archive/SQLITE_STORAGE_COMPLETE_PLAN.md](dev-only/1.0.0/archive/SQLITE_STORAGE_COMPLETE_PLAN.md)
+  - Machine-Readable Diffs: [dev-only/1.0.0/archive/DESIGN_MACHINE_READABLE_DIFFS.md](dev-only/1.0.0/archive/DESIGN_MACHINE_READABLE_DIFFS.md)
+  - Trend Analysis: [dev-only/1.0.0/archive/TREND_ANALYSIS_COMPLETE_PLAN.md](dev-only/1.0.0/archive/TREND_ANALYSIS_COMPLETE_PLAN.md)
+  - Output Formats: [dev-only/1.0.0/archive/OUTPUT_FORMAT_REVIEW_COMPLETE_PLAN.md](dev-only/1.0.0/archive/OUTPUT_FORMAT_REVIEW_COMPLETE_PLAN.md)
 - CommonFinding Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
 - Copilot Instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
 - Project Homepage: [jmotools.com](https://jmotools.com)
@@ -1589,13 +2104,14 @@ The project uses automated weekly tool updates to ensure all security tools stay
 **When temporary documents ARE needed:**
 
 ```bash
-# Store drafts and analysis in gitignored locations
+## Store drafts and analysis in gitignored locations
 echo "analysis notes" > .claude/draft-analysis.md
 echo "temp script" > dev-only/test-script.sh
 echo "results" > /tmp/scan-output.json
 
-# These files NEVER appear in git status
+## These files NEVER appear in git status
 git status  # Clean working tree
+
 ```
 
 ### When to Create Documents
@@ -1620,14 +2136,15 @@ git status  # Clean working tree
 **When documents ARE created, use the jmo-documentation-updater skill to manage them:**
 
 ```bash
-# After creating or modifying documentation
-# The skill will:
-# 1. Check for duplicates and consolidate
-# 2. Verify against Perfect Documentation Structure
-# 3. Update docs/index.md with new links
-# 4. Run markdownlint and fix ALL issues
-# 5. Organize into appropriate locations
-# 6. Archive or delete obsolete docs
+## After creating or modifying documentation
+## The skill will:
+## 1. Check for duplicates and consolidate
+## 2. Verify against Perfect Documentation Structure
+## 3. Update docs/index.md with new links
+## 4. Run markdownlint and fix ALL issues
+## 5. Organize into appropriate locations
+## 6. Archive or delete obsolete docs
+
 ```
 
 **Invoke the skill:**
@@ -1638,6 +2155,7 @@ Use the jmo-documentation-updater skill to:
 - Check for duplicate content in [docs]
 - Consolidate fragmented documentation
 - Archive outdated [doc-name].md
+
 ```
 
 **The skill ensures:**
@@ -1662,6 +2180,7 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 
 ### Snyk (SCA)
 ...
+
 ```
 
 **Rationale:**
@@ -1708,19 +2227,21 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
     ├── index.md                       # Documentation hub with all links
     ├── USER_GUIDE.md                  # Comprehensive reference guide
     ├── DOCKER_README.md               # Docker deep-dive (variants, CI/CD, troubleshooting)
-    ├── docs/DOCKER_README.md # Complete beginner Docker tutorial
     ├── WIZARD_IMPLEMENTATION.md       # Wizard implementation details (for contributors)
     ├── RELEASE.md                     # Release process for maintainers
     ├── MCP_SETUP.md                   # MCP server setup instructions
     ├── examples/
     │   ├── README.md                  # Examples index
     │   ├── wizard-examples.md         # Wizard workflows and patterns
+    │   ├── diff-workflows.md          # v1.0.0: Diff usage examples
+    │   ├── ci-cd-trends.md            # v1.0.0: Trend analysis CI/CD
     │   ├── scan_from_tsv.md           # TSV scanning tutorial
     │   └── github-actions-docker.yml  # CI/CD examples
     ├── screenshots/
     │   └── README.md                  # Screenshot capture guide
     └── schemas/
         └── common_finding.v1.json     # CommonFinding data schema
+
 ```
 
 ### User Journey-Based Documentation
@@ -1728,7 +2249,7 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 **Entry points based on user persona:**
 
 1. **Complete Beginner** (Never used security tools)
-   - Start: [docs/DOCKER_README.md#quick-start-absolute-beginners](docs/DOCKER_README.md#quick-start-absolute-beginners) OR run `jmotools wizard`
+   - Start: [docs/DOCKER_README.md#quick-start-absolute-beginners](docs/DOCKER_README.md#quick-start-absolute-beginners) OR run `jmo wizard`
    - Reason: Zero-installation path with step-by-step guidance
    - Next: [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
 
@@ -1774,6 +2295,7 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 - Content: Configuration reference, CLI synopsis, profiles, suppressions, CI troubleshooting
 - Length: Long (current length appropriate)
 - Updates: When new CLI flags, config options, or features added
+- **v1.0.0:** Added sections for diff, history, trend analysis
 
 **docs/DOCKER_README.md:**
 
@@ -1781,13 +2303,7 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 - Content: Image variants, CI/CD patterns, troubleshooting, security considerations
 - Length: Medium-long
 - Updates: When new Docker images, variants, or CI examples added
-
-**docs/DOCKER_README.md#quick-start-absolute-beginners:**
-
-- Purpose: Hand-holding tutorial for absolute beginners
-- Content: Docker installation, first scan, understanding results, common scenarios
-- Length: Long (step-by-step requires detail)
-- Updates: When beginner workflows or Docker commands change
+- **v1.0.0:** Added volume mounting requirements for `.jmo/history.db`
 
 **docs/examples/wizard-examples.md:**
 
@@ -1795,6 +2311,21 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 - Content: Interactive mode, non-interactive mode, artifact generation, common patterns
 - Length: Medium
 - Updates: When wizard features or flags added
+- **v1.0.0:** Added post-scan trend analysis prompts
+
+**docs/examples/diff-workflows.md (v1.0.0):**
+
+- Purpose: Machine-readable diff usage examples
+- Content: PR review workflows, regression detection, CI/CD integration
+- Length: Medium
+- Updates: When diff features or formats added
+
+**docs/examples/ci-cd-trends.md (v1.0.0):**
+
+- Purpose: Trend analysis CI/CD integration
+- Content: GitHub Actions, GitLab CI, cache strategies, artifact persistence
+- Length: Medium
+- Updates: When trend commands or export formats added
 
 **docs/index.md:**
 
@@ -1822,7 +2353,7 @@ echo "# Snyk Setup" > docs/SNYK_SETUP.md
 
 **When to update documentation:**
 
-1. **New Major Feature** (Docker images, Wizard, etc.)
+1. **New Major Feature** (SQLite storage, Diff, Trend Analysis)
    - Update: README.md, QUICKSTART.md, docs/index.md, relevant deep-dive docs
    - Add: Examples in docs/examples/ if workflow patterns emerge
    - Update: CHANGELOG.md with user-facing changes
@@ -1885,14 +2416,27 @@ When adding/updating documentation:
 
 | File | Purpose |
 |------|---------|
-| `scripts/cli/jmo.py` | Main CLI entry point (scan/report/ci) |
-| `scripts/cli/jmotools.py` | Wrapper commands (wizard, fast, balanced, full, setup) |
+| `scripts/cli/jmo.py` | Main CLI entry point (scan/report/ci/diff/history/trends) |
 | `scripts/cli/wizard.py` | Interactive wizard implementation |
+| `scripts/cli/diff_commands.py` | Diff command implementations (v1.0.0) |
+| `scripts/cli/history_commands.py` | History command implementations (v1.0.0) |
+| `scripts/cli/trend_commands.py` | Trend analysis commands (v1.0.0) |
+| `scripts/cli/trend_formatters.py` | Trend output formatters (v1.0.0) |
 | `scripts/core/normalize_and_report.py` | Aggregation engine, deduplication, enrichment |
 | `scripts/core/config.py` | Config loader for jmo.yml |
 | `scripts/core/common_finding.py` | CommonFinding schema and fingerprinting |
-| `scripts/core/adapters/*.py` | Tool output parsers |
-| `scripts/core/reporters/*.py` | Output formatters (JSON/MD/YAML/HTML/SARIF) |
+| `scripts/core/history_db.py` | SQLite storage for scan history (v1.0.0) |
+| `scripts/core/diff_engine.py` | Diff computation engine (v1.0.0) |
+| `scripts/core/trend_analyzer.py` | Statistical trend analysis (v1.0.0) |
+| `scripts/core/trend_exporters.py` | Trend export formats (v1.0.0) |
+| `scripts/core/developer_attribution.py` | Git blame integration (v1.0.0) |
+| `scripts/core/adapters/*.py` | Tool output parsers (plugin architecture) |
+| `scripts/core/reporters/*.py` | Output formatters (JSON/MD/YAML/HTML/SARIF/CSV) |
+| `scripts/core/reporters/diff_json_reporter.py` | JSON diff reporter (v1.0.0) |
+| `scripts/core/reporters/diff_md_reporter.py` | Markdown diff reporter (v1.0.0) |
+| `scripts/core/reporters/diff_html_reporter.py` | HTML diff reporter (v1.0.0) |
+| `scripts/core/reporters/diff_sarif_reporter.py` | SARIF diff reporter (v1.0.0) |
+| `scripts/core/reporters/csv_reporter.py` | CSV reporter (v1.0.0) |
 | `scripts/dev/update_versions.py` | **Version management automation (v0.6.1+)** |
 | `jmo.yml` | Main configuration file |
 | `versions.yaml` | **Central tool version registry (v0.6.1+)** |
@@ -1904,3 +2448,6 @@ When adding/updating documentation:
 | `.github/workflows/release.yml` | Release automation: PyPI + Docker builds |
 | `.github/workflows/version-check.yml` | **Weekly version consistency checks (v0.6.1+)** |
 | `.github/dependabot.yml` | **Automated dependency updates (v0.6.1+)** |
+| `.jmo/history.db` | **SQLite historical storage (v1.0.0)** |
+| `dev-only/1.0.0/STATUS.md` | **v1.0.0 development progress tracker** |
+| `dev-only/1.0.0/archive/*.md` | **Completed feature documentation** |
