@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 from scripts.core.policy_engine import PolicyEngine, PolicyResult, PolicyMetadata
 
@@ -58,7 +58,7 @@ def policy_evaluation_menu(
         return {}
 
     # Load policy metadata
-    policies_with_metadata = []
+    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]] = []
     for policy_path in builtin_policies:
         try:
             metadata = engine.get_metadata(policy_path)
@@ -66,12 +66,12 @@ def policy_evaluation_menu(
         except Exception as e:
             logger.debug(f"Failed to load metadata for {policy_path.name}: {e}")
             # Use fallback metadata
-            metadata = PolicyMetadata(
-                name=policy_path.stem,
-                version="1.0.0",
-                description=f"Policy: {policy_path.stem}",
-            )
-            policies_with_metadata.append((policy_path, metadata))
+            metadata_dict: Dict[str, Any] = {
+                "name": policy_path.stem,
+                "version": "1.0.0",
+                "description": f"Policy: {policy_path.stem}",
+            }
+            policies_with_metadata.append((policy_path, metadata_dict))
 
     # Auto-detect recommended policies
     recommended = _detect_recommended_policies(findings, profile, policies_with_metadata)
@@ -85,7 +85,7 @@ def policy_evaluation_menu(
         is_recommended = policy_path in recommended
         marker = "✨" if is_recommended else "  "
         tag = " (RECOMMENDED)" if is_recommended else ""
-        print(f"  {i}. {marker} {metadata.name:22} {metadata.description}{tag}")
+        print(f"  {i}. {marker} {metadata.get('name', policy_path.stem):22} {metadata.get('description', '')}{tag}")
 
     print("\nOther options:")
     print(f"  a. Select all recommended ({len(recommended)} policies)")
@@ -109,13 +109,12 @@ def policy_evaluation_menu(
 
     # Evaluate selected policies
     print(f"\n🔍 Evaluating {len(selected_policies)} policies...")
-    findings_path = results_dir / "summaries" / "findings.json"
 
     results = {}
     for policy_path in selected_policies:
         policy_name = policy_path.stem
         try:
-            result = engine.evaluate_policy(policy_path, findings_path)
+            result = engine.evaluate(findings, policy_path)
             results[policy_name] = result
 
             if result.passed:
@@ -144,7 +143,7 @@ def policy_evaluation_menu(
 def _detect_recommended_policies(
     findings: List[Dict[str, Any]],
     profile: str,
-    policies_with_metadata: List[tuple[Path, PolicyMetadata]],
+    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]],
 ) -> List[Path]:
     """
     Auto-detect recommended policies based on scan findings and profile.
@@ -167,13 +166,13 @@ def _detect_recommended_policies(
     recommended = []
 
     # Build policy name → path mapping
-    policy_map = {metadata.name: path for path, metadata in policies_with_metadata}
+    policy_map = {metadata.get("name", path.stem): path for path, metadata in policies_with_metadata}
 
     # Profile-based defaults
     profile_defaults = {
         "fast": ["zero-secrets"],
         "balanced": ["owasp-top-10", "zero-secrets"],
-        "deep": [metadata.name for _, metadata in policies_with_metadata],
+        "deep": [metadata.get("name", path.stem) for path, metadata in policies_with_metadata],
     }
 
     default_policies = profile_defaults.get(profile, ["zero-secrets"])
@@ -237,7 +236,7 @@ def _display_scan_summary(findings: List[Dict[str, Any]]) -> None:
 
 def _parse_policy_choice(
     choice: str,
-    policies_with_metadata: List[tuple[Path, PolicyMetadata]],
+    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]],
     recommended: List[Path],
 ) -> List[Path]:
     """Parse user policy selection choice."""

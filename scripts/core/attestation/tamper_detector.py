@@ -120,7 +120,7 @@ class TamperDetector:
         Returns:
             List of tamper indicators (empty if no issues found)
         """
-        indicators = []
+        indicators: list[TamperIndicator] = []
         historical_attestations = historical_attestations or []
 
         # Check timestamp anomalies
@@ -161,7 +161,7 @@ class TamperDetector:
         Returns:
             List of timestamp-related tamper indicators
         """
-        indicators = []
+        indicators: list[TamperIndicator] = []
 
         try:
             attestation_data = json.loads(Path(attestation_path).read_text())
@@ -304,7 +304,7 @@ class TamperDetector:
         Returns:
             List of builder consistency indicators
         """
-        indicators = []
+        indicators: list[TamperIndicator] = []
 
         try:
             current_data = json.loads(Path(attestation_path).read_text())
@@ -384,7 +384,7 @@ class TamperDetector:
         Returns:
             List of tool rollback indicators
         """
-        indicators = []
+        indicators: list[TamperIndicator] = []
 
         try:
             current_data = json.loads(Path(attestation_path).read_text())
@@ -487,7 +487,7 @@ class TamperDetector:
         Returns:
             List of suspicious pattern indicators
         """
-        indicators = []
+        indicators: list[TamperIndicator] = []
 
         try:
             attestation_data = json.loads(Path(attestation_path).read_text())

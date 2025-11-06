@@ -33,7 +33,7 @@ class PolicyConfig:
         }
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate policy configuration."""
         if not isinstance(self.default_policies, list):
             raise ValueError("default_policies must be a list")

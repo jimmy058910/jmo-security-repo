@@ -132,7 +132,7 @@ class SigstoreSigner:
         response.raise_for_status()
 
         token_data = response.json()
-        return token_data["value"]
+        return str(token_data["value"])
 
     def _get_gitlab_oidc_token(self) -> str:
         """
@@ -161,9 +161,9 @@ class SigstoreSigner:
             # Use sigstore-python's built-in OAuth flow
             from sigstore.oidc import Issuer
 
-            issuer = Issuer.production()
+            issuer = Issuer.production()  # type: ignore[attr-defined]
             token = issuer.identity_token()
-            return token.value
+            return str(token.value)
         except Exception as e:
             logger.error(f"Local OIDC token acquisition failed: {e}")
             raise

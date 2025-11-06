@@ -21,7 +21,7 @@ import logging
 import shutil
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from scripts.core.policy_engine import PolicyEngine
 
@@ -112,24 +112,26 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
     if builtin_policies:
         print(f"Built-in Policies ({len(builtin_policies)}):")
         print("=" * 80)
-        for policy in builtin_policies:
-            meta = policy["metadata"]
-            name = policy["name"]
+        for policy_obj in builtin_policies:
+            policy = cast(Dict[str, Any], policy_obj)
+            meta = cast(Dict[str, Any], policy["metadata"])
+            policy_name = str(policy["name"])
             version = meta.get("version", "unknown")
             desc = meta.get("description", "No description")
-            print(f"  {name:25s} v{version:10s} {desc}")
+            print(f"  {policy_name:25s} v{version:10s} {desc}")
         print()
 
     # User policies
     if user_policies:
         print(f"User Policies ({len(user_policies)}):")
         print("=" * 80)
-        for policy in user_policies:
-            meta = policy["metadata"]
-            name = policy["name"]
+        for policy_obj in user_policies:
+            policy = cast(Dict[str, Any], policy_obj)
+            meta = cast(Dict[str, Any], policy["metadata"])
+            policy_name = str(policy["name"])
             version = meta.get("version", "unknown")
             desc = meta.get("description", "No description")
-            print(f"  {name:25s} v{version:10s} {desc}")
+            print(f"  {policy_name:25s} v{version:10s} {desc}")
         print()
 
     print(f"Total: {len(builtin_policies) + len(user_policies)} policies")

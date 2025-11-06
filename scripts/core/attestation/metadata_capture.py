@@ -53,7 +53,7 @@ class MetadataCapture:
         Returns:
             Dict of scan metadata
         """
-        metadata = {}
+        metadata: Dict[str, Any] = {}
 
         if profile is not None:
             metadata["profile"] = profile
@@ -92,7 +92,7 @@ class MetadataCapture:
         Returns:
             Dict with commit, branch, tag (if available)
         """
-        git_context = {}
+        git_context: Dict[str, Any] = {}
 
         try:
             # Get commit SHA
@@ -146,7 +146,7 @@ class MetadataCapture:
         Returns:
             Dict with CI provider and metadata
         """
-        ci_metadata = {}
+        ci_metadata: Dict[str, Any] = {}
 
         # Detect CI provider
         if os.getenv("GITHUB_ACTIONS") == "true":

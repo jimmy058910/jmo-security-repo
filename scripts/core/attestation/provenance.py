@@ -61,7 +61,7 @@ class ProvenanceGenerator:
 
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-            return data["project"]["version"]
+            return str(data["project"]["version"])
 
     def _get_python_version(self) -> str:
         """Get current Python version.
