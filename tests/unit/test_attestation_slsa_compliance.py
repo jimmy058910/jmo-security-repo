@@ -213,7 +213,7 @@ class TestBuildServiceRequirements:
         findings_path = tmp_path / "findings.json"
         findings_path.write_text('{"findings": []}')
 
-        with patch.dict("os.environ", {"GITLAB_CI": "true", "CI": "true"}):
+        with patch.dict("os.environ", {"GITLAB_CI": "true", "CI": "true"}, clear=True):
             generator = ProvenanceGenerator()
             statement = generator.generate(
                 findings_path=findings_path,
