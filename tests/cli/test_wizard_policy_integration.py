@@ -120,12 +120,11 @@ def mock_policy_engine(sample_policy_metadata):
 def test_detect_recommended_policies_fast_profile(sample_findings):
     """Test auto-detection for fast profile (zero-secrets only)."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-    from scripts.core.policy_engine import PolicyMetadata
 
-    # Create mock policies with proper metadata
+    # Create mock policies with proper metadata (as dicts, not PolicyMetadata objects)
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets")),
-        (Path("owasp-top-10.rego"), PolicyMetadata(name="owasp-top-10", version="1.0.0", description="OWASP Top 10")),
+        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
+        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
     ]
 
     # Use findings without OWASP violations to test pure fast profile
@@ -144,12 +143,11 @@ def test_detect_recommended_policies_fast_profile(sample_findings):
 def test_detect_recommended_policies_balanced_profile(sample_findings):
     """Test auto-detection for balanced profile (owasp + zero-secrets)."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-    from scripts.core.policy_engine import PolicyMetadata
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets")),
-        (Path("owasp-top-10.rego"), PolicyMetadata(name="owasp-top-10", version="1.0.0", description="OWASP Top 10")),
-        (Path("pci-dss.rego"), PolicyMetadata(name="pci-dss", version="1.0.0", description="PCI DSS")),
+        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
+        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
+        (Path("pci-dss.rego"), {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"}),
     ]
 
     recommended = _detect_recommended_policies(sample_findings, "balanced", policies_with_metadata)
@@ -164,8 +162,10 @@ def test_detect_recommended_policies_deep_profile(sample_findings, sample_policy
     """Test auto-detection for deep profile (all policies)."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     recommended = _detect_recommended_policies(sample_findings, "deep", policies_with_metadata)
@@ -177,7 +177,6 @@ def test_detect_recommended_policies_deep_profile(sample_findings, sample_policy
 def test_detect_recommended_policies_with_verified_secrets():
     """Test auto-detection recommends zero-secrets when verified secrets found."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-    from scripts.core.policy_engine import PolicyMetadata
 
     findings_with_secrets = [
         {
@@ -188,8 +187,8 @@ def test_detect_recommended_policies_with_verified_secrets():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets")),
-        (Path("owasp-top-10.rego"), PolicyMetadata(name="owasp-top-10", version="1.0.0", description="OWASP Top 10")),
+        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
+        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
     ]
 
     recommended = _detect_recommended_policies(findings_with_secrets, "fast", policies_with_metadata)
@@ -201,7 +200,6 @@ def test_detect_recommended_policies_with_verified_secrets():
 def test_detect_recommended_policies_with_owasp_violations():
     """Test auto-detection recommends owasp-top-10 when OWASP violations found."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-    from scripts.core.policy_engine import PolicyMetadata
 
     findings_with_owasp = [
         {
@@ -212,8 +210,8 @@ def test_detect_recommended_policies_with_owasp_violations():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets")),
-        (Path("owasp-top-10.rego"), PolicyMetadata(name="owasp-top-10", version="1.0.0", description="OWASP Top 10")),
+        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
+        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
     ]
 
     recommended = _detect_recommended_policies(findings_with_owasp, "fast", policies_with_metadata)
@@ -225,7 +223,6 @@ def test_detect_recommended_policies_with_owasp_violations():
 def test_detect_recommended_policies_with_pci_violations():
     """Test auto-detection recommends pci-dss when PCI violations found."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
-    from scripts.core.policy_engine import PolicyMetadata
 
     findings_with_pci = [
         {
@@ -236,8 +233,8 @@ def test_detect_recommended_policies_with_pci_violations():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets")),
-        (Path("pci-dss.rego"), PolicyMetadata(name="pci-dss", version="1.0.0", description="PCI DSS")),
+        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
+        (Path("pci-dss.rego"), {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"}),
     ]
 
     recommended = _detect_recommended_policies(findings_with_pci, "fast", policies_with_metadata)
@@ -253,8 +250,10 @@ def test_parse_policy_choice_skip(sample_policy_metadata):
     """Test parsing 's' (skip) choice."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     result = _parse_policy_choice("s", policies_with_metadata, [])
@@ -266,8 +265,10 @@ def test_parse_policy_choice_recommended(sample_policy_metadata):
     """Test parsing 'a' (all recommended) choice."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
     recommended = [policies_with_metadata[0][0], policies_with_metadata[1][0]]
 
@@ -280,8 +281,10 @@ def test_parse_policy_choice_all_policies(sample_policy_metadata):
     """Test parsing 'r' (all policies) choice."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     result = _parse_policy_choice("r", policies_with_metadata, [])
@@ -294,8 +297,10 @@ def test_parse_policy_choice_single_number(sample_policy_metadata):
     """Test parsing single policy number (e.g., '1')."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     result = _parse_policy_choice("1", policies_with_metadata, [])
@@ -308,8 +313,10 @@ def test_parse_policy_choice_invalid_number(sample_policy_metadata):
     """Test parsing invalid policy number returns empty list."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     result = _parse_policy_choice("99", policies_with_metadata, [])
@@ -321,8 +328,10 @@ def test_parse_policy_choice_invalid_choice(sample_policy_metadata):
     """Test parsing invalid choice returns empty list."""
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     result = _parse_policy_choice("invalid", policies_with_metadata, [])
@@ -524,8 +533,10 @@ def test_parse_policy_choice_custom_selection(sample_policy_metadata):
     from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
     from unittest.mock import patch
 
+    # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), meta) for meta in sample_policy_metadata
+        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        for meta in sample_policy_metadata
     ]
 
     # Mock input to simulate custom selection
@@ -634,7 +645,6 @@ def test_display_violation():
 def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
     """Test interactive mode with user choosing to skip."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
-    from scripts.core.policy_engine import PolicyMetadata
     from unittest.mock import patch
 
     # Mock PolicyEngine
@@ -645,10 +655,10 @@ def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, t
     mock_policy_files = [Path("policies/builtin/zero-secrets.rego")]
     mock_glob.return_value = mock_policy_files
 
-    # Mock get_metadata
-    mock_engine.get_metadata.return_value = PolicyMetadata(
-        name="zero-secrets", version="1.0.0", description="Block secrets"
-    )
+    # Mock get_metadata to return dict (not PolicyMetadata)
+    mock_engine.get_metadata.return_value = {
+        "name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"
+    }
 
     # Mock user input: choose 's' (skip)
     with patch("builtins.input", return_value="s"):
@@ -664,7 +674,7 @@ def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, t
 def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
     """Test interactive mode with viewing violations."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
-    from scripts.core.policy_engine import PolicyResult, PolicyMetadata
+    from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
 
     # Mock PolicyEngine
@@ -675,10 +685,10 @@ def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, m
     mock_policy_files = [Path("policies/builtin/zero-secrets.rego")]
     mock_glob.return_value = mock_policy_files
 
-    # Mock get_metadata
-    mock_engine.get_metadata.return_value = PolicyMetadata(
-        name="zero-secrets", version="1.0.0", description="Block secrets"
-    )
+    # Mock get_metadata to return dict (not PolicyMetadata)
+    mock_engine.get_metadata.return_value = {
+        "name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"
+    }
 
     # Mock evaluate_policy to return failed result
     mock_engine.evaluate_policy.return_value = PolicyResult(
@@ -853,7 +863,7 @@ def test_display_policy_violations_interactive_previous_navigation(capsys):
 def test_policy_evaluation_menu_noninteractive_mode(mock_glob, mock_engine_class, tmp_path, sample_findings, capsys):
     """Test non-interactive mode uses profile defaults."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
-    from scripts.core.policy_engine import PolicyResult, PolicyMetadata
+    from scripts.core.policy_engine import PolicyResult
 
     # Mock PolicyEngine
     mock_engine = MagicMock()
@@ -866,10 +876,10 @@ def test_policy_evaluation_menu_noninteractive_mode(mock_glob, mock_engine_class
     ]
     mock_glob.return_value = mock_policy_files
 
-    # Mock get_metadata
+    # Mock get_metadata to return dicts (not PolicyMetadata)
     mock_engine.get_metadata.side_effect = [
-        PolicyMetadata(name="zero-secrets", version="1.0.0", description="Block secrets"),
-        PolicyMetadata(name="owasp-top-10", version="1.0.0", description="OWASP Top 10"),
+        {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"},
+        {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
     ]
 
     # Mock evaluate_policy
