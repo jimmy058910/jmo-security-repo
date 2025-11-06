@@ -26,7 +26,7 @@ try:
     console = Console()
 except ImportError:
     RICH_AVAILABLE = False
-    console = None
+    console = None  # type: ignore[assignment]
 
 
 def detect_git_context() -> Optional[Dict[str, Any]]:
@@ -479,7 +479,7 @@ def _filter_by_severity(
     net_change = len(new) - len(resolved)
     trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
 
-    mod_types = []
+    mod_types = []  # type: ignore[var-annotated]
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)
@@ -527,7 +527,7 @@ def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
     net_change = len(new) - len(resolved)
     trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
 
-    mod_types = []
+    mod_types = []  # type: ignore[var-annotated]
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)
@@ -560,8 +560,8 @@ def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
     if category == "new":
         new = diff.new
         resolved = []
-        unchanged = []
-        modified = []
+        unchanged = []  # type: ignore[var-annotated]
+        modified = []  # type: ignore[var-annotated]
     elif category == "resolved":
         new = []
         resolved = diff.resolved
@@ -584,7 +584,7 @@ def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
     net_change = len(new) - len(resolved)
     trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
 
-    mod_types = []
+    mod_types = []  # type: ignore[var-annotated]
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)

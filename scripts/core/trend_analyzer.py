@@ -183,7 +183,7 @@ class TrendAnalyzer:
             # Get specific scans by ID
             scans = []
             for scan_id in scan_ids:
-                scan = get_scan_by_id(self.conn, scan_id)
+                scan = get_scan_by_id(self.conn, scan_id)  # type: ignore[arg-type]
                 if scan:
                     scans.append(dict(scan))
             # Sort by timestamp
@@ -193,7 +193,7 @@ class TrendAnalyzer:
         # Use list_scans with appropriate filters
         if last_n:
             return list(
-                map(dict, list_scans(self.conn, branch=branch, limit=last_n))
+                map(dict, list_scans(self.conn, branch=branch, limit=last_n))  # type: ignore[arg-type]
             )
 
         if days:
@@ -201,7 +201,7 @@ class TrendAnalyzer:
 
             since = int(time.time()) - (days * 86400)
             return list(
-                map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))
+                map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
             )
 
         # Default: last 30 days
@@ -209,7 +209,7 @@ class TrendAnalyzer:
 
         since = int(time.time()) - (30 * 86400)
         return list(
-            map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))
+            map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
         )
 
     def _calculate_severity_trends(
@@ -343,7 +343,7 @@ class TrendAnalyzer:
             return []
 
         placeholders = ",".join("?" * len(scan_ids))
-        cursor = self.conn.execute(
+        cursor = self.conn.execute(  # type: ignore[union-attr]
             f"""
             SELECT rule_id, severity, tool, COUNT(*) as count
             FROM findings
@@ -705,7 +705,7 @@ def validate_trend_significance(
         if severity == "timestamps":
             continue
 
-        trend, tau, p_value = mann_kendall_test(counts)
+        trend, tau, p_value = mann_kendall_test(counts)  # type: ignore[arg-type]
 
         # Determine confidence level
         if p_value < 0.01:

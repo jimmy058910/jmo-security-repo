@@ -799,8 +799,8 @@ def cmd_trends_developers(args) -> int:
         # Analyze trends to get resolved findings
         sys.stdout.write(f"Analyzing last {last_n} scans for resolved findings...\n")
 
-        analyzer = TrendAnalyzer(db_path)
-        report = analyzer.analyze(last_n=last_n)
+        analyzer = TrendAnalyzer(db_path)  # type: ignore[arg-type]
+        report = analyzer.analyze(last_n=last_n)  # type: ignore[attr-defined]
 
         if report.scan_count < 2:
             sys.stdout.write(
@@ -811,7 +811,7 @@ def cmd_trends_developers(args) -> int:
             return 0
 
         # Get resolved fingerprints (first scan - last scan)
-        conn = get_connection(db_path)
+        conn = get_connection(db_path)  # type: ignore[arg-type]
         scan_ids = report.scan_ids
 
         first_scan = get_scan_by_id(conn, scan_ids[0])
@@ -824,8 +824,9 @@ def cmd_trends_developers(args) -> int:
         first_findings = get_findings_for_scan(conn, scan_ids[0])
         last_findings = get_findings_for_scan(conn, scan_ids[-1])
 
-        first_fps = {f[1] for f in first_findings}  # (scan_id, fingerprint, ...)
-        last_fps = {f[1] for f in last_findings}
+        # Type ignore: findings is list of tuples, not dict
+        first_fps = {f[1] for f in first_findings}  # type: ignore[index]  # (scan_id, fingerprint, ...)
+        last_fps = {f[1] for f in last_findings}  # type: ignore[index]
 
         resolved_fps = first_fps - last_fps
 

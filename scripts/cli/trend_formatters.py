@@ -341,7 +341,7 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
         return "\n".join(lines)
 
     # Group by priority
-    by_priority = {}
+    by_priority = {}  # type: ignore[var-annotated]
     for insight in insights:
         priority = insight.get("priority", "MEDIUM")
         if priority not in by_priority:

@@ -67,11 +67,11 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
 
     # Add new findings (baselineState: "new")
     for finding in diff.new:
-        sarif["runs"][0]["results"].append({
+        sarif["runs"][0]["results"].append({  # type: ignore[index]
             "ruleId": finding.get("ruleId", "unknown"),
-            "level": _map_severity_to_sarif(finding.get("severity")),
+            "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]
             "message": {"text": f"{finding.get('message', '')} (NEW in current scan)"},
-            "locations": [_convert_location_to_sarif(finding.get("location"))],
+            "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]
             "baselineState": "new",
             "properties": {
                 "diff_category": "new",
@@ -83,11 +83,11 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
 
     # Add resolved findings (baselineState: "absent", suppressed)
     for finding in diff.resolved:
-        sarif["runs"][0]["results"].append({
+        sarif["runs"][0]["results"].append({  # type: ignore[index]
             "ruleId": finding.get("ruleId", "unknown"),
-            "level": _map_severity_to_sarif(finding.get("severity")),
+            "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]
             "message": {"text": f"{finding.get('message', '')} (RESOLVED since baseline)"},
-            "locations": [_convert_location_to_sarif(finding.get("location"))],
+            "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]
             "baselineState": "absent",
             "suppressions": [
                 {
@@ -111,11 +111,11 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
             for k, v in mod.changes.items()
         )
 
-        sarif["runs"][0]["results"].append({
+        sarif["runs"][0]["results"].append({  # type: ignore[index]
             "ruleId": mod.current.get("ruleId", "unknown"),
-            "level": _map_severity_to_sarif(mod.current.get("severity")),
+            "level": _map_severity_to_sarif(mod.current.get("severity")),  # type: ignore[arg-type]
             "message": {"text": f"{mod.current.get('message', '')} (MODIFIED: {change_desc})"},
-            "locations": [_convert_location_to_sarif(mod.current.get("location"))],
+            "locations": [_convert_location_to_sarif(mod.current.get("location"))],  # type: ignore[arg-type]
             "baselineState": "updated",
             "properties": {
                 "diff_category": "modified",

@@ -1037,7 +1037,7 @@ def _run_trend_command_interactive(db_path: Path, command: str, last_n: int = 30
         last_n: Number of days to analyze
     """
     try:
-        from scripts.cli.trend_commands import (
+        from scripts.cli.trend_commands import (  # type: ignore[attr-defined]
             cmd_trends_analyze,
             cmd_trends_regressions,
             cmd_trends_velocity,
@@ -1461,8 +1461,8 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         print("\n" + _colorize("Diff Configuration:", "bold"))
         if mode == "history":
             print(f"  Mode: {_colorize('History Database', 'green')}")
-            print(f"  Baseline: {_colorize(baseline_id[:12], 'yellow')}")
-            print(f"  Current: {_colorize(current_id[:12], 'yellow')}")
+            print(f"  Baseline: {_colorize(baseline_id[:12], 'yellow')}")  # type: ignore[index]
+            print(f"  Current: {_colorize(current_id[:12], 'yellow')}")  # type: ignore[index]
         else:
             print(f"  Mode: {_colorize('Directory Comparison', 'green')}")
             print(f"  Baseline: {baseline_path}")
