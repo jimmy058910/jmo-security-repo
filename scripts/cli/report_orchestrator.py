@@ -9,7 +9,7 @@ import os
 import time
 from pathlib import Path
 
-from scripts.core.config import load_config
+from scripts.core.config import load_config_with_env_overrides
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.reporters.compliance_reporter import (
@@ -23,7 +23,11 @@ from scripts.core.reporters.sarif_reporter import write_sarif
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.suppress import filter_suppressed, load_suppressions
-from scripts.core.telemetry import send_event, bucket_findings
+from scripts.core.telemetry import (
+    send_event,
+    bucket_findings,
+    send_policy_evaluation_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +67,7 @@ def cmd_report(args, _log_fn) -> int:
     Returns:
         Exit code (0 for success, 1 if threshold exceeded, 2 for errors)
     """
-    cfg = load_config(args.config)
+    cfg = load_config_with_env_overrides(args.config)
 
     # Normalize results_dir from positional or optional
     rd = (
@@ -189,7 +193,28 @@ def cmd_report(args, _log_fn) -> int:
         logger.debug(f"Compliance data formatting error: {e}")
 
     # Evaluate and write policy reports (v1.0.0 Feature #5: Policy-as-Code)
-    policy_names = getattr(args, "policies", None) or []
+    # Determine policies to evaluate using configuration precedence:
+    # 1. CLI arguments (highest priority)
+    # 2. Environment variables (already loaded via load_config_with_env_overrides)
+    # 3. Config file (jmo.yml)
+    # 4. Skip if disabled
+    policy_names = []
+    policy_exit_code = 0
+
+    # 1. CLI arguments (highest priority)
+    if hasattr(args, "policies") and args.policies:
+        policy_names = args.policies
+        _log_fn(args, "INFO", f"Using policies from CLI: {', '.join(policy_names)}")
+    # 2. Config (includes env vars via load_config_with_env_overrides)
+    elif (
+        cfg.policy.enabled and cfg.policy.auto_evaluate and cfg.policy.default_policies
+    ):
+        policy_names = cfg.policy.default_policies
+        _log_fn(args, "INFO", f"Using policies from config: {', '.join(policy_names)}")
+    # 3. Skip if disabled
+    elif not cfg.policy.enabled:
+        _log_fn(args, "DEBUG", "Policy evaluation disabled via config")
+
     if policy_names:
         try:
             from scripts.core.reporters.policy_reporter import (
@@ -207,19 +232,49 @@ def cmd_report(args, _log_fn) -> int:
                 "INFO",
                 f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
             )
+
+            # Measure policy evaluation time for telemetry
+            policy_start = time.perf_counter()
             policy_results = evaluate_policies(
                 findings, policy_names, builtin_dir, user_dir
             )
+            policy_duration_ms = (time.perf_counter() - policy_start) * 1000
 
             if policy_results:
                 write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
                 write_policy_json(policy_results, out_dir / "policy_results.json")
                 write_policy_summary_md(policy_results, out_dir / "POLICY_SUMMARY.md")
+
+                passed = sum(1 for r in policy_results.values() if r.passed)
+                failed = len(policy_results) - passed
+
                 _log_fn(
                     args,
                     "INFO",
-                    f"Policy evaluation complete: {sum(1 for r in policy_results.values() if r.passed)}/{len(policy_results)} passed",
+                    f"Policy evaluation complete: {passed}/{len(policy_results)} passed, {failed} failed",
                 )
+
+                # Send policy evaluation telemetry event (privacy-preserving)
+                send_policy_evaluation_event(
+                    policy_names,
+                    policy_results,
+                    policy_duration_ms,
+                    cfg.__dict__,
+                    __version__,
+                )
+
+                # Fail if violations and fail_on_violation=True (check both CLI and config)
+                cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
+                if failed > 0 and (
+                    cli_fail_on_violation or cfg.policy.fail_on_violation
+                ):
+                    _log_fn(
+                        args,
+                        "ERROR",
+                        f"❌ {failed} policies FAILED. Exiting due to fail_on_violation=True",
+                    )
+                    policy_exit_code = 1
+
         except ImportError as e:
             _log_fn(args, "DEBUG", f"Policy reporter unavailable: {e}")
             logger.debug(f"Policy reporter import error: {e}")
@@ -229,6 +284,9 @@ def cmd_report(args, _log_fn) -> int:
         except Exception as e:
             _log_fn(args, "ERROR", f"Policy evaluation failed: {e}")
             logger.error(f"Policy evaluation error: {e}", exc_info=True)
+            cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
+            if cli_fail_on_violation or cfg.policy.fail_on_violation:
+                policy_exit_code = 1
 
     # Write profiling data
     if args.profile:
@@ -366,4 +424,5 @@ def cmd_report(args, _log_fn) -> int:
 
             traceback.print_exc()
 
-    return code
+    # Return non-zero if either severity threshold or policy violations occurred
+    return max(code, policy_exit_code)

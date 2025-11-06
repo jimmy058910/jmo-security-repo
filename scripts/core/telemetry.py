@@ -278,6 +278,104 @@ def bucket_targets(count: int) -> str:
         return ">50"
 
 
+def bucket_violations(count: int) -> str:
+    """
+    Bucket policy violation count for privacy (prevents fingerprinting).
+
+    Args:
+        count: Number of policy violations
+
+    Returns:
+        Bucketed count string: "0", "1-5", "5-20", "20-100", ">100"
+    """
+    if count == 0:
+        return "0"
+    elif count <= 5:
+        return "1-5"
+    elif count <= 20:
+        return "5-20"
+    elif count <= 100:
+        return "20-100"
+    else:
+        return ">100"
+
+
+def bucket_duration_ms(ms: float) -> str:
+    """
+    Bucket policy evaluation duration for privacy (prevents fingerprinting).
+
+    Args:
+        ms: Evaluation duration in milliseconds
+
+    Returns:
+        Bucketed duration string: "<50ms", "50-100ms", "100-500ms", ">500ms"
+    """
+    if ms < 50:
+        return "<50ms"
+    elif ms < 100:
+        return "50-100ms"
+    elif ms < 500:
+        return "100-500ms"
+    else:
+        return ">500ms"
+
+
+def send_policy_evaluation_event(
+    policy_names: list[str],
+    results: dict[str, Any],
+    duration_ms: float,
+    config: dict[str, Any],
+    version: str,
+) -> None:
+    """
+    Send policy evaluation telemetry event (privacy-preserving).
+
+    Collects anonymous metrics about policy evaluation to improve policy features.
+
+    Privacy Guarantees:
+    - ❌ No PII (no policy content, no finding details)
+    - ❌ No exact counts (bucketed: 0, 1-5, 5-20, 20-100, >100)
+    - ❌ No exact durations (bucketed: <50ms, 50-100ms, etc.)
+    - ✅ Only aggregated metrics for product analytics
+
+    Args:
+        policy_names: List of policy names evaluated
+        results: Dict of policy results (PolicyResult objects)
+        duration_ms: Total evaluation duration in milliseconds
+        config: JMo configuration dict (to check if telemetry enabled)
+        version: JMo Security version string
+
+    Example:
+        >>> send_policy_evaluation_event(
+        ...     ["zero-secrets", "owasp-top-10"],
+        ...     {"zero-secrets": PolicyResult(...), "owasp-top-10": PolicyResult(...)},
+        ...     21.81,
+        ...     config,
+        ...     "1.0.0"
+        ... )
+    """
+    # Calculate total violations (sum across all policies)
+    total_violations = sum(
+        len(r.violations) if hasattr(r, "violations") else 0 for r in results.values()
+    )
+
+    # Count passed/failed policies
+    passed_count = sum(1 for r in results.values() if hasattr(r, "passed") and r.passed)
+    failed_count = len(results) - passed_count
+
+    # Build privacy-preserving metadata
+    metadata = {
+        "policy_count": len(policy_names),  # Exact count OK (low cardinality)
+        "violations_bucket": bucket_violations(total_violations),  # Bucketed
+        "evaluation_time_bucket": bucket_duration_ms(duration_ms),  # Bucketed
+        "policies": sorted(policy_names),  # Policy names OK (built-in policies)
+        "passed_count": passed_count,  # Exact count OK (low cardinality)
+        "failed_count": failed_count,  # Exact count OK (low cardinality)
+    }
+
+    send_event("policy.evaluated", metadata, config, version)
+
+
 def detect_ci_environment() -> bool:
     """
     Detect if running in CI/CD environment.

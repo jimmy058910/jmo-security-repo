@@ -88,6 +88,11 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.store_history = getattr(a, "store_history", False)
             self.history_db = getattr(a, "history_db", None)
             self.profile_name = getattr(a, "profile_name", None)
+            # Policy flags (Phase 5.1)
+            self.policies = getattr(a, "policies", None)
+            self.fail_on_policy_violation = getattr(
+                a, "fail_on_policy_violation", False
+            )
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log

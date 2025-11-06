@@ -61,6 +61,45 @@ All notable changes to JMo Security will be documented in this file.
   - Impact: Data-driven security improvements, automated regression detection, developer accountability, executive reporting
   - See [docs/USER_GUIDE.md#trend-analysis-v100](docs/USER_GUIDE.md#trend-analysis-v100) for complete documentation
 
+- **Feature #6: SLSA Attestation (Supply Chain Security)** - SLSA Level 2 compliance with keyless Sigstore integration
+  - `scripts/core/attestation_generator.py`: Generate SLSA provenance attestations with build/source/material metadata
+  - `scripts/core/attestation_verifier.py`: Advanced tamper detection (4 strategies: signature, hash, cert chain, Rekor transparency log)
+  - `scripts/cli/attestation_commands.py`: 6 CLI commands for attestation workflows (`generate`, `verify`, `sign`, `inspect`, `list`, `export`)
+  - Sigstore integration: Keyless signing with Fulcio (identity certificates) and Rekor (transparency log)
+  - Multi-hash digests: SHA-256, SHA-384, SHA-512 for forensic-grade integrity verification
+  - Build info: Git commit, branch, tag, CI/CD context, builder identity, reproducible flag
+  - Material tracking: Dependencies, build tools, runtime images with hash verification
+  - Auto-attestation: GitHub Actions and GitLab CI workflows with automatic signing and upload
+  - Verification levels: NONE (unsigned), BASIC (hash), STANDARD (signature), STRICT (full chain + Rekor)
+  - Export formats: JSON (SLSA spec), SARIF (code scanning integration), human-readable reports
+  - Test coverage: 200 tests passing (100%), all Sigstore workflows validated
+  - Performance: <100ms attestation generation, <200ms verification (STANDARD), <500ms verification (STRICT with Rekor)
+  - Impact: Supply chain security, provenance tracking, build integrity, SLSA compliance, software bill of materials
+  - See [docs/USER_GUIDE.md#slsa-attestation-v100](docs/USER_GUIDE.md#slsa-attestation-v100) and [docs/examples/attestation-workflows.md](docs/examples/attestation-workflows.md) for complete documentation
+
+- **Feature #7: Policy-as-Code (OPA Integration)** - Automated security policy enforcement using Open Policy Agent
+  - `scripts/core/policy_engine.py`: OPA 1.0+ integration with Rego v1 syntax support, policy evaluation engine
+  - `scripts/cli/wizard_flows/policy_flow.py`: Interactive policy evaluation menu, policy selection, violation display
+  - `scripts/core/reporters/policy_reporter.py`: Policy result reporters (Markdown, JSON, HTML summary)
+  - CLI integration: `jmo scan --policy <name>`, `jmo ci --policy <name> --fail-on-policy-violation`, `jmo wizard --policy <name>`
+  - Built-in policies: `zero-secrets` (verified secrets), `owasp-top-10` (OWASP Top 10 2021), `pci-dss` (PCI DSS 4.0), `production-hardening` (deployment best practices), `hipaa-compliance` (HIPAA security rules)
+  - Configuration integration: `jmo.yml` policy section with `enabled`, `auto_evaluate`, `default_policies`, `fail_on_violation`
+  - Environment variable overrides: `JMO_POLICY_ENABLED`, `JMO_POLICY_DEFAULT_POLICIES`, `JMO_POLICY_FAIL_ON_VIOLATION`
+  - Wizard integration: Post-scan policy evaluation menu, interactive violation display, policy selection UI
+  - CI/CD gating: `--fail-on-policy-violation` flag returns exit code 1 on violations (GitHub Actions, GitLab CI, Jenkins examples)
+  - Custom policy support: User policies in `~/.jmo/policies/` auto-discovered, Rego v1 templates provided
+  - **Telemetry integration**: Privacy-preserving policy evaluation metrics (`send_policy_evaluation_event()`)
+    - Bucketed violation counts (0, 1-5, 5-20, 20-100, >100) - no exact counts
+    - Bucketed evaluation times (<50ms, 50-100ms, 100-500ms, >500ms) - no exact durations
+    - Policy names (built-in only), passed/failed counts - no PII, no finding details
+    - Opt-out via `JMO_TELEMETRY_DISABLE=1` or `telemetry.enabled: false` in jmo.yml
+    - Test coverage: 10 comprehensive tests for policy telemetry (47/47 total telemetry tests passing)
+  - Test coverage: 48 tests passing (100%), 97% code coverage (policy_flow.py), integration tests for wizard/CI modes
+  - Performance: 21.81ms average evaluation time (target: <100ms), all built-in policies ≤23.33ms
+  - Documentation: [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md), [policies/README.md](policies/README.md), [docs/examples/policy-workflows.md](docs/examples/policy-workflows.md), [docs/examples/custom-policy-examples.md](docs/examples/custom-policy-examples.md)
+  - Impact: Automated policy enforcement, compliance validation, CI/CD security gates, zero-tolerance secrets blocking
+  - See [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) for complete documentation
+
 ### Changed
 
 - **Output Format Structure** - All outputs now use metadata wrapper
