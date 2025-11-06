@@ -1171,7 +1171,9 @@ def list_scans(
     return [dict(row) for row in cursor.fetchall()]
 
 
-def list_recent_scans(db_path: Path = DEFAULT_DB_PATH, limit: int = 50) -> List[Dict[str, Any]]:
+def list_recent_scans(
+    db_path: Path = DEFAULT_DB_PATH, limit: int = 50
+) -> List[Dict[str, Any]]:
     """
     List recent scans (convenience wrapper for wizard).
 

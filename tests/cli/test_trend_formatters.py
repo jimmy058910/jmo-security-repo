@@ -8,7 +8,6 @@ Phase 4: Visualization formatters testing
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 
 import pytest
 
@@ -66,9 +65,7 @@ def sample_analysis():
                 "INFO": [20] * 10,
             },
             "total": [100, 95, 90, 85, 80, 75, 70, 65, 60, 55],
-            "timestamps": [
-                f"2025-01-{i:02d}T00:00:00Z" for i in range(1, 11)
-            ],
+            "timestamps": [f"2025-01-{i:02d}T00:00:00Z" for i in range(1, 11)],
         },
         "improvement_metrics": {
             "net_change": -45,
@@ -458,7 +455,7 @@ def test_format_html_report_chart_js(sample_analysis):
     output = format_html_report(sample_analysis)
 
     assert "chart.js" in output.lower()
-    assert "<canvas id=\"trendsChart\">" in output
+    assert '<canvas id="trendsChart">' in output
 
 
 def test_format_html_report_embedded_data(sample_analysis):

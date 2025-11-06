@@ -1,7 +1,6 @@
 """Tests for JSON diff reporter."""
 
 import json
-from pathlib import Path
 
 import pytest
 

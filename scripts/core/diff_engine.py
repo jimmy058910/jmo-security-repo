@@ -21,7 +21,7 @@ import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +228,6 @@ class DiffEngine:
         from scripts.core.history_db import (
             DEFAULT_DB_PATH,
             get_connection,
-            get_findings_for_scan,
             get_scan_by_id,
         )
 
@@ -310,9 +309,7 @@ class DiffEngine:
         logger.debug(f"Loaded {len(findings)} findings from {findings_path}")
         return findings
 
-    def _load_sqlite_findings(
-        self, conn, scan_id: str
-    ) -> List[Dict[str, Any]]:
+    def _load_sqlite_findings(self, conn, scan_id: str) -> List[Dict[str, Any]]:
         """Load findings from SQLite database."""
         from scripts.core.history_db import get_findings_for_scan
 
@@ -337,7 +334,10 @@ class DiffEngine:
                 "severity": row["severity"],
                 "ruleId": row["rule_id"],
                 "tool": {"name": row["tool"]},
-                "location": {"path": row["path"], "startLine": row.get("start_line", 0)},
+                "location": {
+                    "path": row["path"],
+                    "startLine": row.get("start_line", 0),
+                },
                 "message": row["message"],
                 **raw,  # Merge full finding data
             }
@@ -501,8 +501,12 @@ class DiffEngine:
                 changes["priority"] = [baseline_priority, current_priority]
 
             # 3. Compliance framework additions (MEDIUM)
-            baseline_compliance = set(self._flatten_compliance(baseline.get("compliance", {})))
-            current_compliance = set(self._flatten_compliance(current.get("compliance", {})))
+            baseline_compliance = set(
+                self._flatten_compliance(baseline.get("compliance", {}))
+            )
+            current_compliance = set(
+                self._flatten_compliance(current.get("compliance", {}))
+            )
             new_mappings = current_compliance - baseline_compliance
             if new_mappings:
                 changes["compliance_added"] = list(new_mappings)
@@ -516,7 +520,10 @@ class DiffEngine:
             # 5. Message changes (INFORMATIONAL) - threshold 10 chars
             baseline_msg = baseline.get("message", "")
             current_msg = current.get("message", "")
-            if baseline_msg != current_msg and abs(len(baseline_msg) - len(current_msg)) > 10:
+            if (
+                baseline_msg != current_msg
+                and abs(len(baseline_msg) - len(current_msg)) > 10
+            ):
                 changes["message"] = [baseline_msg[:100], current_msg[:100]]
 
             # Only include if changes detected
@@ -627,8 +634,12 @@ class DiffEngine:
 
         # Compliance additions (20% weight)
         # More frameworks = higher priority (positive change)
-        baseline_compliance = len(self._flatten_compliance(baseline.get("compliance", {})))
-        current_compliance = len(self._flatten_compliance(current.get("compliance", {})))
+        baseline_compliance = len(
+            self._flatten_compliance(baseline.get("compliance", {}))
+        )
+        current_compliance = len(
+            self._flatten_compliance(current.get("compliance", {}))
+        )
         compliance_delta = (current_compliance - baseline_compliance) * 0.2
         score += compliance_delta
 

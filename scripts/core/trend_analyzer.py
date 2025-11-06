@@ -24,7 +24,6 @@ from scripts.core.history_db import (
     get_connection,
     get_scan_by_id,
     list_scans,
-    get_findings_for_scan,
     DEFAULT_DB_PATH,
 )
 
@@ -212,9 +211,7 @@ class TrendAnalyzer:
             map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
         )
 
-    def _calculate_severity_trends(
-        self, scans: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _calculate_severity_trends(self, scans: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Calculate severity trends over time.
 
@@ -365,9 +362,7 @@ class TrendAnalyzer:
             for row in cursor.fetchall()
         ]
 
-    def _detect_regressions(
-        self, scans: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _detect_regressions(self, scans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Detect regressions (severity increases) between consecutive scans.
 
@@ -439,9 +434,7 @@ class TrendAnalyzer:
         insights = []
 
         if len(scans) < 2:
-            insights.append(
-                "ℹ️  Need at least 2 scans to generate meaningful insights"
-            )
+            insights.append("ℹ️  Need at least 2 scans to generate meaningful insights")
             return insights
 
         # Insight 1: Overall trend
@@ -467,9 +460,7 @@ class TrendAnalyzer:
         high_change = improvement_metrics["high_change"]
 
         if critical_change < 0:
-            insights.append(
-                f"🎯 CRITICAL findings reduced by {abs(critical_change)}"
-            )
+            insights.append(f"🎯 CRITICAL findings reduced by {abs(critical_change)}")
         elif critical_change > 0:
             insights.append(f"🚨 CRITICAL findings increased by {critical_change}")
 
@@ -480,7 +471,9 @@ class TrendAnalyzer:
 
         # Insight 3: Regressions
         if regressions:
-            critical_regressions = [r for r in regressions if r["severity"] == "CRITICAL"]
+            critical_regressions = [
+                r for r in regressions if r["severity"] == "CRITICAL"
+            ]
             if critical_regressions:
                 insights.append(
                     f"⛔ {len(critical_regressions)} CRITICAL regression(s) detected"
@@ -488,8 +481,12 @@ class TrendAnalyzer:
 
         # Insight 4: Scan frequency
         if len(scans) >= 5:
-            first_ts = datetime.fromisoformat(scans[0]["timestamp_iso"].replace("Z", "+00:00"))
-            last_ts = datetime.fromisoformat(scans[-1]["timestamp_iso"].replace("Z", "+00:00"))
+            first_ts = datetime.fromisoformat(
+                scans[0]["timestamp_iso"].replace("Z", "+00:00")
+            )
+            last_ts = datetime.fromisoformat(
+                scans[-1]["timestamp_iso"].replace("Z", "+00:00")
+            )
             days_span = (last_ts - first_ts).days
             if days_span > 0:
                 scans_per_week = (len(scans) / days_span) * 7
@@ -678,7 +675,7 @@ def _standard_normal_cdf(x: float) -> float:
 
 
 def validate_trend_significance(
-    severity_trends: Dict[str, List[int]]
+    severity_trends: Dict[str, List[int]],
 ) -> Dict[str, Dict[str, Any]]:
     """
     Validate statistical significance of severity trends using Mann-Kendall test.
@@ -775,9 +772,7 @@ def format_trend_summary(analysis: Dict[str, Any], verbose: bool = False) -> str
     lines.append(f"Trend:            {trend_icon} {trend.upper()}")
     lines.append(f"Total change:     {total_change:+d} findings ({pct_change:+.1f}%)")
     lines.append(f"Confidence:       {confidence.upper()}")
-    lines.append(
-        f"CRITICAL change:  {metrics.get('critical_change', 0):+d}"
-    )
+    lines.append(f"CRITICAL change:  {metrics.get('critical_change', 0):+d}")
     lines.append(f"HIGH change:      {metrics.get('high_change', 0):+d}")
     lines.append("")
 

@@ -52,12 +52,16 @@ def sample_scans_data():
         {
             "id": f"scan-{i}",
             "timestamp": 1704067200 + (i * 86400),  # One per day starting Jan 1, 2024
-            "timestamp_iso": datetime.fromtimestamp(1704067200 + (i * 86400), tz=timezone.utc).isoformat(),
+            "timestamp_iso": datetime.fromtimestamp(
+                1704067200 + (i * 86400), tz=timezone.utc
+            ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
             "profile": "balanced",
             "tools": ["trivy", "semgrep"],
-            "total_findings": max(100 - (i * 5), 10),  # Decreasing: 100, 95, 90, ..., 55
+            "total_findings": max(
+                100 - (i * 5), 10
+            ),  # Decreasing: 100, 95, 90, ..., 55
             "critical_count": max(10 - i, 0),  # Decreasing: 10, 9, 8, ..., 0
             "high_count": max(20 - (i * 2), 5),  # Decreasing: 20, 18, 16, ..., 2
             "medium_count": max(30 - i, 10),  # Decreasing: 30, 29, 28, ..., 20
@@ -75,7 +79,9 @@ def degrading_scans_data():
         {
             "id": f"scan-{i}",
             "timestamp": 1704067200 + (i * 86400),
-            "timestamp_iso": datetime.fromtimestamp(1704067200 + (i * 86400), tz=timezone.utc).isoformat(),
+            "timestamp_iso": datetime.fromtimestamp(
+                1704067200 + (i * 86400), tz=timezone.utc
+            ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
             "profile": "balanced",
@@ -103,7 +109,9 @@ def test_mann_kendall_decreasing_trend():
 
     assert trend == "decreasing", f"Expected decreasing trend, got {trend}"
     assert tau < 0, f"Tau should be negative for decreasing trend, got {tau}"
-    assert p_value < 0.05, f"P-value should be < 0.05 for significant trend, got {p_value}"
+    assert (
+        p_value < 0.05
+    ), f"P-value should be < 0.05 for significant trend, got {p_value}"
 
 
 def test_mann_kendall_increasing_trend():
@@ -113,7 +121,9 @@ def test_mann_kendall_increasing_trend():
 
     assert trend == "increasing", f"Expected increasing trend, got {trend}"
     assert tau > 0, f"Tau should be positive for increasing trend, got {tau}"
-    assert p_value < 0.05, f"P-value should be < 0.05 for significant trend, got {p_value}"
+    assert (
+        p_value < 0.05
+    ), f"P-value should be < 0.05 for significant trend, got {p_value}"
 
 
 def test_mann_kendall_no_trend():
@@ -231,7 +241,10 @@ def test_trend_analyzer_improvement_trend(temp_db, sample_scans_data):
 
     # Check trend classification
     metrics = analysis["improvement_metrics"]
-    assert metrics["trend"] in ["improving", "stable"], f"Expected improving/stable, got {metrics['trend']}"
+    assert metrics["trend"] in [
+        "improving",
+        "stable",
+    ], f"Expected improving/stable, got {metrics['trend']}"
     assert metrics["confidence"] == "high", "10 scans should give high confidence"
 
 
@@ -250,32 +263,47 @@ def test_trend_analyzer_degrading_trend(temp_db, degrading_scans_data):
             # Use scan_idx to make fingerprints unique across scans
             findings = []
             for i in range(scan_data["critical_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-crit-{i}",
-                    "severity": "CRITICAL",
-                    "tool": {"name": "trivy"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 1},
-                    "message": f"Critical issue {i}",
-                    "ruleId": f"CRIT-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-crit-{i}",
+                        "severity": "CRITICAL",
+                        "tool": {"name": "trivy"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 1,
+                        },
+                        "message": f"Critical issue {i}",
+                        "ruleId": f"CRIT-{scan_idx}-{i}",
+                    }
+                )
             for i in range(scan_data["high_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-high-{i}",
-                    "severity": "HIGH",
-                    "tool": {"name": "semgrep"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 10},
-                    "message": f"High issue {i}",
-                    "ruleId": f"HIGH-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-high-{i}",
+                        "severity": "HIGH",
+                        "tool": {"name": "semgrep"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 10,
+                        },
+                        "message": f"High issue {i}",
+                        "ruleId": f"HIGH-{scan_idx}-{i}",
+                    }
+                )
             for i in range(scan_data["medium_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-med-{i}",
-                    "severity": "MEDIUM",
-                    "tool": {"name": "trivy"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 20},
-                    "message": f"Medium issue {i}",
-                    "ruleId": f"MED-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-med-{i}",
+                        "severity": "MEDIUM",
+                        "tool": {"name": "trivy"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 20,
+                        },
+                        "message": f"Medium issue {i}",
+                        "ruleId": f"MED-{scan_idx}-{i}",
+                    }
+                )
 
             findings_file.write_text(json.dumps({"findings": findings}))
 
@@ -294,7 +322,9 @@ def test_trend_analyzer_degrading_trend(temp_db, degrading_scans_data):
 
     # Verify degrading trend detected
     metrics = analysis["improvement_metrics"]
-    assert metrics["trend"] == "degrading", f"Expected degrading, got {metrics['trend']}"
+    assert (
+        metrics["trend"] == "degrading"
+    ), f"Expected degrading, got {metrics['trend']}"
     assert metrics["total_change"] > 0, "Total findings should increase"
     assert metrics["critical_change"] > 0, "CRITICAL should increase"
 
@@ -314,32 +344,47 @@ def test_regression_detection(temp_db, degrading_scans_data):
             # Use scan_idx to make fingerprints unique across scans
             findings = []
             for i in range(scan_data["critical_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-crit-{i}",
-                    "severity": "CRITICAL",
-                    "tool": {"name": "trivy"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 1},
-                    "message": f"Critical issue {i}",
-                    "ruleId": f"CRIT-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-crit-{i}",
+                        "severity": "CRITICAL",
+                        "tool": {"name": "trivy"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 1,
+                        },
+                        "message": f"Critical issue {i}",
+                        "ruleId": f"CRIT-{scan_idx}-{i}",
+                    }
+                )
             for i in range(scan_data["high_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-high-{i}",
-                    "severity": "HIGH",
-                    "tool": {"name": "semgrep"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 10},
-                    "message": f"High issue {i}",
-                    "ruleId": f"HIGH-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-high-{i}",
+                        "severity": "HIGH",
+                        "tool": {"name": "semgrep"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 10,
+                        },
+                        "message": f"High issue {i}",
+                        "ruleId": f"HIGH-{scan_idx}-{i}",
+                    }
+                )
             for i in range(scan_data["medium_count"]):
-                findings.append({
-                    "id": f"scan{scan_idx}-med-{i}",
-                    "severity": "MEDIUM",
-                    "tool": {"name": "trivy"},
-                    "location": {"path": f"scan{scan_idx}-file{i}.py", "startLine": 20},
-                    "message": f"Medium issue {i}",
-                    "ruleId": f"MED-{scan_idx}-{i}",
-                })
+                findings.append(
+                    {
+                        "id": f"scan{scan_idx}-med-{i}",
+                        "severity": "MEDIUM",
+                        "tool": {"name": "trivy"},
+                        "location": {
+                            "path": f"scan{scan_idx}-file{i}.py",
+                            "startLine": 20,
+                        },
+                        "message": f"Medium issue {i}",
+                        "ruleId": f"MED-{scan_idx}-{i}",
+                    }
+                )
 
             findings_file.write_text(json.dumps({"findings": findings}))
 
@@ -414,9 +459,21 @@ def test_security_score_grades():
     # Formula: 100 - (critical × 10) - (high × 3) - (medium × 1)
     test_cases = [
         ({"critical_count": 0, "high_count": 0, "medium_count": 0}, 100, "A"),
-        ({"critical_count": 0, "high_count": 3, "medium_count": 1}, 90, "A"),  # 100 - 0 - 9 - 1 = 90
-        ({"critical_count": 1, "high_count": 5, "medium_count": 5}, 70, "C"),  # 100 - 10 - 15 - 5 = 70
-        ({"critical_count": 2, "high_count": 5, "medium_count": 10}, 55, "F"),  # 100 - 20 - 15 - 10 = 55
+        (
+            {"critical_count": 0, "high_count": 3, "medium_count": 1},
+            90,
+            "A",
+        ),  # 100 - 0 - 9 - 1 = 90
+        (
+            {"critical_count": 1, "high_count": 5, "medium_count": 5},
+            70,
+            "C",
+        ),  # 100 - 10 - 15 - 5 = 70
+        (
+            {"critical_count": 2, "high_count": 5, "medium_count": 10},
+            55,
+            "F",
+        ),  # 100 - 20 - 15 - 10 = 55
     ]
 
     analyzer = TrendAnalyzer(Path("/dev/null"))
@@ -425,8 +482,12 @@ def test_security_score_grades():
         scan_data.update({"low_count": 0, "info_count": 0})
         score_data = analyzer._calculate_security_score([scan_data])
 
-        assert score_data["current_score"] == expected_score, f"Expected score {expected_score}, got {score_data['current_score']}"
-        assert score_data["grade"] == expected_grade, f"Expected grade {expected_grade}, got {score_data['grade']}"
+        assert (
+            score_data["current_score"] == expected_score
+        ), f"Expected score {expected_score}, got {score_data['current_score']}"
+        assert (
+            score_data["grade"] == expected_grade
+        ), f"Expected grade {expected_grade}, got {score_data['grade']}"
 
 
 def test_insight_generation(sample_scans_data):
@@ -449,7 +510,10 @@ def test_insight_generation(sample_scans_data):
     regressions = []
 
     insights = analyzer._generate_insights(
-        sample_scans_data, {"by_severity": severity_trends}, improvement_metrics, regressions
+        sample_scans_data,
+        {"by_severity": severity_trends},
+        improvement_metrics,
+        regressions,
     )
 
     assert len(insights) > 0, "Should generate at least one insight"
@@ -618,18 +682,38 @@ def test_improvement_metrics_edge_cases():
     assert metrics["trend"] == "insufficient_data"
 
     # Test: One scan
-    single_scan = [{"total_findings": 10, "critical_count": 1, "high_count": 5,
-                    "medium_count": 3, "low_count": 1, "info_count": 0}]
+    single_scan = [
+        {
+            "total_findings": 10,
+            "critical_count": 1,
+            "high_count": 5,
+            "medium_count": 3,
+            "low_count": 1,
+            "info_count": 0,
+        }
+    ]
     metrics = analyzer._compute_improvement_metrics(single_scan)
     assert metrics["trend"] == "insufficient_data"
     assert metrics["confidence"] == "low"
 
     # Test: Exactly 2 scans (low confidence)
     two_scans = [
-        {"total_findings": 10, "critical_count": 1, "high_count": 5,
-         "medium_count": 3, "low_count": 1, "info_count": 0},
-        {"total_findings": 8, "critical_count": 0, "high_count": 4,
-         "medium_count": 3, "low_count": 1, "info_count": 0},
+        {
+            "total_findings": 10,
+            "critical_count": 1,
+            "high_count": 5,
+            "medium_count": 3,
+            "low_count": 1,
+            "info_count": 0,
+        },
+        {
+            "total_findings": 8,
+            "critical_count": 0,
+            "high_count": 4,
+            "medium_count": 3,
+            "low_count": 1,
+            "info_count": 0,
+        },
     ]
     metrics = analyzer._compute_improvement_metrics(two_scans)
     assert metrics["confidence"] == "low", "2 scans should have low confidence"
@@ -644,4 +728,11 @@ def test_top_rules_empty():
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--cov=scripts.core.trend_analyzer", "--cov-report=term-missing"])
+    pytest.main(
+        [
+            __file__,
+            "-v",
+            "--cov=scripts.core.trend_analyzer",
+            "--cov-report=term-missing",
+        ]
+    )

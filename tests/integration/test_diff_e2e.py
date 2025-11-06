@@ -2,8 +2,6 @@
 
 import json
 import subprocess
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -30,6 +28,7 @@ def temp_workspace(tmp_path):
 @pytest.fixture
 def sample_findings():
     """Generate sample findings for testing."""
+
     def _create_finding(finding_id, severity, tool, path, line, message):
         return {
             "schemaVersion": "1.2.0",
@@ -40,8 +39,9 @@ def sample_findings():
             "location": {"path": path, "startLine": line},
             "message": message,
             "compliance": {},
-            "risk": {}
+            "risk": {},
         }
+
     return _create_finding
 
 
@@ -56,14 +56,24 @@ def test_e2e_directory_diff_json(temp_workspace, sample_findings):
     """
     # Setup: Create findings
     baseline_findings = [
-        sample_findings("baseline001", "HIGH", "semgrep", "src/app.py", 10, "SQL injection"),
-        sample_findings("baseline002", "MEDIUM", "trivy", "src/config.py", 20, "Hardcoded secret"),
-        sample_findings("shared001", "HIGH", "semgrep", "src/auth.py", 30, "Authentication bypass"),
+        sample_findings(
+            "baseline001", "HIGH", "semgrep", "src/app.py", 10, "SQL injection"
+        ),
+        sample_findings(
+            "baseline002", "MEDIUM", "trivy", "src/config.py", 20, "Hardcoded secret"
+        ),
+        sample_findings(
+            "shared001", "HIGH", "semgrep", "src/auth.py", 30, "Authentication bypass"
+        ),
     ]
 
     current_findings = [
-        sample_findings("current001", "CRITICAL", "semgrep", "src/api.py", 15, "Command injection"),
-        sample_findings("shared001", "HIGH", "semgrep", "src/auth.py", 30, "Authentication bypass"),
+        sample_findings(
+            "current001", "CRITICAL", "semgrep", "src/api.py", 15, "Command injection"
+        ),
+        sample_findings(
+            "shared001", "HIGH", "semgrep", "src/auth.py", 30, "Authentication bypass"
+        ),
     ]
 
     # Write findings
@@ -77,15 +87,19 @@ def test_e2e_directory_diff_json(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0, f"Diff failed: {result.stderr}"
@@ -119,7 +133,9 @@ def test_e2e_sqlite_diff_md(temp_workspace):
     2. Compare using scan IDs
     3. Validate Markdown output
     """
-    pytest.skip("SQLite diff requires history_db integration - tested in test_history_commands.py")
+    pytest.skip(
+        "SQLite diff requires history_db integration - tested in test_history_commands.py"
+    )
 
 
 def test_e2e_modification_detection(temp_workspace, sample_findings):
@@ -137,15 +153,19 @@ def test_e2e_modification_detection(temp_workspace, sample_findings):
 
     baseline_findings = [
         {
-            **sample_findings(finding_id, "MEDIUM", "semgrep", "src/app.py", 10, "SQL injection"),
-            "risk": {"cwe": "CWE-89"}
+            **sample_findings(
+                finding_id, "MEDIUM", "semgrep", "src/app.py", 10, "SQL injection"
+            ),
+            "risk": {"cwe": "CWE-89"},
         }
     ]
 
     current_findings = [
         {
-            **sample_findings(finding_id, "HIGH", "semgrep", "src/app.py", 10, "SQL injection"),
-            "risk": {"cwe": "CWE-89"}
+            **sample_findings(
+                finding_id, "HIGH", "semgrep", "src/app.py", 10, "SQL injection"
+            ),
+            "risk": {"cwe": "CWE-89"},
         }
     ]
 
@@ -160,15 +180,19 @@ def test_e2e_modification_detection(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -199,12 +223,18 @@ def test_e2e_ci_workflow(temp_workspace, sample_findings):
     """
     # Setup: Create findings with new CRITICAL
     baseline_findings = [
-        sample_findings("baseline001", "MEDIUM", "semgrep", "src/app.py", 10, "Info leak"),
+        sample_findings(
+            "baseline001", "MEDIUM", "semgrep", "src/app.py", 10, "Info leak"
+        ),
     ]
 
     current_findings = [
-        sample_findings("baseline001", "MEDIUM", "semgrep", "src/app.py", 10, "Info leak"),
-        sample_findings("current001", "CRITICAL", "trivy", "src/config.py", 20, "RCE vulnerability"),
+        sample_findings(
+            "baseline001", "MEDIUM", "semgrep", "src/app.py", 10, "Info leak"
+        ),
+        sample_findings(
+            "current001", "CRITICAL", "trivy", "src/config.py", 20, "RCE vulnerability"
+        ),
     ]
 
     # Write findings
@@ -218,16 +248,21 @@ def test_e2e_ci_workflow(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--severity", "CRITICAL,HIGH"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--severity",
+            "CRITICAL,HIGH",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -274,18 +309,25 @@ def test_e2e_filtering_combinations(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--severity", "HIGH",
-            "--tool", "semgrep",
-            "--only", "new"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--severity",
+            "HIGH",
+            "--tool",
+            "semgrep",
+            "--only",
+            "new",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -326,31 +368,39 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
     output_with = temp_workspace["workspace"] / "diff-with.json"
     result_with = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_with)
+            "--format",
+            "json",
+            "--output",
+            str(output_with),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Run diff WITHOUT modifications
     output_without = temp_workspace["workspace"] / "diff-without.json"
     result_without = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_without),
-            "--no-modifications"
+            "--format",
+            "json",
+            "--output",
+            str(output_without),
+            "--no-modifications",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result_with.returncode == 0
@@ -394,15 +444,19 @@ def test_e2e_html_output(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff-report.html"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "html",
-            "--output", str(output_path)
+            "--format",
+            "html",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -436,15 +490,19 @@ def test_e2e_markdown_output(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.md"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "md",
-            "--output", str(output_path)
+            "--format",
+            "md",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -478,15 +536,19 @@ def test_e2e_sarif_output(temp_workspace, sample_findings):
     output_path = temp_workspace["workspace"] / "diff.sarif"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "sarif",
-            "--output", str(output_path)
+            "--format",
+            "sarif",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0

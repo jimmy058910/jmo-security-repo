@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+
 def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None:
     """
     Export trend report to CSV for Excel/BI tools.
@@ -32,19 +33,21 @@ def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None:
         writer = csv.writer(f)
 
         # Header
-        writer.writerow([
-            "Timestamp",
-            "Scan ID",
-            "CRITICAL",
-            "HIGH",
-            "MEDIUM",
-            "LOW",
-            "INFO",
-            "Total",
-            "Security Score",
-            "Score Trend",
-            "Remediation Rate",
-        ])
+        writer.writerow(
+            [
+                "Timestamp",
+                "Scan ID",
+                "CRITICAL",
+                "HIGH",
+                "MEDIUM",
+                "LOW",
+                "INFO",
+                "Total",
+                "Security Score",
+                "Score Trend",
+                "Remediation Rate",
+            ]
+        )
 
         # Extract data from analysis dict
         severity_trends = analysis.get("severity_trends", {})
@@ -87,29 +90,28 @@ def export_to_csv(analysis: Dict[str, Any], output_path: Path) -> None:
 
             # Calculate per-scan score (approximation)
             scan_score = 10.0 - (
-                crit_count * 3.0
-                + high_count * 1.0
-                + med_count * 0.3
-                + low_count * 0.1
+                crit_count * 3.0 + high_count * 1.0 + med_count * 0.3 + low_count * 0.1
             )
             scan_score = max(0.0, min(10.0, scan_score))
 
             # Only include trend and remediation rate for latest scan
             is_latest = i == max_len - 1
 
-            writer.writerow([
-                timestamp,
-                scan_id,
-                crit_count,
-                high_count,
-                med_count,
-                low_count,
-                info_count,
-                total,
-                f"{scan_score:.1f}",
-                score_trend if is_latest else "",
-                f"{remediation_rate:.2f}" if is_latest else "",
-            ])
+            writer.writerow(
+                [
+                    timestamp,
+                    scan_id,
+                    crit_count,
+                    high_count,
+                    med_count,
+                    low_count,
+                    info_count,
+                    total,
+                    f"{scan_score:.1f}",
+                    score_trend if is_latest else "",
+                    f"{remediation_rate:.2f}" if is_latest else "",
+                ]
+            )
 
 
 def export_to_prometheus(analysis: Dict[str, Any], output_path: Path) -> None:
@@ -323,7 +325,10 @@ def export_to_grafana(analysis: Dict[str, Any], output_path: Path) -> None:
                     "type": "stat",
                     "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
                     "targets": [{"expr": "jmo_remediation_rate", "refId": "A"}],
-                    "options": {"textMode": "value_and_name", "colorMode": "background"},
+                    "options": {
+                        "textMode": "value_and_name",
+                        "colorMode": "background",
+                    },
                     "fieldConfig": {
                         "defaults": {
                             "unit": "findings/day",
@@ -345,7 +350,10 @@ def export_to_grafana(analysis: Dict[str, Any], output_path: Path) -> None:
                     "type": "stat",
                     "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8},
                     "targets": [{"expr": "jmo_net_remediation", "refId": "A"}],
-                    "options": {"textMode": "value_and_name", "colorMode": "background"},
+                    "options": {
+                        "textMode": "value_and_name",
+                        "colorMode": "background",
+                    },
                     "fieldConfig": {
                         "defaults": {
                             "unit": "findings",

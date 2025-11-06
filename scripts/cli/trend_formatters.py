@@ -18,13 +18,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.text import Text
-from rich import box
 
 
 console = Console()
@@ -106,9 +102,13 @@ def format_terminal_report(analysis: Dict[str, Any], verbose: bool = False) -> s
 def _format_security_score(security_score: Dict[str, Any]) -> str:
     """Format security score as gauge with color coding."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append("📊 SECURITY POSTURE SCORE")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     current_score = security_score.get("current_score", 0.0)
     grade = security_score.get("grade", "F")
@@ -144,7 +144,9 @@ def _format_security_score(security_score: Dict[str, Any]) -> str:
     filled = int((current_score / 100.0) * bar_length)
     bar = "█" * filled + "░" * (bar_length - filled)
 
-    lines.append(f"  Score: {current_score:.1f}/100.0 | Grade: {grade} | {rating} {color_indicator}")
+    lines.append(
+        f"  Score: {current_score:.1f}/100.0 | Grade: {grade} | {rating} {color_indicator}"
+    )
     lines.append(f"  Trend: {trend_icon}")
     lines.append(f"  [{bar}]")
 
@@ -164,9 +166,13 @@ def _format_security_score(security_score: Dict[str, Any]) -> str:
 def _format_severity_trends(severity_trends: Dict[str, Any]) -> str:
     """Format severity trends with sparklines."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append("📈 SEVERITY TRENDS")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     by_severity = severity_trends.get("by_severity", {})
 
@@ -211,9 +217,7 @@ def _format_severity_trends(severity_trends: Dict[str, Any]) -> str:
         total_change = latest_total - oldest_total
 
         lines.append("  " + "-" * 76)
-        lines.append(
-            f"  {'TOTAL':<12} {latest_total:<8} {total_change:+d}"
-        )
+        lines.append(f"  {'TOTAL':<12} {latest_total:<8} {total_change:+d}")
 
     return "\n".join(lines)
 
@@ -246,9 +250,7 @@ def _create_sparkline(counts: List[int], severity: str = "") -> str:
         return spark_chars[0] * min(len(counts), 30)
 
     # Normalize to 0-7 range
-    normalized = [
-        int((count - min_val) / (max_val - min_val) * 7) for count in counts
-    ]
+    normalized = [int((count - min_val) / (max_val - min_val) * 7) for count in counts]
 
     # Truncate to 30 chars for display
     sparkline = "".join(spark_chars[n] for n in normalized[:30])
@@ -259,9 +261,13 @@ def _create_sparkline(counts: List[int], severity: str = "") -> str:
 def _format_improvement_metrics(improvement: Dict[str, Any]) -> str:
     """Format improvement metrics comparing first and last scan."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append("📊 IMPROVEMENT METRICS")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     net_change = improvement.get("net_change", 0)
     resolved = improvement.get("resolved", 0)
@@ -279,7 +285,9 @@ def _format_improvement_metrics(improvement: Dict[str, Any]) -> str:
         icon = "➡️"
         status = "STABLE"
 
-    lines.append(f"  {icon} Net Change: {net_change:+d} findings ({percent_change:+.1f}%) - {status}")
+    lines.append(
+        f"  {icon} Net Change: {net_change:+d} findings ({percent_change:+.1f}%) - {status}"
+    )
     lines.append(f"  🔧 Resolved: {resolved}")
     lines.append(f"  ➕ Introduced: {introduced}")
 
@@ -299,9 +307,13 @@ def _format_improvement_metrics(improvement: Dict[str, Any]) -> str:
 def _format_regressions(regressions: List[Dict[str, Any]]) -> str:
     """Format regression alerts as a table."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append(f"⚠️  REGRESSIONS DETECTED ({len(regressions)})")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     if not regressions:
         lines.append("  No regressions detected")
@@ -319,7 +331,9 @@ def _format_regressions(regressions: List[Dict[str, Any]]) -> str:
         current_val = reg.get("current_value")
         previous_val = reg.get("previous_value")
         if current_val is not None and previous_val is not None:
-            lines.append(f"     Count: {previous_val} → {current_val} ({current_val - previous_val:+d})")
+            lines.append(
+                f"     Count: {previous_val} → {current_val} ({current_val - previous_val:+d})"
+            )
 
         lines.append("")
 
@@ -332,9 +346,13 @@ def _format_regressions(regressions: List[Dict[str, Any]]) -> str:
 def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> str:
     """Format automated insights with priority grouping."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append(f"💡 INSIGHTS ({len(insights)})")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     if not insights:
         lines.append("  No insights generated")
@@ -361,7 +379,6 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
         for insight in priority_insights:
             icon = insight.get("icon", "•")
             message = insight.get("message", "No message")
-            category = insight.get("category", "general")
 
             lines.append(f"  {icon} {message}")
 
@@ -383,9 +400,13 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
 def _format_top_rules(top_rules: List[Dict[str, Any]]) -> str:
     """Format top rules by frequency."""
     lines = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
     lines.append(f"🔥 TOP RULES ({len(top_rules)})")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
 
     if not top_rules:
         lines.append("  No rules data available")
@@ -437,8 +458,12 @@ def format_comparison(
     lines.append("=" * 80)
 
     # Scan metadata
-    lines.append(f"\nScan 1: {scan1.get('id', 'unknown')[:8]} ({scan1.get('timestamp_iso', 'N/A')})")
-    lines.append(f"Scan 2: {scan2.get('id', 'unknown')[:8]} ({scan2.get('timestamp_iso', 'N/A')})")
+    lines.append(
+        f"\nScan 1: {scan1.get('id', 'unknown')[:8]} ({scan1.get('timestamp_iso', 'N/A')})"
+    )
+    lines.append(
+        f"Scan 2: {scan2.get('id', 'unknown')[:8]} ({scan2.get('timestamp_iso', 'N/A')})"
+    )
     lines.append("")
 
     # Severity comparison table
@@ -521,9 +546,11 @@ def format_html_report(analysis: Dict[str, Any]) -> str:
 
     # Format timestamps for Chart.js
     formatted_timestamps = [
-        datetime.fromisoformat(ts.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
-        if ts
-        else "Unknown"
+        (
+            datetime.fromisoformat(ts.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
+            if ts
+            else "Unknown"
+        )
         for ts in timestamps
     ]
 
@@ -544,9 +571,9 @@ def format_html_report(analysis: Dict[str, Any]) -> str:
                     "label": severity,
                     "data": by_severity[severity],
                     "borderColor": colors[severity],
-                    "backgroundColor": colors[severity].replace("rgb", "rgba").replace(
-                        ")", ", 0.1)"
-                    ),
+                    "backgroundColor": colors[severity]
+                    .replace("rgb", "rgba")
+                    .replace(")", ", 0.1)"),
                     "tension": 0.4,
                 }
             )

@@ -9,7 +9,6 @@ added to the wizard in v1.0.0.
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -24,7 +23,8 @@ def mock_db(tmp_path):
     cursor = conn.cursor()
 
     # Create scans table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
@@ -32,10 +32,12 @@ def mock_db(tmp_path):
             branch TEXT,
             total_findings INTEGER
         )
-    """)
+    """
+    )
 
     # Create findings table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE findings (
             id INTEGER PRIMARY KEY,
             scan_id TEXT,
@@ -50,7 +52,8 @@ def mock_db(tmp_path):
             raw_finding TEXT,
             FOREIGN KEY(scan_id) REFERENCES scans(id)
         )
-    """)
+    """
+    )
 
     # Insert test scans
     test_scans = [
@@ -59,17 +62,70 @@ def mock_db(tmp_path):
         ("scan3", "2025-11-03T10:00:00", "balanced", "main", 5),
     ]
 
-    cursor.executemany(
-        "INSERT INTO scans VALUES (?, ?, ?, ?, ?)", test_scans
-    )
+    cursor.executemany("INSERT INTO scans VALUES (?, ?, ?, ?, ?)", test_scans)
 
     # Insert test findings
     test_findings = [
-        ("scan1", "fp1", "HIGH", "semgrep", "rule1", "src/main.py", 10, 15, "Test finding 1", "{}"),
-        ("scan1", "fp2", "MEDIUM", "trivy", "rule2", "src/app.py", 20, 25, "Test finding 2", "{}"),
-        ("scan2", "fp2", "MEDIUM", "trivy", "rule2", "src/app.py", 20, 25, "Test finding 2", "{}"),
-        ("scan2", "fp3", "LOW", "bandit", "rule3", "src/util.py", 30, 35, "Test finding 3", "{}"),
-        ("scan3", "fp3", "LOW", "bandit", "rule3", "src/util.py", 30, 35, "Test finding 3", "{}"),
+        (
+            "scan1",
+            "fp1",
+            "HIGH",
+            "semgrep",
+            "rule1",
+            "src/main.py",
+            10,
+            15,
+            "Test finding 1",
+            "{}",
+        ),
+        (
+            "scan1",
+            "fp2",
+            "MEDIUM",
+            "trivy",
+            "rule2",
+            "src/app.py",
+            20,
+            25,
+            "Test finding 2",
+            "{}",
+        ),
+        (
+            "scan2",
+            "fp2",
+            "MEDIUM",
+            "trivy",
+            "rule2",
+            "src/app.py",
+            20,
+            25,
+            "Test finding 2",
+            "{}",
+        ),
+        (
+            "scan2",
+            "fp3",
+            "LOW",
+            "bandit",
+            "rule3",
+            "src/util.py",
+            30,
+            35,
+            "Test finding 3",
+            "{}",
+        ),
+        (
+            "scan3",
+            "fp3",
+            "LOW",
+            "bandit",
+            "rule3",
+            "src/util.py",
+            30,
+            35,
+            "Test finding 3",
+            "{}",
+        ),
     ]
 
     cursor.executemany(
@@ -129,13 +185,16 @@ def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
     db_dir.mkdir(parents=True)
     target_db = db_dir / "history.db"
     import shutil
+
     shutil.copy(mock_db, target_db)
 
     monkeypatch.setenv("HOME", str(tmp_path))
 
     # Mock user declining prompt AND explore_trends_interactive
     with mock.patch("builtins.input", return_value="n"):
-        with mock.patch("scripts.cli.wizard.explore_trends_interactive") as mock_explore:
+        with mock.patch(
+            "scripts.cli.wizard.explore_trends_interactive"
+        ) as mock_explore:
             offer_trend_analysis_after_scan("results")
             # Verify it didn't call explore (user declined)
             assert not mock_explore.called
@@ -180,7 +239,9 @@ def test_explore_trends_menu_option_1(tmp_path, mock_db, capsys):
 
     with mock.patch("builtins.input", side_effect=inputs_with_enter):
         # Mock the _run_trend_command_interactive function
-        with mock.patch("scripts.cli.wizard._run_trend_command_interactive") as mock_run:
+        with mock.patch(
+            "scripts.cli.wizard._run_trend_command_interactive"
+        ) as mock_run:
             explore_trends_interactive(mock_db, "results")
             # Verify it was called with correct params
             assert mock_run.called
@@ -209,14 +270,15 @@ def test_explore_trends_menu_option_8(tmp_path, mock_db, capsys):
 
 def test_run_trend_command_analyze(tmp_path, mock_db):
     """Test running trend analyze command."""
-    import sys
     from scripts.cli.wizard import _run_trend_command_interactive
 
     # Mock the trend_commands module as if it was imported
     fake_trend_commands = mock.MagicMock()
     fake_trend_commands.cmd_trends_analyze = mock.MagicMock(return_value=0)
 
-    with mock.patch.dict("sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}):
+    with mock.patch.dict(
+        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+    ):
         with mock.patch("builtins.input", return_value=""):  # Enter to continue
             with mock.patch("builtins.print"):  # Suppress output
                 _run_trend_command_interactive(mock_db, "analyze", last_n=30)
@@ -277,7 +339,9 @@ def test_compare_scans_success(tmp_path, mock_db):
     inputs = ["1", "2", ""]
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0):
+        with mock.patch(
+            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
+        ):
             with mock.patch("builtins.print"):  # Suppress output
                 _compare_scans_interactive(mock_db)
 
@@ -290,7 +354,9 @@ def test_compare_scans_invalid_selection(tmp_path, mock_db):
     inputs = ["999", "1", "abc", "2", ""]
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0):
+        with mock.patch(
+            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
+        ):
             with mock.patch("builtins.print"):  # Suppress output
                 _compare_scans_interactive(mock_db)
 
@@ -303,7 +369,9 @@ def test_compare_scans_same_scan(tmp_path, mock_db):
     inputs = ["1", "1", "2", ""]
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0):
+        with mock.patch(
+            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
+        ):
             with mock.patch("builtins.print"):  # Suppress output
                 _compare_scans_interactive(mock_db)
 
@@ -324,8 +392,12 @@ def test_export_trends_html(tmp_path, mock_db, monkeypatch):
     inputs = ["html", "2", "n", ""]  # Enter at end for continue
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends") as mock_analyze:
-            with mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format:
+        with mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+        ) as mock_analyze:
+            with mock.patch(
+                "scripts.cli.trend_formatters.format_html_report"
+            ) as mock_format:
                 with mock.patch("builtins.print"):  # Suppress output
                     mock_analyze.return_value = {}
                     mock_format.return_value = "<html>Test Report</html>"
@@ -349,8 +421,12 @@ def test_export_trends_json(tmp_path, mock_db):
     inputs = ["json", "4", ""]
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends") as mock_analyze:
-            with mock.patch("scripts.cli.trend_formatters.format_json_report") as mock_format:
+        with mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+        ) as mock_analyze:
+            with mock.patch(
+                "scripts.cli.trend_formatters.format_json_report"
+            ) as mock_format:
                 with mock.patch("builtins.print"):  # Suppress output
                     mock_analyze.return_value = {}
                     mock_format.return_value = '{"test": "report"}'
@@ -374,8 +450,12 @@ def test_export_trends_html_with_browser(tmp_path, mock_db):
     inputs = ["html", "1", "y", ""]  # Enter at end for continue
 
     with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch("scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends") as mock_analyze:
-            with mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format:
+        with mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+        ) as mock_analyze:
+            with mock.patch(
+                "scripts.cli.trend_formatters.format_html_report"
+            ) as mock_format:
                 with mock.patch("webbrowser.open") as mock_browser:
                     with mock.patch("builtins.print"):  # Suppress output
                         mock_analyze.return_value = {}
@@ -422,6 +502,7 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     db_dir.mkdir(parents=True)
     target_db = db_dir / "history.db"
     import shutil
+
     shutil.copy(mock_db, target_db)
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -444,8 +525,12 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     mock_conn.execute.return_value = mock_cursor
 
     with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn):
-            with mock.patch("scripts.cli.wizard._run_trend_command_interactive") as mock_run:
+        with mock.patch(
+            "scripts.core.history_db.get_connection", return_value=mock_conn
+        ):
+            with mock.patch(
+                "scripts.cli.wizard._run_trend_command_interactive"
+            ) as mock_run:
                 with mock.patch("builtins.print"):  # Suppress output
                     result = run_wizard(
                         yes=True,
@@ -465,6 +550,7 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     db_dir.mkdir(parents=True)
     target_db = db_dir / "history.db"
     import shutil
+
     shutil.copy(mock_db, target_db)
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -486,9 +572,15 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     mock_conn.execute.return_value = mock_cursor
 
     with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn):
-            with mock.patch("scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends") as mock_analyze:
-                with mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format:
+        with mock.patch(
+            "scripts.core.history_db.get_connection", return_value=mock_conn
+        ):
+            with mock.patch(
+                "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+            ) as mock_analyze:
+                with mock.patch(
+                    "scripts.cli.trend_formatters.format_html_report"
+                ) as mock_format:
                     with mock.patch("builtins.print"):  # Suppress output
                         mock_analyze.return_value = {}
                         mock_format.return_value = "<html>Test</html>"
@@ -512,6 +604,7 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     db_dir.mkdir(parents=True)
     target_db = db_dir / "history.db"
     import shutil
+
     shutil.copy(mock_db, target_db)
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -533,9 +626,15 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     mock_conn.execute.return_value = mock_cursor
 
     with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn):
-            with mock.patch("scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends") as mock_analyze:
-                with mock.patch("scripts.cli.trend_formatters.format_json_report") as mock_format:
+        with mock.patch(
+            "scripts.core.history_db.get_connection", return_value=mock_conn
+        ):
+            with mock.patch(
+                "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+            ) as mock_analyze:
+                with mock.patch(
+                    "scripts.cli.trend_formatters.format_json_report"
+                ) as mock_format:
                     with mock.patch("builtins.print"):  # Suppress output
                         mock_analyze.return_value = {}
                         mock_format.return_value = '{"test": "report"}'

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 from scripts.core.history_db import (
     get_connection,
@@ -33,7 +33,6 @@ from scripts.core.history_db import (
 from scripts.core.trend_analyzer import (
     TrendAnalyzer,
     validate_trend_significance,
-    format_trend_summary,
 )
 from scripts.cli.trend_formatters import (
     format_terminal_report,
@@ -98,7 +97,9 @@ def cmd_trends_analyze(args) -> int:
 
         # Statistical validation (if requested)
         if validate_stats and "severity_trends" in analysis:
-            sys.stdout.write("\nRunning statistical validation (Mann-Kendall test)...\n")
+            sys.stdout.write(
+                "\nRunning statistical validation (Mann-Kendall test)...\n"
+            )
             severity_trends_data = analysis["severity_trends"]["by_severity"]
             validation_results = validate_trend_significance(severity_trends_data)
             analysis["statistical_validation"] = validation_results
@@ -121,7 +122,11 @@ def cmd_trends_analyze(args) -> int:
                     if severity in ["CRITICAL", "HIGH"]:
                         trend = results["trend"]
                         p_value = results["p_value"]
-                        significant = "✅ SIGNIFICANT" if results["significant"] else "❌ Not significant"
+                        significant = (
+                            "✅ SIGNIFICANT"
+                            if results["significant"]
+                            else "❌ Not significant"
+                        )
                         sys.stdout.write(
                             f"{severity:10s}: {trend:15s} (p={p_value:.4f}) {significant}\n"
                         )
@@ -221,9 +226,7 @@ def cmd_trends_show(args) -> int:
 
         from scripts.core.history_db import list_scans
 
-        all_scans = list(
-            map(dict, list_scans(conn, branch=branch, limit=1000))
-        )
+        all_scans = list(map(dict, list_scans(conn, branch=branch, limit=1000)))
 
         # Find index of target scan
         scan_index = None
@@ -248,7 +251,7 @@ def cmd_trends_show(args) -> int:
         sys.stdout.write(f"\n📊 Trend Context for Scan: {scan_id[:8]}...\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
-        sys.stdout.write(f"Target Scan:\n")
+        sys.stdout.write("Target Scan:\n")
         sys.stdout.write(f"  Timestamp: {scan['timestamp_iso'][:19]}\n")
         sys.stdout.write(f"  Branch:    {scan['branch'] or 'N/A'}\n")
         sys.stdout.write(f"  Profile:   {scan['profile']}\n")
@@ -803,9 +806,7 @@ def cmd_trends_developers(args) -> int:
         report = analyzer.analyze(last_n=last_n)  # type: ignore[attr-defined]
 
         if report.scan_count < 2:
-            sys.stdout.write(
-                "⚠️  Need at least 2 scans to detect resolved findings.\n"
-            )
+            sys.stdout.write("⚠️  Need at least 2 scans to detect resolved findings.\n")
             sys.stdout.write(f"   Found {report.scan_count} scan(s) in history.\n")
             sys.stdout.write("   Run more scans to enable developer attribution.\n")
             return 0
@@ -881,7 +882,7 @@ def cmd_trends_developers(args) -> int:
                 if row[8]:  # raw_finding column
                     try:
                         raw = json.loads(row[8])
-                    except:
+                    except (json.JSONDecodeError, TypeError, ValueError):
                         pass
 
                 return {
@@ -900,9 +901,7 @@ def cmd_trends_developers(args) -> int:
         dev_stats = attrib.analyze_remediation_by_developer(resolved_fps, hdb)
 
         if not dev_stats:
-            sys.stdout.write(
-                "No developer attribution data available.\n"
-            )
+            sys.stdout.write("No developer attribution data available.\n")
             sys.stdout.write(
                 "This can happen if:\n"
                 "- Files were deleted or moved\n"
@@ -912,7 +911,9 @@ def cmd_trends_developers(args) -> int:
             return 0
 
         # Display results
-        sys.stdout.write(f"📊 Top {min(top, len(dev_stats))} Developers by Remediation:\n")
+        sys.stdout.write(
+            f"📊 Top {min(top, len(dev_stats))} Developers by Remediation:\n"
+        )
         sys.stdout.write("=" * 70 + "\n\n")
 
         for i, dev in enumerate(dev_stats[:top], 1):
@@ -955,7 +956,9 @@ def cmd_trends_developers(args) -> int:
         # Top contributors summary
         if len(dev_stats) >= 3:
             top3_resolved = sum(d.findings_resolved for d in dev_stats[:3])
-            top3_percent = (top3_resolved / total_resolved * 100) if total_resolved > 0 else 0
+            top3_percent = (
+                (top3_resolved / total_resolved * 100) if total_resolved > 0 else 0
+            )
             sys.stdout.write(
                 f"Top 3 contributors: {top3_resolved} findings ({top3_percent:.1f}%)\n"
             )
@@ -968,6 +971,7 @@ def cmd_trends_developers(args) -> int:
     except Exception as e:
         sys.stderr.write(f"Error during developer attribution: {e}\n")
         import traceback
+
         traceback.print_exc()
         return 1
 

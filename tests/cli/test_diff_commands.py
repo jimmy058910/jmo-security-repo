@@ -2,7 +2,6 @@
 
 import json
 import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -12,7 +11,7 @@ from scripts.cli.diff_commands import (
     _filter_by_tool,
     _filter_by_category,
 )
-from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
+from scripts.core.diff_engine import DiffResult, DiffSource
 
 
 @pytest.fixture
@@ -161,8 +160,12 @@ def sample_scan_directories(tmp_path):
         },
     ]
 
-    (baseline_summaries / "findings.json").write_text(json.dumps(baseline_findings, indent=2))
-    (current_summaries / "findings.json").write_text(json.dumps(current_findings, indent=2))
+    (baseline_summaries / "findings.json").write_text(
+        json.dumps(baseline_findings, indent=2)
+    )
+    (current_summaries / "findings.json").write_text(
+        json.dumps(current_findings, indent=2)
+    )
 
     return baseline_root, current_root
 
@@ -462,6 +465,7 @@ def test_cli_only_new(sample_scan_directories, tmp_path):
 
 def test_cli_invalid_args():
     """Test error handling for invalid arguments."""
+
     class Args:
         directories = ["only-one-directory"]  # Need 2 directories
         scan_ids = None
@@ -483,6 +487,7 @@ def test_cli_invalid_args():
 
 def test_cli_missing_directory():
     """Test error when directory doesn't exist."""
+
     class Args:
         directories = ["/nonexistent1", "/nonexistent2"]
         scan_ids = None

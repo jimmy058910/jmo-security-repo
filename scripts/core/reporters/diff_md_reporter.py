@@ -95,7 +95,9 @@ def _write_summary(md: StringIO, diff: DiffResult) -> None:
         "stable": "➖",
     }.get(stats["trend"], "➖")
 
-    md.write(f"| **New Findings** | {stats['total_new']} | 🔴 +{stats['total_new']} |\n")
+    md.write(
+        f"| **New Findings** | {stats['total_new']} | 🔴 +{stats['total_new']} |\n"
+    )
     md.write(
         f"| **Resolved Findings** | {stats['total_resolved']} | ✅ -{stats['total_resolved']} |\n"
     )
@@ -169,7 +171,9 @@ def _write_resolved_findings(md: StringIO, diff: DiffResult) -> None:
             tool_name = finding.get("tool", {}).get("name", "unknown")
             message = finding.get("message", "")[:80]
 
-            md.write(f"- ✅ **{message}** in `{path}:{line}` ({tool_name}, {rule_id})\n")
+            md.write(
+                f"- ✅ **{message}** in `{path}:{line}` ({tool_name}, {rule_id})\n"
+            )
 
         md.write("\n")
 
@@ -213,7 +217,9 @@ def _write_modified_findings(md: StringIO, diff: DiffResult) -> None:
                 md.write(f"- **Severity:** {old} → **{new}** (⚠️ {mod.risk_delta})\n")
             elif change_type == "priority":
                 old, new = change_value
-                md.write(f"- **Priority:** {old:.1f} → {new:.1f} (⚠️ {mod.risk_delta})\n")
+                md.write(
+                    f"- **Priority:** {old:.1f} → {new:.1f} (⚠️ {mod.risk_delta})\n"
+                )
             elif change_type == "compliance_added":
                 md.write(f"- **Compliance:** +{len(change_value)} framework mappings\n")
             elif change_type == "cwe":
@@ -266,8 +272,16 @@ def _write_finding_details(md: StringIO, finding: Dict) -> None:
         if "cweTop25_2024" in compliance and compliance["cweTop25_2024"]:
             cwe_items = compliance["cweTop25_2024"]
             if cwe_items:
-                cwe_id = cwe_items[0].get("cweId", "") if isinstance(cwe_items[0], dict) else ""
-                rank = cwe_items[0].get("rank", "") if isinstance(cwe_items[0], dict) else ""
+                cwe_id = (
+                    cwe_items[0].get("cweId", "")
+                    if isinstance(cwe_items[0], dict)
+                    else ""
+                )
+                rank = (
+                    cwe_items[0].get("rank", "")
+                    if isinstance(cwe_items[0], dict)
+                    else ""
+                )
                 if cwe_id:
                     md.write(f"- CWE Top 25 2024: {cwe_id}, Rank #{rank}\n")
         md.write("\n")

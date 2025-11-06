@@ -12,8 +12,6 @@ Tests cover:
 
 import json
 import subprocess
-import tempfile
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -179,7 +177,9 @@ def test_analyze_remediation_by_developer_with_mocked_blame(mock_repo, mock_hist
     assert result[0].net_contribution == 2
 
 
-def test_analyze_remediation_by_developer_multiple_developers(mock_repo, mock_history_db):
+def test_analyze_remediation_by_developer_multiple_developers(
+    mock_repo, mock_history_db
+):
     """Test analysis with multiple developers."""
     attrib = DeveloperAttribution(mock_repo)
 
@@ -573,7 +573,7 @@ def test_analyze_remediation_git_blame_fails(mock_repo, mock_history_db):
     attrib = DeveloperAttribution(mock_repo)
 
     # Mock git blame to always return None
-    attrib._git_blame_line = lambda f, l: None
+    attrib._git_blame_line = lambda f, line_num: None
 
     resolved = {"fp1", "fp2"}
     result = attrib.analyze_remediation_by_developer(resolved, mock_history_db)

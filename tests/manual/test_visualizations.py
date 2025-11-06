@@ -205,7 +205,7 @@ def test_html_generation():
 
     print(f"\n✅ HTML report generated: {output_file}")
     print(f"   File size: {len(html)} bytes")
-    print(f"   Open in browser to view interactive charts")
+    print("   Open in browser to view interactive charts")
 
 
 if __name__ == "__main__":

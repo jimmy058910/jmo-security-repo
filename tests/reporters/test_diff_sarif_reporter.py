@@ -1,7 +1,6 @@
 """Tests for SARIF diff reporter."""
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -327,7 +326,10 @@ def test_sarif_unicode_handling(tmp_path):
     result = sarif["runs"][0]["results"][0]
     assert "你好" in result["message"]["text"]
     assert "🚨" in result["message"]["text"]
-    assert "файл.py" in result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    assert (
+        "файл.py"
+        in result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    )
 
 
 def test_sarif_creates_parent_directory(tmp_path, sample_diff_result):

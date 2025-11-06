@@ -1,6 +1,5 @@
 """Tests for Markdown diff reporter."""
 
-from pathlib import Path
 
 import pytest
 
@@ -507,23 +506,49 @@ def test_markdown_modification_types(tmp_path):
     modified_findings = [
         ModifiedFinding(
             fingerprint="fp1",
-            changes={"compliance_added": ["owaspTop10_2021:A03:2021", "cweTop25_2024:CWE-79"]},
-            baseline={"id": "fp1", "location": {"path": "test1.py", "startLine": 10}, "ruleId": "R1"},
-            current={"id": "fp1", "location": {"path": "test1.py", "startLine": 10}, "ruleId": "R1"},
+            changes={
+                "compliance_added": ["owaspTop10_2021:A03:2021", "cweTop25_2024:CWE-79"]
+            },
+            baseline={
+                "id": "fp1",
+                "location": {"path": "test1.py", "startLine": 10},
+                "ruleId": "R1",
+            },
+            current={
+                "id": "fp1",
+                "location": {"path": "test1.py", "startLine": 10},
+                "ruleId": "R1",
+            },
             risk_delta="unchanged",
         ),
         ModifiedFinding(
             fingerprint="fp2",
             changes={"cwe": ["CWE-79", "CWE-89"]},
-            baseline={"id": "fp2", "location": {"path": "test2.py", "startLine": 20}, "ruleId": "R2"},
-            current={"id": "fp2", "location": {"path": "test2.py", "startLine": 20}, "ruleId": "R2"},
+            baseline={
+                "id": "fp2",
+                "location": {"path": "test2.py", "startLine": 20},
+                "ruleId": "R2",
+            },
+            current={
+                "id": "fp2",
+                "location": {"path": "test2.py", "startLine": 20},
+                "ruleId": "R2",
+            },
             risk_delta="worsened",
         ),
         ModifiedFinding(
             fingerprint="fp3",
             changes={"message": ["Old message" * 10, "New message" * 15]},
-            baseline={"id": "fp3", "location": {"path": "test3.py", "startLine": 30}, "ruleId": "R3"},
-            current={"id": "fp3", "location": {"path": "test3.py", "startLine": 30}, "ruleId": "R3"},
+            baseline={
+                "id": "fp3",
+                "location": {"path": "test3.py", "startLine": 30},
+                "ruleId": "R3",
+            },
+            current={
+                "id": "fp3",
+                "location": {"path": "test3.py", "startLine": 30},
+                "ruleId": "R3",
+            },
             risk_delta="unchanged",
         ),
     ]

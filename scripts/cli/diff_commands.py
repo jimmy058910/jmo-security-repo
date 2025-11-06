@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Set, Optional, Tuple
+from typing import Dict, Any, Set, Optional, Tuple
 
 from scripts.core.diff_engine import DiffEngine, DiffResult
 from scripts.core.reporters import (
@@ -18,7 +18,6 @@ from scripts.core.reporters import (
 try:
     from rich.console import Console
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.panel import Panel
     from rich.tree import Tree
 
@@ -92,11 +91,17 @@ def detect_git_context() -> Optional[Dict[str, Any]]:
             "pr_target": pr_target or "main",
             "platform": platform,
         }
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
         return None
 
 
-def auto_detect_scans(git_context: Optional[Dict[str, Any]] = None) -> Optional[Tuple[str, str]]:
+def auto_detect_scans(
+    git_context: Optional[Dict[str, Any]] = None,
+) -> Optional[Tuple[str, str]]:
     """
     Auto-detect baseline and current scan directories/IDs.
 
@@ -188,15 +193,30 @@ def print_diff_summary_rich(diff_result: DiffResult) -> None:
 
     # Determine trend color
     trend = stats.get("trend", "neutral")
-    trend_colors = {"improving": "green", "stable": "yellow", "degrading": "red", "neutral": "white"}
+    trend_colors = {
+        "improving": "green",
+        "stable": "yellow",
+        "degrading": "red",
+        "neutral": "white",
+    }
     trend_color = trend_colors.get(trend, "white")
     trend_text = f"Trend: [{trend_color}]{trend.upper()}[/{trend_color}]"
 
-    console.print(Panel(f"{summary_text}\n{trend_text}", title="📊 Diff Summary", border_style="cyan"))
+    console.print(
+        Panel(
+            f"{summary_text}\n{trend_text}",
+            title="📊 Diff Summary",
+            border_style="cyan",
+        )
+    )
 
     # Create severity breakdown table
     if stats.get("new", {}):
-        table = Table(title="New Findings by Severity", show_header=True, header_style="bold magenta")
+        table = Table(
+            title="New Findings by Severity",
+            show_header=True,
+            header_style="bold magenta",
+        )
         table.add_column("Severity", style="cyan", no_wrap=True)
         table.add_column("Count", justify="right", style="yellow")
         table.add_column("Change", justify="right")
@@ -206,16 +226,24 @@ def print_diff_summary_rich(diff_result: DiffResult) -> None:
             new_count = stats.get("new", {}).get(sev, 0)
             resolved_count = stats.get("resolved", {}).get(sev, 0)
             if new_count > 0 or resolved_count > 0:
-                change = f"+{new_count - resolved_count}" if new_count > resolved_count else f"{new_count - resolved_count}"
+                change = (
+                    f"+{new_count - resolved_count}"
+                    if new_count > resolved_count
+                    else f"{new_count - resolved_count}"
+                )
                 change_style = "red" if new_count > resolved_count else "green"
-                table.add_row(sev, str(new_count), f"[{change_style}]{change}[/{change_style}]")
+                table.add_row(
+                    sev, str(new_count), f"[{change_style}]{change}[/{change_style}]"
+                )
 
         console.print(table)
 
     # Tool breakdown
     if stats.get("by_tool", {}):
         tool_tree = Tree("🔧 Findings by Tool")
-        for tool, count in sorted(stats.get("by_tool", {}).items(), key=lambda x: x[1], reverse=True):
+        for tool, count in sorted(
+            stats.get("by_tool", {}).items(), key=lambda x: x[1], reverse=True
+        ):
             tool_tree.add(f"[cyan]{tool}[/cyan]: {count} findings")
 
         console.print(tool_tree)
@@ -244,8 +272,14 @@ def cmd_diff(args) -> int:
             print("Error: Could not auto-detect scan directories", file=sys.stderr)
             print("", file=sys.stderr)
             print("Auto-detection looks for:", file=sys.stderr)
-            print("  Baseline: baseline-results/, results-baseline/, main-results/", file=sys.stderr)
-            print("  Current:  current-results/, results-current/, results/", file=sys.stderr)
+            print(
+                "  Baseline: baseline-results/, results-baseline/, main-results/",
+                file=sys.stderr,
+            )
+            print(
+                "  Current:  current-results/, results-current/, results/",
+                file=sys.stderr,
+            )
             print("", file=sys.stderr)
             print("Run scans first or specify directories manually:", file=sys.stderr)
             print("  jmo diff baseline-results/ current-results/", file=sys.stderr)
@@ -266,12 +300,15 @@ def cmd_diff(args) -> int:
         args.scan_ids = None
 
         # Display auto-detection results
-        print(f"🔍 Auto-detected configuration:", file=sys.stderr)
+        print("🔍 Auto-detected configuration:", file=sys.stderr)
         print(f"   Baseline: {baseline}", file=sys.stderr)
         print(f"   Current:  {current}", file=sys.stderr)
         print(f"   Format:   {args.format}", file=sys.stderr)
         if git_context and git_context.get("is_pr"):
-            print(f"   Context:  PR from {git_context['current_branch']} → {git_context['pr_target']}", file=sys.stderr)
+            print(
+                f"   Context:  PR from {git_context['current_branch']} → {git_context['pr_target']}",
+                file=sys.stderr,
+            )
         print("", file=sys.stderr)
 
     # Validate arguments
@@ -308,10 +345,16 @@ def cmd_diff(args) -> int:
             current_path = Path(current).resolve()
 
             if not baseline_path.exists():
-                print(f"Error: Baseline directory not found: {baseline_path}", file=sys.stderr)
+                print(
+                    f"Error: Baseline directory not found: {baseline_path}",
+                    file=sys.stderr,
+                )
                 return 1
             if not current_path.exists():
-                print(f"Error: Current directory not found: {current_path}", file=sys.stderr)
+                print(
+                    f"Error: Current directory not found: {current_path}",
+                    file=sys.stderr,
+                )
                 return 1
 
             diff_result = engine.compare_directories(baseline_path, current_path)
@@ -361,7 +404,6 @@ def cmd_diff(args) -> int:
             else:
                 # Write to stdout
                 import json
-                from datetime import datetime, timezone
 
                 output = _build_json_output(diff_result)
                 print(json.dumps(output, indent=2, ensure_ascii=False))
@@ -394,7 +436,7 @@ def cmd_diff(args) -> int:
                 output_path = "diff.sarif"
             diff_sarif_reporter.write_sarif_diff(diff_result, Path(output_path))
             print(f"✅ SARIF diff report: {output_path}")
-            print(f"   Upload to GitHub Security or GitLab Code Scanning")
+            print("   Upload to GitHub Security or GitLab Code Scanning")
 
     except Exception as e:
         print(f"Error generating output: {e}", file=sys.stderr)
@@ -457,9 +499,7 @@ def _build_json_output(diff: DiffResult) -> Dict[str, Any]:
     }
 
 
-def _filter_by_severity(
-    diff: DiffResult, severities: Set[str]
-) -> DiffResult:
+def _filter_by_severity(diff: DiffResult, severities: Set[str]) -> DiffResult:
     """Filter diff result by severity levels."""
     new = [f for f in diff.new if f.get("severity") in severities]
     resolved = [f for f in diff.resolved if f.get("severity") in severities]
@@ -477,7 +517,9 @@ def _filter_by_severity(
     new_by_sev = Counter(f.get("severity", "INFO") for f in new)
     resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
     net_change = len(new) - len(resolved)
-    trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    trend = (
+        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    )
 
     mod_types = []  # type: ignore[var-annotated]
     for m in modified:
@@ -525,7 +567,9 @@ def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
     new_by_sev = Counter(f.get("severity", "INFO") for f in new)
     resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
     net_change = len(new) - len(resolved)
-    trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    trend = (
+        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    )
 
     mod_types = []  # type: ignore[var-annotated]
     for m in modified:
@@ -582,7 +626,9 @@ def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
     new_by_sev = Counter(f.get("severity", "INFO") for f in new)
     resolved_by_sev = Counter(f.get("severity", "INFO") for f in resolved)
     net_change = len(new) - len(resolved)
-    trend = "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    trend = (
+        "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
+    )
 
     mod_types = []  # type: ignore[var-annotated]
     for m in modified:

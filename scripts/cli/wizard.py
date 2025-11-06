@@ -842,7 +842,11 @@ def run_wizard(
             # Non-interactive trend analysis
             if analyze_trends or export_trends_html or export_trends_json:
                 if not db_path.exists():
-                    print(_colorize("\n⚠ No history database found (need ≥2 scans)", "yellow"))
+                    print(
+                        _colorize(
+                            "\n⚠ No history database found (need ≥2 scans)", "yellow"
+                        )
+                    )
                 else:
                     try:
                         from scripts.core.history_db import get_connection
@@ -852,33 +856,67 @@ def run_wizard(
                         scan_count = cursor.fetchone()[0]
 
                         if scan_count < 2:
-                            print(_colorize(f"\n⚠ Only {scan_count} scan(s) in history (need ≥2)", "yellow"))
+                            print(
+                                _colorize(
+                                    f"\n⚠ Only {scan_count} scan(s) in history (need ≥2)",
+                                    "yellow",
+                                )
+                            )
                         else:
                             if analyze_trends:
-                                print(_colorize("\n📊 Running trend analysis...", "blue"))
-                                _run_trend_command_interactive(db_path, "analyze", last_n=30)
+                                print(
+                                    _colorize("\n📊 Running trend analysis...", "blue")
+                                )
+                                _run_trend_command_interactive(
+                                    db_path, "analyze", last_n=30
+                                )
 
                             if export_trends_html or export_trends_json:
-                                print(_colorize("\n📊 Exporting trend reports...", "blue"))
+                                print(
+                                    _colorize("\n📊 Exporting trend reports...", "blue")
+                                )
                                 from scripts.core.trend_analyzer import TrendAnalyzer
-                                from scripts.cli.trend_formatters import format_html_report, format_json_report
+                                from scripts.cli.trend_formatters import (
+                                    format_html_report,
+                                    format_json_report,
+                                )
 
                                 analyzer = TrendAnalyzer(db_path)
                                 report = analyzer.analyze_trends(last_n=30)
 
                                 if export_trends_html:
-                                    output_file = Path(config.results_dir) / "summaries" / "trend_report.html"
-                                    output_file.parent.mkdir(parents=True, exist_ok=True)
+                                    output_file = (
+                                        Path(config.results_dir)
+                                        / "summaries"
+                                        / "trend_report.html"
+                                    )
+                                    output_file.parent.mkdir(
+                                        parents=True, exist_ok=True
+                                    )
                                     html_content = format_html_report(report)
                                     output_file.write_text(html_content)
-                                    print(_colorize(f"✓ HTML report: {output_file}", "green"))
+                                    print(
+                                        _colorize(
+                                            f"✓ HTML report: {output_file}", "green"
+                                        )
+                                    )
 
                                 if export_trends_json:
-                                    output_file = Path(config.results_dir) / "summaries" / "trend_report.json"
-                                    output_file.parent.mkdir(parents=True, exist_ok=True)
+                                    output_file = (
+                                        Path(config.results_dir)
+                                        / "summaries"
+                                        / "trend_report.json"
+                                    )
+                                    output_file.parent.mkdir(
+                                        parents=True, exist_ok=True
+                                    )
                                     json_content = format_json_report(report)
                                     output_file.write_text(json_content)
-                                    print(_colorize(f"✓ JSON report: {output_file}", "green"))
+                                    print(
+                                        _colorize(
+                                            f"✓ JSON report: {output_file}", "green"
+                                        )
+                                    )
 
                     except Exception as e:
                         print(_colorize(f"\n⚠ Trend analysis failed: {e}", "yellow"))
@@ -1027,7 +1065,9 @@ def explore_trends_interactive(db_path: Path, results_dir: str = "results") -> N
             _explain_metrics_interactive()
 
 
-def _run_trend_command_interactive(db_path: Path, command: str, last_n: int = 30) -> None:
+def _run_trend_command_interactive(
+    db_path: Path, command: str, last_n: int = 30
+) -> None:
     """
     Execute a trend analysis command interactively.
 
@@ -1083,7 +1123,11 @@ def _run_trend_command_interactive(db_path: Path, command: str, last_n: int = 30
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(_colorize("\n⚠ Trend analysis not available (missing dependencies)", "yellow"))
+        print(
+            _colorize(
+                "\n⚠ Trend analysis not available (missing dependencies)", "yellow"
+            )
+        )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
         print(_colorize(f"\n✗ Error: {e}", "red"))
@@ -1115,7 +1159,9 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         # Display scans
         print("\n" + _colorize("Recent Scans:", "bold"))
-        print(f"{'#':<4} {'ID':<10} {'Timestamp':<20} {'Profile':<12} {'Branch':<15} {'Findings':<10}")
+        print(
+            f"{'#':<4} {'ID':<10} {'Timestamp':<20} {'Profile':<12} {'Branch':<15} {'Findings':<10}"
+        )
         print("-" * 80)
 
         for i, scan in enumerate(scans, 1):
@@ -1125,13 +1171,17 @@ def _compare_scans_interactive(db_path: Path) -> None:
             branch = scan.get("branch", "unknown")[:14]
             total = scan.get("total_findings", 0)
 
-            print(f"{i:<4} {scan_id:<10} {timestamp:<20} {profile:<12} {branch:<15} {total:<10}")
+            print(
+                f"{i:<4} {scan_id:<10} {timestamp:<20} {profile:<12} {branch:<15} {total:<10}"
+            )
 
         # Select scans
         print()
         while True:
             try:
-                baseline_choice = input(_colorize("Select baseline scan number: ", "bold")).strip()
+                baseline_choice = input(
+                    _colorize("Select baseline scan number: ", "bold")
+                ).strip()
                 baseline_idx = int(baseline_choice) - 1
                 if 0 <= baseline_idx < len(scans):
                     break
@@ -1141,7 +1191,9 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         while True:
             try:
-                current_choice = input(_colorize("Select current scan number: ", "bold")).strip()
+                current_choice = input(
+                    _colorize("Select current scan number: ", "bold")
+                ).strip()
                 current_idx = int(current_choice) - 1
                 if 0 <= current_idx < len(scans):
                     if current_idx != baseline_idx:
@@ -1165,7 +1217,11 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         args = CompareArgs()
 
-        print(_colorize(f"\n=== Comparing {baseline_id[:8]} → {current_id[:8]} ===\n", "bold"))
+        print(
+            _colorize(
+                f"\n=== Comparing {baseline_id[:8]} → {current_id[:8]} ===\n", "bold"
+            )
+        )
         result = cmd_trends_compare(args)
 
         if result != 0:
@@ -1174,7 +1230,11 @@ def _compare_scans_interactive(db_path: Path) -> None:
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(_colorize("\n⚠ Trend comparison not available (missing dependencies)", "yellow"))
+        print(
+            _colorize(
+                "\n⚠ Trend comparison not available (missing dependencies)", "yellow"
+            )
+        )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
         print(_colorize(f"\n✗ Error: {e}", "red"))
@@ -1238,6 +1298,7 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
 
             if _prompt_yes_no("\nOpen report in browser?", default=True):
                 import webbrowser
+
                 webbrowser.open(f"file://{output_file.resolve()}")
         else:
             output_file = Path(results_dir) / "summaries" / "trend_report.json"
@@ -1251,7 +1312,9 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(_colorize("\n⚠ Trend export not available (missing dependencies)", "yellow"))
+        print(
+            _colorize("\n⚠ Trend export not available (missing dependencies)", "yellow")
+        )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
         print(_colorize(f"\n✗ Error: {e}", "red"))
@@ -1269,7 +1332,8 @@ def _explain_metrics_interactive() -> None:
     print(_colorize("📖 Trend Analysis Metrics Explained", "bold"))
     print(_colorize("=" * 60, "bold"))
 
-    print("""
+    print(
+        """
 1. OVERALL SECURITY TREND
    • Shows direction: improving, worsening, stable
    • Mann-Kendall test validates statistical significance
@@ -1306,7 +1370,8 @@ Examples:
   • Score: "85/100" = mostly clean, some medium issues
 
 For more details, see: docs/USER_GUIDE.md#trend-analysis
-""")
+"""
+    )
 
     input(_colorize("\nPress Enter to continue...", "blue"))
 
@@ -1350,7 +1415,11 @@ def run_diff_wizard(use_docker: bool = False) -> int:
             db_path = Path.home() / ".jmo" / "history.db"
 
             if not db_path.exists():
-                print(_colorize(f"\nError: History database not found at {db_path}", "red"))
+                print(
+                    _colorize(
+                        f"\nError: History database not found at {db_path}", "red"
+                    )
+                )
                 print("Run some scans first to populate the history database.")
                 return 1
 
@@ -1371,12 +1440,16 @@ def run_diff_wizard(use_docker: bool = False) -> int:
                     total = scan.get("total_findings", 0)
                     scan_id = scan.get("id", "")[:8]
 
-                    print(f"  [{i:2d}] {scan_id}  {timestamp}  {profile:10s}  {branch:15s}  ({total} findings)")
+                    print(
+                        f"  [{i:2d}] {scan_id}  {timestamp}  {profile:10s}  {branch:15s}  ({total} findings)"
+                    )
 
                 # Select baseline
                 while True:
                     try:
-                        choice = input(_colorize("\nSelect baseline scan number: ", "bold")).strip()
+                        choice = input(
+                            _colorize("\nSelect baseline scan number: ", "bold")
+                        ).strip()
                         idx = int(choice) - 1
                         if 0 <= idx < len(scans):
                             baseline_id = scans[idx]["id"]
@@ -1388,7 +1461,9 @@ def run_diff_wizard(use_docker: bool = False) -> int:
                 # Select current
                 while True:
                     try:
-                        choice = input(_colorize("Select current scan number: ", "bold")).strip()
+                        choice = input(
+                            _colorize("Select current scan number: ", "bold")
+                        ).strip()
                         idx = int(choice) - 1
                         if 0 <= idx < len(scans):
                             current_id = scans[idx]["id"]
@@ -1407,12 +1482,16 @@ def run_diff_wizard(use_docker: bool = False) -> int:
             # Directory mode
             _print_step(2, 5, "Select Directories")
 
-            baseline_path = input(_colorize("Baseline results directory: ", "bold")).strip()
+            baseline_path = input(
+                _colorize("Baseline results directory: ", "bold")
+            ).strip()
             if not Path(baseline_path).exists():
                 print(_colorize(f"Error: Directory not found: {baseline_path}", "red"))
                 return 1
 
-            current_path = input(_colorize("Current results directory: ", "bold")).strip()
+            current_path = input(
+                _colorize("Current results directory: ", "bold")
+            ).strip()
             if not Path(current_path).exists():
                 print(_colorize(f"Error: Directory not found: {current_path}", "red"))
                 return 1
@@ -1426,8 +1505,22 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         print("  [3] CRITICAL + HIGH")
         print("  [4] CRITICAL + HIGH + MEDIUM")
 
-        sev_choice = _prompt_choice("Select severity filter:", [("1", "All"), ("2", "CRITICAL"), ("3", "CRITICAL,HIGH"), ("4", "CRITICAL,HIGH,MEDIUM")], default="1")
-        severity_filter = {"1": "", "2": "CRITICAL", "3": "CRITICAL,HIGH", "4": "CRITICAL,HIGH,MEDIUM"}[sev_choice]
+        sev_choice = _prompt_choice(
+            "Select severity filter:",
+            [
+                ("1", "All"),
+                ("2", "CRITICAL"),
+                ("3", "CRITICAL,HIGH"),
+                ("4", "CRITICAL,HIGH,MEDIUM"),
+            ],
+            default="1",
+        )
+        severity_filter = {
+            "1": "",
+            "2": "CRITICAL",
+            "3": "CRITICAL,HIGH",
+            "4": "CRITICAL,HIGH,MEDIUM",
+        }[sev_choice]
 
         print("\nCategory filtering:")
         print("  [1] All changes")
@@ -1435,8 +1528,14 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         print("  [3] Resolved findings only")
         print("  [4] Modified findings only")
 
-        cat_choice = _prompt_choice("Select category filter:", [("1", "All"), ("2", "New"), ("3", "Resolved"), ("4", "Modified")], default="1")
-        category_filter = {"1": None, "2": "new", "3": "resolved", "4": "modified"}[cat_choice]
+        cat_choice = _prompt_choice(
+            "Select category filter:",
+            [("1", "All"), ("2", "New"), ("3", "Resolved"), ("4", "Modified")],
+            default="1",
+        )
+        category_filter = {"1": None, "2": "new", "3": "resolved", "4": "modified"}[
+            cat_choice
+        ]
 
         # Step 3: Output format
         _print_step(4, 5, "Select Output Format")
@@ -1451,7 +1550,9 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         output_format = _select_mode("Output formats", formats, default="html")
 
         output_file = f"diff-report.{output_format}"
-        custom_output = input(_colorize(f"Output file [{output_file}]: ", "bold")).strip()
+        custom_output = input(
+            _colorize(f"Output file [{output_file}]: ", "bold")
+        ).strip()
         if custom_output:
             output_file = custom_output
 
@@ -1483,7 +1584,9 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         # Build command args (mock argparse namespace)
         class DiffArgs:
             def __init__(self):
-                self.directories = [baseline_path, current_path] if mode == "directory" else None
+                self.directories = (
+                    [baseline_path, current_path] if mode == "directory" else None
+                )
                 self.scan_ids = [baseline_id, current_id] if mode == "history" else None
                 self.db = str(Path.home() / ".jmo" / "history.db")
                 self.severity = severity_filter if severity_filter else None
@@ -1506,6 +1609,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
             if output_format == "html" and Path(output_file).exists():
                 if _prompt_yes_no("\nOpen report in browser?", default=True):
                     import webbrowser
+
                     webbrowser.open(f"file://{Path(output_file).resolve()}")
         else:
             print(_colorize("\n✗ Diff generation failed", "red"))

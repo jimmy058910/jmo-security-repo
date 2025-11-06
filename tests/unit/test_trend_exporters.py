@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import csv
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -178,7 +176,13 @@ def test_csv_unicode_handling(tmp_path):
             "analysis_timestamp": "2025-01-01T00:00:00Z",
         },
         "severity_trends": {
-            "by_severity": {"CRITICAL": [1], "HIGH": [2], "MEDIUM": [3], "LOW": [4], "INFO": [5]},
+            "by_severity": {
+                "CRITICAL": [1],
+                "HIGH": [2],
+                "MEDIUM": [3],
+                "LOW": [4],
+                "INFO": [5],
+            },
             "timestamps": ["2025-01-01T00:00:00Z"],
         },
         "security_score": {"trend": "improving"},
@@ -519,14 +523,14 @@ def test_prometheus_scraping_compatible(sample_analysis, tmp_path):
     lines = content.strip().split("\n")
 
     # Should have HELP and TYPE lines
-    help_lines = [l for l in lines if l.startswith("# HELP")]
-    type_lines = [l for l in lines if l.startswith("# TYPE")]
+    help_lines = [line for line in lines if line.startswith("# HELP")]
+    type_lines = [line for line in lines if line.startswith("# TYPE")]
 
     assert len(help_lines) > 0
     assert len(type_lines) > 0
 
     # Metric lines should not have # prefix
-    metric_lines = [l for l in lines if not l.startswith("#") and l.strip()]
+    metric_lines = [line for line in lines if not line.startswith("#") and line.strip()]
     assert len(metric_lines) > 0
 
     # Each metric line should have format: metric_name{labels} value

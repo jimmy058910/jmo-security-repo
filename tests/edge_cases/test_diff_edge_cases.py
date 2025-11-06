@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -29,6 +28,7 @@ def temp_workspace(tmp_path):
 @pytest.fixture
 def sample_finding():
     """Generate a single sample finding."""
+
     def _create(finding_id, severity, tool, path, line, message):
         return {
             "schemaVersion": "1.2.0",
@@ -39,8 +39,9 @@ def sample_finding():
             "location": {"path": path, "startLine": line},
             "message": message,
             "compliance": {},
-            "risk": {}
+            "risk": {},
         }
+
     return _create
 
 
@@ -52,7 +53,9 @@ def test_empty_baseline(temp_workspace, sample_finding):
 
     # Current has 50 findings
     current_findings = [
-        sample_finding(f"c{i:03d}", "HIGH", "semgrep", f"src/file{i}.py", i, f"Issue {i}")
+        sample_finding(
+            f"c{i:03d}", "HIGH", "semgrep", f"src/file{i}.py", i, f"Issue {i}"
+        )
         for i in range(50)
     ]
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
@@ -62,15 +65,19 @@ def test_empty_baseline(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0, f"Diff failed: {result.stderr}"
@@ -91,7 +98,9 @@ def test_empty_current(temp_workspace, sample_finding):
     """Handle empty current (all baseline findings resolved)."""
     # Baseline has 30 findings
     baseline_findings = [
-        sample_finding(f"b{i:03d}", "MEDIUM", "trivy", f"src/old{i}.py", i, f"Old issue {i}")
+        sample_finding(
+            f"b{i:03d}", "MEDIUM", "trivy", f"src/old{i}.py", i, f"Old issue {i}"
+        )
         for i in range(30)
     ]
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
@@ -105,15 +114,19 @@ def test_empty_current(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -133,7 +146,14 @@ def test_identical_scans(temp_workspace, sample_finding):
     """Handle identical scans (no changes)."""
     # Same 20 findings in both
     findings = [
-        sample_finding(f"shared{i:03d}", "HIGH", "semgrep", f"src/app{i}.py", i, f"Shared issue {i}")
+        sample_finding(
+            f"shared{i:03d}",
+            "HIGH",
+            "semgrep",
+            f"src/app{i}.py",
+            i,
+            f"Shared issue {i}",
+        )
         for i in range(20)
     ]
 
@@ -147,15 +167,19 @@ def test_identical_scans(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -178,13 +202,17 @@ def test_large_diff_10k_findings(temp_workspace, sample_finding):
 
     # Baseline: 5K findings
     baseline_findings = [
-        sample_finding(f"b{i:05d}", "MEDIUM", "trivy", f"src/b{i}.py", i, f"Baseline {i}")
+        sample_finding(
+            f"b{i:05d}", "MEDIUM", "trivy", f"src/b{i}.py", i, f"Baseline {i}"
+        )
         for i in range(5000)
     ]
 
     # Current: Different 5K findings
     current_findings = [
-        sample_finding(f"c{i:05d}", "HIGH", "semgrep", f"src/c{i}.py", i, f"Current {i}")
+        sample_finding(
+            f"c{i:05d}", "HIGH", "semgrep", f"src/c{i}.py", i, f"Current {i}"
+        )
         for i in range(5000)
     ]
 
@@ -199,16 +227,20 @@ def test_large_diff_10k_findings(temp_workspace, sample_finding):
     start = time.time()
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
         text=True,
-        timeout=10  # 10s timeout (should be <2s per spec)
+        timeout=10,  # 10s timeout (should be <2s per spec)
     )
     elapsed = time.time() - start
 
@@ -228,34 +260,53 @@ def test_unicode_in_messages(temp_workspace, sample_finding):
     # Findings with Unicode characters
     baseline_findings = [
         sample_finding("b001", "HIGH", "semgrep", "src/app.py", 10, "SQL注入漏洞"),
-        sample_finding("b002", "MEDIUM", "trivy", "src/auth.py", 20, "Безопасность ошибка"),
-        sample_finding("b003", "LOW", "checkov", "iac/main.tf", 5, "🔒 Security misconfiguration"),
+        sample_finding(
+            "b002", "MEDIUM", "trivy", "src/auth.py", 20, "Безопасность ошибка"
+        ),
+        sample_finding(
+            "b003", "LOW", "checkov", "iac/main.tf", 5, "🔒 Security misconfiguration"
+        ),
     ]
 
     current_findings = [
-        sample_finding("c001", "CRITICAL", "semgrep", "src/api.py", 15, "XSS脆弱性 (cross-site scripting)"),
-        sample_finding("b002", "MEDIUM", "trivy", "src/auth.py", 20, "Безопасность ошибка"),  # Unchanged
+        sample_finding(
+            "c001",
+            "CRITICAL",
+            "semgrep",
+            "src/api.py",
+            15,
+            "XSS脆弱性 (cross-site scripting)",
+        ),
+        sample_finding(
+            "b002", "MEDIUM", "trivy", "src/auth.py", 20, "Безопасность ошибка"
+        ),  # Unchanged
     ]
 
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
     current_json = temp_workspace["current"] / "summaries" / "findings.json"
 
-    baseline_json.write_text(json.dumps(baseline_findings, indent=2, ensure_ascii=False))
+    baseline_json.write_text(
+        json.dumps(baseline_findings, indent=2, ensure_ascii=False)
+    )
     current_json.write_text(json.dumps(current_findings, indent=2, ensure_ascii=False))
 
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -287,15 +338,19 @@ def test_malformed_findings_json(temp_workspace):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should fail gracefully
@@ -321,7 +376,9 @@ def test_mixed_schema_versions(temp_workspace, sample_finding):
 
     # Current: schemaVersion 1.2.0 (current)
     current_findings = [
-        sample_finding("c001", "CRITICAL", "trivy", "src/api.py", 15, "RCE vulnerability"),
+        sample_finding(
+            "c001", "CRITICAL", "trivy", "src/api.py", 15, "RCE vulnerability"
+        ),
     ]
 
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
@@ -334,15 +391,19 @@ def test_mixed_schema_versions(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -361,11 +422,15 @@ def test_modification_detection_disabled(temp_workspace, sample_finding):
     finding_id = "shared001"
 
     baseline_findings = [
-        sample_finding(finding_id, "MEDIUM", "semgrep", "src/app.py", 10, "SQL injection"),
+        sample_finding(
+            finding_id, "MEDIUM", "semgrep", "src/app.py", 10, "SQL injection"
+        ),
     ]
 
     current_findings = [
-        sample_finding(finding_id, "HIGH", "semgrep", "src/app.py", 10, "SQL injection"),
+        sample_finding(
+            finding_id, "HIGH", "semgrep", "src/app.py", 10, "SQL injection"
+        ),
     ]
 
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
@@ -378,16 +443,20 @@ def test_modification_detection_disabled(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--no-modifications"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--no-modifications",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -425,18 +494,25 @@ def test_filter_combinations(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--severity", "HIGH",
-            "--tool", "semgrep",
-            "--only", "new"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--severity",
+            "HIGH",
+            "--tool",
+            "semgrep",
+            "--only",
+            "new",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -463,15 +539,19 @@ def test_missing_findings_json(temp_workspace):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path)
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should fail with clear error
@@ -483,12 +563,16 @@ def test_only_new_filter(temp_workspace, sample_finding):
     """Test --only new filter excludes resolved/unchanged."""
     baseline_findings = [
         sample_finding("b1", "HIGH", "semgrep", "src/old.py", 1, "Old issue"),
-        sample_finding("shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"),
+        sample_finding(
+            "shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"
+        ),
     ]
 
     current_findings = [
         sample_finding("c1", "CRITICAL", "semgrep", "src/new.py", 3, "New issue"),
-        sample_finding("shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"),
+        sample_finding(
+            "shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"
+        ),
     ]
 
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
@@ -501,16 +585,21 @@ def test_only_new_filter(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--only", "new"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--only",
+            "new",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0
@@ -532,12 +621,16 @@ def test_only_resolved_filter(temp_workspace, sample_finding):
     """Test --only resolved filter excludes new/unchanged."""
     baseline_findings = [
         sample_finding("b1", "HIGH", "semgrep", "src/old.py", 1, "Resolved issue"),
-        sample_finding("shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"),
+        sample_finding(
+            "shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"
+        ),
     ]
 
     current_findings = [
         sample_finding("c1", "CRITICAL", "semgrep", "src/new.py", 3, "New issue"),
-        sample_finding("shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"),
+        sample_finding(
+            "shared1", "MEDIUM", "trivy", "src/shared.py", 2, "Shared issue"
+        ),
     ]
 
     baseline_json = temp_workspace["baseline"] / "summaries" / "findings.json"
@@ -550,16 +643,21 @@ def test_only_resolved_filter(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
         [
-            "python3", "-m", "scripts.cli.jmo",
+            "python3",
+            "-m",
+            "scripts.cli.jmo",
             "diff",
             str(temp_workspace["baseline"]),
             str(temp_workspace["current"]),
-            "--format", "json",
-            "--output", str(output_path),
-            "--only", "resolved"
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+            "--only",
+            "resolved",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     assert result.returncode == 0

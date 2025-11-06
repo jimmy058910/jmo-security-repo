@@ -15,12 +15,10 @@ Phase 6 of Trend Analysis feature (#4).
 from __future__ import annotations
 
 import logging
-import re
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -277,9 +275,7 @@ class DeveloperAttribution:
             if author_name and author_email:
                 return {"name": author_name, "email": author_email}
 
-            logger.debug(
-                f"Incomplete git blame output for {file_path}:{line_num}"
-            )
+            logger.debug(f"Incomplete git blame output for {file_path}:{line_num}")
 
         except subprocess.TimeoutExpired:
             logger.warning(f"git blame timeout for {file_path}:{line_num}")

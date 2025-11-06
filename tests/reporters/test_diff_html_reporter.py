@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -10,7 +10,6 @@ from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
 from scripts.core.reporters.diff_html_reporter import (
     INLINE_THRESHOLD,
     write_html_diff,
-    _write_html_diff_react,
     _write_html_diff_vanilla,
 )
 
@@ -118,8 +117,11 @@ def test_html_react_path(tmp_path, sample_diff_result):
     """Test React dashboard path (if built)."""
     out_path = tmp_path / "diff.html"
 
-    # Mock React dashboard exists
-    react_template_path = Path(__file__).parent / "../../scripts/dashboard/dist/index.html"
+    # Mock React dashboard exists (path defined but not used in current implementation)
+    # Future enhancement: use this path for React integration
+    # react_template_path = (
+    #     Path(__file__).parent / "../../scripts/dashboard/dist/index.html"
+    # )
     mock_template = """<!DOCTYPE html>
 <html>
 <head><title>React Dashboard</title></head>
@@ -129,8 +131,10 @@ def test_html_react_path(tmp_path, sample_diff_result):
 </body>
 </html>"""
 
-    with patch.object(Path, "exists", return_value=True), \
-         patch.object(Path, "read_text", return_value=mock_template):
+    with (
+        patch.object(Path, "exists", return_value=True),
+        patch.object(Path, "read_text", return_value=mock_template),
+    ):
         write_html_diff(sample_diff_result, out_path)
 
     assert out_path.exists()
@@ -168,7 +172,12 @@ def test_html_inline_mode(tmp_path, sample_diff_result):
     out_path = tmp_path / "diff.html"
 
     # Ensure total findings < INLINE_THRESHOLD
-    assert len(sample_diff_result.new) + len(sample_diff_result.resolved) + len(sample_diff_result.modified) < INLINE_THRESHOLD
+    assert (
+        len(sample_diff_result.new)
+        + len(sample_diff_result.resolved)
+        + len(sample_diff_result.modified)
+        < INLINE_THRESHOLD
+    )
 
     _write_html_diff_vanilla(sample_diff_result, out_path)
 
@@ -467,7 +476,9 @@ def test_html_json_escaping(tmp_path):
 
     # Verify dangerous characters escaped in JSON data
     assert "<\\/script>" in content  # Escaped in JSON data
-    assert "alert('XSS')" in content or "alert(\\'XSS\\')" in content  # Payload preserved
+    assert (
+        "alert('XSS')" in content or "alert(\\'XSS\\')" in content
+    )  # Payload preserved
 
     # Verify HTML is well-formed (only one script tag at the end)
     assert content.count("</script>") == 1  # Only template's closing tag

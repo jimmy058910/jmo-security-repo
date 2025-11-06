@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.diff_engine import DiffEngine, DiffResult, DiffSource, ModifiedFinding
+from scripts.core.diff_engine import DiffEngine, DiffSource
 
 
 # ============================================================================
