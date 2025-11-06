@@ -6,12 +6,18 @@ Target: <100ms per policy evaluation
 """
 
 import json
+import shutil
 import time
 from pathlib import Path
 
 import pytest
 
 from scripts.core.reporters.policy_reporter import evaluate_policies
+
+
+def opa_available() -> bool:
+    """Check if OPA binary is available in PATH."""
+    return shutil.which("opa") is not None
 
 
 @pytest.fixture
@@ -77,6 +83,7 @@ def sample_findings_large_set():
     return findings
 
 
+@pytest.mark.skipif(not opa_available(), reason="OPA binary not found in PATH")
 def test_policy_evaluation_performance_small(
     sample_findings_clean, builtin_dir, user_dir
 ):
@@ -99,6 +106,7 @@ def test_policy_evaluation_performance_small(
     ), f"Policy evaluation took {elapsed_ms:.2f}ms (target: <100ms)"
 
 
+@pytest.mark.skipif(not opa_available(), reason="OPA binary not found in PATH")
 def test_policy_evaluation_performance_large(
     sample_findings_large_set, builtin_dir, user_dir
 ):
@@ -121,6 +129,7 @@ def test_policy_evaluation_performance_large(
     ), f"Policy evaluation (1000 findings) took {elapsed_ms:.2f}ms (target: <500ms)"
 
 
+@pytest.mark.skipif(not opa_available(), reason="OPA binary not found in PATH")
 def test_all_policies_performance(sample_findings_clean, builtin_policies, builtin_dir, user_dir):
     """Benchmark all built-in policies."""
     if not builtin_policies:
@@ -150,6 +159,7 @@ def test_all_policies_performance(sample_findings_clean, builtin_policies, built
     ), f"Slowest policy ({slowest_policy}): {slowest:.2f}ms (target: <100ms)"
 
 
+@pytest.mark.skipif(not opa_available(), reason="OPA binary not found in PATH")
 def test_policy_evaluation_with_violations_performance(builtin_dir, user_dir):
     """Test performance when policy violations are found."""
     findings_with_secrets = [
