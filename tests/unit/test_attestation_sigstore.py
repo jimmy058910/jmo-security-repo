@@ -130,7 +130,7 @@ class TestOIDCTokenAcquisition:
         assert token == "github-oidc-token"
         mock_get.assert_called_once()
 
-    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab-jwt-token"})
+    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab-jwt-token"}, clear=True)
     def test_get_gitlab_oidc_token(self):
         """Test acquiring OIDC token from GitLab CI."""
         from scripts.core.attestation.signer import SigstoreSigner
