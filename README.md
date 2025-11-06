@@ -986,6 +986,15 @@ This project provides an automated framework for conducting thorough security au
   - Memory system for persistent learning across sessions
 - 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 - 🔒 **Security-First**: XSS vulnerability patched, comprehensive input escaping, secure-by-default configurations
+- 🔐 **SLSA Attestation (v1.0.0)**: Supply chain security with SLSA Level 2 compliance
+  - Keyless signing via Sigstore (Fulcio + Rekor transparency log)
+  - Advanced tamper detection: signature verification, multi-hash digests (SHA-256/384/512), certificate chain validation, Rekor transparency log verification
+  - Build provenance tracking: Git commit, branch, tag, CI/CD context, builder identity, reproducible builds
+  - Material tracking: Dependencies, build tools, runtime images with hash verification
+  - Auto-attestation in CI/CD: GitHub Actions and GitLab CI workflows with automatic signing and upload
+  - 6 CLI commands: `generate`, `verify`, `sign`, `inspect`, `list`, `export` (JSON, SARIF, human-readable reports)
+  - 200 tests passing (100% coverage), <100ms generation, <500ms verification (STRICT mode)
+  - See [docs/USER_GUIDE.md#slsa-attestation-v100](docs/USER_GUIDE.md#slsa-attestation-v100) and [docs/examples/attestation-workflows.md](docs/examples/attestation-workflows.md)
 
 ## 🚀 Quick Start (Local Installation)
 

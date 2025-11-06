@@ -285,6 +285,17 @@ def _add_ci_args(subparsers):
     cp.add_argument(
         "--profile", action="store_true", help="Collect timings.json during report"
     )
+    cp.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate in CI mode (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
+    cp.add_argument(
+        "--fail-on-policy-violation",
+        action="store_true",
+        help="Fail CI (exit code 1) if any policy violations found",
+    )
     _add_logging_args(cp)
     return cp
 
@@ -365,6 +376,17 @@ def _add_wizard_args(subparsers):
         "--emit-gha",
         action="store_true",
         help="Emit GitHub Actions workflow instead of running",
+    )
+    wizard_parser.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate after scan (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
+    wizard_parser.add_argument(
+        "--skip-policies",
+        action="store_true",
+        help="Skip policy evaluation entirely (overrides config defaults)",
     )
     return wizard_parser
 
@@ -1027,6 +1049,104 @@ See: dev-only/1.0.0/TREND_ANALYSIS_COMPLETE_PLAN.md for complete documentation.
     return trends_parser
 
 
+def _add_attest_args(subparsers):
+    """Add 'attest' subcommand arguments for generating attestations."""
+    attest_parser = subparsers.add_parser(
+        "attest",
+        help="Generate SLSA attestation for scan results",
+        description="""
+Generate cryptographic attestation for findings using SLSA provenance v1.0.
+
+The attestation proves:
+- What was scanned (subject with multi-hash digests)
+- How it was scanned (tools, profile, parameters)
+- When it was scanned (timestamps)
+- Where it was scanned (builder ID, CI context)
+
+Example:
+  jmo attest results/summaries/findings.json
+  jmo attest findings.json --sign --rekor
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    attest_parser.add_argument("subject", help="File to attest (e.g., findings.json)")
+    attest_parser.add_argument(
+        "--output",
+        "-o",
+        help="Output path for attestation (default: <subject>.att.json)",
+    )
+    attest_parser.add_argument(
+        "--sign",
+        action="store_true",
+        help="Sign attestation with Sigstore (requires cosign)",
+    )
+    attest_parser.add_argument(
+        "--rekor", action="store_true", help="Upload to Rekor transparency log"
+    )
+    attest_parser.add_argument(
+        "--scan-args", help="JSON file with original scan arguments"
+    )
+    attest_parser.add_argument(
+        "--tools", nargs="+", help="Tools used in scan (e.g., trivy semgrep)"
+    )
+    attest_parser.add_argument(
+        "--human-logs",
+        action="store_true",
+        help="Use human-friendly colored logs instead of JSON",
+    )
+    attest_parser.add_argument(
+        "--log-level", choices=["DEBUG", "INFO", "WARN", "ERROR"], help="Set log level"
+    )
+
+
+def _add_verify_args(subparsers):
+    """Add 'verify' subcommand arguments for verifying attestations."""
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Verify SLSA attestation for scan results",
+        description="""
+Verify cryptographic attestation and detect tampering.
+
+Verification checks:
+- Subject digest matches attestation
+- Attestation format is valid
+- Signature verification (if signed)
+- Rekor transparency log (if published)
+
+Exit codes:
+  0 - Verification succeeded
+  1 - Verification failed or tampering detected
+
+Example:
+  jmo verify findings.json
+  jmo verify findings.json --rekor-check
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    verify_parser.add_argument("subject", help="File to verify (e.g., findings.json)")
+    verify_parser.add_argument(
+        "--attestation", "-a", help="Attestation file (default: <subject>.att.json)"
+    )
+    verify_parser.add_argument(
+        "--rekor-check",
+        action="store_true",
+        help="Verify against Rekor transparency log",
+    )
+    verify_parser.add_argument(
+        "--policy", help="Policy file for additional verification rules"
+    )
+    verify_parser.add_argument(
+        "--human-logs",
+        action="store_true",
+        help="Use human-friendly colored logs instead of JSON",
+    )
+    verify_parser.add_argument(
+        "--log-level", choices=["DEBUG", "INFO", "WARN", "ERROR"], help="Set log level"
+    )
+
+
 def _add_diff_args(subparsers):
     """Add 'diff' subcommand arguments for comparing scans."""
     diff_parser = subparsers.add_parser(
@@ -1158,6 +1278,8 @@ Documentation: https://docs.jmotools.com
     _add_report_args(sub)
     _add_ci_args(sub)
     _add_diff_args(sub)
+    _add_attest_args(sub)  # SLSA attestation
+    _add_verify_args(sub)  # Attestation verification
     _add_adapters_args(sub)
     _add_schedule_args(sub)
     _add_mcp_args(sub)
@@ -1889,6 +2011,8 @@ def cmd_wizard(args):
         emit_script=args.emit_script,
         emit_make_target=args.emit_make_target,
         emit_gha=args.emit_gha,
+        policies=getattr(args, "policies", None),
+        skip_policies=getattr(args, "skip_policies", False),
     )
 
 
@@ -2055,6 +2179,148 @@ def _open_results(args):
                 pass
 
 
+def cmd_attest(args) -> int:
+    """Generate attestation for scan results.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 on success, non-zero on error
+    """
+    import json
+
+    subject_path = Path(args.subject)
+    if not subject_path.exists():
+        _log(args, "ERROR", f"Subject file not found: {args.subject}")
+        return 1
+
+    # Load scan arguments if provided
+    scan_args = {}
+    if hasattr(args, "scan_args") and args.scan_args:
+        with open(args.scan_args) as f:
+            scan_args = json.load(f)
+
+    # Get tools list
+    tools = getattr(args, "tools", None) or scan_args.get("tools", [])
+
+    # Generate provenance
+    from scripts.core.attestation.provenance import ProvenanceGenerator
+
+    generator = ProvenanceGenerator()
+    statement = generator.generate(
+        findings_path=subject_path,
+        profile=scan_args.get("profile_name", "default"),
+        tools=tools,
+        targets=scan_args.get("repos", []),
+    )
+
+    # Determine output path
+    if hasattr(args, "output") and args.output:
+        output_path = args.output
+    else:
+        output_path = str(subject_path) + ".att.json"
+
+    # Save attestation
+    attestation_path = Path(output_path)
+    attestation_path.parent.mkdir(parents=True, exist_ok=True)
+    attestation_path.write_text(json.dumps(statement, indent=2))
+
+    _log(args, "INFO", f"Generated attestation: {output_path}")
+
+    # Sign if requested (Phase 3: implemented)
+    if hasattr(args, "sign") and args.sign:
+        try:
+            from scripts.core.attestation.signer import SigstoreSigner
+
+            _log(args, "INFO", "Signing attestation with Sigstore...")
+            signer = SigstoreSigner()
+            sign_result = signer.sign(str(attestation_path))
+
+            _log(args, "INFO", "✅ Attestation signed successfully")
+            _log(args, "INFO", f"  Signature: {sign_result['signature_path']}")
+            _log(args, "INFO", f"  Certificate: {sign_result['certificate_path']}")
+            _log(args, "INFO", f"  Bundle: {sign_result['bundle_path']}")
+            if sign_result.get("rekor_entry"):
+                _log(args, "INFO", f"  Rekor entry: {sign_result['rekor_entry']}")
+
+        except Exception as e:
+            _log(args, "ERROR", f"Signing failed: {e}")
+            return 1
+
+    # Note: Rekor upload happens automatically during signing
+    if (
+        hasattr(args, "rekor")
+        and args.rekor
+        and not (hasattr(args, "sign") and args.sign)
+    ):
+        _log(
+            args,
+            "WARN",
+            "Rekor upload requires --sign flag (signing automatically uploads to Rekor)",
+        )
+
+    return 0
+
+
+def cmd_verify(args) -> int:
+    """Verify attestation for scan results.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 if verification succeeds, non-zero on error or tampering
+    """
+    from scripts.core.attestation.verifier import AttestationVerifier
+
+    subject_path = Path(args.subject)
+    if not subject_path.exists():
+        _log(args, "ERROR", f"Subject file not found: {args.subject}")
+        return 1
+
+    # Determine attestation path
+    if hasattr(args, "attestation") and args.attestation:
+        attestation_path = args.attestation
+    else:
+        attestation_path = str(subject_path) + ".att.json"
+
+    if not Path(attestation_path).exists():
+        _log(args, "ERROR", f"Attestation not found: {attestation_path}")
+        return 1
+
+    # Create verifier
+    verifier = AttestationVerifier()
+
+    # Verify attestation
+    result = verifier.verify(
+        subject_path=str(subject_path),
+        attestation_path=attestation_path,
+        check_rekor=getattr(args, "rekor_check", False),
+        policy_path=getattr(args, "policy", None),
+    )
+
+    if result.is_valid:
+        _log(args, "INFO", "✅ Attestation verified successfully")
+        _log(args, "INFO", f"  Subject: {result.subject_name}")
+        _log(args, "INFO", f"  SHA-256: {result.subject_digest}")
+        _log(args, "INFO", f"  Builder: {result.builder_id}")
+        _log(args, "INFO", f"  Build time: {result.build_time}")
+
+        if result.rekor_entry:
+            _log(args, "INFO", f"  Rekor entry: {result.rekor_entry}")
+
+        return 0
+    else:
+        _log(args, "ERROR", "❌ Attestation verification FAILED")
+        _log(args, "ERROR", f"  Reason: {result.error_message}")
+
+        if result.tamper_detected:
+            _log(args, "ERROR", "  ⚠️  TAMPER DETECTED - Subject has been modified!")
+
+        return 1
+
+
 def main():
     args = parse_args()
 
@@ -2087,6 +2353,10 @@ def main():
         return cmd_trends(args)
     elif args.cmd == "diff":
         return cmd_diff(args)
+    elif args.cmd == "attest":
+        return cmd_attest(args)
+    elif args.cmd == "verify":
+        return cmd_verify(args)
     # elif args.cmd == "policy":
     #     return handle_policy_command(args)  # TODO: restore when policy feature is ready
     else:

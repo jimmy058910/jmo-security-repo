@@ -29,6 +29,9 @@ profiles:
     - osv-scanner
     threads: 8
     timeout: 300
+    policy:
+      default_policies:
+        - zero-secrets
     per_tool:
       semgrep:
         flags:
@@ -70,6 +73,10 @@ profiles:
     - dependency-check
     threads: 4
     timeout: 600
+    policy:
+      default_policies:
+        - owasp-top-10
+        - zero-secrets
     per_tool:
       semgrep:
         flags:
@@ -138,6 +145,14 @@ profiles:
     threads: 2
     timeout: 900
     retries: 1
+    policy:
+      default_policies:
+        - owasp-top-10
+        - zero-secrets
+        - pci-dss
+        - production-hardening
+        - hipaa-compliance
+      fail_on_violation: true
     per_tool:
       semgrep:
         flags:
@@ -188,5 +203,17 @@ profiling:
   min_threads: 2
   max_threads: 8
   default_threads: 4
+# Policy-as-Code Configuration (Feature #5, v1.0.0)
+policy:
+  enabled: true                  # Enable policy evaluation
+  auto_evaluate: true             # Auto-evaluate after scans
+  default_policies:               # Policies to apply by default
+    - owasp-top-10
+    - zero-secrets
+  fail_on_violation: false        # Fail CI/CD if violations found
+  opa:
+    binary: opa                   # Path to OPA binary
+    version: ">=0.70.0"           # Minimum OPA version
+    timeout: 30                   # Policy evaluation timeout (seconds)
 telemetry:
   enabled: true

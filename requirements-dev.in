@@ -22,6 +22,10 @@ mcp[cli]>=1.0.0  # Official Anthropic MCP SDK with FastMCP framework
 # Python dependencies for policy integration
 packaging  # For version comparison in OPA version checks
 
-# Trend Analysis dependencies (Feature #5: Trend Analysis - v1.0.0)
+# Trend Analysis dependencies (Feature #4: Trend Analysis - v1.0.0)
 scipy>=1.11.0,<1.15.0  # Mann-Kendall test; constrained for Python 3.10 compatibility
 numpy>=1.24.0,<2.3.0  # Explicitly constrain numpy for Python 3.10 support
+
+# SLSA Attestation dependencies (Feature #6: Supply Chain Attestation - v1.0.0)
+sigstore>=2.0.0  # Sigstore Python SDK for keyless signing (Fulcio + Rekor)
+cryptography>=41.0.0  # Cryptographic primitives for hashing and signing

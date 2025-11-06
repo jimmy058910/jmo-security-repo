@@ -3036,3 +3036,225 @@ def get_compliance_trend(
         "insights": insights,
         "summary_stats": summary_stats,
     }
+"""
+Attestation storage functions for history_db.py.
+
+These functions will be appended to history_db.py to add SLSA attestation storage.
+"""
+
+# SQL statements for attestations schema
+CREATE_ATTESTATIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS attestations (
+    scan_id TEXT PRIMARY KEY,
+    attestation_json TEXT NOT NULL,
+    signature_path TEXT,
+    certificate_path TEXT,
+    rekor_entry TEXT,
+    rekor_published INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    slsa_level INTEGER DEFAULT 2,
+    FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+);
+"""
+
+CREATE_ATTESTATIONS_INDEX_CREATED_AT = """
+CREATE INDEX IF NOT EXISTS idx_attestations_created_at ON attestations(created_at);
+"""
+
+CREATE_ATTESTATIONS_INDEX_REKOR_PUBLISHED = """
+CREATE INDEX IF NOT EXISTS idx_attestations_rekor_published ON attestations(rekor_published);
+"""
+
+
+def migrate_add_attestations_table():
+    """Migrate existing database to add attestations table.
+
+    This function adds the attestations table to existing databases
+    that were created before the SLSA attestation feature.
+
+    Safe to call multiple times - checks for table existence first.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Check if attestations table exists
+    cursor.execute("""
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name='attestations'
+    """)
+
+    if cursor.fetchone():
+        logger.info("Attestations table already exists, skipping migration")
+        return
+
+    logger.info("Creating attestations table...")
+
+    # Create table and indexes
+    cursor.execute(CREATE_ATTESTATIONS_TABLE)
+    cursor.execute(CREATE_ATTESTATIONS_INDEX_CREATED_AT)
+    cursor.execute(CREATE_ATTESTATIONS_INDEX_REKOR_PUBLISHED)
+
+    conn.commit()
+    logger.info("Attestations table created successfully")
+
+
+def store_attestation(
+    scan_id: str,
+    attestation: Dict[str, Any],
+    signature_path: Optional[str] = None,
+    certificate_path: Optional[str] = None,
+    rekor_entry: Optional[str] = None,
+    rekor_published: bool = False
+) -> None:
+    """Store attestation in database.
+
+    Args:
+        scan_id: Scan ID (foreign key to scans table)
+        attestation: Full in-toto statement (dict)
+        signature_path: Optional path to signature file
+        certificate_path: Optional path to certificate file
+        rekor_entry: Optional Rekor UUID
+        rekor_published: Whether published to Rekor transparency log
+
+    Raises:
+        sqlite3.IntegrityError: If scan_id doesn't exist in scans table
+    """
+    # Ensure attestations table exists (auto-migration)
+    migrate_add_attestations_table()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO attestations (
+            scan_id, attestation_json, signature_path, certificate_path,
+            rekor_entry, rekor_published, created_at, slsa_level
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        scan_id,
+        json.dumps(attestation),
+        signature_path,
+        certificate_path,
+        rekor_entry,
+        1 if rekor_published else 0,
+        int(time.time()),
+        2  # SLSA Level 2 for v1.0.0
+    ))
+
+    conn.commit()
+    logger.info(f"Attestation stored for scan {scan_id}")
+
+
+def load_attestation(scan_id: str) -> Optional[Dict[str, Any]]:
+    """Load attestation from database.
+
+    Args:
+        scan_id: Scan ID
+
+    Returns:
+        Attestation data (dict) or None if not found
+
+    Example:
+        >>> attestation = load_attestation("scan-abc123")
+        >>> if attestation:
+        ...     print(attestation["attestation"]["_type"])
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT attestation_json, signature_path, certificate_path,
+               rekor_entry, rekor_published, created_at, slsa_level
+        FROM attestations
+        WHERE scan_id = ?
+    """, (scan_id,))
+
+    row = cursor.fetchone()
+    if not row:
+        return None
+
+    return {
+        "scan_id": scan_id,
+        "attestation": json.loads(row[0]),
+        "signature_path": row[1],
+        "certificate_path": row[2],
+        "rekor_entry": row[3],
+        "rekor_published": bool(row[4]),
+        "created_at": row[5],
+        "slsa_level": row[6],
+    }
+
+
+def get_attestation_coverage(days: int = 30) -> Dict[str, Any]:
+    """Get attestation coverage statistics.
+
+    Calculates what percentage of scans have attestations, and how many
+    were successfully published to Rekor transparency log.
+
+    Args:
+        days: Number of days to analyze (default: 30)
+
+    Returns:
+        Coverage statistics including:
+        - total_scans: Total scans in period
+        - attested_scans: Scans with attestations
+        - missing_scans: Scans without attestations
+        - coverage_percentage: Attestation coverage %
+        - rekor_published: Scans published to Rekor
+        - rekor_rate: % of attestations published
+        - missing_scan_ids: List of scan IDs without attestations
+
+    Example:
+        >>> coverage = get_attestation_coverage(days=30)
+        >>> print(f"Coverage: {coverage['coverage_percentage']:.1f}%")
+        >>> print(f"Rekor rate: {coverage['rekor_rate']:.1f}%")
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    since = int(time.time()) - (days * 86400)
+
+    # Total scans in period
+    cursor.execute("""
+        SELECT COUNT(*) FROM scans WHERE timestamp >= ?
+    """, (since,))
+    total_scans = cursor.fetchone()[0]
+
+    # Attested scans in period
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM attestations a
+        JOIN scans s ON a.scan_id = s.id
+        WHERE s.timestamp >= ?
+    """, (since,))
+    attested_scans = cursor.fetchone()[0]
+
+    # Rekor published rate
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM attestations a
+        JOIN scans s ON a.scan_id = s.id
+        WHERE s.timestamp >= ? AND a.rekor_published = 1
+    """, (since,))
+    rekor_published = cursor.fetchone()[0]
+
+    # Missing attestations (scan IDs)
+    cursor.execute("""
+        SELECT s.id
+        FROM scans s
+        LEFT JOIN attestations a ON s.id = a.scan_id
+        WHERE s.timestamp >= ? AND a.scan_id IS NULL
+        ORDER BY s.timestamp DESC
+    """, (since,))
+    missing_scan_ids = [row[0] for row in cursor.fetchall()]
+
+    return {
+        "days": days,
+        "total_scans": total_scans,
+        "attested_scans": attested_scans,
+        "missing_scans": total_scans - attested_scans,
+        "coverage_percentage": (attested_scans / total_scans * 100) if total_scans > 0 else 0,
+        "rekor_published": rekor_published,
+        "rekor_rate": (rekor_published / attested_scans * 100) if attested_scans > 0 else 0,
+        "missing_scan_ids": missing_scan_ids,
+    }

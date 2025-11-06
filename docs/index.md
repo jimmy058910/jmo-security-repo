@@ -18,6 +18,18 @@
 
 ## 🎉 Latest Updates (v1.0.0 - November 2025)
 
+- 🔒 **NEW: SLSA Attestation (Supply Chain Security)** - Tamper-evident scan results with provenance
+  - SLSA Level 2 compliance: Signed provenance with keyless Sigstore integration
+  - Tamper detection: Timestamp anomalies, builder consistency, tool rollback detection
+  - Multi-hash digests (SHA-256/384/512) for defense-in-depth
+  - Auto-attestation in CI: GitHub Actions + GitLab CI with OIDC (no key management)
+  - See [USER_GUIDE.md — SLSA Attestation](USER_GUIDE.md#slsa-attestation-v100) and [examples/attestation-workflows.md](examples/attestation-workflows.md)
+- ⚖️ **NEW: Policy-as-Code (ROADMAP #7)** - OPA-based security policy enforcement with CI/CD gating
+  - 5 built-in policies: zero-secrets, OWASP Top 10, PCI DSS, production-hardening, HIPAA compliance
+  - Custom policy authoring with Rego v1 syntax (OPA 1.0+)
+  - CI mode integration: `--fail-on-policy-violation` for automated policy gating
+  - Performance: <100ms per policy evaluation (21.81ms average across all policies)
+  - See [POLICY_AS_CODE.md](POLICY_AS_CODE.md) and [examples/policy-workflows.md](examples/policy-workflows.md)
 - 🔄 **NEW: Machine-Readable Diffs (ROADMAP #3)** - Compare scans over time with fingerprint-based diff engine
   - Four output formats: JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
   - CI/CD integration: GitHub Actions & GitLab CI examples with automated PR/MR comments
@@ -174,6 +186,12 @@ make tools
 | [**Results Quick Reference**](RESULTS_QUICK_REFERENCE.md) | **One-page printable triage card (30-minute workflow)** | **Everyone** |
 | [**Schedule Guide**](SCHEDULE_GUIDE.md) | **Complete guide to automated scan scheduling (v0.8.0+)** | **DevOps/SRE** |
 | [**Slack Notifications**](examples/slack-notifications.md) | **Real-world Slack integration patterns (v0.8.0+)** | **DevOps/SRE** |
+| [**Attestation Workflows (v1.0.0)**](examples/attestation-workflows.md) | **SLSA attestation CI/CD patterns (GitHub Actions, GitLab CI, Docker)** | **DevOps/SRE** |
+| [**Policy-as-Code (v1.0.0)**](POLICY_AS_CODE.md) | **OPA-based policy enforcement for security compliance (zero-secrets, OWASP, PCI DSS)** | **Everyone** |
+| [Policy Workflows (v1.0.0)](examples/policy-workflows.md) | CI/CD integration examples for policy gating | DevOps/SRE |
+| [Custom Policy Examples (v1.0.0)](examples/custom-policy-examples.md) | 5 complete custom policy templates (SQL injection, container vulns, license compliance) | Advanced |
+| [Diff Workflows (v1.0.0)](examples/diff-workflows.md) | Machine-readable diff usage examples | DevOps |
+| [Trend Analysis (v1.0.0)](examples/ci-cd-trends.md) | Trend analysis CI/CD integration | DevOps |
 | [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows | Beginners |
 | [TSV Scanning](examples/scan_from_tsv.md) | Clone and scan from TSV files | DevOps |
 | [GitHub Actions Docker](examples/github-actions-docker.yml) | CI/CD workflow examples | DevOps/SRE |

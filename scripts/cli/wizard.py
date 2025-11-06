@@ -718,6 +718,8 @@ def run_wizard(
     analyze_trends: bool = False,
     export_trends_html: bool = False,
     export_trends_json: bool = False,
+    policies: list[str] | None = None,
+    skip_policies: bool = False,
 ) -> int:
     """
     Run the interactive wizard.
@@ -731,6 +733,8 @@ def run_wizard(
         analyze_trends: Automatically analyze trends after scan (non-interactive)
         export_trends_html: Export trend report as HTML after scan
         export_trends_json: Export trend report as JSON after scan
+        policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
+        skip_policies: Skip policy evaluation entirely
 
     Returns:
         Exit code
@@ -922,7 +926,20 @@ def run_wizard(
                         print(_colorize(f"\n⚠ Trend analysis failed: {e}", "yellow"))
                         logger.debug(f"Trend analysis error: {e}")
             else:
-                # Interactive offer (only if no non-interactive flags)
+                # Interactive offers (only if no non-interactive flags)
+                # 1. Policy evaluation (Phase 2.5)
+                # Create args-like object with policy flags
+                import argparse
+
+                policy_args = argparse.Namespace(
+                    policies=policies,
+                    skip_policies=skip_policies,
+                    yes=yes,
+                )
+                offer_policy_evaluation_after_scan(
+                    config.results_dir, config.profile, policy_args
+                )
+                # 2. Trend analysis
                 offer_trend_analysis_after_scan(config.results_dir)
 
         send_wizard_telemetry(
@@ -991,6 +1008,67 @@ def offer_trend_analysis_after_scan(results_dir: str) -> None:
     except Exception as e:
         # Don't block user if trend offer fails
         logger.debug(f"Trend offer failed: {e}")
+
+
+def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> None:
+    """
+    Offer policy evaluation after scan completes.
+
+    Prompts user to evaluate security policies against scan findings.
+    Respects CLI flags: --policies, --skip-policies.
+
+    Args:
+        results_dir: Results directory from completed scan
+        profile: Scan profile name (fast/balanced/deep)
+        args: Parsed CLI arguments with policy flags
+    """
+    from pathlib import Path
+    import json
+
+    # Check if user explicitly skipped policies via CLI
+    if getattr(args, "skip_policies", False):
+        logger.debug("Policy evaluation skipped via --skip-policies flag")
+        return
+
+    # Load findings from scan results
+    findings_path = Path(results_dir) / "summaries" / "findings.json"
+    if not findings_path.exists():
+        logger.debug(
+            f"Findings not found at {findings_path}, skipping policy evaluation"
+        )
+        return
+
+    try:
+        findings_data = json.loads(findings_path.read_text())
+        findings = findings_data.get("findings", [])
+
+        if not findings:
+            logger.debug("No findings to evaluate, skipping policy evaluation")
+            return
+
+        # Import policy flow module
+        from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
+
+        # Determine non-interactive mode
+        non_interactive = getattr(args, "yes", False)
+
+        # Call policy evaluation menu
+        policy_results = policy_evaluation_menu(
+            Path(results_dir),
+            profile,
+            findings,
+            non_interactive=non_interactive,
+        )
+
+        if policy_results:
+            logger.info(
+                f"Policy evaluation completed: {len(policy_results)} policies evaluated"
+            )
+
+    except Exception as e:
+        # Don't block user if policy evaluation fails
+        print(_colorize(f"\n⚠ Policy evaluation failed: {e}", "yellow"))
+        logger.debug(f"Policy evaluation error: {e}")
 
 
 def explore_trends_interactive(db_path: Path, results_dir: str = "results") -> None:
@@ -1673,6 +1751,19 @@ def main() -> int:
         help="Export trend report as JSON after scan",
     )
 
+    # Policy evaluation flags (v1.0.0+)
+    parser.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate after scan (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
+    parser.add_argument(
+        "--skip-policies",
+        action="store_true",
+        help="Skip policy evaluation entirely (overrides config defaults)",
+    )
+
     args = parser.parse_args()
 
     if args.mode == "diff":
@@ -1687,6 +1778,8 @@ def main() -> int:
             analyze_trends=args.analyze_trends,
             export_trends_html=args.export_trends_html,
             export_trends_json=args.export_trends_json,
+            policies=args.policies,
+            skip_policies=args.skip_policies,
         )
 
 

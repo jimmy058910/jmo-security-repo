@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TYPE_CHECKING, Any as AnyType
@@ -14,6 +15,41 @@ else:
         YamlModule = None  # type: ignore[assignment]
 
 yaml: AnyType | None = YamlModule
+
+
+@dataclass
+class PolicyConfig:
+    """Policy-as-Code configuration (Feature #5, v1.0.0)."""
+
+    enabled: bool = True
+    auto_evaluate: bool = True  # Auto-evaluate policies after scans
+    default_policies: list[str] = field(default_factory=list)
+    fail_on_violation: bool = False
+    opa: dict[str, Any] = field(
+        default_factory=lambda: {
+            "binary": "opa",
+            "version": ">=0.70.0",
+            "timeout": 30,
+        }
+    )
+
+    def __post_init__(self):
+        """Validate policy configuration."""
+        if not isinstance(self.default_policies, list):
+            raise ValueError("default_policies must be a list")
+
+        if self.opa.get("timeout", 30) <= 0:
+            raise ValueError("opa.timeout must be positive")
+
+        # Merge partial OPA config with defaults
+        default_opa = {
+            "binary": "opa",
+            "version": ">=0.70.0",
+            "timeout": 30,
+        }
+        for key, default_value in default_opa.items():
+            if key not in self.opa:
+                self.opa[key] = default_value
 
 
 @dataclass
@@ -45,6 +81,8 @@ class Config:
     profiling_min_threads: int = 2
     profiling_max_threads: int = 8
     profiling_default_threads: int = 4
+    # Policy-as-Code configuration (Feature #5, v1.0.0)
+    policy: PolicyConfig = field(default_factory=PolicyConfig)
 
 
 def load_config(path: str | None) -> Config:
@@ -106,4 +144,89 @@ def load_config(path: str | None) -> Config:
             cfg.profiling_max_threads = prof["max_threads"]
         if isinstance(prof.get("default_threads"), int) and prof["default_threads"] > 0:
             cfg.profiling_default_threads = prof["default_threads"]
+
+    # Policy configuration (Feature #5, v1.0.0)
+    policy_section = data.get("policy", {})
+    if isinstance(policy_section, dict):
+        try:
+            # Build OPA config with defaults
+            opa_config = {
+                "binary": "opa",
+                "version": ">=0.70.0",
+                "timeout": 30,
+            }
+            if isinstance(policy_section.get("opa"), dict):
+                opa_config.update(policy_section["opa"])
+
+            # Create PolicyConfig
+            policy_config = PolicyConfig(
+                enabled=policy_section.get("enabled", True),
+                auto_evaluate=policy_section.get("auto_evaluate", True),
+                default_policies=policy_section.get("default_policies", [])
+                if isinstance(policy_section.get("default_policies"), list)
+                else [],
+                fail_on_violation=policy_section.get("fail_on_violation", False),
+                opa=opa_config,
+            )
+
+            # Apply profile-specific policy overrides
+            profile_name = cfg.default_profile or data.get("default_profile")
+            if profile_name and isinstance(cfg.profiles.get(profile_name), dict):
+                profile_data = cfg.profiles[profile_name]
+                if isinstance(profile_data.get("policy"), dict):
+                    profile_policy = profile_data["policy"]
+                    # Override with profile-specific settings
+                    if isinstance(profile_policy.get("default_policies"), list):
+                        policy_config.default_policies = profile_policy["default_policies"]
+                    if "fail_on_violation" in profile_policy:
+                        policy_config.fail_on_violation = profile_policy["fail_on_violation"]
+
+            cfg.policy = policy_config
+        except (ValueError, TypeError):
+            # If policy config is invalid, use defaults
+            cfg.policy = PolicyConfig()
+
     return cfg
+
+
+def load_config_with_env_overrides(path: str | None) -> Config:
+    """Load configuration with environment variable overrides.
+
+    Environment variables take highest precedence:
+    1. CLI arguments (handled by caller)
+    2. Environment variables (this function)
+    3. jmo.yml config file
+    4. Profile defaults
+    """
+    config = load_config(path)
+
+    # Override policy settings from environment
+    if os.getenv("JMO_POLICY_ENABLED"):
+        config.policy.enabled = os.getenv("JMO_POLICY_ENABLED", "").lower() == "true"
+
+    if os.getenv("JMO_POLICY_AUTO_EVALUATE"):
+        config.policy.auto_evaluate = (
+            os.getenv("JMO_POLICY_AUTO_EVALUATE", "").lower() == "true"
+        )
+
+    if os.getenv("JMO_POLICY_DEFAULT_POLICIES"):
+        policies_str = os.getenv("JMO_POLICY_DEFAULT_POLICIES", "")
+        config.policy.default_policies = [p.strip() for p in policies_str.split(",") if p.strip()]
+
+    if os.getenv("JMO_POLICY_FAIL_ON_VIOLATION"):
+        config.policy.fail_on_violation = (
+            os.getenv("JMO_POLICY_FAIL_ON_VIOLATION", "").lower() == "true"
+        )
+
+    if os.getenv("JMO_POLICY_OPA_BINARY"):
+        config.policy.opa["binary"] = os.getenv("JMO_POLICY_OPA_BINARY", "opa")
+
+    if os.getenv("JMO_POLICY_OPA_TIMEOUT"):
+        try:
+            timeout = int(os.getenv("JMO_POLICY_OPA_TIMEOUT", "30"))
+            if timeout > 0:
+                config.policy.opa["timeout"] = timeout
+        except ValueError:
+            pass  # Keep existing timeout if invalid
+
+    return config
