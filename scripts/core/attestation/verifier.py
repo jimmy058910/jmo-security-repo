@@ -44,7 +44,7 @@ class AttestationVerifier:
         self,
         config: Optional[Dict[str, Any]] = None,
         enable_tamper_detection: bool = True,
-        max_age_days: int = 90
+        max_age_days: int = 90,
     ):
         """Initialize verifier.
 
@@ -56,7 +56,11 @@ class AttestationVerifier:
         self.config = config or {}
         self.rekor_url = self.config.get("rekor_url", REKOR_URL)
         self.enable_tamper_detection = enable_tamper_detection
-        self.tamper_detector = TamperDetector(max_age_days=max_age_days) if enable_tamper_detection else None
+        self.tamper_detector = (
+            TamperDetector(max_age_days=max_age_days)
+            if enable_tamper_detection
+            else None
+        )
 
     def _compute_digest(self, file_path: str, algorithm: str = "sha256") -> str:
         """
@@ -76,9 +80,7 @@ class AttestationVerifier:
         return hash_obj.hexdigest()
 
     def _verify_subject_digest(
-        self,
-        subject_path: str,
-        expected_digests: Dict[str, str]
+        self, subject_path: str, expected_digests: Dict[str, str]
     ) -> bool:
         """
         Verify subject file matches expected digests (multi-hash support).
@@ -95,7 +97,9 @@ class AttestationVerifier:
             try:
                 actual_digest = self._compute_digest(subject_path, algorithm)
                 if actual_digest != expected_digest:
-                    logger.error(f"{algorithm.upper()} digest mismatch: {actual_digest} != {expected_digest}")
+                    logger.error(
+                        f"{algorithm.upper()} digest mismatch: {actual_digest} != {expected_digest}"
+                    )
                     return False
             except ValueError:
                 logger.warning(f"Unsupported hash algorithm: {algorithm}")
@@ -110,7 +114,7 @@ class AttestationVerifier:
         signature_path: Optional[str] = None,
         check_rekor: bool = False,
         policy_path: Optional[str] = None,
-        historical_attestations: Optional[List[str]] = None
+        historical_attestations: Optional[List[str]] = None,
     ) -> VerificationResult:
         """Verify attestation for a subject.
 
@@ -190,15 +194,14 @@ class AttestationVerifier:
                 indicators = self.tamper_detector.check_all(
                     subject_path=subject_path,
                     attestation_path=attestation_path,
-                    historical_attestations=historical_attestations or []
+                    historical_attestations=historical_attestations or [],
                 )
 
                 result.tamper_indicators = indicators
 
                 # Check for CRITICAL indicators
                 critical_indicators = [
-                    ind for ind in indicators
-                    if ind.severity.value == "CRITICAL"
+                    ind for ind in indicators if ind.severity.value == "CRITICAL"
                 ]
 
                 if critical_indicators:
@@ -225,7 +228,9 @@ class AttestationVerifier:
         result.is_valid = True
         result.subject_name = subject_name
         # Use SHA-256 as primary digest for backward compatibility
-        result.subject_digest = subject_digest_obj.get("sha256", list(subject_digest_obj.values())[0])
+        result.subject_digest = subject_digest_obj.get(
+            "sha256", list(subject_digest_obj.values())[0]
+        )
         result.builder_id = builder_id
         result.build_time = build_time
 
@@ -246,9 +251,13 @@ class AttestationVerifier:
         try:
             # Build sigstore verify command
             cmd = [
-                "python3", "-m", "sigstore", "verify",
-                "--bundle", bundle_path,
-                attestation_path
+                "python3",
+                "-m",
+                "sigstore",
+                "verify",
+                "--bundle",
+                bundle_path,
+                attestation_path,
             ]
 
             logger.debug(f"Running command: {' '.join(cmd)}")
@@ -257,7 +266,7 @@ class AttestationVerifier:
                 capture_output=True,
                 text=True,
                 timeout=VERIFICATION_TIMEOUT,
-                check=False
+                check=False,
             )
 
             if result.returncode == 0:

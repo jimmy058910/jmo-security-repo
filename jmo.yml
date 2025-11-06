@@ -31,7 +31,7 @@ profiles:
     timeout: 300
     policy:
       default_policies:
-        - zero-secrets
+      - zero-secrets
     per_tool:
       semgrep:
         flags:
@@ -75,8 +75,8 @@ profiles:
     timeout: 600
     policy:
       default_policies:
-        - owasp-top-10
-        - zero-secrets
+      - owasp-top-10
+      - zero-secrets
     per_tool:
       semgrep:
         flags:
@@ -147,11 +147,11 @@ profiles:
     retries: 1
     policy:
       default_policies:
-        - owasp-top-10
-        - zero-secrets
-        - pci-dss
-        - production-hardening
-        - hipaa-compliance
+      - owasp-top-10
+      - zero-secrets
+      - pci-dss
+      - production-hardening
+      - hipaa-compliance
       fail_on_violation: true
     per_tool:
       semgrep:
@@ -208,8 +208,8 @@ policy:
   enabled: true                  # Enable policy evaluation
   auto_evaluate: true             # Auto-evaluate after scans
   default_policies:               # Policies to apply by default
-    - owasp-top-10
-    - zero-secrets
+  - owasp-top-10
+  - zero-secrets
   fail_on_violation: false        # Fail CI/CD if violations found
   opa:
     binary: opa                   # Path to OPA binary

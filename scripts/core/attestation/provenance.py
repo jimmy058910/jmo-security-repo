@@ -136,9 +136,7 @@ class ProvenanceGenerator:
         digests = self.generate_digests(findings_path)
 
         digest = Digest(
-            sha256=digests["sha256"],
-            sha384=digests["sha384"],
-            sha512=digests["sha512"]
+            sha256=digests["sha256"], sha384=digests["sha384"], sha512=digests["sha512"]
         )
 
         subject = Subject(name="findings.json", digest=digest)
@@ -151,7 +149,7 @@ class ProvenanceGenerator:
         tools: List[str],
         targets: List[str],
         threads: int = 4,
-        timeout: int = 600
+        timeout: int = 600,
     ) -> BuildDefinition:
         """Create build definition with scan parameters.
 
@@ -181,14 +179,14 @@ class ProvenanceGenerator:
                 "threads": threads,
                 "timeout": timeout,
             },
-            resolvedDependencies=[]  # TODO: Add tool versions in future phase
+            resolvedDependencies=[],  # TODO: Add tool versions in future phase
         )
 
     def _create_run_details(
         self,
         invocation_id: Optional[str] = None,
         started_on: Optional[str] = None,
-        finished_on: Optional[str] = None
+        finished_on: Optional[str] = None,
     ) -> RunDetails:
         """Create run details with builder and timing metadata.
 
@@ -214,13 +212,11 @@ class ProvenanceGenerator:
             version={
                 "jmo": self.jmo_version,
                 "python": self.python_version,
-            }
+            },
         )
 
         metadata = Metadata(
-            invocationId=invocation_id,
-            startedOn=started_on,
-            finishedOn=finished_on
+            invocationId=invocation_id, startedOn=started_on, finishedOn=finished_on
         )
 
         return RunDetails(builder=builder, metadata=metadata)
@@ -242,7 +238,9 @@ class ProvenanceGenerator:
             return f"https://github.com/{repo}"
         elif ci_provider == "gitlab":
             # GitLab CI: Use project URL from CI_PROJECT_URL
-            project_url = os.getenv("CI_PROJECT_URL", "https://gitlab.com/unknown/unknown")
+            project_url = os.getenv(
+                "CI_PROJECT_URL", "https://gitlab.com/unknown/unknown"
+            )
             return project_url
         else:
             # Local or generic CI: Use JMo repository URL
@@ -258,7 +256,7 @@ class ProvenanceGenerator:
         timeout: int = 600,
         invocation_id: Optional[str] = None,
         started_on: Optional[str] = None,
-        finished_on: Optional[str] = None
+        finished_on: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate complete SLSA provenance document.
 
@@ -285,20 +283,17 @@ class ProvenanceGenerator:
             tools=tools,
             targets=targets,
             threads=threads,
-            timeout=timeout
+            timeout=timeout,
         )
 
         # Create run details
         run_details = self._create_run_details(
-            invocation_id=invocation_id,
-            started_on=started_on,
-            finished_on=finished_on
+            invocation_id=invocation_id, started_on=started_on, finished_on=finished_on
         )
 
         # Create SLSA provenance
         slsa_provenance = SLSAProvenance(
-            buildDefinition=build_definition,
-            runDetails=run_details
+            buildDefinition=build_definition, runDetails=run_details
         )
 
         # Create in-toto statement
@@ -306,7 +301,7 @@ class ProvenanceGenerator:
             _type=INTOTO_VERSION,
             subject=subjects,
             predicateType=SLSA_VERSION,
-            predicate=slsa_provenance.to_dict()
+            predicate=slsa_provenance.to_dict(),
         )
 
         return statement.to_dict()

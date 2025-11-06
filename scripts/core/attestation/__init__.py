@@ -29,7 +29,12 @@ from .verifier import AttestationVerifier, VerificationResult
 from .signer import SigstoreSigner
 from .ci_detector import CIDetector
 from .metadata_capture import MetadataCapture
-from .tamper_detector import TamperDetector, TamperIndicator, TamperSeverity, TamperIndicatorType
+from .tamper_detector import (
+    TamperDetector,
+    TamperIndicator,
+    TamperSeverity,
+    TamperIndicatorType,
+)
 from .models import (
     SLSAProvenance,
     InTotoStatement,

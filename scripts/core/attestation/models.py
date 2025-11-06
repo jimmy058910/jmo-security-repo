@@ -19,6 +19,7 @@ class Digest:
 
     SLSA requires multiple hash algorithms for defense-in-depth.
     """
+
     sha256: str
     sha384: Optional[str] = None
     sha512: Optional[str] = None
@@ -39,15 +40,13 @@ class Subject:
 
     Represents the artifact (e.g., findings.json) with its name and digest.
     """
+
     name: str
     digest: Digest
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
-            "name": self.name,
-            "digest": self.digest.to_dict()
-        }
+        return {"name": self.name, "digest": self.digest.to_dict()}
 
 
 @dataclass
@@ -56,6 +55,7 @@ class Builder:
 
     In JMo's case, this represents the scanning infrastructure.
     """
+
     id: str  # URI identifying the builder (e.g., GitHub repo URL)
     version: Dict[str, str]  # Version info (jmo, python, etc.)
 
@@ -67,6 +67,7 @@ class Builder:
 @dataclass
 class Metadata:
     """Build/scan metadata (timing, invocation details)."""
+
     invocationId: str  # Unique ID for this scan invocation
     startedOn: Optional[str] = None  # ISO 8601 timestamp
     finishedOn: Optional[str] = None  # ISO 8601 timestamp
@@ -84,15 +85,13 @@ class Metadata:
 @dataclass
 class RunDetails:
     """Details about the scan execution."""
+
     builder: Builder
     metadata: Metadata
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
-            "builder": self.builder.to_dict(),
-            "metadata": self.metadata.to_dict()
-        }
+        return {"builder": self.builder.to_dict(), "metadata": self.metadata.to_dict()}
 
 
 @dataclass
@@ -101,10 +100,15 @@ class BuildDefinition:
 
     Describes what was scanned and how.
     """
+
     buildType: str  # URI identifying the build type (JMo scan type)
-    externalParameters: Dict[str, Any]  # User-provided parameters (profile, tools, targets)
+    externalParameters: Dict[
+        str, Any
+    ]  # User-provided parameters (profile, tools, targets)
     internalParameters: Dict[str, Any]  # JMo internal parameters (threads, timeout)
-    resolvedDependencies: List[Dict[str, Any]] = field(default_factory=list)  # Tool versions
+    resolvedDependencies: List[Dict[str, Any]] = field(
+        default_factory=list
+    )  # Tool versions
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -118,6 +122,7 @@ class SLSAProvenance:
     The predicate contains the actual provenance information:
     what was built, how it was built, and who built it.
     """
+
     buildDefinition: BuildDefinition
     runDetails: RunDetails
 
@@ -125,7 +130,7 @@ class SLSAProvenance:
         """Convert to dictionary for JSON serialization."""
         return {
             "buildDefinition": self.buildDefinition.to_dict(),
-            "runDetails": self.runDetails.to_dict()
+            "runDetails": self.runDetails.to_dict(),
         }
 
 
@@ -143,6 +148,7 @@ class InTotoStatement:
             "predicate": {...}
         }
     """
+
     _type: str  # in-toto statement type URI
     subject: List[Subject]  # Artifacts being attested
     predicateType: str  # Type of predicate (SLSA provenance URI)
@@ -154,5 +160,5 @@ class InTotoStatement:
             "_type": self._type,
             "subject": [s.to_dict() for s in self.subject],
             "predicateType": self.predicateType,
-            "predicate": self.predicate
+            "predicate": self.predicate,
         }

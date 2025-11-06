@@ -82,24 +82,28 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
     if builtin_dir.exists():
         for policy_file in sorted(builtin_dir.glob("*.rego")):
             metadata = engine.get_metadata(policy_file)
-            builtin_policies.append({
-                "name": policy_file.stem,
-                "path": policy_file,
-                "metadata": metadata,
-                "source": "builtin"
-            })
+            builtin_policies.append(
+                {
+                    "name": policy_file.stem,
+                    "path": policy_file,
+                    "metadata": metadata,
+                    "source": "builtin",
+                }
+            )
 
     # Discover user policies
     user_policies = []
     if user_dir.exists():
         for policy_file in sorted(user_dir.glob("*.rego")):
             metadata = engine.get_metadata(policy_file)
-            user_policies.append({
-                "name": policy_file.stem,
-                "path": policy_file,
-                "metadata": metadata,
-                "source": "user"
-            })
+            user_policies.append(
+                {
+                    "name": policy_file.stem,
+                    "path": policy_file,
+                    "metadata": metadata,
+                    "source": "user",
+                }
+            )
 
     # Display results
     if not builtin_policies and not user_policies:
@@ -267,7 +271,9 @@ def cmd_policy_show(args: argparse.Namespace) -> int:
     print(f"Policy: {policy_name}")
     print("=" * 80)
     print(f"Path: {policy_path}")
-    print(f"Source: {'builtin' if get_builtin_policies_dir() in policy_path.parents else 'user'}")
+    print(
+        f"Source: {'builtin' if get_builtin_policies_dir() in policy_path.parents else 'user'}"
+    )
     print()
 
     if metadata:
@@ -311,7 +317,9 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
         logger.error(f"Builtin policy not found: {policy_name}")
 
         # List available builtin policies
-        available = [p.stem for p in builtin_dir.glob("*.rego")] if builtin_dir.exists() else []
+        available = (
+            [p.stem for p in builtin_dir.glob("*.rego")] if builtin_dir.exists() else []
+        )
         if available:
             logger.info(f"Available builtin policies: {', '.join(sorted(available))}")
 
@@ -325,7 +333,9 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
     user_policy_path = user_dir / f"{policy_name}.rego"
     if user_policy_path.exists():
         if not args.force:
-            logger.warning(f"Policy '{policy_name}' already installed at: {user_policy_path}")
+            logger.warning(
+                f"Policy '{policy_name}' already installed at: {user_policy_path}"
+            )
             logger.info("Use --force to overwrite")
             return 1
         else:

@@ -64,7 +64,9 @@ class SigstoreSigner:
         self.fulcio_url = self.config.get("fulcio_url", self.fulcio_url)
         self.rekor_url = self.config.get("rekor_url", self.rekor_url)
 
-        logger.debug(f"Sigstore signer initialized: Fulcio={self.fulcio_url}, Rekor={self.rekor_url}")
+        logger.debug(
+            f"Sigstore signer initialized: Fulcio={self.fulcio_url}, Rekor={self.rekor_url}"
+        )
 
     def _detect_ci_environment(self) -> str:
         """
@@ -117,17 +119,14 @@ class SigstoreSigner:
 
         headers = {
             "Authorization": f"Bearer {request_token}",
-            "Accept": "application/json"
+            "Accept": "application/json",
         }
 
         # Request token with audience for Sigstore
         params = {"audience": "sigstore"}
 
         response = requests.get(
-            token_url,
-            headers=headers,
-            params=params,
-            timeout=ATTESTATION_TIMEOUT
+            token_url, headers=headers, params=params, timeout=ATTESTATION_TIMEOUT
         )
         response.raise_for_status()
 
@@ -205,7 +204,9 @@ class SigstoreSigner:
                 cmd.append("--staging")
 
             # Output bundle path
-            bundle_path = attestation_path_obj.with_suffix(attestation_path_obj.suffix + ".sigstore.json")
+            bundle_path = attestation_path_obj.with_suffix(
+                attestation_path_obj.suffix + ".sigstore.json"
+            )
             cmd.extend(["--bundle", str(bundle_path)])
 
             # Input file
@@ -218,7 +219,7 @@ class SigstoreSigner:
                 capture_output=True,
                 text=True,
                 timeout=ATTESTATION_TIMEOUT,
-                check=False
+                check=False,
             )
 
             if result.returncode != 0:
@@ -247,10 +248,14 @@ class SigstoreSigner:
                     rekor_entry_url = f"{self.rekor_url}/api/v1/log/entries/{log_index}"
 
             # Save individual files
-            signature_path = attestation_path_obj.with_suffix(attestation_path_obj.suffix + ".sig")
+            signature_path = attestation_path_obj.with_suffix(
+                attestation_path_obj.suffix + ".sig"
+            )
             signature_path.write_text(signature_b64)
 
-            certificate_path = attestation_path_obj.with_suffix(attestation_path_obj.suffix + ".crt")
+            certificate_path = attestation_path_obj.with_suffix(
+                attestation_path_obj.suffix + ".crt"
+            )
             certificate_path.write_text(certificate_b64)
 
             logger.info("✅ Signing complete")
@@ -264,7 +269,7 @@ class SigstoreSigner:
                 "signature_path": str(signature_path),
                 "certificate_path": str(certificate_path),
                 "bundle_path": str(bundle_path),
-                "rekor_entry": rekor_entry_url
+                "rekor_entry": rekor_entry_url,
             }
 
         except Exception as e:

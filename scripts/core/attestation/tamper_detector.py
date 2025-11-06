@@ -89,7 +89,7 @@ class TamperDetector:
         self,
         max_age_days: int = 90,
         max_duration_hours: int = 24,
-        allow_builder_version_change: bool = True
+        allow_builder_version_change: bool = True,
     ):
         """
         Initialize tamper detector.
@@ -107,7 +107,7 @@ class TamperDetector:
         self,
         subject_path: str,
         attestation_path: str,
-        historical_attestations: Optional[List[str]] = None
+        historical_attestations: Optional[List[str]] = None,
     ) -> List[TamperIndicator]:
         """
         Run all tamper detection checks and aggregate indicators.
@@ -129,7 +129,9 @@ class TamperDetector:
         # Check builder consistency
         if historical_attestations:
             indicators.extend(
-                self.check_builder_consistency(attestation_path, historical_attestations)
+                self.check_builder_consistency(
+                    attestation_path, historical_attestations
+                )
             )
 
         # Check tool version rollback
@@ -184,17 +186,21 @@ class TamperDetector:
         if started_on:
             try:
                 started_dt = datetime.fromisoformat(started_on.replace("Z", "+00:00"))
-                if started_dt > now + timedelta(minutes=5):  # 5-minute tolerance for clock skew
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.CRITICAL,
-                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
-                        description="Attestation started in the future",
-                        evidence={
-                            "started_on": started_on,
-                            "current_time": now.isoformat(),
-                            "diff_minutes": (started_dt - now).total_seconds() / 60
-                        }
-                    ))
+                if started_dt > now + timedelta(
+                    minutes=5
+                ):  # 5-minute tolerance for clock skew
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.CRITICAL,
+                            indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                            description="Attestation started in the future",
+                            evidence={
+                                "started_on": started_on,
+                                "current_time": now.isoformat(),
+                                "diff_minutes": (started_dt - now).total_seconds() / 60,
+                            },
+                        )
+                    )
             except ValueError as e:
                 logger.warning(f"Invalid startedOn timestamp: {e}")
 
@@ -202,16 +208,19 @@ class TamperDetector:
             try:
                 finished_dt = datetime.fromisoformat(finished_on.replace("Z", "+00:00"))
                 if finished_dt > now + timedelta(minutes=5):  # 5-minute tolerance
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.CRITICAL,
-                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
-                        description="Attestation finished in the future",
-                        evidence={
-                            "finished_on": finished_on,
-                            "current_time": now.isoformat(),
-                            "diff_minutes": (finished_dt - now).total_seconds() / 60
-                        }
-                    ))
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.CRITICAL,
+                            indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                            description="Attestation finished in the future",
+                            evidence={
+                                "finished_on": finished_on,
+                                "current_time": now.isoformat(),
+                                "diff_minutes": (finished_dt - now).total_seconds()
+                                / 60,
+                            },
+                        )
+                    )
             except ValueError as e:
                 logger.warning(f"Invalid finishedOn timestamp: {e}")
 
@@ -222,31 +231,37 @@ class TamperDetector:
                 finished_dt = datetime.fromisoformat(finished_on.replace("Z", "+00:00"))
 
                 if finished_dt < started_dt:
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.CRITICAL,
-                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
-                        description="Build finished before it started",
-                        evidence={
-                            "started_on": started_on,
-                            "finished_on": finished_on,
-                            "diff_seconds": (finished_dt - started_dt).total_seconds()
-                        }
-                    ))
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.CRITICAL,
+                            indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                            description="Build finished before it started",
+                            evidence={
+                                "started_on": started_on,
+                                "finished_on": finished_on,
+                                "diff_seconds": (
+                                    finished_dt - started_dt
+                                ).total_seconds(),
+                            },
+                        )
+                    )
 
                 # Check for extremely long duration
                 duration_hours = (finished_dt - started_dt).total_seconds() / 3600
                 if duration_hours > self.max_duration_hours:
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.HIGH,
-                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
-                        description=f"Build duration exceeds {self.max_duration_hours} hours",
-                        evidence={
-                            "duration_hours": duration_hours,
-                            "max_duration_hours": self.max_duration_hours,
-                            "started_on": started_on,
-                            "finished_on": finished_on
-                        }
-                    ))
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.HIGH,
+                            indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                            description=f"Build duration exceeds {self.max_duration_hours} hours",
+                            evidence={
+                                "duration_hours": duration_hours,
+                                "max_duration_hours": self.max_duration_hours,
+                                "started_on": started_on,
+                                "finished_on": finished_on,
+                            },
+                        )
+                    )
             except ValueError as e:
                 logger.warning(f"Invalid timestamp format: {e}")
 
@@ -257,37 +272,39 @@ class TamperDetector:
                 age_days = (now - finished_dt).days
 
                 if age_days > self.max_age_days:
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.MEDIUM,
-                        indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
-                        description=f"Attestation is {age_days} days old (possible replay attack)",
-                        evidence={
-                            "age_days": age_days,
-                            "max_age_days": self.max_age_days,
-                            "finished_on": finished_on
-                        }
-                    ))
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.MEDIUM,
+                            indicator_type=TamperIndicatorType.TIMESTAMP_ANOMALY,
+                            description=f"Attestation is {age_days} days old (possible replay attack)",
+                            evidence={
+                                "age_days": age_days,
+                                "max_age_days": self.max_age_days,
+                                "finished_on": finished_on,
+                            },
+                        )
+                    )
             except ValueError as e:
                 logger.warning(f"Invalid finishedOn timestamp: {e}")
 
         # Check for missing timestamps
         if not started_on or not finished_on:
-            indicators.append(TamperIndicator(
-                severity=TamperSeverity.MEDIUM,
-                indicator_type=TamperIndicatorType.MISSING_FIELD,
-                description="Missing required timestamp fields",
-                evidence={
-                    "has_started_on": started_on is not None,
-                    "has_finished_on": finished_on is not None
-                }
-            ))
+            indicators.append(
+                TamperIndicator(
+                    severity=TamperSeverity.MEDIUM,
+                    indicator_type=TamperIndicatorType.MISSING_FIELD,
+                    description="Missing required timestamp fields",
+                    evidence={
+                        "has_started_on": started_on is not None,
+                        "has_finished_on": finished_on is not None,
+                    },
+                )
+            )
 
         return indicators
 
     def check_builder_consistency(
-        self,
-        attestation_path: str,
-        historical_attestations: List[str]
+        self, attestation_path: str, historical_attestations: List[str]
     ) -> List[TamperIndicator]:
         """
         Check builder consistency across attestations.
@@ -308,7 +325,11 @@ class TamperDetector:
 
         try:
             current_data = json.loads(Path(attestation_path).read_text())
-            current_builder = current_data.get("predicate", {}).get("runDetails", {}).get("builder", {})
+            current_builder = (
+                current_data.get("predicate", {})
+                .get("runDetails", {})
+                .get("builder", {})
+            )
             current_builder_id = current_builder.get("id", "")
             current_builder_version = current_builder.get("version", {})
         except Exception as e:
@@ -316,34 +337,45 @@ class TamperDetector:
             return indicators
 
         if not current_builder_id:
-            indicators.append(TamperIndicator(
-                severity=TamperSeverity.MEDIUM,
-                indicator_type=TamperIndicatorType.MISSING_FIELD,
-                description="Missing builder ID in attestation",
-                evidence={"attestation_path": attestation_path}
-            ))
+            indicators.append(
+                TamperIndicator(
+                    severity=TamperSeverity.MEDIUM,
+                    indicator_type=TamperIndicatorType.MISSING_FIELD,
+                    description="Missing builder ID in attestation",
+                    evidence={"attestation_path": attestation_path},
+                )
+            )
             return indicators
 
         # Compare with historical attestations
         for historical_path in historical_attestations:
             try:
                 historical_data = json.loads(Path(historical_path).read_text())
-                historical_builder = historical_data.get("predicate", {}).get("runDetails", {}).get("builder", {})
+                historical_builder = (
+                    historical_data.get("predicate", {})
+                    .get("runDetails", {})
+                    .get("builder", {})
+                )
                 historical_builder_id = historical_builder.get("id", "")
                 historical_builder_version = historical_builder.get("version", {})
 
                 # Check for builder ID change (critical)
-                if historical_builder_id and historical_builder_id != current_builder_id:
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.CRITICAL,
-                        indicator_type=TamperIndicatorType.BUILDER_INCONSISTENCY,
-                        description="Builder ID changed from previous attestation",
-                        evidence={
-                            "current_builder_id": current_builder_id,
-                            "historical_builder_id": historical_builder_id,
-                            "historical_attestation": historical_path
-                        }
-                    ))
+                if (
+                    historical_builder_id
+                    and historical_builder_id != current_builder_id
+                ):
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.CRITICAL,
+                            indicator_type=TamperIndicatorType.BUILDER_INCONSISTENCY,
+                            description="Builder ID changed from previous attestation",
+                            evidence={
+                                "current_builder_id": current_builder_id,
+                                "historical_builder_id": historical_builder_id,
+                                "historical_attestation": historical_path,
+                            },
+                        )
+                    )
 
                 # Check for builder version change (warning if version changes disabled)
                 if (
@@ -351,25 +383,27 @@ class TamperDetector:
                     and historical_builder_version
                     and historical_builder_version != current_builder_version
                 ):
-                    indicators.append(TamperIndicator(
-                        severity=TamperSeverity.HIGH,
-                        indicator_type=TamperIndicatorType.BUILDER_INCONSISTENCY,
-                        description="Builder version changed from previous attestation",
-                        evidence={
-                            "current_builder_version": current_builder_version,
-                            "historical_builder_version": historical_builder_version,
-                            "historical_attestation": historical_path
-                        }
-                    ))
+                    indicators.append(
+                        TamperIndicator(
+                            severity=TamperSeverity.HIGH,
+                            indicator_type=TamperIndicatorType.BUILDER_INCONSISTENCY,
+                            description="Builder version changed from previous attestation",
+                            evidence={
+                                "current_builder_version": current_builder_version,
+                                "historical_builder_version": historical_builder_version,
+                                "historical_attestation": historical_path,
+                            },
+                        )
+                    )
             except Exception as e:
-                logger.warning(f"Failed to read historical attestation {historical_path}: {e}")
+                logger.warning(
+                    f"Failed to read historical attestation {historical_path}: {e}"
+                )
 
         return indicators
 
     def check_tool_rollback(
-        self,
-        attestation_path: str,
-        historical_attestations: List[str]
+        self, attestation_path: str, historical_attestations: List[str]
     ) -> List[TamperIndicator]:
         """
         Detect tool version rollback attacks.
@@ -417,7 +451,9 @@ class TamperDetector:
         for historical_path in historical_attestations:
             try:
                 historical_data = json.loads(Path(historical_path).read_text())
-                historical_build_def = historical_data.get("predicate", {}).get("buildDefinition", {})
+                historical_build_def = historical_data.get("predicate", {}).get(
+                    "buildDefinition", {}
+                )
 
                 # Try externalParameters.tools first (ProvenanceGenerator format)
                 historical_params = historical_build_def.get("externalParameters", {})
@@ -425,7 +461,9 @@ class TamperDetector:
 
                 # Fallback to resolvedDependencies (alternative format)
                 if not historical_tools:
-                    historical_tools = historical_build_def.get("resolvedDependencies", [])
+                    historical_tools = historical_build_def.get(
+                        "resolvedDependencies", []
+                    )
 
                 # Build historical tool versions dict
                 historical_versions: Dict[str, str] = {}
@@ -443,32 +481,39 @@ class TamperDetector:
 
                         # Simple version comparison (works for semantic versioning)
                         # Note: This is a heuristic; production should use proper version parsing
-                        if self._is_version_downgrade(current_version, historical_version):
+                        if self._is_version_downgrade(
+                            current_version, historical_version
+                        ):
                             # Determine severity based on tool criticality
-                            severity = TamperSeverity.CRITICAL if tool_name in [
-                                "trivy", "semgrep", "trufflehog", "syft"
-                            ] else TamperSeverity.HIGH
+                            severity = (
+                                TamperSeverity.CRITICAL
+                                if tool_name
+                                in ["trivy", "semgrep", "trufflehog", "syft"]
+                                else TamperSeverity.HIGH
+                            )
 
-                            indicators.append(TamperIndicator(
-                                severity=severity,
-                                indicator_type=TamperIndicatorType.TOOL_ROLLBACK,
-                                description=f"Tool {tool_name} downgraded from {historical_version} to {current_version}",
-                                evidence={
-                                    "tool_name": tool_name,
-                                    "current_version": current_version,
-                                    "historical_version": historical_version,
-                                    "historical_attestation": historical_path
-                                }
-                            ))
+                            indicators.append(
+                                TamperIndicator(
+                                    severity=severity,
+                                    indicator_type=TamperIndicatorType.TOOL_ROLLBACK,
+                                    description=f"Tool {tool_name} downgraded from {historical_version} to {current_version}",
+                                    evidence={
+                                        "tool_name": tool_name,
+                                        "current_version": current_version,
+                                        "historical_version": historical_version,
+                                        "historical_attestation": historical_path,
+                                    },
+                                )
+                            )
             except Exception as e:
-                logger.warning(f"Failed to read historical attestation {historical_path}: {e}")
+                logger.warning(
+                    f"Failed to read historical attestation {historical_path}: {e}"
+                )
 
         return indicators
 
     def check_suspicious_patterns(
-        self,
-        subject_path: str,
-        attestation_path: str
+        self, subject_path: str, attestation_path: str
     ) -> List[TamperIndicator]:
         """
         Detect suspicious patterns in attestation.
@@ -497,7 +542,9 @@ class TamperDetector:
 
         # Extract key fields
         predicate = attestation_data.get("predicate", {})
-        external_params = predicate.get("buildDefinition", {}).get("externalParameters", {})
+        external_params = predicate.get("buildDefinition", {}).get(
+            "externalParameters", {}
+        )
         builder = predicate.get("runDetails", {}).get("builder", {})
         subject_list = attestation_data.get("subject", [])
 
@@ -513,16 +560,18 @@ class TamperDetector:
                     findings_count = len(subject_data.get("findings", []))
 
                     if findings_count == 0:
-                        indicators.append(TamperIndicator(
-                            severity=TamperSeverity.HIGH,
-                            indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
-                            description=f"Zero findings with {len(tools)} tools (possible scan bypass)",
-                            evidence={
-                                "tool_count": len(tools),
-                                "findings_count": findings_count,
-                                "profile": profile
-                            }
-                        ))
+                        indicators.append(
+                            TamperIndicator(
+                                severity=TamperSeverity.HIGH,
+                                indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
+                                description=f"Zero findings with {len(tools)} tools (possible scan bypass)",
+                                evidence={
+                                    "tool_count": len(tools),
+                                    "findings_count": findings_count,
+                                    "profile": profile,
+                                },
+                            )
+                        )
             except Exception as e:
                 logger.warning(f"Failed to check findings count: {e}")
 
@@ -530,12 +579,14 @@ class TamperDetector:
         for subject in subject_list:
             subject_name = subject.get("name", "")
             if ".." in subject_name or subject_name.startswith("/"):
-                indicators.append(TamperIndicator(
-                    severity=TamperSeverity.HIGH,
-                    indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
-                    description=f"Suspicious subject name: {subject_name}",
-                    evidence={"subject_name": subject_name}
-                ))
+                indicators.append(
+                    TamperIndicator(
+                        severity=TamperSeverity.HIGH,
+                        indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
+                        description=f"Suspicious subject name: {subject_name}",
+                        evidence={"subject_name": subject_name},
+                    )
+                )
 
         # Check for missing required fields
         required_fields = {
@@ -544,24 +595,30 @@ class TamperDetector:
             "subject": len(subject_list) > 0,
         }
 
-        missing_fields = [field for field, present in required_fields.items() if not present]
+        missing_fields = [
+            field for field, present in required_fields.items() if not present
+        ]
         if missing_fields:
-            indicators.append(TamperIndicator(
-                severity=TamperSeverity.MEDIUM,
-                indicator_type=TamperIndicatorType.MISSING_FIELD,
-                description=f"Missing required fields: {', '.join(missing_fields)}",
-                evidence={"missing_fields": missing_fields}
-            ))
+            indicators.append(
+                TamperIndicator(
+                    severity=TamperSeverity.MEDIUM,
+                    indicator_type=TamperIndicatorType.MISSING_FIELD,
+                    description=f"Missing required fields: {', '.join(missing_fields)}",
+                    evidence={"missing_fields": missing_fields},
+                )
+            )
 
         # Check for suspicious builder patterns
         if builder_id:
             if "localhost" in builder_id.lower() or builder_id.startswith("file://"):
-                indicators.append(TamperIndicator(
-                    severity=TamperSeverity.HIGH,
-                    indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
-                    description=f"Suspicious builder ID: {builder_id}",
-                    evidence={"builder_id": builder_id}
-                ))
+                indicators.append(
+                    TamperIndicator(
+                        severity=TamperSeverity.HIGH,
+                        indicator_type=TamperIndicatorType.SUSPICIOUS_PATTERN,
+                        description=f"Suspicious builder ID: {builder_id}",
+                        evidence={"builder_id": builder_id},
+                    )
+                )
 
         return indicators
 

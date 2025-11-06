@@ -123,5 +123,7 @@ class CIDetector:
         elif value_lower in ("false", "0", "no"):
             return False
         else:
-            logger.warning(f"Invalid JMO_ATTEST_ENABLED value: {value}, treating as not set")
+            logger.warning(
+                f"Invalid JMO_ATTEST_ENABLED value: {value}, treating as not set"
+            )
             return None

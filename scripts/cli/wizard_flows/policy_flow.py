@@ -74,7 +74,9 @@ def policy_evaluation_menu(
             policies_with_metadata.append((policy_path, metadata_dict))
 
     # Auto-detect recommended policies
-    recommended = _detect_recommended_policies(findings, profile, policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        findings, profile, policies_with_metadata
+    )
 
     # Display scan summary
     _display_scan_summary(findings)
@@ -85,7 +87,9 @@ def policy_evaluation_menu(
         is_recommended = policy_path in recommended
         marker = "✨" if is_recommended else "  "
         tag = " (RECOMMENDED)" if is_recommended else ""
-        print(f"  {i}. {marker} {metadata.get('name', policy_path.stem):22} {metadata.get('description', '')}{tag}")
+        print(
+            f"  {i}. {marker} {metadata.get('name', policy_path.stem):22} {metadata.get('description', '')}{tag}"
+        )
 
     print("\nOther options:")
     print(f"  a. Select all recommended ({len(recommended)} policies)")
@@ -129,7 +133,9 @@ def policy_evaluation_menu(
     # Summary
     passed = sum(1 for r in results.values() if r.passed)
     failed = len(results) - passed
-    print(f"\n📊 Policy Evaluation Summary: {passed}/{len(results)} passed, {failed} failed")
+    print(
+        f"\n📊 Policy Evaluation Summary: {passed}/{len(results)} passed, {failed} failed"
+    )
 
     # Offer interactive violation viewer
     if failed > 0 and not non_interactive:
@@ -166,13 +172,18 @@ def _detect_recommended_policies(
     recommended = []
 
     # Build policy name → path mapping
-    policy_map = {metadata.get("name", path.stem): path for path, metadata in policies_with_metadata}
+    policy_map = {
+        metadata.get("name", path.stem): path
+        for path, metadata in policies_with_metadata
+    }
 
     # Profile-based defaults
     profile_defaults = {
         "fast": ["zero-secrets"],
         "balanced": ["owasp-top-10", "zero-secrets"],
-        "deep": [metadata.get("name", path.stem) for path, metadata in policies_with_metadata],
+        "deep": [
+            metadata.get("name", path.stem) for path, metadata in policies_with_metadata
+        ],
     }
 
     default_policies = profile_defaults.get(profile, ["zero-secrets"])
@@ -185,9 +196,7 @@ def _detect_recommended_policies(
     has_owasp_violations = any(
         f.get("compliance", {}).get("owaspTop10_2021") for f in findings
     )
-    has_pci_violations = any(
-        f.get("compliance", {}).get("pciDss4_0") for f in findings
-    )
+    has_pci_violations = any(f.get("compliance", {}).get("pciDss4_0") for f in findings)
 
     # Add findings-based recommendations
     if has_verified_secrets and "zero-secrets" not in default_policies:
@@ -217,7 +226,10 @@ def _display_scan_summary(findings: List[Dict[str, Any]]) -> None:
         severity = finding.get("severity", "INFO")
         severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
-        if finding.get("tool", {}).get("name") == "trufflehog" and finding.get("verified") is True:
+        if (
+            finding.get("tool", {}).get("name") == "trufflehog"
+            and finding.get("verified") is True
+        ):
             verified_secrets += 1
 
         if finding.get("compliance", {}).get("owaspTop10_2021"):
@@ -276,7 +288,9 @@ def display_policy_violations_interactive(results: Dict[str, PolicyResult]) -> N
     - Finding details with compliance mappings
     - Navigation between policies
     """
-    failed_policies = {name: result for name, result in results.items() if not result.passed}
+    failed_policies = {
+        name: result for name, result in results.items() if not result.passed
+    }
 
     if not failed_policies:
         print("\n✅ All policies passed! No violations to display.")

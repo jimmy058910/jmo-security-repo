@@ -35,7 +35,7 @@ class MetadataCapture:
         urls: Optional[List[str]] = None,
         threads: Optional[int] = None,
         timeout: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Capture scan parameters from command-line arguments.
@@ -101,7 +101,7 @@ class MetadataCapture:
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=5
+                timeout=5,
             )
             if result.returncode == 0:
                 git_context["commit"] = result.stdout.strip()
@@ -112,7 +112,7 @@ class MetadataCapture:
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=5
+                timeout=5,
             )
             if result.returncode == 0:
                 git_context["branch"] = result.stdout.strip()
@@ -123,7 +123,7 @@ class MetadataCapture:
                 capture_output=True,
                 text=True,
                 check=False,
-                timeout=5
+                timeout=5,
             )
             if result.returncode == 0:
                 git_context["tag"] = result.stdout.strip()
