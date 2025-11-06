@@ -16,11 +16,16 @@
 
 ---
 
-## 🎉 Latest Updates (v0.8.0 - October 2025)
+## 🎉 Latest Updates (v1.0.0 - November 2025)
 
-- 🚀 **NEW: GitLab CI/CD Integration** - Auto-generate `.gitlab-ci.yml` from schedules with one command
-- 📅 **NEW: Schedule Management** - Kubernetes-style scan scheduling with cron syntax support
-- 💬 **NEW: Slack Notifications** - Built-in webhook integration for real-time pipeline alerts
+- 🔄 **NEW: Machine-Readable Diffs (ROADMAP #3)** - Compare scans over time with fingerprint-based diff engine
+  - Four output formats: JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
+  - CI/CD integration: GitHub Actions & GitLab CI examples with automated PR/MR comments
+  - Performance: <500ms for 1000-finding diffs, <2s for 10K-finding diffs
+  - See [examples/diff-workflows.md](examples/diff-workflows.md) for complete workflows
+- 🚀 **GitLab CI/CD Integration** - Auto-generate `.gitlab-ci.yml` from schedules with one command
+- 📅 **Schedule Management** - Kubernetes-style scan scheduling with cron syntax support
+- 💬 **Slack Notifications** - Built-in webhook integration for real-time pipeline alerts
 - 📚 **ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
 - 📝 **Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
 - 💰 **GitHub Sponsors** - Support ongoing development

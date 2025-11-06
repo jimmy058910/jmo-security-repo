@@ -14,6 +14,7 @@ All 11+ security tools pre-installed and ready to use. Perfect for beginners, CI
 - [CI/CD Integration](#cicd-integration)
 - [Advanced Configuration](#advanced-configuration)
 - [Docker Compose](#docker-compose)
+- [Trend Analysis with Docker](#trend-analysis-with-docker)
 - [Troubleshooting](#troubleshooting)
 - [Building Custom Images](#building-custom-images)
 - [Security Considerations](#security-considerations)
@@ -669,6 +670,418 @@ docker-compose run --rm ci
 # Run fast scan
 docker-compose run --rm fast
 ```
+
+---
+
+## Trend Analysis with Docker
+
+**Track security improvements over time using persistent SQLite history database.**
+
+JMo Security v1.0.0+ includes comprehensive trend analysis capabilities that work seamlessly in Docker with proper volume mounting. This enables historical tracking, regression detection, and developer attribution across container runs.
+
+### Prerequisites
+
+**CRITICAL: Volume persistence is REQUIRED for trend analysis.**
+
+Trend analysis relies on a SQLite history database (`~/.jmo/history.db`) that must persist across container runs. Without volume mounting, each scan starts fresh with no historical data.
+
+### Basic Trend Analysis Workflow
+
+#### Step 1: Run First Scan with History Persistence
+
+```bash
+# Create persistent .jmo directory
+mkdir -p ~/.jmo
+
+# Run first scan (creates baseline in history database)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results-baseline --profile-name balanced
+```
+
+**What this does:**
+
+- `-v ~/.jmo:/root/.jmo` - Mounts persistent directory for SQLite database
+- Scan results automatically saved to history database
+- Database location: `~/.jmo/history.db`
+
+#### Step 2: Make Code Changes and Run Second Scan
+
+```bash
+# After fixing some security issues
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results-current --profile-name balanced
+```
+
+#### Step 3: Analyze Trends
+
+```bash
+# View trend analysis for last 30 days
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends analyze --days 30 --format text
+```
+
+**Output includes:**
+
+- Finding velocity (new findings per day)
+- Remediation rate (fixes per day)
+- Security score trends (0-100)
+- Statistical significance (Mann-Kendall test, p < 0.05)
+
+### Common Trend Commands
+
+#### Show Recent Scan History
+
+```bash
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends show --limit 10 --format text
+```
+
+#### Check for Regressions
+
+```bash
+# Detect new HIGH/CRITICAL findings in last 7 days
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends regressions --days 7 --format text
+```
+
+#### View Security Score
+
+```bash
+# Current security posture (0-100)
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends score --format text
+```
+
+#### Compare Two Scans
+
+```bash
+# Interactive diff between two scans
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/results:/results" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends compare --scan-id-1 latest --scan-id-2 previous --format text
+```
+
+#### Developer Attribution (Requires .git Mount)
+
+```bash
+# See who fixed the most security issues
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v "$(pwd)/.git:/scan/.git:ro" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends developers --limit 10 --format text
+```
+
+**Important:** Developer attribution requires mounting `.git` directory for git blame integration.
+
+### Exporting Trend Reports
+
+#### Export HTML Report (Interactive Dashboard)
+
+```bash
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/results:/results" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends export html --output /results/trends-report.html
+```
+
+**Features:**
+
+- Interactive Chart.js visualizations
+- Finding velocity charts
+- Security score gauges
+- Remediation rate sparklines
+- Top remediators leaderboard
+
+#### Export JSON Data (Machine-Readable)
+
+```bash
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/results:/results" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends export json --output /results/trends-data.json
+```
+
+#### Export CSV (Excel/BI Tools)
+
+```bash
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/results:/results" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends export csv --output /results/trends-data.csv
+```
+
+#### Export Prometheus Metrics
+
+```bash
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  -v "$(pwd)/results:/results" \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends export prometheus --output /results/metrics.prom
+```
+
+**Metrics exposed:**
+
+- `jmo_security_score` (0-100)
+- `jmo_findings_total` (by severity)
+- `jmo_remediation_rate` (fixes per day)
+- `jmo_finding_velocity` (new findings per day)
+
+### Docker Compose Workflow for Trends
+
+**See `docker-compose.trends.yml` for comprehensive example.**
+
+```bash
+# Download docker-compose.trends.yml from repository
+curl -O https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/docker-compose.trends.yml
+
+# Run baseline scan
+docker compose -f docker-compose.trends.yml run scan-baseline
+
+# Run current scan (after code changes)
+docker compose -f docker-compose.trends.yml run scan-current
+
+# Analyze trends
+docker compose -f docker-compose.trends.yml run analyze-trends
+
+# Export HTML report
+docker compose -f docker-compose.trends.yml run export-html
+
+# Check for regressions
+docker compose -f docker-compose.trends.yml run check-regressions
+
+# View developer attribution
+docker compose -f docker-compose.trends.yml run developers
+```
+
+**Benefits of Docker Compose approach:**
+
+- Named volumes for automatic persistence
+- Service dependencies (scan → analyze → export)
+- Consistent configuration across runs
+- Easy integration with CI/CD pipelines
+
+### CI/CD Integration with Trends
+
+#### GitHub Actions Example
+
+```yaml
+name: Security Scan with Trends
+
+on: [push, pull_request]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git blame
+
+      # Restore history database from cache
+      - name: Restore history cache
+        uses: actions/cache@v4
+        with:
+          path: .jmo
+          key: jmo-history-${{ github.repository }}
+
+      # Run scan with trend analysis
+      - name: Run security scan
+        run: |
+          mkdir -p .jmo
+          docker run --rm \
+            -v ${{ github.workspace }}:/scan \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+      # Check for regressions (fail if new HIGH/CRITICAL)
+      - name: Check for regressions
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends regressions --format terminal
+
+      # Export trend report
+      - name: Export trend report
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/results:/results \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends analyze --export html --export-file /results/trends-report.html
+
+      # Upload reports
+      - name: Upload trend report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trends
+          path: results/trends-report.html
+```
+
+**Key points:**
+
+- Use `actions/cache` to persist `.jmo` directory across runs
+- Cache key tied to repository (separate history per project)
+- Full git history (`fetch-depth: 0`) enables developer attribution
+- Regression checks can gate deployments
+
+#### GitLab CI Example
+
+```yaml
+security-scan-with-trends:
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  cache:
+    key: jmo-history-${CI_PROJECT_ID}
+    paths:
+      - .jmo/
+  script:
+    - mkdir -p .jmo
+    # Run scan
+    - |
+      docker run --rm \
+        -v $PWD:/scan \
+        -v $PWD/.jmo:/root/.jmo \
+        ghcr.io/jimmy058910/jmo-security:latest \
+        scan --repo /scan --results-dir /scan/results --profile-name balanced
+    # Check regressions
+    - |
+      docker run --rm \
+        -v $PWD/.jmo:/root/.jmo \
+        ghcr.io/jimmy058910/jmo-security:latest \
+        trends regressions --format terminal
+    # Export HTML report
+    - |
+      docker run --rm \
+        -v $PWD/.jmo:/root/.jmo \
+        -v $PWD/results:/results \
+        ghcr.io/jimmy058910/jmo-security:latest \
+        trends analyze --export html --export-file /results/trends-report.html
+  artifacts:
+    paths:
+      - results/trends-report.html
+    expire_in: 30 days
+```
+
+**Key points:**
+
+- Cache `.jmo` directory with project-specific key
+- DinD (Docker-in-Docker) service for nested containers
+- Artifacts persist trend reports for review
+
+### Environment Variable Configuration
+
+Override default behavior with environment variables:
+
+```bash
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  -e JMO_HISTORY_DB_PATH=/root/.jmo/custom-history.db \
+  -e JMO_LOG_LEVEL=DEBUG \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --profile-name balanced
+```
+
+**Configuration precedence:**
+
+1. Environment variables (highest priority)
+2. Mounted config files (`jmo.yml`)
+3. Default values
+
+### Troubleshooting Trends in Docker
+
+#### "No scans found in history database"
+
+**Problem:** Volume not mounted or database empty
+
+**Solutions:**
+
+1. Verify volume mount: `docker run --rm -v ~/.jmo:/root/.jmo ...`
+2. Check database exists: `ls -lh ~/.jmo/history.db`
+3. Run at least one scan first to populate database
+
+#### "Permission denied" on .jmo directory
+
+**Problem:** Container can't write to volume
+
+**Solutions:**
+
+```bash
+# Fix permissions
+chmod 755 ~/.jmo
+
+# Run as current user
+docker run --rm --user $(id -u):$(id -g) \
+  -v ~/.jmo:/root/.jmo ...
+```
+
+#### "Git repository not found" for developer attribution
+
+**Problem:** `.git` directory not mounted
+
+**Solution:**
+
+```bash
+# Mount .git directory (read-only for safety)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v "$(pwd)/.git:/scan/.git:ro" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends developers --limit 10
+```
+
+#### Trend data persists after removing container
+
+**Expected behavior:** This is by design!
+
+Named volumes and bind mounts persist data intentionally. To reset:
+
+```bash
+# Remove history database
+rm ~/.jmo/history.db
+
+# Or remove entire .jmo directory
+rm -rf ~/.jmo
+```
+
+#### Cache not working in CI/CD
+
+**Solutions:**
+
+1. **GitHub Actions:** Use `actions/cache` with consistent key
+2. **GitLab CI:** Ensure cache key is project-specific
+3. **Jenkins:** Use Docker volumes or bind mounts in pipeline
+
+**See `docker-compose.trends.yml` for complete working examples.**
 
 ---
 

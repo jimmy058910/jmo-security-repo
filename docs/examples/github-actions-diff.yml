@@ -1,0 +1,192 @@
+# Security Diff for Pull Requests
+#
+# This workflow automatically compares security findings between the main branch
+# and the PR branch, posting results as a PR comment and uploading SARIF to
+# GitHub Code Scanning.
+#
+# Copy this file to: .github/workflows/security-diff-pr.yml
+
+name: Security Diff (PR Review)
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write  # Post PR comments
+  security-events: write  # Upload SARIF to Code Scanning
+
+jobs:
+  security-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for baseline comparison
+          ref: ${{ github.head_ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install JMo Security
+        run: |
+          pip install --upgrade pip
+          pip install jmo-security
+
+      - name: Scan baseline (main branch)
+        run: |
+          echo "📊 Scanning baseline (main branch)..."
+          git checkout ${{ github.base_ref }}
+          jmo scan --repo . --profile fast --results-dir baseline-results/
+          echo "✅ Baseline scan complete"
+
+      - name: Scan current (PR branch)
+        run: |
+          echo "📊 Scanning current (PR branch)..."
+          git checkout ${{ github.head_ref }}
+          jmo scan --repo . --profile fast --results-dir current-results/
+          echo "✅ Current scan complete"
+
+      - name: Generate diff report (Markdown)
+        run: |
+          echo "🔍 Generating diff report..."
+          jmo diff baseline-results/ current-results/ \
+            --format md \
+            --output pr-diff.md \
+            --severity CRITICAL,HIGH,MEDIUM
+
+      - name: Generate diff report (JSON for gating)
+        run: |
+          jmo diff baseline-results/ current-results/ \
+            --format json \
+            --output diff.json
+
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read diff report
+            let diffContent;
+            try {
+              diffContent = fs.readFileSync('pr-diff.md', 'utf8');
+            } catch (err) {
+              diffContent = '⚠️ Failed to generate diff report. Check workflow logs.';
+            }
+
+            // Find existing bot comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Security Diff Report')
+            );
+
+            // Create or update comment
+            const commentBody = `${diffContent}\n\n---\n*Updated: ${new Date().toISOString()}*`;
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+              console.log('✅ Updated existing PR comment');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+              console.log('✅ Posted new PR comment');
+            }
+
+      - name: Generate SARIF report
+        if: always()
+        run: |
+          echo "📋 Generating SARIF report for Code Scanning..."
+          jmo diff baseline-results/ current-results/ \
+            --format sarif \
+            --output diff.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: diff.sarif
+          category: jmo-security-diff
+          wait-for-processing: true
+
+      - name: Check for new CRITICAL/HIGH findings (CI gate)
+        run: |
+          echo "🚦 Checking for new CRITICAL/HIGH findings..."
+
+          # Extract counts from JSON
+          CRITICAL=$(jq -r '.statistics.new_by_severity.CRITICAL // 0' diff.json)
+          HIGH=$(jq -r '.statistics.new_by_severity.HIGH // 0' diff.json)
+          TOTAL=$((CRITICAL + HIGH))
+
+          echo "📊 New findings:"
+          echo "  - CRITICAL: $CRITICAL"
+          echo "  - HIGH: $HIGH"
+          echo "  - TOTAL: $TOTAL"
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo "❌ FAILED: Found $TOTAL new CRITICAL/HIGH findings"
+            echo "::error::Security gate failed: $TOTAL new CRITICAL/HIGH findings detected"
+            exit 1
+          else
+            echo "✅ PASSED: No new CRITICAL/HIGH findings"
+          fi
+
+      - name: Upload diff reports as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-diff-reports
+          path: |
+            pr-diff.md
+            diff.json
+            diff.sarif
+            baseline-results/summaries/
+            current-results/summaries/
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Security Diff Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f diff.json ]; then
+            NEW=$(jq -r '.statistics.total_new' diff.json)
+            RESOLVED=$(jq -r '.statistics.total_resolved' diff.json)
+            MODIFIED=$(jq -r '.statistics.total_modified' diff.json)
+            TREND=$(jq -r '.statistics.trend' diff.json)
+
+            echo "📊 **Results:**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🆕 New findings: $NEW" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Resolved findings: $RESOLVED" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔄 Modified findings: $MODIFIED" >> $GITHUB_STEP_SUMMARY
+            echo "- 📈 Trend: $TREND" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "View detailed report in PR comments." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Diff report not generated. Check workflow logs." >> $GITHUB_STEP_SUMMARY
+          fi

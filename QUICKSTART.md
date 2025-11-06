@@ -278,6 +278,273 @@ jmo schedule export nightly-deep --backend gitlab-ci >> .gitlab-ci.yml
 
 ---
 
+## 🔄 Compare Scans Over Time (`jmo diff`)
+
+**NEW in v1.0.0:** Track security improvements and identify regressions by comparing two scans.
+
+### Quick Example
+
+```bash
+# Scan baseline (e.g., main branch)
+jmo scan --repo . --profile balanced --results-dir baseline-results/
+
+# Scan current (e.g., feature branch)
+jmo scan --repo . --profile balanced --results-dir current-results/
+
+# Compare scans
+jmo diff baseline-results/ current-results/ \
+  --format md \
+  --output diff.md
+
+# View report
+cat diff.md
+```
+
+**Output:** Markdown report showing:
+
+- ⚠️ NEW findings (1 CRITICAL, 2 HIGH)
+- ✅ RESOLVED findings (3 MEDIUM)
+- ➖ UNCHANGED findings (10 findings)
+- 📈 Trend: improving
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions - Block PR if new CRITICAL/HIGH
+- name: Compare scans
+  run: |
+    jmo diff baseline/ current/ --format json --output diff.json
+    NEW=$(jq '(.statistics.new_by_severity.CRITICAL // 0) + (.statistics.new_by_severity.HIGH // 0)' diff.json)
+    if [ "$NEW" -gt 0 ]; then
+      echo "❌ Found $NEW new CRITICAL/HIGH findings"
+      exit 1
+    fi
+```
+
+**Complete Guide:** [docs/examples/diff-workflows.md](docs/examples/diff-workflows.md)
+
+---
+
+## 📊 Track Security Trends Over Time (`jmo trends`)
+
+**NEW in v1.0.0:** Statistical trend analysis with Mann-Kendall significance testing to track security posture improvements over time.
+
+### Quick Example
+
+```bash
+# Run baseline scan (history tracking starts automatically)
+jmo scan --repo . --profile balanced --results-dir results/
+
+# Run more scans over time (weekly, after fixes, etc.)
+jmo scan --repo . --profile balanced --results-dir results/
+# ... (repeat over days/weeks/months)
+
+# Analyze trends (requires ≥5 scans for statistical significance)
+jmo trends analyze --branch main --format terminal
+
+# Check for regressions (new HIGH/CRITICAL findings)
+jmo trends regressions --severity HIGH --format terminal
+
+# Calculate security score (0-100 scale)
+jmo trends score --branch main --scans 10 --format terminal
+
+# Export trend report (HTML visualization)
+jmo trends analyze --export html --export-file trends-report.html
+```
+
+**Output:** Terminal report showing:
+
+- 📈 **Trend direction**: improving / worsening / stable (Mann-Kendall p < 0.05)
+- 📊 **Statistics**: Kendall's Tau, p-value, severity breakdown
+- ⚠️ **Regressions**: New HIGH/CRITICAL findings since last scan
+- 🏆 **Security score**: 0-100 normalized score
+- 🔍 **Top issues**: Most frequent finding types
+
+### Docker Workflow
+
+Track trends across container runs with volume mounting:
+
+```bash
+# Create persistent .jmo directory for history database
+mkdir -p ~/.jmo
+
+# Run first scan (creates baseline)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+# Run second scan (days/weeks later)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+# Analyze trends (after ≥5 scans)
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends analyze --branch main --format terminal
+
+# Check regressions (CI gating)
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends regressions --severity HIGH --format terminal
+```
+
+**Key Points:**
+
+- Volume mount `-v ~/.jmo:/root/.jmo` persists history database
+- Branch isolation: `--branch main` vs `--branch develop` (separate trends)
+- Requires ≥5 scans for Mann-Kendall statistical significance
+
+### CI/CD Integration
+
+**GitHub Actions Example** - Track trends across PR merges:
+
+```yaml
+name: Security Trends
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git blame
+
+      # Restore history database from cache
+      - name: Restore history cache
+        uses: actions/cache@v4
+        with:
+          path: .jmo
+          key: jmo-history-${{ github.repository }}-main
+
+      # Run scan
+      - name: Run security scan
+        run: |
+          mkdir -p .jmo
+          docker run --rm \
+            -v ${{ github.workspace }}:/scan \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+      # Analyze trends
+      - name: Analyze trends
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends analyze --branch main --format terminal
+
+      # Check regressions (fail if new HIGH/CRITICAL)
+      - name: Check regressions
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends regressions --severity HIGH --format terminal
+
+      # Export HTML report
+      - name: Export trend report
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/reports:/reports \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends analyze --export html --export-file /reports/trends.html
+
+      # Upload report
+      - name: Upload trends
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trends
+          path: reports/trends.html
+```
+
+**Key CI/CD Features:**
+
+- `actions/cache` persists `.jmo/history.db` across runs
+- Branch-specific cache keys for isolation
+- Regression gating with `--severity HIGH`
+- HTML report artifact upload
+
+### Export Formats
+
+**CSV (Excel/spreadsheet):**
+
+```bash
+jmo trends analyze --export csv --export-file trends.csv
+```
+
+**Prometheus (monitoring):**
+
+```bash
+jmo trends analyze --export prometheus --export-file metrics.prom
+# Push to Pushgateway:
+curl -X POST http://pushgateway:9091/metrics/job/jmo-security < metrics.prom
+```
+
+**Grafana (dashboards):**
+
+```bash
+jmo trends analyze --export grafana --export-file dashboard.json
+# Import via Grafana API or UI
+```
+
+**Dashboard JSON (React/web apps):**
+
+```bash
+jmo trends analyze --export dashboard --export-file trends-data.json
+# Consume in custom dashboards
+```
+
+### Developer Attribution
+
+See who introduced security issues (requires git repository):
+
+```bash
+# Local scan with .git directory
+jmo trends developers --branch main --limit 10 --format terminal
+
+# Docker scan with .git mount
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v "$(pwd)/.git:/scan/.git:ro" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends developers --limit 10 --format terminal
+```
+
+**Output:**
+
+```text
+Developer Attribution Report
+───────────────────────────────────────────────────────────────
+Developer          Introduced  Resolved  Active  Avg Age (days)
+alice@example.com           12         8       4              45
+bob@example.com              8         6       2              30
+...
+```
+
+**Complete Guides:**
+
+- [docs/USER_GUIDE.md — Trend Analysis](docs/USER_GUIDE.md#trend-analysis-v100)
+- [docs/API_REFERENCE.md — TrendAnalyzer API](docs/API_REFERENCE.md#trendanalyzer)
+- [docs/examples/ci-cd-trends.md](docs/examples/ci-cd-trends.md) - CI/CD integration patterns
+
+---
+
 ## ✨ What's New
 
 ### v0.9.0 - EPSS/KEV Risk Prioritization (October 30, 2025)

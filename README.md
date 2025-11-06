@@ -74,6 +74,63 @@ Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md
 
 ## 🎉 Recent Improvements
 
+### v1.0.0 - Machine-Readable Diffs (November 2025) 🎯
+
+**MAJOR FEATURE: Compare Security Scans Over Time (ROADMAP #3):**
+
+Track security posture improvements, identify regressions, and automate CI/CD security gates with intelligent diff analysis!
+
+- ✅ **Smart Diff Engine** - Compare two scan results with fingerprint-based matching
+  - Classifies findings: NEW, RESOLVED, UNCHANGED, MODIFIED
+  - Detects severity upgrades/downgrades automatically
+  - Calculates trend: improving, stable, worsening
+  - O(n) performance for large scans (10K findings in <2s)
+- ✅ **4 Output Formats** - Machine-readable reports for all workflows
+  - **JSON** (v1.0.0) - Structured data with metadata wrapper for tooling integration
+  - **Markdown** - PR/MR comments with collapsible details and emoji indicators
+  - **HTML** - Interactive dashboard with charts and trend visualization
+  - **SARIF 2.1.0** - GitHub/GitLab Code Scanning integration with baselineState
+- ✅ **Flexible Filtering** - Focus on what matters
+  - Severity filter: `--severity CRITICAL,HIGH`
+  - Tool filter: `--tool semgrep,trivy`
+  - Category filter: `--only new` or `--only resolved`
+  - Combine multiple filters for precise results
+- ✅ **CI/CD Integration** - Ready-to-use workflows
+  - GitHub Actions: Auto-comment on PRs, upload SARIF, security gates
+  - GitLab CI: MR comments via API, artifact generation, gating
+  - Examples: [github-actions-diff.yml](docs/examples/github-actions-diff.yml), [gitlab-ci-diff.yml](docs/examples/gitlab-ci-diff.yml)
+- ✅ **Modification Detection** - Track finding evolution
+  - Detects 5 change types: severity, priority, compliance, CWE, message
+  - Risk delta calculation: improved, worsened, unchanged
+  - Disable with `--no-modifications` for faster diffs
+
+**Key Benefits:**
+
+- 🎯 **CI/CD Gates** - Block merges if new CRITICAL/HIGH findings detected
+- 📊 **Sprint Tracking** - Measure remediation progress over sprints
+- 🚀 **PR Reviews** - Show only NEW issues in PR comments (reduce noise by 90%)
+- 📈 **Trend Analysis** - Visualize security posture over time
+- ✅ **Release Validation** - Ensure releases have fewer issues than previous versions
+
+**Quick Example:**
+
+```bash
+# Compare baseline and current scans
+jmo diff baseline-results/ current-results/ \
+  --format md \
+  --output pr-diff.md \
+  --severity CRITICAL,HIGH
+
+# CI/CD gate: Fail if new CRITICAL/HIGH findings
+jmo diff baseline/ current/ --format json --output diff.json
+NEW_COUNT=$(jq '(.statistics.new_by_severity.CRITICAL // 0) + (.statistics.new_by_severity.HIGH // 0)' diff.json)
+[ "$NEW_COUNT" -eq 0 ] || exit 1
+```
+
+**Complete Guide:** [docs/examples/diff-workflows.md](docs/examples/diff-workflows.md) | [docs/USER_GUIDE.md — jmo diff](docs/USER_GUIDE.md#jmo-diff)
+
+---
+
 ### v0.8.0 - GitLab CI & Stability (October 2025)
 
 **GitLab CI/CD Integration:**

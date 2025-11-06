@@ -1171,6 +1171,24 @@ def list_scans(
     return [dict(row) for row in cursor.fetchall()]
 
 
+def list_recent_scans(db_path: Path = DEFAULT_DB_PATH, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    List recent scans (convenience wrapper for wizard).
+
+    Args:
+        db_path: Path to database file
+        limit: Maximum number of results
+
+    Returns:
+        List of scan metadata dicts sorted by timestamp descending
+    """
+    conn = get_connection(db_path)
+    try:
+        return list_scans(conn, limit=limit)
+    finally:
+        conn.close()
+
+
 def get_findings_for_scan(
     conn: sqlite3.Connection,
     scan_id: str,

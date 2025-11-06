@@ -15,6 +15,8 @@ from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.history_commands import cmd_history
+from scripts.cli.diff_commands import cmd_diff
+from scripts.cli.trend_commands import cmd_trends
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
@@ -813,6 +815,302 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     return history_parser
 
 
+def _add_trends_args(subparsers):
+    """Add 'trends' subcommand arguments for security trend analysis."""
+    trends_parser = subparsers.add_parser(
+        "trends",
+        help="Analyze security trends over time (Phase 1-3 complete)",
+        description="""
+Analyze security trends over time using SQLite historical data.
+
+Features:
+- Statistical trend validation (Mann-Kendall test)
+- Regression detection (CRITICAL/HIGH increases)
+- Security posture scoring (0-100 scale)
+- Automated insights generation
+- Side-by-side scan comparisons
+
+Usage Examples:
+    # Analyze last 10 scans
+    jmo trends analyze --last 10
+
+    # Analyze last 30 days with statistical validation
+    jmo trends analyze --days 30 --validate-statistics
+
+    # Show regression detections
+    jmo trends regressions --severity CRITICAL
+
+    # Security score history
+    jmo trends score --last 30
+
+    # Compare two scans
+    jmo trends compare abc123 def456
+
+    # Show insights
+    jmo trends insights
+
+See: dev-only/1.0.0/TREND_ANALYSIS_COMPLETE_PLAN.md for complete documentation.
+        """,
+    )
+    trends_subparsers = trends_parser.add_subparsers(dest="trends_command")
+
+    # Common arguments
+    def add_common_trend_args(parser):
+        parser.add_argument(
+            "--db",
+            default=None,
+            help="Path to SQLite database (default: .jmo/history.db)",
+        )
+        parser.add_argument(
+            "--branch",
+            default="main",
+            help="Git branch to analyze (default: main)",
+        )
+
+    # ANALYZE
+    analyze_parser = trends_subparsers.add_parser(
+        "analyze", help="Analyze security trends with flexible filters"
+    )
+    analyze_parser.add_argument(
+        "--days",
+        type=int,
+        help="Number of days to analyze (e.g., 30)",
+    )
+    analyze_parser.add_argument(
+        "--last",
+        type=int,
+        help="Last N scans to analyze (e.g., 10)",
+    )
+    analyze_parser.add_argument(
+        "--scan-ids",
+        nargs="+",
+        help="Specific scan IDs to analyze",
+    )
+    analyze_parser.add_argument(
+        "--validate-statistics",
+        action="store_true",
+        help="Run Mann-Kendall statistical validation",
+    )
+    analyze_parser.add_argument(
+        "--format",
+        choices=["terminal", "json"],
+        default="terminal",
+        help="Output format (default: terminal)",
+    )
+    analyze_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed output (top rules, etc.)",
+    )
+    analyze_parser.add_argument(
+        "--export-json",
+        help="Export analysis to JSON file",
+    )
+    analyze_parser.add_argument(
+        "--export-html",
+        help="Export analysis to HTML file (Phase 4)",
+    )
+    add_common_trend_args(analyze_parser)
+
+    # SHOW
+    show_parser = trends_subparsers.add_parser(
+        "show", help="Show trend context for a specific scan"
+    )
+    show_parser.add_argument(
+        "scan_id",
+        help="Scan ID to show context for",
+    )
+    show_parser.add_argument(
+        "--context",
+        type=int,
+        default=5,
+        help="Number of scans before/after to show (default: 5)",
+    )
+    add_common_trend_args(show_parser)
+
+    # REGRESSIONS
+    regressions_parser = trends_subparsers.add_parser(
+        "regressions", help="List all detected regressions"
+    )
+    regressions_parser.add_argument(
+        "--last",
+        type=int,
+        help="Last N scans to analyze",
+    )
+    regressions_parser.add_argument(
+        "--severity",
+        choices=["CRITICAL", "HIGH"],
+        help="Filter by severity",
+    )
+    regressions_parser.add_argument(
+        "--fail-on-any",
+        action="store_true",
+        help="Exit with error code 1 if any regressions found (for CI)",
+    )
+    add_common_trend_args(regressions_parser)
+
+    # SCORE
+    score_parser = trends_subparsers.add_parser(
+        "score", help="Show security posture score history"
+    )
+    score_parser.add_argument(
+        "--last",
+        type=int,
+        help="Last N scans to analyze",
+    )
+    score_parser.add_argument(
+        "--days",
+        type=int,
+        help="Number of days to analyze",
+    )
+    add_common_trend_args(score_parser)
+
+    # COMPARE
+    compare_parser = trends_subparsers.add_parser(
+        "compare", help="Compare two specific scans side-by-side"
+    )
+    compare_parser.add_argument(
+        "scan_id_1",
+        help="First scan ID",
+    )
+    compare_parser.add_argument(
+        "scan_id_2",
+        help="Second scan ID",
+    )
+    compare_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show sample findings from diff",
+    )
+    add_common_trend_args(compare_parser)
+
+    # INSIGHTS
+    insights_parser = trends_subparsers.add_parser(
+        "insights", help="List all automated insights"
+    )
+    insights_parser.add_argument(
+        "--last",
+        type=int,
+        help="Last N scans to analyze",
+    )
+    add_common_trend_args(insights_parser)
+
+    # EXPLAIN
+    explain_parser = trends_subparsers.add_parser(
+        "explain", help="Explain how trend metrics are calculated"
+    )
+    explain_parser.add_argument(
+        "metric",
+        nargs="?",
+        choices=["score", "mann-kendall", "regressions", "trend", "all"],
+        default="all",
+        help="Metric to explain (default: all)",
+    )
+
+    # DEVELOPERS
+    developers_parser = trends_subparsers.add_parser(
+        "developers", help="Show developer remediation rankings (Phase 5)"
+    )
+    developers_parser.add_argument(
+        "--last",
+        type=int,
+        help="Last N scans to analyze",
+    )
+    developers_parser.add_argument(
+        "--top",
+        type=int,
+        default=10,
+        help="Show top N developers (default: 10)",
+    )
+    add_common_trend_args(developers_parser)
+
+    return trends_parser
+
+
+def _add_diff_args(subparsers):
+    """Add 'diff' subcommand arguments for comparing scans."""
+    diff_parser = subparsers.add_parser(
+        "diff",
+        help="Compare two security scans",
+        description="""
+Compare security scans to show new, resolved, and modified findings.
+
+Supports three modes:
+1. Auto mode: Auto-detect scans based on Git context (NEW in v1.0.0)
+   jmo diff --auto
+
+2. Directory mode: Compare scan result directories (default)
+   jmo diff baseline-results/ current-results/
+
+3. SQLite mode: Compare historical scan IDs
+   jmo diff --scan abc123 --scan def456
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Auto-detection mode (NEW)
+    diff_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Auto-detect baseline/current scans and suggest format based on Git context",
+    )
+
+    # Mode selection - positional directories OR --scan flags
+    diff_parser.add_argument(
+        "directories",
+        nargs="*",
+        help="Two directories to compare (baseline current)",
+    )
+    diff_parser.add_argument(
+        "--scan",
+        action="append",
+        dest="scan_ids",
+        help="SQLite scan ID (use twice: --scan abc123 --scan def456)",
+    )
+
+    # Output options
+    diff_parser.add_argument(
+        "--format",
+        choices=["json", "md", "html", "sarif"],
+        default="md",
+        help="Output format (default: md)",
+    )
+    diff_parser.add_argument(
+        "--output", type=Path, help="Output file path (default: stdout for md/json)"
+    )
+
+    # Modification detection (Decision 4)
+    diff_parser.add_argument(
+        "--no-modifications",
+        action="store_true",
+        help="Disable modification detection (faster)",
+    )
+
+    # Filtering
+    diff_parser.add_argument(
+        "--severity",
+        help="Filter by severity (comma-separated): CRITICAL,HIGH",
+    )
+    diff_parser.add_argument(
+        "--tool",
+        help="Filter by tool (comma-separated): semgrep,trivy",
+    )
+    diff_parser.add_argument(
+        "--only",
+        choices=["new", "resolved", "modified"],
+        help="Show only specific category",
+    )
+
+    # SQLite options
+    diff_parser.add_argument(
+        "--db",
+        type=Path,
+        help="Path to SQLite database (default: ~/.jmo/scans.db)",
+    )
+
+    return diff_parser
+
+
 def parse_args():
     """Parse command-line arguments for jmo CLI."""
     ap = argparse.ArgumentParser(
@@ -859,10 +1157,12 @@ Documentation: https://docs.jmotools.com
     _add_scan_args(sub)
     _add_report_args(sub)
     _add_ci_args(sub)
+    _add_diff_args(sub)
     _add_adapters_args(sub)
     _add_schedule_args(sub)
     _add_mcp_args(sub)
     _add_history_args(sub)
+    _add_trends_args(sub)
     # add_policy_subparser(sub)  # Policy-as-Code commands (TODO: restore when policy feature is ready)
 
     try:
@@ -1783,6 +2083,10 @@ def main():
         return cmd_mcp_server(args)
     elif args.cmd == "history":
         return cmd_history(args)
+    elif args.cmd == "trends":
+        return cmd_trends(args)
+    elif args.cmd == "diff":
+        return cmd_diff(args)
     # elif args.cmd == "policy":
     #     return handle_policy_command(args)  # TODO: restore when policy feature is ready
     else:

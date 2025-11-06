@@ -21,3 +21,6 @@ mcp[cli]>=1.0.0  # Official Anthropic MCP SDK with FastMCP framework
 # Note: OPA binary installed separately via scripts/dev/install_tools.sh
 # Python dependencies for policy integration
 packaging  # For version comparison in OPA version checks
+
+# Trend Analysis dependencies (Feature #5: Trend Analysis - v1.0.0)
+scipy>=1.11.0  # Mann-Kendall statistical test for trend detection

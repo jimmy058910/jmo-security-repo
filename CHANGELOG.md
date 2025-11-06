@@ -29,6 +29,38 @@ All notable changes to JMo Security will be documented in this file.
   - Test coverage: 20 dual-mode tests (100% coverage)
   - Impact: 95% reduction in dashboard load time for large scans
 
+- **Feature #4: Machine-Readable Diffs (ROADMAP #3)** - Compare security scans over time
+  - `scripts/core/diff_engine.py`: Fingerprint-based diff algorithm with O(n) performance
+  - `scripts/cli/diff_commands.py`: CLI interface for `jmo diff` command
+  - Four output formats: JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
+  - Modification detection: Tracks severity upgrades, compliance changes, priority shifts
+  - Flexible filtering: By severity, tool, category (`--only new`), or combination
+  - Two comparison modes: Directory mode (primary) and SQLite mode (historical)
+  - CI/CD integration: GitHub Actions and GitLab CI examples with PR/MR comment automation
+  - Test coverage: 47/47 tests passing (100%), 96% code coverage
+  - Performance: <500ms for 1000-finding diffs, <2s for 10K-finding diffs
+  - Impact: Enables PR reviews, remediation tracking, regression detection, security gates
+  - See [docs/examples/diff-workflows.md](docs/examples/diff-workflows.md) for complete workflows
+
+- **Feature #5: Trend Analysis (ROADMAP #4)** - Statistical trend detection and security posture scoring
+  - `scripts/core/trend_analyzer.py`: Mann-Kendall statistical test, security score calculation, regression detection
+  - `scripts/cli/trend_commands.py`: 8 CLI commands for comprehensive trend analysis
+  - `scripts/core/developer_attribution.py`: Git blame-based remediation tracking per developer/team
+  - `scripts/cli/trend_formatters.py`: Terminal, JSON, and HTML formatters for trend reports
+  - `scripts/core/trend_exporters.py`: CSV, Prometheus, Grafana, Dashboard JSON exporters
+  - Eight commands: `analyze`, `show`, `regressions`, `score`, `compare`, `insights`, `explain`, `developers`
+  - Statistical rigor: Mann-Kendall test (p < 0.05 significance threshold) distinguishes real trends from noise
+  - Security scoring: 0-100 scale with letter grades (A-F), formula: 100 - (critical×10) - (high×3) - (medium×1)
+  - Developer velocity: Tracks fixes per week, average severity, team aggregation via git blame
+  - Export formats: CSV (Excel), Prometheus (monitoring), Grafana (pre-built dashboards), Dashboard JSON (React apps)
+  - Wizard integration: Post-scan prompts offer trend analysis, regression detection, security scoring
+  - CI/CD examples: GitHub Actions and GitLab CI with cache/artifacts for history persistence
+  - Docker support: Volume mounting for `.jmo/history.db` persistence across container runs
+  - Test coverage: 133/133 tests passing (100%), all statistical methods validated
+  - Performance: <100ms trend analysis for 50 scans, <500ms for 200 scans
+  - Impact: Data-driven security improvements, automated regression detection, developer accountability, executive reporting
+  - See [docs/USER_GUIDE.md#trend-analysis-v100](docs/USER_GUIDE.md#trend-analysis-v100) for complete documentation
+
 ### Changed
 
 - **Output Format Structure** - All outputs now use metadata wrapper

@@ -93,10 +93,11 @@ samples/fixtures/infra-demo/docker-test-results/
 # Hypothesis property-based testing cache (test artifacts, not source)
 .hypothesis/
 
-# JMo local workspace (developer-specific, not for version control)
+# JMo local workspace (scan history database with findings, potentially secrets)
 # This is the REPOSITORY .jmo/ directory, not the user's HOME ~/.jmo/
-# - Repository .jmo/: Developer scratch space, memory system, local analysis
-# - User HOME ~/.jmo/: User config (schedules.json, telemetry-id) - lives outside repo
+# - Repository .jmo/: SQLite scan history (history.db) - contains findings, should NOT be committed
+# - User HOME ~/.jmo/: User config (schedules.json, config.yml, policies) - lives outside repo
+# Note: Use --history-db flag to store database elsewhere if needed
 .jmo/
 
 # Node.js dependencies (API)

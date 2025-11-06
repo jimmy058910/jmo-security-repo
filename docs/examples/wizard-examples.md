@@ -1027,6 +1027,814 @@ For complete details, see [docs/TELEMETRY.md](../TELEMETRY.md).
 
 ---
 
+## Trend Analysis Integration (v1.0.0+)
+
+**NEW in v1.0.0:** The wizard now offers interactive trend analysis after each scan, enabling statistical tracking of security posture improvements over time.
+
+### Post-Scan Trend Prompt
+
+After completing a scan with ≥2 historical scans stored, the wizard automatically offers trend analysis:
+
+```text
+✅ Scan completed successfully!
+
+📊 Historical data detected (5 scans available)
+
+Would you like to explore security trends? [y/N]: y
+```
+
+**Trigger Conditions:**
+
+- ≥2 scans in history database (`.jmo/history.db`)
+- Scan completed successfully
+- Interactive terminal (TTY)
+- Not in CI/CD environment
+
+### Interactive Trend Menu
+
+Once you accept the trend prompt, the wizard displays a 9-option menu:
+
+```text
+╔════════════════════════════════════════════════════════════════════╗
+║                  📊 Security Trends Analysis                         ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Choose an option:
+
+1. 📈 Analyze trends (Mann-Kendall significance testing)
+2. 📊 Show recent scan history (last 10 scans)
+3. ⚠️  Check regressions (new HIGH/CRITICAL findings)
+4. 🏆 Calculate security score (0-100 scale)
+5. 🔄 Compare two scans (side-by-side diff)
+6. 💡 Get insights & recommendations
+7. 📖 Explain statistical methods
+8. 👥 View developer attribution (who introduced/resolved)
+9. 📤 Export trend report (HTML/CSV/JSON)
+0. ⬅️  Exit
+
+Selection [0-9]:
+```
+
+### Menu Options Explained
+
+#### Option 1: Analyze Trends
+
+Runs full Mann-Kendall statistical analysis with terminal output:
+
+```text
+Selection: 1
+
+Running trend analysis...
+
+╔════════════════════════════════════════════════════════════════════╗
+║                     Security Trend Analysis                          ║
+╚════════════════════════════════════════════════════════════════════╝
+
+📊 Overall Trend: ✅ IMPROVING (p=0.003, tau=-0.68)
+
+Severity Breakdown:
+┌────────────────────────────────────────────────────────────────────┐
+│ CRITICAL:  12 → 3  (-75%) ↓↓↓                                      │
+│ HIGH:      45 → 28 (-38%) ↓↓                                       │
+│ MEDIUM:    89 → 82 (-8%)  ↓                                        │
+│ LOW:       124 → 130 (+5%) →                                       │
+│ INFO:      67 → 71 (+6%)  →                                        │
+├────────────────────────────────────────────────────────────────────┤
+│ Total:     337 → 314 (-7%) ↓                                       │
+└────────────────────────────────────────────────────────────────────┘
+
+🏆 Security Score: 72/100 (C+)
+  • Score trend: ↑ +15 points since baseline
+  • Weighted by severity (CRITICAL×10, HIGH×3, MEDIUM×1)
+  • Normalized by codebase size (125,000 LOC)
+
+📈 Trend History (last 10 scans):
+  ████████░░░░░░░░  Week 1: 337 findings (baseline)
+  ███████░░░░░░░░░  Week 2: 321 findings (-5%)
+  ██████░░░░░░░░░░  Week 3: 305 findings (-10%)
+  ██████░░░░░░░░░░  Week 4: 298 findings (-12%)
+  █████░░░░░░░░░░░  Week 5: 314 findings (-7%) ← Current
+
+💡 Key Insights:
+  • 9 CRITICAL findings resolved (SQL injection, RCE)
+  • High-severity trend statistically significant (p<0.001)
+  • Developer velocity: 3.2 fixes/week (above team average)
+
+Press Enter to continue...
+```
+
+**Statistical Significance:**
+
+- **Mann-Kendall test** with p < 0.05 threshold
+- **Kendall's Tau** correlation coefficient (-1 to +1)
+- **p-value** measures statistical significance (lower = more confident)
+
+#### Option 2: Show Recent History
+
+Displays last 10 scans with metadata:
+
+```text
+Selection: 2
+
+╔════════════════════════════════════════════════════════════════════╗
+║                       Recent Scan History                            ║
+╚════════════════════════════════════════════════════════════════════╝
+
+┌────────────────────────────────────────────────────────────────────┐
+│ Scan #5 (current)                                                  │
+│ • Date: 2025-11-05 18:30:15                                        │
+│ • Branch: main                                                     │
+│ • Profile: balanced                                                │
+│ • Findings: 314 (8 CRITICAL, 28 HIGH, 82 MEDIUM)                  │
+│ • Duration: 14.3 minutes                                           │
+│ • Tools: 8 (trufflehog, semgrep, trivy, syft, checkov, etc.)     │
+├────────────────────────────────────────────────────────────────────┤
+│ Scan #4 (1 week ago)                                              │
+│ • Date: 2025-10-29 19:15:42                                        │
+│ • Branch: main                                                     │
+│ • Findings: 298 (-5% from #3)                                     │
+│ • Duration: 13.8 minutes                                           │
+├────────────────────────────────────────────────────────────────────┤
+│ Scan #3 (2 weeks ago)                                             │
+│ • Date: 2025-10-22 20:10:33                                        │
+│ • Findings: 305 (-5% from #2)                                     │
+│ • Duration: 14.1 minutes                                           │
+└────────────────────────────────────────────────────────────────────┘
+
+... (showing 10 most recent scans)
+
+Press Enter to continue...
+```
+
+#### Option 3: Check Regressions
+
+Detects new HIGH/CRITICAL findings since last scan:
+
+```text
+Selection: 3
+
+Checking for regressions...
+
+⚠️  2 new HIGH findings detected since last scan
+
+╔════════════════════════════════════════════════════════════════════╗
+║                     Regression Analysis                              ║
+╚════════════════════════════════════════════════════════════════════╝
+
+┌─ NEW HIGH FINDINGS (2) ────────────────────────────────────────────
+│
+│ 1. CWE-89: SQL Injection
+│    • File: api/users.py:42
+│    • Tool: semgrep
+│    • Message: User input concatenated into SQL query
+│    • Introduced: 2025-11-01 (commit abc1234)
+│    • Developer: alice@example.com
+│    • Fix: Use parameterized queries (e.g., cursor.execute(query, params))
+│
+│ 2. CWE-798: Hardcoded Credentials
+│    • File: config/database.yml:10
+│    • Tool: trufflehog (verified)
+│    • Message: Hardcoded database password
+│    • Introduced: 2025-11-02 (commit def5678)
+│    • Developer: bob@example.com
+│    • Fix: Move to environment variables or secrets manager
+│
+└────────────────────────────────────────────────────────────────────┘
+
+✅ No new CRITICAL findings
+
+Recommendation: Review and fix new HIGH findings before merge/deploy.
+
+Press Enter to continue...
+```
+
+**Regression Detection:**
+
+- Compares current scan to previous scan by fingerprint ID
+- NEW findings = appear in current scan, not in previous
+- RESOLVED findings = appear in previous scan, not in current
+
+#### Option 4: Calculate Security Score
+
+Displays 0-100 security score with letter grade:
+
+```text
+Selection: 4
+
+Calculating security score...
+
+╔════════════════════════════════════════════════════════════════════╗
+║                        Security Score                                ║
+╚════════════════════════════════════════════════════════════════════╝
+
+🏆 Current Score: 72/100 (C+)
+
+Score Breakdown:
+┌────────────────────────────────────────────────────────────────────┐
+│ Base Score:           100                                          │
+│ - CRITICAL findings:  -30  (3 × 10 penalty each)                   │
+│ - HIGH findings:      -84  (28 × 3 penalty each)                   │
+│ - MEDIUM findings:    -82  (82 × 1 penalty each)                   │
+│ + Improvement bonus:  +68  (improving trend)                       │
+├────────────────────────────────────────────────────────────────────┤
+│ Normalized Score:     72/100                                       │
+│ Letter Grade:         C+                                           │
+└────────────────────────────────────────────────────────────────────┘
+
+📈 Score History (last 10 scans):
+  57 → 62 → 65 → 69 → 72  (↑ +15 points since baseline)
+
+Codebase: 125,000 lines of code (normalized)
+
+Grade Scale:
+  A (90-100): Excellent security posture
+  B (80-89):  Good security, minor issues
+  C (70-79):  Adequate security, needs improvement
+  D (60-69):  Poor security, action required
+  F (0-59):   Critical security issues
+
+Next Steps:
+  • Resolve 3 CRITICAL findings → +30 points (target: B grade)
+  • Reduce HIGH findings by 50% → +42 points (target: A grade)
+
+Press Enter to continue...
+```
+
+#### Option 5: Compare Two Scans
+
+Side-by-side comparison of any two historical scans:
+
+```text
+Selection: 5
+
+Available scans for comparison:
+  1. Scan #5 (2025-11-05) - 314 findings [current]
+  2. Scan #4 (2025-10-29) - 298 findings
+  3. Scan #3 (2025-10-22) - 305 findings
+  4. Scan #2 (2025-10-15) - 321 findings
+  5. Scan #1 (2025-10-08) - 337 findings [baseline]
+
+Select first scan [1-5]: 1
+Select second scan [1-5]: 5
+
+Comparing Scan #5 (current) vs Scan #1 (baseline)...
+
+╔════════════════════════════════════════════════════════════════════╗
+║                     Scan Comparison Report                           ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Overall Change: 337 → 314 findings (-7%)
+
+┌─ Severity Comparison ──────────────────────────────────────────────
+│               Baseline (Oct 8)   Current (Nov 5)   Change
+│ CRITICAL:            12                3          -9  (-75%) ✅
+│ HIGH:                45               28         -17  (-38%) ✅
+│ MEDIUM:              89               82          -7   (-8%) ✅
+│ LOW:                124              130          +6   (+5%) ⚠️
+│ INFO:                67               71          +4   (+6%) →
+└────────────────────────────────────────────────────────────────────┘
+
+✅ NEW Resolutions (23 findings fixed):
+  • CWE-89: SQL Injection (9 instances) → alice@example.com
+  • CWE-798: Hardcoded Secrets (6 instances) → bob@example.com
+  • CWE-79: XSS (5 instances) → charlie@example.com
+  • CWE-22: Path Traversal (3 instances) → alice@example.com
+
+⚠️  NEW Regressions (6 findings introduced):
+  • CWE-352: CSRF (4 instances) → dave@example.com
+  • CWE-798: Hardcoded Credentials (2 instances) → bob@example.com
+
+🏆 Security Score: 57 → 72 (+15 points, C+ grade)
+
+Developer Attribution:
+  • alice@example.com: 12 fixed, 0 introduced (MVP!)
+  • bob@example.com: 6 fixed, 2 introduced
+  • charlie@example.com: 5 fixed, 0 introduced
+  • dave@example.com: 0 fixed, 4 introduced (needs review)
+
+Time Span: 4 weeks (28 days)
+Fix Velocity: 0.82 fixes/day
+
+Press Enter to continue...
+```
+
+#### Option 6: Get Insights
+
+AI-generated actionable recommendations:
+
+```text
+Selection: 6
+
+Generating insights...
+
+╔════════════════════════════════════════════════════════════════════╗
+║                  Security Insights & Recommendations                 ║
+╚════════════════════════════════════════════════════════════════════╝
+
+🎯 CRITICAL Priority (3 findings):
+
+1. SQL Injection Hotspot (CWE-89)
+   • Occurrences: 3 active, 9 resolved
+   • Files: api/users.py, api/products.py, api/orders.py
+   • Pattern: User input concatenation
+   • Remediation: Implement prepared statements/ORM
+   • Effort: 2-4 hours
+   • Risk Reduction: HIGH
+
+2. Hardcoded Secrets (CWE-798)
+   • Occurrences: 2 active, 6 resolved (regression!)
+   • Files: config/database.yml, config/redis.yml
+   • Pattern: Plaintext credentials in config
+   • Remediation: Use environment variables + secrets manager
+   • Effort: 1 hour
+   • Risk Reduction: CRITICAL
+
+🔥 HIGH Priority (5 findings):
+
+3. CSRF Missing Protection (CWE-352)
+   • Occurrences: 4 active (NEW)
+   • Files: api/admin/*.py
+   • Developer: dave@example.com (recent commits)
+   • Remediation: Add CSRF token middleware
+   • Effort: 30 minutes
+   • Risk Reduction: HIGH
+
+💡 MEDIUM Priority (2 patterns):
+
+4. Sensitive Data Exposure (CWE-200)
+   • Trend: Increasing (+3 last month)
+   • Pattern: Verbose error messages in production
+   • Remediation: Implement error sanitization
+   • Effort: 1-2 hours
+
+5. Dependency Vulnerabilities (CVEs)
+   • Occurrences: 12 active (needs upgrade)
+   • Libraries: requests 2.25.1 (CVE-2023-32681), pillow 8.3.2 (CVE-2023-50447)
+   • Remediation: Update requirements.txt
+   • Effort: 30 minutes + testing
+
+🏆 Positive Trends:
+
+✅ SQL Injection: 75% reduction (12 → 3) - Great progress!
+✅ Developer velocity: 3.2 fixes/week (above 2.5 team avg)
+✅ High-severity trend: Statistically significant improvement (p=0.001)
+
+🎯 Next Steps (Priority Order):
+
+1. Review dave@example.com's commits (4 CSRF issues introduced)
+2. Fix 2 hardcoded credential regressions (prevent pattern repeat)
+3. Address 3 remaining SQL injections (complete elimination)
+4. Update dependencies (low effort, high impact)
+
+Estimated Total Effort: 6-10 hours to reach A grade (90+)
+
+Press Enter to continue...
+```
+
+#### Option 7: Explain Methods
+
+Educational content about statistical validation:
+
+```text
+Selection: 7
+
+╔════════════════════════════════════════════════════════════════════╗
+║                Statistical Methods Explanation                       ║
+╚════════════════════════════════════════════════════════════════════╝
+
+📊 Mann-Kendall Trend Test
+
+Purpose: Detect statistically significant trends in time-series data
+
+How it works:
+  1. Compares all pairs of observations over time
+  2. Counts how many pairs increase vs decrease
+  3. Calculates Kendall's Tau correlation coefficient
+  4. Computes p-value to measure statistical confidence
+
+Interpretation:
+  • p < 0.05: Trend is statistically significant (not random noise)
+  • tau < 0: Decreasing trend (fewer findings = improving)
+  • tau > 0: Increasing trend (more findings = degrading)
+  • tau ≈ 0: No trend (stable security posture)
+
+Example:
+  Scans: 337 → 321 → 305 → 298 → 314
+  Result: tau = -0.68, p = 0.003
+  Meaning: Statistically significant improvement trend
+           (99.7% confidence it's not random)
+
+Requirements:
+  • Minimum 5 scans for reliable results
+  • Consistent scanning (same tools, profiles)
+  • Non-parametric (no assumptions about data distribution)
+
+🏆 Security Score Calculation
+
+Formula: 100 - (critical×10) - (high×3) - (medium×1) + improvement_bonus
+
+Components:
+  • Base score: 100 (perfect security)
+  • CRITICAL penalty: -10 points each
+  • HIGH penalty: -3 points each
+  • MEDIUM penalty: -1 point each
+  • Improvement bonus: +1 point per resolved HIGH/CRITICAL
+
+Normalization: Adjusted by codebase size (findings per 1000 LOC)
+
+Letter Grades:
+  A (90-100): 0-1 CRITICAL, <5 HIGH
+  B (80-89):  0 CRITICAL, 5-10 HIGH
+  C (70-79):  1-2 CRITICAL, 10-20 HIGH
+  D (60-69):  3+ CRITICAL, 20+ HIGH
+  F (0-59):   5+ CRITICAL, 30+ HIGH
+
+📈 Regression Detection
+
+Method: Fingerprint-based finding comparison
+
+Process:
+  1. Each finding gets unique fingerprint (tool + rule + location)
+  2. Compare current scan fingerprints to previous scan
+  3. NEW = appear in current, not in previous
+  4. RESOLVED = appear in previous, not in current
+
+Why fingerprints?
+  • Deterministic: Same finding = same ID
+  • Deduplication: Avoid counting duplicates
+  • Tracking: Monitor specific findings across scans
+
+Example:
+  Finding: SQL injection in api/users.py:42 (semgrep rule: sql-concat)
+  Fingerprint: sha256("semgrep|sql-concat|api/users.py|42|...")
+  Status: NEW if fingerprint not in previous scan
+
+For more details, see:
+  • Mann-Kendall Test: https://en.wikipedia.org/wiki/Mann-Kendall_test
+  • Kendall's Tau: https://en.wikipedia.org/wiki/Kendall_rank_correlation
+  • docs/USER_GUIDE.md#trend-analysis-v100
+
+Press Enter to continue...
+```
+
+#### Option 8: Developer Attribution
+
+See who introduced/resolved security issues:
+
+```text
+Selection: 8
+
+Analyzing developer contributions...
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    Developer Attribution Report                      ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Time Range: Last 10 scans (2 months)
+
+┌─ Top Contributors (by fixes) ──────────────────────────────────────
+│
+│ 1. alice@example.com
+│    • Introduced: 12 findings
+│    • Resolved:   28 findings
+│    • Active:     4 findings (avg age: 15 days)
+│    • Velocity:   4.2 fixes/week
+│    • Focus:      SQL Injection (9), Path Traversal (3)
+│    • Grade:      A+ (net positive contributor)
+│
+│ 2. charlie@example.com
+│    • Introduced: 5 findings
+│    • Resolved:   18 findings
+│    • Active:     2 findings (avg age: 22 days)
+│    • Velocity:   2.8 fixes/week
+│    • Focus:      XSS (5), CSRF (3)
+│    • Grade:      A (strong contributor)
+│
+│ 3. bob@example.com
+│    • Introduced: 8 findings
+│    • Resolved:   12 findings
+│    • Active:     3 findings (avg age: 45 days)
+│    • Velocity:   1.5 fixes/week
+│    • Focus:      Hardcoded Secrets (6), Config Issues (2)
+│    • Grade:      B (needs review for secret management)
+│
+└────────────────────────────────────────────────────────────────────┘
+
+⚠️  Attention Needed:
+
+  dave@example.com
+    • Introduced: 4 CSRF findings (all HIGH severity)
+    • Resolved:   0 findings
+    • Active:     4 findings (avg age: 7 days)
+    • Pattern:    Missing CSRF protection in admin endpoints
+    • Recommendation: Code review + CSRF middleware training
+
+Team Statistics:
+  • Total developers: 6
+  • Average velocity: 2.5 fixes/week
+  • Top category: SQL Injection (12 resolved)
+  • Most improved: alice@example.com (+16 net resolutions)
+
+Git Blame Attribution:
+  • Based on line-level blame analysis
+  • Tracks who last modified vulnerable code
+  • Age = days since introduction
+  • Velocity = fixes per week
+
+Note: Requires .git directory access for attribution.
+
+Press Enter to continue...
+```
+
+**Git Blame Integration:**
+
+- Runs `git blame` on vulnerable file locations
+- Extracts developer email and commit timestamp
+- Aggregates findings by developer
+
+#### Option 9: Export Reports
+
+Generate trend reports in multiple formats:
+
+```text
+Selection: 9
+
+Choose export format:
+  1. HTML (interactive dashboard with charts)
+  2. JSON (machine-readable data)
+  3. CSV (spreadsheet import)
+  4. Prometheus (monitoring metrics)
+  5. Grafana (pre-built dashboard)
+
+Export format [1-5]: 1
+
+Export location (default: trends-report.html): trends-report.html
+
+Generating HTML trend report...
+
+✅ Report exported: trends-report.html (1.2 MB)
+
+Report includes:
+  • Interactive trend charts (Chart.js)
+  • Severity breakdowns
+  • Security score gauge
+  • Developer attribution table
+  • Regression timeline
+  • Insights & recommendations
+
+Opening in browser...
+
+Press Enter to return to menu...
+```
+
+**Export Formats:**
+
+- **HTML**: Self-contained interactive dashboard with Chart.js
+- **JSON**: Machine-readable data for custom dashboards
+- **CSV**: Spreadsheet import for Excel/Google Sheets
+- **Prometheus**: Metrics in Prometheus exposition format
+- **Grafana**: Pre-built Grafana dashboard JSON
+
+### Non-Interactive Trend Flags
+
+For automation and CI/CD, use CLI flags instead of the interactive menu:
+
+#### Analyze Trends After Scan
+
+```bash
+jmotools wizard --yes --analyze-trends
+```
+
+**Workflow:**
+
+1. Runs scan with defaults (balanced profile)
+2. After scan completes, automatically runs trend analysis
+3. Displays terminal report
+4. Exits
+
+#### Export Trends After Scan
+
+```bash
+jmotools wizard --yes --export-trends-html trends.html
+```
+
+**Workflow:**
+
+1. Runs scan
+2. Exports HTML trend report to `trends.html`
+3. Auto-opens in browser (if TTY)
+
+#### Export JSON for CI/CD
+
+```bash
+jmotools wizard --yes --export-trends-json trends.json
+```
+
+**Use case:** Store trend data as CI/CD artifact
+
+```yaml
+# GitHub Actions example
+- name: Run scan with trends
+  run: jmotools wizard --yes --export-trends-json trends.json
+
+- name: Upload trends
+  uses: actions/upload-artifact@v4
+  with:
+    name: security-trends
+    path: trends.json
+```
+
+#### Multiple Export Formats
+
+```bash
+jmotools wizard --yes \
+  --analyze-trends \
+  --export-trends-html trends.html \
+  --export-trends-csv trends.csv \
+  --export-trends-json trends.json
+```
+
+### Docker Volume Mounting for Trends
+
+**CRITICAL:** Trends require persistent `.jmo/history.db` across container runs.
+
+#### Docker Workflow
+
+```bash
+# Create persistent .jmo directory
+mkdir -p ~/.jmo
+
+# Run first scan (creates baseline)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+# Run second scan (days/weeks later)
+docker run --rm \
+  -v "$(pwd):/scan" \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+# Analyze trends (after ≥5 scans)
+docker run --rm \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends analyze --branch main --format terminal
+```
+
+**Key Points:**
+
+- Volume mount `-v ~/.jmo:/root/.jmo` persists history database
+- Branch isolation via `--branch main` (separate trends per branch)
+- Requires ≥5 scans for Mann-Kendall statistical significance
+
+### CI/CD Trend Integration
+
+#### GitHub Actions with Cache
+
+```yaml
+name: Security Trends
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git blame
+
+      # Restore history database from cache
+      - name: Restore history cache
+        uses: actions/cache@v4
+        with:
+          path: .jmo
+          key: jmo-history-${{ github.repository }}-main
+
+      # Run scan
+      - name: Run security scan
+        run: |
+          mkdir -p .jmo
+          docker run --rm \
+            -v ${{ github.workspace }}:/scan \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            scan --repo /scan --results-dir /scan/results --profile-name balanced
+
+      # Analyze trends
+      - name: Analyze trends
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends analyze --branch main --format terminal
+
+      # Check regressions (fail if new HIGH/CRITICAL)
+      - name: Check regressions
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends regressions --severity HIGH --format terminal
+
+      # Export HTML report
+      - name: Export trend report
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v ${{ github.workspace }}/.jmo:/root/.jmo \
+            -v ${{ github.workspace }}/reports:/reports \
+            ghcr.io/jimmy058910/jmo-security:latest \
+            trends analyze --export html --export-file /reports/trends.html
+
+      # Upload report
+      - name: Upload trends
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-trends
+          path: reports/trends.html
+```
+
+**Key Features:**
+
+- `actions/cache` persists `.jmo/history.db` across runs
+- Branch-specific cache keys for isolation
+- Regression gating with `--severity HIGH`
+- HTML report artifact upload
+
+### Troubleshooting Trends
+
+#### "Insufficient scans for analysis"
+
+**Cause:** Less than 2 scans in history database
+
+**Fix:**
+
+```bash
+# Run at least 2 scans with same branch
+jmo scan --repo . --profile balanced --results-dir results/
+# ... wait (days/weeks)
+jmo scan --repo . --profile balanced --results-dir results/
+
+# Now trends work
+jmo trends analyze --branch main --format terminal
+```
+
+#### "No significant trends detected"
+
+**Cause:** Not enough scans, or findings genuinely stable
+
+**Explanation:**
+
+- Mann-Kendall requires 5-7+ scans for reliable results
+- Consistent patterns needed (2 scans → not enough data points)
+
+**Fix:**
+
+- Continue running scans regularly for 2-4 weeks
+- Trends will emerge with more data
+
+#### Git blame not working in Docker
+
+**Cause:** Git history not available in container
+
+**Fix:**
+
+```bash
+# Mount .git directory
+docker run --rm \
+  -v $PWD:/scan \
+  -v $PWD/.git:/scan/.git:ro \
+  -v ~/.jmo:/root/.jmo \
+  ghcr.io/jimmy058910/jmo-security:latest \
+  trends developers --branch main --limit 10 --format terminal
+```
+
+### Trend Analysis Best Practices
+
+1. **Consistent scanning:** Run scans on same schedule (weekly, post-fix, etc.)
+2. **Branch isolation:** Use `--branch main` vs `--branch develop` for separate trends
+3. **Sufficient data:** Wait for ≥5 scans before drawing conclusions
+4. **Profile consistency:** Use same profile (balanced) for trend accuracy
+5. **Developer attribution:** Requires git repository access
+6. **Docker volume mounting:** Always mount `.jmo/` for persistence
+7. **CI/CD caching:** Use `actions/cache` or `cache:` in GitLab CI
+
+For complete documentation, see:
+
+- [docs/USER_GUIDE.md — Trend Analysis](../USER_GUIDE.md#trend-analysis-v100)
+- [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer)
+- [docs/examples/ci-cd-trends.md](./ci-cd-trends.md) - Complete CI/CD patterns
+
+---
+
 ## Artifact Generation
 
 Generate reusable artifacts without running a scan.
