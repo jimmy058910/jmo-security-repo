@@ -21,6 +21,7 @@ from scripts.cli.trend_commands import cmd_trends
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
+from scripts.cli.policy_commands import cmd_policy
 
 # Telemetry
 from scripts.core.telemetry import (
@@ -1049,6 +1050,106 @@ See: dev-only/1.0.0/TREND_ANALYSIS_COMPLETE_PLAN.md for complete documentation.
     return trends_parser
 
 
+def _add_policy_args(subparsers):
+    """Add 'policy' subcommand arguments for Policy-as-Code management."""
+    policy_parser = subparsers.add_parser(
+        "policy",
+        help="Manage Policy-as-Code (OPA) for security governance",
+        description="""
+Manage OPA-based policies for custom security governance and compliance enforcement.
+
+Commands:
+- list      List all available policies (builtin + user)
+- validate  Validate policy syntax with OPA
+- test      Test policy against sample findings
+- show      Display policy metadata and content
+- install   Install builtin policy to user directory for customization
+
+Policy Locations:
+- Built-in: policies/builtin/
+- User:     ~/.jmo/policies/
+
+Usage Examples:
+    # List all policies
+    jmo policy list
+
+    # Validate policy syntax
+    jmo policy validate zero-secrets
+
+    # Test policy with findings
+    jmo policy test zero-secrets --findings-file results/summaries/findings.json
+
+    # Show policy details
+    jmo policy show owasp-top-10
+
+    # Install policy for customization
+    jmo policy install pci-dss
+
+See: docs/POLICY_AS_CODE.md for complete documentation.
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    policy_subparsers = policy_parser.add_subparsers(dest="policy_command", required=True)
+
+    # LIST
+    list_parser = policy_subparsers.add_parser(
+        "list",
+        help="List all available policies"
+    )
+
+    # VALIDATE
+    validate_parser = policy_subparsers.add_parser(
+        "validate",
+        help="Validate policy syntax"
+    )
+    validate_parser.add_argument(
+        "policy",
+        help="Policy name (without .rego extension)"
+    )
+
+    # TEST
+    test_parser = policy_subparsers.add_parser(
+        "test",
+        help="Test policy with findings file"
+    )
+    test_parser.add_argument(
+        "policy",
+        help="Policy name (without .rego extension)"
+    )
+    test_parser.add_argument(
+        "--findings-file",
+        required=True,
+        help="Path to JSON file with findings (e.g., results/summaries/findings.json)"
+    )
+
+    # SHOW
+    show_parser = policy_subparsers.add_parser(
+        "show",
+        help="Display policy metadata and content"
+    )
+    show_parser.add_argument(
+        "policy",
+        help="Policy name (without .rego extension)"
+    )
+
+    # INSTALL
+    install_parser = policy_subparsers.add_parser(
+        "install",
+        help="Install builtin policy to user directory"
+    )
+    install_parser.add_argument(
+        "policy",
+        help="Policy name to install (without .rego extension)"
+    )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing policy if already installed"
+    )
+
+    return policy_parser
+
+
 def _add_attest_args(subparsers):
     """Add 'attest' subcommand arguments for generating attestations."""
     attest_parser = subparsers.add_parser(
@@ -1285,7 +1386,7 @@ Documentation: https://docs.jmotools.com
     _add_mcp_args(sub)
     _add_history_args(sub)
     _add_trends_args(sub)
-    # add_policy_subparser(sub)  # Policy-as-Code commands (TODO: restore when policy feature is ready)
+    _add_policy_args(sub)  # Policy-as-Code commands
 
     try:
         return ap.parse_args()
@@ -2357,8 +2458,8 @@ def main():
         return cmd_attest(args)
     elif args.cmd == "verify":
         return cmd_verify(args)
-    # elif args.cmd == "policy":
-    #     return handle_policy_command(args)  # TODO: restore when policy feature is ready
+    elif args.cmd == "policy":
+        return cmd_policy(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1

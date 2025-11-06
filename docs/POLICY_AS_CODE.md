@@ -301,10 +301,10 @@ mkdir -p ~/.jmo/policies
 cp my-policy.rego ~/.jmo/policies/
 
 # Validate policy syntax
-opa check ~/.jmo/policies/my-policy.rego
+jmo policy validate my-policy
 
-# Test policy with OPA eval (jmo policy test not yet available in v1.0.0)
-opa eval -d ~/.jmo/policies/my-policy.rego -i results/summaries/findings.json 'data.my_policy'
+# Test policy with sample findings
+jmo policy test my-policy --findings-file results/summaries/findings.json
 
 # Use in scans
 jmo scan --repo . --profile-name balanced
@@ -521,8 +521,8 @@ opa check policies/builtin/my-policy.rego
 1. **Check policy criteria:**
 
    ```bash
-   # Manually test policy with OPA eval (jmo policy test not yet available in v1.0.0)
-   opa eval -d policies/builtin/zero-secrets.rego -i results/summaries/findings.json 'data.zero_secrets'
+   # Test policy with sample findings
+   jmo policy test zero-secrets --findings-file results/summaries/findings.json
    ```
 
 2. **Verify finding schema:**
