@@ -34,7 +34,7 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json'])
+        monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json"])
         args = parse_args()
         assert args.cmd == "attest"
         assert args.subject == "findings.json"
@@ -44,7 +44,11 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json', '--output', 'custom.att.json'])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["jmo", "attest", "findings.json", "--output", "custom.att.json"],
+        )
         args = parse_args()
         assert args.output == "custom.att.json"
 
@@ -53,7 +57,11 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json', '--tools', 'trivy', 'semgrep'])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["jmo", "attest", "findings.json", "--tools", "trivy", "semgrep"],
+        )
         args = parse_args()
         assert args.tools == ["trivy", "semgrep"]
 
@@ -62,7 +70,11 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json', '--scan-args', 'scan_config.json'])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["jmo", "attest", "findings.json", "--scan-args", "scan_config.json"],
+        )
         args = parse_args()
         assert args.scan_args == "scan_config.json"
 
@@ -71,7 +83,7 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json', '--sign'])
+        monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json", "--sign"])
         args = parse_args()
         assert args.sign is True
 
@@ -80,7 +92,7 @@ class TestAttestCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'attest', 'findings.json', '--rekor'])
+        monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json", "--rekor"])
         args = parse_args()
         assert args.rekor is True
 
@@ -93,7 +105,7 @@ class TestVerifyCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'verify', 'findings.json'])
+        monkeypatch.setattr(sys, "argv", ["jmo", "verify", "findings.json"])
         args = parse_args()
         assert args.cmd == "verify"
         assert args.subject == "findings.json"
@@ -103,7 +115,11 @@ class TestVerifyCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'verify', 'findings.json', '--attestation', 'custom.att.json'])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["jmo", "verify", "findings.json", "--attestation", "custom.att.json"],
+        )
         args = parse_args()
         assert args.attestation == "custom.att.json"
 
@@ -112,7 +128,9 @@ class TestVerifyCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'verify', 'findings.json', '--rekor-check'])
+        monkeypatch.setattr(
+            sys, "argv", ["jmo", "verify", "findings.json", "--rekor-check"]
+        )
         args = parse_args()
         assert args.rekor_check is True
 
@@ -121,7 +139,9 @@ class TestVerifyCommandParsing:
         import sys
         from scripts.cli.jmo import parse_args
 
-        monkeypatch.setattr(sys, 'argv', ['jmo', 'verify', 'findings.json', '--policy', 'policy.yaml'])
+        monkeypatch.setattr(
+            sys, "argv", ["jmo", "verify", "findings.json", "--policy", "policy.yaml"]
+        )
         args = parse_args()
         assert args.policy == "policy.yaml"
 
@@ -137,15 +157,11 @@ class TestAttestCommandExecution:
                 "jmo_version": "1.0.0",
                 "profile": "balanced",
                 "tools": ["trivy", "semgrep"],
-                "target_count": 1
+                "target_count": 1,
             },
             "findings": [
-                {
-                    "id": "fingerprint-abc123",
-                    "severity": "HIGH",
-                    "tool": "trivy"
-                }
-            ]
+                {"id": "fingerprint-abc123", "severity": "HIGH", "tool": "trivy"}
+            ],
         }
 
         findings_path = tmp_path / "findings.json"
@@ -164,7 +180,7 @@ class TestAttestCommandExecution:
             scan_args=None,
             tools=["trivy", "semgrep"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_attest(args)
@@ -188,7 +204,7 @@ class TestAttestCommandExecution:
             scan_args=None,
             tools=["trivy"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_attest(args)
@@ -208,7 +224,7 @@ class TestAttestCommandExecution:
             scan_args=None,
             tools=["trivy"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_attest(args)
@@ -224,7 +240,7 @@ class TestAttestCommandExecution:
             "profile_name": "balanced",
             "tools": ["trivy", "semgrep", "trufflehog"],
             "threads": 4,
-            "repos": ["repo1", "repo2"]
+            "repos": ["repo1", "repo2"],
         }
         scan_args_path = tmp_path / "scan_args.json"
         scan_args_path.write_text(json.dumps(scan_args))
@@ -237,7 +253,7 @@ class TestAttestCommandExecution:
             scan_args=str(scan_args_path),
             tools=None,  # Should use tools from scan_args
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_attest(args)
@@ -247,8 +263,16 @@ class TestAttestCommandExecution:
         attestation_path = Path(str(sample_findings) + ".att.json")
         attestation = json.loads(attestation_path.read_text())
 
-        assert attestation["predicate"]["buildDefinition"]["externalParameters"]["profile"] == "balanced"
-        assert "trivy" in attestation["predicate"]["buildDefinition"]["externalParameters"]["tools"]
+        assert (
+            attestation["predicate"]["buildDefinition"]["externalParameters"]["profile"]
+            == "balanced"
+        )
+        assert (
+            "trivy"
+            in attestation["predicate"]["buildDefinition"]["externalParameters"][
+                "tools"
+            ]
+        )
 
     def test_attest_includes_provenance_structure(self, sample_findings):
         """Test that attestation has correct SLSA provenance structure."""
@@ -262,7 +286,7 @@ class TestAttestCommandExecution:
             scan_args=None,
             tools=["trivy"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_attest(args)
@@ -302,7 +326,7 @@ class TestVerifyCommandExecution:
             findings_path=subject_path,
             profile="balanced",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         attestation_path = tmp_path / "findings.json.att.json"
@@ -322,7 +346,7 @@ class TestVerifyCommandExecution:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -344,7 +368,7 @@ class TestVerifyCommandExecution:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -361,7 +385,7 @@ class TestVerifyCommandExecution:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -382,7 +406,7 @@ class TestVerifyCommandExecution:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -405,7 +429,7 @@ class TestVerifyCommandExecution:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -444,8 +468,7 @@ class TestVerifierClass:
 
         # Wrong digest should fail verification (multi-hash format)
         assert not verifier._verify_subject_digest(
-            str(test_file),
-            expected_digests={"sha256": "0" * 64}  # Wrong digest
+            str(test_file), expected_digests={"sha256": "0" * 64}  # Wrong digest
         )
 
     def test_verifier_matches_correct_digest(self, tmp_path):
@@ -462,8 +485,7 @@ class TestVerifierClass:
 
         # Multi-hash format (Phase 5 API)
         assert verifier._verify_subject_digest(
-            str(test_file),
-            expected_digests={"sha256": expected_digest}
+            str(test_file), expected_digests={"sha256": expected_digest}
         )
 
     def test_verification_result_structure(self):
@@ -476,7 +498,7 @@ class TestVerifierClass:
             subject_digest="abc123...",
             builder_id="https://github.com/user/repo",
             build_time="2025-01-03T10:00:00Z",
-            rekor_entry="uuid-abc123"
+            rekor_entry="uuid-abc123",
         )
 
         assert result.is_valid is True
@@ -489,9 +511,7 @@ class TestVerifierClass:
         from scripts.core.attestation.verifier import VerificationResult
 
         result = VerificationResult(
-            is_valid=False,
-            error_message="Digest mismatch",
-            tamper_detected=True
+            is_valid=False, error_message="Digest mismatch", tamper_detected=True
         )
 
         assert result.is_valid is False
@@ -532,21 +552,19 @@ class TestAttestationStorage:
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
 
         scan_id = "scan-abc123"
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
             # Mock table exists
             mock_cursor.fetchone.return_value = ("attestations",)
             mock_conn.return_value.cursor.return_value = mock_cursor
 
             store_attestation(
-                scan_id=scan_id,
-                attestation=attestation,
-                rekor_published=False
+                scan_id=scan_id, attestation=attestation, rekor_published=False
             )
 
             # Verify INSERT was called
@@ -560,7 +578,7 @@ class TestAttestationStorage:
 
         scan_id = "scan-abc123"
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
                 '{"_type": "https://in-toto.io/Statement/v0.1"}',
@@ -569,7 +587,7 @@ class TestAttestationStorage:
                 None,
                 0,
                 int(time.time()),
-                2
+                2,
             )
             mock_conn.return_value.cursor.return_value = mock_cursor
 
@@ -598,7 +616,7 @@ class TestErrorHandling:
             scan_args=None,
             tools=["trivy"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         # Should not crash, but might succeed with digest of invalid JSON
@@ -624,7 +642,7 @@ class TestErrorHandling:
             rekor_check=False,
             policy=None,
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         exit_code = cmd_verify(args)
@@ -649,7 +667,7 @@ class TestErrorHandling:
             scan_args=None,
             tools=["trivy"],
             human_logs=False,
-            log_level="INFO"
+            log_level="INFO",
         )
 
         # Should fail gracefully (no crash)

@@ -162,9 +162,11 @@ def load_config(path: str | None) -> Config:
             policy_config = PolicyConfig(
                 enabled=policy_section.get("enabled", True),
                 auto_evaluate=policy_section.get("auto_evaluate", True),
-                default_policies=policy_section.get("default_policies", [])
-                if isinstance(policy_section.get("default_policies"), list)
-                else [],
+                default_policies=(
+                    policy_section.get("default_policies", [])
+                    if isinstance(policy_section.get("default_policies"), list)
+                    else []
+                ),
                 fail_on_violation=policy_section.get("fail_on_violation", False),
                 opa=opa_config,
             )
@@ -177,9 +179,13 @@ def load_config(path: str | None) -> Config:
                     profile_policy = profile_data["policy"]
                     # Override with profile-specific settings
                     if isinstance(profile_policy.get("default_policies"), list):
-                        policy_config.default_policies = profile_policy["default_policies"]
+                        policy_config.default_policies = profile_policy[
+                            "default_policies"
+                        ]
                     if "fail_on_violation" in profile_policy:
-                        policy_config.fail_on_violation = profile_policy["fail_on_violation"]
+                        policy_config.fail_on_violation = profile_policy[
+                            "fail_on_violation"
+                        ]
 
             cfg.policy = policy_config
         except (ValueError, TypeError):
@@ -211,7 +217,9 @@ def load_config_with_env_overrides(path: str | None) -> Config:
 
     if os.getenv("JMO_POLICY_DEFAULT_POLICIES"):
         policies_str = os.getenv("JMO_POLICY_DEFAULT_POLICIES", "")
-        config.policy.default_policies = [p.strip() for p in policies_str.split(",") if p.strip()]
+        config.policy.default_policies = [
+            p.strip() for p in policies_str.split(",") if p.strip()
+        ]
 
     if os.getenv("JMO_POLICY_FAIL_ON_VIOLATION"):
         config.policy.fail_on_violation = (

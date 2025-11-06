@@ -123,17 +123,28 @@ def test_detect_recommended_policies_fast_profile(sample_findings):
 
     # Create mock policies with proper metadata (as dicts, not PolicyMetadata objects)
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
-        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
+        (
+            Path("zero-secrets.rego"),
+            {
+                "name": "zero-secrets",
+                "version": "1.0.0",
+                "description": "Block secrets",
+            },
+        ),
+        (
+            Path("owasp-top-10.rego"),
+            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+        ),
     ]
 
     # Use findings without OWASP violations to test pure fast profile
     findings_no_owasp = [
-        f for f in sample_findings
-        if not f.get("compliance", {}).get("owaspTop10_2021")
+        f for f in sample_findings if not f.get("compliance", {}).get("owaspTop10_2021")
     ]
 
-    recommended = _detect_recommended_policies(findings_no_owasp, "fast", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        findings_no_owasp, "fast", policies_with_metadata
+    )
 
     # Fast profile should recommend zero-secrets only
     assert len(recommended) == 1
@@ -145,12 +156,27 @@ def test_detect_recommended_policies_balanced_profile(sample_findings):
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
-        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
-        (Path("pci-dss.rego"), {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"}),
+        (
+            Path("zero-secrets.rego"),
+            {
+                "name": "zero-secrets",
+                "version": "1.0.0",
+                "description": "Block secrets",
+            },
+        ),
+        (
+            Path("owasp-top-10.rego"),
+            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+        ),
+        (
+            Path("pci-dss.rego"),
+            {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"},
+        ),
     ]
 
-    recommended = _detect_recommended_policies(sample_findings, "balanced", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        sample_findings, "balanced", policies_with_metadata
+    )
 
     # Balanced profile should recommend owasp-top-10 + zero-secrets
     assert len(recommended) == 2
@@ -158,17 +184,28 @@ def test_detect_recommended_policies_balanced_profile(sample_findings):
     assert any("owasp-top-10" in str(p) for p in recommended)
 
 
-def test_detect_recommended_policies_deep_profile(sample_findings, sample_policy_metadata):
+def test_detect_recommended_policies_deep_profile(
+    sample_findings, sample_policy_metadata
+):
     """Test auto-detection for deep profile (all policies)."""
     from scripts.cli.wizard_flows.policy_flow import _detect_recommended_policies
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
-    recommended = _detect_recommended_policies(sample_findings, "deep", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        sample_findings, "deep", policies_with_metadata
+    )
 
     # Deep profile should recommend all 5 policies
     assert len(recommended) == 5
@@ -187,11 +224,23 @@ def test_detect_recommended_policies_with_verified_secrets():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
-        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
+        (
+            Path("zero-secrets.rego"),
+            {
+                "name": "zero-secrets",
+                "version": "1.0.0",
+                "description": "Block secrets",
+            },
+        ),
+        (
+            Path("owasp-top-10.rego"),
+            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+        ),
     ]
 
-    recommended = _detect_recommended_policies(findings_with_secrets, "fast", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        findings_with_secrets, "fast", policies_with_metadata
+    )
 
     # Should recommend zero-secrets due to verified secrets
     assert any("zero-secrets" in str(p) for p in recommended)
@@ -210,11 +259,23 @@ def test_detect_recommended_policies_with_owasp_violations():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
-        (Path("owasp-top-10.rego"), {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"}),
+        (
+            Path("zero-secrets.rego"),
+            {
+                "name": "zero-secrets",
+                "version": "1.0.0",
+                "description": "Block secrets",
+            },
+        ),
+        (
+            Path("owasp-top-10.rego"),
+            {"name": "owasp-top-10", "version": "1.0.0", "description": "OWASP Top 10"},
+        ),
     ]
 
-    recommended = _detect_recommended_policies(findings_with_owasp, "fast", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        findings_with_owasp, "fast", policies_with_metadata
+    )
 
     # Should recommend owasp-top-10 due to OWASP violations
     assert any("owasp-top-10" in str(p) for p in recommended)
@@ -233,11 +294,23 @@ def test_detect_recommended_policies_with_pci_violations():
     ]
 
     policies_with_metadata = [
-        (Path("zero-secrets.rego"), {"name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"}),
-        (Path("pci-dss.rego"), {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"}),
+        (
+            Path("zero-secrets.rego"),
+            {
+                "name": "zero-secrets",
+                "version": "1.0.0",
+                "description": "Block secrets",
+            },
+        ),
+        (
+            Path("pci-dss.rego"),
+            {"name": "pci-dss", "version": "1.0.0", "description": "PCI DSS"},
+        ),
     ]
 
-    recommended = _detect_recommended_policies(findings_with_pci, "fast", policies_with_metadata)
+    recommended = _detect_recommended_policies(
+        findings_with_pci, "fast", policies_with_metadata
+    )
 
     # Should recommend pci-dss due to PCI violations
     assert any("pci-dss" in str(p) for p in recommended)
@@ -252,7 +325,14 @@ def test_parse_policy_choice_skip(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -267,7 +347,14 @@ def test_parse_policy_choice_recommended(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
     recommended = [policies_with_metadata[0][0], policies_with_metadata[1][0]]
@@ -283,7 +370,14 @@ def test_parse_policy_choice_all_policies(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -299,7 +393,14 @@ def test_parse_policy_choice_single_number(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -315,7 +416,14 @@ def test_parse_policy_choice_invalid_number(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -330,7 +438,14 @@ def test_parse_policy_choice_invalid_choice(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -386,6 +501,7 @@ def test_export_violations_json(tmp_path):
 
     # Change to tmp_path before exporting
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -426,6 +542,7 @@ def test_export_violations_markdown(tmp_path):
     )
 
     import os
+
     original_dir = os.getcwd()
     try:
         os.chdir(tmp_path)
@@ -449,14 +566,18 @@ def test_export_violations_markdown(tmp_path):
 
 
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
-def test_policy_evaluation_menu_opa_unavailable(mock_engine_class, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_opa_unavailable(
+    mock_engine_class, tmp_path, sample_findings, capsys
+):
     """Test graceful handling when OPA unavailable."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
 
     # Mock OPA unavailable
     mock_engine_class.side_effect = RuntimeError("OPA binary not found")
 
-    results = policy_evaluation_menu(tmp_path, "balanced", sample_findings, non_interactive=True)
+    results = policy_evaluation_menu(
+        tmp_path, "balanced", sample_findings, non_interactive=True
+    )
 
     assert results == {}
     captured = capsys.readouterr()
@@ -465,7 +586,9 @@ def test_policy_evaluation_menu_opa_unavailable(mock_engine_class, tmp_path, sam
 
 @patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
-def test_policy_evaluation_menu_no_policies(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_no_policies(
+    mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
+):
     """Test graceful handling when no built-in policies found."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
 
@@ -476,7 +599,9 @@ def test_policy_evaluation_menu_no_policies(mock_engine_class, mock_glob, tmp_pa
     # Mock empty policy directory (no .rego files found)
     mock_glob.return_value = []
 
-    results = policy_evaluation_menu(tmp_path, "balanced", sample_findings, non_interactive=True)
+    results = policy_evaluation_menu(
+        tmp_path, "balanced", sample_findings, non_interactive=True
+    )
 
     assert results == {}
     captured = capsys.readouterr()
@@ -488,7 +613,9 @@ def test_policy_evaluation_menu_no_policies(mock_engine_class, mock_glob, tmp_pa
 
 @patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
-def test_policy_evaluation_menu_metadata_fallback(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_metadata_fallback(
+    mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
+):
     """Test fallback metadata when get_metadata() fails."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from scripts.core.policy_engine import PolicyResult
@@ -518,7 +645,9 @@ def test_policy_evaluation_menu_metadata_fallback(mock_engine_class, mock_glob, 
     findings_dir.mkdir(parents=True, exist_ok=True)
     (findings_dir / "findings.json").write_text(json.dumps(sample_findings))
 
-    results = policy_evaluation_menu(tmp_path, "fast", sample_findings, non_interactive=True)
+    results = policy_evaluation_menu(
+        tmp_path, "fast", sample_findings, non_interactive=True
+    )
 
     # Should use fallback metadata and still evaluate policy
     assert len(results) == 1
@@ -535,7 +664,14 @@ def test_parse_policy_choice_custom_selection(sample_policy_metadata):
 
     # Convert PolicyMetadata objects to dicts
     policies_with_metadata = [
-        (Path(f"{meta.name}.rego"), {"name": meta.name, "version": meta.version, "description": meta.description})
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
         for meta in sample_policy_metadata
     ]
 
@@ -555,17 +691,24 @@ def test_parse_policy_choice_custom_selection(sample_policy_metadata):
 
 def test_display_policy_violations_interactive_all_passed():
     """Test violation viewer with all policies passed."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
 
     results = {
-        "zero-secrets": PolicyResult(policy_name="zero-secrets", passed=True, violations=[]),
-        "owasp-top-10": PolicyResult(policy_name="owasp-top-10", passed=True, violations=[]),
+        "zero-secrets": PolicyResult(
+            policy_name="zero-secrets", passed=True, violations=[]
+        ),
+        "owasp-top-10": PolicyResult(
+            policy_name="owasp-top-10", passed=True, violations=[]
+        ),
     }
 
     # Should print success message
     import sys
     from io import StringIO
+
     captured_output = StringIO()
     sys.stdout = captured_output
 
@@ -579,7 +722,9 @@ def test_display_policy_violations_interactive_all_passed():
 
 def test_display_policy_violations_interactive_navigation(capsys):
     """Test violation viewer navigation between policies."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
 
@@ -587,12 +732,24 @@ def test_display_policy_violations_interactive_navigation(capsys):
         "zero-secrets": PolicyResult(
             policy_name="zero-secrets",
             passed=False,
-            violations=[{"category": "SECRET", "message": "Hardcoded password", "severity": "HIGH"}],
+            violations=[
+                {
+                    "category": "SECRET",
+                    "message": "Hardcoded password",
+                    "severity": "HIGH",
+                }
+            ],
         ),
         "owasp-top-10": PolicyResult(
             policy_name="owasp-top-10",
             passed=False,
-            violations=[{"category": "XSS", "message": "Cross-site scripting", "severity": "MEDIUM"}],
+            violations=[
+                {
+                    "category": "XSS",
+                    "message": "Cross-site scripting",
+                    "severity": "MEDIUM",
+                }
+            ],
         ),
     }
 
@@ -642,7 +799,9 @@ def test_display_violation():
 
 @patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
-def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_interactive_skip(
+    mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
+):
     """Test interactive mode with user choosing to skip."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from unittest.mock import patch
@@ -657,12 +816,16 @@ def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, t
 
     # Mock get_metadata to return dict (not PolicyMetadata)
     mock_engine.get_metadata.return_value = {
-        "name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"
+        "name": "zero-secrets",
+        "version": "1.0.0",
+        "description": "Block secrets",
     }
 
     # Mock user input: choose 's' (skip)
     with patch("builtins.input", return_value="s"):
-        results = policy_evaluation_menu(tmp_path, "fast", sample_findings, non_interactive=False)
+        results = policy_evaluation_menu(
+            tmp_path, "fast", sample_findings, non_interactive=False
+        )
 
     assert results == {}
     captured = capsys.readouterr()
@@ -671,7 +834,9 @@ def test_policy_evaluation_menu_interactive_skip(mock_engine_class, mock_glob, t
 
 @patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
-def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, mock_glob, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_interactive_view_violations(
+    mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
+):
     """Test interactive mode with viewing violations."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from scripts.core.policy_engine import PolicyResult
@@ -687,7 +852,9 @@ def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, m
 
     # Mock get_metadata to return dict (not PolicyMetadata)
     mock_engine.get_metadata.return_value = {
-        "name": "zero-secrets", "version": "1.0.0", "description": "Block secrets"
+        "name": "zero-secrets",
+        "version": "1.0.0",
+        "description": "Block secrets",
     }
 
     # Mock evaluate_policy to return failed result
@@ -704,7 +871,9 @@ def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, m
 
     # Mock user input: choose 'a' (recommended), then 'n' (don't view violations)
     with patch("builtins.input", side_effect=["a", "n"]):
-        results = policy_evaluation_menu(tmp_path, "fast", sample_findings, non_interactive=False)
+        results = policy_evaluation_menu(
+            tmp_path, "fast", sample_findings, non_interactive=False
+        )
 
     assert len(results) == 1
     assert "zero-secrets" in results
@@ -712,7 +881,9 @@ def test_policy_evaluation_menu_interactive_view_violations(mock_engine_class, m
 
 def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
     """Test violation viewer with JSON export action."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
     import os
@@ -721,7 +892,13 @@ def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
         "zero-secrets": PolicyResult(
             policy_name="zero-secrets",
             passed=False,
-            violations=[{"category": "SECRET", "message": "Hardcoded password", "severity": "HIGH"}],
+            violations=[
+                {
+                    "category": "SECRET",
+                    "message": "Hardcoded password",
+                    "severity": "HIGH",
+                }
+            ],
         ),
     }
 
@@ -742,7 +919,9 @@ def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
 
 def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys):
     """Test violation viewer with Markdown export action."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
     import os
@@ -751,7 +930,13 @@ def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys)
         "owasp-top-10": PolicyResult(
             policy_name="owasp-top-10",
             passed=False,
-            violations=[{"category": "XSS", "message": "Cross-site scripting", "severity": "MEDIUM"}],
+            violations=[
+                {
+                    "category": "XSS",
+                    "message": "Cross-site scripting",
+                    "severity": "MEDIUM",
+                }
+            ],
             message="Policy failed",
         ),
     }
@@ -777,7 +962,9 @@ def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys)
 
 def test_display_policy_violations_interactive_more_than_10_violations(capsys):
     """Test violation viewer with >10 violations showing truncation."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
 
@@ -806,7 +993,9 @@ def test_display_policy_violations_interactive_more_than_10_violations(capsys):
 
 def test_display_policy_violations_interactive_invalid_choice(capsys):
     """Test violation viewer with invalid choice input."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
 
@@ -828,7 +1017,9 @@ def test_display_policy_violations_interactive_invalid_choice(capsys):
 
 def test_display_policy_violations_interactive_previous_navigation(capsys):
     """Test violation viewer navigation to previous policy."""
-    from scripts.cli.wizard_flows.policy_flow import display_policy_violations_interactive
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
     from scripts.core.policy_engine import PolicyResult
     from unittest.mock import patch
 
@@ -860,7 +1051,9 @@ def test_display_policy_violations_interactive_previous_navigation(capsys):
 
 @patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
 @patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
-def test_policy_evaluation_menu_noninteractive_mode(mock_glob, mock_engine_class, tmp_path, sample_findings, capsys):
+def test_policy_evaluation_menu_noninteractive_mode(
+    mock_glob, mock_engine_class, tmp_path, sample_findings, capsys
+):
     """Test non-interactive mode uses profile defaults."""
     from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
     from scripts.core.policy_engine import PolicyResult
@@ -894,7 +1087,9 @@ def test_policy_evaluation_menu_noninteractive_mode(mock_glob, mock_engine_class
     findings_dir.mkdir(parents=True, exist_ok=True)
     (findings_dir / "findings.json").write_text(json.dumps(sample_findings))
 
-    results = policy_evaluation_menu(tmp_path, "balanced", sample_findings, non_interactive=True)
+    results = policy_evaluation_menu(
+        tmp_path, "balanced", sample_findings, non_interactive=True
+    )
 
     # Should evaluate 2 policies (balanced profile defaults)
     assert len(results) == 2

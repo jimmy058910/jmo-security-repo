@@ -130,7 +130,9 @@ def test_policy_evaluation_performance_large(
 
 
 @pytest.mark.skipif(not opa_available(), reason="OPA binary not found in PATH")
-def test_all_policies_performance(sample_findings_clean, builtin_policies, builtin_dir, user_dir):
+def test_all_policies_performance(
+    sample_findings_clean, builtin_policies, builtin_dir, user_dir
+):
     """Benchmark all built-in policies."""
     if not builtin_policies:
         pytest.skip("No built-in policies found")
@@ -138,7 +140,9 @@ def test_all_policies_performance(sample_findings_clean, builtin_policies, built
     timings = {}
     for policy_name in builtin_policies:
         start = time.perf_counter()
-        results = evaluate_policies(sample_findings_clean, [policy_name], builtin_dir, user_dir)
+        results = evaluate_policies(
+            sample_findings_clean, [policy_name], builtin_dir, user_dir
+        )
         elapsed_ms = (time.perf_counter() - start) * 1000
         timings[policy_name] = elapsed_ms
 
@@ -188,7 +192,9 @@ def test_policy_evaluation_with_violations_performance(builtin_dir, user_dir):
     policy_name = "zero-secrets"
 
     start = time.perf_counter()
-    results = evaluate_policies(findings_with_secrets, [policy_name], builtin_dir, user_dir)
+    results = evaluate_policies(
+        findings_with_secrets, [policy_name], builtin_dir, user_dir
+    )
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     # Should have found violations

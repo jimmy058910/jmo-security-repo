@@ -46,19 +46,15 @@ class TestMultiHashDigestVerification:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": sha256_hash}
-            }],
+            "subject": [{"name": "findings.json", "digest": {"sha256": sha256_hash}}],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is True
@@ -80,23 +76,24 @@ class TestMultiHashDigestVerification:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": sha256_hash,
-                    "sha384": sha384_hash,
-                    "sha512": sha512_hash
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": sha256_hash,
+                        "sha384": sha384_hash,
+                        "sha512": sha512_hash,
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is True
@@ -111,19 +108,17 @@ class TestMultiHashDigestVerification:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": "0" * 64}  # Wrong hash
-            }],
+            "subject": [
+                {"name": "findings.json", "digest": {"sha256": "0" * 64}}  # Wrong hash
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is False
@@ -143,22 +138,23 @@ class TestMultiHashDigestVerification:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": sha256_hash,  # Correct
-                    "sha512": "0" * 128  # Wrong
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": sha256_hash,  # Correct
+                        "sha512": "0" * 128,  # Wrong
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         # Should fail if any digest mismatches
@@ -173,19 +169,15 @@ class TestMultiHashDigestVerification:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": "abc123"}
-            }],
+            "subject": [{"name": "findings.json", "digest": {"sha256": "abc123"}}],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is False
@@ -202,8 +194,7 @@ class TestMultiHashDigestVerification:
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is False
@@ -231,12 +222,9 @@ class TestTimestampAnomalyDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": future_time,
-                        "finishedOn": future_time
-                    }
+                    "metadata": {"startedOn": future_time, "finishedOn": future_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -262,12 +250,9 @@ class TestTimestampAnomalyDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": start_time,
-                        "finishedOn": finish_time
-                    }
+                    "metadata": {"startedOn": start_time, "finishedOn": finish_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -292,12 +277,9 @@ class TestTimestampAnomalyDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": start_time,
-                        "finishedOn": finish_time
-                    }
+                    "metadata": {"startedOn": start_time, "finishedOn": finish_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -320,12 +302,9 @@ class TestTimestampAnomalyDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": old_time,
-                        "finishedOn": old_time
-                    }
+                    "metadata": {"startedOn": old_time, "finishedOn": old_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -334,7 +313,10 @@ class TestTimestampAnomalyDetection:
 
         # Should warn about stale attestation
         assert len(indicators) > 0
-        assert any("stale" in ind.description.lower() or "old" in ind.description.lower() for ind in indicators)
+        assert any(
+            "stale" in ind.description.lower() or "old" in ind.description.lower()
+            for ind in indicators
+        )
 
     def test_accept_valid_timestamps(self, tmp_path):
         """Test accepting valid recent timestamps."""
@@ -350,12 +332,9 @@ class TestTimestampAnomalyDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": start_time,
-                        "finishedOn": finish_time
-                    }
+                    "metadata": {"startedOn": start_time, "finishedOn": finish_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -373,7 +352,7 @@ class TestTimestampAnomalyDetection:
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
-            "predicate": {"runDetails": {}}
+            "predicate": {"runDetails": {}},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -390,7 +369,9 @@ class TestTimestampAnomalyDetection:
         # Create timestamp with suspicious timezone offset
         base_time = datetime.now(timezone.utc)
         # Manipulated timestamp (claims to be from far future timezone)
-        manipulated_time = base_time.replace(tzinfo=timezone(timedelta(hours=20))).isoformat()
+        manipulated_time = base_time.replace(
+            tzinfo=timezone(timedelta(hours=20))
+        ).isoformat()
 
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
@@ -400,10 +381,10 @@ class TestTimestampAnomalyDetection:
                 "runDetails": {
                     "metadata": {
                         "startedOn": manipulated_time,
-                        "finishedOn": manipulated_time
+                        "finishedOn": manipulated_time,
                     }
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -432,10 +413,8 @@ class TestBuilderConsistencyChecks:
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
-                "runDetails": {
-                    "builder": {"id": "https://github.com/actions/runner"}
-                }
-            }
+                "runDetails": {"builder": {"id": "https://github.com/actions/runner"}}
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -448,14 +427,13 @@ class TestBuilderConsistencyChecks:
                 "runDetails": {
                     "builder": {"id": "https://malicious-ci.example.com/builder"}
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         assert len(indicators) > 0
@@ -471,11 +449,7 @@ class TestBuilderConsistencyChecks:
         historical_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
-            "predicate": {
-                "runDetails": {
-                    "builder": {"id": builder_id}
-                }
-            }
+            "predicate": {"runDetails": {"builder": {"id": builder_id}}},
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -483,22 +457,19 @@ class TestBuilderConsistencyChecks:
         current_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "def456"}}],
-            "predicate": {
-                "runDetails": {
-                    "builder": {"id": builder_id}
-                }
-            }
+            "predicate": {"runDetails": {"builder": {"id": builder_id}}},
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should NOT flag consistent builder
-        builder_changes = [ind for ind in indicators if "builder" in ind.description.lower()]
+        builder_changes = [
+            ind for ind in indicators if "builder" in ind.description.lower()
+        ]
         assert len(builder_changes) == 0
 
     def test_detect_ci_platform_change(self, tmp_path):
@@ -510,10 +481,8 @@ class TestBuilderConsistencyChecks:
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
-                "runDetails": {
-                    "builder": {"id": "https://github.com/actions/runner"}
-                }
-            }
+                "runDetails": {"builder": {"id": "https://github.com/actions/runner"}}
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -525,14 +494,13 @@ class TestBuilderConsistencyChecks:
                 "runDetails": {
                     "builder": {"id": "https://gitlab.com/gitlab-org/gitlab-runner"}
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         assert len(indicators) > 0
@@ -547,7 +515,7 @@ class TestBuilderConsistencyChecks:
         historical_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
-            "predicate": {"runDetails": {}}
+            "predicate": {"runDetails": {}},
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -555,14 +523,13 @@ class TestBuilderConsistencyChecks:
         current_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "def456"}}],
-            "predicate": {"runDetails": {}}
+            "predicate": {"runDetails": {}},
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should handle gracefully
@@ -581,11 +548,7 @@ class TestBuilderConsistencyChecks:
             data = {
                 "_type": "https://in-toto.io/Statement/v0.1",
                 "subject": [{"name": "test", "digest": {"sha256": f"hash{i}"}}],
-                "predicate": {
-                    "runDetails": {
-                        "builder": {"id": builder_id}
-                    }
-                }
+                "predicate": {"runDetails": {"builder": {"id": builder_id}}},
             }
             path.write_text(json.dumps(data))
             historical_paths.append(str(path))
@@ -599,14 +562,13 @@ class TestBuilderConsistencyChecks:
                 "runDetails": {
                     "builder": {"id": "https://suspicious.example.com/builder"}
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            historical_paths
+            str(current_path), historical_paths
         )
 
         # Should detect deviation from established pattern
@@ -624,10 +586,10 @@ class TestBuilderConsistencyChecks:
                 "runDetails": {
                     "builder": {
                         "id": "https://github.com/actions/runner",
-                        "version": {"github-runner": "2.300.0"}
+                        "version": {"github-runner": "2.300.0"},
                     }
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -639,23 +601,26 @@ class TestBuilderConsistencyChecks:
                 "runDetails": {
                     "builder": {
                         "id": "https://github.com/actions/runner",
-                        "version": {"github-runner": "2.301.0"}
+                        "version": {"github-runner": "2.301.0"},
                     }
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # May warn about version change (LOW severity)
         version_warnings = [ind for ind in indicators if ind.severity == "LOW"]
         # Version changes are expected, should be LOW or no warning
-        assert all(ind.severity in ["LOW", "INFO"] for ind in indicators if "version" in ind.description.lower())
+        assert all(
+            ind.severity in ["LOW", "INFO"]
+            for ind in indicators
+            if "version" in ind.description.lower()
+        )
 
 
 # ============================================================================
@@ -676,11 +641,9 @@ class TestToolVersionRollbackDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "buildDefinition": {
-                    "resolvedDependencies": [
-                        {"name": "trivy", "version": "0.45.0"}
-                    ]
+                    "resolvedDependencies": [{"name": "trivy", "version": "0.45.0"}]
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -694,18 +657,21 @@ class TestToolVersionRollbackDetection:
                         {"name": "trivy", "version": "0.40.0"}  # Downgrade
                     ]
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         assert len(indicators) > 0
-        assert any("rollback" in ind.description.lower() or "downgrade" in ind.description.lower() for ind in indicators)
+        assert any(
+            "rollback" in ind.description.lower()
+            or "downgrade" in ind.description.lower()
+            for ind in indicators
+        )
 
     def test_accept_tool_version_upgrade(self, tmp_path):
         """Test accepting legitimate tool version upgrades."""
@@ -717,11 +683,9 @@ class TestToolVersionRollbackDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "buildDefinition": {
-                    "resolvedDependencies": [
-                        {"name": "trivy", "version": "0.40.0"}
-                    ]
+                    "resolvedDependencies": [{"name": "trivy", "version": "0.40.0"}]
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -735,18 +699,19 @@ class TestToolVersionRollbackDetection:
                         {"name": "trivy", "version": "0.45.0"}  # Upgrade (OK)
                     ]
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should NOT flag upgrades
-        rollback_indicators = [ind for ind in indicators if "rollback" in ind.description.lower()]
+        rollback_indicators = [
+            ind for ind in indicators if "rollback" in ind.description.lower()
+        ]
         assert len(rollback_indicators) == 0
 
     def test_detect_critical_tool_rollback(self, tmp_path):
@@ -759,11 +724,9 @@ class TestToolVersionRollbackDetection:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "buildDefinition": {
-                    "resolvedDependencies": [
-                        {"name": "trivy", "version": "0.45.0"}
-                    ]
+                    "resolvedDependencies": [{"name": "trivy", "version": "0.45.0"}]
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -777,14 +740,13 @@ class TestToolVersionRollbackDetection:
                         {"name": "trivy", "version": "0.30.0"}  # Major downgrade
                     ]
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Critical tool rollback should be CRITICAL severity (trivy is a critical tool)
@@ -798,7 +760,7 @@ class TestToolVersionRollbackDetection:
         historical_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
-            "predicate": {"buildDefinition": {}}
+            "predicate": {"buildDefinition": {}},
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -806,14 +768,13 @@ class TestToolVersionRollbackDetection:
         current_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "def456"}}],
-            "predicate": {"buildDefinition": {}}
+            "predicate": {"buildDefinition": {}},
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should handle gracefully
@@ -831,10 +792,10 @@ class TestToolVersionRollbackDetection:
                 "buildDefinition": {
                     "resolvedDependencies": [
                         {"name": "trivy", "version": "0.45.0"},
-                        {"name": "semgrep", "version": "1.50.0"}
+                        {"name": "semgrep", "version": "1.50.0"},
                     ]
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -846,17 +807,16 @@ class TestToolVersionRollbackDetection:
                 "buildDefinition": {
                     "resolvedDependencies": [
                         {"name": "trivy", "version": "0.30.0"},  # Rollback
-                        {"name": "semgrep", "version": "1.30.0"}  # Rollback
+                        {"name": "semgrep", "version": "1.30.0"},  # Rollback
                     ]
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should detect both rollbacks
@@ -881,10 +841,14 @@ class TestSuspiciousPatternDetection:
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(b'{"findings": []}').hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(b'{"findings": []}').hexdigest()
+                    },
+                }
+            ],
             "predicate": {
                 "buildDefinition": {
                     "resolvedDependencies": [
@@ -892,17 +856,16 @@ class TestSuspiciousPatternDetection:
                         {"name": "semgrep"},
                         {"name": "trufflehog"},
                         {"name": "checkov"},
-                        {"name": "bandit"}
+                        {"name": "bandit"},
                     ]
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # May warn about suspicious empty results
@@ -913,29 +876,36 @@ class TestSuspiciousPatternDetection:
         from scripts.core.attestation.tamper_detector import TamperDetector
 
         findings_path = tmp_path / "findings.json"
-        findings_path.write_text('{"findings": [{"id": "1"}, {"id": "2"}]}')  # 2 findings
+        findings_path.write_text(
+            '{"findings": [{"id": "1"}, {"id": "2"}]}'
+        )  # 2 findings
 
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(b'{"findings": [{"id": "1"}, {"id": "2"}]}').hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(
+                            b'{"findings": [{"id": "1"}, {"id": "2"}]}'
+                        ).hexdigest()
+                    },
+                }
+            ],
             "predicate": {
                 "buildDefinition": {
                     "externalParameters": {
                         "findings_count": 100  # Claims 100 but file has 2
                     }
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # Should detect mismatch
@@ -951,18 +921,19 @@ class TestSuspiciousPatternDetection:
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "../../../etc/passwd",  # Path traversal attempt
-                "digest": {"sha256": "abc123"}
-            }],
-            "predicate": {}
+            "subject": [
+                {
+                    "name": "../../../etc/passwd",  # Path traversal attempt
+                    "digest": {"sha256": "abc123"},
+                }
+            ],
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # Should detect path traversal
@@ -986,8 +957,7 @@ class TestSuspiciousPatternDetection:
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # Should detect missing required fields
@@ -1008,14 +978,13 @@ class TestSuspiciousPatternDetection:
                 "runDetails": {
                     "builder": {"id": "http://localhost:8080/builder"}  # Suspicious
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # Should warn about localhost builder
@@ -1032,29 +1001,32 @@ class TestSuspiciousPatternDetection:
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(findings_content.encode()).hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+                    },
+                }
+            ],
             "predicate": {
                 "buildDefinition": {
                     "resolvedDependencies": [{"name": "trivy", "version": "0.45.0"}]
                 },
-                "runDetails": {
-                    "builder": {"id": "https://github.com/actions/runner"}
-                }
-            }
+                "runDetails": {"builder": {"id": "https://github.com/actions/runner"}},
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         detector = TamperDetector()
         indicators = detector.check_suspicious_patterns(
-            str(findings_path),
-            str(attestation_path)
+            str(findings_path), str(attestation_path)
         )
 
         # Should NOT detect issues
-        high_severity = [ind for ind in indicators if ind.severity == TamperSeverity.HIGH]
+        high_severity = [
+            ind for ind in indicators if ind.severity == TamperSeverity.HIGH
+        ]
         assert len(high_severity) == 0
 
 
@@ -1079,17 +1051,23 @@ class TestAttackScenarioSimulation:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(original_content.encode()).hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(original_content.encode()).hexdigest()
+                    },
+                }
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         # Attacker substitutes file
-        findings_path.write_text('{"findings": []}')  # Same content but potentially different
+        findings_path.write_text(
+            '{"findings": []}'
+        )  # Same content but potentially different
 
         # Actually different content to simulate attack
         malicious_content = '{"findings": [], "backdoor": true}'
@@ -1097,8 +1075,7 @@ class TestAttackScenarioSimulation:
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(findings_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(findings_path), attestation_path=str(attestation_path)
         )
 
         # Should detect tampering
@@ -1118,12 +1095,9 @@ class TestAttackScenarioSimulation:
             "subject": [{"name": "findings.json", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": old_time,
-                        "finishedOn": old_time
-                    }
+                    "metadata": {"startedOn": old_time, "finishedOn": old_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -1147,7 +1121,7 @@ class TestAttackScenarioSimulation:
                         {"name": "trivy", "version": "0.45.0"}  # Current
                     ]
                 }
-            }
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -1161,14 +1135,13 @@ class TestAttackScenarioSimulation:
                         {"name": "trivy", "version": "0.20.0"}  # Vulnerable old version
                     ]
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_tool_rollback(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should detect suspicious rollback
@@ -1183,10 +1156,8 @@ class TestAttackScenarioSimulation:
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
-                "runDetails": {
-                    "builder": {"id": "https://github.com/actions/runner"}
-                }
-            }
+                "runDetails": {"builder": {"id": "https://github.com/actions/runner"}}
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -1199,14 +1170,13 @@ class TestAttackScenarioSimulation:
                     # Typosquatting attack
                     "builder": {"id": "https://github.com/actlons/runner"}
                 }
-            }
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
         detector = TamperDetector()
         indicators = detector.check_builder_consistency(
-            str(current_path),
-            [str(historical_path)]
+            str(current_path), [str(historical_path)]
         )
 
         # Should detect builder change
@@ -1227,12 +1197,9 @@ class TestAttackScenarioSimulation:
             "subject": [{"name": "test", "digest": {"sha256": "abc123"}}],
             "predicate": {
                 "runDetails": {
-                    "metadata": {
-                        "startedOn": start_time,
-                        "finishedOn": finish_time
-                    }
+                    "metadata": {"startedOn": start_time, "finishedOn": finish_time}
                 }
-            }
+            },
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -1255,10 +1222,8 @@ class TestAttackScenarioSimulation:
                 "buildDefinition": {
                     "resolvedDependencies": [{"name": "trivy", "version": "0.45.0"}]
                 },
-                "runDetails": {
-                    "builder": {"id": "https://github.com/actions/runner"}
-                }
-            }
+                "runDetails": {"builder": {"id": "https://github.com/actions/runner"}},
+            },
         }
         historical_path.write_text(json.dumps(historical_data))
 
@@ -1272,16 +1237,20 @@ class TestAttackScenarioSimulation:
             "subject": [{"name": "test", "digest": {"sha256": "def456"}}],
             "predicate": {
                 "buildDefinition": {
-                    "resolvedDependencies": [{"name": "trivy", "version": "0.20.0"}]  # Rollback
+                    "resolvedDependencies": [
+                        {"name": "trivy", "version": "0.20.0"}
+                    ]  # Rollback
                 },
                 "runDetails": {
-                    "builder": {"id": "http://localhost:8080/builder"},  # Suspicious builder
+                    "builder": {
+                        "id": "http://localhost:8080/builder"
+                    },  # Suspicious builder
                     "metadata": {
                         "startedOn": future_time,  # Future timestamp
-                        "finishedOn": future_time
-                    }
-                }
-            }
+                        "finishedOn": future_time,
+                    },
+                },
+            },
         }
         current_path.write_text(json.dumps(current_data))
 
@@ -1293,9 +1262,17 @@ class TestAttackScenarioSimulation:
 
         all_indicators = []
         all_indicators.extend(detector.check_timestamp_anomalies(str(current_path)))
-        all_indicators.extend(detector.check_builder_consistency(str(current_path), [str(historical_path)]))
-        all_indicators.extend(detector.check_tool_rollback(str(current_path), [str(historical_path)]))
-        all_indicators.extend(detector.check_suspicious_patterns(str(findings_path), str(current_path)))
+        all_indicators.extend(
+            detector.check_builder_consistency(
+                str(current_path), [str(historical_path)]
+            )
+        )
+        all_indicators.extend(
+            detector.check_tool_rollback(str(current_path), [str(historical_path)])
+        )
+        all_indicators.extend(
+            detector.check_suspicious_patterns(str(findings_path), str(current_path))
+        )
 
         # Should detect multiple indicators (HIGH severity)
         assert len(all_indicators) >= 3
@@ -1321,19 +1298,22 @@ class TestVerificationIntegration:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(findings_content.encode()).hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+                    },
+                }
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(findings_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(findings_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is True
@@ -1348,19 +1328,17 @@ class TestVerificationIntegration:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": "0" * 64}  # Wrong
-            }],
+            "subject": [
+                {"name": "findings.json", "digest": {"sha256": "0" * 64}}  # Wrong
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(findings_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(findings_path), attestation_path=str(attestation_path)
         )
 
         assert result.is_valid is False
@@ -1378,12 +1356,16 @@ class TestVerificationIntegration:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(findings_content.encode()).hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+                    },
+                }
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -1399,7 +1381,7 @@ class TestVerificationIntegration:
         result = verifier.verify(
             subject_path=str(findings_path),
             attestation_path=str(attestation_path),
-            signature_path=str(bundle_path)
+            signature_path=str(bundle_path),
         )
 
         assert result.is_valid is True
@@ -1415,12 +1397,16 @@ class TestVerificationIntegration:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": hashlib.sha256(findings_content.encode()).hexdigest()}
-            }],
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+                    },
+                }
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -1437,7 +1423,7 @@ class TestVerificationIntegration:
             result = verifier.verify(
                 subject_path=str(findings_path),
                 attestation_path=str(attestation_path),
-                signature_path=str(bundle_path)
+                signature_path=str(bundle_path),
             )
 
             assert result.is_valid is False

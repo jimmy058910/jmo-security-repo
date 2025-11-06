@@ -884,7 +884,9 @@ def test_send_policy_evaluation_event_disabled_when_telemetry_disabled(monkeypat
     mock_send_async.assert_not_called()
 
 
-def test_send_policy_evaluation_event_builds_correct_metadata(clear_ci_env, monkeypatch):
+def test_send_policy_evaluation_event_builds_correct_metadata(
+    clear_ci_env, monkeypatch
+):
     """Test send_policy_evaluation_event() builds privacy-preserving metadata."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 
@@ -933,7 +935,9 @@ def test_send_policy_evaluation_event_builds_correct_metadata(clear_ci_env, monk
     assert metadata["failed_count"] == 2  # owasp-top-10, pci-dss failed
 
 
-def test_send_policy_evaluation_event_handles_zero_violations(clear_ci_env, monkeypatch):
+def test_send_policy_evaluation_event_handles_zero_violations(
+    clear_ci_env, monkeypatch
+):
     """Test send_policy_evaluation_event() handles zero violations correctly."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 

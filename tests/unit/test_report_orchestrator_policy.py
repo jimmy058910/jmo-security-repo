@@ -48,8 +48,10 @@ def sample_findings():
 @pytest.fixture
 def mock_log_fn():
     """Mock logging function."""
+
     def _log(args, level, message):
         print(f"[{level}] {message}")
+
     return _log
 
 
@@ -61,18 +63,23 @@ def write_findings_json(tmp_path: Path, findings: list):
     summaries_dir.mkdir(parents=True, exist_ok=True)
 
     findings_file = summaries_dir / "findings.json"
-    findings_file.write_text(json.dumps({"meta": {}, "findings": findings}), encoding="utf-8")
+    findings_file.write_text(
+        json.dumps({"meta": {}, "findings": findings}), encoding="utf-8"
+    )
 
     return results_dir
 
 
-def test_report_uses_config_policy_defaults(tmp_path, sample_findings, mock_log_fn, monkeypatch):
+def test_report_uses_config_policy_defaults(
+    tmp_path, sample_findings, mock_log_fn, monkeypatch
+):
     """Test that config policy defaults are used when CLI not specified."""
     from scripts.cli.report_orchestrator import cmd_report
 
     # Create jmo.yml with policy config
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -82,7 +89,9 @@ policy:
 outputs:
   - json
   - md
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -108,7 +117,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should use config policies
@@ -125,7 +136,8 @@ def test_report_cli_policies_override_config(tmp_path, sample_findings, mock_log
 
     # Create jmo.yml with different policies
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -133,7 +145,9 @@ policy:
     - owasp-top-10
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -155,7 +169,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should use CLI policy (zero-secrets), not config policy (owasp-top-10)
@@ -165,19 +181,24 @@ outputs:
     assert result == 0
 
 
-def test_report_policy_disabled_skips_evaluation(tmp_path, sample_findings, mock_log_fn):
+def test_report_policy_disabled_skips_evaluation(
+    tmp_path, sample_findings, mock_log_fn
+):
     """Test that policy evaluation is skipped when disabled."""
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: false
   default_policies:
     - owasp-top-10
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -202,12 +223,15 @@ outputs:
     assert result == 0
 
 
-def test_report_auto_evaluate_false_skips_evaluation(tmp_path, sample_findings, mock_log_fn):
+def test_report_auto_evaluate_false_skips_evaluation(
+    tmp_path, sample_findings, mock_log_fn
+):
     """Test that auto_evaluate=false skips automatic policy evaluation."""
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: false
@@ -215,7 +239,9 @@ policy:
     - owasp-top-10
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -240,12 +266,15 @@ outputs:
     assert result == 0
 
 
-def test_report_fail_on_violation_returns_exit_code_1(tmp_path, sample_findings, mock_log_fn):
+def test_report_fail_on_violation_returns_exit_code_1(
+    tmp_path, sample_findings, mock_log_fn
+):
     """Test that fail_on_violation causes exit code 1 when policies fail."""
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -254,7 +283,9 @@ policy:
   fail_on_violation: true
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -279,19 +310,24 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should return 1 due to fail_on_violation=true and policy failure
     assert result == 1
 
 
-def test_report_fail_on_violation_false_returns_exit_code_0(tmp_path, sample_findings, mock_log_fn):
+def test_report_fail_on_violation_false_returns_exit_code_0(
+    tmp_path, sample_findings, mock_log_fn
+):
     """Test that fail_on_violation=false returns 0 even when policies fail."""
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -300,7 +336,9 @@ policy:
   fail_on_violation: false
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     results_dir = write_findings_json(tmp_path, sample_findings)
 
@@ -325,19 +363,24 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should return 0 (fail_on_violation=false)
     assert result == 0
 
 
-def test_report_environment_variable_override(tmp_path, sample_findings, mock_log_fn, monkeypatch):
+def test_report_environment_variable_override(
+    tmp_path, sample_findings, mock_log_fn, monkeypatch
+):
     """Test that environment variables override config."""
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -345,7 +388,9 @@ policy:
     - owasp-top-10
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # Override with environment variable
     monkeypatch.setenv("JMO_POLICY_DEFAULT_POLICIES", "pci-dss,hipaa-compliance")
@@ -373,7 +418,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should use env var policies (pci-dss, hipaa-compliance), not config (owasp-top-10)
@@ -389,7 +436,8 @@ def test_report_combined_exit_code(tmp_path, sample_findings, mock_log_fn):
     from scripts.cli.report_orchestrator import cmd_report
 
     jmo_yml = tmp_path / "jmo.yml"
-    jmo_yml.write_text("""
+    jmo_yml.write_text(
+        """
 policy:
   enabled: true
   auto_evaluate: true
@@ -399,7 +447,9 @@ policy:
 fail_on: HIGH
 outputs:
   - json
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     # Findings include HIGH severity (should trigger fail_on threshold)
     results_dir = write_findings_json(tmp_path, sample_findings)
@@ -425,7 +475,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should return 1 (both severity threshold and policy violation triggered)

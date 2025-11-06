@@ -40,7 +40,7 @@ class TestSigstoreClientInitialization:
         from scripts.core.attestation.signer import SigstoreSigner
         from scripts.core.attestation.constants import (
             FULCIO_URL_PRODUCTION,
-            REKOR_URL_PRODUCTION
+            REKOR_URL_PRODUCTION,
         )
 
         signer = SigstoreSigner()
@@ -52,7 +52,7 @@ class TestSigstoreClientInitialization:
         from scripts.core.attestation.signer import SigstoreSigner
         from scripts.core.attestation.constants import (
             FULCIO_URL_STAGING,
-            REKOR_URL_STAGING
+            REKOR_URL_STAGING,
         )
 
         config = {"use_staging": True}
@@ -66,7 +66,7 @@ class TestSigstoreClientInitialization:
 
         config = {
             "fulcio_url": "https://custom-fulcio.example.com",
-            "rekor_url": "https://custom-rekor.example.com"
+            "rekor_url": "https://custom-rekor.example.com",
         }
         signer = SigstoreSigner(config=config)
         assert signer.fulcio_url == "https://custom-fulcio.example.com"
@@ -76,7 +76,13 @@ class TestSigstoreClientInitialization:
 class TestOIDCTokenAcquisition:
     """Test OIDC token acquisition from different environments."""
 
-    @patch.dict("os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url", "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token"})
+    @patch.dict(
+        "os.environ",
+        {
+            "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token",
+        },
+    )
     def test_detect_github_actions_environment(self):
         """Test detecting GitHub Actions CI environment."""
         from scripts.core.attestation.signer import SigstoreSigner
@@ -104,7 +110,13 @@ class TestOIDCTokenAcquisition:
         assert ci_env == "local"
 
     @patch("requests.get")
-    @patch.dict("os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url", "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token"})
+    @patch.dict(
+        "os.environ",
+        {
+            "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token",
+        },
+    )
     def test_get_github_oidc_token(self, mock_get):
         """Test acquiring OIDC token from GitHub Actions."""
         from scripts.core.attestation.signer import SigstoreSigner
@@ -140,7 +152,13 @@ class TestOIDCTokenAcquisition:
         assert ci_env == "local"
 
     @patch("requests.get", side_effect=Exception("Network error"))
-    @patch.dict("os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url", "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token"})
+    @patch.dict(
+        "os.environ",
+        {
+            "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request-token",
+        },
+    )
     def test_oidc_token_acquisition_failure(self, mock_get):
         """Test handling OIDC token acquisition failure."""
         from scripts.core.attestation.signer import SigstoreSigner
@@ -176,9 +194,9 @@ class TestFulcioCertificateSigning:
             "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.3",
             "verificationMaterial": {
                 "certificate": "base64-cert",
-                "tlogEntries": [{"logIndex": "12345"}]
+                "tlogEntries": [{"logIndex": "12345"}],
             },
-            "messageSignature": {"signature": "base64-sig"}
+            "messageSignature": {"signature": "base64-sig"},
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -207,11 +225,8 @@ class TestFulcioCertificateSigning:
         bundle_path = tmp_path / "test.att.json.sigstore.json"
         bundle_data = {
             "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.3",
-            "verificationMaterial": {
-                "certificate": "base64-cert",
-                "tlogEntries": []
-            },
-            "messageSignature": {"signature": "base64-sig"}
+            "verificationMaterial": {"certificate": "base64-cert", "tlogEntries": []},
+            "messageSignature": {"signature": "base64-sig"},
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -264,15 +279,15 @@ class TestRekorTransparencyLog:
         rekor_entry = {
             "logIndex": "12345",
             "logID": "rekor-log-id",
-            "integratedTime": "1234567890"
+            "integratedTime": "1234567890",
         }
         bundle_data = {
             "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.3",
             "verificationMaterial": {
                 "certificate": "base64-cert",
-                "tlogEntries": [rekor_entry]
+                "tlogEntries": [rekor_entry],
             },
-            "messageSignature": {"signature": "base64-sig"}
+            "messageSignature": {"signature": "base64-sig"},
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -289,14 +304,13 @@ class TestRekorTransparencyLog:
 
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "logIndex": 12345,
-            "body": "base64-entry"
-        }
+        mock_response.json.return_value = {"logIndex": 12345, "body": "base64-entry"}
         mock_get.return_value = mock_response
 
         signer = SigstoreSigner()
-        exists = signer.verify_rekor_entry("https://rekor.sigstore.dev/api/v1/log/entries/12345")
+        exists = signer.verify_rekor_entry(
+            "https://rekor.sigstore.dev/api/v1/log/entries/12345"
+        )
         assert exists is True
 
     @patch("requests.get")
@@ -309,7 +323,9 @@ class TestRekorTransparencyLog:
         mock_get.return_value = mock_response
 
         signer = SigstoreSigner()
-        exists = signer.verify_rekor_entry("https://rekor.sigstore.dev/api/v1/log/entries/99999")
+        exists = signer.verify_rekor_entry(
+            "https://rekor.sigstore.dev/api/v1/log/entries/99999"
+        )
         assert exists is False
 
     @patch("requests.get", side_effect=Exception("Rekor unavailable"))
@@ -319,7 +335,9 @@ class TestRekorTransparencyLog:
 
         signer = SigstoreSigner()
         with pytest.raises(Exception) as exc_info:
-            signer.verify_rekor_entry("https://rekor.sigstore.dev/api/v1/log/entries/12345")
+            signer.verify_rekor_entry(
+                "https://rekor.sigstore.dev/api/v1/log/entries/12345"
+            )
         assert "Rekor unavailable" in str(exc_info.value)
 
 
@@ -339,14 +357,16 @@ class TestVerificationWithSignature:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -362,7 +382,7 @@ class TestVerificationWithSignature:
         result = verifier.verify(
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
-            signature_path=str(bundle_path)
+            signature_path=str(bundle_path),
         )
 
         assert result.is_valid is True
@@ -380,14 +400,16 @@ class TestVerificationWithSignature:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -404,7 +426,7 @@ class TestVerificationWithSignature:
         result = verifier.verify(
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
-            signature_path=str(bundle_path)
+            signature_path=str(bundle_path),
         )
 
         assert result.is_valid is False
@@ -422,14 +444,16 @@ class TestVerificationWithSignature:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": "6e96a492bc9fa40d22212c5be0396a203f3dbd4916cf97ebe2f66b6d54fa4a9a"  # Correct hash
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -437,7 +461,7 @@ class TestVerificationWithSignature:
         result = verifier.verify(
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
-            signature_path=str(tmp_path / "missing.sigstore.json")
+            signature_path=str(tmp_path / "missing.sigstore.json"),
         )
 
         assert result.is_valid is False
@@ -458,11 +482,11 @@ class TestCLISigningIntegration:
         findings_path.write_text(json.dumps({"findings": []}))
 
         scan_args_path = tmp_path / "scan_args.json"
-        scan_args_path.write_text(json.dumps({
-            "profile_name": "balanced",
-            "tools": ["trivy"],
-            "repos": ["test-repo"]
-        }))
+        scan_args_path.write_text(
+            json.dumps(
+                {"profile_name": "balanced", "tools": ["trivy"], "repos": ["test-repo"]}
+            )
+        )
 
         # Mock successful signing (subprocess call)
         mock_result = Mock()
@@ -477,28 +501,42 @@ class TestCLISigningIntegration:
             "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.3",
             "verificationMaterial": {
                 "certificate": "base64-cert",
-                "tlogEntries": [{"logIndex": "12345"}]
+                "tlogEntries": [{"logIndex": "12345"}],
             },
-            "messageSignature": {"signature": "base64-sig"}
+            "messageSignature": {"signature": "base64-sig"},
         }
+
         # Pre-create the bundle (simulating sigstore CLI creating it)
         def create_bundle(*args, **kwargs):
-            attestation_path.write_text(json.dumps({
-                "_type": "https://in-toto.io/Statement/v0.1",
-                "subject": [{"name": "findings.json", "digest": {"sha256": "abc"}}],
-                "predicateType": "https://slsa.dev/provenance/v1",
-                "predicate": {}
-            }))
+            attestation_path.write_text(
+                json.dumps(
+                    {
+                        "_type": "https://in-toto.io/Statement/v0.1",
+                        "subject": [
+                            {"name": "findings.json", "digest": {"sha256": "abc"}}
+                        ],
+                        "predicateType": "https://slsa.dev/provenance/v1",
+                        "predicate": {},
+                    }
+                )
+            )
             bundle_path.write_text(json.dumps(bundle_data))
             return mock_result
 
         mock_run.side_effect = create_bundle
 
-        monkeypatch.setattr(sys, 'argv', [
-            'jmo', 'attest', str(findings_path),
-            '--sign',
-            '--scan-args', str(scan_args_path)
-        ])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "jmo",
+                "attest",
+                str(findings_path),
+                "--sign",
+                "--scan-args",
+                str(scan_args_path),
+            ],
+        )
         args = parse_args()
 
         exit_code = cmd_attest(args)
@@ -518,32 +556,45 @@ class TestCLISigningIntegration:
         subject_path.write_text(json.dumps({"findings": []}))
 
         attestation_path = tmp_path / "findings.json.att.json"
-        attestation_path.write_text(json.dumps({
-            "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{"name": "findings.json", "digest": {"sha256": "abc123"}}],
-            "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
-        }))
+        attestation_path.write_text(
+            json.dumps(
+                {
+                    "_type": "https://in-toto.io/Statement/v0.1",
+                    "subject": [
+                        {"name": "findings.json", "digest": {"sha256": "abc123"}}
+                    ],
+                    "predicateType": "https://slsa.dev/provenance/v1",
+                    "predicate": {},
+                }
+            )
+        )
 
         # Mock verification result
         mock_verify.return_value = VerificationResult(
             is_valid=True,
             subject_name="findings.json",
-            rekor_entry="https://rekor.sigstore.dev/api/v1/log/entries/12345"
+            rekor_entry="https://rekor.sigstore.dev/api/v1/log/entries/12345",
         )
 
-        monkeypatch.setattr(sys, 'argv', [
-            'jmo', 'verify', str(subject_path),
-            '--attestation', str(attestation_path),
-            '--rekor-check'
-        ])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "jmo",
+                "verify",
+                str(subject_path),
+                "--attestation",
+                str(attestation_path),
+                "--rekor-check",
+            ],
+        )
         args = parse_args()
 
         exit_code = cmd_verify(args)
         assert exit_code == 0
         # Verify that check_rekor=True was passed
         call_kwargs = mock_verify.call_args[1]
-        assert call_kwargs.get('check_rekor') is True
+        assert call_kwargs.get("check_rekor") is True
 
 
 class TestSLSALevel2Requirements:
@@ -570,9 +621,9 @@ class TestSLSALevel2Requirements:
             "mediaType": "application/vnd.dev.sigstore.bundle+json;version=0.3",
             "verificationMaterial": {
                 "certificate": "base64-cert",
-                "tlogEntries": [{"logIndex": "12345"}]
+                "tlogEntries": [{"logIndex": "12345"}],
             },
-            "messageSignature": {"signature": "base64-sig"}
+            "messageSignature": {"signature": "base64-sig"},
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -601,7 +652,7 @@ class TestSLSALevel2Requirements:
             findings_path=findings_path,
             profile="balanced",
             tools=["trivy"],
-            targets=["test-repo"]
+            targets=["test-repo"],
         )
 
         # Check that provenance metadata includes SLSA level

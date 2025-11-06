@@ -3036,6 +3036,8 @@ def get_compliance_trend(
         "insights": insights,
         "summary_stats": summary_stats,
     }
+
+
 """
 Attestation storage functions for history_db.py.
 
@@ -3078,10 +3080,12 @@ def migrate_add_attestations_table():
     cursor = conn.cursor()
 
     # Check if attestations table exists
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='attestations'
-    """)
+    """
+    )
 
     if cursor.fetchone():
         logger.info("Attestations table already exists, skipping migration")
@@ -3104,7 +3108,7 @@ def store_attestation(
     signature_path: Optional[str] = None,
     certificate_path: Optional[str] = None,
     rekor_entry: Optional[str] = None,
-    rekor_published: bool = False
+    rekor_published: bool = False,
 ) -> None:
     """Store attestation in database.
 
@@ -3125,21 +3129,24 @@ def store_attestation(
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT OR REPLACE INTO attestations (
             scan_id, attestation_json, signature_path, certificate_path,
             rekor_entry, rekor_published, created_at, slsa_level
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        scan_id,
-        json.dumps(attestation),
-        signature_path,
-        certificate_path,
-        rekor_entry,
-        1 if rekor_published else 0,
-        int(time.time()),
-        2  # SLSA Level 2 for v1.0.0
-    ))
+    """,
+        (
+            scan_id,
+            json.dumps(attestation),
+            signature_path,
+            certificate_path,
+            rekor_entry,
+            1 if rekor_published else 0,
+            int(time.time()),
+            2,  # SLSA Level 2 for v1.0.0
+        ),
+    )
 
     conn.commit()
     logger.info(f"Attestation stored for scan {scan_id}")
@@ -3162,12 +3169,15 @@ def load_attestation(scan_id: str) -> Optional[Dict[str, Any]]:
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT attestation_json, signature_path, certificate_path,
                rekor_entry, rekor_published, created_at, slsa_level
         FROM attestations
         WHERE scan_id = ?
-    """, (scan_id,))
+    """,
+        (scan_id,),
+    )
 
     row = cursor.fetchone()
     if not row:
@@ -3215,37 +3225,49 @@ def get_attestation_coverage(days: int = 30) -> Dict[str, Any]:
     since = int(time.time()) - (days * 86400)
 
     # Total scans in period
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*) FROM scans WHERE timestamp >= ?
-    """, (since,))
+    """,
+        (since,),
+    )
     total_scans = cursor.fetchone()[0]
 
     # Attested scans in period
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*)
         FROM attestations a
         JOIN scans s ON a.scan_id = s.id
         WHERE s.timestamp >= ?
-    """, (since,))
+    """,
+        (since,),
+    )
     attested_scans = cursor.fetchone()[0]
 
     # Rekor published rate
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT COUNT(*)
         FROM attestations a
         JOIN scans s ON a.scan_id = s.id
         WHERE s.timestamp >= ? AND a.rekor_published = 1
-    """, (since,))
+    """,
+        (since,),
+    )
     rekor_published = cursor.fetchone()[0]
 
     # Missing attestations (scan IDs)
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT s.id
         FROM scans s
         LEFT JOIN attestations a ON s.id = a.scan_id
         WHERE s.timestamp >= ? AND a.scan_id IS NULL
         ORDER BY s.timestamp DESC
-    """, (since,))
+    """,
+        (since,),
+    )
     missing_scan_ids = [row[0] for row in cursor.fetchall()]
 
     return {
@@ -3253,8 +3275,12 @@ def get_attestation_coverage(days: int = 30) -> Dict[str, Any]:
         "total_scans": total_scans,
         "attested_scans": attested_scans,
         "missing_scans": total_scans - attested_scans,
-        "coverage_percentage": (attested_scans / total_scans * 100) if total_scans > 0 else 0,
+        "coverage_percentage": (
+            (attested_scans / total_scans * 100) if total_scans > 0 else 0
+        ),
         "rekor_published": rekor_published,
-        "rekor_rate": (rekor_published / attested_scans * 100) if attested_scans > 0 else 0,
+        "rekor_rate": (
+            (rekor_published / attested_scans * 100) if attested_scans > 0 else 0
+        ),
         "missing_scan_ids": missing_scan_ids,
     }

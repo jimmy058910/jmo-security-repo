@@ -921,6 +921,7 @@ outputs:
 
     # Mock yaml as None (simulating ImportError)
     import scripts.core.config
+
     original_yaml = scripts.core.config.yaml
     scripts.core.config.yaml = None
 
@@ -928,7 +929,15 @@ outputs:
         config = load_config(str(config_file))
 
         # Should return default Config when yaml unavailable
-        assert config.tools == ["trufflehog", "semgrep", "syft", "trivy", "checkov", "hadolint", "zap"]
+        assert config.tools == [
+            "trufflehog",
+            "semgrep",
+            "syft",
+            "trivy",
+            "checkov",
+            "hadolint",
+            "zap",
+        ]
         assert config.outputs == ["json", "md", "yaml", "html"]
     finally:
         scripts.core.config.yaml = original_yaml

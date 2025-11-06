@@ -184,7 +184,7 @@ class TestScanMetadataCapture:
             tools=["trivy", "semgrep"],
             repos=["repo1"],
             threads=4,
-            timeout=600
+            timeout=600,
         )
 
         assert metadata["profile_name"] == "balanced"
@@ -201,7 +201,7 @@ class TestScanMetadataCapture:
         metadata = capture.from_scan_args(
             repos=["repo1", "repo2"],
             images=["nginx:latest"],
-            urls=["https://example.com"]
+            urls=["https://example.com"],
         )
 
         assert metadata["repos"] == ["repo1", "repo2"]
@@ -234,12 +234,15 @@ class TestScanMetadataCapture:
 
         capture = MetadataCapture()
 
-        with patch.dict("os.environ", {
-            "GITHUB_ACTIONS": "true",
-            "GITHUB_REPOSITORY": "owner/repo",
-            "GITHUB_SHA": "commit123",
-            "GITHUB_REF": "refs/heads/main"
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "GITHUB_ACTIONS": "true",
+                "GITHUB_REPOSITORY": "owner/repo",
+                "GITHUB_SHA": "commit123",
+                "GITHUB_REF": "refs/heads/main",
+            },
+        ):
             metadata = capture.capture_ci_metadata()
 
             assert metadata["ci_provider"] == "github"
@@ -253,9 +256,7 @@ class TestScanMetadataCapture:
 
         capture = MetadataCapture()
         metadata = capture.from_scan_args(
-            profile="fast",
-            tools=["trivy"],
-            repos=["repo1"]
+            profile="fast", tools=["trivy"], repos=["repo1"]
         )
 
         # Should be JSON serializable
@@ -307,7 +308,7 @@ class TestCIModeIntegration:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Should generate valid attestation
@@ -341,7 +342,7 @@ class TestCIModeIntegration:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
         # Save attestation manually
         attestation_path.write_text(json.dumps(statement, indent=2))
@@ -352,8 +353,8 @@ class TestCIModeIntegration:
                 "messageSignature": {"signature": "sig123"},
                 "verificationMaterial": {
                     "certificate": "cert123",
-                    "tlogEntries": [{"logIndex": "12345"}]
-                }
+                    "tlogEntries": [{"logIndex": "12345"}],
+                },
             }
             bundle_path.write_text(json.dumps(bundle_data))
             return Mock(returncode=0, stderr="")
@@ -374,7 +375,9 @@ class TestCIModeIntegration:
         from scripts.core.attestation.signer import SigstoreSigner
 
         attestation_path = tmp_path / "test.att.json"
-        attestation_path.write_text(json.dumps({"_type": "https://in-toto.io/Statement/v0.1"}))
+        attestation_path.write_text(
+            json.dumps({"_type": "https://in-toto.io/Statement/v0.1"})
+        )
 
         with patch("subprocess.run") as mock_run:
             # Simulate signing failure
@@ -398,7 +401,7 @@ class TestCIModeIntegration:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         attestation_path_str = str(findings_path) + ".att.json"
@@ -428,7 +431,7 @@ class TestCIModeIntegration:
             profile="balanced",
             tools=["trivy", "semgrep"],
             targets=["repo1", "repo2"],
-            threads=4
+            threads=4,
         )
 
         # Should include invocation parameters
@@ -444,11 +447,7 @@ class TestCIModeIntegration:
         from scripts.core.attestation import ProvenanceGenerator
 
         findings_path = tmp_path / "findings.json"
-        findings = {
-            "findings": [
-                {"severity": "HIGH", "ruleId": "TEST-001"}
-            ]
-        }
+        findings = {"findings": [{"severity": "HIGH", "ruleId": "TEST-001"}]}
         findings_path.write_text(json.dumps(findings))
 
         # Generate attestation
@@ -457,7 +456,7 @@ class TestCIModeIntegration:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Attestation should be generated successfully
@@ -524,11 +523,7 @@ class TestCICDErrorHandling:
 
         # Invalid inputs should not crash
         try:
-            metadata = capture.from_scan_args(
-                profile=None,
-                tools=None,
-                repos=None
-            )
+            metadata = capture.from_scan_args(profile=None, tools=None, repos=None)
             assert isinstance(metadata, dict)
         except Exception:
             pytest.fail("Should handle invalid metadata gracefully")
@@ -540,7 +535,9 @@ class TestCICDErrorHandling:
         signer = SigstoreSigner()
 
         attestation_path = tmp_path / "test.att.json"
-        attestation_path.write_text(json.dumps({"_type": "https://in-toto.io/Statement/v0.1"}))
+        attestation_path.write_text(
+            json.dumps({"_type": "https://in-toto.io/Statement/v0.1"})
+        )
 
         with patch("subprocess.run") as mock_run:
             # Simulate sigstore CLI failure
@@ -560,7 +557,9 @@ class TestCICDErrorHandling:
             mock_get.side_effect = Exception("Timeout")
 
             with pytest.raises(Exception):
-                signer.verify_rekor_entry("https://rekor.sigstore.dev/api/v1/log/entries/123")
+                signer.verify_rekor_entry(
+                    "https://rekor.sigstore.dev/api/v1/log/entries/123"
+                )
 
     def test_partial_git_context_fills_defaults(self):
         """Test partial Git context uses defaults for missing data."""
@@ -605,12 +604,14 @@ class TestCICDPerformance:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
         elapsed = time.time() - start
 
         # Should be fast (<500ms for typical scan)
-        assert elapsed < 0.5, f"Attestation generation took {elapsed:.3f}s (expected <0.5s)"
+        assert (
+            elapsed < 0.5
+        ), f"Attestation generation took {elapsed:.3f}s (expected <0.5s)"
 
     def test_ci_mode_overhead_minimal(self, tmp_path):
         """Test CI mode with attestation adds minimal overhead."""

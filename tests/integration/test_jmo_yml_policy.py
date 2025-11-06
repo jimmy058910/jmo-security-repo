@@ -72,7 +72,9 @@ def test_jmo_yml_fast_profile_policy(jmo_yml_path, tmp_path):
 
     # Create modified jmo.yml with fast profile as default
     jmo_content = jmo_yml_path.read_text(encoding="utf-8")
-    jmo_content = jmo_content.replace("default_profile: balanced", "default_profile: fast")
+    jmo_content = jmo_content.replace(
+        "default_profile: balanced", "default_profile: fast"
+    )
 
     modified_yml = tmp_path / "jmo_fast.yml"
     modified_yml.write_text(jmo_content, encoding="utf-8")
@@ -90,7 +92,9 @@ def test_jmo_yml_deep_profile_policy(jmo_yml_path, tmp_path):
 
     # Create modified jmo.yml with deep profile as default
     jmo_content = jmo_yml_path.read_text(encoding="utf-8")
-    jmo_content = jmo_content.replace("default_profile: balanced", "default_profile: deep")
+    jmo_content = jmo_content.replace(
+        "default_profile: balanced", "default_profile: deep"
+    )
 
     modified_yml = tmp_path / "jmo_deep.yml"
     modified_yml.write_text(jmo_content, encoding="utf-8")
@@ -177,9 +181,12 @@ def test_jmo_yml_all_profiles_have_policy(jmo_yml_path):
     profiles = ["fast", "balanced", "deep"]
     for profile in profiles:
         assert profile in jmo_data["profiles"], f"Profile {profile} missing"
-        assert "policy" in jmo_data["profiles"][profile], f"Policy missing in {profile} profile"
-        assert "default_policies" in jmo_data["profiles"][profile]["policy"], \
-            f"default_policies missing in {profile} profile"
+        assert (
+            "policy" in jmo_data["profiles"][profile]
+        ), f"Policy missing in {profile} profile"
+        assert (
+            "default_policies" in jmo_data["profiles"][profile]["policy"]
+        ), f"default_policies missing in {profile} profile"
 
 
 # ========== COVERAGE TARGET: ≥90% ====================

@@ -35,17 +35,10 @@ class TestProvenanceModels:
         from scripts.core.attestation.models import Subject, Digest
 
         # Create digest with SHA-256, SHA-384, SHA-512
-        digest = Digest(
-            sha256="abc123...",
-            sha384="def456...",
-            sha512="ghi789..."
-        )
+        digest = Digest(sha256="abc123...", sha384="def456...", sha512="ghi789...")
 
         # Create subject
-        subject = Subject(
-            name="findings.json",
-            digest=digest
-        )
+        subject = Subject(name="findings.json", digest=digest)
 
         assert subject.name == "findings.json"
         assert subject.digest.sha256 == "abc123..."
@@ -61,13 +54,10 @@ class TestProvenanceModels:
             externalParameters={
                 "profile": "balanced",
                 "targets": ["repo1"],
-                "tools": ["trivy", "semgrep"]
+                "tools": ["trivy", "semgrep"],
             },
-            internalParameters={
-                "version": "1.0.0",
-                "threads": 4
-            },
-            resolvedDependencies=[]
+            internalParameters={"version": "1.0.0", "threads": 4},
+            resolvedDependencies=[],
         )
 
         assert build_def.buildType == "https://jmotools.com/jmo-scan/v1"
@@ -80,13 +70,13 @@ class TestProvenanceModels:
 
         builder = Builder(
             id="https://github.com/jimmy058910/jmo-security-repo",
-            version={"jmo": "1.0.0", "python": "3.11.5"}
+            version={"jmo": "1.0.0", "python": "3.11.5"},
         )
 
         metadata = Metadata(
             invocationId="uuid-abc123",
             startedOn="2025-01-03T10:00:00Z",
-            finishedOn="2025-01-03T10:15:00Z"
+            finishedOn="2025-01-03T10:15:00Z",
         )
 
         run_details = RunDetails(builder=builder, metadata=metadata)
@@ -97,20 +87,18 @@ class TestProvenanceModels:
     def test_intoto_statement_model(self):
         """Test complete in-toto statement structure."""
         from scripts.core.attestation.models import (
-            InTotoStatement, Subject, Digest, SLSAProvenance
+            InTotoStatement,
+            Subject,
+            Digest,
+            SLSAProvenance,
         )
 
         # Create minimal statement
         statement = InTotoStatement(
             _type="https://in-toto.io/Statement/v0.1",
-            subject=[
-                Subject(
-                    name="findings.json",
-                    digest=Digest(sha256="abc123")
-                )
-            ],
+            subject=[Subject(name="findings.json", digest=Digest(sha256="abc123"))],
             predicateType="https://slsa.dev/provenance/v1",
-            predicate={}
+            predicate={},
         )
 
         assert statement._type == "https://in-toto.io/Statement/v0.1"
@@ -161,7 +149,7 @@ class TestHashGeneration:
         """Test generating all three hash algorithms."""
         from scripts.core.attestation.provenance import ProvenanceGenerator
 
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             f.write('{"findings": []}')
             findings_path = Path(f.name)
 
@@ -220,15 +208,11 @@ class TestProvenanceGeneration:
                 "jmo_version": "1.0.0",
                 "profile": "balanced",
                 "tools": ["trivy", "semgrep"],
-                "target_count": 1
+                "target_count": 1,
             },
             "findings": [
-                {
-                    "id": "fingerprint-abc123",
-                    "severity": "HIGH",
-                    "tool": "trivy"
-                }
-            ]
+                {"id": "fingerprint-abc123", "severity": "HIGH", "tool": "trivy"}
+            ],
         }
 
         findings_path = tmp_path / "findings.json"
@@ -244,7 +228,7 @@ class TestProvenanceGeneration:
             findings_path=sample_findings_file,
             profile="balanced",
             tools=["trivy", "semgrep"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Validate structure
@@ -262,7 +246,7 @@ class TestProvenanceGeneration:
             findings_path=sample_findings_file,
             profile="balanced",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         subjects = provenance["subject"]
@@ -279,7 +263,7 @@ class TestProvenanceGeneration:
             findings_path=sample_findings_file,
             profile="balanced",
             tools=["trivy", "semgrep"],
-            targets=["repo1", "image1"]
+            targets=["repo1", "image1"],
         )
 
         build_def = provenance["predicate"]["buildDefinition"]
@@ -303,7 +287,7 @@ class TestProvenanceGeneration:
             findings_path=sample_findings_file,
             profile="balanced",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         run_details = provenance["predicate"]["runDetails"]
@@ -329,7 +313,7 @@ class TestProvenanceGeneration:
             findings_path=sample_findings_file,
             profile="balanced",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Should serialize without errors
@@ -360,22 +344,20 @@ class TestSQLiteIntegration:
             "_type": "https://in-toto.io/Statement/v0.1",
             "subject": [],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
 
         scan_id = "scan-abc123"
 
         # Store attestation
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
             # Mock table exists (skip migration)
             mock_cursor.fetchone.return_value = ("attestations",)
             mock_conn.return_value.cursor.return_value = mock_cursor
 
             store_attestation(
-                scan_id=scan_id,
-                attestation=attestation,
-                rekor_published=False
+                scan_id=scan_id, attestation=attestation, rekor_published=False
             )
 
             # Verify INSERT was called (will be called twice: once for SELECT, once for INSERT)
@@ -390,7 +372,7 @@ class TestSQLiteIntegration:
 
         scan_id = "scan-abc123"
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             # Mock database response
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = (
@@ -398,9 +380,9 @@ class TestSQLiteIntegration:
                 None,  # signature_path
                 None,  # certificate_path
                 None,  # rekor_entry
-                0,     # rekor_published
+                0,  # rekor_published
                 int(time.time()),  # created_at
-                2      # slsa_level
+                2,  # slsa_level
             )
             mock_conn.return_value.cursor.return_value = mock_cursor
 
@@ -421,7 +403,7 @@ class TestSQLiteIntegration:
         """Test loading non-existent attestation returns None."""
         from scripts.core.history_db import load_attestation
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
             mock_cursor.fetchone.return_value = None
             mock_conn.return_value.cursor.return_value = mock_cursor
@@ -434,17 +416,19 @@ class TestSQLiteIntegration:
         """Test attestation coverage calculation."""
         from scripts.core.history_db import get_attestation_coverage
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
 
             # Mock queries (total scans, attested scans, rekor published, missing)
             mock_cursor.fetchone.side_effect = [
                 (10,),  # total_scans
-                (7,),   # attested_scans
-                (5,)    # rekor_published
+                (7,),  # attested_scans
+                (5,),  # rekor_published
             ]
             mock_cursor.fetchall.return_value = [
-                ("scan-1",), ("scan-2",), ("scan-3",)  # missing_scan_ids
+                ("scan-1",),
+                ("scan-2",),
+                ("scan-3",),  # missing_scan_ids
             ]
 
             mock_conn.return_value.cursor.return_value = mock_cursor
@@ -468,7 +452,7 @@ class TestDatabaseMigration:
         """Test migration creates attestations table."""
         from scripts.core.history_db import migrate_add_attestations_table
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
 
             # Mock: table doesn't exist
@@ -484,7 +468,7 @@ class TestDatabaseMigration:
         """Test migration skips if table already exists."""
         from scripts.core.history_db import migrate_add_attestations_table
 
-        with patch('scripts.core.history_db.get_connection') as mock_conn:
+        with patch("scripts.core.history_db.get_connection") as mock_conn:
             mock_cursor = MagicMock()
 
             # Mock: table exists

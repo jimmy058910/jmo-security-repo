@@ -23,7 +23,11 @@ from scripts.core.reporters.sarif_reporter import write_sarif
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.suppress import filter_suppressed, load_suppressions
-from scripts.core.telemetry import send_event, bucket_findings, send_policy_evaluation_event
+from scripts.core.telemetry import (
+    send_event,
+    bucket_findings,
+    send_policy_evaluation_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +206,9 @@ def cmd_report(args, _log_fn) -> int:
         policy_names = args.policies
         _log_fn(args, "INFO", f"Using policies from CLI: {', '.join(policy_names)}")
     # 2. Config (includes env vars via load_config_with_env_overrides)
-    elif cfg.policy.enabled and cfg.policy.auto_evaluate and cfg.policy.default_policies:
+    elif (
+        cfg.policy.enabled and cfg.policy.auto_evaluate and cfg.policy.default_policies
+    ):
         policy_names = cfg.policy.default_policies
         _log_fn(args, "INFO", f"Using policies from config: {', '.join(policy_names)}")
     # 3. Skip if disabled
@@ -250,12 +256,18 @@ def cmd_report(args, _log_fn) -> int:
 
                 # Send policy evaluation telemetry event (privacy-preserving)
                 send_policy_evaluation_event(
-                    policy_names, policy_results, policy_duration_ms, cfg.__dict__, __version__
+                    policy_names,
+                    policy_results,
+                    policy_duration_ms,
+                    cfg.__dict__,
+                    __version__,
                 )
 
                 # Fail if violations and fail_on_violation=True (check both CLI and config)
                 cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
-                if failed > 0 and (cli_fail_on_violation or cfg.policy.fail_on_violation):
+                if failed > 0 and (
+                    cli_fail_on_violation or cfg.policy.fail_on_violation
+                ):
                     _log_fn(
                         args,
                         "ERROR",

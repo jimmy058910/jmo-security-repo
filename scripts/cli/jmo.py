@@ -1089,62 +1089,49 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    policy_subparsers = policy_parser.add_subparsers(dest="policy_command", required=True)
+    policy_subparsers = policy_parser.add_subparsers(
+        dest="policy_command", required=True
+    )
 
     # LIST
     list_parser = policy_subparsers.add_parser(
-        "list",
-        help="List all available policies"
+        "list", help="List all available policies"
     )
 
     # VALIDATE
     validate_parser = policy_subparsers.add_parser(
-        "validate",
-        help="Validate policy syntax"
+        "validate", help="Validate policy syntax"
     )
-    validate_parser.add_argument(
-        "policy",
-        help="Policy name (without .rego extension)"
-    )
+    validate_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # TEST
     test_parser = policy_subparsers.add_parser(
-        "test",
-        help="Test policy with findings file"
+        "test", help="Test policy with findings file"
     )
-    test_parser.add_argument(
-        "policy",
-        help="Policy name (without .rego extension)"
-    )
+    test_parser.add_argument("policy", help="Policy name (without .rego extension)")
     test_parser.add_argument(
         "--findings-file",
         required=True,
-        help="Path to JSON file with findings (e.g., results/summaries/findings.json)"
+        help="Path to JSON file with findings (e.g., results/summaries/findings.json)",
     )
 
     # SHOW
     show_parser = policy_subparsers.add_parser(
-        "show",
-        help="Display policy metadata and content"
+        "show", help="Display policy metadata and content"
     )
-    show_parser.add_argument(
-        "policy",
-        help="Policy name (without .rego extension)"
-    )
+    show_parser.add_argument("policy", help="Policy name (without .rego extension)")
 
     # INSTALL
     install_parser = policy_subparsers.add_parser(
-        "install",
-        help="Install builtin policy to user directory"
+        "install", help="Install builtin policy to user directory"
     )
     install_parser.add_argument(
-        "policy",
-        help="Policy name to install (without .rego extension)"
+        "policy", help="Policy name to install (without .rego extension)"
     )
     install_parser.add_argument(
         "--force",
         action="store_true",
-        help="Overwrite existing policy if already installed"
+        help="Overwrite existing policy if already installed",
     )
 
     return policy_parser

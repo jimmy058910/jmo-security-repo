@@ -69,7 +69,9 @@ def sample_findings_no_violations():
     }
 
 
-def test_ci_mode_fails_on_policy_violation_with_flag(tmp_path, sample_findings_with_violations):
+def test_ci_mode_fails_on_policy_violation_with_flag(
+    tmp_path, sample_findings_with_violations
+):
     """Test CI mode fails when policy violations found and --fail-on-policy-violation set."""
     from scripts.cli.report_orchestrator import cmd_report
     from scripts.core.policy_engine import PolicyResult
@@ -128,7 +130,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should exit 1 due to --fail-on-policy-violation flag
@@ -196,14 +200,18 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should exit 0 (warn only, no failure)
     assert result == 0
 
 
-def test_ci_mode_config_fail_on_violation_works(tmp_path, sample_findings_with_violations):
+def test_ci_mode_config_fail_on_violation_works(
+    tmp_path, sample_findings_with_violations
+):
     """Test CI mode respects config fail_on_violation=true."""
     from scripts.cli.report_orchestrator import cmd_report
     from scripts.core.policy_engine import PolicyResult
@@ -262,7 +270,9 @@ outputs:
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should exit 1 due to config fail_on_violation=true
@@ -319,12 +329,16 @@ outputs:
     # Mock policy evaluation to return success
     with patch("scripts.core.reporters.policy_reporter.evaluate_policies") as mock_eval:
         mock_eval.return_value = {
-            "zero-secrets": PolicyResult(policy_name="zero-secrets", passed=True, violations=[])
+            "zero-secrets": PolicyResult(
+                policy_name="zero-secrets", passed=True, violations=[]
+            )
         }
 
         with patch("scripts.core.reporters.policy_reporter.write_policy_report"):
             with patch("scripts.core.reporters.policy_reporter.write_policy_json"):
-                with patch("scripts.core.reporters.policy_reporter.write_policy_summary_md"):
+                with patch(
+                    "scripts.core.reporters.policy_reporter.write_policy_summary_md"
+                ):
                     result = cmd_report(args, mock_log_fn)
 
     # Should exit 0 (all policies passed)

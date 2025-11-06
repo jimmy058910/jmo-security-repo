@@ -46,7 +46,7 @@ class TestProvenanceExistence:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # SLSA Level 2: Provenance MUST exist
@@ -67,7 +67,7 @@ class TestProvenanceExistence:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Should include SLSA version
@@ -90,7 +90,7 @@ class TestProvenanceExistence:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # SLSA Level 2: Subject digest MUST be present
@@ -121,7 +121,7 @@ class TestProvenanceExistence:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Subject digest MUST match file
@@ -142,7 +142,7 @@ class TestProvenanceExistence:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Save provenance
@@ -174,7 +174,7 @@ class TestBuildServiceRequirements:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # SLSA Level 2: Builder ID MUST be present
@@ -198,7 +198,7 @@ class TestBuildServiceRequirements:
                 findings_path=findings_path,
                 profile="fast",
                 tools=["trivy"],
-                targets=["repo1"]
+                targets=["repo1"],
             )
 
             predicate = statement.get("predicate", {})
@@ -222,7 +222,7 @@ class TestBuildServiceRequirements:
                 findings_path=findings_path,
                 profile="fast",
                 tools=["trivy"],
-                targets=["repo1"]
+                targets=["repo1"],
             )
 
             predicate = statement.get("predicate", {})
@@ -245,7 +245,7 @@ class TestBuildServiceRequirements:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         predicate = statement.get("predicate", {})
@@ -267,7 +267,7 @@ class TestBuildServiceRequirements:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         predicate = statement.get("predicate", {})
@@ -300,7 +300,7 @@ class TestNonFalsifiableProvenance:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Save to file
@@ -317,7 +317,7 @@ class TestNonFalsifiableProvenance:
         bundle_path = tmp_path / "findings.json.att.json.sigstore.json"
         bundle_data = {
             "messageSignature": {"signature": "sig123"},
-            "verificationMaterial": {"certificate": "cert123", "tlogEntries": []}
+            "verificationMaterial": {"certificate": "cert123", "tlogEntries": []},
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -349,8 +349,8 @@ class TestNonFalsifiableProvenance:
             "messageSignature": {"signature": "sig123"},
             "verificationMaterial": {
                 "certificate": "base64-certificate-data",
-                "tlogEntries": []
-            }
+                "tlogEntries": [],
+            },
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -380,8 +380,8 @@ class TestNonFalsifiableProvenance:
             "messageSignature": {"signature": "sig123"},
             "verificationMaterial": {
                 "certificate": "cert123",
-                "tlogEntries": [{"logIndex": "12345", "logID": "rekor-id"}]
-            }
+                "tlogEntries": [{"logIndex": "12345", "logID": "rekor-id"}],
+            },
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -404,14 +404,16 @@ class TestNonFalsifiableProvenance:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {
-                    "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+            "subject": [
+                {
+                    "name": "findings.json",
+                    "digest": {
+                        "sha256": hashlib.sha256(findings_content.encode()).hexdigest()
+                    },
                 }
-            }],
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
@@ -427,7 +429,7 @@ class TestNonFalsifiableProvenance:
         result = verifier.verify(
             subject_path=str(subject_path),
             attestation_path=str(attestation_path),
-            signature_path=str(bundle_path)
+            signature_path=str(bundle_path),
         )
 
         # SLSA Level 2: Signature MUST be verifiable
@@ -446,19 +448,17 @@ class TestNonFalsifiableProvenance:
         attestation_path = tmp_path / "findings.json.att.json"
         attestation_data = {
             "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{
-                "name": "findings.json",
-                "digest": {"sha256": "0" * 64}  # Wrong hash
-            }],
+            "subject": [
+                {"name": "findings.json", "digest": {"sha256": "0" * 64}}  # Wrong hash
+            ],
             "predicateType": "https://slsa.dev/provenance/v1",
-            "predicate": {}
+            "predicate": {},
         }
         attestation_path.write_text(json.dumps(attestation_data))
 
         verifier = AttestationVerifier()
         result = verifier.verify(
-            subject_path=str(subject_path),
-            attestation_path=str(attestation_path)
+            subject_path=str(subject_path), attestation_path=str(attestation_path)
         )
 
         # SLSA Level 2: Tampering MUST be detected
@@ -486,7 +486,7 @@ class TestBuildParametersCaptured:
             findings_path=findings_path,
             profile="balanced",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # SLSA Level 2: Build parameters MUST be captured
@@ -510,7 +510,7 @@ class TestBuildParametersCaptured:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy", "semgrep", "trufflehog"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         predicate = statement.get("predicate", {})
@@ -535,7 +535,7 @@ class TestBuildParametersCaptured:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1", "repo2", "repo3"]
+            targets=["repo1", "repo2", "repo3"],
         )
 
         predicate = statement.get("predicate", {})
@@ -568,11 +568,14 @@ class TestBuildParametersCaptured:
 
         capture = MetadataCapture()
 
-        with patch.dict("os.environ", {
-            "GITHUB_ACTIONS": "true",
-            "GITHUB_REPOSITORY": "owner/repo",
-            "GITHUB_SHA": "abc123"
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "GITHUB_ACTIONS": "true",
+                "GITHUB_REPOSITORY": "owner/repo",
+                "GITHUB_SHA": "abc123",
+            },
+        ):
             ci_metadata = capture.capture_ci_metadata()
 
             # SLSA Level 2: CI context SHOULD be captured
@@ -601,16 +604,11 @@ class TestSLSAComplianceChecker:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # SLSA Level 2 required fields
-        required_fields = [
-            "_type",
-            "subject",
-            "predicateType",
-            "predicate"
-        ]
+        required_fields = ["_type", "subject", "predicateType", "predicate"]
 
         for field in required_fields:
             assert field in statement, f"Missing required field: {field}"
@@ -627,7 +625,7 @@ class TestSLSAComplianceChecker:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         predicate = statement.get("predicate", {})
@@ -648,7 +646,7 @@ class TestSLSAComplianceChecker:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         predicate = statement.get("predicate", {})
@@ -674,7 +672,7 @@ class TestSLSAComplianceChecker:
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         subjects = statement.get("subject", [])
@@ -688,7 +686,11 @@ class TestSLSAComplianceChecker:
     @patch("subprocess.run")
     def test_full_slsa_level_2_compliance(self, mock_run, tmp_path):
         """Test full SLSA Level 2 compliance workflow."""
-        from scripts.core.attestation import ProvenanceGenerator, SigstoreSigner, AttestationVerifier
+        from scripts.core.attestation import (
+            ProvenanceGenerator,
+            SigstoreSigner,
+            AttestationVerifier,
+        )
 
         # 1. Generate provenance
         findings_content = '{"findings": []}'
@@ -700,7 +702,7 @@ class TestSLSAComplianceChecker:
             findings_path=findings_path,
             profile="balanced",
             tools=["trivy", "semgrep"],
-            targets=["repo1"]
+            targets=["repo1"],
         )
 
         # Save provenance
@@ -718,8 +720,8 @@ class TestSLSAComplianceChecker:
             "messageSignature": {"signature": "sig123"},
             "verificationMaterial": {
                 "certificate": "cert123",
-                "tlogEntries": [{"logIndex": "12345"}]
-            }
+                "tlogEntries": [{"logIndex": "12345"}],
+            },
         }
         bundle_path.write_text(json.dumps(bundle_data))
 
@@ -731,7 +733,7 @@ class TestSLSAComplianceChecker:
         verify_result = verifier.verify(
             subject_path=str(findings_path),
             attestation_path=str(attestation_path),
-            signature_path=str(bundle_path)
+            signature_path=str(bundle_path),
         )
 
         # SLSA Level 2 COMPLIANCE CHECKLIST:

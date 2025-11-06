@@ -32,6 +32,7 @@ class TestSigstoreDependencies:
         """Test that sigstore library can be imported."""
         try:
             import sigstore
+
             assert sigstore is not None
         except ImportError:
             pytest.fail("sigstore library not installed - run: pip install sigstore")
@@ -39,6 +40,7 @@ class TestSigstoreDependencies:
     def test_sigstore_version(self):
         """Test that sigstore version is >= 2.0."""
         import sigstore
+
         # Check version is present
         assert hasattr(sigstore, "__version__")
 
@@ -57,9 +59,12 @@ class TestCryptographyDependencies:
         """Test that cryptography library can be imported."""
         try:
             import cryptography
+
             assert cryptography is not None
         except ImportError:
-            pytest.fail("cryptography library not installed - run: pip install cryptography")
+            pytest.fail(
+                "cryptography library not installed - run: pip install cryptography"
+            )
 
     def test_hash_algorithms_available(self):
         """Test that SHA-256, SHA-384, SHA-512 are available."""
@@ -106,10 +111,7 @@ class TestCosignBinary:
 
         # Run cosign version
         result = subprocess.run(
-            [cosign_cmd, "version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            [cosign_cmd, "version"], capture_output=True, text=True, timeout=5
         )
 
         assert result.returncode == 0, f"cosign version check failed: {result.stderr}"
@@ -158,11 +160,9 @@ class TestAttestationConfiguration:
                 "sigstore": {
                     "oidc_provider": "detect",
                     "fulcio_url": "https://fulcio.sigstore.dev",
-                    "rekor_url": "https://rekor.sigstore.dev"
+                    "rekor_url": "https://rekor.sigstore.dev",
                 },
-                "storage": {
-                    "attestation_dir": "results/attestations"
-                }
+                "storage": {"attestation_dir": "results/attestations"},
             }
         }
 
@@ -191,6 +191,7 @@ class TestDependencyGracefulDegradation:
 
         try:
             import sigstore
+
             available = True
         except ImportError:
             available = False
@@ -198,6 +199,7 @@ class TestDependencyGracefulDegradation:
         if not available:
             # Should log warning but not fail
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning("sigstore library not available - attestation disabled")
 
@@ -217,10 +219,9 @@ class TestDependencyGracefulDegradation:
 @pytest.fixture
 def mock_attestation_env():
     """Mock environment for attestation testing."""
-    with patch.dict(os.environ, {
-        "GITHUB_TOKEN": "ghp_test123",
-        "COSIGN_EXPERIMENTAL": "1"
-    }):
+    with patch.dict(
+        os.environ, {"GITHUB_TOKEN": "ghp_test123", "COSIGN_EXPERIMENTAL": "1"}
+    ):
         yield
 
 
@@ -233,6 +234,7 @@ class TestAttestationEnvironment:
         try:
             import sigstore
             import cryptography
+
             sigstore_available = True
         except ImportError:
             sigstore_available = False
