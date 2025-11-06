@@ -1094,9 +1094,7 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     )
 
     # LIST
-    list_parser = policy_subparsers.add_parser(
-        "list", help="List all available policies"
-    )
+    policy_subparsers.add_parser("list", help="List all available policies")
 
     # VALIDATE
     validate_parser = policy_subparsers.add_parser(

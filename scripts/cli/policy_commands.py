@@ -19,7 +19,6 @@ import argparse
 import json
 import logging
 import shutil
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
