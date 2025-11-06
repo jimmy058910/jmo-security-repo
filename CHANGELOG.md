@@ -88,6 +88,12 @@ All notable changes to JMo Security will be documented in this file.
   - Wizard integration: Post-scan policy evaluation menu, interactive violation display, policy selection UI
   - CI/CD gating: `--fail-on-policy-violation` flag returns exit code 1 on violations (GitHub Actions, GitLab CI, Jenkins examples)
   - Custom policy support: User policies in `~/.jmo/policies/` auto-discovered, Rego v1 templates provided
+  - **Telemetry integration**: Privacy-preserving policy evaluation metrics (`send_policy_evaluation_event()`)
+    - Bucketed violation counts (0, 1-5, 5-20, 20-100, >100) - no exact counts
+    - Bucketed evaluation times (<50ms, 50-100ms, 100-500ms, >500ms) - no exact durations
+    - Policy names (built-in only), passed/failed counts - no PII, no finding details
+    - Opt-out via `JMO_TELEMETRY_DISABLE=1` or `telemetry.enabled: false` in jmo.yml
+    - Test coverage: 10 comprehensive tests for policy telemetry (47/47 total telemetry tests passing)
   - Test coverage: 48 tests passing (100%), 97% code coverage (policy_flow.py), integration tests for wizard/CI modes
   - Performance: 21.81ms average evaluation time (target: <100ms), all built-in policies ≤23.33ms
   - Documentation: [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md), [policies/README.md](policies/README.md), [docs/examples/policy-workflows.md](docs/examples/policy-workflows.md), [docs/examples/custom-policy-examples.md](docs/examples/custom-policy-examples.md)

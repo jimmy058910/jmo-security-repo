@@ -480,7 +480,8 @@ spec:
 2. **Test policy:**
 
    ```bash
-   jmo policy test my-custom-policy --findings-file test-findings.json
+   # Test with OPA eval (jmo policy test not yet available in v1.0.0)
+   opa eval -d ~/.jmo/policies/my-custom-policy.rego -i test-findings.json 'data.my_custom_policy'
    ```
 
 3. **Validate syntax:**
