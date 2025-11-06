@@ -1,6 +1,5 @@
 """Tests for Markdown diff reporter."""
 
-
 import pytest
 
 from scripts.core.diff_engine import DiffResult, DiffSource, ModifiedFinding
