@@ -16,4 +16,3 @@ Your codebase IS the memory. These skills help Claude analyze and reuse existing
 ## Usage
 
 Claude Code automatically discovers and uses these skills when relevant. No manual invocation needed.
-

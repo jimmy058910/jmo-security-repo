@@ -1,8 +1,6 @@
 # JMo's Security Audit Tool Suite
 
-<p align="center">
-   <img src="assets/jmo-logo.png" alt="JMo Security Audit Tool Suite" width="220" />
-</p>
+![JMo Security Audit Tool Suite](assets/jmo-logo.png)
 
 [![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)

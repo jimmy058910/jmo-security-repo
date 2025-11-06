@@ -90,6 +90,7 @@ query = f"SELECT * FROM users WHERE id = {user_id}"
 query = "SELECT * FROM users WHERE id = ?"
 cursor.execute(query, (user_id,))
 ```
+
 </details>
 ```
 
@@ -118,6 +119,7 @@ fi
 ### Configuration Options
 
 **Strict mode:** Block on CRITICAL only
+
 ```bash
 NEW_CRITICAL=$(jq '.statistics.new_by_severity.CRITICAL // 0' diff.json)
 if [ "$NEW_CRITICAL" -gt 0 ]; then
@@ -126,6 +128,7 @@ fi
 ```
 
 **Moderate mode:** Block on CRITICAL/HIGH
+
 ```bash
 NEW_COUNT=$(jq '(.statistics.new_by_severity.CRITICAL // 0) + (.statistics.new_by_severity.HIGH // 0)' diff.json)
 if [ "$NEW_COUNT" -gt 0 ]; then
@@ -134,6 +137,7 @@ fi
 ```
 
 **Relaxed mode:** Block only if net change is negative
+
 ```bash
 NET_CHANGE=$(jq '.statistics.net_change' diff.json)
 if [ "$NET_CHANGE" -gt 5 ]; then  # More than 5 new findings overall
@@ -157,12 +161,14 @@ fi
 ### Workflow
 
 **At Sprint Start:**
+
 ```bash
 # Scan and save baseline
 jmo scan --repo . --profile balanced --results-dir sprint-start/
 ```
 
 **At Sprint End:**
+
 ```bash
 # Scan current state
 jmo scan --repo . --profile balanced --results-dir sprint-end/
@@ -393,6 +399,7 @@ def test_no_new_critical_findings(security_baseline):
 **Cause:** Fingerprint IDs changed between scans (e.g., different tool versions)
 
 **Solution:**
+
 ```bash
 # Ensure same tool versions
 jmo scan --repo . --profile fast --tools trivy,semgrep --results-dir baseline/
@@ -408,6 +415,7 @@ jq '.id' current/summaries/findings.json | head -5
 **Cause:** Too many findings in diff report
 
 **Solution:**
+
 ```bash
 # Filter to CRITICAL/HIGH only
 jmo diff baseline/ current/ \
@@ -427,6 +435,7 @@ jmo diff baseline/ current/ \
 **Cause:** Tool vendors updated severity ratings or CWE mappings
 
 **Solution:**
+
 ```bash
 # Disable modification detection
 jmo diff baseline/ current/ \
@@ -446,6 +455,7 @@ jmo diff baseline/ current/ \
 **Cause:** Missing `security-events: write` permission
 
 **Solution:**
+
 ```yaml
 permissions:
   contents: read
@@ -457,6 +467,7 @@ permissions:
 **Cause:** Large result directories with many findings
 
 **Solution:**
+
 ```bash
 # Use --no-modifications for faster diffs
 jmo diff baseline/ current/ \
