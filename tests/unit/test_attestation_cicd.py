@@ -17,8 +17,7 @@ import json
 import os
 import pytest
 from pathlib import Path
-from unittest.mock import patch, Mock, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import patch, Mock
 
 
 # ============================================================================
@@ -364,7 +363,7 @@ class TestCIModeIntegration:
         # Sign in GitHub Actions environment
         with patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "CI": "true"}):
             signer = SigstoreSigner()
-            result = signer.sign(str(attestation_path))
+            signer.sign(str(attestation_path))
 
             # Should create bundle
             assert bundle_path.exists()
@@ -509,7 +508,7 @@ class TestCICDErrorHandling:
         """Test missing findings.json logs warning but doesn't fail."""
         from scripts.core.attestation.ci_detector import CIDetector
 
-        detector = CIDetector()
+        CIDetector()
 
         # Should handle gracefully if findings don't exist
         findings_path = tmp_path / "nonexistent.json"
@@ -600,7 +599,7 @@ class TestCICDPerformance:
         generator = ProvenanceGenerator()
 
         start = time.time()
-        statement = generator.generate(
+        generator.generate(
             findings_path=findings_path,
             profile="fast",
             tools=["trivy"],

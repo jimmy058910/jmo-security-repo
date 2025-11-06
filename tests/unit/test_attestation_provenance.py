@@ -21,8 +21,7 @@ import hashlib
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-from typing import Dict, Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -90,7 +89,6 @@ class TestProvenanceModels:
             InTotoStatement,
             Subject,
             Digest,
-            SLSAProvenance,
         )
 
         # Create minimal statement
@@ -337,7 +335,7 @@ class TestSQLiteIntegration:
 
     def test_store_attestation(self, test_db):
         """Test storing attestation in database."""
-        from scripts.core.history_db import store_attestation, get_connection
+        from scripts.core.history_db import store_attestation
 
         # Create test attestation
         attestation = {

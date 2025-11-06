@@ -20,7 +20,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, cast
 
 from scripts.core.policy_engine import PolicyEngine
 
@@ -344,7 +344,7 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
     shutil.copy2(policy_path, user_policy_path)
 
     print(f"✅ Installed policy '{policy_name}' to: {user_policy_path}")
-    print(f"\nYou can now customize the policy and use it with:")
+    print("\nYou can now customize the policy and use it with:")
     print(f"  jmo report --policy {policy_name}")
 
     return 0

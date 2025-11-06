@@ -19,8 +19,7 @@ Test Coverage:
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock, patch
 
 
 class TestSigstoreClientInitialization:
@@ -162,7 +161,6 @@ class TestOIDCTokenAcquisition:
     def test_oidc_token_acquisition_failure(self, mock_get):
         """Test handling OIDC token acquisition failure."""
         from scripts.core.attestation.signer import SigstoreSigner
-        from scripts.core.attestation.constants import ERROR_CODES
 
         signer = SigstoreSigner()
         with pytest.raises(Exception) as exc_info:
@@ -604,7 +602,6 @@ class TestSLSALevel2Requirements:
     def test_slsa_level_2_signed_provenance(self, mock_run, tmp_path):
         """Test that signed provenance meets SLSA Level 2."""
         from scripts.core.attestation.signer import SigstoreSigner
-        from scripts.core.attestation.constants import SLSA_LEVEL_2
 
         attestation_path = tmp_path / "test.att.json"
         attestation_path.write_text(json.dumps({"test": "attestation"}))
@@ -642,7 +639,6 @@ class TestSLSALevel2Requirements:
     def test_slsa_level_metadata_in_attestation(self, tmp_path):
         """Test that attestation includes SLSA level metadata."""
         from scripts.core.attestation.provenance import ProvenanceGenerator
-        from scripts.core.attestation.constants import SLSA_LEVEL_2
 
         findings_path = tmp_path / "findings.json"
         findings_path.write_text(json.dumps({"findings": []}))

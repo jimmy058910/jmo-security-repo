@@ -18,9 +18,8 @@ Coverage Target: 100% (8/8 tests)
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -149,7 +148,6 @@ class TestAttestationConfiguration:
 
     def test_attestation_config_schema(self):
         """Test that attestation config can be loaded from jmo.yml."""
-        import yaml
 
         # Example attestation config
         config = {
@@ -190,7 +188,7 @@ class TestDependencyGracefulDegradation:
         # For now, test the pattern we'll use
 
         try:
-            import sigstore
+            import sigstore  # noqa: F401
 
             available = True
         except ImportError:
@@ -232,15 +230,15 @@ class TestAttestationEnvironment:
         """Test that all components are available for attestation."""
         # Check all dependencies
         try:
-            import sigstore
-            import cryptography
+            import sigstore  # noqa: F401
+            import cryptography  # noqa: F401
 
             sigstore_available = True
         except ImportError:
             sigstore_available = False
 
         # Check OIDC token
-        github_token = os.getenv("GITHUB_TOKEN")
+        os.getenv("GITHUB_TOKEN")
 
         # Check cosign binary
         cosign_available = shutil.which("cosign") is not None

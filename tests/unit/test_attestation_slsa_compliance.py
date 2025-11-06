@@ -20,9 +20,6 @@ Test Coverage: 25 tests for SLSA Level 2 validation
 
 import json
 import hashlib
-import pytest
-from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import patch, Mock
 
 

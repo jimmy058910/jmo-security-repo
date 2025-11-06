@@ -5,7 +5,6 @@ Performance benchmarks for policy evaluation.
 Target: <100ms per policy evaluation
 """
 
-import json
 import shutil
 import time
 from pathlib import Path
@@ -140,7 +139,7 @@ def test_all_policies_performance(
     timings = {}
     for policy_name in builtin_policies:
         start = time.perf_counter()
-        results = evaluate_policies(
+        evaluate_policies(
             sample_findings_clean, [policy_name], builtin_dir, user_dir
         )
         elapsed_ms = (time.perf_counter() - start) * 1000

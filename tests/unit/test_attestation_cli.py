@@ -18,9 +18,8 @@ Coverage Target: 100% (45/45 tests)
 """
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from argparse import Namespace
 
 import pytest
@@ -546,7 +545,6 @@ class TestAttestationStorage:
     def test_store_attestation_in_history_db(self):
         """Test storing attestation in SQLite database."""
         from scripts.core.history_db import store_attestation
-        from unittest.mock import MagicMock, patch
 
         attestation = {
             "_type": "https://in-toto.io/Statement/v0.1",
@@ -573,7 +571,6 @@ class TestAttestationStorage:
     def test_load_attestation_from_history_db(self):
         """Test loading attestation from SQLite database."""
         from scripts.core.history_db import load_attestation
-        from unittest.mock import MagicMock, patch
         import time
 
         scan_id = "scan-abc123"
@@ -652,7 +649,6 @@ class TestErrorHandling:
     def test_attest_handles_permission_denied(self, tmp_path):
         """Test attest handles permission errors gracefully."""
         from scripts.cli.jmo import cmd_attest
-        import os
 
         # Create read-only file
         subject_path = tmp_path / "readonly.json"

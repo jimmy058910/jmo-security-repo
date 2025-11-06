@@ -13,7 +13,6 @@ This test suite verifies that:
 Target Coverage: ≥90%
 """
 
-import argparse
 import json
 from pathlib import Path
 import pytest

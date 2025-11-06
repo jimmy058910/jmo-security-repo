@@ -15,11 +15,10 @@ Test Coverage: 40 tests for robust verification and tamper detection
 import json
 import hashlib
 import pytest
-from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, Mock
 
-from scripts.core.attestation.tamper_detector import TamperSeverity, TamperIndicatorType
+from scripts.core.attestation.tamper_detector import TamperSeverity
 
 
 # ============================================================================
@@ -614,7 +613,7 @@ class TestBuilderConsistencyChecks:
         )
 
         # May warn about version change (LOW severity)
-        version_warnings = [ind for ind in indicators if ind.severity == "LOW"]
+        [ind for ind in indicators if ind.severity == "LOW"]
         # Version changes are expected, should be LOW or no warning
         assert all(
             ind.severity in ["LOW", "INFO"]

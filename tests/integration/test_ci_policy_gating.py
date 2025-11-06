@@ -14,7 +14,6 @@ Target Coverage: CI mode policy integration.
 
 import argparse
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest

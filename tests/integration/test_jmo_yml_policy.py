@@ -11,7 +11,6 @@ This test verifies that:
 Target Coverage: ≥90%
 """
 
-import os
 from pathlib import Path
 import pytest
 

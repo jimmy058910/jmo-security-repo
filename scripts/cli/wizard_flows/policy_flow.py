@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
 
-from scripts.core.policy_engine import PolicyEngine, PolicyResult, PolicyMetadata
+from scripts.core.policy_engine import PolicyEngine, PolicyResult
 
 logger = logging.getLogger(__name__)
 

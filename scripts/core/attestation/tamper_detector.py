@@ -15,7 +15,6 @@ Used by AttestationVerifier to detect advanced supply chain attacks.
 
 import json
 import logging
-import hashlib
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
@@ -176,7 +175,6 @@ class TamperDetector:
         run_details = predicate.get("runDetails", {})
         metadata = run_details.get("metadata", {})
 
-        invocation_id = metadata.get("invocationId")
         started_on = metadata.get("startedOn")
         finished_on = metadata.get("finishedOn")
 
