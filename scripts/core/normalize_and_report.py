@@ -171,6 +171,13 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         # Unexpected enrichment failure (e.g., EPSS/KEV API errors)
         logger.debug(f"Unexpected error during priority enrichment: {e}")
 
+    # Cross-tool deduplication clustering (v1.0.0 Feature #4 - Phase 2)
+    try:
+        deduped = _cluster_cross_tool_duplicates(deduped)
+    except Exception as e:
+        # Best-effort clustering - log but continue with unfiltered results
+        logger.warning(f"Cross-tool clustering failed, continuing with Phase 1 deduplication: {e}")
+
     return deduped
 
 
@@ -445,6 +452,67 @@ def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:
                 "kev_due_date": priority_score.kev_due_date,
                 "components": priority_score.components,
             }
+
+
+def _cluster_cross_tool_duplicates(
+    findings: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Apply cross-tool deduplication clustering (Phase 2).
+
+    Groups similar findings from different tools into consensus findings with
+    detected_by arrays. Uses multi-dimensional similarity matching on:
+    - Location (path + line numbers): 35% weight
+    - Message content (fuzzy text matching): 40% weight
+    - Metadata (CWE, CVE, rule IDs): 25% weight
+
+    Args:
+        findings: List of deduplicated findings from Phase 1 (fingerprint-based)
+
+    Returns:
+        List of consensus findings with cross-tool duplicates clustered
+    """
+    # Skip clustering if too few findings
+    if len(findings) < 2:
+        logger.debug("Skipping cross-tool clustering (< 2 findings)")
+        return findings
+
+    from scripts.core.dedup_enhanced import FindingClusterer
+
+    logger.info(f"Clustering {len(findings)} findings for cross-tool duplicates...")
+
+    # Progress callback for user feedback
+    def progress(current: int, total: int, message: str):
+        if current % 50 == 0 or current == total:
+            logger.info(message)
+
+    # Create clusterer with default threshold (0.50)
+    # Threshold of 0.50 balances precision/recall for diverse tool outputs
+    # Lower than unit tests (0.75) to account for real tool wording variations
+    # TODO: Make threshold configurable via jmo.yml deduplication section
+    clusterer = FindingClusterer(similarity_threshold=0.50)
+
+    # Run clustering algorithm
+    clusters = clusterer.cluster(findings, progress_callback=progress)
+
+    # Convert clusters to consensus findings
+    consensus_findings = []
+    for cluster in clusters:
+        if len(cluster.findings) > 1:
+            # Multiple findings in cluster -> create consensus
+            consensus_findings.append(cluster.to_consensus_finding())
+        else:
+            # Single finding -> keep as-is
+            consensus_findings.append(cluster.representative)
+
+    # Log reduction statistics
+    reduction_count = len(findings) - len(consensus_findings)
+    reduction_pct = (reduction_count / len(findings) * 100) if len(findings) > 0 else 0
+    logger.info(
+        f"Cross-tool clustering complete: {len(findings)} → {len(consensus_findings)} findings "
+        f"({reduction_count} duplicates removed, {reduction_pct:.1f}% reduction)"
+    )
+
+    return consensus_findings
 
 
 def main() -> int:
