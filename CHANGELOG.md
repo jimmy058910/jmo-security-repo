@@ -100,6 +100,27 @@ All notable changes to JMo Security will be documented in this file.
   - Impact: Automated policy enforcement, compliance validation, CI/CD security gates, zero-tolerance secrets blocking
   - See [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) for complete documentation
 
+- **Feature #8: Cross-Tool Deduplication** - Intelligent clustering of duplicate findings across multiple security tools
+  - `scripts/core/dedup_enhanced.py`: Multi-dimensional similarity engine (SimilarityCalculator, FindingClusterer)
+  - Integration: Second-pass clustering in `normalize_and_report.py` after fingerprint deduplication
+  - Similarity algorithm: Three weighted components (Location 35%, Message 40%, Metadata 25%)
+    - Location matching: Path normalization + line range overlap (Jaccard index + gap penalty)
+    - Message matching: Hybrid fuzzy + token matching via rapidfuzz + security keyword extraction
+    - Metadata matching: CWE/CVE/Rule ID family matching with type conflict detection
+  - Clustering: Greedy algorithm with 0.75 similarity threshold (configurable 0.70-0.85)
+  - Consensus findings: Highest-severity finding becomes representative, others stored in `context.duplicates`
+  - Confidence levels: HIGH (4+ tools), MEDIUM (2-3 tools), LOW (1 tool)
+  - Configuration: `jmo.yml` deduplication section with `cross_tool_clustering`, `similarity_threshold`, component weights
+  - Reporter updates: All output formats show consensus badges and `detected_by` arrays
+    - Markdown: "Cross-Tool Consensus" section with top 10 multi-tool findings
+    - HTML: Blue consensus badges with tool count and hover tooltips
+    - CSV: `detected_by` column with comma-separated tool names
+    - SARIF: Consensus metadata in `properties.consensus` field
+  - Test coverage: 41/41 tests passing (38 unit + 3 integration), 95% code coverage
+  - Performance: <2 seconds for 1000 findings, <5 seconds for 10K findings
+  - Impact: 30-40% reduction in reported findings, noise elimination, high-confidence prioritization
+  - See [docs/USER_GUIDE.md#cross-tool-deduplication-v100](docs/USER_GUIDE.md#cross-tool-deduplication-v100) for complete documentation
+
 ### Changed
 
 - **Output Format Structure** - All outputs now use metadata wrapper

@@ -1,0 +1,244 @@
+{
+  "known_duplicates": [
+    {
+      "cluster_id": "sql_injection_users_py",
+      "expected_findings": 3,
+      "tools": ["trivy", "semgrep", "bandit"],
+      "findings": [
+        {
+          "id": "fp1-sql-injection-trivy",
+          "tool": {"name": "trivy", "version": "0.50.0"},
+          "severity": "HIGH",
+          "message": "SQL Injection vulnerability in query construction",
+          "location": {"path": "app/users.py", "startLine": 42, "endLine": 45},
+          "ruleId": "python-sql-injection",
+          "raw": {"CWE": "CWE-89"}
+        },
+        {
+          "id": "fp2-sql-injection-semgrep",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "Potential SQL injection: unsanitized user input in SQL query",
+          "location": {"path": "app/users.py", "startLine": 42, "endLine": 42},
+          "ruleId": "python.lang.security.audit.sqli-injection",
+          "raw": {"owasp": "A03:2021", "cwe": ["CWE-89"]}
+        },
+        {
+          "id": "fp3-sql-injection-bandit",
+          "tool": {"name": "bandit", "version": "1.7.0"},
+          "severity": "MEDIUM",
+          "message": "Possible SQL injection vector: string formatting in SQL statement",
+          "location": {"path": "app/users.py", "startLine": 43, "endLine": 43},
+          "ruleId": "B608",
+          "raw": {"issue_cwe": {"id": 89, "link": "https://cwe.mitre.org/data/definitions/89.html"}}
+        }
+      ]
+    },
+    {
+      "cluster_id": "xss_template_render",
+      "expected_findings": 2,
+      "tools": ["semgrep", "trivy"],
+      "findings": [
+        {
+          "id": "fp4-xss-semgrep",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "MEDIUM",
+          "message": "Cross-Site Scripting (XSS) vulnerability in template rendering",
+          "location": {"path": "app/templates.py", "startLine": 100, "endLine": 102},
+          "ruleId": "python.flask.security.xss.template-autoescape-off",
+          "raw": {"cwe": ["CWE-79"], "owasp": "A03:2021"}
+        },
+        {
+          "id": "fp5-xss-trivy",
+          "tool": {"name": "trivy", "version": "0.50.0"},
+          "severity": "HIGH",
+          "message": "XSS: Unescaped output in HTML template",
+          "location": {"path": "app/templates.py", "startLine": 100, "endLine": 100},
+          "ruleId": "python-xss-template",
+          "raw": {"CWE": "CWE-79"}
+        }
+      ]
+    },
+    {
+      "cluster_id": "hardcoded_aws_key",
+      "expected_findings": 3,
+      "tools": ["trufflehog", "semgrep", "noseyparker"],
+      "findings": [
+        {
+          "id": "fp6-aws-trufflehog",
+          "tool": {"name": "trufflehog", "version": "3.68.0"},
+          "severity": "CRITICAL",
+          "message": "Hardcoded AWS Access Key detected in configuration file",
+          "location": {"path": "config/aws.yaml", "startLine": 5, "endLine": 5},
+          "ruleId": "aws-access-key",
+          "raw": {"verified": true, "detector_name": "AWS"}
+        },
+        {
+          "id": "fp7-aws-semgrep",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "AWS secret key hardcoded in config file",
+          "location": {"path": "config/aws.yaml", "startLine": 5, "endLine": 6},
+          "ruleId": "yaml.aws.hardcoded-credentials",
+          "raw": {"cwe": ["CWE-798"]}
+        },
+        {
+          "id": "fp8-aws-noseyparker",
+          "tool": {"name": "noseyparker", "version": "0.16.0"},
+          "severity": "HIGH",
+          "message": "Detected AWS credential in YAML configuration",
+          "location": {"path": "config/aws.yaml", "startLine": 5, "endLine": 5},
+          "ruleId": "AWS_ACCESS_KEY",
+          "raw": {"match_type": "aws_access_key_id"}
+        }
+      ]
+    },
+    {
+      "cluster_id": "cve_log4j_openssl",
+      "expected_findings": 2,
+      "tools": ["trivy", "grype"],
+      "findings": [
+        {
+          "id": "fp9-cve-trivy",
+          "tool": {"name": "trivy", "version": "0.50.0"},
+          "severity": "HIGH",
+          "message": "CVE-2021-1234: Buffer overflow in OpenSSL",
+          "location": {"path": "requirements.txt", "startLine": 10, "endLine": 10},
+          "ruleId": "CVE-2021-1234",
+          "raw": {"CVE": "CVE-2021-1234", "PkgName": "openssl", "InstalledVersion": "1.0.2"},
+          "tags": ["vulnerability", "cve"]
+        },
+        {
+          "id": "fp10-cve-grype",
+          "tool": {"name": "grype", "version": "0.73.0"},
+          "severity": "HIGH",
+          "message": "OpenSSL 1.0.2 has CVE-2021-1234 (buffer overflow vulnerability)",
+          "location": {"path": "requirements.txt", "startLine": 10, "endLine": 10},
+          "ruleId": "CVE-2021-1234",
+          "raw": {"VulnerabilityID": "CVE-2021-1234", "Artifact": "openssl-1.0.2"},
+          "tags": ["vulnerability", "dependency"]
+        }
+      ]
+    },
+    {
+      "cluster_id": "dockerfile_user_root",
+      "expected_findings": 2,
+      "tools": ["hadolint", "trivy"],
+      "findings": [
+        {
+          "id": "fp11-dockerfile-hadolint",
+          "tool": {"name": "hadolint", "version": "2.12.0"},
+          "severity": "LOW",
+          "message": "Running as root user. Specify USER instruction",
+          "location": {"path": "Dockerfile", "startLine": 20, "endLine": 20},
+          "ruleId": "DL3002",
+          "raw": {}
+        },
+        {
+          "id": "fp12-dockerfile-trivy",
+          "tool": {"name": "trivy", "version": "0.50.0"},
+          "severity": "MEDIUM",
+          "message": "Container runs as root (UID 0)",
+          "location": {"path": "Dockerfile", "startLine": 20, "endLine": 22},
+          "ruleId": "DS002",
+          "raw": {"misconfiguration": true}
+        }
+      ]
+    }
+  ],
+  "known_non_duplicates": [
+    {
+      "description": "Different vulnerability types (SQL injection vs XSS)",
+      "findings": [
+        {
+          "id": "fp-nd1-sql",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "SQL Injection vulnerability",
+          "location": {"path": "app/api.py", "startLine": 100, "endLine": 100},
+          "ruleId": "sql-injection",
+          "raw": {"CWE": "CWE-89"}
+        },
+        {
+          "id": "fp-nd2-xss",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "Cross-Site Scripting (XSS) in output",
+          "location": {"path": "app/api.py", "startLine": 100, "endLine": 100},
+          "ruleId": "xss-reflected",
+          "raw": {"CWE": "CWE-79"}
+        }
+      ]
+    },
+    {
+      "description": "Same file, different lines (>10 line gap)",
+      "findings": [
+        {
+          "id": "fp-nd3-line42",
+          "tool": {"name": "bandit", "version": "1.7.0"},
+          "severity": "MEDIUM",
+          "message": "Use of eval() is insecure",
+          "location": {"path": "app/utils.py", "startLine": 42, "endLine": 42},
+          "ruleId": "B307",
+          "raw": {}
+        },
+        {
+          "id": "fp-nd4-line100",
+          "tool": {"name": "bandit", "version": "1.7.0"},
+          "severity": "MEDIUM",
+          "message": "Use of pickle module is insecure",
+          "location": {"path": "app/utils.py", "startLine": 100, "endLine": 100},
+          "ruleId": "B301",
+          "raw": {}
+        }
+      ]
+    },
+    {
+      "description": "Different files entirely",
+      "findings": [
+        {
+          "id": "fp-nd5-users-py",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "SQL Injection",
+          "location": {"path": "app/users.py", "startLine": 10, "endLine": 10},
+          "ruleId": "sql-injection",
+          "raw": {}
+        },
+        {
+          "id": "fp-nd6-auth-py",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "SQL Injection",
+          "location": {"path": "app/auth.py", "startLine": 10, "endLine": 10},
+          "ruleId": "sql-injection",
+          "raw": {}
+        }
+      ]
+    },
+    {
+      "description": "CVE vs code issue (different finding types)",
+      "findings": [
+        {
+          "id": "fp-nd7-cve",
+          "tool": {"name": "trivy", "version": "0.50.0"},
+          "severity": "CRITICAL",
+          "message": "CVE-2021-44228: Log4Shell vulnerability",
+          "location": {"path": "pom.xml", "startLine": 15, "endLine": 15},
+          "ruleId": "CVE-2021-44228",
+          "raw": {"CVE": "CVE-2021-44228"},
+          "tags": ["vulnerability", "cve"]
+        },
+        {
+          "id": "fp-nd8-code-issue",
+          "tool": {"name": "semgrep", "version": "1.60.0"},
+          "severity": "HIGH",
+          "message": "Insecure logging configuration",
+          "location": {"path": "src/main/java/App.java", "startLine": 20, "endLine": 22},
+          "ruleId": "java.logging.insecure-config",
+          "raw": {}
+        }
+      ]
+    }
+  ]
+}

@@ -35,6 +35,7 @@ dependencies = [
     "croniter>=1.0",  # Required for schedule management (v0.9.0+)
     "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
     "tomli>=2.0.0; python_version<'3.11'",  # Required for pyproject.toml reading (v1.0.0+)
+    "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
 ]
 
 [project.urls]

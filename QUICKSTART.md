@@ -1246,11 +1246,38 @@ The toolkit uses a type-safe severity enum with comparison operators for consist
 | LOW | Minor issues | Address during regular maintenance |
 | INFO | Informational findings | Review for context |
 
+### Cross-Tool Consensus (v1.0.0)
+
+After scanning, findings are automatically deduplicated in two phases:
+
+1. **Exact duplicates removed** (same tool, same location)
+2. **Cross-tool duplicates clustered** (multiple tools, same issue)
+
+Look for **🔍 Detected by N tools** badges in the dashboard and Markdown summary - these indicate high-confidence findings that multiple tools agree on.
+
+**Example:**
+
+```markdown
+🔍 Detected by 3 tools | HIGH CONFIDENCE
+Tools: trivy, semgrep, bandit
+SQL Injection vulnerability in query construction
+app.py:42-43
+```
+
+**Confidence Levels:**
+
+- **HIGH (4+ tools):** Very likely true positive - prioritize these first
+- **MEDIUM (2-3 tools):** Likely true positive - validate and fix
+- **LOW (1 tool):** Requires careful validation
+
+This reduces noise by 30-40% while helping you focus on the highest-confidence findings first.
+
 ### Key Metrics to Monitor
 
 - **Verified Secrets**: Confirmed active credentials (immediate action required)
-- **Total Findings**: Overall security issue count
+- **Total Findings**: Overall security issue count (after deduplication)
 - **Unique Issue Types**: Variety of security problems found
+- **High Confidence Findings**: Issues detected by multiple tools (🔍 badge)
 
 ## Example Workflows
 

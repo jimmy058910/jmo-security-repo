@@ -129,6 +129,22 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
                 result["properties"] = {}
             result["properties"]["cvss"] = f["cvss"]
 
+        # v1.0.0: Add cross-tool consensus information
+        detected_by = f.get("detected_by", [])
+        if detected_by and len(detected_by) > 1:
+            if "properties" not in result:
+                result["properties"] = {}
+            # Add consensus metadata
+            result["properties"]["consensus"] = {
+                "detectedByCount": len(detected_by),
+                "tools": [
+                    {"name": t.get("name", "unknown"), "version": t.get("version", "")}
+                    for t in detected_by
+                ],
+            }
+            # Add correlation IDs for cross-tool tracking
+            result["correlationGuid"] = f.get("id", "")
+
         results.append(result)
 
     # Read version from pyproject.toml if possible
