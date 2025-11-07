@@ -376,7 +376,7 @@ class SimilarityCalculator:
         # Composite
         base_sim = (token_sim * 0.40) + (fuzzy_sim * 0.40) + (metadata_boost * 0.20)
 
-        return min(1.0, base_sim)
+        return float(min(1.0, base_sim))
 
     def _normalize_message(self, msg: str) -> str:
         """Normalize message for comparison."""
@@ -515,7 +515,7 @@ class SimilarityCalculator:
 
     def _extract_cves_from_raw(self, raw: dict) -> set[str]:
         """Extract CVE IDs from raw finding data."""
-        cves = set()
+        cves: set[str] = set()
 
         # Common keys: CVE, VulnerabilityID, cve_id
         for key in ["CVE", "VulnerabilityID", "cve_id", "cve"]:
