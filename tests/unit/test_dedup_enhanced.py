@@ -26,7 +26,9 @@ from scripts.core.dedup_enhanced import (
 @pytest.fixture
 def cross_tool_fixtures():
     """Load test fixtures with known duplicates and non-duplicates."""
-    fixtures_path = Path(__file__).parent.parent / "fixtures" / "cross_tool_findings.json"
+    fixtures_path = (
+        Path(__file__).parent.parent / "fixtures" / "cross_tool_findings.json"
+    )
     with open(fixtures_path) as f:
         return json.load(f)
 
@@ -194,7 +196,9 @@ def test_message_with_cwe_cve(calc):
     msg2 = "SQL Injection (CWE-89) detected in user input"
 
     similarity = calc.message_similarity(msg1, msg2)
-    assert similarity >= 0.75  # CWE match is strong signal (adjusted for actual behavior)
+    assert (
+        similarity >= 0.75
+    )  # CWE match is strong signal (adjusted for actual behavior)
 
 
 # ===== Phase 3: Metadata Similarity Tests =====
@@ -616,9 +620,7 @@ def test_consensus_confidence():
         representative={"id": "f1", "message": "Issue", "tool": {}, "raw": {}}
     )
     for i in range(2, 5):
-        cluster1.add(
-            {"id": f"f{i}", "message": "Issue", "tool": {}, "raw": {}}, 0.90
-        )
+        cluster1.add({"id": f"f{i}", "message": "Issue", "tool": {}, "raw": {}}, 0.90)
 
     consensus1 = cluster1.to_consensus_finding()
     assert consensus1["confidence"]["level"] == "HIGH"
@@ -704,7 +706,10 @@ def test_cluster_performance_100_findings():
                 "id": f"f{i}",
                 "severity": "HIGH",
                 "message": f"SQL injection in query {group}",  # Group-specific message
-                "location": {"path": f"file{group}.py", "startLine": 10 + group},  # Same line per group
+                "location": {
+                    "path": f"file{group}.py",
+                    "startLine": 10 + group,
+                },  # Same line per group
                 "raw": {"CWE": "CWE-89"},  # Same CWE
                 "tool": {"name": "trivy"},
             }

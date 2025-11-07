@@ -176,7 +176,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         deduped = _cluster_cross_tool_duplicates(deduped)
     except Exception as e:
         # Best-effort clustering - log but continue with unfiltered results
-        logger.warning(f"Cross-tool clustering failed, continuing with Phase 1 deduplication: {e}")
+        logger.warning(
+            f"Cross-tool clustering failed, continuing with Phase 1 deduplication: {e}"
+        )
 
     return deduped
 
@@ -455,7 +457,7 @@ def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:
 
 
 def _cluster_cross_tool_duplicates(
-    findings: list[dict[str, Any]]
+    findings: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Apply cross-tool deduplication clustering (Phase 2).
 

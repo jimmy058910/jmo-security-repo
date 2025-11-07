@@ -452,7 +452,9 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
         lines.append("")
 
     # Cross-Tool Consensus (Phase 2 deduplication - v1.0.0)
-    consensus_findings = [f for f in findings if "detected_by" in f and len(f.get("detected_by", [])) > 1]
+    consensus_findings = [
+        f for f in findings if "detected_by" in f and len(f.get("detected_by", [])) > 1
+    ]
     if consensus_findings:
         lines.append("## Cross-Tool Consensus")
         lines.append("")

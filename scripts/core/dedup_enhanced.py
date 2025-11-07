@@ -20,10 +20,8 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable
 
 # Import rapidfuzz for fast fuzzy string matching
@@ -605,7 +603,9 @@ class FindingClusterer:
             similarity_threshold: Minimum similarity score for clustering (default 0.75)
         """
         self.threshold = similarity_threshold
-        self.calculator = SimilarityCalculator(similarity_threshold=similarity_threshold)
+        self.calculator = SimilarityCalculator(
+            similarity_threshold=similarity_threshold
+        )
 
     def cluster(
         self,
