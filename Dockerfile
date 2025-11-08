@@ -331,6 +331,17 @@ RUN echo "=== Verifying ALL 28 tools ===" && \
     cdxgen --version && \
     echo "=== All 28 tools verified ==="
 
+# Create non-root user and set ownership (Security best practice)
+RUN useradd -m -u 1000 -s /bin/bash jmo && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local && \
+    chmod -R 755 /opt/jmo-security
+
+# Update PATH environment variable for non-root user
+ENV PATH="/home/jmo/.local/bin:${PATH}"
+
+# Switch to non-root user
+USER jmo
+
 # Set default entrypoint to jmo CLI
 ENTRYPOINT ["jmo"]
 
