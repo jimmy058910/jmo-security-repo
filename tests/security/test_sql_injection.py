@@ -8,8 +8,6 @@ and are resistant to SQL injection attacks.
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
 
 import pytest
 
@@ -41,7 +39,7 @@ class TestSQLInjectionResistance:
         (scan_results_dir / "summaries").mkdir(parents=True)
         (scan_results_dir / "summaries" / "findings.json").write_text("[]")
 
-        scan_id = store_scan(
+        store_scan(
             results_dir=scan_results_dir,
             profile="balanced",
             tools=["trivy"],

@@ -74,7 +74,7 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         try:
             from scripts.core.config import load_config
 
-            config = load_config(config_file)
+            load_config(config_file)
 
             # If we get here, safe_load was used (good)
             # The malicious payload should have been parsed as a string, not executed
@@ -84,7 +84,7 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         except yaml.constructor.ConstructorError:
             # safe_load raises ConstructorError for !!python/object - this is expected and good
             pass
-        except Exception as e:
+        except Exception:
             # Other exceptions are acceptable (e.g., invalid config structure)
             pass
 
@@ -203,14 +203,14 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
             # Python 3.11+ supports timeout parameter
             if sys.version_info >= (3, 11):
                 try:
-                    result = re.search(pattern, redos_input, timeout=1)
+                    re.search(pattern, redos_input, timeout=1)
                     # No assertion needed - just checking it doesn't hang
                 except TimeoutError:
                     pytest.fail(f"Pattern '{pattern}' caused ReDoS (timed out)")
             else:
                 # For Python < 3.11, just verify pattern compiles and runs
                 # (no timeout support, but patterns should still be safe)
-                result = re.search(pattern, redos_input)
+                re.search(pattern, redos_input)
                 # No assertion needed - just checking it completes
 
     def test_environment_variable_injection(self, tmp_path):
@@ -243,7 +243,7 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
             # Should echo the literal value, not execute it
             assert (
                 result.stdout.strip() == malicious_value
-            ), f"Environment variable value should be literal, not executed"
+            ), "Environment variable value should be literal, not executed"
 
             # Clean up
             del os.environ["TEST_MALICIOUS_VAR"]
