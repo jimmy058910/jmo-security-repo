@@ -14,8 +14,7 @@ dashboard_html = Path("dist/index.html").read_text()
 # Inject sample data (inline mode simulation)
 findings_json = json.dumps(sample_findings).replace("</script>", "<\\/script>")
 test_html = dashboard_html.replace(
-    'window.__FINDINGS__ = []',
-    f'window.__FINDINGS__ = {findings_json}'
+    "window.__FINDINGS__ = []", f"window.__FINDINGS__ = {findings_json}"
 )
 
 # Write test file

@@ -47,9 +47,9 @@ class TestInputValidation:
             )
 
             # Command should fail gracefully (invalid tool name), not execute shell commands
-            assert result.returncode != 0, (
-                f"Malicious input '{malicious_input}' should fail gracefully"
-            )
+            assert (
+                result.returncode != 0
+            ), f"Malicious input '{malicious_input}' should fail gracefully"
 
             # Should not see signs of command execution in stderr
             assert "pwned" not in result.stderr
@@ -78,9 +78,9 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
 
             # If we get here, safe_load was used (good)
             # The malicious payload should have been parsed as a string, not executed
-            assert not Path("/tmp/yaml-pwned.txt").exists(), (
-                "YAML deserialization attack succeeded - should use safe_load"
-            )
+            assert not Path(
+                "/tmp/yaml-pwned.txt"
+            ).exists(), "YAML deserialization attack succeeded - should use safe_load"
         except yaml.constructor.ConstructorError:
             # safe_load raises ConstructorError for !!python/object - this is expected and good
             pass
@@ -137,9 +137,11 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
 
         # Should fail gracefully or clamp to reasonable value, not crash
         # (Python handles big ints well, but should validate for reasonableness)
-        assert result.returncode in [0, 1, 2], (
-            "Large timeout should be handled gracefully"
-        )
+        assert result.returncode in [
+            0,
+            1,
+            2,
+        ], "Large timeout should be handled gracefully"
 
     def test_filename_sanitization(self, tmp_path):
         """Test that filenames with special characters are sanitized.
@@ -171,9 +173,9 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
 
                 # Verify no file written outside summaries_dir
                 for file in tmp_path.rglob("*"):
-                    assert summaries_dir in file.parents or file == summaries_dir, (
-                        f"File '{file}' written outside summaries_dir"
-                    )
+                    assert (
+                        summaries_dir in file.parents or file == summaries_dir
+                    ), f"File '{file}' written outside summaries_dir"
             except (OSError, ValueError):
                 # Acceptable - invalid filename rejected
                 pass
@@ -239,9 +241,9 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
             )
 
             # Should echo the literal value, not execute it
-            assert result.stdout.strip() == malicious_value, (
-                f"Environment variable value should be literal, not executed"
-            )
+            assert (
+                result.stdout.strip() == malicious_value
+            ), f"Environment variable value should be literal, not executed"
 
             # Clean up
             del os.environ["TEST_MALICIOUS_VAR"]

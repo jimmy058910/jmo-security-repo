@@ -71,9 +71,9 @@ class TestPathTraversalResistance:
                 found_malicious_path = True
                 break
 
-        assert found_malicious_path, (
-            "Malicious path should be stored as literal string, not executed"
-        )
+        assert (
+            found_malicious_path
+        ), "Malicious path should be stored as literal string, not executed"
 
     def test_config_file_path_traversal(self, tmp_path):
         """Test that config file loading prevents path traversal.
@@ -119,9 +119,9 @@ outputs:
                 # Verify not loading /etc/passwd by checking for typical passwd content
                 if config is not None:
                     # Should not contain user entries like "root:x:0:0:"
-                    assert not hasattr(config, "root"), (
-                        "Should not load /etc/passwd as config"
-                    )
+                    assert not hasattr(
+                        config, "root"
+                    ), "Should not load /etc/passwd as config"
             except (FileNotFoundError, PermissionError, Exception):
                 # Expected: file doesn't exist, permission denied, or invalid YAML
                 pass
@@ -303,9 +303,9 @@ suppressions:
 
             # Verify path doesn't escape tmp_path (safety check)
             # In production, JMo should validate repo paths before scanning
-            assert resolved_path.exists() or not resolved_path.exists(), (
-                "Path resolution should not cause errors"
-            )
+            assert (
+                resolved_path.exists() or not resolved_path.exists()
+            ), "Path resolution should not cause errors"
 
 
 if __name__ == "__main__":

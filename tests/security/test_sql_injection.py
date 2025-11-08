@@ -65,9 +65,9 @@ class TestSQLInjectionResistance:
             result = cursor.fetchall()
 
             # Should return empty result (not match legitimate scan)
-            assert len(result) == 0, (
-                f"SQL injection payload '{payload}' should not return results"
-            )
+            assert (
+                len(result) == 0
+            ), f"SQL injection payload '{payload}' should not return results"
 
         # Verify legitimate scan still exists
         cursor = conn.execute("SELECT COUNT(*) FROM scans")
@@ -116,9 +116,9 @@ class TestSQLInjectionResistance:
 
         # Should contain malicious payloads as literal strings (not executed)
         for tool in malicious_tools:
-            assert tool in tools_json, (
-                f"Tool '{tool}' should be stored as literal string, not executed"
-            )
+            assert (
+                tool in tools_json
+            ), f"Tool '{tool}' should be stored as literal string, not executed"
 
         conn.close()
 

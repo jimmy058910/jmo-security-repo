@@ -41,9 +41,9 @@ class TestDockerSecurity:
 
             # Should specify USER directive (not root)
             has_user_directive = re.search(r"^USER\s+(?!root)", content, re.MULTILINE)
-            assert has_user_directive, (
-                f"{dockerfile} should specify non-root USER directive"
-            )
+            assert (
+                has_user_directive
+            ), f"{dockerfile} should specify non-root USER directive"
 
     def test_dockerfiles_use_specific_base_image_tags(self):
         """Test that Dockerfiles use specific base image tags, not 'latest'.
@@ -67,14 +67,14 @@ class TestDockerSecurity:
             for line_num, line in enumerate(lines, 1):
                 if line.strip().startswith("FROM "):
                     # Should not use :latest tag
-                    assert ":latest" not in line, (
-                        f"{dockerfile}:{line_num} should not use ':latest' tag"
-                    )
+                    assert (
+                        ":latest" not in line
+                    ), f"{dockerfile}:{line_num} should not use ':latest' tag"
 
                     # Should use a specific version tag
-                    assert ":" in line.replace("FROM ", "").strip(), (
-                        f"{dockerfile}:{line_num} should specify a version tag"
-                    )
+                    assert (
+                        ":" in line.replace("FROM ", "").strip()
+                    ), f"{dockerfile}:{line_num} should specify a version tag"
 
     def test_dockerfiles_no_hardcoded_secrets(self):
         """Test that Dockerfiles don't contain hardcoded secrets.
@@ -111,7 +111,9 @@ class TestDockerSecurity:
 
                 for pattern in secret_patterns:
                     if re.search(pattern, line, re.IGNORECASE):
-                        findings.append(f"{dockerfile}:{line_num} | {line.strip()[:80]}")
+                        findings.append(
+                            f"{dockerfile}:{line_num} | {line.strip()[:80]}"
+                        )
 
         # Should find no hardcoded secrets
         assert len(findings) == 0, (
@@ -138,9 +140,9 @@ class TestDockerSecurity:
             # Count number of FROM statements (multi-stage has multiple)
             from_count = len(re.findall(r"^FROM\s+", content, re.MULTILINE))
 
-            assert from_count >= 2, (
-                f"{dockerfile} should use multi-stage builds (has {from_count} FROM statements)"
-            )
+            assert (
+                from_count >= 2
+            ), f"{dockerfile} should use multi-stage builds (has {from_count} FROM statements)"
 
     def test_dockerfiles_minimal_privileges(self):
         """Test that Dockerfiles don't grant excessive privileges.
@@ -171,7 +173,9 @@ class TestDockerSecurity:
             for line_num, line in enumerate(lines, 1):
                 for pattern in dangerous_patterns:
                     if re.search(pattern, line, re.IGNORECASE):
-                        findings.append(f"{dockerfile}:{line_num} | {line.strip()[:80]}")
+                        findings.append(
+                            f"{dockerfile}:{line_num} | {line.strip()[:80]}"
+                        )
 
         # Should find no excessive privileges
         assert len(findings) == 0, (
@@ -214,7 +218,9 @@ class TestDockerSecurity:
 
                 for pattern in sensitive_patterns:
                     if re.search(pattern, line, re.IGNORECASE):
-                        findings.append(f"{dockerfile}:{line_num} | {line.strip()[:80]}")
+                        findings.append(
+                            f"{dockerfile}:{line_num} | {line.strip()[:80]}"
+                        )
 
         # Should find no sensitive file copies
         assert len(findings) == 0, (

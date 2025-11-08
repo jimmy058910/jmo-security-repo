@@ -131,7 +131,9 @@ def compare_benchmarks(
         if base.duration_ms == 0:
             change_pct = 0.0
         else:
-            change_pct = ((curr.duration_ms - base.duration_ms) / base.duration_ms) * 100
+            change_pct = (
+                (curr.duration_ms - base.duration_ms) / base.duration_ms
+            ) * 100
 
         # Detect regression (slowdown beyond threshold)
         regression = change_pct > threshold_pct
@@ -216,9 +218,7 @@ def format_markdown_report(
             status = "⚡ Faster"
 
         baseline_str = f"{c.baseline_ms:.2f}" if c.baseline_ms > 0 else "N/A"
-        change_str = (
-            f"{c.change_pct:+.1f}%" if c.baseline_ms > 0 else "New"
-        )
+        change_str = f"{c.change_pct:+.1f}%" if c.baseline_ms > 0 else "New"
 
         md += (
             f"| {c.name} | {baseline_str} | {c.current_ms:.2f} | "
