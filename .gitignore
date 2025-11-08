@@ -111,5 +111,12 @@ scripts/api/.vercel/
 .env.local
 .env.*.local
 
+# Cryptographic keys and certificates (security-critical files)
+*.pem
+*.key
+*secret*
+*credentials*
+
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
+coverage/
