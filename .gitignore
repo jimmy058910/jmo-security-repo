@@ -120,3 +120,14 @@ scripts/api/.vercel/
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
 coverage/
+
+# Additional generated artifacts
+*.sarif
+*_report.html
+dependency-images.txt
+detected-images.txt
+
+# Backup files (additional patterns)
+*.backup
+*.new
+*.orig

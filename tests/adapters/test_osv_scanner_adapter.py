@@ -343,3 +343,216 @@ def test_osv_scanner_adapter_compliance_enrichment(tmp_path: Path):
     assert len(items) == 1
     # Compliance field should exist (enriched by compliance_mapper)
     assert hasattr(items[0], "compliance")
+
+
+def test_osv_scanner_adapter_malformed_json(tmp_path: Path):
+    """Test OSV-Scanner adapter handles malformed JSON gracefully."""
+    f = tmp_path / "osv-scanner.json"
+    f.write_text("{invalid json}", encoding="utf-8")
+    adapter = OSVScannerAdapter()
+    items = adapter.parse(f)
+
+    assert items == []
+
+
+def test_osv_scanner_adapter_cvss_v2_only(tmp_path: Path):
+    """Test OSV-Scanner adapter with CVSS v2 score (no v3)."""
+    data = {
+        "results": [
+            {
+                "source": {"path": "requirements.txt", "type": "lockfile"},
+                "packages": [
+                    {
+                        "package": {
+                            "name": "pillow",
+                            "version": "8.0.0",
+                            "ecosystem": "PyPI",
+                        },
+                        "vulnerabilities": [
+                            {
+                                "id": "PYSEC-2021-123",
+                                "aliases": ["CVE-2021-25287"],
+                                "summary": "Out-of-bounds read in Pillow",
+                                "severity": [{"type": "CVSS_V2", "score": "5.8"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    f = tmp_path / "osv-scanner.json"
+    write(f, data)
+    adapter = OSVScannerAdapter()
+    items = adapter.parse(f)
+
+    assert len(items) == 1
+    assert items[0].cvss["v2"] == "5.8"
+    assert items[0].cvss["v3"] is None
+    # No v3 score, should default to MEDIUM
+    assert items[0].severity == "MEDIUM"
+
+
+def test_osv_scanner_adapter_multiple_ecosystems(tmp_path: Path):
+    """Test OSV-Scanner adapter with multiple package ecosystems."""
+    data = {
+        "results": [
+            {
+                "source": {"path": "Gemfile.lock", "type": "lockfile"},
+                "packages": [
+                    {
+                        "package": {
+                            "name": "rails",
+                            "version": "5.2.0",
+                            "ecosystem": "RubyGems",
+                        },
+                        "vulnerabilities": [
+                            {
+                                "id": "GHSA-65cv-r6x7-79hv",
+                                "aliases": ["CVE-2020-8164"],
+                                "summary": "Deserialization vulnerability in Rails",
+                                "severity": [{"type": "CVSS_V3", "score": "8.1"}],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "source": {"path": "composer.lock", "type": "lockfile"},
+                "packages": [
+                    {
+                        "package": {
+                            "name": "symfony/http-foundation",
+                            "version": "4.4.0",
+                            "ecosystem": "Packagist",
+                        },
+                        "vulnerabilities": [
+                            {
+                                "id": "GHSA-mcx4-f5f5-4859",
+                                "aliases": ["CVE-2021-21424"],
+                                "summary": "Session fixation in Symfony",
+                                "database_specific": {"severity": "MEDIUM"},
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+    f = tmp_path / "osv-scanner.json"
+    write(f, data)
+    adapter = OSVScannerAdapter()
+    items = adapter.parse(f)
+
+    assert len(items) == 2
+    # RubyGems finding
+    assert items[0].ruleId == "GHSA-65cv-r6x7-79hv"
+    assert "rubygems" in items[0].tags
+    assert items[0].context["package_ecosystem"] == "RubyGems"
+    assert items[0].severity == "HIGH"  # 8.1 CVSS
+
+    # Packagist finding
+    assert items[1].ruleId == "GHSA-mcx4-f5f5-4859"
+    assert "packagist" in items[1].tags
+    assert items[1].context["package_ecosystem"] == "Packagist"
+    assert items[1].severity == "MEDIUM"
+
+
+def test_osv_scanner_adapter_malformed_data_structures(tmp_path: Path):
+    """Test OSV-Scanner adapter handles malformed/missing data structures."""
+    data = {
+        "results": [
+            # Missing source field (string instead of dict)
+            "invalid_result",
+            # Result with invalid packages (not a list)
+            {"source": {"path": "test.lock"}, "packages": "not-a-list"},
+            # Result with invalid package entries
+            {
+                "source": {"path": "test2.lock"},
+                "packages": [
+                    "not-a-dict",
+                    {"package": "not-a-dict"},  # Invalid package
+                    {
+                        "package": {"name": "valid-pkg", "version": "1.0.0"},
+                        "vulnerabilities": "not-a-list",  # Invalid vulns
+                    },
+                    {
+                        "package": {"name": "valid-pkg2", "version": "2.0.0"},
+                        "vulnerabilities": [
+                            "not-a-dict",  # Invalid vuln entry
+                            {
+                                "id": "VALID-001",
+                                "summary": "Test vuln",
+                                "aliases": "not-a-list",  # Invalid aliases
+                            },
+                        ],
+                    },
+                ],
+            },
+        ]
+    }
+    f = tmp_path / "osv-scanner.json"
+    write(f, data)
+    adapter = OSVScannerAdapter()
+    items = adapter.parse(f)
+
+    # Should handle all malformed data gracefully and only parse valid vuln
+    assert len(items) == 1
+    assert items[0].ruleId == "VALID-001"
+    assert items[0].context["cves"] == []  # aliases was not a list
+
+
+def test_osv_scanner_adapter_cvss_edge_cases(tmp_path: Path):
+    """Test OSV-Scanner adapter with CVSS edge cases (invalid scores, missing data)."""
+    data = {
+        "results": [
+            {
+                "source": {"path": "test.lock", "type": "lockfile"},
+                "packages": [
+                    {
+                        "package": {
+                            "name": "test-pkg",
+                            "version": "1.0.0",
+                            "ecosystem": "npm",
+                        },
+                        "vulnerabilities": [
+                            {
+                                "id": "TEST-001",
+                                "summary": "Test with invalid CVSS",
+                                "severity": [
+                                    {"type": "CVSS_V3", "score": "invalid"},
+                                    {"type": "CVSS_V2", "score": None},
+                                ],
+                            },
+                            {
+                                "id": "TEST-002",
+                                "summary": "Test with missing references",
+                                "severity": [{"type": "CVSS_V3", "score": "3.5"}],
+                                "references": [
+                                    "not-a-dict",  # Invalid reference
+                                    {},  # Missing url field
+                                    {"url": "https://example.com"},
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    f = tmp_path / "osv-scanner.json"
+    write(f, data)
+    adapter = OSVScannerAdapter()
+    items = adapter.parse(f)
+
+    assert len(items) == 2
+    # TEST-001: Invalid CVSS should default to MEDIUM
+    assert items[0].ruleId == "TEST-001"
+    assert items[0].severity == "MEDIUM"
+
+    # TEST-002: Should derive severity from CVSS v3 score (3.5 = LOW)
+    assert items[1].ruleId == "TEST-002"
+    assert items[1].severity == "LOW"
+    # Should only include valid reference
+    assert len(items[1].references) == 1
+    assert items[1].references[0] == "https://example.com"

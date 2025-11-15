@@ -10,6 +10,7 @@ on:
     # Weekly on Sunday at 00:00 UTC
     - cron: '0 0 * * 0'
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual version checks require create_issues input for controlling issue creation
     inputs:
       create_issues:
         description: 'Create GitHub issues for outdated tools'
@@ -71,25 +72,27 @@ jobs:
 
       - name: Check for Trivy version mismatch (critical)
         run: |
-          # Extract Trivy versions from all Dockerfiles
+          # Extract Trivy versions from all 4 Dockerfiles
           # shellcheck disable=SC2252
           TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile || echo "not_found")
+          TRIVY_BALANCED=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.balanced || echo "not_found")
           TRIVY_SLIM=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.slim || echo "not_found")
-          TRIVY_ALPINE=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.alpine || echo "not_found")
+          TRIVY_FAST=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.fast || echo "not_found")
 
           echo "Trivy versions found:"
-          echo "  Dockerfile:        $TRIVY_FULL"
-          echo "  Dockerfile.slim:   $TRIVY_SLIM"
-          echo "  Dockerfile.alpine: $TRIVY_ALPINE"
+          echo "  Dockerfile:          $TRIVY_FULL"
+          echo "  Dockerfile.balanced: $TRIVY_BALANCED"
+          echo "  Dockerfile.slim:     $TRIVY_SLIM"
+          echo "  Dockerfile.fast:     $TRIVY_FAST"
 
-          # Check for mismatches
-          if [ "$TRIVY_FULL" != "$TRIVY_SLIM" ] || [ "$TRIVY_FULL" != "$TRIVY_ALPINE" ]; then
+          # Check for mismatches across all 4 variants
+          if [ "$TRIVY_FULL" != "$TRIVY_BALANCED" ] || [ "$TRIVY_FULL" != "$TRIVY_SLIM" ] || [ "$TRIVY_FULL" != "$TRIVY_FAST" ]; then
             echo "::error::CRITICAL: Trivy version mismatch detected!"
             echo "::error::This can cause CVE detection discrepancies (see ROADMAP.md #14)"
             exit 1
           fi
 
-          echo "✅ All Trivy versions are consistent: $TRIVY_FULL"
+          echo "✅ All Trivy versions are consistent across 4 variants: $TRIVY_FULL"
 
   check-dockerfile-consistency:
     name: Validate Dockerfile consistency
@@ -107,7 +110,7 @@ jobs:
           ISSUES=0
 
           # Check for inline version patterns that should use variables
-          for dockerfile in Dockerfile Dockerfile.slim Dockerfile.alpine; do
+          for dockerfile in Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast; do
             echo "Checking $dockerfile for hardcoded versions..."
 
             # Look for download URLs with hardcoded versions (bad pattern)

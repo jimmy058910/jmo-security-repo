@@ -30,7 +30,7 @@ from scripts.core.history_db import (
 )
 
 # Import fixtures from conftest
-from tests.performance.conftest import create_test_finding
+from .conftest import create_test_finding
 
 
 def test_store_scan_1000_findings_fast(

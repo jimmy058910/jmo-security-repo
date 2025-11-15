@@ -164,9 +164,11 @@ def _add_scan_config_args(parser):
         help="Optional profile name from config.profiles to apply for scanning",
     )
     parser.add_argument(
-        "--store-history",
-        action="store_true",
-        help="Store scan results in history database (.jmo/history.db) after completion",
+        "--no-store-history",
+        action="store_false",
+        dest="store_history",
+        default=True,
+        help="Disable automatic history storage (default: enabled)",
     )
     parser.add_argument(
         "--history-db",
@@ -2023,7 +2025,33 @@ def cmd_scan(args) -> int:
     )
 
     _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
-    return 0
+
+    # BUG #2 FIX: Automatically run report phase to aggregate findings and store history
+    # This ensures --no-store-history flag (default: enabled) actually works
+    _log(args, "INFO", "Running report phase to aggregate findings...")
+
+    # Add missing report-specific arguments to namespace
+    if not hasattr(args, "results_dir_pos"):
+        args.results_dir_pos = None
+    if not hasattr(args, "results_dir_opt"):
+        args.results_dir_opt = str(results_dir)
+    if not hasattr(args, "out"):
+        args.out = None  # Will default to results_dir/summaries
+    if not hasattr(args, "fail_on"):
+        args.fail_on = None
+    if not hasattr(args, "profile"):
+        args.profile = False
+    if not hasattr(args, "threads"):
+        args.threads = None
+    if not hasattr(args, "policies"):
+        args.policies = None
+    if not hasattr(args, "allow_missing_tools"):
+        args.allow_missing_tools = False
+
+    report_code = _cmd_report_impl(args, _log)
+
+    # Return report exit code if it failed, otherwise 0 (scan succeeded)
+    return report_code if report_code != 0 else 0
 
 
 def cmd_report(args) -> int:
@@ -2095,7 +2123,7 @@ def cmd_wizard(args):
     return run_wizard(
         yes=args.yes,
         emit_script=args.emit_script,
-        emit_make_target=args.emit_make_target,
+        emit_make=args.emit_make_target,
         emit_gha=args.emit_gha,
         policies=getattr(args, "policies", None),
         skip_policies=getattr(args, "skip_policies", False),

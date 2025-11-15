@@ -5,14 +5,14 @@ import { useState, useEffect } from 'react'
  *
  * Behavior:
  * 1. Reads initial state from localStorage ('theme' key)
- * 2. Falls back to system preference if no saved preference
+ * 2. Defaults to dark mode if no saved preference
  * 3. Applies 'dark' class to document.documentElement
  * 4. Persists changes to localStorage
  *
  * @returns {[boolean, () => void]} [isDark, toggleDark]
  */
 export function useDarkMode(): [boolean, () => void] {
-  // Initialize state from localStorage or system preference
+  // Initialize state from localStorage or default to dark
   const [isDark, setIsDark] = useState<boolean>(() => {
     // Check localStorage first
     const saved = localStorage.getItem('theme')
@@ -20,8 +20,8 @@ export function useDarkMode(): [boolean, () => void] {
       return saved === 'dark'
     }
 
-    // Fall back to system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+    // Default to dark mode
+    return true
   })
 
   // Apply dark class to document.documentElement

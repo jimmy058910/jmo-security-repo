@@ -29,7 +29,7 @@ try:
     from rapidfuzz import fuzz
 except ImportError:
     # Fallback to simple ratio calculation if rapidfuzz not available
-    fuzz = None
+    fuzz = None  # type: ignore
 
 from scripts.core.common_finding import Severity
 

@@ -23,12 +23,12 @@ permissions:
   security-events: write  # For uploading SARIF files to GitHub Security
 
 jobs:
-  # PRE-RELEASE GATE: Verify all tools are up-to-date before releasing
+  # PRE-RELEASE GATE: Comprehensive release validation (v1.0.0+)
   pre-release-check:
-    name: Verify tools up-to-date
+    name: Pre-Release Validation
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    timeout-minutes: 5
+    timeout-minutes: 10  # Increased from 5 to accommodate full test suite
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -37,40 +37,56 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          pip install -e .
+          pip install -r requirements-dev.txt
 
-      - name: Check for outdated tools
+      - name: Install security tools (for pre-release checks)
         run: |
-          echo "🔍 Checking for outdated tools before release..."
+          # Install TruffleHog for secrets scanning
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+          # Install Bandit for security audit
+          pip install bandit
+
+      - name: Install GitHub CLI (for CI status checks)
+        run: |
+          type -p curl >/dev/null || sudo apt install curl -y
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+
+      - name: Run comprehensive pre-release checks
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🚀 Running comprehensive pre-release validation..."
           echo ""
-          python3 scripts/dev/update_versions.py --check-latest || {
+          python3 scripts/dev/pre_release_check.py || {
             echo ""
-            echo "❌ ERROR: Cannot release with outdated tools!"
-            echo ""
-            echo "Found outdated tools. Update before releasing:"
-            echo "  python3 scripts/dev/update_versions.py --update-all"
-            echo "  python3 scripts/dev/update_versions.py --sync"
-            echo "  git add versions.yaml Dockerfile*"
-            echo "  git commit -m 'deps(tools): update all to latest before ${GITHUB_REF##*/}'"
-            echo "  git tag ${GITHUB_REF##*/} --force"
-            echo "  git push origin ${GITHUB_REF##*/} --force"
-            echo ""
-            echo "Alternatively, run the pre-release update workflow:"
-            echo "  gh workflow run pre-release-update.yml -f version=${GITHUB_REF##*/v}"
+            echo "❌ PRE-RELEASE CHECKS FAILED!"
+            echo "   Fix issues above before releasing."
             echo ""
             exit 1
           }
 
-      - name: Report current tool versions
+      - name: Generate release notes preview
         run: |
           echo ""
-          echo "✅ All tools are up-to-date! Proceeding with release."
+          echo "📝 Release notes preview:"
           echo ""
-          python3 scripts/dev/update_versions.py --report
+          python3 scripts/dev/generate_release_notes.py ${GITHUB_REF##*/} || {
+            echo ""
+            echo "⚠️  WARNING: Failed to generate release notes"
+            echo "   Verify CHANGELOG.md has entry for ${GITHUB_REF##*/}"
+          }
 
   # Build and publish Python package to PyPI
   pypi-publish:

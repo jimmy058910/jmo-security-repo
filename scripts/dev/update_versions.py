@@ -54,8 +54,9 @@ except ImportError:
 REPO_ROOT = Path(__file__).parent.parent.parent
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
+DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
 DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
-DOCKERFILE_ALPINE = REPO_ROOT / "Dockerfile.alpine"
+DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
 
 # ANSI colors
@@ -272,7 +273,12 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         version_map[tool.upper()] = info["version"]
 
     # Update each Dockerfile
-    for dockerfile_path in [DOCKERFILE, DOCKERFILE_SLIM, DOCKERFILE_ALPINE]:
+    for dockerfile_path in [
+        DOCKERFILE,
+        DOCKERFILE_BALANCED,
+        DOCKERFILE_SLIM,
+        DOCKERFILE_FAST,
+    ]:
         if not dockerfile_path.exists():
             warn(f"{dockerfile_path.name} not found, skipping")
             continue

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmo-security"
-version = "0.9.0"
+version = "1.0.0"
 description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs, multi-target scanning)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ dependencies = [
     "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
     "tomli>=2.0.0; python_version<'3.11'",  # Required for pyproject.toml reading (v1.0.0+)
     "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
+    "rich>=13.0",  # Required for trend analysis console formatting (v1.0.0+)
 ]
 
 [project.urls]
@@ -88,6 +89,7 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
 ]
 
 [tool.coverage.run]

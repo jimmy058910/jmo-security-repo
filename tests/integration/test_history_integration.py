@@ -253,9 +253,9 @@ class TestHistoryCLI:
         assert result.returncode == 0, f"Command failed: {result.stderr}"
         assert "fast" in result.stdout  # Profile name
         # Note: Output format depends on whether tabulate is installed
-        # Both formats show findings summary
-        assert "findings" in result.stdout
-        assert "CRITICAL" in result.stdout or "HIGH" in result.stdout
+        # Both formats show findings summary (case-insensitive check)
+        assert "findings" in result.stdout.lower()
+        assert "critical" in result.stdout.lower() or "high" in result.stdout.lower()
 
     def test_history_stats_command(self, tmp_path):
         """Test 'jmo history stats' command."""

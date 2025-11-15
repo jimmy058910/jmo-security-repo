@@ -200,15 +200,15 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         ]
 
         for pattern in safe_patterns:
-            # Python 3.11+ supports timeout parameter
-            if sys.version_info >= (3, 11):
+            # Python 3.13+ supports timeout parameter (not 3.11)
+            if sys.version_info >= (3, 13):
                 try:
                     re.search(pattern, redos_input, timeout=1)
                     # No assertion needed - just checking it doesn't hang
                 except TimeoutError:
                     pytest.fail(f"Pattern '{pattern}' caused ReDoS (timed out)")
             else:
-                # For Python < 3.11, just verify pattern compiles and runs
+                # For Python < 3.13, just verify pattern compiles and runs
                 # (no timeout support, but patterns should still be safe)
                 re.search(pattern, redos_input)
                 # No assertion needed - just checking it completes

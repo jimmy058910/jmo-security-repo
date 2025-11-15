@@ -1,5 +1,6 @@
 name: E2E Comprehensive Tests
 
+# checkov:skip=CKV2_GHA_1: Workflow requires write permissions for PR comments and issue creation
 on:
   pull_request:
     paths:
@@ -12,6 +13,7 @@ on:
     # Nightly at 6 AM UTC
     - cron: '0 6 * * *'
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual test execution requires test_id and docker_tag inputs for targeted testing
     inputs:
       test_id:
         description: 'Specific test to run (e.g., U1, M2, A3). Leave empty for all tests.'

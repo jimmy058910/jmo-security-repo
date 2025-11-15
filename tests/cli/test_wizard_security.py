@@ -189,11 +189,13 @@ class TestCommandListStructure:
         # Verify it's a list
         assert isinstance(cmd_list, list)
 
-        # Verify jmotools command structure
-        assert cmd_list[0] == "jmotools"
-        assert cmd_list[1] == "balanced"
+        # Verify jmo command structure
+        assert cmd_list[0] == "jmo"
+        assert cmd_list[1] == "scan"
 
-        # Verify arguments are properly separated
+        # Verify profile and arguments are properly separated
+        assert "--profile-name" in cmd_list
+        assert "balanced" in cmd_list
         assert "--repos-dir" in cmd_list
         assert "--results-dir" in cmd_list
         assert "--fail-on" in cmd_list

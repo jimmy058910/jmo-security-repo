@@ -487,11 +487,12 @@ def _cluster_cross_tool_duplicates(
         if current % 50 == 0 or current == total:
             logger.info(message)
 
-    # Create clusterer with default threshold (0.50)
-    # Threshold of 0.50 balances precision/recall for diverse tool outputs
-    # Lower than unit tests (0.75) to account for real tool wording variations
+    # Create clusterer with default threshold (0.75)
+    # Threshold of 0.75 ensures location similarity matters (35% weight)
+    # Prevents clustering findings from different file paths
+    # With 0% location + 100% message/metadata = max 0.65 (below threshold)
     # TODO: Make threshold configurable via jmo.yml deduplication section
-    clusterer = FindingClusterer(similarity_threshold=0.50)
+    clusterer = FindingClusterer(similarity_threshold=0.75)
 
     # Run clustering algorithm
     clusters = clusterer.cluster(findings, progress_callback=progress)

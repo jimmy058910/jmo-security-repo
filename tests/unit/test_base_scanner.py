@@ -5,8 +5,8 @@ from scripts.cli.scan_jobs.base_scanner import BaseScanner, ScanResult
 from scripts.cli.scan_orchestrator import ScanConfig
 
 
-class TestScanner(BaseScanner):
-    """Test implementation of BaseScanner."""
+class MockScanner(BaseScanner):
+    """Mock implementation of BaseScanner for testing."""
 
     def scan(self, target, results_dir, tools, args):
         """Minimal scan implementation for testing."""
@@ -28,7 +28,7 @@ class TestScanner(BaseScanner):
 def test_create_output_dir(tmp_path):
     """Test output directory creation."""
     config = ScanConfig(tools=["trivy"], results_dir=tmp_path)
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     output_dir = scanner._create_output_dir(tmp_path, "repo", "test-repo")
 
@@ -39,7 +39,7 @@ def test_create_output_dir(tmp_path):
 def test_create_output_dir_with_nested_path(tmp_path):
     """Test output directory creation with nested paths."""
     config = ScanConfig(tools=["trivy"], results_dir=tmp_path)
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     output_dir = scanner._create_output_dir(tmp_path, "image", "registry_image_tag")
 
@@ -50,7 +50,7 @@ def test_create_output_dir_with_nested_path(tmp_path):
 def test_sanitize_name_simple():
     """Test name sanitization for simple names."""
     config = ScanConfig(tools=["trivy"], results_dir=Path("/tmp"))
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     assert scanner._sanitize_name("my-repo") == "my-repo"
     assert scanner._sanitize_name("my_repo") == "my_repo"
@@ -60,7 +60,7 @@ def test_sanitize_name_simple():
 def test_sanitize_name_with_special_chars():
     """Test name sanitization with special characters."""
     config = ScanConfig(tools=["trivy"], results_dir=Path("/tmp"))
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     assert scanner._sanitize_name("my/repo:tag") == "my_repo_tag"
     assert (
@@ -74,7 +74,7 @@ def test_sanitize_name_with_special_chars():
 def test_sanitize_name_preserves_valid_chars():
     """Test that sanitization preserves valid characters."""
     config = ScanConfig(tools=["trivy"], results_dir=Path("/tmp"))
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     valid_name = "my-valid.repo_123"
     assert scanner._sanitize_name(valid_name) == valid_name
@@ -104,7 +104,7 @@ def test_scan_result_dataclass():
 def test_scanner_has_config():
     """Test that scanner stores config."""
     config = ScanConfig(tools=["trivy", "syft"], results_dir=Path("/tmp"))
-    scanner = TestScanner(config)
+    scanner = MockScanner(config)
 
     assert scanner.config == config
     assert scanner.config.tools == ["trivy", "syft"]

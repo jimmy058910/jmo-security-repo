@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import subprocess  # nosec B404 - CLI needs subprocess
-import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -631,9 +630,13 @@ def generate_command_list(config: WizardConfig) -> list[str]:
     return _build_command_parts(config)
 
 
-def execute_scan(config: WizardConfig) -> int:
+def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     """
     Step 7: Execute the scan.
+
+    Args:
+        config: Wizard configuration
+        yes: Skip prompts and use defaults
 
     Returns:
         Exit code from scan
@@ -646,7 +649,8 @@ def execute_scan(config: WizardConfig) -> int:
     print(_colorize(f"  {command}", "green"))
     print()
 
-    if not _prompt_yes_no("Execute now?", default=True):
+    # In non-interactive mode, auto-execute without prompting
+    if not yes and not _prompt_yes_no("Execute now?", default=True):
         print("\nCommand saved. You can run it later:")
         print(f"  {command}")
         return 0
@@ -656,35 +660,22 @@ def execute_scan(config: WizardConfig) -> int:
 
     # Execute via subprocess
     try:
-        if config.use_docker:
-            # Docker execution - use list for security (no shell=True)
-            command_list = generate_command_list(config)
-            result = subprocess.run(
-                command_list,
-                shell=False,  # IMPORTANT: shell=False prevents command injection
-                check=False,
+        # Both Docker and native execution use subprocess for consistency and security
+        command_list = generate_command_list(config)
+        result = subprocess.run(
+            command_list,
+            shell=False,  # IMPORTANT: shell=False prevents command injection
+            check=False,
+        )
+        # Print results guide after scan completes
+        if result.returncode == 0 or result.returncode == 1:
+            print(
+                "\n"
+                + _colorize("📖 Learn how to triage and act on your findings:", "blue")
             )
-            # Print results guide after scan completes
-            if result.returncode == 0 or result.returncode == 1:
-                print(
-                    "\n"
-                    + _colorize(
-                        "📖 Learn how to triage and act on your findings:", "blue"
-                    )
-                )
-                print("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md")
-                print("  - Complete guide: docs/RESULTS_GUIDE.md")
-            return result.returncode
-        else:
-            # Native execution via jmotools
-            sys.path.insert(0, str(Path(__file__).parent))
-            from jmotools import main as jmotools_main
-
-            # Build argv from secure list
-            command_list = generate_command_list(config)
-            argv = command_list[1:]  # Skip 'jmotools'
-            exit_code: int = jmotools_main(argv)
-            return exit_code
+            print("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md")
+            print("  - Complete guide: docs/RESULTS_GUIDE.md")
+        return result.returncode
 
     except KeyboardInterrupt:
         print(_colorize("\n\nScan cancelled by user", "yellow"))
@@ -837,7 +828,7 @@ def run_wizard(
             return 0
 
         # Execute scan
-        result = execute_scan(config)
+        result = execute_scan(config, yes=yes)
 
         # Handle trend analysis after successful scan (if ≥2 scans exist)
         if result == 0 or result == 1:  # Success (0 = clean, 1 = findings)

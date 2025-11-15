@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import FindingsTable from './components/FindingsTable'
 import FilterPanel from './components/FilterPanel'
+import SeverityChart from './components/SeverityChart'
 import DarkModeToggle from './components/DarkModeToggle'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp'
 import ExportButton from './components/ExportButton'
@@ -146,7 +147,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors">
-      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             🛡️ JMo Security Dashboard
@@ -253,6 +254,9 @@ export default function App() {
                   isDiffMode={isDiffMode}
                 />
               )}
+
+              {/* Severity Distribution Chart */}
+              <SeverityChart findings={filteredFindings} />
 
               {/* Filter Panel */}
               <FilterPanel

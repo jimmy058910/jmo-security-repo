@@ -161,14 +161,17 @@ def build_command_parts(config: WizardConfig) -> list[str]:
 
     else:
         # Native command
-        cmd_parts = ["jmotools", config.profile]
+        cmd_parts = ["jmo", "scan"]
 
         # Add target-specific flags
         cmd_parts.extend(_get_target_args_with_volumes(config.target, use_docker=False))
 
-        # Advanced options
+        # Results directory and profile
         if config.results_dir:
             cmd_parts.extend(["--results-dir", config.results_dir])
+        cmd_parts.extend(["--profile-name", config.profile])
+
+        # Advanced options
         if config.threads is not None:
             cmd_parts.extend(["--threads", str(config.threads)])
         if config.timeout is not None:

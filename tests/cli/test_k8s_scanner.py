@@ -134,6 +134,9 @@ class TestK8sScanner:
 
     def test_scan_k8s_sanitizes_name(self, tmp_path):
         """Test that context/namespace are sanitized for directory names"""
+        # Create individual-k8s subdirectory (matches production usage in scan_orchestrator)
+        k8s_results_dir = tmp_path / "individual-k8s"
+
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -151,7 +154,7 @@ class TestK8sScanner:
 
             scan_k8s_resource(
                 k8s_info=k8s_info,
-                results_dir=tmp_path,
+                results_dir=k8s_results_dir,  # Pass individual-k8s directory (matches production)
                 tools=["trivy"],
                 timeout=600,
                 retries=0,
@@ -160,7 +163,7 @@ class TestK8sScanner:
             )
 
             # Check sanitized directory
-            expected_dir = tmp_path / "individual-k8s" / "cluster-01_kube-system"
+            expected_dir = k8s_results_dir / "cluster-01_kube-system"
             assert expected_dir.exists()
 
     def test_scan_k8s_with_timeout_override(self, tmp_path):

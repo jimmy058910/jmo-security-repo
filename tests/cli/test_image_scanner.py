@@ -77,6 +77,9 @@ class TestImageScanner:
 
     def test_scan_image_sanitizes_name(self, tmp_path):
         """Test that image names are sanitized for directory names"""
+        # Create individual-images subdirectory (matches production usage in scan_orchestrator)
+        image_results_dir = tmp_path / "individual-images"
+
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -90,7 +93,7 @@ class TestImageScanner:
             # Image with special characters
             scan_image(
                 image="registry.example.com:5000/my-app:v1.2.3",
-                results_dir=tmp_path,
+                results_dir=image_results_dir,  # Pass individual-images directory
                 tools=["trivy"],
                 timeout=600,
                 retries=0,
@@ -99,11 +102,7 @@ class TestImageScanner:
             )
 
             # Check that directory was created with sanitized name
-            expected_dir = (
-                tmp_path
-                / "individual-images"
-                / "registry.example.com_5000_my-app_v1.2.3"
-            )
+            expected_dir = image_results_dir / "registry.example.com_5000_my-app_v1.2.3"
             assert expected_dir.exists()
 
     def test_scan_image_with_tool_timeout_override(self, tmp_path):
@@ -200,6 +199,9 @@ class TestImageScanner:
 
     def test_scan_image_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
+        # Create individual-images subdirectory (matches production usage in scan_orchestrator)
+        image_results_dir = tmp_path / "individual-images"
+
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -212,7 +214,7 @@ class TestImageScanner:
 
             scan_image(
                 image="alpine:latest",
-                results_dir=tmp_path,
+                results_dir=image_results_dir,  # Pass individual-images directory (matches production)
                 tools=["trivy"],
                 timeout=600,
                 retries=0,
@@ -220,9 +222,9 @@ class TestImageScanner:
                 allow_missing_tools=False,
             )
 
-            # Check directory structure
-            assert (tmp_path / "individual-images").exists()
-            assert (tmp_path / "individual-images" / "alpine_latest").exists()
+            # Check that directory was created with sanitized image name
+            expected_dir = image_results_dir / "alpine_latest"
+            assert expected_dir.exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""

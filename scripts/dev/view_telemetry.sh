@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-GIST_ID="${JMO_TELEMETRY_GIST_ID:-}"
+GIST_ID="${JMO_TELEMETRY_GIST_ID-}"
 TELEMETRY_FILE="/tmp/jmo-telemetry-events.jsonl"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -23,47 +23,47 @@ NC='\033[0m' # No Color
 
 # Check prerequisites
 if [ -z "$GIST_ID" ]; then
-    echo -e "${RED}❌ Error: JMO_TELEMETRY_GIST_ID environment variable not set${NC}"
-    echo "   Set it with: export JMO_TELEMETRY_GIST_ID=your-gist-id"
-    exit 1
+  echo -e "${RED}❌ Error: JMO_TELEMETRY_GIST_ID environment variable not set${NC}"
+  echo "   Set it with: export JMO_TELEMETRY_GIST_ID=your-gist-id"
+  exit 1
 fi
 
-if ! command -v gh &> /dev/null; then
-    echo -e "${RED}❌ Error: GitHub CLI (gh) not installed${NC}"
-    echo "   Install: https://cli.github.com/"
-    exit 1
+if ! command -v gh &>/dev/null; then
+  echo -e "${RED}❌ Error: GitHub CLI (gh) not installed${NC}"
+  echo "   Install: https://cli.github.com/"
+  exit 1
 fi
 
-if ! command -v jq &> /dev/null; then
-    echo -e "${RED}❌ Error: jq not installed${NC}"
-    echo "   Install: sudo apt install jq (Linux) or brew install jq (macOS)"
-    exit 1
+if ! command -v jq &>/dev/null; then
+  echo -e "${RED}❌ Error: jq not installed${NC}"
+  echo "   Install: sudo apt install jq (Linux) or brew install jq (macOS)"
+  exit 1
 fi
 
 # Fetch telemetry data
 echo -e "${CYAN}🔄 Fetching telemetry data from Gist...${NC}"
-if ! gh gist view "$GIST_ID" --raw > "$TELEMETRY_FILE" 2>/dev/null; then
-    echo -e "${RED}❌ Failed to fetch Gist data${NC}"
-    echo "   Check GIST_ID and GitHub authentication: gh auth status"
-    exit 1
+if ! gh gist view "$GIST_ID" --raw >"$TELEMETRY_FILE" 2>/dev/null; then
+  echo -e "${RED}❌ Failed to fetch Gist data${NC}"
+  echo "   Check GIST_ID and GitHub authentication: gh auth status"
+  exit 1
 fi
 
-TOTAL_EVENTS=$(wc -l < "$TELEMETRY_FILE")
+TOTAL_EVENTS=$(wc -l <"$TELEMETRY_FILE")
 echo -e "${GREEN}✅ Downloaded $TOTAL_EVENTS events${NC}"
 echo
 
 # Handle command-line arguments
-if [ "${1:-}" = "--raw" ]; then
-    cat "$TELEMETRY_FILE" | jq .
-    exit 0
+if [ "${1-}" = "--raw" ]; then
+  cat "$TELEMETRY_FILE" | jq .
+  exit 0
 fi
 
-if [ "${1:-}" = "--export" ]; then
-    OUTPUT_FILE="telemetry-export-$(date +%Y%m%d-%H%M%S).csv"
-    echo "event,timestamp,platform,python_version,profile,mode,duration,tools_count" > "$OUTPUT_FILE"
-    jq -r '[.event, .timestamp, .platform, .python_version, (.metadata.profile // ""), (.metadata.mode // ""), (.metadata.duration_bucket // ""), (.metadata.tools | length // 0)] | @csv' "$TELEMETRY_FILE" >> "$OUTPUT_FILE"
-    echo -e "${GREEN}✅ Exported to $OUTPUT_FILE${NC}"
-    exit 0
+if [ "${1-}" = "--export" ]; then
+  OUTPUT_FILE="telemetry-export-$(date +%Y%m%d-%H%M%S).csv"
+  echo "event,timestamp,platform,python_version,profile,mode,duration,tools_count" >"$OUTPUT_FILE"
+  jq -r '[.event, .timestamp, .platform, .python_version, (.metadata.profile // ""), (.metadata.mode // ""), (.metadata.duration_bucket // ""), (.metadata.tools | length // 0)] | @csv' "$TELEMETRY_FILE" >>"$OUTPUT_FILE"
+  echo -e "${GREEN}✅ Exported to $OUTPUT_FILE${NC}"
+  exit 0
 fi
 
 # === TELEMETRY DASHBOARD ===
@@ -94,32 +94,32 @@ echo
 echo -e "${YELLOW}📋 Event Type Breakdown${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 jq -r '.event' "$TELEMETRY_FILE" | sort | uniq -c | sort -rn | while read -r count event; do
-    printf "  %-40s %8d\n" "$event" "$count"
+  printf "  %-40s %8d\n" "$event" "$count"
 done
 echo
 
 # Platform distribution
 echo -e "${YELLOW}💻 Platform Distribution${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-if jq -e 'select(.platform)' "$TELEMETRY_FILE" &> /dev/null; then
-    jq -r 'select(.platform) | .platform' "$TELEMETRY_FILE" | sort | uniq -c | sort -rn | while read -r count platform; do
-        percentage=$((count * 100 / TOTAL_EVENTS))
-        printf "  %-30s %5d (%3d%%)\n" "$platform" "$count" "$percentage"
-    done
+if jq -e 'select(.platform)' "$TELEMETRY_FILE" &>/dev/null; then
+  jq -r 'select(.platform) | .platform' "$TELEMETRY_FILE" | sort | uniq -c | sort -rn | while read -r count platform; do
+    percentage=$((count * 100 / TOTAL_EVENTS))
+    printf "  %-30s %5d (%3d%%)\n" "$platform" "$count" "$percentage"
+  done
 else
-    echo "  (No platform data yet)"
+  echo "  (No platform data yet)"
 fi
 echo
 
 # Python version distribution
 echo -e "${YELLOW}🐍 Python Version Distribution${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-if jq -e 'select(.python_version)' "$TELEMETRY_FILE" &> /dev/null; then
-    jq -r 'select(.python_version) | .python_version' "$TELEMETRY_FILE" | sort | uniq -c | sort -rn | while read -r count version; do
-        printf "  %-30s %5d\n" "$version" "$count"
-    done
+if jq -e 'select(.python_version)' "$TELEMETRY_FILE" &>/dev/null; then
+  jq -r 'select(.python_version) | .python_version' "$TELEMETRY_FILE" | sort | uniq -c | sort -rn | while read -r count version; do
+    printf "  %-30s %5d\n" "$version" "$count"
+  done
 else
-    echo "  (No Python version data yet)"
+  echo "  (No Python version data yet)"
 fi
 echo
 
@@ -127,12 +127,12 @@ echo
 echo -e "${YELLOW}🎯 Profile Popularity${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$SCAN_STARTED" -gt 0 ]; then
-    jq -r 'select(.event == "scan.started") | .metadata.profile' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count profile; do
-        percentage=$((count * 100 / SCAN_STARTED))
-        printf "  %-30s %5d (%3d%%)\n" "$profile" "$count" "$percentage"
-    done
+  jq -r 'select(.event == "scan.started") | .metadata.profile' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count profile; do
+    percentage=$((count * 100 / SCAN_STARTED))
+    printf "  %-30s %5d (%3d%%)\n" "$profile" "$count" "$percentage"
+  done
 else
-    echo "  (No scan.started events yet)"
+  echo "  (No scan.started events yet)"
 fi
 echo
 
@@ -140,12 +140,12 @@ echo
 echo -e "${YELLOW}🚀 Execution Mode${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$SCAN_STARTED" -gt 0 ]; then
-    jq -r 'select(.event == "scan.started") | .metadata.mode' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count mode; do
-        percentage=$((count * 100 / SCAN_STARTED))
-        printf "  %-30s %5d (%3d%%)\n" "$mode" "$count" "$percentage"
-    done
+  jq -r 'select(.event == "scan.started") | .metadata.mode' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count mode; do
+    percentage=$((count * 100 / SCAN_STARTED))
+    printf "  %-30s %5d (%3d%%)\n" "$mode" "$count" "$percentage"
+  done
 else
-    echo "  (No scan.started events yet)"
+  echo "  (No scan.started events yet)"
 fi
 echo
 
@@ -153,11 +153,11 @@ echo
 echo -e "${YELLOW}🔧 Most Popular Tools${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$SCAN_STARTED" -gt 0 ]; then
-    jq -r 'select(.event == "scan.started") | .metadata.tools[]' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | head -10 | while read -r count tool; do
-        printf "  %-30s %5d\n" "$tool" "$count"
-    done
+  jq -r 'select(.event == "scan.started") | .metadata.tools[]' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | head -10 | while read -r count tool; do
+    printf "  %-30s %5d\n" "$tool" "$count"
+  done
 else
-    echo "  (No scan.started events yet)"
+  echo "  (No scan.started events yet)"
 fi
 echo
 
@@ -165,11 +165,11 @@ echo
 echo -e "${YELLOW}❌ Tool Failures${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$TOOL_FAILURES" -gt 0 ]; then
-    jq -r 'select(.event == "tool.failed") | .metadata.tool' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count tool; do
-        printf "  %-30s %5d\n" "$tool" "$count"
-    done
+  jq -r 'select(.event == "tool.failed") | .metadata.tool' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -rn | while read -r count tool; do
+    printf "  %-30s %5d\n" "$tool" "$count"
+  done
 else
-    echo -e "  ${GREEN}(No tool failures - great job!)${NC}"
+  echo -e "  ${GREEN}(No tool failures - great job!)${NC}"
 fi
 echo
 
@@ -177,12 +177,12 @@ echo
 echo -e "${YELLOW}⏱️  Scan Duration Distribution${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$SCAN_COMPLETED" -gt 0 ]; then
-    jq -r 'select(.event == "scan.completed") | .metadata.duration_bucket' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -k2 | while read -r count bucket; do
-        percentage=$((count * 100 / SCAN_COMPLETED))
-        printf "  %-30s %5d (%3d%%)\n" "$bucket" "$count" "$percentage"
-    done
+  jq -r 'select(.event == "scan.completed") | .metadata.duration_bucket' "$TELEMETRY_FILE" 2>/dev/null | sort | uniq -c | sort -k2 | while read -r count bucket; do
+    percentage=$((count * 100 / SCAN_COMPLETED))
+    printf "  %-30s %5d (%3d%%)\n" "$bucket" "$count" "$percentage"
+  done
 else
-    echo "  (No scan.completed events yet)"
+  echo "  (No scan.completed events yet)"
 fi
 echo
 
@@ -190,14 +190,14 @@ echo
 echo -e "${YELLOW}🎯 Target Type Distribution${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$SCAN_STARTED" -gt 0 ]; then
-    for target_type in repos images urls iac gitlab k8s; do
-        total=$(jq -r "select(.event == \"scan.started\") | .metadata.target_types.$target_type // 0" "$TELEMETRY_FILE" 2>/dev/null | awk '{s+=$1} END {print s+0}')
-        if [ "$total" -gt 0 ]; then
-            printf "  %-30s %5d\n" "$target_type" "$total"
-        fi
-    done
+  for target_type in repos images urls iac gitlab k8s; do
+    total=$(jq -r "select(.event == \"scan.started\") | .metadata.target_types.$target_type // 0" "$TELEMETRY_FILE" 2>/dev/null | awk '{s+=$1} END {print s+0}')
+    if [ "$total" -gt 0 ]; then
+      printf "  %-30s %5d\n" "$target_type" "$total"
+    fi
+  done
 else
-    echo "  (No scan.started events yet)"
+  echo "  (No scan.started events yet)"
 fi
 echo
 
@@ -205,21 +205,21 @@ echo
 echo -e "${YELLOW}🏠 Your Local Telemetry Status${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ -f ~/.jmo-security/telemetry-id ]; then
-    echo "  Your anonymous ID: $(cat ~/.jmo-security/telemetry-id)"
+  echo "  Your anonymous ID: $(cat ~/.jmo-security/telemetry-id)"
 else
-    echo "  No telemetry ID found (telemetry disabled)"
+  echo "  No telemetry ID found (telemetry disabled)"
 fi
 
 if [ -f ~/.jmo-security/scan-count ]; then
-    local_scans=$(cat ~/.jmo-security/scan-count)
-    echo "  Your local scan count: $local_scans"
+  local_scans=$(cat ~/.jmo-security/scan-count)
+  echo "  Your local scan count: $local_scans"
 
-    if [ "$SCAN_STARTED" -gt 0 ]; then
-        contribution=$((SCAN_STARTED * 100 / local_scans))
-        echo "  Events uploaded: $SCAN_STARTED / $local_scans ($contribution%)"
-    fi
+  if [ "$SCAN_STARTED" -gt 0 ]; then
+    contribution=$((SCAN_STARTED * 100 / local_scans))
+    echo "  Events uploaded: $SCAN_STARTED / $local_scans ($contribution%)"
+  fi
 else
-    echo "  No scan count found"
+  echo "  No scan count found"
 fi
 echo
 
@@ -227,11 +227,11 @@ echo
 echo -e "${YELLOW}📅 Recent Events (last 10)${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ "$TOTAL_EVENTS" -gt 0 ]; then
-    tail -10 "$TELEMETRY_FILE" | jq -r '. | "\(.timestamp) | \(.event) | \(.platform // "N/A")"' 2>/dev/null | while read -r line; do
-        echo "  $line"
-    done
+  tail -10 "$TELEMETRY_FILE" | jq -r '. | "\(.timestamp) | \(.event) | \(.platform // "N/A")"' 2>/dev/null | while read -r line; do
+    echo "  $line"
+  done
 else
-    echo "  (No events)"
+  echo "  (No events)"
 fi
 echo
 

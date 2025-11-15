@@ -311,7 +311,8 @@ jobs:
     else:
         # Native workflow
         scan_cmd_lines = [
-            f"jmotools {config.profile}",
+            "jmo scan",
+            f"--profile-name {config.profile}",
             f"--threads {threads}",
             f"--timeout {timeout}",
         ]

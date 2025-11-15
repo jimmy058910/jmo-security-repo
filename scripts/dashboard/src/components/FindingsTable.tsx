@@ -1,4 +1,5 @@
 import { useState, useMemo, Fragment } from 'react'
+import * as Tooltip from '@radix-ui/react-tooltip'
 import { CommonFinding } from '../types/findings'
 
 interface FindingsTableProps {
@@ -11,10 +12,90 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
   const [sortKey, setSortKey] = useState<string>('severity')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(25)
 
-  // Sorting logic
+  // Pagination Controls Component (rendered both top and bottom)
+  const PaginationControls = () => {
+    const totalPages = Math.ceil(sortedFindings.length / pageSize)
+
+    return (
+      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+            <span className="font-medium">{Math.min(currentPage * pageSize, sortedFindings.length)}</span> of{' '}
+            <span className="font-medium">{sortedFindings.length}</span> findings
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="pageSize" className="text-sm text-gray-700 dark:text-gray-300">
+              Per page:
+            </label>
+            <select
+              id="pageSize"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value))
+                setCurrentPage(1) // Reset to first page when changing page size
+              }}
+              className="rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm py-1 px-2"
+            >
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            First
+          </button>
+          <button
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Last
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Sorting logic with KEV-first prioritization
   const sortedFindings = useMemo(() => {
     const sorted = [...findings].sort((a, b) => {
+      // KEV-FIRST SORTING: Always prioritize KEV findings regardless of other sort criteria
+      const aIsKEV = a.priority?.is_kev || false
+      const bIsKEV = b.priority?.is_kev || false
+
+      if (aIsKEV && !bIsKEV) return -1  // a is KEV, b is not → a comes first
+      if (!aIsKEV && bIsKEV) return 1   // b is KEV, a is not → b comes first
+
+      // Both KEV or both not KEV → apply normal sorting
       let av, bv
 
       if (sortKey === 'severity') {
@@ -42,12 +123,21 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
     return sorted
   }, [findings, sortKey, sortDir])
 
+  // Pagination logic
+  const paginatedFindings = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    return sortedFindings.slice(startIndex, endIndex)
+  }, [sortedFindings, currentPage, pageSize])
+
   const toggleSort = (key: string) => {
     if (sortKey === key) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
     } else {
       setSortKey(key)
-      setSortDir('asc')
+      // Default to DESC for priority (higher numbers = more urgent)
+      // Default to ASC for other columns
+      setSortDir(key === 'priority' ? 'desc' : 'asc')
     }
   }
 
@@ -81,8 +171,14 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+    <Tooltip.Provider delayDuration={300}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        {/* TOP PAGINATION CONTROLS */}
+        {sortedFindings.length > 0 && <PaginationControls />}
+
+        {/* TABLE */}
+        <div className="overflow-x-auto max-w-full">
+          <table className="min-w-max divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th
@@ -118,7 +214,7 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {sortedFindings.map((finding) => (
+          {paginatedFindings.map((finding) => (
             <Fragment key={finding.id}>
               <tr
                 className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
@@ -138,13 +234,61 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
                   {finding.severity}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {finding.ruleId}
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <span className="cursor-help truncate max-w-xs block">
+                        {finding.ruleId}
+                      </span>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        sideOffset={5}
+                        side="top"
+                      >
+                        {finding.description || finding.ruleId}
+                        <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {finding.location.path}:{finding.location.startLine || '?'}
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <span className="cursor-help truncate max-w-xs block">
+                        {finding.location.path}:{finding.location.startLine || '?'}
+                      </span>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        sideOffset={5}
+                        side="top"
+                      >
+                        {finding.location.path}:{finding.location.startLine || '?'}
+                        <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-md truncate">
-                  {finding.message}
+                <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 min-w-96 max-w-2xl">
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <div className="break-words line-clamp-2 cursor-help">
+                        {finding.message}
+                      </div>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 dark:bg-gray-700 text-white px-3 py-2 rounded text-sm max-w-md shadow-lg z-50"
+                        sideOffset={5}
+                        side="top"
+                      >
+                        {finding.message}
+                        <Tooltip.Arrow className="fill-gray-900 dark:fill-gray-700" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {finding.tool.name}
@@ -193,6 +337,15 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+
+      {/* BOTTOM PAGINATION CONTROLS */}
+      {sortedFindings.length > 0 && (
+        <div className="border-t border-gray-200 dark:border-gray-700">
+          <PaginationControls />
+        </div>
+      )}
+      </div>
+    </Tooltip.Provider>
   )
 }

@@ -20,6 +20,7 @@ from scripts.core.reporters.compliance_reporter import (
 from scripts.core.reporters.csv_reporter import write_csv
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.reporters.sarif_reporter import write_sarif
+from scripts.core.reporters.simple_html_reporter import write_simple_html
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.suppress import filter_suppressed, load_suppressions
@@ -166,6 +167,8 @@ def cmd_report(args, _log_fn) -> int:
             _log_fn(args, "DEBUG", f"YAML reporter unavailable: {e}")
     if "html" in cfg.outputs:
         write_html(findings, out_dir / "dashboard.html")
+    if "simple-html" in cfg.outputs:
+        write_simple_html(findings, out_dir / "simple-report.html")
     if "sarif" in cfg.outputs:
         write_sarif(findings, out_dir / "findings.sarif")
     if "csv" in cfg.outputs:
@@ -355,6 +358,8 @@ def cmd_report(args, _log_fn) -> int:
         output_formats.append("md")
     if getattr(args, "html", False) or "html" in cfg.outputs:
         output_formats.append("html")
+    if getattr(args, "simple_html", False) or "simple-html" in cfg.outputs:
+        output_formats.append("simple-html")
     if getattr(args, "sarif", False) or "sarif" in cfg.outputs:
         output_formats.append("sarif")
     if getattr(args, "yaml", False) or "yaml" in cfg.outputs:

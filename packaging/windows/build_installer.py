@@ -79,13 +79,10 @@ def find_nsis_path() -> str | None:
     # Check PATH
     try:
         result = subprocess.run(
-            ["where", "makensis"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["where", "makensis"], capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip().split('\n')[0]
+            return result.stdout.strip().split("\n")[0]
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
@@ -109,10 +106,7 @@ def check_chocolatey_installed() -> bool:
     """
     try:
         result = subprocess.run(
-            ["choco", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["choco", "--version"], capture_output=True, text=True, timeout=5
         )
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -131,18 +125,14 @@ def install_chocolatey():
     # Chocolatey installation command
     install_cmd = (
         'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
-        '[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; '
-        'iex ((New-Object System.Net.WebClient).DownloadString(\'https://community.chocolatey.org/install.ps1\'))'
+        "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+        "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
         '"'
     )
 
     try:
         result = subprocess.run(
-            install_cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=300
+            install_cmd, shell=True, capture_output=True, text=True, timeout=300
         )
 
         if result.returncode != 0:
@@ -178,7 +168,7 @@ def install_nsis():
             ["choco", "install", "nsis", "-y"],
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=300,
         )
 
         if result.returncode != 0:
@@ -205,7 +195,10 @@ def refresh_path():
 
     try:
         # Read system PATH
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment") as key:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ) as key:
             system_path = winreg.QueryValueEx(key, "Path")[0]
 
         # Read user PATH
@@ -247,8 +240,10 @@ def ensure_nsis_available(auto_install: bool = False):
         print("⚠️  Chocolatey not found\n")
 
         if not auto_install:
-            response = input("Install Chocolatey package manager? (y/n): ").strip().lower()
-            if response != 'y':
+            response = (
+                input("Install Chocolatey package manager? (y/n): ").strip().lower()
+            )
+            if response != "y":
                 raise RuntimeError(
                     "NSIS installation cancelled. Please install manually:\n"
                     "https://nsis.sourceforge.io/Download"
@@ -261,7 +256,7 @@ def ensure_nsis_available(auto_install: bool = False):
     # Install NSIS
     if not auto_install:
         response = input("Install NSIS via Chocolatey? (y/n): ").strip().lower()
-        if response != 'y':
+        if response != "y":
             raise RuntimeError(
                 "NSIS installation cancelled. Please install manually:\n"
                 "https://nsis.sourceforge.io/Download"
@@ -310,7 +305,7 @@ def create_pyinstaller_spec(version: str) -> Path:
     print("📝 Creating PyInstaller spec file...")
 
     # Convert PROJECT_ROOT to string with forward slashes for cross-platform compatibility
-    project_root_str = str(PROJECT_ROOT).replace('\\', '/')
+    project_root_str = str(PROJECT_ROOT).replace("\\", "/")
 
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec for JMo Security {version}
@@ -426,7 +421,7 @@ exe = EXE(
 """
 
     spec_file = PACKAGING_DIR / "jmo-security.spec"
-    spec_file.write_text(spec_content, encoding='utf-8')
+    spec_file.write_text(spec_content, encoding="utf-8")
     print(f"✅ Spec file created: {spec_file}\n")
     return spec_file
 
@@ -483,7 +478,7 @@ def create_version_info(version: str) -> Path:
 """
 
     version_file = PACKAGING_DIR / "file_version_info.txt"
-    version_file.write_text(version_info_content, encoding='utf-8')
+    version_file.write_text(version_info_content, encoding="utf-8")
     print(f"✅ Version info created: {version_file}\n")
     return version_file
 
@@ -771,7 +766,7 @@ FunctionEnd
 """
 
     nsis_file = PACKAGING_DIR / "installer.nsi"
-    nsis_file.write_text(nsis_script, encoding='utf-8')
+    nsis_file.write_text(nsis_script, encoding="utf-8")
     print(f"✅ NSIS script created: {nsis_file}\n")
     return nsis_file
 

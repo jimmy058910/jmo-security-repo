@@ -57,7 +57,7 @@ def scan_iac_file(
 
     # Use filename as directory name
     safe_name = iac_path.stem
-    out_dir = results_dir / "individual-iac" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:

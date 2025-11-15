@@ -80,7 +80,8 @@ def test_generate_command_native_repos_dir():
 
     cmd = generate_command(config)
 
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--repos-dir /home/user/repos" in cmd
     assert "--results-dir results" in cmd
     assert "--threads 4" in cmd
@@ -101,7 +102,8 @@ def test_generate_command_native_with_fail_on():
 
     cmd = generate_command(config)
 
-    assert "jmotools fast" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name fast" in cmd
     assert "--repo /home/user/myrepo" in cmd
     assert "--fail-on HIGH" in cmd
 
@@ -140,7 +142,8 @@ def test_generate_command_tsv_mode():
 
     cmd = generate_command(config)
 
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--tsv ./repos.tsv" in cmd
     assert "--dest repos-tsv" in cmd
 
@@ -158,7 +161,8 @@ def test_generate_makefile_target():
 
     assert ".PHONY: security-scan" in makefile
     assert "security-scan:" in makefile
-    assert "jmotools balanced" in makefile
+    assert "jmo scan" in makefile
+    assert "--profile-name balanced" in makefile
     assert "/home/user/repos" in makefile
 
 
@@ -175,7 +179,8 @@ def test_generate_shell_script():
 
     assert "#!/usr/bin/env bash" in script
     assert "set -euo pipefail" in script
-    assert "jmotools fast" in script
+    assert "jmo scan" in script
+    assert "--profile-name fast" in script
     assert "/home/user/myrepo" in script
 
 
@@ -198,7 +203,8 @@ def test_generate_github_actions_native():
     assert "runs-on: ubuntu-latest" in workflow
     assert "actions/checkout@v4" in workflow
     assert "actions/setup-python@v5" in workflow
-    assert "jmotools balanced" in workflow
+    assert "jmo scan" in workflow
+    assert "--profile-name balanced" in workflow
     assert "--fail-on HIGH" in workflow
     assert "upload-artifact@v4" in workflow
     assert "upload-sarif@v3" in workflow
@@ -734,7 +740,8 @@ def test_generate_command_targets_mode():
     config.results_dir = "results"
 
     cmd = generate_command(config)
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--targets /path/to/targets.txt" in cmd
 
 
@@ -815,31 +822,33 @@ def test_execute_scan_native_mode(mock_yes_no):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_keyboard_interrupt(mock_yes_no):
+@patch("subprocess.run")
+def test_execute_scan_keyboard_interrupt(mock_run, mock_yes_no):
     """Test execute_scan with keyboard interrupt."""
     from scripts.cli.wizard import execute_scan
 
     config = WizardConfig()
     config.use_docker = False
 
-    mock_jmotools_main = MagicMock(side_effect=KeyboardInterrupt())
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    # Mock subprocess.run to raise KeyboardInterrupt
+    mock_run.side_effect = KeyboardInterrupt()
+    exit_code = execute_scan(config)
 
     assert exit_code == 130
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_exception(mock_yes_no):
+@patch("subprocess.run")
+def test_execute_scan_exception(mock_run, mock_yes_no):
     """Test execute_scan with exception."""
     from scripts.cli.wizard import execute_scan
 
     config = WizardConfig()
     config.use_docker = False
 
-    mock_jmotools_main = MagicMock(side_effect=Exception("Test error"))
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    # Mock subprocess.run to raise OSError (a system error)
+    mock_run.side_effect = OSError("Test error")
+    exit_code = execute_scan(config)
 
     assert exit_code == 1
 

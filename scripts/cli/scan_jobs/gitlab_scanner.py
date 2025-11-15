@@ -292,7 +292,7 @@ def scan_gitlab_repo(
 
         # Move results from temp location to final GitLab results directory
         safe_name = full_path.replace("/", "_").replace("*", "all")
-        final_out_dir = results_dir / "individual-gitlab" / safe_name
+        final_out_dir = results_dir / safe_name
         final_out_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy all tool output files from temp to final location

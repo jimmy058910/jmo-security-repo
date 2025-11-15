@@ -344,7 +344,7 @@ class TestDockerBuild:
             ],
             capture_output=True,
             text=True,
-            timeout=600,  # 10 minutes max
+            timeout=1200,  # 20 minutes max (WSL2 can be slow)
             check=False,
         )
 

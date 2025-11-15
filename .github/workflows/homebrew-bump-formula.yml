@@ -10,6 +10,7 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual formula update requires version input for Homebrew submission
     inputs:
       version:
         description: 'Version to bump (without v prefix, e.g., 0.9.0)'

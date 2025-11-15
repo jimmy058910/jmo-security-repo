@@ -1,0 +1,109 @@
+name: Performance Regression Detection
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'scripts/core/**'
+      - 'tests/performance/**'
+      - '.github/workflows/performance-regression.yml'
+  workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual performance testing requires baseline_ref input for comparative benchmarking
+    inputs:
+      baseline_ref:
+        description: 'Baseline git ref (branch/tag/commit)'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+  pull-requests: write  # For posting benchmark results as comments
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for baseline comparison
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -r requirements-dev.txt
+          pip install psutil  # Required for memory benchmark
+
+      - name: Run baseline benchmarks (main branch)
+        id: baseline
+        run: |
+          git checkout ${{ github.event.inputs.baseline_ref || 'main' }}
+          python3 -m pytest tests/performance/test_benchmarks.py \
+            -v \
+            --benchmark-only \
+            --benchmark-json=baseline-results.json \
+            || true  # Don't fail if baseline doesn't have benchmarks yet
+        continue-on-error: true
+
+      - name: Checkout PR branch
+        run: |
+          git checkout ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run current benchmarks
+        id: current
+        run: |
+          python3 -m pytest tests/performance/test_benchmarks.py \
+            -v \
+            -m benchmark \
+            --tb=short \
+            --benchmark-json=current-results.json
+
+      - name: Compare results and detect regressions
+        id: compare
+        run: |
+          python3 scripts/dev/compare_benchmarks.py \
+            --baseline baseline-results.json \
+            --current current-results.json \
+            --threshold 20 \
+            --output benchmark-comparison.md
+        continue-on-error: true
+
+      - name: Post benchmark results as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const comparison = fs.readFileSync('benchmark-comparison.md', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comparison
+            });
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            baseline-results.json
+            current-results.json
+            benchmark-comparison.md
+          retention-days: 30
+
+      - name: Fail on performance regression
+        if: steps.compare.outputs.regression_detected == 'true'
+        run: |
+          echo "❌ Performance regression detected! See benchmark-comparison.md for details."
+          exit 1

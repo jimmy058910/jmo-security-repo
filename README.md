@@ -72,6 +72,102 @@ Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md
 
 ## 🎉 Recent Improvements
 
+### v1.0.0 - SQLite Historical Storage (November 2025) 📊
+
+**MAJOR FEATURE: Track Security Posture Over Time (ROADMAP #1):**
+
+Store scan history in SQLite for long-term trend analysis, compliance reporting, and security posture monitoring!
+
+- ✅ **13 History CLI Commands** - Complete scan lifecycle management
+  - `jmo history list` - View all historical scans
+  - `jmo history show <scan-id>` - Detailed scan information
+  - `jmo history compare <id1> <id2>` - Compare two scans
+  - `jmo history export --output scans.json` - Export scan data
+  - `jmo history prune --keep 50` - Manage database size
+  - `jmo history vacuum` - Optimize database
+  - `jmo history verify` - Integrity checks
+- ✅ **Fingerprint-Based Deduplication** - Track findings across scans
+  - Deterministic fingerprint IDs for cross-run correlation
+  - Performance: <100ms queries for 10K findings
+  - Schema: scans, findings, trends tables
+- ✅ **Git Context Capture** - Track code state
+  - Commit hash, branch, tag, dirty flag
+  - Developer attribution via git blame
+  - Automated remediation tracking
+- ✅ **Docker Volume Persistence** - Maintain history across runs
+  - `-v $PWD/.jmo/history.db:/scan/.jmo/history.db`
+  - Automatic database initialization
+  - Connection pooling and indexed queries
+
+**Quick Example:**
+
+```bash
+# Run scan and auto-store to history database
+jmo scan --repo . --profile balanced
+
+# View all scans
+jmo history list
+
+# Compare two scans
+jmo history compare abc123 def456
+
+# Export history to JSON
+jmo history export --output audit-report.json
+```
+
+**Complete Guide:** [docs/examples/ci-cd-trends.md](docs/examples/ci-cd-trends.md) | [docs/USER_GUIDE.md — jmo history](docs/USER_GUIDE.md#jmo-history)
+
+---
+
+### v1.0.0 - Statistical Trend Analysis (November 2025) 📈
+
+**MAJOR FEATURE: Mann-Kendall Statistical Validation (ROADMAP #4):**
+
+Scientifically validate security trends with p < 0.05 significance testing!
+
+- ✅ **8 Trend Analysis Commands** - Complete trend toolkit
+  - `jmo trends analyze --days 30` - Overall trend analysis
+  - `jmo trends show --days 30` - Detailed trend visualization
+  - `jmo trends regressions --threshold 10` - Detect regressions
+  - `jmo trends score` - Security posture score (0-100)
+  - `jmo trends compare --baseline <scan-id>` - Baseline comparison
+  - `jmo trends insights --period week` - Actionable insights
+  - `jmo trends explain --finding-id <fingerprint>` - Finding lifecycle
+  - `jmo trends developers --top 10` - Developer velocity tracking
+- ✅ **Statistical Rigor** - Mann-Kendall test (p < 0.05 significance)
+  - Validates trends are not random noise
+  - Requires ≥7 data points for accuracy
+  - Calculates trend: improving, stable, worsening
+- ✅ **Security Scoring** - 0-100 scale with letter grades (A-F)
+  - Formula: `100 - (critical×10) - (high×3) - (medium×1)`
+  - Thresholds: A (90-100), B (80-89), C (70-79), D (60-69), F (<60)
+  - Track remediation progress over time
+- ✅ **4 Export Formats** - Integrate with monitoring/dashboards
+  - **CSV** - Excel analysis
+  - **Prometheus** - Monitoring integration
+  - **Grafana** - Dashboard visualization
+  - **JSON** - React app integration
+
+**Quick Example:**
+
+```bash
+# Analyze trends over last 30 days
+jmo trends analyze --days 30
+
+# Detect security regressions (≥10% increase)
+jmo trends regressions --threshold 10
+
+# Calculate security posture score
+jmo trends score
+
+# Export to Prometheus
+jmo trends analyze --export prometheus
+```
+
+**Complete Guide:** [docs/examples/ci-cd-trends.md](docs/examples/ci-cd-trends.md) | [docs/USER_GUIDE.md — jmo trends](docs/USER_GUIDE.md#jmo-trends)
+
+---
+
 ### v1.0.0 - Machine-Readable Diffs (November 2025) 🎯
 
 **MAJOR FEATURE: Compare Security Scans Over Time (ROADMAP #3):**

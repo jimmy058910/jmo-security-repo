@@ -40,13 +40,13 @@ def analyze_test_file(test_path: Path) -> Dict[str, Any]:
 def extract_adapter_name(test_path: Path) -> str:
     """Extract adapter name from test file name."""
     # test_trivy_adapter.py -> trivy
-    match = re.match(r'test_(.+)_adapter\.py', test_path.name)
+    match = re.match(r"test_(.+)_adapter\.py", test_path.name)
     return match.group(1) if match else "unknown"
 
 
 def count_tests(content: str) -> int:
     """Count test functions."""
-    return len(re.findall(r'^def test_', content, re.MULTILINE))
+    return len(re.findall(r"^def test_", content, re.MULTILINE))
 
 
 def extract_fixtures(content: str) -> List[str]:
@@ -54,15 +54,17 @@ def extract_fixtures(content: str) -> List[str]:
     fixtures = []
 
     # Look for @pytest.fixture
-    fixture_matches = re.findall(r'@pytest\.fixture.*?\ndef (\w+)\(', content, re.DOTALL)
+    fixture_matches = re.findall(
+        r"@pytest\.fixture.*?\ndef (\w+)\(", content, re.DOTALL
+    )
     fixtures.extend(fixture_matches)
 
     # Look for tmp_path usage
-    if 'tmp_path' in content:
+    if "tmp_path" in content:
         fixtures.append("tmp_path (pytest builtin)")
 
     # Look for JSON fixtures
-    json_fixtures = re.findall(r'(\w+)\.json', content)
+    json_fixtures = re.findall(r"(\w+)\.json", content)
     if json_fixtures:
         fixtures.append(f"JSON fixtures: {', '.join(set(json_fixtures[:3]))}")
 
@@ -74,14 +76,14 @@ def extract_mock_patterns(content: str) -> List[str]:
     patterns = []
 
     # Check for common mocks
-    if '@patch' in content:
+    if "@patch" in content:
         patches = re.findall(r"@patch\(['\"](.+?)['\"]\)", content)
         patterns.extend([f"@patch: {p}" for p in patches[:5]])
 
-    if 'MagicMock' in content:
+    if "MagicMock" in content:
         patterns.append("MagicMock usage")
 
-    if 'mock_open' in content:
+    if "mock_open" in content:
         patterns.append("mock_open (file I/O)")
 
     return patterns
@@ -116,12 +118,12 @@ def extract_edge_cases(content: str) -> List[str]:
 
     # Look for test function names indicating edge cases
     edge_patterns = [
-        (r'test_.*empty', 'Empty input handling'),
-        (r'test_.*missing', 'Missing file/data handling'),
-        (r'test_.*invalid', 'Invalid data handling'),
-        (r'test_.*error', 'Error conditions'),
-        (r'test_.*malformed', 'Malformed data'),
-        (r'test_.*None', 'None value handling'),
+        (r"test_.*empty", "Empty input handling"),
+        (r"test_.*missing", "Missing file/data handling"),
+        (r"test_.*invalid", "Invalid data handling"),
+        (r"test_.*error", "Error conditions"),
+        (r"test_.*malformed", "Malformed data"),
+        (r"test_.*None", "None value handling"),
     ]
 
     for pattern, description in edge_patterns:
@@ -136,17 +138,17 @@ def extract_key_imports(content: str) -> List[str]:
     imports = []
 
     key_patterns = [
-        'import pytest',
-        'from unittest.mock import',
-        'from pathlib import Path',
-        'import json',
-        'from scripts.core.adapters',
+        "import pytest",
+        "from unittest.mock import",
+        "from pathlib import Path",
+        "import json",
+        "from scripts.core.adapters",
     ]
 
     for pattern in key_patterns:
         if pattern in content:
             # Extract full line
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 if pattern in line:
                     imports.append(line.strip())
                     break
@@ -173,7 +175,9 @@ def calculate_coverage_estimate(patterns: Dict[str, Any]) -> Dict[str, Any]:
         "estimate": estimate,
         "test_count": test_count,
         "edge_cases_tested": edge_cases,
-        "recommendation": "Add more edge case tests" if edge_cases < 3 else "Coverage looks good"
+        "recommendation": (
+            "Add more edge case tests" if edge_cases < 3 else "Coverage looks good"
+        ),
     }
 
 
@@ -203,7 +207,10 @@ def main():
 
     if not test_path.exists():
         print(f"Error: {test_path} not found", file=sys.stderr)
-        print(f"\nSuggested template: {suggest_test_template(adapter_name)}", file=sys.stderr)
+        print(
+            f"\nSuggested template: {suggest_test_template(adapter_name)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     patterns = analyze_test_file(test_path)

@@ -191,25 +191,34 @@ class TrendAnalyzer:
 
         # Use list_scans with appropriate filters
         if last_n:
-            return list(
+            scans = list(
                 map(dict, list_scans(self.conn, branch=branch, limit=last_n))  # type: ignore[arg-type]
             )
+            # Sort by timestamp (oldest first) for regression detection
+            scans.sort(key=lambda s: s["timestamp"])
+            return scans
 
         if days:
             import time
 
             since = int(time.time()) - (days * 86400)
-            return list(
+            scans = list(
                 map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
             )
+            # Sort by timestamp (oldest first) for regression detection
+            scans.sort(key=lambda s: s["timestamp"])
+            return scans
 
         # Default: last 30 days
         import time
 
         since = int(time.time()) - (30 * 86400)
-        return list(
+        scans = list(
             map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
         )
+        # Sort by timestamp (oldest first) for regression detection
+        scans.sort(key=lambda s: s["timestamp"])
+        return scans
 
     def _calculate_severity_trends(self, scans: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

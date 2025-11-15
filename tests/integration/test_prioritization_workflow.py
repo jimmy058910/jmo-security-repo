@@ -279,26 +279,20 @@ class TestPrioritizationWorkflow:
 
         html_content = output_path.read_text()
 
-        # Verify priority column in table header
-        assert (
-            'th data-key="priority"' in html_content
-            or '<th data-key="priority">Priority</th>' in html_content
-        )
+        # React implementation: Verify data is embedded with priority field
+        # Check that findings are embedded with priority data
+        assert "test-001" in html_content  # Finding ID
+        assert "test-002" in html_content  # Finding ID
+        assert '"priority":' in html_content  # Priority field in JSON data
 
-        # Verify KEV badge CSS
-        assert "kev-badge" in html_content
-        assert "priority-badge" in html_content
+        # Verify priority sub-fields are embedded (epss, is_kev, etc.)
+        assert '"epss":' in html_content  # EPSS score field
+        assert '"is_kev":' in html_content  # KEV boolean field
+        assert "0.95" in html_content  # EPSS value from test-001
+        assert "0.75" in html_content  # EPSS value from test-002
 
-        # Verify priority sorting logic
-        assert (
-            "if(sortKey==='priority')" in html_content
-            or "sortKey==='priority'" in html_content
-        )
-
-        # Verify priority metadata section in detail row
-        assert "Priority Analysis:" in html_content
-        assert "EPSS:" in html_content
-        assert "CISA KEV:" in html_content
+        # React dashboard has root div for mounting
+        assert '<div id="root"></div>' in html_content or 'id="root"' in html_content
 
     @patch("scripts.core.priority_calculator.EPSSClient")
     @patch("scripts.core.priority_calculator.KEVClient")

@@ -42,9 +42,15 @@ def write_html_diff(diff: DiffResult, out_path: Path) -> None:
 def _write_html_diff_react(diff: DiffResult, out_path: Path) -> None:
     """Use React dashboard with diff-specific data injection."""
     # Read React dashboard template
-    template_html = (
-        Path(__file__).parent / "../../dashboard/dist/index.html"
-    ).read_text(encoding="utf-8")
+    template_path = Path(__file__).parent / "../../dashboard/dist/index.html"
+    template_html = template_path.read_text(encoding="utf-8")
+
+    # Check if template has the required placeholder
+    if "window.__DIFF_DATA__ = null" not in template_html:
+        logger.warning(
+            "React template missing placeholder. Falling back to vanilla JS."
+        )
+        return _write_html_diff_vanilla(diff, out_path)
 
     # Prepare diff data
     diff_data = {

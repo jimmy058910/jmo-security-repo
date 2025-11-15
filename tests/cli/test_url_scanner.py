@@ -72,6 +72,9 @@ class TestUrlScanner:
 
     def test_scan_url_sanitizes_domain(self, tmp_path):
         """Test that domain names are sanitized for directory names"""
+        # Create individual-web subdirectory (matches production usage in scan_orchestrator)
+        web_results_dir = tmp_path / "individual-web"
+
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -85,7 +88,7 @@ class TestUrlScanner:
             # URL with special characters
             scan_url(
                 url="https://sub.example.com:8080/path",
-                results_dir=tmp_path,
+                results_dir=web_results_dir,  # Pass individual-web directory (matches production)
                 tools=["zap"],
                 timeout=600,
                 retries=0,
@@ -94,7 +97,7 @@ class TestUrlScanner:
             )
 
             # Check that directory was created with sanitized domain
-            expected_dir = tmp_path / "individual-web" / "sub.example.com_8080"
+            expected_dir = web_results_dir / "sub.example.com_8080"
             assert expected_dir.exists()
 
     def test_scan_url_file_protocol_rejected(self, tmp_path):
@@ -203,6 +206,9 @@ class TestUrlScanner:
 
     def test_scan_url_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
+        # Create individual-web subdirectory (matches production usage in scan_orchestrator)
+        web_results_dir = tmp_path / "individual-web"
+
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -215,7 +221,7 @@ class TestUrlScanner:
 
             scan_url(
                 url="https://secure.example.com",
-                results_dir=tmp_path,
+                results_dir=web_results_dir,  # Pass individual-web directory (matches production)
                 tools=["zap"],
                 timeout=600,
                 retries=0,
@@ -223,9 +229,9 @@ class TestUrlScanner:
                 allow_missing_tools=False,
             )
 
-            # Check directory structure
-            assert (tmp_path / "individual-web").exists()
-            assert (tmp_path / "individual-web" / "secure.example.com").exists()
+            # Check that directory was created with sanitized domain
+            expected_dir = web_results_dir / "secure.example.com"
+            assert expected_dir.exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""

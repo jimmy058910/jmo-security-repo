@@ -57,7 +57,7 @@ def scan_k8s_resource(
     all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
 
     safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
-    out_dir = results_dir / "individual-k8s" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:

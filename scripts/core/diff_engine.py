@@ -297,17 +297,24 @@ class DiffEngine:
 
         try:
             with open(findings_path, "r", encoding="utf-8") as f:
-                findings = json.load(f)
+                data = json.load(f)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in {findings_path}: {e}")
 
-        if not isinstance(findings, list):
+        # Handle v1.0.0 metadata wrapper format
+        if isinstance(data, dict) and "findings" in data:
+            findings = data["findings"]
+            logger.debug(f"Detected v1.0.0 metadata wrapper format in {findings_path}")
+        elif isinstance(data, list):
+            findings = data
+            logger.debug(f"Detected legacy list format in {findings_path}")
+        else:
             raise ValueError(
-                f"Expected findings.json to contain a list, got {type(findings).__name__}"
+                f"Expected findings.json to contain a list or v1.0.0 wrapper, got {type(data).__name__}"
             )
 
         logger.debug(f"Loaded {len(findings)} findings from {findings_path}")
-        return findings
+        return list(findings)
 
     def _load_sqlite_findings(self, conn, scan_id: str) -> List[Dict[str, Any]]:
         """Load findings from SQLite database."""

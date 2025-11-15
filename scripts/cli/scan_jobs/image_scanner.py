@@ -56,7 +56,7 @@ def scan_image(
 
     # Sanitize image name for directory (replace special chars with underscores)
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
-    out_dir = results_dir / "individual-images" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:

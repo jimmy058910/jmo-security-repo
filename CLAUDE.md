@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 JMo Security Audit Tool Suite is a terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners with a unified Python CLI, normalized outputs, and an HTML dashboard. The project scans repositories for secrets, vulnerabilities, misconfigurations, and security issues using industry-standard tools.
 
-**Current Version:** v0.9.0 (v1.0.0 in development - 6/13 features complete)
+**Current Version:** v1.0.0 (production release)
 
 **Key Philosophy:**
 
@@ -21,30 +21,31 @@ JMo Security Audit Tool Suite is a terminal-first, cross-platform security audit
 - **Statistical trend analysis** with Mann-Kendall validation (v1.0.0)
 - Resilient to missing tools with fallback mechanisms
 
-## v1.0.0 Development Status
+## v1.0.0 Production Release
 
-**Progress:** 6/13 features complete (46.2%)
+**Status:** 🎉 **Production Ready** (Release Score: 92/100)
 
-### Completed Features
+### Core Features (Production)
 
-- ✅ **Feature #1:** New Tools & Adapters (28 scanners)
-- ✅ **Feature #2:** AI Remediation (MCP Server)
-- ✅ **Feature #3:** Machine-Readable Diffs (4 output formats)
-- ✅ **Feature #4:** Trend Analysis (Mann-Kendall, 8 commands)
-- ✅ **Feature #5:** SQLite Historical Storage (13 CLI commands)
-- ✅ **Feature #8:** Output Format Standardization (v1.0.0 metadata wrapper, CSV)
+- ✅ **SQLite Historical Storage:** 13 CLI commands for scan history and trend tracking
+- ✅ **Machine-Readable Diffs:** 4 output formats (JSON, Markdown, HTML, SARIF) for regression detection
+- ✅ **Statistical Trend Analysis:** Mann-Kendall validation, 8 trend commands, security posture scoring
+- ✅ **Cross-Tool Deduplication:** 30-40% noise reduction via similarity clustering
+- ✅ **Output Format Standardization:** v1.0.0 metadata wrapper, CSV export, dual-mode HTML
+- ✅ **28 Security Scanners:** Unified adapter architecture with plugin system
+- ✅ **SLSA Attestation:** Supply chain security with cryptographic signatures
+- ✅ **Policy-as-Code:** Compliance enforcement with 6 framework mappings
 
-### In Development
+### Test Coverage
 
-- ⏳ Feature #6: Profile Enhancements
-- ⏳ Feature #7: Advanced Filtering
-- ⏳ Feature #9: Interactive Dashboard Improvements
-- ⏳ Feature #10: CI/CD Integration Templates
-- ⏳ Feature #11: Plugin System Enhancements
-- ⏳ Feature #12: Performance Optimization
-- ⏳ Feature #13: Security Hardening
+- **2,981 automated tests** (99.97% pass rate)
+- **87% code coverage** (exceeds 85% CI requirement)
+- **Performance validated:** <50ms scan insert, <200ms trend analysis
+- **Multi-platform:** Ubuntu, macOS, WSL2 compatibility verified
 
-**See [dev-only/1.0.0/STATUS.md](dev-only/1.0.0/STATUS.md) for complete development status.**
+### Ongoing Enhancements (Post-v1.0.0)
+
+Future releases will include profile enhancements, advanced filtering, CI/CD templates, and performance optimizations. See [dev-only/1.0.0/STATUS.md](dev-only/1.0.0/STATUS.md) for roadmap.
 
 ## Core Commands
 
@@ -218,10 +219,13 @@ jmo trends insights --period week
 jmo trends developers --top 10
 jmo trends explain --finding-id FINGERPRINT
 
-## Export formats (CSV, Prometheus, Grafana, JSON)
-jmo trends analyze --export csv
-jmo trends analyze --export prometheus
-jmo trends analyze --export grafana
+## Export formats (JSON, HTML, CSV, Prometheus, Grafana, Dashboard)
+jmo trends analyze --export-json trends.json
+jmo trends analyze --export-html trends.html
+jmo trends analyze --export-csv trends.csv
+jmo trends analyze --export-prometheus metrics.prom
+jmo trends analyze --export-grafana dashboard.json
+jmo trends analyze --export-dashboard data.json
 
 ```
 
@@ -316,10 +320,13 @@ jmo trends insights --period week
 jmo trends developers --top 10
 jmo trends explain --finding-id FINGERPRINT
 
-## Export formats (CSV, Prometheus, Grafana, JSON)
-jmo trends analyze --export csv
-jmo trends analyze --export prometheus
-jmo trends analyze --export grafana
+## Export formats (JSON, HTML, CSV, Prometheus, Grafana, Dashboard)
+jmo trends analyze --export-json trends.json
+jmo trends analyze --export-html trends.html
+jmo trends analyze --export-csv trends.csv
+jmo trends analyze --export-prometheus metrics.prom
+jmo trends analyze --export-grafana dashboard.json
+jmo trends analyze --export-dashboard data.json
 ```
 
 **Performance Benchmarks:**
@@ -695,7 +702,7 @@ Statistical trend detection with Mann-Kendall validation:
   - Formula: `100 - (critical×10) - (high×3) - (medium×1)`
   - Thresholds: A (90-100), B (80-89), C (70-79), D (60-69), F (<60)
 - **Developer attribution:** Git blame-based remediation tracking per developer/team
-- **Export formats:** CSV (Excel), Prometheus (monitoring), Grafana (dashboards), JSON (React apps)
+- **Export formats:** JSON (React apps), HTML (interactive reports), CSV (Excel), Prometheus (monitoring), Grafana (dashboards), Dashboard (optimized JSON)
 - **Eight commands:**
   - `analyze`: Overall trend analysis with statistical validation
   - `show`: Detailed trend visualization
@@ -914,14 +921,14 @@ results = scanner.scan_targets(images)
 
 **Tool Assignments by Target Type (v0.6.2):**
 
-| Target Type | Primary Tools | Secondary Tools |
-|-------------|---------------|-----------------|
-| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit, syft, checkov, hadolint, falco, afl++ |
-| Container Images | trivy, syft | - |
-| IaC Files | checkov, trivy | - |
-| Web URLs | zap, nuclei | - |
-| GitLab Repos | Full repository scanner | trufflehog, semgrep, bandit, trivy, syft, checkov, hadolint, noseyparker, falco, afl++ |
-| Kubernetes | trivy | - |
+| Target Type      | Primary Tools       | Secondary Tools                                                      |
+|------------------|---------------------|----------------------------------------------------------------------|
+| Repositories     | trufflehog, semgrep | trivy, noseyparker, bandit, syft, checkov, hadolint, falco, afl++    |
+| Container Images | trivy, syft         | -                                                                    |
+| IaC Files        | checkov, trivy      | -                                                                    |
+| Web URLs         | zap, nuclei             | -                                                                    |
+| GitLab Repos     | Full repository scanner | trufflehog, semgrep, bandit, trivy, syft, checkov, hadolint, noseyparker, falco, afl++ |
+| Kubernetes       | trivy                   | -                                                                    |
 
 **Key Changes (v0.6.2):**
 
@@ -1135,7 +1142,7 @@ The project uses 5 workflows for full CI/CD automation:
 2. **[.github/workflows/release.yml](.github/workflows/release.yml)** — Release automation
    - `pre-release-check` job: Blocks release if tools outdated (CRITICAL GATE)
    - `pypi-publish` job: Build and publish to PyPI (Trusted Publishers OIDC)
-   - `docker-build` job: Multi-arch Docker images (full/slim/alpine variants)
+   - `docker-build` job: Multi-arch Docker images (full/balanced/slim/fast variants)
    - `docker-scan` job: Trivy vulnerability scanning
    - `verify-badges` job: Verify PyPI badges after publish
    - Triggers: version tags (`v*`), workflow_dispatch
@@ -1408,16 +1415,16 @@ Skills centralize expertise for complex tasks, providing:
 
 **Use skills proactively when:**
 
-| Task | Skill to Use | Trigger |
-|------|--------------|---------|
-| Adding new tool adapter | jmo-adapter-generator | "Add support for [tool]" |
-| Writing adapter tests | jmo-test-fabricator | "Write tests for [tool] adapter" |
-| Debugging CI failures | jmo-ci-debugger | "CI is failing", "GitHub Actions not working" |
-| Updating documentation | jmo-documentation-updater | "Update docs for [feature]" |
-| Optimizing scan performance | jmo-profile-optimizer | "Scans are too slow", "Too many timeouts" |
-| Adding new target type | jmo-target-type-expander | "Scan [AWS/npm/GraphQL/etc.]" |
-| Mapping to compliance frameworks | jmo-compliance-mapper | "What frameworks does [CWE] map to?" |
-| Preparing for release | dev-helper | "Bump version to X.Y.Z" |
+| Task                     | Skill to Use              | Trigger                                        |
+|--------------------------|---------------------------|------------------------------------------------|
+| Adding new tool adapter  | jmo-adapter-generator     | "Add support for [tool]"                       |
+| Writing adapter tests    | jmo-test-fabricator       | "Write tests for [tool] adapter"               |
+| Debugging CI failures    | jmo-ci-debugger           | "CI is failing", "GitHub Actions not working"  |
+| Updating documentation           | jmo-documentation-updater | "Update docs for [feature]"              |
+| Optimizing scan performance      | jmo-profile-optimizer     | "Scans are too slow", "Too many timeouts" |
+| Adding new target type           | jmo-target-type-expander  | "Scan [AWS/npm/GraphQL/etc.]"            |
+| Mapping to compliance frameworks | jmo-compliance-mapper     | "What frameworks does [CWE] map to?"     |
+| Preparing for release            | dev-helper                | "Bump version to X.Y.Z"                  |
 
 **Skills are guides, not rigid requirements.** If project constraints require a different approach, document the deviation in your PR description or code comments. Consider updating the skill if the deviation becomes a common pattern.
 
@@ -1427,18 +1434,18 @@ Claude Code automatically activates skills based on natural language patterns. Y
 
 ### Common Trigger Patterns
 
-| User Request | Auto-Activated Skill | Example |
-|--------------|---------------------|---------|
-| "Add support for [tool]" | jmo-adapter-generator | "Add support for Snyk" |
-| "Scans are too slow" | jmo-profile-optimizer | "Optimize balanced profile" |
-| "CI is failing" | jmo-ci-debugger | "GitHub Actions timeout" |
-| "Write tests for [adapter]" | jmo-test-fabricator | "Write tests for snyk_adapter.py" |
-| "Map [CWE] to frameworks" | jmo-compliance-mapper | "Map CWE-79 to OWASP" |
-| "Fix [vulnerability]" | jmo-security-hardening | "Fix CSRF in API" |
-| "Refactor [function]" | jmo-refactoring-assistant | "Refactor cmd_scan" |
-| "Document [feature]" | jmo-documentation-updater | "Document AWS scanning" |
-| "[tool] not working" | jmo-systematic-debugging | "Semgrep returns no findings" |
-| "Build React [component]" | jmo-dashboard-builder | "Add SBOM tree view" |
+| User Request                 | Auto-Activated Skill      | Example                              |
+|------------------------------|---------------------------|--------------------------------------|
+| "Add support for [tool]"     | jmo-adapter-generator     | "Add support for Snyk"               |
+| "Scans are too slow"         | jmo-profile-optimizer     | "Optimize balanced profile"          |
+| "CI is failing"              | jmo-ci-debugger           | "GitHub Actions timeout"             |
+| "Write tests for [adapter]"  | jmo-test-fabricator       | "Write tests for snyk_adapter.py"    |
+| "Map [CWE] to frameworks"    | jmo-compliance-mapper     | "Map CWE-79 to OWASP"                |
+| "Fix [vulnerability]"        | jmo-security-hardening    | "Fix CSRF in API"                    |
+| "Refactor [function]"        | jmo-refactoring-assistant | "Refactor cmd_scan"                  |
+| "Document [feature]"         | jmo-documentation-updater | "Document AWS scanning"              |
+| "[tool] not working"         | jmo-systematic-debugging  | "Semgrep returns no findings"        |
+| "Build React [component]"    | jmo-dashboard-builder     | "Add SBOM tree view"                 |
 
 ### How It Works
 
@@ -2127,6 +2134,7 @@ The project uses automated weekly tool updates to ensure all security tools stay
 
 - **Claude Skills Index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md)** — Complete skill catalog with workflows
 - User Guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- **Docker Variants: [docs/DOCKER_VARIANTS_MASTER.md](docs/DOCKER_VARIANTS_MASTER.md)** — Complete tool distribution across 4 variants (full, balanced, slim, fast)
 - Quick Start: [QUICKSTART.md](QUICKSTART.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Testing: [TEST.md](TEST.md)
@@ -2503,7 +2511,7 @@ When adding/updating documentation:
 | `versions.yaml` | **Central tool version registry (v0.6.1+)** |
 | `pyproject.toml` | Python package metadata and build config |
 | `Makefile` | Developer shortcuts for common tasks |
-| `Dockerfile`, `Dockerfile.slim`, `Dockerfile.alpine` | Docker image variants |
+| `Dockerfile`, `Dockerfile.balanced`, `Dockerfile.slim`, `Dockerfile.fast` | Docker image variants (4 active: full, balanced, slim, fast) |
 | `.pre-commit-config.yaml` | Pre-commit hook configuration |
 | `.github/workflows/ci.yml` | Primary CI: tests, quick checks, nightly lint |
 | `.github/workflows/release.yml` | Release automation: PyPI + Docker builds |

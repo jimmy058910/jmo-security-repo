@@ -2,7 +2,26 @@
 
 All notable changes to JMo Security will be documented in this file.
 
-## 1.0.0 (2025-11-XX)
+## [Unreleased]
+
+### Added
+
+- **Dashboard Improvements (Sprint 2)** - React dashboard UX enhancements and email-compatible reporter
+  - **KEV-first sorting:** Findings with `priority.is_kev=true` always appear first in table, regardless of other sort criteria
+  - **Dual pagination:** Pagination controls rendered both top and bottom of table for easier navigation (25/50/100/200 items per page)
+  - **Radix UI tooltips:** Truncated cells (ruleId, path, message) show full content on hover with accessible tooltips
+  - **Simple HTML reporter:** Email-compatible static HTML table with inline CSS
+    - File: `scripts/core/reporters/simple_html_reporter.py`
+    - Output: `results/summaries/simple-report.html`
+    - Features: XSS protection, MSO compatibility, responsive design, dark mode support
+    - Use cases: Email reports, offline viewing, non-technical stakeholders, compliance docs
+    - Tested in: Gmail, Outlook, Apple Mail, Thunderbird, Yahoo Mail, ProtonMail
+    - Test coverage: 13 tests (100% coverage)
+  - Build time: 28.17s (down from 43.17s), bundle size: 688.71 KB
+  - Impact: Improved usability for security teams, faster navigation of large datasets, accessible findings for all stakeholders
+  - See [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) for simple-html documentation
+
+## [1.0.0] - 2025-11-10
 
 ### Added
 
@@ -568,19 +587,19 @@ jmo scan --repo ./myapp --enable-history --encrypt-findings
 
 **Behavior Comparison:**
 
-| Scan Command | Hostname/Username | Raw Findings | Encrypted | Use Case |
-|--------------|-------------------|--------------|-----------|----------|
-| `jmo scan --enable-history` | ❌ Not collected | ✅ Stored | ❌ No | Privacy-first (default) |
-| `jmo scan --enable-history --collect-metadata` | ✅ Collected | ✅ Stored | ❌ No | Team analytics (opt-in) |
-| `jmo scan --enable-history --no-store-raw-findings` | ❌ Not collected | ❌ Not stored | N/A | Secret redaction |
-| `jmo scan --enable-history --encrypt-findings` | ❌ Not collected | ✅ Encrypted | ✅ Yes | Compliance (SOC 2, ISO 27001) |
+| Scan Command                                         | Hostname/Username | Raw Findings  | Encrypted | Use Case                       |
+|------------------------------------------------------|-------------------|---------------|-----------|--------------------------------|
+| `jmo scan --enable-history`                          | ❌ Not collected   | ✅ Stored      | ❌ No      | Privacy-first (default)        |
+| `jmo scan --enable-history --collect-metadata`       | ✅ Collected       | ✅ Stored      | ❌ No      | Team analytics (opt-in)        |
+| `jmo scan --enable-history --no-store-raw-findings`  | ❌ Not collected   | ❌ Not stored  | N/A       | Secret redaction               |
+| `jmo scan --enable-history --encrypt-findings`       | ❌ Not collected   | ✅ Encrypted   | ✅ Yes     | Compliance (SOC 2, ISO 27001)  |
 
 **Database Schema Compatibility:**
 
-| Database Version | v0.9.x Code | v1.0.0 Code | Migration Required? |
-|------------------|-------------|-------------|---------------------|
-| Created with v0.9.x | ✅ Works | ✅ Works | ❌ No |
-| Created with v1.0.0 | ❌ Fails (raw_finding NOT NULL) | ✅ Works | ⚠️ Yes (for v0.9.x code) |
+| Database Version        | v0.9.x Code                   | v1.0.0 Code | Migration Required?      |
+|-------------------------|-------------------------------|-------------|--------------------------|
+| Created with v0.9.x     | ✅ Works                       | ✅ Works     | ❌ No                     |
+| Created with v1.0.0     | ❌ Fails (raw_finding NOT NULL) | ✅ Works     | ⚠️ Yes (for v0.9.x code)  |
 
 **Recommendation:** Upgrade to v1.0.0 before creating new databases. Existing v0.9.x databases will work without changes.
 

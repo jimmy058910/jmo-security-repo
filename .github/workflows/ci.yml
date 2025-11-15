@@ -1,6 +1,7 @@
 ---
 name: CI
 
+# checkov:skip=CKV2_GHA_1: CI workflow requires write permissions for uploading coverage and SARIF results
 on:
   push:
   pull_request:

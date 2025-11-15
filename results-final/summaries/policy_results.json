@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "policies": [
+    {
+      "name": "owasp-top-10",
+      "passed": true,
+      "violations": [],
+      "warnings": [],
+      "message": "\u2705 No OWASP Top 10 violations detected",
+      "metadata": {}
+    },
+    {
+      "name": "zero-secrets",
+      "passed": true,
+      "violations": [],
+      "warnings": [],
+      "message": "\u2705 No verified secrets detected",
+      "metadata": {}
+    }
+  ]
+}

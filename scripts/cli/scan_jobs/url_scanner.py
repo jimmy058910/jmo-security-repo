@@ -69,7 +69,7 @@ def scan_url(
     # Sanitize URL for directory name (extract domain)
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
 
-    out_dir = results_dir / "individual-web" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:

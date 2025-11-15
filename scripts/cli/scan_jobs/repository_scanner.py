@@ -611,8 +611,11 @@ def scan_repository(
     # ========== v1.0.0 New Tools (17 total) ==========
 
     # Checkov CI/CD: GitHub Actions workflow scanning
+    # NOTE: checkov creates a DIRECTORY with --output-file, not a flat file
+    # We must use --output-file-path (directory) and then move results_json.json
     if "checkov-cicd" in tools:
         checkov_cicd_out = out_dir / "checkov-cicd.json"
+        checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
         if _tool_exists("checkov"):
             checkov_cicd_flags = get_tool_flags("checkov-cicd")
             checkov_cicd_cmd = [
@@ -621,8 +624,8 @@ def scan_repository(
                 "github_actions",
                 "--output",
                 "json",
-                "--output-file",
-                str(checkov_cicd_out),
+                "--output-file-path",
+                str(checkov_cicd_temp_dir),
                 *checkov_cicd_flags,
                 "--directory",
                 str(repo / ".github" / "workflows"),
@@ -631,7 +634,7 @@ def scan_repository(
                 ToolDefinition(
                     name="checkov-cicd",
                     command=checkov_cicd_cmd,
-                    output_file=checkov_cicd_out,
+                    output_file=checkov_cicd_temp_dir / "results_json.json",
                     timeout=get_tool_timeout("checkov-cicd", timeout),
                     retries=retries,
                     ok_return_codes=(0, 1),
@@ -1117,6 +1120,20 @@ def scan_repository(
             else:
                 noseyparker_phases[phase] = False
             continue  # Don't set individual phase status in statuses dict
+
+        # Handle checkov-cicd special case: move results from temp directory
+        if result.tool == "checkov-cicd" and result.status == "success":
+            # checkov creates: checkov-cicd-temp/results_json.json
+            # We need: checkov-cicd.json (flat file)
+            import shutil
+
+            checkov_cicd_out = out_dir / "checkov-cicd.json"
+            checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
+            checkov_cicd_temp_file = checkov_cicd_temp_dir / "results_json.json"
+            if checkov_cicd_temp_file.exists():
+                shutil.move(str(checkov_cicd_temp_file), str(checkov_cicd_out))
+                # Clean up temp directory
+                shutil.rmtree(checkov_cicd_temp_dir, ignore_errors=True)
 
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)

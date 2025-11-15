@@ -358,29 +358,15 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
         lines.append("  No insights generated")
         return "\n".join(lines)
 
-    # Group by priority
-    by_priority = {}  # type: ignore[var-annotated]
+    # Handle insights as plain strings (TrendAnalyzer._generate_insights returns List[str])
     for insight in insights:
-        priority = insight.get("priority", "MEDIUM")
-        if priority not in by_priority:
-            by_priority[priority] = []
-        by_priority[priority].append(insight)
-
-    # Display in priority order
-    for priority in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-        priority_insights = by_priority.get(priority, [])
-        if not priority_insights:
-            continue
-
-        # Priority header
-        lines.append(f"\n  [{priority}]")
-        lines.append("  " + "-" * 76)
-
-        for insight in priority_insights:
+        if isinstance(insight, dict):
+            # Dict format (future enhancement)
             icon = insight.get("icon", "•")
             message = insight.get("message", "No message")
-
-            lines.append(f"  {icon} {message}")
+            priority = insight.get("priority", "")
+            priority_str = f"[{priority}] " if priority else ""
+            lines.append(f"  {icon} {priority_str}{message}")
 
             if verbose:
                 details = insight.get("details")
@@ -393,6 +379,9 @@ def _format_insights(insights: List[Dict[str, Any]], verbose: bool = False) -> s
                     lines.append(f"     → {action}")
 
             lines.append("")
+        else:
+            # String format (current implementation)
+            lines.append(f"  {insight}")
 
     return "\n".join(lines)
 

@@ -1986,6 +1986,4721 @@ class TestGetTrendSummary:
         assert trend["top_rules"][0]["count"] >= 15
 
 
+class TestSecretRedaction:
+    """Test secret redaction functionality for sensitive data."""
+
+    def test_redact_secrets_no_store_raw(self):
+        """Test that redact_secrets returns None when store_raw=False."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "HIGH",
+            "raw": {"secret": "my-api-key-12345"},
+        }
+
+        result = redact_secrets(finding, store_raw=False)
+
+        assert result["raw_finding"] is None
+
+    def test_redact_secrets_no_raw_data(self):
+        """Test that redact_secrets handles findings without raw data."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {"id": "fp1", "severity": "HIGH"}
+
+        result = redact_secrets(finding, store_raw=True)
+
+        assert result["raw_finding"] == "{}"
+
+    def test_redact_secrets_non_secret_tool(self):
+        """Test that non-secret tools store raw data unchanged."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "HIGH",
+            "tool": {"name": "trivy", "version": "0.68.0"},
+            "raw": {"VulnerabilityID": "CVE-2024-0001", "Severity": "HIGH"},
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        assert raw_data["VulnerabilityID"] == "CVE-2024-0001"
+        assert raw_data["Severity"] == "HIGH"
+
+    def test_redact_trufflehog_secrets(self):
+        """Test TruffleHog secret redaction."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "HIGH",
+            "tool": {"name": "trufflehog", "version": "3.82.0"},
+            "raw": {
+                "DetectorName": "AWS",
+                "VerificationStatus": "Verified",
+                "Raw": "AKIAIOSFODNN7EXAMPLE",
+                "RawV2": "aws_secret_access_key_value",
+            },
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        assert raw_data["DetectorName"] == "AWS"
+        assert raw_data["VerificationStatus"] == "Verified"
+        assert raw_data["Raw"] == "[REDACTED]"
+        assert raw_data["RawV2"] == "[REDACTED]"
+
+    def test_redact_trufflehog_secrets_nested(self):
+        """Test TruffleHog secret redaction with nested structures."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "HIGH",
+            "tool": {"name": "trufflehog", "version": "3.82.0"},
+            "raw": {
+                "DetectorName": "GitHub",
+                "matches": [
+                    {"Raw": "ghp_secret123", "context": {"file": "config.yml"}},
+                    {"Raw": "ghp_secret456", "context": {"file": "env.sh"}},
+                ],
+            },
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        assert raw_data["matches"][0]["Raw"] == "[REDACTED]"
+        assert raw_data["matches"][1]["Raw"] == "[REDACTED]"
+        assert raw_data["matches"][0]["context"]["file"] == "config.yml"
+
+    def test_redact_noseyparker_secrets(self):
+        """Test NoseyParker secret redaction."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "MEDIUM",
+            "tool": {"name": "noseyparker", "version": "0.19.0"},
+            "raw": {
+                "rule_name": "Generic API Key",
+                "match": {
+                    "snippet": "api_key=abc123def456",
+                    "capture_groups": {
+                        "secret_value": "abc123def456",
+                        "context": "config.py:15",
+                    },
+                },
+            },
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        assert raw_data["rule_name"] == "Generic API Key"
+        assert raw_data["match"]["snippet"] == "[REDACTED]"
+        assert raw_data["match"]["capture_groups"]["secret_value"] == "[REDACTED]"
+        assert raw_data["match"]["capture_groups"]["context"] == "config.py:15"
+
+    def test_redact_semgrep_secrets(self):
+        """Test Semgrep-secrets redaction."""
+        from scripts.core.history_db import redact_secrets
+
+        finding = {
+            "id": "fp1",
+            "severity": "HIGH",
+            "tool": {"name": "semgrep-secrets", "version": "1.50.0"},
+            "raw": {
+                "check_id": "secrets.api-key",
+                "extra": {
+                    "lines": "api_key = 'sk-abc123'",
+                    "message": "Hardcoded API key",
+                    "metadata": {
+                        "secret_type": "api_key",
+                        "secret_confidence": "high",
+                        "other_field": "keep",
+                    },
+                },
+            },
+        }
+
+        result = redact_secrets(finding, store_raw=True)
+
+        raw_data = json.loads(result["raw_finding"])
+        assert raw_data["check_id"] == "secrets.api-key"
+        assert raw_data["extra"]["lines"] == "[REDACTED]"
+        assert raw_data["extra"]["message"] == "Hardcoded API key"
+        assert raw_data["extra"]["metadata"]["secret_type"] == "[REDACTED]"
+        assert raw_data["extra"]["metadata"]["secret_confidence"] == "[REDACTED]"
+        assert raw_data["extra"]["metadata"]["other_field"] == "keep"
+
+
+class TestDatabaseOptimization:
+    """Test database optimization and query performance functions."""
+
+    def test_get_query_plan(self, tmp_path):
+        """Test query plan extraction for performance analysis."""
+        from scripts.core.history_db import get_query_plan, init_database, store_scan
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Store a scan to have data
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS",
+                    }
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["semgrep"],
+            db_path=db_path,
+            branch="main",
+        )
+
+        conn = get_connection(db_path)
+
+        # Get query plan for a simple query
+        plan = get_query_plan(conn, "SELECT * FROM scans WHERE branch = 'main'")
+
+        # Should contain query plan information
+        assert len(plan) > 0
+        assert isinstance(plan, str)
+        # Should mention the index or SCAN
+        assert "scans" in plan.lower() or "SCAN" in plan
+
+        conn.close()
+
+    def test_optimize_database(self, tmp_path):
+        """Test database optimization (VACUUM, ANALYZE)."""
+        from scripts.core.history_db import init_database, optimize_database, store_scan
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Store some scans
+        for i in range(3):
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": f"fp{i}",
+                            "severity": "MEDIUM",
+                            "ruleId": "CWE-123",
+                            "tool": {"name": "trivy"},
+                            "location": {"path": f"file{i}.py", "startLine": i},
+                            "message": f"Finding {i}",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir,
+                profile="balanced",
+                tools=["trivy"],
+                db_path=db_path,
+                branch="main",
+            )
+
+        # Run optimization
+        result = optimize_database(db_path)
+
+        # Check result structure
+        assert "size_before_mb" in result
+        assert "size_after_mb" in result
+        assert "space_reclaimed_mb" in result
+        assert "indices_count" in result
+        assert "vacuum_success" in result
+        assert "analyze_success" in result
+
+        # Check types and reasonable values
+        assert isinstance(result["size_before_mb"], float)
+        assert isinstance(result["size_after_mb"], float)
+        assert result["size_before_mb"] >= 0
+        assert result["size_after_mb"] >= 0
+        assert result["indices_count"] > 0  # Should have indices
+        assert result["vacuum_success"] is True
+        assert result["analyze_success"] is True
+
+    def test_optimize_database_reclaims_space(self, tmp_path):
+        """Test that optimization can reclaim space after deletions."""
+        from scripts.core.history_db import (
+            delete_scan,
+            get_connection,
+            init_database,
+            optimize_database,
+            store_scan,
+        )
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Store and delete scans to create fragmentation
+        scan_ids = []
+        for i in range(5):
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": f"fp{j}",
+                            "severity": "HIGH",
+                            "ruleId": f"CWE-{j}",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": f"file{j}.py", "startLine": j},
+                            "message": f"Finding {j}",
+                        }
+                        for j in range(100)  # 100 findings per scan
+                    ]
+                )
+            )
+            with patch("time.time", return_value=1000000 + i):
+                store_scan(
+                    results_dir,
+                    profile="deep",
+                    tools=["semgrep"],
+                    db_path=db_path,
+                    branch="main",
+                )
+
+        # Get scan IDs
+        conn = get_connection(db_path)
+        cursor = conn.execute("SELECT id FROM scans ORDER BY timestamp")
+        scan_ids = [row[0] for row in cursor.fetchall()]
+        conn.close()
+
+        # Delete first 3 scans (creates space to reclaim)
+        conn = get_connection(db_path)
+        for scan_id in scan_ids[:3]:
+            delete_scan(conn, scan_id)
+        conn.close()
+
+        # Optimize should reclaim space
+        result = optimize_database(db_path)
+
+        # Space reclaimed should be >= 0 (can be 0 if SQLite doesn't fragment)
+        assert result["space_reclaimed_mb"] >= 0
+
+
+class TestDashboardFunctions:
+    """Test dashboard summary and timeline functions."""
+
+    def test_get_dashboard_summary(self, tmp_path):
+        """Test dashboard summary generation."""
+        from scripts.core.history_db import (
+            get_dashboard_summary,
+            get_connection,
+            init_database,
+            store_scan,
+        )
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        # Store a scan with diverse findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "CRITICAL",
+                        "ruleId": "CVE-2024-0001",
+                        "tool": {"name": "trivy", "version": "0.68.0"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "Critical vulnerability",
+                        "compliance": {
+                            "owaspTop10_2021": ["A06:2021"],
+                            "cweTop25_2024": [{"id": "CWE-79", "rank": 1}],
+                        },
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "semgrep", "version": "1.50.0"},
+                        "location": {"path": "src/db.py", "startLine": 25},
+                        "message": "SQL injection",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-200",
+                        "tool": {"name": "semgrep", "version": "1.50.0"},
+                        "location": {"path": "src/info.py", "startLine": 5},
+                        "message": "Information disclosure",
+                    },
+                ]
+            )
+        )
+
+        scan_id = store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["trivy", "semgrep"],
+            db_path=db_path,
+            branch="main",
+        )
+
+        conn = get_connection(db_path)
+
+        # Get dashboard summary
+        summary = get_dashboard_summary(conn, scan_id)
+
+        conn.close()
+
+        # Verify structure
+        assert summary is not None
+        assert "scan" in summary
+        assert "severity_counts" in summary
+        assert "top_rules" in summary
+        assert "tools_used" in summary
+        assert "findings_by_tool" in summary
+        assert "compliance_coverage" in summary
+
+        # Check severity counts
+        assert summary["severity_counts"]["CRITICAL"] == 1
+        assert summary["severity_counts"]["HIGH"] == 1
+        assert summary["severity_counts"]["MEDIUM"] == 1
+        assert summary["severity_counts"]["LOW"] == 0
+
+        # Check tools used
+        assert "trivy" in summary["tools_used"]
+        assert "semgrep" in summary["tools_used"]
+
+        # Check compliance coverage
+        assert summary["compliance_coverage"]["total_findings"] == 3
+        assert (
+            summary["compliance_coverage"]["findings_with_compliance"] >= 1
+        )  # fp1 has compliance
+
+    def test_get_dashboard_summary_invalid_scan(self, tmp_path):
+        """Test dashboard summary with invalid scan ID."""
+        from scripts.core.history_db import (
+            get_dashboard_summary,
+            get_connection,
+            init_database,
+        )
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+
+        conn = get_connection(db_path)
+
+        # Invalid scan ID should return None
+        summary = get_dashboard_summary(conn, "nonexistent123")
+
+        conn.close()
+
+        assert summary is None
+
+
+class TestEncryptionDecryption:
+    """Test encryption and decryption of raw findings."""
+
+    def test_encrypt_raw_finding_success(self, monkeypatch):
+        """Test successful encryption of raw finding."""
+        from scripts.core.history_db import encrypt_raw_finding
+
+        # Set encryption key
+        monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-encryption-key-32-chars!!")
+
+        raw_json = '{"secret": "my-api-key", "value": 12345}'
+
+        encrypted = encrypt_raw_finding(raw_json)
+
+        # Should be encrypted (not equal to original)
+        assert encrypted != raw_json
+        # Should be a non-empty string
+        assert len(encrypted) > 0
+        assert isinstance(encrypted, str)
+
+    def test_encrypt_raw_finding_missing_key(self, monkeypatch):
+        """Test encryption fails without JMO_ENCRYPTION_KEY."""
+        from scripts.core.history_db import encrypt_raw_finding
+
+        # Ensure env var not set
+        monkeypatch.delenv("JMO_ENCRYPTION_KEY", raising=False)
+
+        raw_json = '{"secret": "my-api-key"}'
+
+        with pytest.raises(ValueError, match="JMO_ENCRYPTION_KEY"):
+            encrypt_raw_finding(raw_json)
+
+    def test_encrypt_raw_finding_missing_cryptography(self, monkeypatch):
+        """Test encryption fails without cryptography library."""
+        monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-key-32-chars-long-here!!")
+
+        # Mock ImportError for cryptography
+        import builtins
+
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "cryptography.fernet" or name.startswith("cryptography"):
+                raise ImportError("No module named 'cryptography'")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", mock_import)
+
+        # Re-import after mocking
+        from scripts.core.history_db import encrypt_raw_finding
+
+        raw_json = '{"secret": "my-api-key"}'
+
+        with pytest.raises(ImportError, match="cryptography library required"):
+            encrypt_raw_finding(raw_json)
+
+    def test_decrypt_raw_finding_success(self, monkeypatch):
+        """Test successful decryption of encrypted finding."""
+        from scripts.core.history_db import decrypt_raw_finding, encrypt_raw_finding
+
+        monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-encryption-key-32-chars!!")
+
+        original_json = '{"secret": "my-api-key", "value": 12345}'
+
+        # Encrypt
+        encrypted = encrypt_raw_finding(original_json)
+
+        # Decrypt
+        decrypted = decrypt_raw_finding(encrypted)
+
+        # Should match original
+        assert decrypted == original_json
+
+    def test_decrypt_raw_finding_missing_key(self, monkeypatch):
+        """Test decryption fails without JMO_ENCRYPTION_KEY."""
+        from scripts.core.history_db import decrypt_raw_finding
+
+        monkeypatch.delenv("JMO_ENCRYPTION_KEY", raising=False)
+
+        encrypted_str = "fake-encrypted-data"
+
+        with pytest.raises(ValueError, match="JMO_ENCRYPTION_KEY"):
+            decrypt_raw_finding(encrypted_str)
+
+    def test_decrypt_raw_finding_invalid_ciphertext(self, monkeypatch):
+        """Test decryption fails with invalid ciphertext."""
+        from scripts.core.history_db import decrypt_raw_finding
+
+        monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-encryption-key-32-chars!!")
+
+        invalid_encrypted = "not-valid-fernet-ciphertext"
+
+        with pytest.raises(Exception):  # Fernet raises various exceptions
+            decrypt_raw_finding(invalid_encrypted)
+
+    def test_encrypt_decrypt_roundtrip(self, monkeypatch):
+        """Test full encrypt/decrypt roundtrip with complex data."""
+        from scripts.core.history_db import decrypt_raw_finding, encrypt_raw_finding
+
+        monkeypatch.setenv("JMO_ENCRYPTION_KEY", "test-key-32-characters-here!!")
+
+        complex_json = json.dumps(
+            {
+                "DetectorName": "AWS",
+                "Raw": "AKIAIOSFODNN7EXAMPLE",
+                "nested": {"data": [1, 2, 3], "unicode": "日本語"},
+            }
+        )
+
+        encrypted = encrypt_raw_finding(complex_json)
+        decrypted = decrypt_raw_finding(encrypted)
+
+        assert decrypted == complex_json
+        assert json.loads(decrypted)["nested"]["unicode"] == "日本語"
+
+
+class TestAttestationFunctions:
+    """Test SLSA attestation storage and retrieval."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        # Create unique database path for this test
+        db_path = tmp_path / f"test_{id(self)}.db"
+
+        # Monkeypatch DEFAULT_DB_PATH
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        # CRITICAL SOLUTION: Patch sqlite3.connect at the module level
+        # This ensures ALL database connections in history_db module use test database
+        # Even when get_connection() is called with default parameter
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            # If trying to connect to default .jmo/history.db, redirect to test database
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+
+        yield db_path
+
+        # Cleanup: remove database file after test
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_store_attestation_success(self, tmp_path, isolate_database, monkeypatch):
+        """Test successful attestation storage."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            store_attestation,
+            store_scan,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Store a scan first
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS",
+                    }
+                ]
+            )
+        )
+
+        scan_id = store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["semgrep"],
+            # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+            branch="main",
+        )
+
+        # Mock time.time() for consistent timestamp
+        mock_time = 1234567890
+        monkeypatch.setattr("time.time", lambda: mock_time)
+
+        # Store attestation
+        attestation = {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "subject": [{"name": "scan-results", "digest": {"sha256": "abc123"}}],
+            "predicate": {
+                "builder": {"id": "https://github.com/actions"},
+                "buildType": "jmo-security-scan",
+            },
+        }
+
+        store_attestation(
+            scan_id,
+            attestation,
+            signature_path="/path/to/signature.sig",
+            certificate_path="/path/to/cert.pem",
+            rekor_entry="https://rekor.sigstore.dev/api/v1/log/entries/abc123",
+            rekor_published=True,
+        )
+
+        # Verify attestation was stored
+        # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT attestation_json, signature_path, rekor_published, slsa_level FROM attestations WHERE scan_id = ?",
+            (scan_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row is not None
+        stored_attestation = json.loads(row[0])
+        assert stored_attestation["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert row[1] == "/path/to/signature.sig"
+        assert row[2] == 1  # rekor_published = True
+        assert row[3] == 2  # SLSA Level 2
+
+    def test_load_attestation_success(self, tmp_path, isolate_database, monkeypatch):
+        """Test successful attestation loading."""
+        from scripts.core.history_db import (
+            init_database,
+            load_attestation,
+            store_attestation,
+            store_scan,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Store a scan first
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS",
+                    }
+                ]
+            )
+        )
+
+        scan_id = store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["semgrep"],
+            # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+            branch="main",
+        )
+
+        # Mock time.time() for consistent timestamp
+        mock_time = 1234567890
+        monkeypatch.setattr("time.time", lambda: mock_time)
+
+        # Store attestation
+        attestation = {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "subject": [{"name": "scan-results", "digest": {"sha256": "def456"}}],
+        }
+
+        store_attestation(
+            scan_id,
+            attestation,
+            signature_path="/path/to/sig2.sig",
+            certificate_path="/path/to/cert2.pem",
+            rekor_entry="https://rekor.sigstore.dev/api/v1/log/entries/def456",
+            rekor_published=False,
+        )
+
+        # Load attestation
+        loaded = load_attestation(scan_id)
+
+        assert loaded is not None
+        assert loaded["scan_id"] == scan_id
+        assert loaded["attestation"]["_type"] == "https://in-toto.io/Statement/v0.1"
+        assert loaded["signature_path"] == "/path/to/sig2.sig"
+        assert loaded["certificate_path"] == "/path/to/cert2.pem"
+        assert (
+            loaded["rekor_entry"]
+            == "https://rekor.sigstore.dev/api/v1/log/entries/def456"
+        )
+        assert loaded["rekor_published"] is False
+        assert loaded["created_at"] == mock_time
+        assert loaded["slsa_level"] == 2
+
+    def test_load_attestation_not_found(self, isolate_database):
+        """Test loading attestation for non-existent scan."""
+        from scripts.core.history_db import (
+            init_database,
+            load_attestation,
+            migrate_add_attestations_table,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Ensure attestations table exists (normally created by store_attestation)
+        migrate_add_attestations_table()
+
+        # Try to load attestation for non-existent scan
+        loaded = load_attestation("non-existent-scan-id")
+
+        assert loaded is None
+
+    def test_get_attestation_coverage(self, tmp_path, isolate_database, monkeypatch):
+        """Test attestation coverage statistics."""
+        from scripts.core.history_db import (
+            get_attestation_coverage,
+            init_database,
+            store_attestation,
+            store_scan,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Mock time.time() for consistent timestamps
+        base_time = 1234567890
+        current_time = base_time + (10 * 86400)  # 10 days later
+        monkeypatch.setattr("time.time", lambda: current_time)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+
+        # Store 3 scans within the 30-day window
+        scan_ids = []
+        for i in range(3):
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": f"fp{i}",
+                            "severity": "HIGH",
+                            "ruleId": f"CWE-{i}",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": f"src/file{i}.py", "startLine": 10},
+                            "message": f"Issue {i}",
+                        }
+                    ]
+                )
+            )
+
+            # Mock time for each scan (1 day apart)
+            scan_time = current_time - (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=scan_time: t)
+
+            scan_id = store_scan(
+                results_dir,
+                profile="balanced",
+                tools=["semgrep"],
+                # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+                branch="main",
+            )
+            scan_ids.append(scan_id)
+
+        # Reset time to current
+        monkeypatch.setattr("time.time", lambda: current_time)
+
+        # Add attestations to 2 out of 3 scans
+        # Scan 0: Attestation with Rekor published
+        store_attestation(
+            scan_ids[0],
+            {"_type": "https://in-toto.io/Statement/v0.1"},
+            signature_path="/sig0.sig",
+            certificate_path="/cert0.pem",
+            rekor_entry="https://rekor.sigstore.dev/entry0",
+            rekor_published=True,
+        )
+
+        # Scan 1: Attestation WITHOUT Rekor published
+        store_attestation(
+            scan_ids[1],
+            {"_type": "https://in-toto.io/Statement/v0.1"},
+            signature_path="/sig1.sig",
+            certificate_path="/cert1.pem",
+            rekor_entry=None,
+            rekor_published=False,
+        )
+
+        # Scan 2: No attestation
+
+        # Get coverage for last 30 days
+        coverage = get_attestation_coverage(days=30)
+
+        # Verify statistics
+        assert coverage["days"] == 30
+        assert coverage["total_scans"] == 3
+        assert coverage["attested_scans"] == 2
+        assert coverage["missing_scans"] == 1
+        assert coverage["coverage_percentage"] == pytest.approx(66.67, rel=0.1)
+        assert coverage["rekor_published"] == 1
+        assert coverage["rekor_rate"] == 50.0
+        assert scan_ids[2] in coverage["missing_scan_ids"]
+        assert len(coverage["missing_scan_ids"]) == 1
+
+    def test_get_attestation_coverage_no_scans(self, isolate_database):
+        """Test attestation coverage with no scans."""
+        from scripts.core.history_db import (
+            get_attestation_coverage,
+            init_database,
+            migrate_add_attestations_table,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Ensure attestations table exists (normally created by store_attestation)
+        migrate_add_attestations_table()
+
+        # Get coverage with no scans
+        coverage = get_attestation_coverage(days=30)
+
+        assert coverage["total_scans"] == 0
+        assert coverage["attested_scans"] == 0
+        assert coverage["missing_scans"] == 0
+        assert coverage["coverage_percentage"] == 0
+        assert coverage["rekor_rate"] == 0
+        assert len(coverage["missing_scan_ids"]) == 0
+
+    def test_store_attestation_overwrite(self, tmp_path, isolate_database, monkeypatch):
+        """Test that storing attestation twice overwrites the first."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            store_attestation,
+            store_scan,
+        )
+
+        db_path = isolate_database  # Use fixture-provided isolated database
+
+        init_database(db_path)
+
+        # Store a scan
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS",
+                    }
+                ]
+            )
+        )
+
+        scan_id = store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["semgrep"],
+            # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+            branch="main",
+        )
+
+        # Mock time.time()
+        mock_time = 1234567890
+        monkeypatch.setattr("time.time", lambda: mock_time)
+
+        # Store first attestation
+        attestation1 = {"version": "1.0", "data": "first"}
+        store_attestation(
+            scan_id,
+            attestation1,
+            signature_path="/sig1.sig",
+            certificate_path="/cert1.pem",
+            rekor_entry=None,
+            rekor_published=False,
+        )
+
+        # Store second attestation (should overwrite)
+        attestation2 = {"version": "2.0", "data": "second"}
+        store_attestation(
+            scan_id,
+            attestation2,
+            signature_path="/sig2.sig",
+            certificate_path="/cert2.pem",
+            rekor_entry="https://rekor.sigstore.dev/entry",
+            rekor_published=True,
+        )
+
+        # Verify only one attestation exists with second data
+        # Don't pass db_path - use monkeypatched DEFAULT_DB_PATH
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*), attestation_json, signature_path, rekor_published FROM attestations WHERE scan_id = ?",
+            (scan_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row[0] == 1  # Only one attestation
+        stored_attestation = json.loads(row[1])
+        assert stored_attestation["version"] == "2.0"
+        assert stored_attestation["data"] == "second"
+        assert row[2] == "/sig2.sig"
+        assert row[3] == 1  # rekor_published = True
+
+
+class TestSearchFindings:
+    """Test suite for search_findings function (lines 2078-2205)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        # Create unique database path for this test
+        db_path = tmp_path / f"test_{id(self)}.db"
+
+        # Monkeypatch DEFAULT_DB_PATH
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        # CRITICAL SOLUTION: Patch sqlite3.connect at the module level
+        # This ensures ALL database connections in history_db module use test database
+        # Even when get_connection() is called with default parameter
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            # If trying to connect to default .jmo/history.db, redirect to test database
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+
+        yield db_path
+
+        # Cleanup: remove database file after test
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_search_findings_text_query(self, tmp_path, isolate_database):
+        """Test basic text search across message, path, and rule_id."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability detected",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection risk",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/file.py", "startLine": 30},
+                        "message": "Path traversal",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Search for "SQL" - should match message
+        conn = get_connection()
+        results = search_findings(conn, "SQL")
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["rule_id"] == "CWE-89"
+        assert "SQL injection" in results[0]["message"]
+
+    def test_search_findings_path_match(self, tmp_path, isolate_database):
+        """Test text search matching file paths."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/auth/login.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/api/endpoint.py", "startLine": 20},
+                        "message": "Path traversal",
+                    },
+                ]
+            )
+        )
+
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Search for "auth" - should match path
+        conn = get_connection()
+        results = search_findings(conn, "auth")
+        conn.close()
+
+        assert len(results) == 1
+        assert "auth/login.py" in results[0]["path"]
+
+    def test_search_findings_rule_id_match(self, tmp_path, isolate_database):
+        """Test text search matching rule IDs."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Search for "CWE-89" - should match rule_id
+        conn = get_connection()
+        results = search_findings(conn, "CWE-89")
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["rule_id"] == "CWE-89"
+
+    def test_search_findings_severity_filter_single(self, tmp_path, isolate_database):
+        """Test filtering by single severity level."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/file.py", "startLine": 30},
+                        "message": "Path traversal",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Filter for HIGH severity only
+        conn = get_connection()
+        results = search_findings(conn, "", {"severity": "HIGH"})
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["severity"] == "HIGH"
+
+    def test_search_findings_severity_filter_multiple(self, tmp_path, isolate_database):
+        """Test filtering by multiple severity levels."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/file.py", "startLine": 30},
+                        "message": "Path traversal",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Filter for HIGH and CRITICAL severity
+        conn = get_connection()
+        results = search_findings(conn, "", {"severity": ["HIGH", "CRITICAL"]})
+        conn.close()
+
+        assert len(results) == 2
+        severities = {r["severity"] for r in results}
+        assert severities == {"HIGH", "CRITICAL"}
+
+    def test_search_findings_tool_filter_single(self, tmp_path, isolate_database):
+        """Test filtering by single tool."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Filter for semgrep only
+        conn = get_connection()
+        results = search_findings(conn, "", {"tool": "semgrep"})
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["tool"] == "semgrep"
+
+    def test_search_findings_tool_filter_multiple(self, tmp_path, isolate_database):
+        """Test filtering by multiple tools."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "trivy"},
+                        "location": {"path": "src/file.py", "startLine": 30},
+                        "message": "Path traversal",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir,
+            profile="balanced",
+            tools=["semgrep", "bandit", "trivy"],
+            branch="main",
+        )
+
+        # Filter for semgrep and bandit
+        conn = get_connection()
+        results = search_findings(conn, "", {"tool": ["semgrep", "bandit"]})
+        conn.close()
+
+        assert len(results) == 2
+        tools = {r["tool"] for r in results}
+        assert tools == {"semgrep", "bandit"}
+
+    def test_search_findings_scan_id_filter(self, tmp_path, isolate_database):
+        """Test filtering by scan_id."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create first scan
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                ]
+            )
+        )
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create second scan
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["bandit"], branch="main"
+        )
+
+        # Filter for scan_id1 only
+        conn = get_connection()
+        results = search_findings(conn, "", {"scan_id": scan_id1})
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["scan_id"] == scan_id1
+        assert results[0]["rule_id"] == "CWE-79"
+
+    def test_search_findings_branch_filter(self, tmp_path, isolate_database):
+        """Test filtering by branch (requires JOIN with scans table)."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create main branch scan
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                ]
+            )
+        )
+        store_scan(results_dir1, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Create dev branch scan
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+        store_scan(results_dir2, profile="balanced", tools=["bandit"], branch="dev")
+
+        # Filter for main branch only
+        conn = get_connection()
+        results = search_findings(conn, "", {"branch": "main"})
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["rule_id"] == "CWE-79"
+
+    def test_search_findings_date_range_filter(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test filtering by date range (requires JOIN with scans table)."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create old scan (timestamp: 1000000000)
+        mock_time_old = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_old)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                ]
+            )
+        )
+        store_scan(results_dir1, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Create new scan (timestamp: 2000000000)
+        mock_time_new = 2000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_new)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+        store_scan(results_dir2, profile="balanced", tools=["bandit"], branch="main")
+
+        # Filter for scans between 1500000000 and 2500000000 (should get new scan only)
+        conn = get_connection()
+        results = search_findings(conn, "", {"date_range": (1500000000, 2500000000)})
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["rule_id"] == "CWE-89"
+
+    def test_search_findings_combined_filters(self, tmp_path, isolate_database):
+        """Test combining text query with multiple filters."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability detected",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection risk",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/file.py", "startLine": 30},
+                        "message": "Path traversal vulnerability",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Search for "vulnerability" with HIGH severity and semgrep tool
+        conn = get_connection()
+        results = search_findings(
+            conn, "vulnerability", {"severity": "HIGH", "tool": "semgrep"}
+        )
+        conn.close()
+
+        assert len(results) == 1
+        assert results[0]["rule_id"] == "CWE-79"
+        assert "XSS" in results[0]["message"]
+
+    def test_search_findings_limit_parameter(self, tmp_path, isolate_database):
+        """Test limit parameter."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create many test findings
+        findings = [
+            {
+                "id": f"fp{i}",
+                "severity": "HIGH",
+                "ruleId": f"CWE-{i}",
+                "tool": {"name": "semgrep"},
+                "location": {"path": f"src/file{i}.py", "startLine": 10},
+                "message": f"Vulnerability {i}",
+            }
+            for i in range(10)
+        ]
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(json.dumps(findings))
+
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Limit to 5 results
+        conn = get_connection()
+        results = search_findings(conn, "", {"limit": 5})
+        conn.close()
+
+        assert len(results) == 5
+
+    def test_search_findings_default_limit(self, tmp_path, isolate_database):
+        """Test default limit of 100."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 150 test findings (exceeds default limit of 100)
+        findings = [
+            {
+                "id": f"fp{i}",
+                "severity": "HIGH",
+                "ruleId": f"CWE-{i}",
+                "tool": {"name": "semgrep"},
+                "location": {"path": f"src/file{i}.py", "startLine": 10},
+                "message": f"Vulnerability {i}",
+            }
+            for i in range(150)
+        ]
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(json.dumps(findings))
+
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # No limit specified - should default to 100
+        conn = get_connection()
+        results = search_findings(conn, "")
+        conn.close()
+
+        assert len(results) == 100
+
+    def test_search_findings_severity_ordering(self, tmp_path, isolate_database):
+        """Test results are ordered by severity (CRITICAL > HIGH > MEDIUM > LOW > INFO)."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings with different severities
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "LOW",
+                        "ruleId": "CWE-1",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/a.py", "startLine": 10},
+                        "message": "Low severity",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-2",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/b.py", "startLine": 20},
+                        "message": "Critical severity",
+                    },
+                    {
+                        "id": "fp3",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-3",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/c.py", "startLine": 30},
+                        "message": "High severity",
+                    },
+                    {
+                        "id": "fp4",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-4",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/d.py", "startLine": 40},
+                        "message": "Medium severity",
+                    },
+                ]
+            )
+        )
+
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Get all findings - should be ordered by severity
+        conn = get_connection()
+        results = search_findings(conn, "")
+        conn.close()
+
+        severities = [r["severity"] for r in results]
+        assert severities == ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+    def test_search_findings_empty_query(self, tmp_path, isolate_database):
+        """Test search with empty query returns all findings."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                    {
+                        "id": "fp2",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 20},
+                        "message": "SQL injection",
+                    },
+                ]
+            )
+        )
+
+        store_scan(
+            results_dir, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Empty query - should return all findings
+        conn = get_connection()
+        results = search_findings(conn, "")
+        conn.close()
+
+        assert len(results) == 2
+
+    def test_search_findings_no_matches(self, tmp_path, isolate_database):
+        """Test search with no matches returns empty list."""
+        from scripts.core.history_db import (
+            get_connection,
+            init_database,
+            search_findings,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create test findings
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    },
+                ]
+            )
+        )
+
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Search for something that doesn't exist
+        conn = get_connection()
+        results = search_findings(conn, "nonexistent")
+        conn.close()
+
+        assert len(results) == 0
+
+
+class TestRecurringFindings:
+    """Test suite for get_recurring_findings function (lines 2536-2627)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        # Create unique database path for this test
+        db_path = tmp_path / f"test_{id(self)}.db"
+
+        # Monkeypatch DEFAULT_DB_PATH
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        # CRITICAL SOLUTION: Patch sqlite3.connect at the module level
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+
+        yield db_path
+
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_recurring_findings_basic(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test basic recurring findings detection."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 3 scans with the same finding (recurring)
+        for i in range(3):
+            mock_time = 1000000000 + (i * 86400)  # 1 day apart
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-recurring",  # Same fingerprint = recurring
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS vulnerability",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Get recurring findings (min_occurrences=3)
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring) == 1
+        assert recurring[0]["fingerprint"] == "fp-recurring"
+        assert recurring[0]["occurrence_count"] == 3
+        assert recurring[0]["rule_id"] == "CWE-79"
+        assert recurring[0]["severity"] == "HIGH"
+
+    def test_get_recurring_findings_min_occurrences(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test min_occurrences parameter filtering."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create findings with different occurrence counts
+        # Finding 1: appears 5 times
+        for i in range(5):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results_5_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-5-times",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Finding 2: appears 2 times (below threshold of 3)
+        for i in range(2):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results_2_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-2-times",
+                            "severity": "MEDIUM",
+                            "ruleId": "CWE-89",
+                            "tool": {"name": "bandit"},
+                            "location": {"path": "src/db.py", "startLine": 20},
+                            "message": "SQL",
+                        }
+                    ]
+                )
+            )
+            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="main")
+
+        # Get recurring findings with min_occurrences=3 (default)
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        # Only fp-5-times should be returned
+        assert len(recurring) == 1
+        assert recurring[0]["fingerprint"] == "fp-5-times"
+        assert recurring[0]["occurrence_count"] == 5
+
+    def test_get_recurring_findings_branch_filtering(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test that findings are filtered by branch."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 3 scans on main branch with recurring finding
+        for i in range(3):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"main_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-main",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Create 3 scans on dev branch with different recurring finding
+        for i in range(3):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"dev_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-dev",
+                            "severity": "CRITICAL",
+                            "ruleId": "CWE-89",
+                            "tool": {"name": "bandit"},
+                            "location": {"path": "src/db.py", "startLine": 20},
+                            "message": "SQL",
+                        }
+                    ]
+                )
+            )
+            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="dev")
+
+        # Get recurring findings for main branch only
+        conn = get_connection()
+        recurring_main = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring_main) == 1
+        assert recurring_main[0]["fingerprint"] == "fp-main"
+
+        # Get recurring findings for dev branch only
+        conn = get_connection()
+        recurring_dev = get_recurring_findings(conn, "dev", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring_dev) == 1
+        assert recurring_dev[0]["fingerprint"] == "fp-dev"
+
+    def test_get_recurring_findings_avg_days_calculation(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test average days between fixes calculation."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 3 scans: day 0, day 10, day 20 (10 days apart each)
+        timestamps = [1000000000, 1000000000 + (10 * 86400), 1000000000 + (20 * 86400)]
+
+        for i, ts in enumerate(timestamps):
+            monkeypatch.setattr("time.time", lambda t=ts: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-recurring",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Get recurring findings
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring) == 1
+        # Total: 20 days, occurrences: 3, avg = 20 / (3-1) = 10.0 days
+        assert recurring[0]["avg_days_between_fixes"] == 10.0
+
+    def test_get_recurring_findings_severity_ordering(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test results are ordered by occurrence_count DESC, then severity DESC."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create finding 1: HIGH severity, 3 occurrences
+        for i in range(3):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"high_3_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-high-3",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Create finding 2: CRITICAL severity, 5 occurrences (should be first)
+        for i in range(5):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"critical_5_{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-critical-5",
+                            "severity": "CRITICAL",
+                            "ruleId": "CWE-89",
+                            "tool": {"name": "bandit"},
+                            "location": {"path": "src/db.py", "startLine": 20},
+                            "message": "SQL",
+                        }
+                    ]
+                )
+            )
+            store_scan(results_dir, profile="balanced", tools=["bandit"], branch="main")
+
+        # Get recurring findings
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring) == 2
+        # First should be fp-critical-5 (more occurrences)
+        assert recurring[0]["fingerprint"] == "fp-critical-5"
+        assert recurring[0]["occurrence_count"] == 5
+        # Second should be fp-high-3
+        assert recurring[1]["fingerprint"] == "fp-high-3"
+        assert recurring[1]["occurrence_count"] == 3
+
+    def test_get_recurring_findings_first_last_seen(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test first_seen and last_seen timestamps."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 3 scans with specific timestamps
+        timestamps = [1000000000, 1500000000, 2000000000]
+
+        for i, ts in enumerate(timestamps):
+            monkeypatch.setattr("time.time", lambda t=ts: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-recurring",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Get recurring findings
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring) == 1
+        # Verify first_seen and last_seen are ISO timestamps
+        assert recurring[0]["first_seen"] is not None
+        assert recurring[0]["last_seen"] is not None
+        assert "T" in recurring[0]["first_seen"]  # ISO format check
+        assert "T" in recurring[0]["last_seen"]
+
+    def test_get_recurring_findings_no_results(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test when no findings meet min_occurrences threshold."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create only 2 scans with same finding (below threshold of 3)
+        for i in range(2):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-only-2",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+            store_scan(
+                results_dir, profile="balanced", tools=["semgrep"], branch="main"
+            )
+
+        # Get recurring findings (min_occurrences=3)
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=3)
+        conn.close()
+
+        assert len(recurring) == 0
+
+    def test_get_recurring_findings_single_occurrence(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test avg_days_between_fixes is 0 for single occurrence."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_recurring_findings,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create exactly 1 scan (min_occurrences=1)
+        mock_time = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-single",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS",
+                    }
+                ]
+            )
+        )
+        store_scan(results_dir, profile="balanced", tools=["semgrep"], branch="main")
+
+        # Get recurring findings with min_occurrences=1
+        conn = get_connection()
+        recurring = get_recurring_findings(conn, "main", min_occurrences=1)
+        conn.close()
+
+        assert len(recurring) == 1
+        # Single occurrence should have avg_days_between_fixes = 0.0
+        assert recurring[0]["avg_days_between_fixes"] == 0.0
+
+
+class TestScanDiffForAI:
+    """Test suite for get_scan_diff_for_ai function (lines 2390-2533)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_scan_diff_for_ai_basic(self, tmp_path, isolate_database, monkeypatch):
+        """Test basic AI-friendly diff computation."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-old",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/old.py", "startLine": 10},
+                        "message": "Old finding",
+                    }
+                ]
+            )
+        )
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan with new finding
+        mock_time_2 = 1000000000 + 86400  # 1 day later
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-new",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/new.py", "startLine": 20},
+                        "message": "New finding",
+                    }
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["bandit"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify structure
+        assert "new_findings" in diff
+        assert "resolved_findings" in diff
+        assert "context" in diff
+
+        # Verify new finding has priority score
+        assert len(diff["new_findings"]) == 1
+        new_finding = diff["new_findings"][0]
+        assert "priority_score" in new_finding
+        assert new_finding["severity"] == "CRITICAL"
+        assert new_finding["rule_id"] == "CWE-89"
+
+        # Verify resolved finding
+        assert len(diff["resolved_findings"]) == 1
+        resolved_finding = diff["resolved_findings"][0]
+        assert "likely_fix" in resolved_finding
+        assert resolved_finding["rule_id"] == "CWE-79"
+
+    def test_get_scan_diff_for_ai_priority_scoring(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test priority scoring based on severity."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan (empty)
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(json.dumps([]))
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan with findings of different severities
+        mock_time_2 = 1000000000 + 86400
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-critical",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/a.py", "startLine": 10},
+                        "message": "Critical",
+                    },
+                    {
+                        "id": "fp-high",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/b.py", "startLine": 20},
+                        "message": "High",
+                    },
+                    {
+                        "id": "fp-medium",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/c.py", "startLine": 30},
+                        "message": "Medium",
+                    },
+                    {
+                        "id": "fp-low",
+                        "severity": "LOW",
+                        "ruleId": "CWE-1",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/d.py", "startLine": 40},
+                        "message": "Low",
+                    },
+                    {
+                        "id": "fp-info",
+                        "severity": "INFO",
+                        "ruleId": "CWE-2",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/e.py", "startLine": 50},
+                        "message": "Info",
+                    },
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify priority scores match severity
+        # CRITICAL=10, HIGH=7, MEDIUM=4, LOW=2, INFO=1
+        findings_by_severity = {f["severity"]: f for f in diff["new_findings"]}
+
+        assert findings_by_severity["CRITICAL"]["priority_score"] == 10
+        assert findings_by_severity["HIGH"]["priority_score"] == 7
+        assert findings_by_severity["MEDIUM"]["priority_score"] == 4
+        assert findings_by_severity["LOW"]["priority_score"] == 2
+        assert findings_by_severity["INFO"]["priority_score"] == 1
+
+    def test_get_scan_diff_for_ai_compliance_boost(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test priority score boost for compliance frameworks."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan (empty)
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(json.dumps([]))
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan with compliance-tagged finding
+        mock_time_2 = 1000000000 + 86400
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-with-compliance",
+                        "severity": "HIGH",  # Base score: 7
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/app.py", "startLine": 10},
+                        "message": "XSS with compliance",
+                        "compliance": {
+                            "owaspTop10_2021": ["A03:2021"],  # Adds +2 boost
+                        },
+                    }
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify compliance boost: 7 (HIGH) + 2 (compliance) = 9
+        assert len(diff["new_findings"]) == 1
+        assert diff["new_findings"][0]["priority_score"] == 9
+
+    def test_get_scan_diff_for_ai_priority_sorting(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test that new findings are sorted by priority score DESC."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan (empty)
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(json.dumps([]))
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan with mixed priority findings
+        mock_time_2 = 1000000000 + 86400
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-low",
+                        "severity": "LOW",  # Priority: 2
+                        "ruleId": "CWE-1",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/a.py", "startLine": 10},
+                        "message": "Low",
+                    },
+                    {
+                        "id": "fp-critical",
+                        "severity": "CRITICAL",  # Priority: 10
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/b.py", "startLine": 20},
+                        "message": "Critical",
+                    },
+                    {
+                        "id": "fp-medium",
+                        "severity": "MEDIUM",  # Priority: 4
+                        "ruleId": "CWE-22",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/c.py", "startLine": 30},
+                        "message": "Medium",
+                    },
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify findings are sorted by priority DESC
+        priorities = [f["priority_score"] for f in diff["new_findings"]]
+        assert priorities == [10, 4, 2]  # CRITICAL, MEDIUM, LOW
+
+    def test_get_scan_diff_for_ai_context(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test context metadata in diff."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(json.dumps([]))
+        scan_id1 = store_scan(
+            results_dir1,
+            profile="balanced",
+            tools=["semgrep"],
+            branch="main",
+            commit_hash="abc123",
+        )
+
+        # Create comparison scan 5 days later
+        mock_time_2 = 1000000000 + (5 * 86400)  # 5 days later
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(json.dumps([]))
+        scan_id2 = store_scan(
+            results_dir2,
+            profile="balanced",
+            tools=["semgrep"],
+            branch="main",
+            commit_hash="def456",
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify context
+        assert "context" in diff
+        context = diff["context"]
+        assert "scan_1" in context
+        assert "scan_2" in context
+        assert "commit_diff" in context
+        assert "time_delta_days" in context
+        assert context["time_delta_days"] == 5
+        assert "abc" in context["commit_diff"] and "def" in context["commit_diff"]
+
+    def test_get_scan_diff_for_ai_likely_fix(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test likely_fix heuristic for resolved findings."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan with finding
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-resolved",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/vulnerable.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    }
+                ]
+            )
+        )
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan (finding resolved)
+        mock_time_2 = 1000000000 + 86400
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(json.dumps([]))
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify likely_fix heuristic
+        assert len(diff["resolved_findings"]) == 1
+        resolved = diff["resolved_findings"][0]
+        assert "likely_fix" in resolved
+        assert "vulnerable.py" in resolved["likely_fix"]
+        assert "Modified or deleted" in resolved["likely_fix"]
+
+    def test_get_scan_diff_for_ai_no_changes(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test diff when no changes between scans."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create two identical scans
+        for i in range(2):
+            mock_time = 1000000000 + (i * 86400)
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-same",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/app.py", "startLine": 10},
+                            "message": "XSS",
+                        }
+                    ]
+                )
+            )
+
+        scan_id1 = store_scan(
+            tmp_path / "results0", profile="balanced", tools=["semgrep"], branch="main"
+        )
+        scan_id2 = store_scan(
+            tmp_path / "results1", profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify no changes
+        assert len(diff["new_findings"]) == 0
+        assert len(diff["resolved_findings"]) == 0
+
+    def test_get_scan_diff_for_ai_priority_cap(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test priority score is capped at 10."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_scan_diff_for_ai,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create baseline scan (empty)
+        mock_time_1 = 1000000000
+        monkeypatch.setattr("time.time", lambda: mock_time_1)
+
+        results_dir1 = tmp_path / "results1"
+        summaries_dir1 = results_dir1 / "summaries"
+        summaries_dir1.mkdir(parents=True)
+        (summaries_dir1 / "findings.json").write_text(json.dumps([]))
+        scan_id1 = store_scan(
+            results_dir1, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Create comparison scan with CRITICAL + compliance (10 + 2 = 12, capped to 10)
+        mock_time_2 = 1000000000 + 86400
+        monkeypatch.setattr("time.time", lambda: mock_time_2)
+
+        results_dir2 = tmp_path / "results2"
+        summaries_dir2 = results_dir2 / "summaries"
+        summaries_dir2.mkdir(parents=True)
+        (summaries_dir2 / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-critical-compliance",
+                        "severity": "CRITICAL",  # Base: 10
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/db.py", "startLine": 10},
+                        "message": "SQL injection",
+                        "pci_dss": ["6.5.1"],  # +2 boost
+                    }
+                ]
+            )
+        )
+        scan_id2 = store_scan(
+            results_dir2, profile="balanced", tools=["bandit"], branch="main"
+        )
+
+        # Get AI-friendly diff
+        conn = get_connection()
+        diff = get_scan_diff_for_ai(conn, scan_id1, scan_id2)
+        conn.close()
+
+        # Verify priority is capped at 10
+        assert diff["new_findings"][0]["priority_score"] == 10
+
+
+class TestComplianceSummary:
+    """Tests for get_compliance_summary function (lines 2635-2850)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_compliance_summary_all_frameworks(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance summary with all 6 frameworks."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create scan with findings mapped to all 6 frameworks
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                        "compliance": {
+                            "owaspTop10_2021": ["A03:2021"],
+                            "cweTop25_2024": [{"id": "79", "name": "XSS", "rank": 2}],
+                            "cisControlsV8_1": [
+                                {"id": "16.11", "name": "...", "ig": "IG2"}
+                            ],
+                            "nistCsf2_0": [
+                                {"function": "Protect", "category": "PR.DS"}
+                            ],
+                            "pciDss4_0": [{"requirement": "6.5.7", "priority": "P1"}],
+                            "mitreAttack": [{"tactic": "TA0001", "technique": "T1189"}],
+                        },
+                    }
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="balanced", tools=["semgrep"], branch="main"
+        )
+
+        # Get compliance summary
+        conn = get_connection()
+        summary = get_compliance_summary(conn, scan_id, framework="all")
+        conn.close()
+
+        # Verify all 6 frameworks present
+        assert "framework_summaries" in summary
+        assert len(summary["framework_summaries"]) == 6
+        assert "owasp_top10_2021" in summary["framework_summaries"]
+        assert "cwe_top25_2024" in summary["framework_summaries"]
+        assert "cis_controls_v8_1" in summary["framework_summaries"]
+        assert "nist_csf_2_0" in summary["framework_summaries"]
+        assert "pci_dss_4_0" in summary["framework_summaries"]
+        assert "mitre_attack" in summary["framework_summaries"]
+
+        # Verify coverage stats
+        assert summary["coverage_stats"]["total_findings"] == 1
+        assert summary["coverage_stats"]["findings_with_compliance"] == 1
+        assert summary["coverage_stats"]["coverage_percentage"] == 100.0
+        assert summary["coverage_stats"]["by_framework"]["owasp"] == 1
+        assert summary["coverage_stats"]["by_framework"]["cwe"] == 1
+        assert summary["coverage_stats"]["by_framework"]["cis"] == 1
+        assert summary["coverage_stats"]["by_framework"]["nist"] == 1
+        assert summary["coverage_stats"]["by_framework"]["pci"] == 1
+        assert summary["coverage_stats"]["by_framework"]["mitre"] == 1
+
+    def test_get_compliance_summary_single_framework(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance summary with single framework filter."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-owasp",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 10},
+                        "message": "XSS",
+                        "compliance": {
+                            "owaspTop10_2021": ["A03:2021"],
+                            "cweTop25_2024": [{"id": "79"}],
+                        },
+                    }
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="fast", tools=["semgrep"], branch="main"
+        )
+
+        # Get OWASP-only summary
+        conn = get_connection()
+        summary = get_compliance_summary(conn, scan_id, framework="owasp")
+        conn.close()
+
+        # Verify only OWASP framework present
+        assert len(summary["framework_summaries"]) == 1
+        assert "owasp_top10_2021" in summary["framework_summaries"]
+        assert "cwe_top25_2024" not in summary["framework_summaries"]
+
+    def test_get_compliance_summary_aggregation(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test aggregation of multiple findings in same category."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-xss-1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/a.py", "startLine": 10},
+                        "message": "XSS 1",
+                        "compliance": {"owaspTop10_2021": ["A03:2021"]},
+                    },
+                    {
+                        "id": "fp-xss-2",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/b.py", "startLine": 20},
+                        "message": "XSS 2",
+                        "compliance": {"owaspTop10_2021": ["A03:2021"]},
+                    },
+                    {
+                        "id": "fp-sqli",
+                        "severity": "CRITICAL",
+                        "ruleId": "CWE-89",
+                        "tool": {"name": "bandit"},
+                        "location": {"path": "src/c.py", "startLine": 30},
+                        "message": "SQL injection",
+                        "compliance": {"owaspTop10_2021": ["A03:2021"]},
+                    },
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="fast", tools=["semgrep", "bandit"], branch="main"
+        )
+
+        conn = get_connection()
+        summary = get_compliance_summary(conn, scan_id, framework="owasp")
+        conn.close()
+
+        # Verify aggregation
+        owasp_data = summary["framework_summaries"]["owasp_top10_2021"]
+        assert "A03:2021" in owasp_data
+        assert owasp_data["A03:2021"]["count"] == 3
+        assert owasp_data["A03:2021"]["severities"]["CRITICAL"] == 1
+        assert owasp_data["A03:2021"]["severities"]["HIGH"] == 1
+        assert owasp_data["A03:2021"]["severities"]["MEDIUM"] == 1
+
+    def test_get_compliance_summary_coverage_percentage(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test coverage percentage calculation."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-with-compliance",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/a.py", "startLine": 10},
+                        "message": "XSS",
+                        "compliance": {"owaspTop10_2021": ["A03:2021"]},
+                    },
+                    {
+                        "id": "fp-without-compliance",
+                        "severity": "LOW",
+                        "ruleId": "CUSTOM-1",
+                        "tool": {"name": "custom"},
+                        "location": {"path": "src/b.py", "startLine": 20},
+                        "message": "Custom rule",
+                    },
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="fast", tools=["semgrep", "custom"], branch="main"
+        )
+
+        conn = get_connection()
+        summary = get_compliance_summary(conn, scan_id, framework="all")
+        conn.close()
+
+        # Verify coverage: 1 out of 2 = 50%
+        assert summary["coverage_stats"]["total_findings"] == 2
+        assert summary["coverage_stats"]["findings_with_compliance"] == 1
+        assert summary["coverage_stats"]["coverage_percentage"] == 50.0
+
+    def test_get_compliance_summary_no_compliance(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance summary with no compliance data."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-no-compliance",
+                        "severity": "MEDIUM",
+                        "ruleId": "CUSTOM-1",
+                        "tool": {"name": "custom"},
+                        "location": {"path": "src/test.py", "startLine": 10},
+                        "message": "Custom rule",
+                    }
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="fast", tools=["custom"], branch="main"
+        )
+
+        conn = get_connection()
+        summary = get_compliance_summary(conn, scan_id, framework="all")
+        conn.close()
+
+        # Verify zero coverage
+        assert summary["coverage_stats"]["total_findings"] == 1
+        assert summary["coverage_stats"]["findings_with_compliance"] == 0
+        assert summary["coverage_stats"]["coverage_percentage"] == 0.0
+        assert summary["coverage_stats"]["by_framework"]["owasp"] == 0
+        assert summary["coverage_stats"]["by_framework"]["cwe"] == 0
+
+    def test_get_compliance_summary_invalid_scan_id(self, tmp_path, isolate_database):
+        """Test compliance summary with invalid scan ID."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_compliance_summary,
+            init_database,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        conn = get_connection()
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Scan not found"):
+            get_compliance_summary(conn, "nonexistent-scan-id", framework="all")
+
+        conn.close()
+
+
+class TestFindingContext:
+    """Tests for get_finding_context function (lines 2213-2387)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_finding_context_basic(self, tmp_path, isolate_database, monkeypatch):
+        """Test basic finding context retrieval."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_context,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-test",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 10},
+                        "message": "XSS vulnerability",
+                    }
+                ]
+            )
+        )
+        scan_id = store_scan(
+            results_dir, profile="fast", tools=["semgrep"], branch="main"
+        )
+
+        conn = get_connection()
+        context = get_finding_context(conn, "fp-test")
+        conn.close()
+
+        # Verify context structure
+        assert context is not None
+        assert "finding" in context
+        assert "history" in context
+        assert "similar_findings" in context
+        assert "remediation_history" in context
+        assert "compliance_impact" in context
+
+        # Verify finding data
+        assert context["finding"]["fingerprint"] == "fp-test"
+        assert context["finding"]["severity"] == "HIGH"
+
+    def test_get_finding_context_nonexistent(self, tmp_path, isolate_database):
+        """Test context retrieval for nonexistent finding."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_context,
+            init_database,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        conn = get_connection()
+        context = get_finding_context(conn, "nonexistent-fingerprint")
+        conn.close()
+
+        # Should return None
+        assert context is None
+
+    def test_get_finding_context_history(self, tmp_path, isolate_database, monkeypatch):
+        """Test finding context with historical occurrences."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_context,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        # Create 3 scans with same finding (recurring)
+        for i in range(3):
+            mock_time = 1000000000 + (i * 86400)  # 1 day apart
+            monkeypatch.setattr("time.time", lambda t=mock_time: t)
+
+            results_dir = tmp_path / f"results{i}"
+            summaries_dir = results_dir / "summaries"
+            summaries_dir.mkdir(parents=True)
+            (summaries_dir / "findings.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "fp-recurring",
+                            "severity": "HIGH",
+                            "ruleId": "CWE-79",
+                            "tool": {"name": "semgrep"},
+                            "location": {"path": "src/xss.py", "startLine": 10},
+                            "message": "XSS vulnerability",
+                        }
+                    ]
+                )
+            )
+            store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+
+        conn = get_connection()
+        context = get_finding_context(conn, "fp-recurring")
+        conn.close()
+
+        # Verify history (up to 10 occurrences)
+        assert len(context["history"]) == 3
+        assert context["history"][0]["branch"] == "main"
+
+    def test_get_finding_context_similar_findings(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test finding context with similar findings."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_context,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-primary",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 10},
+                        "message": "XSS primary",
+                    },
+                    {
+                        "id": "fp-similar-1",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 20},
+                        "message": "XSS similar 1",
+                    },
+                    {
+                        "id": "fp-similar-2",
+                        "severity": "MEDIUM",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 30},
+                        "message": "XSS similar 2",
+                    },
+                ]
+            )
+        )
+        store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+
+        conn = get_connection()
+        context = get_finding_context(conn, "fp-primary")
+        conn.close()
+
+        # Verify similar findings (same rule_id, same path, different line)
+        assert len(context["similar_findings"]) == 2
+        assert context["similar_findings"][0]["fingerprint"] == "fp-similar-1"
+        assert context["similar_findings"][1]["fingerprint"] == "fp-similar-2"
+
+    def test_get_finding_context_compliance(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test finding context with compliance frameworks."""
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_context,
+            init_database,
+            store_scan,
+        )
+
+        db_path = isolate_database
+        init_database(db_path)
+
+        monkeypatch.setattr("time.time", lambda: 1000000000)
+
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+        (summaries_dir / "findings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "fp-compliance",
+                        "severity": "HIGH",
+                        "ruleId": "CWE-79",
+                        "tool": {"name": "semgrep"},
+                        "location": {"path": "src/xss.py", "startLine": 10},
+                        "message": "XSS with compliance",
+                        "compliance": {
+                            "owaspTop10_2021": ["A03:2021"],
+                            "cweTop25_2024": [{"id": "79", "name": "XSS"}],
+                            "pciDss4_0": [{"requirement": "6.5.7"}],
+                        },
+                    }
+                ]
+            )
+        )
+        store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
+
+        conn = get_connection()
+        context = get_finding_context(conn, "fp-compliance")
+        conn.close()
+
+        # Verify compliance impact
+        frameworks = context["compliance_impact"]["frameworks"]
+        assert any("OWASP" in f for f in frameworks)
+        assert any("CWE-79" in f for f in frameworks)
+        assert any("PCI DSS" in f for f in frameworks)
+
+
+class TestTimelineData:
+    """Tests for get_timeline_data function (lines 1945-2030)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_timeline_data_basic(self, tmp_path, isolate_database, monkeypatch):
+        """Test basic timeline data retrieval."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_timeline_data,
+            get_connection,
+        )
+        import time
+        import json
+
+        # Mock time.time() to return consistent timestamp
+        current_time = 1700000000  # Nov 14, 2023
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create scan 10 days ago
+        old_timestamp = current_time - (10 * 86400)
+        results_dir = tmp_path / "results1"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+        findings_file.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "schemaVersion": "1.2.0",
+                            "id": "fp-test1",
+                            "ruleId": "rule1",
+                            "severity": "CRITICAL",
+                            "tool": {"name": "semgrep", "version": "1.0.0"},
+                            "location": {
+                                "path": "test.py",
+                                "startLine": 1,
+                                "endLine": 1,
+                            },
+                            "message": "Test finding",
+                        }
+                    ]
+                }
+            )
+        )
+
+        # Patch store_scan to use old timestamp
+        import scripts.core.history_db as history_db_module
+
+        original_time_func = history_db_module.time.time
+
+        def mock_time_for_store():
+            return old_timestamp
+
+        monkeypatch.setattr(history_db_module.time, "time", mock_time_for_store)
+
+        scan_id = store_scan(
+            results_dir, branch="main", profile="balanced", tools=["semgrep"]
+        )
+
+        # Restore current time
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get timeline data for last 30 days
+        conn = get_connection()
+        timeline = get_timeline_data(conn, branch="main", days=30)
+        conn.close()
+
+        # Verify timeline has 1 data point
+        assert len(timeline) == 1
+        assert timeline[0]["CRITICAL"] == 1
+        assert timeline[0]["HIGH"] == 0
+        assert timeline[0]["MEDIUM"] == 0
+        assert timeline[0]["LOW"] == 0
+        assert timeline[0]["INFO"] == 0
+        assert timeline[0]["total"] == 1
+        assert "date" in timeline[0]
+        assert "timestamp" in timeline[0]
+
+    def test_get_timeline_data_multiple_days(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test timeline with multiple scans across different days."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_timeline_data,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 3 scans on different days
+        for i, days_ago in enumerate([5, 10, 15]):
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            # Different severity counts for each day
+            severities = [
+                ["CRITICAL", "HIGH"],
+                ["HIGH", "MEDIUM", "MEDIUM"],
+                ["LOW", "INFO"],
+            ]
+            findings = [
+                {
+                    "schemaVersion": "1.2.0",
+                    "id": f"fp-test{i}-{j}",
+                    "ruleId": f"rule{j}",
+                    "severity": sev,
+                    "tool": {"name": "semgrep", "version": "1.0.0"},
+                    "location": {
+                        "path": "test.py",
+                        "startLine": j + 1,
+                        "endLine": j + 1,
+                    },
+                    "message": f"Test finding {j}",
+                }
+                for j, sev in enumerate(severities[i])
+            ]
+
+            findings_file.write_text(json.dumps({"findings": findings}))
+
+            # Patch store_scan to use specific timestamp
+            import scripts.core.history_db as history_db_module
+
+            def mock_time_for_scan():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time_for_scan)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get timeline for last 30 days
+        conn = get_connection()
+        timeline = get_timeline_data(conn, branch="main", days=30)
+        conn.close()
+
+        # Verify 3 data points
+        assert len(timeline) == 3
+
+        # Verify sorted by date (oldest first)
+        for i in range(len(timeline) - 1):
+            assert timeline[i]["date"] <= timeline[i + 1]["date"]
+
+        # Verify severity counts
+        total_critical = sum(t["CRITICAL"] for t in timeline)
+        total_high = sum(t["HIGH"] for t in timeline)
+        total_medium = sum(t["MEDIUM"] for t in timeline)
+        total_low = sum(t["LOW"] for t in timeline)
+        total_info = sum(t["INFO"] for t in timeline)
+
+        assert total_critical == 1
+        assert total_high == 2
+        assert total_medium == 2
+        assert total_low == 1
+        assert total_info == 1
+
+    def test_get_timeline_data_same_day_multiple_scans(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test timeline with multiple scans on same day - should keep latest."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_timeline_data,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 3 scans on same day (different times, within 12 hours to ensure same UTC date)
+        for i in range(3):
+            timestamp = (
+                current_time - (5 * 86400) + (i * 1800)
+            )  # Same day, 30-minute intervals
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            # Each scan has i+1 findings
+            findings = [
+                {
+                    "schemaVersion": "1.2.0",
+                    "id": f"fp-test{i}-{j}",
+                    "ruleId": f"rule{j}",
+                    "severity": "HIGH",
+                    "tool": {"name": "semgrep", "version": "1.0.0"},
+                    "location": {
+                        "path": "test.py",
+                        "startLine": j + 1,
+                        "endLine": j + 1,
+                    },
+                    "message": f"Test finding {j}",
+                }
+                for j in range(i + 1)
+            ]
+
+            findings_file.write_text(json.dumps({"findings": findings}))
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time_for_scan():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time_for_scan)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get timeline
+        conn = get_connection()
+        timeline = get_timeline_data(conn, branch="main", days=30)
+        conn.close()
+
+        # Should have 1 data point (same day)
+        assert len(timeline) == 1
+
+        # Should keep latest scan (3 findings)
+        assert timeline[0]["HIGH"] == 3
+        assert timeline[0]["total"] == 3
+
+    def test_get_timeline_data_different_branches(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test timeline filters by branch correctly."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_timeline_data,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create scan on main branch
+        timestamp1 = current_time - (5 * 86400)
+        results_dir1 = tmp_path / "results1"
+        results_dir1.mkdir()
+        findings_file1 = results_dir1 / "summaries" / "findings.json"
+        findings_file1.parent.mkdir(parents=True)
+        findings_file1.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "schemaVersion": "1.2.0",
+                            "id": "fp-main",
+                            "ruleId": "rule1",
+                            "severity": "CRITICAL",
+                            "tool": {"name": "semgrep", "version": "1.0.0"},
+                            "location": {
+                                "path": "test.py",
+                                "startLine": 1,
+                                "endLine": 1,
+                            },
+                            "message": "Main branch finding",
+                        }
+                    ]
+                }
+            )
+        )
+
+        import scripts.core.history_db as history_db_module
+
+        def mock_time1():
+            return timestamp1
+
+        monkeypatch.setattr(history_db_module.time, "time", mock_time1)
+        store_scan(results_dir1, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Create scan on dev branch
+        timestamp2 = current_time - (3 * 86400)
+        results_dir2 = tmp_path / "results2"
+        results_dir2.mkdir()
+        findings_file2 = results_dir2 / "summaries" / "findings.json"
+        findings_file2.parent.mkdir(parents=True)
+        findings_file2.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "schemaVersion": "1.2.0",
+                            "id": "fp-dev",
+                            "ruleId": "rule2",
+                            "severity": "HIGH",
+                            "tool": {"name": "semgrep", "version": "1.0.0"},
+                            "location": {
+                                "path": "test.py",
+                                "startLine": 2,
+                                "endLine": 2,
+                            },
+                            "message": "Dev branch finding",
+                        }
+                    ]
+                }
+            )
+        )
+
+        def mock_time2():
+            return timestamp2
+
+        monkeypatch.setattr(history_db_module.time, "time", mock_time2)
+        store_scan(results_dir2, branch="dev", profile="balanced", tools=["semgrep"])
+
+        # Restore current time
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get timeline for main branch
+        conn = get_connection()
+        main_timeline = get_timeline_data(conn, branch="main", days=30)
+
+        # Should only have main branch scan
+        assert len(main_timeline) == 1
+        assert main_timeline[0]["CRITICAL"] == 1
+        assert main_timeline[0]["HIGH"] == 0
+
+        # Get timeline for dev branch
+        dev_timeline = get_timeline_data(conn, branch="dev", days=30)
+
+        # Should only have dev branch scan
+        assert len(dev_timeline) == 1
+        assert dev_timeline[0]["CRITICAL"] == 0
+        assert dev_timeline[0]["HIGH"] == 1
+
+        conn.close()
+
+    def test_get_timeline_data_time_window(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test timeline respects days parameter."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_timeline_data,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create scans at 5, 20, 40 days ago
+        for days_ago in [5, 20, 40]:
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results_{days_ago}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+            findings_file.write_text(
+                json.dumps(
+                    {
+                        "findings": [
+                            {
+                                "schemaVersion": "1.2.0",
+                                "id": f"fp-{days_ago}",
+                                "ruleId": "rule1",
+                                "severity": "HIGH",
+                                "tool": {"name": "semgrep", "version": "1.0.0"},
+                                "location": {
+                                    "path": "test.py",
+                                    "startLine": 1,
+                                    "endLine": 1,
+                                },
+                                "message": f"Finding from {days_ago} days ago",
+                            }
+                        ]
+                    }
+                )
+            )
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        conn = get_connection()
+
+        # Get timeline for last 30 days - should include 5 and 20, not 40
+        timeline_30 = get_timeline_data(conn, branch="main", days=30)
+        assert len(timeline_30) == 2
+
+        # Get timeline for last 50 days - should include all 3
+        timeline_50 = get_timeline_data(conn, branch="main", days=50)
+        assert len(timeline_50) == 3
+
+        # Get timeline for last 10 days - should include only 5
+        timeline_10 = get_timeline_data(conn, branch="main", days=10)
+        assert len(timeline_10) == 1
+
+        conn.close()
+
+    def test_get_timeline_data_empty(self, tmp_path, isolate_database):
+        """Test timeline with no scans."""
+        from scripts.core.history_db import (
+            get_timeline_data,
+            get_connection,
+            init_database,
+        )
+
+        # Initialize database first
+        init_database()
+        conn = get_connection()
+
+        timeline = get_timeline_data(conn, branch="main", days=30)
+        conn.close()
+
+        # Should return empty list
+        assert timeline == []
+
+
+class TestFindingDetailsBatch:
+    """Tests for get_finding_details_batch function (lines 2033-2075)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_finding_details_batch_basic(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test basic batch finding retrieval."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_finding_details_batch,
+            get_connection,
+        )
+        import json
+
+        # Create scan with 3 findings
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+
+        findings = [
+            {
+                "schemaVersion": "1.2.0",
+                "id": f"fp-test{i}",
+                "ruleId": f"rule{i}",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM"][i],
+                "tool": {"name": "semgrep", "version": "1.0.0"},
+                "location": {
+                    "path": f"test{i}.py",
+                    "startLine": i + 1,
+                    "endLine": i + 1,
+                },
+                "message": f"Test finding {i}",
+            }
+            for i in range(3)
+        ]
+
+        findings_file.write_text(json.dumps({"findings": findings}))
+        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Fetch all 3 findings by fingerprint
+        conn = get_connection()
+        fingerprints = ["fp-test0", "fp-test1", "fp-test2"]
+        batch = get_finding_details_batch(conn, fingerprints)
+        conn.close()
+
+        # Verify all 3 findings returned
+        assert len(batch) == 3
+
+        # Verify sorted by severity DESC (alphabetically: MEDIUM, HIGH, CRITICAL)
+        # Note: SQLite sorts severity as strings, not by custom order
+        assert batch[0]["severity"] == "MEDIUM"
+        assert batch[1]["severity"] == "HIGH"
+        assert batch[2]["severity"] == "CRITICAL"
+
+        # Verify fingerprints match
+        batch_fps = {f["fingerprint"] for f in batch}
+        assert batch_fps == {"fp-test0", "fp-test1", "fp-test2"}
+
+    def test_get_finding_details_batch_empty(self, tmp_path, isolate_database):
+        """Test batch retrieval with empty fingerprint list."""
+        from scripts.core.history_db import get_finding_details_batch, get_connection
+
+        conn = get_connection()
+        batch = get_finding_details_batch(conn, [])
+        conn.close()
+
+        # Should return empty list
+        assert batch == []
+
+    def test_get_finding_details_batch_nonexistent(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test batch retrieval with nonexistent fingerprints."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_finding_details_batch,
+            get_connection,
+        )
+        import json
+
+        # Create scan with 1 finding
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+        findings_file.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "schemaVersion": "1.2.0",
+                            "id": "fp-exists",
+                            "ruleId": "rule1",
+                            "severity": "HIGH",
+                            "tool": {"name": "semgrep", "version": "1.0.0"},
+                            "location": {
+                                "path": "test.py",
+                                "startLine": 1,
+                                "endLine": 1,
+                            },
+                            "message": "Test finding",
+                        }
+                    ]
+                }
+            )
+        )
+        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Try to fetch nonexistent fingerprints
+        conn = get_connection()
+        batch = get_finding_details_batch(conn, ["fp-missing1", "fp-missing2"])
+        conn.close()
+
+        # Should return empty list
+        assert batch == []
+
+    def test_get_finding_details_batch_mixed(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test batch retrieval with mix of existing and nonexistent fingerprints."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_finding_details_batch,
+            get_connection,
+        )
+        import json
+
+        # Create scan with 2 findings
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+
+        findings = [
+            {
+                "schemaVersion": "1.2.0",
+                "id": "fp-exists1",
+                "ruleId": "rule1",
+                "severity": "HIGH",
+                "tool": {"name": "semgrep", "version": "1.0.0"},
+                "location": {
+                    "path": "test1.py",
+                    "startLine": 1,
+                    "endLine": 1,
+                },
+                "message": "Test finding 1",
+            },
+            {
+                "schemaVersion": "1.2.0",
+                "id": "fp-exists2",
+                "ruleId": "rule2",
+                "severity": "MEDIUM",
+                "tool": {"name": "semgrep", "version": "1.0.0"},
+                "location": {
+                    "path": "test2.py",
+                    "startLine": 2,
+                    "endLine": 2,
+                },
+                "message": "Test finding 2",
+            },
+        ]
+
+        findings_file.write_text(json.dumps({"findings": findings}))
+        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Fetch mix of existing and nonexistent
+        conn = get_connection()
+        fingerprints = ["fp-exists1", "fp-missing", "fp-exists2"]
+        batch = get_finding_details_batch(conn, fingerprints)
+        conn.close()
+
+        # Should return only the 2 existing findings
+        assert len(batch) == 2
+        batch_fps = {f["fingerprint"] for f in batch}
+        assert batch_fps == {"fp-exists1", "fp-exists2"}
+
+    def test_get_finding_details_batch_sorting(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test batch retrieval sorting (severity DESC, then path)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_finding_details_batch,
+            get_connection,
+        )
+        import json
+
+        # Create scan with 5 findings with same severity, different paths
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+
+        findings = [
+            {
+                "schemaVersion": "1.2.0",
+                "id": f"fp-{i}",
+                "ruleId": "rule1",
+                "severity": "HIGH",
+                "tool": {"name": "semgrep", "version": "1.0.0"},
+                "location": {
+                    "path": path,
+                    "startLine": 1,
+                    "endLine": 1,
+                },
+                "message": "Test finding",
+            }
+            for i, path in enumerate(["z.py", "a.py", "m.py"])
+        ]
+
+        findings_file.write_text(json.dumps({"findings": findings}))
+        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Fetch all findings
+        conn = get_connection()
+        fingerprints = ["fp-0", "fp-1", "fp-2"]
+        batch = get_finding_details_batch(conn, fingerprints)
+        conn.close()
+
+        # Verify sorted by path (a.py, m.py, z.py)
+        assert len(batch) == 3
+        assert batch[0]["path"] == "a.py"
+        assert batch[1]["path"] == "m.py"
+        assert batch[2]["path"] == "z.py"
+
+
+class TestComplianceTrend:
+    """Tests for get_compliance_trend function (lines 2853-3038)."""
+
+    @pytest.fixture(autouse=True)
+    def isolate_database(self, tmp_path, monkeypatch):
+        """Isolate database for each test to prevent cross-test pollution."""
+        import scripts.core.history_db as history_db_module
+        import sqlite3
+        from pathlib import Path as PathlibPath
+
+        db_path = tmp_path / f"test_{id(self)}.db"
+        monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
+
+        original_connect = sqlite3.connect
+
+        def patched_connect(database, *args, **kwargs):
+            if str(database).endswith(".jmo/history.db") or database == str(
+                PathlibPath(".jmo/history.db")
+            ):
+                database = str(db_path)
+            return original_connect(database, *args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", patched_connect)
+        yield db_path
+        if db_path.exists():
+            db_path.unlink()
+
+    def test_get_compliance_trend_improving(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance trend showing improvement (reduction in findings)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_compliance_trend,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 2 scans: first with 10 OWASP findings, second with 5 (50% reduction)
+        for i, (days_ago, finding_count) in enumerate([(10, 10), (5, 5)]):
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            findings = [
+                {
+                    "schemaVersion": "1.2.0",
+                    "id": f"fp-{i}-{j}",
+                    "ruleId": f"rule{j}",
+                    "severity": "HIGH",
+                    "tool": {"name": "semgrep", "version": "1.0.0"},
+                    "location": {
+                        "path": f"test{j}.py",
+                        "startLine": 1,
+                        "endLine": 1,
+                    },
+                    "message": "Test finding",
+                    "compliance": {
+                        "owaspTop10_2021": ["A03:2021"],
+                    },
+                }
+                for j in range(finding_count)
+            ]
+
+            findings_file.write_text(json.dumps({"findings": findings}))
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get compliance trend for OWASP
+        conn = get_connection()
+        trend = get_compliance_trend(conn, branch="main", framework="owasp", days=30)
+        conn.close()
+
+        # Verify improving trend
+        assert trend["framework"] == "owasp"
+        assert trend["branch"] == "main"
+        assert trend["days"] == 30
+        assert trend["trend"] == "improving"  # 10 → 5 is 50% reduction
+        assert len(trend["data_points"]) == 2
+        assert trend["data_points"][0]["total_findings_with_framework"] == 10
+        assert trend["data_points"][1]["total_findings_with_framework"] == 5
+        assert trend["summary_stats"]["first_scan_count"] == 10
+        assert trend["summary_stats"]["last_scan_count"] == 5
+        assert trend["summary_stats"]["change_percentage"] == -50.0
+        assert len(trend["insights"]) > 0
+        assert "reduced" in trend["insights"][0].lower()
+
+    def test_get_compliance_trend_degrading(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance trend showing degradation (increase in findings)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_compliance_trend,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 2 scans: first with 5 CWE findings, second with 10 (100% increase)
+        for i, (days_ago, finding_count) in enumerate([(10, 5), (5, 10)]):
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            findings = [
+                {
+                    "schemaVersion": "1.2.0",
+                    "id": f"fp-{i}-{j}",
+                    "ruleId": f"rule{j}",
+                    "severity": "CRITICAL",
+                    "tool": {"name": "semgrep", "version": "1.0.0"},
+                    "location": {
+                        "path": f"test{j}.py",
+                        "startLine": 1,
+                        "endLine": 1,
+                    },
+                    "message": "Test finding",
+                    "compliance": {
+                        "cweTop25_2024": [{"cweId": "CWE-79", "rank": 1}],
+                    },
+                }
+                for j in range(finding_count)
+            ]
+
+            findings_file.write_text(json.dumps({"findings": findings}))
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get compliance trend for CWE
+        conn = get_connection()
+        trend = get_compliance_trend(conn, branch="main", framework="cwe", days=30)
+        conn.close()
+
+        # Verify degrading trend
+        assert trend["framework"] == "cwe"
+        assert trend["trend"] == "degrading"  # 5 → 10 is 100% increase
+        assert trend["data_points"][0]["total_findings_with_framework"] == 5
+        assert trend["data_points"][1]["total_findings_with_framework"] == 10
+        assert trend["summary_stats"]["first_scan_count"] == 5
+        assert trend["summary_stats"]["last_scan_count"] == 10
+        assert trend["summary_stats"]["change_percentage"] == 100.0
+        assert len(trend["insights"]) > 0
+        assert "increased" in trend["insights"][0].lower()
+
+    def test_get_compliance_trend_stable(self, tmp_path, isolate_database, monkeypatch):
+        """Test compliance trend showing stability (minimal change)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_compliance_trend,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 3 scans: all with 10 PCI DSS findings (stable)
+        for i, days_ago in enumerate([15, 10, 5]):
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            findings = [
+                {
+                    "schemaVersion": "1.2.0",
+                    "id": f"fp-{i}-{j}",
+                    "ruleId": f"rule{j}",
+                    "severity": "MEDIUM",
+                    "tool": {"name": "semgrep", "version": "1.0.0"},
+                    "location": {
+                        "path": f"test{j}.py",
+                        "startLine": 1,
+                        "endLine": 1,
+                    },
+                    "message": "Test finding",
+                    "compliance": {
+                        "pciDss4_0": [{"requirement": "3.2.1"}],
+                    },
+                }
+                for j in range(10)
+            ]
+
+            findings_file.write_text(json.dumps({"findings": findings}))
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get compliance trend for PCI DSS
+        conn = get_connection()
+        trend = get_compliance_trend(conn, branch="main", framework="pci", days=30)
+        conn.close()
+
+        # Verify stable trend
+        assert trend["framework"] == "pci"
+        assert trend["trend"] == "stable"  # 10 → 10 is 0% change
+        assert len(trend["data_points"]) == 3
+        assert all(
+            dp["total_findings_with_framework"] == 10 for dp in trend["data_points"]
+        )
+        assert trend["summary_stats"]["first_scan_count"] == 10
+        assert trend["summary_stats"]["last_scan_count"] == 10
+        assert trend["summary_stats"]["change_percentage"] == 0.0
+        assert trend["summary_stats"]["avg_findings_per_scan"] == 10.0
+        assert len(trend["insights"]) > 0
+        assert "stable" in trend["insights"][0].lower()
+
+    def test_get_compliance_trend_insufficient_data(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance trend with insufficient data (< 2 scans)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_compliance_trend,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create only 1 scan
+        timestamp = current_time - (5 * 86400)
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        findings_file = results_dir / "summaries" / "findings.json"
+        findings_file.parent.mkdir(parents=True)
+        findings_file.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "schemaVersion": "1.2.0",
+                            "id": "fp-test",
+                            "ruleId": "rule1",
+                            "severity": "HIGH",
+                            "tool": {"name": "semgrep", "version": "1.0.0"},
+                            "location": {
+                                "path": "test.py",
+                                "startLine": 1,
+                                "endLine": 1,
+                            },
+                            "message": "Test finding",
+                            "compliance": {
+                                "owaspTop10_2021": ["A03:2021"],
+                            },
+                        }
+                    ]
+                }
+            )
+        )
+
+        import scripts.core.history_db as history_db_module
+
+        def mock_time():
+            return timestamp
+
+        monkeypatch.setattr(history_db_module.time, "time", mock_time)
+        store_scan(results_dir, branch="main", profile="balanced", tools=["semgrep"])
+
+        # Restore current time
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get compliance trend
+        conn = get_connection()
+        trend = get_compliance_trend(conn, branch="main", framework="owasp", days=30)
+        conn.close()
+
+        # Verify insufficient_data status
+        assert trend["framework"] == "owasp"
+        assert trend["trend"] == "insufficient_data"
+        assert trend["data_points"] == []
+        assert trend["summary_stats"] == {}
+        assert len(trend["insights"]) > 0
+        assert "not enough" in trend["insights"][0].lower()
+
+    def test_get_compliance_trend_invalid_framework(self, tmp_path, isolate_database):
+        """Test compliance trend with invalid framework name."""
+        from scripts.core.history_db import get_compliance_trend, get_connection
+
+        conn = get_connection()
+
+        # Should raise ValueError for invalid framework
+        import pytest
+
+        with pytest.raises(ValueError, match="Invalid framework"):
+            get_compliance_trend(conn, branch="main", framework="invalid", days=30)
+
+        conn.close()
+
+    def test_get_compliance_trend_zero_to_zero(
+        self, tmp_path, isolate_database, monkeypatch
+    ):
+        """Test compliance trend with zero findings in both scans (stable)."""
+        from scripts.core.history_db import (
+            store_scan,
+            get_compliance_trend,
+            get_connection,
+        )
+        import time
+        import json
+
+        current_time = 1700000000
+        monkeypatch.setattr(time, "time", lambda: current_time)
+
+        # Create 2 scans with no OWASP findings
+        for i, days_ago in enumerate([10, 5]):
+            timestamp = current_time - (days_ago * 86400)
+            results_dir = tmp_path / f"results{i}"
+            results_dir.mkdir()
+            findings_file = results_dir / "summaries" / "findings.json"
+            findings_file.parent.mkdir(parents=True)
+
+            # Finding without OWASP compliance
+            findings_file.write_text(
+                json.dumps(
+                    {
+                        "findings": [
+                            {
+                                "schemaVersion": "1.2.0",
+                                "id": f"fp-{i}",
+                                "ruleId": "rule1",
+                                "severity": "HIGH",
+                                "tool": {"name": "semgrep", "version": "1.0.0"},
+                                "location": {
+                                    "path": "test.py",
+                                    "startLine": 1,
+                                    "endLine": 1,
+                                },
+                                "message": "Test finding",
+                                # No OWASP compliance
+                            }
+                        ]
+                    }
+                )
+            )
+
+            import scripts.core.history_db as history_db_module
+
+            def mock_time():
+                return timestamp
+
+            monkeypatch.setattr(history_db_module.time, "time", mock_time)
+            store_scan(
+                results_dir, branch="main", profile="balanced", tools=["semgrep"]
+            )
+
+        # Restore current time
+        import scripts.core.history_db as history_db_module
+
+        monkeypatch.setattr(history_db_module.time, "time", lambda: current_time)
+
+        # Get compliance trend
+        conn = get_connection()
+        trend = get_compliance_trend(conn, branch="main", framework="owasp", days=30)
+        conn.close()
+
+        # Verify stable trend (0 → 0)
+        assert trend["trend"] == "stable"
+        assert trend["data_points"][0]["total_findings_with_framework"] == 0
+        assert trend["data_points"][1]["total_findings_with_framework"] == 0
+        assert trend["summary_stats"]["change_percentage"] == 0.0
+
+
 if __name__ == "__main__":
     pytest.main(
         [__file__, "-v", "--cov=scripts.core.history_db", "--cov-report=term-missing"]

@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "1.0.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-11-13T01:31:43.967880Z",
+    "scan_id": "3fd019d4-9614-42fc-b264-7ccb021658b5",
+    "profile": "balanced",
+    "tools": [],
+    "target_count": 0,
+    "finding_count": 0,
+    "platform": "Linux"
+  },
+  "findings": []
+}

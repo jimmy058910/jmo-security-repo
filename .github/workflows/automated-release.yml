@@ -2,6 +2,7 @@ name: Automated Release
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual release workflow requires version bump type and changelog entry for maintainer control
     inputs:
       version_bump:
         description: 'Version bump type'
@@ -144,7 +145,7 @@ jobs:
 
           # Add tool updates if any
           if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
-            git add versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
+            git add versions.yaml Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast
           fi
 
           # Create commit

@@ -44,16 +44,20 @@ def extract_plugin_metadata(content: str) -> Dict[str, str]:
 
     # Extract metadata block
     metadata_match = re.search(
-        r'@adapter_plugin\(PluginMetadata\((.*?)\)\)',
-        content,
-        re.DOTALL
+        r"@adapter_plugin\(PluginMetadata\((.*?)\)\)", content, re.DOTALL
     )
 
     if metadata_match:
         metadata_str = metadata_match.group(1)
 
         # Extract individual fields
-        for field in ["name", "version", "tool_name", "schema_version", "output_format"]:
+        for field in [
+            "name",
+            "version",
+            "tool_name",
+            "schema_version",
+            "output_format",
+        ]:
             field_match = re.search(rf'{field}=["\'](.*?)["\']', metadata_str)
             if field_match:
                 metadata[field] = field_match.group(1)
@@ -63,7 +67,7 @@ def extract_plugin_metadata(content: str) -> Dict[str, str]:
 
 def extract_method_signature(content: str, method_name: str) -> Dict[str, Any]:
     """Extract method signature and return type."""
-    pattern = rf'def {method_name}\(self,\s*(.*?)\)\s*->\s*(.+?):'
+    pattern = rf"def {method_name}\(self,\s*(.*?)\)\s*->\s*(.+?):"
     match = re.search(pattern, content)
 
     if match:
@@ -79,7 +83,7 @@ def extract_finding_patterns(content: str) -> List[str]:
     patterns = []
 
     # Look for Finding() instantiations
-    finding_matches = re.finditer(r'Finding\((.*?)\)', content, re.DOTALL)
+    finding_matches = re.finditer(r"Finding\((.*?)\)", content, re.DOTALL)
 
     for match in finding_matches:
         # Get first 200 chars of Finding creation
@@ -107,13 +111,13 @@ def extract_error_patterns(content: str) -> List[str]:
 
 def extract_json_structure(content: str) -> str:
     """Infer JSON structure from parsing logic."""
-    if 'json.load(' in content:
+    if "json.load(" in content:
         # Try to find key access patterns
         keys = re.findall(r'data\[["\'](.*?)["\']\]', content)
         if keys:
             return f"Top-level keys accessed: {', '.join(set(keys[:5]))}"
 
-    if '.readlines()' in content:
+    if ".readlines()" in content:
         return "NDJSON format (newline-delimited JSON)"
 
     return "Unknown structure - review code manually"
@@ -123,7 +127,11 @@ def extract_imports(content: str) -> List[str]:
     """Extract key imports."""
     imports = []
 
-    import_lines = [line for line in content.split('\n') if line.strip().startswith('import ') or line.strip().startswith('from ')]
+    import_lines = [
+        line
+        for line in content.split("\n")
+        if line.strip().startswith("import ") or line.strip().startswith("from ")
+    ]
 
     # Filter to most relevant
     for line in import_lines[:5]:
@@ -134,7 +142,7 @@ def extract_imports(content: str) -> List[str]:
 
 def extract_helper_functions(content: str) -> List[str]:
     """Extract helper function names."""
-    functions = re.findall(r'^def (_[a-z_]+)\(', content, re.MULTILINE)
+    functions = re.findall(r"^def (_[a-z_]+)\(", content, re.MULTILINE)
     return functions[:5]  # Top 5 helpers
 
 

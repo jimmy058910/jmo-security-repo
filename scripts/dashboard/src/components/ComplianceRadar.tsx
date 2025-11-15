@@ -17,6 +17,8 @@ interface ComplianceRadarProps {
 
 interface ComplianceScore {
   framework: string
+  fullName: string
+  link: string
   coverage: number
   fullMark: 100
 }
@@ -38,12 +40,48 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
   const complianceData: ComplianceScore[] = useMemo(() => {
     if (findings.length === 0) {
       return [
-        { framework: 'OWASP', coverage: 0, fullMark: 100 },
-        { framework: 'CWE', coverage: 0, fullMark: 100 },
-        { framework: 'CIS', coverage: 0, fullMark: 100 },
-        { framework: 'NIST', coverage: 0, fullMark: 100 },
-        { framework: 'PCI DSS', coverage: 0, fullMark: 100 },
-        { framework: 'ATT&CK', coverage: 0, fullMark: 100 },
+        {
+          framework: 'OWASP',
+          fullName: 'OWASP Top 10 2021',
+          link: 'https://owasp.org/www-project-top-ten/',
+          coverage: 0,
+          fullMark: 100,
+        },
+        {
+          framework: 'CWE',
+          fullName: 'CWE Top 25 2024',
+          link: 'https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html',
+          coverage: 0,
+          fullMark: 100,
+        },
+        {
+          framework: 'CIS',
+          fullName: 'CIS Controls v8.1',
+          link: 'https://www.cisecurity.org/controls/v8',
+          coverage: 0,
+          fullMark: 100,
+        },
+        {
+          framework: 'NIST',
+          fullName: 'NIST CSF 2.0',
+          link: 'https://www.nist.gov/cyberframework',
+          coverage: 0,
+          fullMark: 100,
+        },
+        {
+          framework: 'PCI DSS',
+          fullName: 'PCI DSS 4.0',
+          link: 'https://www.pcisecuritystandards.org/document_library/',
+          coverage: 0,
+          fullMark: 100,
+        },
+        {
+          framework: 'ATT&CK',
+          fullName: 'MITRE ATT&CK',
+          link: 'https://attack.mitre.org/',
+          coverage: 0,
+          fullMark: 100,
+        },
       ]
     }
 
@@ -71,31 +109,43 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
     return [
       {
         framework: 'OWASP',
+        fullName: 'OWASP Top 10 2021',
+        link: 'https://owasp.org/www-project-top-ten/',
         coverage: Math.round((owaspCount / total) * 100),
         fullMark: 100,
       },
       {
         framework: 'CWE',
+        fullName: 'CWE Top 25 2024',
+        link: 'https://cwe.mitre.org/top25/archive/2024/2024_cwe_top25.html',
         coverage: Math.round((cweCount / total) * 100),
         fullMark: 100,
       },
       {
         framework: 'CIS',
+        fullName: 'CIS Controls v8.1',
+        link: 'https://www.cisecurity.org/controls/v8',
         coverage: Math.round((cisCount / total) * 100),
         fullMark: 100,
       },
       {
         framework: 'NIST',
+        fullName: 'NIST CSF 2.0',
+        link: 'https://www.nist.gov/cyberframework',
         coverage: Math.round((nistCount / total) * 100),
         fullMark: 100,
       },
       {
         framework: 'PCI DSS',
+        fullName: 'PCI DSS 4.0',
+        link: 'https://www.pcisecuritystandards.org/document_library/',
         coverage: Math.round((pciCount / total) * 100),
         fullMark: 100,
       },
       {
         framework: 'ATT&CK',
+        fullName: 'MITRE ATT&CK',
+        link: 'https://attack.mitre.org/',
         coverage: Math.round((attackCount / total) * 100),
         fullMark: 100,
       },
@@ -186,14 +236,27 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
           Framework Breakdown
         </h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-1 gap-3 text-sm">
           {complianceData.map(item => (
             <div
               key={item.framework}
-              className="flex justify-between items-center p-2 rounded bg-gray-50 dark:bg-gray-700"
+              className="flex justify-between items-center p-3 rounded bg-gray-50 dark:bg-gray-700"
             >
-              <span className="text-gray-700 dark:text-gray-300">{item.framework}</span>
-              <span className={`font-bold ${getCoverageColor(item.coverage)}`}>
+              <div className="flex flex-col">
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-medium"
+                  title={`Open ${item.fullName} documentation`}
+                >
+                  {item.fullName}
+                </a>
+                <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {item.framework}
+                </span>
+              </div>
+              <span className={`font-bold text-lg ${getCoverageColor(item.coverage)}`}>
                 {item.coverage}%
               </span>
             </div>

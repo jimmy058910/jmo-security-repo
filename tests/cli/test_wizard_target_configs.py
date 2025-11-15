@@ -217,12 +217,14 @@ def test_generate_command_list_repo_target():
 
     result = generate_command_list(config)
 
-    # Verify command structure (wizard generates jmotools commands)
+    # Verify command structure (wizard generates jmo scan commands)
     assert isinstance(result, list)
     assert len(result) > 0
-    assert "jmotools" in result or result[0] == "jmotools"
+    assert result[0] == "jmo"
+    assert result[1] == "scan"
     assert "--repos-dir" in result
     assert "/test/repos" in result
+    assert "--profile-name" in result
     assert "balanced" in result
 
 
@@ -433,9 +435,11 @@ def test_end_to_end_repo_scan_command():
     cmd = generate_command_list(config)
 
     # Verify command contains all expected elements
-    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert cmd[0] == "jmo"
+    assert cmd[1] == "scan"
     assert "--repos-dir" in cmd or "repos-dir" in " ".join(cmd)
     assert "/test/repos" in cmd
+    assert "--profile-name" in cmd
     assert "balanced" in cmd
     assert "--threads" in cmd or "8" in cmd
 
@@ -453,7 +457,10 @@ def test_end_to_end_multi_image_command():
 
     cmd = generate_command_list(config)
 
-    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert cmd[0] == "jmo"
+    assert cmd[1] == "scan"
+    assert "--profile-name" in cmd
+    assert "fast" in cmd
     assert "--images-file" in cmd or "images-file" in " ".join(cmd)
 
 
@@ -471,5 +478,8 @@ def test_end_to_end_url_scan_with_api_spec():
 
     cmd = generate_command_list(config)
 
-    assert "jmotools" in cmd or cmd[0] == "jmotools"
+    assert cmd[0] == "jmo"
+    assert cmd[1] == "scan"
+    assert "--profile-name" in cmd
+    assert "balanced" in cmd
     assert "--url" in cmd or "https://api.example.com" in " ".join(cmd)

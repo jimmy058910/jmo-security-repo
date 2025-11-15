@@ -142,24 +142,22 @@ def test_html_script_tag_escaping(tmp_path: Path):
     # (They might appear in HTML elsewhere, but not in the JSON data)
     # Find the data array declaration (v1.0.0 dual-mode uses inline initialization)
     # Pattern: data = [...]  (inline mode assigns in the else branch)
-    data_start = script_content.find("data = [")
-    data_end = script_content.find("];", data_start) if data_start != -1 else -1
+    # React implementation: uses window.__FINDINGS__ = []
+    data_start = script_content.find("window.__FINDINGS__ = [")
+    data_end = script_content.find("]", data_start) if data_start != -1 else -1
     if data_start != -1 and data_end != -1:
-        data_json = script_content[data_start : data_end + 2]
+        data_json = script_content[data_start : data_end + 1]
 
-        # Count unescaped </script> (should be 0 or very few, definitely not 4+)
+        # Count unescaped </script> (should be 0, all should be escaped to <\/script>)
         unescaped_count = data_json.count("</script>")
-        # We expect at most 1 (the closing tag for data = [...];)
-        # But the fix should make it 0 in the data itself
-        assert unescaped_count <= 1, (
+        # With proper escaping, we should have 0 unescaped </script> in the data
+        assert unescaped_count == 0, (
             f"Found {unescaped_count} unescaped </script> in data JSON! "
-            f"These will break the script tag. Expected 0-1."
+            f"These will break the script tag. Expected 0."
         )
 
     # 6. Verify the dashboard data is loadable by checking structure
-    # v1.0.0 dual-mode: uses "let data = []" followed by conditional assignment
+    # React implementation: uses window.__FINDINGS__ = []
     assert (
-        "let data = []" in script_content or "const data = [" in script_content
-    ), "Data initialization not found (expected 'let data = []' or 'const data = [')"
-    assert "let sortKey" in script_content  # Verify rest of JS is present
-    assert "function render()" in script_content  # Core function exists
+        "window.__FINDINGS__ = [" in script_content
+    ), "Data initialization not found (expected 'window.__FINDINGS__ = [')"

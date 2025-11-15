@@ -69,7 +69,7 @@ jobs:
           git checkout -b "$BRANCH"
 
           # Stage changes
-          git add versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
+          git add versions.yaml Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast
 
           # Check if there are changes to commit
           if git diff --cached --quiet; then
