@@ -5,5 +5,9 @@
 # Archived documentation - historical reference only
 docs/archive/*.md
 
+# Test results and scan output directories (not committed to repo)
+results-*/**/*.md
+.playwright-mcp/**/*.md
+
 # Results guide has intentionally duplicate section headings for different compliance frameworks
 docs/RESULTS_GUIDE.md:MD024
