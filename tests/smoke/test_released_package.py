@@ -153,9 +153,7 @@ class TestDockerImages:
             timeout=300,  # 5 minutes for image pull
         )
 
-        assert (
-            result.returncode == 0
-        ), f"Failed to pull Docker image: {result.stderr}"
+        assert result.returncode == 0, f"Failed to pull Docker image: {result.stderr}"
 
     @pytest.mark.skipif(
         subprocess.run(["docker", "--version"], capture_output=True).returncode != 0,
@@ -164,7 +162,13 @@ class TestDockerImages:
     def test_docker_image_help_works(self):
         """Test Docker image runs and --help works."""
         result = subprocess.run(
-            ["docker", "run", "--rm", "ghcr.io/jimmy058910/jmo-security:latest", "--help"],
+            [
+                "docker",
+                "run",
+                "--rm",
+                "ghcr.io/jimmy058910/jmo-security:latest",
+                "--help",
+            ],
             capture_output=True,
             text=True,
             timeout=60,

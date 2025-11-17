@@ -212,13 +212,17 @@ def get_user_safe(user_id):
                 cwe = metadata.get("cwe")
                 if cwe:
                     # CWE-89 is SQL injection
-                    assert "CWE-89" in str(cwe) or "89" in str(cwe), "Should map to CWE-89"
+                    assert "CWE-89" in str(cwe) or "89" in str(
+                        cwe
+                    ), "Should map to CWE-89"
 
                 # Verify OWASP mapping (if present)
                 owasp = metadata.get("owasp")
                 if owasp:
                     # A03:2021 is Injection category
-                    assert any("A03" in str(o) or "injection" in str(o).lower() for o in owasp)
+                    assert any(
+                        "A03" in str(o) or "injection" in str(o).lower() for o in owasp
+                    )
 
                 break
 
@@ -320,11 +324,17 @@ def main():
             # Verify secret structure
             for secret in secrets_found:
                 # TruffleHog v3 format
-                assert "DetectorName" in secret or "detector_name" in secret, "Should have detector name"
-                assert "Verified" in secret or "verified" in secret, "Should have verification status"
+                assert (
+                    "DetectorName" in secret or "detector_name" in secret
+                ), "Should have detector name"
+                assert (
+                    "Verified" in secret or "verified" in secret
+                ), "Should have verification status"
 
                 # Check if it's GitHub or AWS secret
-                detector = secret.get("DetectorName") or secret.get("detector_name") or ""
+                detector = (
+                    secret.get("DetectorName") or secret.get("detector_name") or ""
+                )
                 if "github" in detector.lower():
                     # GitHub token detected
                     assert "github" in detector.lower()
@@ -347,7 +357,7 @@ def main():
         """
         # Create Terraform file with misconfig
         terraform_file = tmp_path / "main.tf"
-        terraform_content = '''
+        terraform_content = """
 resource "aws_s3_bucket" "example" {
   bucket = "my-insecure-bucket"
 
@@ -371,7 +381,7 @@ resource "aws_s3_bucket" "secure_example" {
     Environment = "Prod"
   }
 }
-'''
+"""
 
         terraform_file.write_text(terraform_content)
 

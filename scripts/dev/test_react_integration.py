@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from scripts.core.reporters.html_reporter import write_html, INLINE_THRESHOLD
 
+
 # Create test findings
 def create_test_finding(i):
     return {
@@ -24,6 +25,7 @@ def create_test_finding(i):
             "endColumn": 20,
         },
     }
+
 
 # Test inline mode (≤1000 findings)
 print("Testing inline mode (100 findings)...")
@@ -46,9 +48,13 @@ assert external_output.exists(), "External dashboard not created"
 external_json = external_output.parent / "findings.json"
 assert external_json.exists(), "findings.json not created for external mode"
 external_content = external_output.read_text()
-assert "window.__FINDINGS__ = []" in external_content, "Should use empty array in external mode"
+assert (
+    "window.__FINDINGS__ = []" in external_content
+), "Should use empty array in external mode"
 assert "Loaded via fetch()" in external_content, "Should have fetch() comment"
-print(f"✅ External mode works! Dashboard: {external_output.stat().st_size / 1024:.1f} KB, JSON: {external_json.stat().st_size / 1024:.1f} KB")
+print(
+    f"✅ External mode works! Dashboard: {external_output.stat().st_size / 1024:.1f} KB, JSON: {external_json.stat().st_size / 1024:.1f} KB"
+)
 
 # Verify JSON structure
 loaded_json = json.loads(external_json.read_text())
@@ -57,6 +63,7 @@ print(f"✅ External JSON valid with {len(loaded_json)} findings")
 
 # Test React build exists
 from scripts.core.reporters.html_reporter import Path as ReporterPath
+
 dashboard_dir = ReporterPath(__file__).parent / "scripts" / "dashboard"
 react_build = dashboard_dir / "dist" / "index.html"
 assert react_build.exists(), f"React build not found at {react_build}"

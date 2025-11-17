@@ -90,7 +90,9 @@ class RepositoryAnalyzer:
 
     def _extract_python_apis(self) -> Dict[str, Dict]:
         """Extract all public APIs from Python files."""
-        apis: Dict[str, Dict] = defaultdict(lambda: {"functions": [], "classes": [], "cli_commands": []})
+        apis: Dict[str, Dict] = defaultdict(
+            lambda: {"functions": [], "classes": [], "cli_commands": []}
+        )
 
         python_files = [
             self.repo_root / "scripts" / "cli" / "jmo.py",
@@ -193,9 +195,7 @@ class RepositoryAnalyzer:
 
         return docs
 
-    def _detect_undocumented_features(
-        self, apis: Dict, docs: Dict[str, str]
-    ) -> None:
+    def _detect_undocumented_features(self, apis: Dict, docs: Dict[str, str]) -> None:
         """Detect features in code that aren't documented."""
         all_doc_text = " ".join(docs.values()).lower()
 
@@ -219,9 +219,9 @@ class RepositoryAnalyzer:
                             "name": func_name,
                             "file": file_path,
                             "line": func["line"],
-                            "severity": "medium"
-                            if "public" in file_path
-                            else "low",  # Public APIs more critical
+                            "severity": (
+                                "medium" if "public" in file_path else "low"
+                            ),  # Public APIs more critical
                         }
                     )
 
@@ -232,7 +232,9 @@ class RepositoryAnalyzer:
                 if (
                     cls_name.lower() not in all_doc_text
                     and not cls["docstring"]
-                    and not cls_name.endswith("Adapter")  # Adapters are self-documenting
+                    and not cls_name.endswith(
+                        "Adapter"
+                    )  # Adapters are self-documenting
                 ):
                     self.findings["undocumented_features"].append(
                         {
@@ -240,9 +242,9 @@ class RepositoryAnalyzer:
                             "name": cls_name,
                             "file": file_path,
                             "line": cls["line"],
-                            "severity": "high"
-                            if "core" in file_path
-                            else "medium",  # Core classes more critical
+                            "severity": (
+                                "high" if "core" in file_path else "medium"
+                            ),  # Core classes more critical
                         }
                     )
 
@@ -461,9 +463,9 @@ class RepositoryAnalyzer:
                         "type": "feature_coverage",
                         "feature": feature,
                         "present_in": present_in,
-                        "severity": "high"
-                        if len(present_in) == 0
-                        else "medium",  # No coverage is critical
+                        "severity": (
+                            "high" if len(present_in) == 0 else "medium"
+                        ),  # No coverage is critical
                     }
                 )
 

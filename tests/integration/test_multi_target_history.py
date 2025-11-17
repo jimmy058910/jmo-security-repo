@@ -305,11 +305,13 @@ class TestMultiTargetHistoryIntegration:
         3. Verify history entry
         """
         iac_file = tmp_path / "main.tf"
-        iac_file.write_text('''
+        iac_file.write_text(
+            """
 resource "aws_s3_bucket" "test" {
   bucket = "my-test-bucket"
 }
-''')
+"""
+        )
 
         results_dir = tmp_path / "results"
         db_path = tmp_path / ".jmo" / "history.db"

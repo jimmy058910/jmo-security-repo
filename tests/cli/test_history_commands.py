@@ -190,7 +190,7 @@ def sample_database(tmp_path):
             "src/views.py",
             120,
             "XSS vulnerability",
-            '{}',
+            "{}",
             "scan1",
             "fp2",
             "MEDIUM",
@@ -199,7 +199,7 @@ def sample_database(tmp_path):
             "src/info.py",
             15,
             "Information disclosure",
-            '{}',
+            "{}",
         ),
     )
 
@@ -220,7 +220,7 @@ def sample_database(tmp_path):
             "src/info.py",
             15,
             "Information disclosure",
-            '{}',
+            "{}",
             "scan2",
             "fp3",
             "CRITICAL",
@@ -229,7 +229,7 @@ def sample_database(tmp_path):
             "src/db.py",
             89,
             "SQL injection",
-            '{}',
+            "{}",
         ),
     )
 
@@ -1070,10 +1070,7 @@ class TestCmdHistoryTrends:
         # May succeed or fail depending on trend data
         captured = capsys.readouterr()
         # Check for either success or no scans message
-        assert (
-            "Security Trends:" in captured.out
-            or "No scans found" in captured.out
-        )
+        assert "Security Trends:" in captured.out or "No scans found" in captured.out
 
     def test_trends_success_json_format(self, sample_database, capsys):
         """Test trends analysis in JSON format."""
@@ -1179,10 +1176,7 @@ class TestCmdHistoryMigrate:
         captured = capsys.readouterr()
         # Check for success message
         if result == 0:
-            assert (
-                "No pending migrations" in captured.out
-                or "Applied" in captured.out
-            )
+            assert "No pending migrations" in captured.out or "Applied" in captured.out
 
     def test_migrate_database_not_found(self, tmp_path, capsys):
         """Test error when database doesn't exist."""

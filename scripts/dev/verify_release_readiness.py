@@ -106,7 +106,9 @@ class ReleaseReadinessVerifier:
 
         # Extract coverage percentage
         coverage_lines = [
-            line for line in result.stdout.split("\n") if "TOTAL" in line and "%" in line
+            line
+            for line in result.stdout.split("\n")
+            if "TOTAL" in line and "%" in line
         ]
 
         if coverage_lines:
@@ -136,7 +138,10 @@ class ReleaseReadinessVerifier:
             ("Feature #3: Machine-Readable Diffs", ["scripts/cli/diff_commands.py"]),
             ("Feature #4: Trend Analysis", ["scripts/cli/trend_commands.py"]),
             ("Feature #5: SQLite Historical Storage", ["scripts/core/history_db.py"]),
-            ("Feature #8: Output Format Standardization", ["scripts/core/reporters/csv_reporter.py"]),
+            (
+                "Feature #8: Output Format Standardization",
+                ["scripts/core/reporters/csv_reporter.py"],
+            ),
         ]
 
         for i, (feature, paths) in enumerate(features, 1):
@@ -279,7 +284,9 @@ class ReleaseReadinessVerifier:
                 print(f"   ❌ {workflow} not found")
 
         # Check pre-release-check script
-        print(f"\n[{len(workflows)+1}/{len(workflows)+1}] Checking pre-release automation...")
+        print(
+            f"\n[{len(workflows)+1}/{len(workflows)+1}] Checking pre-release automation..."
+        )
         pre_release_script = Path("scripts/dev/pre_release_check.py")
 
         if pre_release_script.exists():
@@ -312,7 +319,9 @@ class ReleaseReadinessVerifier:
         )
 
         # Check if any CRITICAL tools are outdated
-        if "CRITICAL" in result.stdout and ("outdated" in result.stdout.lower() or "→" in result.stdout):
+        if "CRITICAL" in result.stdout and (
+            "outdated" in result.stdout.lower() or "→" in result.stdout
+        ):
             self.errors.append("CRITICAL tools outdated")
             print("   ❌ CRITICAL tools are outdated (must update before release)")
         else:

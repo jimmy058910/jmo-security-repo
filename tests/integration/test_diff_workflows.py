@@ -181,7 +181,9 @@ class TestDirectoryDiffWorkflows:
         assert output_path.exists()
 
         md_content = output_path.read_text()
-        assert "# 🔍 Security Diff Report" in md_content or "Security Diff" in md_content
+        assert (
+            "# 🔍 Security Diff Report" in md_content or "Security Diff" in md_content
+        )
         assert "Summary" in md_content
         assert "SQL injection" in md_content
 

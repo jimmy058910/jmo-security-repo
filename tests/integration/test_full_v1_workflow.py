@@ -113,7 +113,11 @@ class TestV1WorkflowIntegration:
             assert len(scans) >= 1, "At least one scan should be stored"
             scan = scans[0]
             # Profile comes from config file default_profile, not scan args
-            assert scan["profile"] in ["fast", "balanced", ""], "Profile should be stored"
+            assert scan["profile"] in [
+                "fast",
+                "balanced",
+                "",
+            ], "Profile should be stored"
             assert "trufflehog" in scan["tools"], "trufflehog should be in tools"
 
         # Step 5: Verify dashboard HTML
@@ -239,7 +243,9 @@ class TestV1WorkflowIntegration:
         md_content = output_path.read_text()
 
         # Check PR comment-friendly format
-        assert "# 🔍 Security Diff Report" in md_content or "Security Diff" in md_content
+        assert (
+            "# 🔍 Security Diff Report" in md_content or "Security Diff" in md_content
+        )
         assert "Summary" in md_content
         assert "Remote code execution" in md_content
 
@@ -340,11 +346,14 @@ class TestV1WorkflowIntegration:
             timeout=30,
         )
 
-        assert result_export.returncode == 0, f"JSON export failed: {result_export.stderr}"
+        assert (
+            result_export.returncode == 0
+        ), f"JSON export failed: {result_export.stderr}"
         assert json_export.exists(), "JSON export file should exist"
 
         # Validate JSON format
         import json as json_module
+
         export_data = json_module.loads(json_export.read_text())
         assert "metadata" in export_data
         assert "scans" in export_data
@@ -495,7 +504,9 @@ class TestV1WorkflowIntegration:
             timeout=30,
         )
 
-        assert result_trends.returncode == 0, f"Trend analysis failed: {result_trends.stderr}"
+        assert (
+            result_trends.returncode == 0
+        ), f"Trend analysis failed: {result_trends.stderr}"
 
 
 if __name__ == "__main__":

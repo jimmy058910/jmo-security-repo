@@ -36,7 +36,9 @@ def is_major_or_minor_release(version: str) -> bool:
     return patch == "0"
 
 
-def extract_changelog_section(version: str, changelog_path: Path = Path("CHANGELOG.md")) -> str:
+def extract_changelog_section(
+    version: str, changelog_path: Path = Path("CHANGELOG.md")
+) -> str:
     """Extract release notes for specific version from CHANGELOG.md."""
     if not changelog_path.exists():
         raise FileNotFoundError(f"CHANGELOG.md not found at {changelog_path}")

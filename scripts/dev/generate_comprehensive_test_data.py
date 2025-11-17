@@ -26,36 +26,29 @@ TOOLS = {
     # Secrets scanners
     "trufflehog": {"type": "secrets", "weight": 0.15},
     "noseyparker": {"type": "secrets", "weight": 0.05},
-
     # SAST scanners
     "semgrep": {"type": "sast", "weight": 0.20},
     "bandit": {"type": "sast", "weight": 0.08},
     "gosec": {"type": "sast", "weight": 0.05},
     "horusec": {"type": "sast", "weight": 0.05},
-
     # SBOM + Vulnerability scanners
     "syft": {"type": "sbom", "weight": 0.10},
     "trivy": {"type": "vuln", "weight": 0.15},
     "grype": {"type": "vuln", "weight": 0.08},
     "osv-scanner": {"type": "vuln", "weight": 0.05},
     "dependency-check": {"type": "vuln", "weight": 0.04},
-
     # IaC scanners
     "checkov": {"type": "iac", "weight": 0.10},
     "checkov-cicd": {"type": "iac", "weight": 0.03},
-
     # Container scanners
     "hadolint": {"type": "container", "weight": 0.05},
-
     # DAST scanners
     "zap": {"type": "dast", "weight": 0.08},
     "nuclei": {"type": "dast", "weight": 0.06},
     "akto": {"type": "api", "weight": 0.03},
-
     # Cloud CSPM
     "prowler": {"type": "cloud", "weight": 0.06},
     "kubescape": {"type": "k8s", "weight": 0.05},
-
     # Other scanners
     "yara": {"type": "malware", "weight": 0.02},
     "bearer": {"type": "privacy", "weight": 0.03},
@@ -70,30 +63,58 @@ TOOLS = {
 # Severity distribution (realistic production distribution)
 SEVERITIES = {
     "CRITICAL": 0.05,  # 5%
-    "HIGH": 0.15,      # 15%
-    "MEDIUM": 0.35,    # 35%
-    "LOW": 0.30,       # 30%
-    "INFO": 0.15,      # 15%
+    "HIGH": 0.15,  # 15%
+    "MEDIUM": 0.35,  # 35%
+    "LOW": 0.30,  # 30%
+    "INFO": 0.15,  # 15%
 }
 
 # Compliance framework mappings
 COMPLIANCE_MAPPINGS = {
     "owasp": [
-        "A01:2021", "A02:2021", "A03:2021", "A04:2021", "A05:2021",
-        "A06:2021", "A07:2021", "A08:2021", "A09:2021", "A10:2021"
+        "A01:2021",
+        "A02:2021",
+        "A03:2021",
+        "A04:2021",
+        "A05:2021",
+        "A06:2021",
+        "A07:2021",
+        "A08:2021",
+        "A09:2021",
+        "A10:2021",
     ],
     "cwe": [
-        "CWE-79", "CWE-89", "CWE-78", "CWE-22", "CWE-352",
-        "CWE-434", "CWE-611", "CWE-798", "CWE-502", "CWE-287",
-        "CWE-190", "CWE-787", "CWE-416", "CWE-125", "CWE-20"
+        "CWE-79",
+        "CWE-89",
+        "CWE-78",
+        "CWE-22",
+        "CWE-352",
+        "CWE-434",
+        "CWE-611",
+        "CWE-798",
+        "CWE-502",
+        "CWE-287",
+        "CWE-190",
+        "CWE-787",
+        "CWE-416",
+        "CWE-125",
+        "CWE-20",
     ],
     "cis": ["1.1", "1.2", "2.1", "2.2", "3.1", "4.1", "5.1"],
     "nist": ["ID.AM", "PR.AC", "PR.DS", "DE.CM", "RS.RP"],
     "pci_dss": ["2.2", "6.2", "6.5", "8.2", "10.2"],
     "attack": [
-        "T1003", "T1059", "T1071", "T1078", "T1105",
-        "T1190", "T1210", "T1547", "T1068", "T1055"
-    ]
+        "T1003",
+        "T1059",
+        "T1071",
+        "T1078",
+        "T1105",
+        "T1190",
+        "T1210",
+        "T1547",
+        "T1068",
+        "T1055",
+    ],
 }
 
 # Rule templates by tool type
@@ -144,12 +165,21 @@ RULE_TEMPLATES = {
 
 # File paths for realistic finding locations
 FILE_PATHS = [
-    "src/auth/login.py", "src/api/users.py", "src/db/queries.py",
-    "src/utils/crypto.py", "src/config/settings.py", "src/models/user.py",
-    "infrastructure/terraform/main.tf", "infrastructure/k8s/deployment.yaml",
-    "Dockerfile", "docker-compose.yml", ".github/workflows/ci.yml",
-    "frontend/src/components/Login.tsx", "frontend/src/api/client.ts",
-    "backend/handlers/auth.go", "backend/db/migrations/001_init.sql",
+    "src/auth/login.py",
+    "src/api/users.py",
+    "src/db/queries.py",
+    "src/utils/crypto.py",
+    "src/config/settings.py",
+    "src/models/user.py",
+    "infrastructure/terraform/main.tf",
+    "infrastructure/k8s/deployment.yaml",
+    "Dockerfile",
+    "docker-compose.yml",
+    ".github/workflows/ci.yml",
+    "frontend/src/components/Login.tsx",
+    "frontend/src/api/client.ts",
+    "backend/handlers/auth.go",
+    "backend/db/migrations/001_init.sql",
 ]
 
 
@@ -160,7 +190,9 @@ def weighted_choice(choices: Dict[str, float]) -> str:
     return random.choices(items, weights=weights, k=1)[0]
 
 
-def generate_fingerprint(tool: str, rule: str, path: str, line: int, message: str) -> str:
+def generate_fingerprint(
+    tool: str, rule: str, path: str, line: int, message: str
+) -> str:
     """Generate deterministic fingerprint for finding."""
     content = f"{tool}|{rule}|{path}|{line}|{message[:120]}"
     return hashlib.sha256(content.encode()).hexdigest()[:16]
@@ -171,60 +203,89 @@ def generate_compliance(severity: str, tool_type: str) -> Dict[str, Any]:
     compliance: Dict[str, Any] = {}
 
     # Higher severity = more framework coverage
-    coverage_factor = {"CRITICAL": 0.9, "HIGH": 0.7, "MEDIUM": 0.5, "LOW": 0.3, "INFO": 0.1}[severity]
+    coverage_factor = {
+        "CRITICAL": 0.9,
+        "HIGH": 0.7,
+        "MEDIUM": 0.5,
+        "LOW": 0.3,
+        "INFO": 0.1,
+    }[severity]
 
     # OWASP Top 10
     if random.random() < coverage_factor:
-        owasp_list: List[str] = random.sample(COMPLIANCE_MAPPINGS["owasp"], k=random.randint(1, 3))
+        owasp_list: List[str] = random.sample(
+            COMPLIANCE_MAPPINGS["owasp"], k=random.randint(1, 3)
+        )
         compliance["owaspTop10_2021"] = owasp_list
 
     # CWE Top 25
     if random.random() < coverage_factor:
         cwes = random.sample(COMPLIANCE_MAPPINGS["cwe"], k=random.randint(1, 2))
-        cwe_dicts: List[Dict[str, Any]] = [{"id": cwe, "rank": i+1, "category": "Weakness"}
-                                            for i, cwe in enumerate(cwes)]
+        cwe_dicts: List[Dict[str, Any]] = [
+            {"id": cwe, "rank": i + 1, "category": "Weakness"}
+            for i, cwe in enumerate(cwes)
+        ]
         compliance["cweTop25_2024"] = cwe_dicts
 
     # CIS Controls
-    if tool_type in ["iac", "cloud", "k8s", "container"] and random.random() < coverage_factor:
+    if (
+        tool_type in ["iac", "cloud", "k8s", "container"]
+        and random.random() < coverage_factor
+    ):
         cis_list = random.sample(COMPLIANCE_MAPPINGS["cis"], k=random.randint(1, 2))
-        cis_dicts: List[Dict[str, Any]] = [{"control": c, "ig": random.choice([1, 2, 3])} for c in cis_list]
+        cis_dicts: List[Dict[str, Any]] = [
+            {"control": c, "ig": random.choice([1, 2, 3])} for c in cis_list
+        ]
         compliance["cisControlsV8_1"] = cis_dicts
 
     # NIST CSF
     if random.random() < coverage_factor:
         nist_list = random.sample(COMPLIANCE_MAPPINGS["nist"], k=random.randint(1, 2))
-        nist_dicts: List[Dict[str, Any]] = [{"function": "PROTECT", "category": c} for c in nist_list]
+        nist_dicts: List[Dict[str, Any]] = [
+            {"function": "PROTECT", "category": c} for c in nist_list
+        ]
         compliance["nistCsf2_0"] = nist_dicts
 
     # PCI DSS
     if tool_type in ["secrets", "vuln", "dast"] and random.random() < coverage_factor:
         pci_list = random.sample(COMPLIANCE_MAPPINGS["pci_dss"], k=random.randint(1, 2))
-        pci_dicts: List[Dict[str, Any]] = [{"requirement": r, "priority": "P1"} for r in pci_list]
+        pci_dicts: List[Dict[str, Any]] = [
+            {"requirement": r, "priority": "P1"} for r in pci_list
+        ]
         compliance["pciDss4_0"] = pci_dicts
 
     # MITRE ATT&CK
     if severity in ["CRITICAL", "HIGH"] and random.random() < coverage_factor:
-        attack_list = random.sample(COMPLIANCE_MAPPINGS["attack"], k=random.randint(1, 2))
-        attack_dicts: List[Dict[str, Any]] = [{"tactic": "Initial Access", "technique": t} for t in attack_list]
+        attack_list = random.sample(
+            COMPLIANCE_MAPPINGS["attack"], k=random.randint(1, 2)
+        )
+        attack_dicts: List[Dict[str, Any]] = [
+            {"tactic": "Initial Access", "technique": t} for t in attack_list
+        ]
         compliance["mitreAttack"] = attack_dicts
 
     return compliance
 
 
-def generate_finding(tool: str, tool_type: str, severity: str, index: int) -> Dict[str, Any]:
+def generate_finding(
+    tool: str, tool_type: str, severity: str, index: int
+) -> Dict[str, Any]:
     """Generate a single CommonFinding v1.2.0 finding."""
 
     # Select rule template based on tool type
     template_type = tool_type if tool_type in RULE_TEMPLATES else "sast"
-    rule_id, message_template = random.choice(RULE_TEMPLATES.get(template_type, RULE_TEMPLATES["sast"]))
+    rule_id, message_template = random.choice(
+        RULE_TEMPLATES.get(template_type, RULE_TEMPLATES["sast"])
+    )
 
     # Generate location
     file_path = random.choice(FILE_PATHS)
     start_line = random.randint(10, 500)
 
     # Generate fingerprint
-    fingerprint = generate_fingerprint(tool, rule_id, file_path, start_line, message_template)
+    fingerprint = generate_fingerprint(
+        tool, rule_id, file_path, start_line, message_template
+    )
 
     # Generate compliance mappings
     compliance = generate_compliance(severity, tool_type)
@@ -235,35 +296,34 @@ def generate_finding(tool: str, tool_type: str, severity: str, index: int) -> Di
         "id": f"finding-{fingerprint}",
         "ruleId": rule_id,
         "severity": severity,
-        "tool": {
-            "name": tool,
-            "version": "latest"
-        },
+        "tool": {"name": tool, "version": "latest"},
         "location": {
             "path": file_path,
             "startLine": start_line,
-            "endLine": start_line + random.randint(0, 5)
+            "endLine": start_line + random.randint(0, 5),
         },
         "message": message_template,
         "description": f"Detailed description for {message_template.lower()}",
         "compliance": compliance,
         "priority": {
             "priority": random.randint(50, 100),
-            "is_kev": severity == "CRITICAL" and random.random() < 0.2
-        }
+            "is_kev": severity == "CRITICAL" and random.random() < 0.2,
+        },
     }
 
     # Add remediation for higher severity
     if severity in ["CRITICAL", "HIGH"]:
         finding["remediation"] = {
             "summary": f"Fix {rule_id.lower().replace('-', ' ')} by updating configuration",
-            "references": [f"https://example.com/fix/{rule_id.lower()}"]
+            "references": [f"https://example.com/fix/{rule_id.lower()}"],
         }
 
     return finding
 
 
-def generate_tool_output(tool: str, tool_type: str, count: int, output_dir: Path) -> List[Dict[str, Any]]:
+def generate_tool_output(
+    tool: str, tool_type: str, count: int, output_dir: Path
+) -> List[Dict[str, Any]]:
     """Generate findings for a tool."""
 
     findings: List[Dict[str, Any]] = []
@@ -278,9 +338,13 @@ def generate_tool_output(tool: str, tool_type: str, count: int, output_dir: Path
 
 def main():
     parser = argparse.ArgumentParser(description="Generate comprehensive test data")
-    parser.add_argument("--output", default="results-comprehensive", help="Output directory")
+    parser.add_argument(
+        "--output", default="results-comprehensive", help="Output directory"
+    )
     parser.add_argument("--count", type=int, default=5000, help="Total finding count")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
     args = parser.parse_args()
 
     # Set random seed
@@ -308,14 +372,18 @@ def main():
             weight = config["weight"]
             if isinstance(weight, (int, float)):
                 weight_val = float(weight)
-                findings_per_tool[tool] = max(1, int(args.count * weight_val / total_weight))
+                findings_per_tool[tool] = max(
+                    1, int(args.count * weight_val / total_weight)
+                )
 
     # Generate all findings
     all_findings: List[Dict[str, Any]] = []
     for tool_name, tool_config in TOOLS.items():
         count = findings_per_tool[tool_name]
         tool_type_str = str(tool_config.get("type", "sast"))
-        tool_findings = generate_tool_output(tool_name, tool_type_str, count, output_dir)
+        tool_findings = generate_tool_output(
+            tool_name, tool_type_str, count, output_dir
+        )
         all_findings.extend(tool_findings)
 
     # Write aggregated findings.json with v1.0.0 metadata wrapper
@@ -326,17 +394,15 @@ def main():
             "jmo_version": "1.0.0",
             "schema_version": "1.2.0",
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "scan_id": "test-comprehensive-" + hashlib.sha256(str(args.seed).encode()).hexdigest()[:16],
+            "scan_id": "test-comprehensive-"
+            + hashlib.sha256(str(args.seed).encode()).hexdigest()[:16],
             "profile": "comprehensive-test",
             "tools": list(TOOLS.keys()),
             "target_count": 1,
             "finding_count": total_generated,
-            "platform": {
-                "os": "test",
-                "python": "3.11.0"
-            }
+            "platform": {"os": "test", "python": "3.11.0"},
         },
-        "findings": all_findings
+        "findings": all_findings,
     }
 
     output_file = summaries_dir / "findings.json"
@@ -349,7 +415,9 @@ def main():
     for severity, weight in SEVERITIES.items():
         expected = int(total_generated * weight)
         actual = sum(1 for f in all_findings if f.get("severity") == severity)
-        print(f"   {severity:10s}: {actual:4d} findings (~{expected:4d} expected, {weight*100:.0f}%)")
+        print(
+            f"   {severity:10s}: {actual:4d} findings (~{expected:4d} expected, {weight*100:.0f}%)"
+        )
     print()
     print(f"🔧 Tool distribution:")
     tool_counts: Dict[str, int] = {}
@@ -365,7 +433,9 @@ def main():
     print(f"   1. Copy findings-data.json for external dashboard mode:")
     print(f"      cp {output_file} {summaries_dir}/findings-data.json")
     print(f"   2. Open dashboard.html from results-final or similar")
-    print(f"   3. Test: All {len(TOOLS)} tools, all severities, all compliance frameworks")
+    print(
+        f"   3. Test: All {len(TOOLS)} tools, all severities, all compliance frameworks"
+    )
 
 
 if __name__ == "__main__":

@@ -247,7 +247,9 @@ class TestPerformanceBenchmarks:
             json.dump(scan_data["findings"], f)
 
         # Create dummy target directory to avoid detection errors
-        (results_dir / "individual-repos" / "test-repo").mkdir(parents=True, exist_ok=True)
+        (results_dir / "individual-repos" / "test-repo").mkdir(
+            parents=True, exist_ok=True
+        )
 
         # Benchmark scan insert
         start = time.time()
@@ -273,7 +275,9 @@ class TestPerformanceBenchmarks:
         assert retrieved is not None
         assert retrieved["total_findings"] == 100
 
-        print(f"\n✓ Benchmark 1: SQLite scan insert: {duration_ms:.2f}ms (target: <50ms)")
+        print(
+            f"\n✓ Benchmark 1: SQLite scan insert: {duration_ms:.2f}ms (target: <50ms)"
+        )
 
     def test_benchmark_2_diff_engine_1000_findings(self, tmp_path):
         """Benchmark: Diff engine with 1000 findings should be <500ms.
@@ -321,7 +325,9 @@ class TestPerformanceBenchmarks:
         assert len(diff_result.new) == 100
         assert len(diff_result.resolved) == 100
 
-        print(f"\n✓ Benchmark 2: Diff engine (1000 findings): {duration_ms:.2f}ms (target: <500ms)")
+        print(
+            f"\n✓ Benchmark 2: Diff engine (1000 findings): {duration_ms:.2f}ms (target: <500ms)"
+        )
 
     def test_benchmark_3_trend_analysis_50_scans(self, perf_db, tmp_path):
         """Benchmark: Trend analysis for 50 scans should be <100ms.
@@ -350,7 +356,9 @@ class TestPerformanceBenchmarks:
                 json.dump(scan_data["findings"], f)
 
             # Create dummy target directory
-            (scan_results_dir / "individual-repos" / "test-repo").mkdir(parents=True, exist_ok=True)
+            (scan_results_dir / "individual-repos" / "test-repo").mkdir(
+                parents=True, exist_ok=True
+            )
 
             # Store scan with incrementing timestamps (daily scans)
             scan_id = store_scan(
@@ -385,7 +393,9 @@ class TestPerformanceBenchmarks:
         # Verify trend data structure
         assert "metadata" in trends or "severity_trends" in trends
 
-        print(f"\n✓ Benchmark 3: Trend analysis (50 scans): {duration_ms:.2f}ms (target: <100ms)")
+        print(
+            f"\n✓ Benchmark 3: Trend analysis (50 scans): {duration_ms:.2f}ms (target: <100ms)"
+        )
 
     def test_benchmark_4_cross_tool_deduplication_1000_findings(self, tmp_path):
         """Benchmark: Cross-tool deduplication of 1000 findings should be <2s.
@@ -477,11 +487,14 @@ class TestPerformanceBenchmarks:
 
         # For >1000 findings, should use external mode
         dashboard_content = dashboard_path.read_text()
-        assert "findings-data.json" in dashboard_content or "findings.json" in dashboard_content, (
-            "Dashboard should reference external JSON for >1000 findings"
-        )
+        assert (
+            "findings-data.json" in dashboard_content
+            or "findings.json" in dashboard_content
+        ), "Dashboard should reference external JSON for >1000 findings"
 
-        print(f"\n✓ Benchmark 5: Dashboard generation (5000 findings): {duration_s:.2f}s (target: <5s)")
+        print(
+            f"\n✓ Benchmark 5: Dashboard generation (5000 findings): {duration_s:.2f}s (target: <5s)"
+        )
 
     def test_benchmark_6_memory_usage_10k_findings(self, tmp_path):
         """Benchmark: Processing 10,000 findings should use <500MB memory.

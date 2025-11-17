@@ -187,7 +187,16 @@ def sample_database(tmp_path):
         ("scan1", "fp1", "CRITICAL", "trivy", "CVE-2021-1234", "app.py", 10, 15),
         ("scan1", "fp2", "HIGH", "semgrep", "CWE-79", "server.py", 20, 25),
         ("scan2", "fp3", "CRITICAL", "trivy", "CVE-2021-5678", "app.py", 30, 35),
-        ("scan2", "fp2", "HIGH", "semgrep", "CWE-79", "server.py", 20, 25),  # Same as scan1
+        (
+            "scan2",
+            "fp2",
+            "HIGH",
+            "semgrep",
+            "CWE-79",
+            "server.py",
+            20,
+            25,
+        ),  # Same as scan1
     ]
 
     for finding in findings_data:

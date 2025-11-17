@@ -213,7 +213,7 @@ class TestCrossPlatformCompatibility:
 
     @pytest.mark.skipif(
         sys.platform not in ["win32", "linux"] or not os.path.exists("/mnt/c"),
-        reason="Windows/WSL only"
+        reason="Windows/WSL only",
     )
     def test_windows_wsl_full_scan(self, tmp_path):
         """
@@ -310,7 +310,9 @@ class TestCrossPlatformCompatibility:
             if "/mnt/c/" in repo_path_str:
                 # This is a Windows filesystem accessed from WSL
                 # Verify SQLite database works across filesystem boundary
-                assert db_path.exists(), "SQLite should work on Windows filesystem from WSL"
+                assert (
+                    db_path.exists()
+                ), "SQLite should work on Windows filesystem from WSL"
 
         # Step 6: Verify line ending handling
         # Read file and check line endings preserved

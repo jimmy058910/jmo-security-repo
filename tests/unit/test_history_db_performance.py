@@ -53,15 +53,17 @@ def large_findings_set():
     """Generate 10,000 test findings for performance testing."""
     findings = []
     for i in range(10000):
-        findings.append({
-            "id": f"fp_{i}",
-            "schemaVersion": "1.2.0",
-            "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
-            "ruleId": f"TEST-{i % 100}",
-            "tool": {"name": "test", "version": "1.0.0"},
-            "location": {"path": f"file_{i % 1000}.py", "startLine": i % 500},
-            "message": f"Test finding {i}",
-        })
+        findings.append(
+            {
+                "id": f"fp_{i}",
+                "schemaVersion": "1.2.0",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                "ruleId": f"TEST-{i % 100}",
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": f"file_{i % 1000}.py", "startLine": i % 500},
+                "message": f"Test finding {i}",
+            }
+        )
     return findings
 
 
@@ -256,8 +258,7 @@ def test_trend_analysis_query_performance(perf_db, tmp_path):
         conn = sqlite3.connect(perf_db)
         timestamp = base_time - ((49 - i) * 86400 // 2)  # 30 days spread
         conn.execute(
-            "UPDATE scans SET timestamp = ? WHERE id = ?",
-            (timestamp, scan_id)
+            "UPDATE scans SET timestamp = ? WHERE id = ?", (timestamp, scan_id)
         )
         conn.commit()
         conn.close()
@@ -268,11 +269,12 @@ def test_trend_analysis_query_performance(perf_db, tmp_path):
 
     start = time.time()
     # Simulate trend analysis query (get all scans + findings)
-    scans = list(list_scans(conn, branch="main", since=base_time - 30 * 86400, limit=1000))
+    scans = list(
+        list_scans(conn, branch="main", since=base_time - 30 * 86400, limit=1000)
+    )
     for scan in scans:
         findings = conn.execute(
-            "SELECT * FROM findings WHERE scan_id = ?",
-            (scan["id"],)
+            "SELECT * FROM findings WHERE scan_id = ?", (scan["id"],)
         ).fetchall()
     elapsed = time.time() - start
 
@@ -516,14 +518,16 @@ def test_finding_deduplication_across_scans(perf_db, tmp_path):
     conn.row_factory = sqlite3.Row
 
     start = time.time()
-    findings_a = list(conn.execute(
-        "SELECT * FROM findings WHERE scan_id = ?",
-        (scan_a_id,)
-    ).fetchall())
-    findings_b = list(conn.execute(
-        "SELECT * FROM findings WHERE scan_id = ?",
-        (scan_b_id,)
-    ).fetchall())
+    findings_a = list(
+        conn.execute(
+            "SELECT * FROM findings WHERE scan_id = ?", (scan_a_id,)
+        ).fetchall()
+    )
+    findings_b = list(
+        conn.execute(
+            "SELECT * FROM findings WHERE scan_id = ?", (scan_b_id,)
+        ).fetchall()
+    )
     elapsed = time.time() - start
 
     conn.close()

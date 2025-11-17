@@ -52,7 +52,9 @@ def load_db(tmp_path):
     conn.close()
 
 
-def create_large_codebase(root_dir: Path, file_count: int = 1000, lines_per_file: int = 100):
+def create_large_codebase(
+    root_dir: Path, file_count: int = 1000, lines_per_file: int = 100
+):
     """
     Generate a large synthetic codebase for load testing.
 
@@ -88,7 +90,9 @@ def create_large_codebase(root_dir: Path, file_count: int = 1000, lines_per_file
         file_path.write_text("\n".join(code_lines))
 
 
-def create_bulk_findings(count: int, scan_id_prefix: str = "load") -> List[Dict[str, Any]]:
+def create_bulk_findings(
+    count: int, scan_id_prefix: str = "load"
+) -> List[Dict[str, Any]]:
     """
     Generate bulk findings for load testing.
 
@@ -171,10 +175,14 @@ class TestLargeRepositoryScanning:
 
         # Measure aggregation performance
         all_findings = []
-        for tool_file in (results_dir / "individual-repos" / "large-repo").glob("*.json"):
+        for tool_file in (results_dir / "individual-repos" / "large-repo").glob(
+            "*.json"
+        ):
             with open(tool_file) as f:
                 tool_findings = json.load(f)
-                all_findings.extend(tool_findings if isinstance(tool_findings, list) else [])
+                all_findings.extend(
+                    tool_findings if isinstance(tool_findings, list) else []
+                )
 
         duration_s = time.time() - start
 
@@ -219,17 +227,25 @@ class TestLargeRepositoryScanning:
         findings_per_tool = len(findings) // len(tools)
 
         for idx, tool in enumerate(tools):
-            tool_json = results_dir / "individual-repos" / "enterprise-repo" / f"{tool}.json"
+            tool_json = (
+                results_dir / "individual-repos" / "enterprise-repo" / f"{tool}.json"
+            )
             start_idx = idx * findings_per_tool
-            end_idx = start_idx + findings_per_tool if idx < len(tools) - 1 else len(findings)
+            end_idx = (
+                start_idx + findings_per_tool if idx < len(tools) - 1 else len(findings)
+            )
             tool_json.write_text(json.dumps(findings[start_idx:end_idx]))
 
         # Aggregate results
         all_findings = []
-        for tool_file in (results_dir / "individual-repos" / "enterprise-repo").glob("*.json"):
+        for tool_file in (results_dir / "individual-repos" / "enterprise-repo").glob(
+            "*.json"
+        ):
             with open(tool_file) as f:
                 tool_findings = json.load(f)
-                all_findings.extend(tool_findings if isinstance(tool_findings, list) else [])
+                all_findings.extend(
+                    tool_findings if isinstance(tool_findings, list) else []
+                )
 
         duration_s = time.time() - start
 
@@ -270,7 +286,9 @@ class TestLargeRepositoryScanning:
             create_large_codebase(repo_dir, file_count=10, lines_per_file=50)
 
             # Create findings
-            findings = create_bulk_findings(count=findings_per_repo, scan_id_prefix=f"repo-{i}")
+            findings = create_bulk_findings(
+                count=findings_per_repo, scan_id_prefix=f"repo-{i}"
+            )
             all_findings.extend(findings)
 
             # Write tool outputs
@@ -330,7 +348,9 @@ class TestHighVolumeHistoricalData:
 
         for i in range(1000):
             # Create findings for this scan
-            findings = create_bulk_findings(count=50 + (i % 50), scan_id_prefix=f"bulk-{i}")
+            findings = create_bulk_findings(
+                count=50 + (i % 50), scan_id_prefix=f"bulk-{i}"
+            )
 
             # Create results directory
             scan_results_dir = tmp_path / f"scan-{i}"
@@ -386,7 +406,9 @@ class TestHighVolumeHistoricalData:
         base_time = int(datetime.now().timestamp())
 
         for i in range(1000):
-            findings = create_bulk_findings(count=50 + (i % 50), scan_id_prefix=f"trend-{i}")
+            findings = create_bulk_findings(
+                count=50 + (i % 50), scan_id_prefix=f"trend-{i}"
+            )
 
             scan_results_dir = tmp_path / f"scan-{i}"
             (scan_results_dir / "summaries").mkdir(parents=True)

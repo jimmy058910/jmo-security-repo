@@ -262,7 +262,17 @@ def check_ci_passing() -> None:
 
     # Use GitHub CLI to check latest workflow run
     result = subprocess.run(
-        ["gh", "run", "list", "--branch", "main", "--limit", "1", "--json", "conclusion"],
+        [
+            "gh",
+            "run",
+            "list",
+            "--branch",
+            "main",
+            "--limit",
+            "1",
+            "--json",
+            "conclusion",
+        ],
         capture_output=True,
         text=True,
     )
@@ -288,7 +298,9 @@ def check_ci_passing() -> None:
 
         print(f"✅ CI passing on main branch (status: {conclusion})")
     except (json.JSONDecodeError, KeyError, IndexError) as e:
-        raise AssertionError(f"Failed to parse CI status: {e}\n   Output: {result.stdout}")
+        raise AssertionError(
+            f"Failed to parse CI status: {e}\n   Output: {result.stdout}"
+        )
 
 
 def main() -> int:
