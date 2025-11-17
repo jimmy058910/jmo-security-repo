@@ -325,7 +325,7 @@ class TestAutoStorage:
         )
 
         assert result.returncode == 0
-        assert "--store-history" in result.stdout
+        assert "--no-store-history" in result.stdout
         assert "--history-db" in result.stdout
 
 
