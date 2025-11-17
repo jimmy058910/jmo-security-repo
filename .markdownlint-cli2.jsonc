@@ -13,7 +13,8 @@
     "MD034": false,
     "MD036": false,
     "MD046": false,
-    "MD051": false
+    "MD051": false,
+    "MD060": false
   },
   "ignores": [
     "results-*/**",
