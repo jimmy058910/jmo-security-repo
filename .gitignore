@@ -19,6 +19,7 @@ coverage.json
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 build/
 dist/
 *.egg-info/
@@ -63,6 +64,7 @@ htmlcov/
 # Security scan results (don't commit actual scan results)
 security-results-*/
 results/
+results-*/
 
 # Test reports and documentation (comprehensive testing artifacts)
 docs/comprehensive-test-report.md
@@ -89,6 +91,9 @@ docs/archive/*
 # Claude Code user-specific configuration (open-source project)
 .claude/
 samples/fixtures/infra-demo/docker-test-results/
+
+# Skill Seekers analysis artifacts (local development, not for public repo)
+skill_seekers/
 
 # Hypothesis property-based testing cache (test artifacts, not source)
 .hypothesis/
@@ -124,8 +129,14 @@ coverage/
 # Additional generated artifacts
 *.sarif
 *_report.html
+test-*.html
+*-dashboard.html
 dependency-images.txt
 detected-images.txt
+
+# Playwright screenshots
+.playwright-mcp/
+*.playwright.png
 
 # Backup files (additional patterns)
 *.backup

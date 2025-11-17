@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
+.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -19,6 +19,7 @@ help:
 	@echo "  report   - Use CLI to emit json/md/yaml/html from RESULTS_DIR (supports FAIL_ON and THREADS)"
 	@echo "  profile  - Same as report, but records timings.json (JMO_PROFILE=1)"
 	@echo "  verify-env - Check OS/WSL/macOS and required tools"
+	@echo "  analyze-completeness - Run repository completeness analyzer (doc-code drift detection)"
 	@echo "  dev-deps  - Install Python dev dependencies"
 	@echo "  upgrade-pip - Upgrade pip/setuptools/wheel in current Python env"
 	@echo "  deps-compile - Use pip-tools to compile requirements-dev.in -> requirements-dev.txt"
@@ -109,6 +110,9 @@ verify:
 
 verify-env:
 	bash scripts/dev/verify-env.sh
+
+analyze-completeness:
+	$(PY) scripts/dev/analyze_repo_completeness.py
 
 dev-deps:
 	$(PY) -m pip install -r requirements-dev.txt || true
