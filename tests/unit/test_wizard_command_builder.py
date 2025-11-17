@@ -426,7 +426,7 @@ def test_build_command_parts_native_image():
 
     cmd = build_command_parts(config)
 
-    assert "jmotools" in cmd
+    assert "jmo" in cmd
     assert "balanced" in cmd
     assert "--image" in cmd
     assert "nginx:latest" in cmd
