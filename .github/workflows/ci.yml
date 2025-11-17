@@ -195,7 +195,7 @@ jobs:
           JMO_THREADS: "2"
           SKIP_REACT_BUILD_CHECK: "true"
         run: |
-          python -m pytest -q --maxfail=1 --disable-warnings
+          python -m pytest -q --maxfail=1 --disable-warnings -m "not requires_tools"
 
       - name: Run tests with coverage (gate)
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
@@ -213,7 +213,8 @@ jobs:
             --cov=. \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=85
+            --cov-fail-under=85 \
+            -m "not requires_tools"
 
       - name: Upload coverage to Codecov
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}

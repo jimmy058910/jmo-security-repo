@@ -9,6 +9,7 @@ Usage:
 """
 
 import json
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -141,7 +142,7 @@ class TestDockerImages:
     """Smoke tests for Docker images."""
 
     @pytest.mark.skipif(
-        subprocess.run(["docker", "--version"], capture_output=True).returncode != 0,
+        shutil.which("docker") is None,
         reason="Docker not available",
     )
     def test_docker_image_available(self):
@@ -156,7 +157,7 @@ class TestDockerImages:
         assert result.returncode == 0, f"Failed to pull Docker image: {result.stderr}"
 
     @pytest.mark.skipif(
-        subprocess.run(["docker", "--version"], capture_output=True).returncode != 0,
+        shutil.which("docker") is None,
         reason="Docker not available",
     )
     def test_docker_image_help_works(self):
@@ -181,7 +182,7 @@ class TestDockerImages:
         assert "JMo Security" in result.stdout or "usage" in result.stdout.lower()
 
     @pytest.mark.skipif(
-        subprocess.run(["docker", "--version"], capture_output=True).returncode != 0,
+        shutil.which("docker") is None,
         reason="Docker not available",
     )
     def test_docker_scan_help_works(self):
