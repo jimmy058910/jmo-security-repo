@@ -49,16 +49,16 @@ repos:
     hooks:
       - id: markdownlint
 
-  # Python lint/format
+  # Python format/lint (Black MUST run before Ruff per jmo-ci-debugger #15)
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
     hooks:
       - id: ruff
         args: ["--fix"]
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
 
   # Type checking
   - repo: https://github.com/pre-commit/mirrors-mypy

@@ -1875,6 +1875,14 @@ def cmd_scan(args) -> int:
     tools = eff["tools"]
     results_dir = Path(args.results_dir)
 
+    # Security: Validate tool names to prevent command injection
+    import re
+    invalid_chars = re.compile(r'[;&|`$()<>]')
+    for tool in tools:
+        if invalid_chars.search(tool):
+            _log(args, "ERROR", f"Invalid tool name detected: '{tool}' contains shell metacharacters")
+            return 1  # Return non-zero exit code for security rejection
+
     # Create ScanConfig from effective settings
     scan_config = ScanConfig(
         tools=tools,
