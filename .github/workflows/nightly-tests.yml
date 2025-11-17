@@ -167,7 +167,7 @@ jobs:
   docker-smoke-tests:
     name: Docker Smoke Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Removed timeout-minutes to allow WSL2 builds to complete (BUG #16)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -192,8 +192,8 @@ jobs:
           mkdir -p test-repo results
           echo "print('test')" > test-repo/test.py
           docker run --rm \
-            -v $PWD/test-repo:/scan \
-            -v $PWD/results:/results \
+            -v "$PWD/test-repo:/scan" \
+            -v "$PWD/results:/results" \
             jmo-security:nightly-test scan \
               --repo /scan \
               --results-dir /results \
@@ -253,10 +253,11 @@ jobs:
               });
             } else {
               // Add comment to existing issue
+              const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existingIssue.number,
-                body: `Nightly tests failed again on ${today}.\n\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+                body: `Nightly tests failed again on ${today}.\n\nWorkflow run: ${workflowUrl}`
               });
             }

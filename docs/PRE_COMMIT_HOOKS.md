@@ -47,36 +47,36 @@ Once installed, hooks run automatically:
 
 #### Security
 
-7. **detect-private-key** — Prevent committing private keys
-8. **check-added-large-files** — Block files >10MB
-9. **bandit** — Python security linter (scripts/ only, strict config)
+1. **detect-private-key** — Prevent committing private keys
+2. **check-added-large-files** — Block files >10MB
+3. **bandit** — Python security linter (scripts/ only, strict config)
 
 #### Code Quality - Python
 
-10. **ruff** — Fast Python linter (auto-fix enabled)
-11. **black** — Python formatter (opinionated)
-12. **mypy** — Type checker (scripts/ only)
+1. **ruff** — Fast Python linter (auto-fix enabled)
+2. **black** — Python formatter (opinionated)
+3. **mypy** — Type checker (scripts/ only)
 
 #### Code Quality - Shell
 
-13. **shellcheck** — Shell script linter
-14. **shfmt** — Shell script formatter
+1. **shellcheck** — Shell script linter
+2. **shfmt** — Shell script formatter
 
 #### Code Quality - YAML
 
-15. **yamllint** — Strict YAML linting (schema-agnostic)
+1. **yamllint** — Strict YAML linting (schema-agnostic)
 
 #### Code Quality - Markdown
 
-16. **markdownlint** — Markdown linting (accessibility, rendering)
+1. **markdownlint** — Markdown linting (accessibility, rendering)
 
 #### CI/CD Validation
 
-17. **actionlint** — Validate GitHub Actions workflows
+1. **actionlint** — Validate GitHub Actions workflows
 
 #### Dependency Management (v0.7.1+)
 
-18. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.10+
+1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.10+
 
 ---
 
@@ -279,13 +279,14 @@ python3.11 -m pip install --user pip-tools
 python3.11 -m piptools --version
 ```
 
-### Error: "Cannot install <package> because of conflicting dependencies"
+### Error: "Cannot install package because of conflicting dependencies"
 
 **Cause:** Dependency conflicts in `requirements-dev.in`.
 
 **Fix:**
 
 1. Check conflicts:
+
    ```bash
    python3.11 scripts/dev/update_dependencies.py --validate
    ```
@@ -293,12 +294,14 @@ python3.11 -m piptools --version
 2. Review error messages for conflicting packages
 
 3. Pin conflicting package in `requirements-dev.in`:
+
    ```bash
    # Example: checkov requires packaging<24.0
    echo "packaging<24.0  # Required by checkov" >> requirements-dev.in
    ```
 
 4. Recompile:
+
    ```bash
    make deps-compile
    ```
@@ -310,6 +313,7 @@ python3.11 -m piptools --version
 **Solutions:**
 
 1. **Run hooks in parallel** (default in pre-commit):
+
    ```yaml
    # .pre-commit-config.yaml
    default_stages: [commit]
@@ -317,6 +321,7 @@ python3.11 -m piptools --version
    ```
 
 2. **Skip slow hooks for WIP commits:**
+
    ```bash
    SKIP=mypy,bandit git commit -m "WIP: draft"
    # Run before push: pre-commit run --all-files
@@ -447,6 +452,7 @@ repos:
    - Shows all failures at once
 
 2. **Cache dependencies:**
+
    ```bash
    # pre-commit caches hook environments automatically
    # Clear cache to fix issues:
@@ -454,6 +460,7 @@ repos:
    ```
 
 3. **Skip slow hooks for WIP:**
+
    ```bash
    SKIP=mypy,bandit git commit -m "WIP"
    ```

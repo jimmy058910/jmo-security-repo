@@ -56,10 +56,10 @@ jobs:
             echo "Updating all tools to latest versions..."
             python3 scripts/dev/update_versions.py --update-all
             python3 scripts/dev/update_versions.py --sync
-            echo "tools_updated=true" >> $GITHUB_OUTPUT
+            echo "tools_updated=true" >> "$GITHUB_OUTPUT"
           else
             echo "All tools already up-to-date"
-            echo "tools_updated=false" >> $GITHUB_OUTPUT
+            echo "tools_updated=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Bump version in pyproject.toml
@@ -69,7 +69,7 @@ jobs:
           echo "Current version: $CURRENT_VERSION"
 
           # Parse version components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION" || true
 
           # Bump version based on input
           case "${{ inputs.version_bump }}" in
@@ -93,7 +93,7 @@ jobs:
           # Update pyproject.toml
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
 
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update CHANGELOG.md
         run: |
@@ -135,7 +135,7 @@ jobs:
           BRANCH="release-v${NEW_VERSION}"
 
           git checkout -b "$BRANCH"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Commit release changes
         run: |
