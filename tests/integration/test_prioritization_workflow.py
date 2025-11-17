@@ -279,7 +279,7 @@ class TestPrioritizationWorkflow:
 
         html_content = output_path.read_text()
 
-        # Check if React build exists (determines which assertions to run)
+        # Check if React build OR test fixture exists (determines which assertions to run)
         from pathlib import Path as RealPath
 
         dashboard_dir = (
@@ -287,7 +287,11 @@ class TestPrioritizationWorkflow:
         )
         react_build_exists = (dashboard_dir / "dist" / "index.html").exists()
 
-        if react_build_exists:
+        # Also check for test fixtures (used in CI when React build doesn't exist)
+        repo_root = RealPath(__file__).parent.parent.parent
+        test_fixture_exists = (repo_root / "tests" / "fixtures" / "dashboard" / "test-inline-dashboard.html").exists()
+
+        if react_build_exists or test_fixture_exists:
             # React implementation: Verify data is embedded with priority field
             # Check that findings are embedded with priority data
             assert "test-001" in html_content  # Finding ID
