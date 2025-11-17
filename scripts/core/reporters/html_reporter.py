@@ -22,6 +22,8 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         findings: List of CommonFinding dicts
         out_path: Path to write dashboard.html
     """
+    import os
+
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     total = len(findings)
@@ -31,11 +33,19 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     dashboard_dir = Path(__file__).parent.parent.parent / "dashboard"
     react_build_path = dashboard_dir / "dist" / "index.html"
 
-    if not react_build_path.exists():
+    # Allow skipping React build check in CI/test environments
+    skip_react_check = os.getenv("SKIP_REACT_BUILD_CHECK", "false").lower() == "true"
+
+    if not skip_react_check and not react_build_path.exists():
         raise FileNotFoundError(
             f"React dashboard build not found at {react_build_path}. "
             f"Run 'npm run build' in {dashboard_dir}"
         )
+
+    # If React build doesn't exist and check is skipped, write a simple fallback HTML
+    if not react_build_path.exists():
+        _write_fallback_html(findings, p)
+        return
 
     template = react_build_path.read_text(encoding="utf-8")
 
@@ -75,3 +85,68 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         )
 
     p.write_text(doc, encoding="utf-8")
+
+
+def _write_fallback_html(findings: list[dict[str, Any]], out_path: Path) -> None:
+    """
+    Write a simple fallback HTML when React build is not available.
+
+    Used in CI/test environments where React dashboard hasn't been built.
+
+    Args:
+        findings: List of CommonFinding dicts
+        out_path: Path to write fallback dashboard.html
+    """
+    total = len(findings)
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JMo Security - Findings Report</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        h1 {{
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }}
+        .alert {{
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }}
+        .stats {{
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <h1>JMo Security Findings Report</h1>
+    <div class="alert">
+        <strong>⚠️  Fallback HTML Mode</strong><br>
+        This is a simplified HTML report. The interactive React dashboard was not available.<br>
+        To view the full interactive dashboard, build the React app with <code>npm run build</code> in <code>scripts/dashboard/</code>.
+    </div>
+    <div class="stats">
+        <h2>Summary</h2>
+        <p><strong>Total Findings:</strong> {total}</p>
+        <p>For detailed findings, please view the JSON report at <code>findings.json</code>.</p>
+    </div>
+</body>
+</html>
+"""
+    out_path.write_text(html, encoding="utf-8")

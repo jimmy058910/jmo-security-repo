@@ -193,6 +193,7 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q --maxfail=1 --disable-warnings
 
@@ -202,6 +203,7 @@ jobs:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
             --maxfail=1 \
