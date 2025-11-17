@@ -1884,7 +1884,7 @@ def cmd_scan(args) -> int:
             _log(
                 args,
                 "ERROR",
-                f"Invalid tool name detected: '{tool}' contains shell metacharacters",
+                "Invalid tool name: contains shell metacharacters",
             )
             return 1  # Return non-zero exit code for security rejection
 

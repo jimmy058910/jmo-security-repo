@@ -255,6 +255,7 @@ urllib3==2.5.0
     # via
     #   requests
     #   tuf
+    #   types-requests
 uvicorn==0.38.0
     # via mcp
 virtualenv==20.35.4
