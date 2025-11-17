@@ -10,7 +10,7 @@
           "tool": {"name": "trivy", "version": "0.50.0"},
           "severity": "HIGH",
           "message": "SQL Injection vulnerability in query construction",
-          "location": {"path": "app/users.py", "startLine": 42, "endLine": 45},
+          "location": {"path": "app/users.py", "startLine": 42, "endLine": 44},
           "ruleId": "python-sql-injection",
           "raw": {"CWE": "CWE-89"}
         },
@@ -19,7 +19,7 @@
           "tool": {"name": "semgrep", "version": "1.60.0"},
           "severity": "HIGH",
           "message": "Potential SQL injection: unsanitized user input in SQL query",
-          "location": {"path": "app/users.py", "startLine": 42, "endLine": 42},
+          "location": {"path": "app/users.py", "startLine": 42, "endLine": 44},
           "ruleId": "python.lang.security.audit.sqli-injection",
           "raw": {"owasp": "A03:2021", "cwe": ["CWE-89"]}
         },
@@ -28,7 +28,7 @@
           "tool": {"name": "bandit", "version": "1.7.0"},
           "severity": "MEDIUM",
           "message": "Possible SQL injection vector: string formatting in SQL statement",
-          "location": {"path": "app/users.py", "startLine": 43, "endLine": 43},
+          "location": {"path": "app/users.py", "startLine": 42, "endLine": 44},
           "ruleId": "B608",
           "raw": {"issue_cwe": {"id": 89, "link": "https://cwe.mitre.org/data/definitions/89.html"}}
         }

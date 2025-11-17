@@ -46,7 +46,7 @@ def test_cluster_cross_tool_duplicates_function(sql_injection_cluster):
 
     all_findings = sql_injection_cluster + [xss_finding]
 
-    # Run clustering (uses default 0.50 threshold)
+    # Run clustering (uses default 0.75 threshold)
     result = _cluster_cross_tool_duplicates(all_findings)
 
     # Verify results
