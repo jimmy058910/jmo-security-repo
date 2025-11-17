@@ -10,7 +10,6 @@ Tests end-to-end priority enrichment including:
 """
 
 import json
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -281,7 +280,6 @@ class TestPrioritizationWorkflow:
         html_content = output_path.read_text()
 
         # Check if React build exists (determines which assertions to run)
-        import os
         from pathlib import Path as RealPath
 
         dashboard_dir = (

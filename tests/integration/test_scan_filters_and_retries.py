@@ -19,6 +19,8 @@ def _repo(tmp_path: Path, name: str) -> Path:
 
 def test_include_exclude_filters(tmp_path: Path):
     """Test include/exclude patterns filter repositories correctly."""
+    import os
+
     # Create two repos: app-1 (should be included) and test-1 (should be excluded)
     _repo(tmp_path, "app-1")
     _repo(tmp_path, "test-1")
@@ -50,12 +52,16 @@ exclude: ["test-*"]
         "--allow-missing-tools",  # Use stubs if trufflehog missing
     ]
 
+    test_env = os.environ.copy()
+    test_env["PYTHONPATH"] = "."
+    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
+
     result = subprocess.run(
         cmd,
         timeout=30,
         capture_output=True,
         text=True,
-        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+        env=test_env,
     )
     assert result.returncode == 0, f"Scan failed: {result.stderr}"
 
@@ -73,6 +79,8 @@ def test_retries_attempts_logging(tmp_path: Path):
     Actual retry behavior testing requires simulating tool failures,
     which is complex with real tool execution.
     """
+    import os
+
     repo = _repo(tmp_path, "retry-repo")
     out_base = tmp_path / "results"
 
@@ -101,12 +109,16 @@ retries: 2
         "--allow-missing-tools",
     ]
 
+    test_env = os.environ.copy()
+    test_env["PYTHONPATH"] = "."
+    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
+
     result = subprocess.run(
         cmd,
         timeout=30,
         capture_output=True,
         text=True,
-        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+        env=test_env,
     )
     assert result.returncode == 0
 
@@ -121,6 +133,8 @@ def test_semgrep_rc2_and_trivy_rc1_accepted(tmp_path: Path):
     Trivy exits with rc=1 when vulnerabilities found.
     Both should be treated as success if output files are written.
     """
+    import os
+
     repo = _repo(tmp_path, "exitcode-repo")
     # Create a Python file to trigger semgrep findings
     (repo / "app.py").write_text("password = 'hardcoded123'", encoding="utf-8")
@@ -150,12 +164,16 @@ tools: [semgrep, trivy]
         "--allow-missing-tools",  # Use stubs if tools missing
     ]
 
+    test_env = os.environ.copy()
+    test_env["PYTHONPATH"] = "."
+    test_env["SKIP_REACT_BUILD_CHECK"] = "true"
+
     result = subprocess.run(
         cmd,
         timeout=60,
         capture_output=True,
         text=True,
-        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+        env=test_env,
     )
     # Scan should succeed despite non-zero exit codes from tools
     assert result.returncode == 0, f"Scan failed unexpectedly: {result.stderr}"
