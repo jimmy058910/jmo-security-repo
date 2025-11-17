@@ -75,8 +75,11 @@ jobs:
           # Extract Trivy versions from all 4 Dockerfiles
           # shellcheck disable=SC2252
           TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile || echo "not_found")
+          # shellcheck disable=SC2252
           TRIVY_BALANCED=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.balanced || echo "not_found")
+          # shellcheck disable=SC2252
           TRIVY_SLIM=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.slim || echo "not_found")
+          # shellcheck disable=SC2252
           TRIVY_FAST=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.fast || echo "not_found")
 
           echo "Trivy versions found:"
@@ -86,7 +89,10 @@ jobs:
           echo "  Dockerfile.fast:     $TRIVY_FAST"
 
           # Check for mismatches across all 4 variants
-          if [ "$TRIVY_FULL" != "$TRIVY_BALANCED" ] || [ "$TRIVY_FULL" != "$TRIVY_SLIM" ] || [ "$TRIVY_FULL" != "$TRIVY_FAST" ]; then
+          # shellcheck disable=SC2252
+          if [ "$TRIVY_FULL" != "$TRIVY_BALANCED" ] || \
+             [ "$TRIVY_FULL" != "$TRIVY_SLIM" ] || \
+             [ "$TRIVY_FULL" != "$TRIVY_FAST" ]; then
             echo "::error::CRITICAL: Trivy version mismatch detected!"
             echo "::error::This can cause CVE detection discrepancies (see ROADMAP.md #14)"
             exit 1

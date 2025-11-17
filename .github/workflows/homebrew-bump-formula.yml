@@ -38,7 +38,7 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "📦 Bumping Homebrew formula to version: $VERSION"
 
       - name: Verify PyPI release exists
