@@ -701,6 +701,35 @@ def decrypt_raw_finding(encrypted_str: str) -> str:
     return decrypted_str
 
 
+def _serialize_for_sqlite(value: Any) -> Any:
+    """
+    Serialize dict/list types to JSON strings for SQLite storage.
+
+    SQLite parameter binding only supports primitive types (int, float, str,
+    bytes, None). This function converts dict and list types to JSON strings
+    to prevent sqlite3.InterfaceError during executemany() operations.
+
+    Args:
+        value: Value to serialize (any type)
+
+    Returns:
+        JSON string if value is dict/list, otherwise original value
+
+    Example:
+        >>> _serialize_for_sqlite({"key": "value"})
+        '{"key": "value"}'
+        >>> _serialize_for_sqlite("already a string")
+        'already a string'
+        >>> _serialize_for_sqlite(42)
+        42
+        >>> _serialize_for_sqlite(None)
+        None
+    """
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return value
+
+
 def _enforce_database_permissions(db_path: Path) -> None:
     """
     Enforce restrictive file permissions on database file (Phase 6 Step 6.2).
@@ -964,9 +993,10 @@ def store_scan(
                 end_line = (
                     location.get("endLine") if isinstance(location, dict) else None
                 )
-                title = finding.get("title")
-                message = finding.get("message", "")
-                remediation = finding.get("remediation")
+                # Defensive serialization for fields that might be dicts/lists
+                title = _serialize_for_sqlite(finding.get("title"))
+                message = _serialize_for_sqlite(finding.get("message", ""))
+                remediation = _serialize_for_sqlite(finding.get("remediation"))
 
                 # Compliance data (v1.2.0)
                 compliance = finding.get("compliance", {})

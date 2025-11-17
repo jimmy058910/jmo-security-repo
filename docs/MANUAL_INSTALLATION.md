@@ -5,11 +5,13 @@
 ## Why Manual Installation?
 
 **MobSF (Mobile Security Framework)**:
+
 - Requires Android SDK subset (~200 MB)
 - Needs specific APK tooling (aapt2, apktool, jadx)
 - Complex multi-stage Docker build (not ready for v1.0.0)
 
 **Akto (API Security)**:
+
 - Runs as standalone Docker service (not embeddable in JMo container)
 - Requires separate port mapping and service orchestration
 - Best deployed as sidecar container in CI/CD
@@ -110,13 +112,16 @@ jmotools setup
 ### Troubleshooting
 
 **Issue**: `mobsf command not found`
+
 - **Fix**: Add pip install location to PATH: `export PATH="$HOME/.local/bin:$PATH"`
 
 **Issue**: `ANDROID_HOME not set`
+
 - **Fix**: Verify environment variable: `echo $ANDROID_HOME`
 - Re-run Step 2
 
 **Issue**: `APK analysis fails with aapt2 error`
+
 - **Fix**: Install missing build-tools: `sdkmanager "build-tools;30.0.3"`
 
 ---
@@ -239,15 +244,19 @@ jobs:
 ### Troubleshooting
 
 **Issue**: `Akto service not responding`
+
 - **Fix**: Check Docker logs: `docker-compose logs akto`
 - Restart services: `docker-compose restart`
 
 **Issue**: `API key authentication failed`
+
 - **Fix**: Regenerate API key from Akto dashboard
 - Update `~/.jmo/akto.yml`
 
 **Issue**: `Port 8080 already in use`
+
 - **Fix**: Change port in `docker-compose.yml`:
+
   ```yaml
   ports:
     - "8090:8080"  # Use port 8090 instead
@@ -285,6 +294,7 @@ jobs:
 **Want to help add Docker support for MobSF/Akto in v1.0.1?**
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
+
 - Docker multi-stage build patterns
 - Tool integration guidelines
 - Testing requirements (≥85% coverage)

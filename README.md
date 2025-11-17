@@ -31,12 +31,15 @@
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-coming--soon-lightgrey)](#)
 <!-- If/when a workflow exists, switch to:
 [![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml/badge.svg)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/tests.yml)
+
 -->
 <!-- Codecov (enable after uploading coverage):
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://codecov.io/gh/jimmy058910/jmo-security-repo)
+
 -->
 <!-- PyPI (enable after first release):
 [![PyPI - Version](https://img.shields.io/pypi/v/jmo-security)](https://pypi.org/project/jmo-security/)
+
 -->
 
 A terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners (secrets, SAST, SBOM, IaC, Dockerfile) with a unified Python CLI, normalized outputs, and an HTML dashboard.
@@ -1144,13 +1147,13 @@ CI verifies that `requirements-dev.txt` is up to date on PRs. If it fails, run `
 make verify-env
 ```
 
-1. Install Python dev dependencies (for running tests and reporters):
+2. Install Python dev dependencies (for running tests and reporters):
 
 ```bash
 make dev-deps
 ```
 
-1. Scan repositories using a profile, then aggregate reports:
+3. Scan repositories using a profile, then aggregate reports:
 
 ```bash
 # Scan immediate subfolders under ~/repos with the 'balanced' profile (default)

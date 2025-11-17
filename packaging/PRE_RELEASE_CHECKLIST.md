@@ -9,6 +9,7 @@
 ## ✅ Phase 1: Preparation (COMPLETE)
 
 ### 1.1 Update Windows Installer Builder ✅
+
 - [x] Updated `packaging/windows/build_installer.py` to remove `jmotools.py` references
 - [x] Updated PyInstaller spec to only build `jmo.exe` (no more `jmotools.exe`)
 - [x] Updated NSIS installer script:
@@ -23,14 +24,17 @@
   - `croniter`
 
 **Files Modified:**
+
 - `/mnt/c/Projects/jmo-security-repo/packaging/windows/build_installer.py`
 
 ### 1.2 Update WinGet Manifests ✅
+
 - [x] Updated `jmo.jmo-security.locale.en-US.yaml`:
   - Breaking changes section now documents CLI consolidation
   - Migration guide: `jmotools wizard → jmo wizard`
 
 **Files Modified:**
+
 - `/mnt/c/Projects/jmo-security-repo/packaging/winget/manifests/j/jmo/jmo-security/0.9.0/jmo.jmo-security.locale.en-US.yaml`
 
 ---
@@ -39,6 +43,7 @@
 
 **Platform:** Windows 10+ or Windows 11
 **Prerequisites:**
+
 - Python 3.10+ installed
 - PyInstaller: `pip install pyinstaller`
 - NSIS 3.x: https://nsis.sourceforge.io/Download (add to PATH)
@@ -51,6 +56,7 @@ python packaging/windows/build_installer.py
 ```
 
 **Expected Output:**
+
 ```text
 ======================================================================
   JMo Security Windows Installer Build Script
@@ -97,6 +103,7 @@ SHA256:    C:\Projects\jmo-security-repo\dist\jmo-security-0.9.0-win64.exe.sha25
 ```
 
 **Outputs:**
+
 - `dist/jmo-security-0.9.0-win64.exe` (~25-35 MB NSIS installer)
 - `dist/jmo-security-0.9.0-win64.exe.sha256` (SHA256 hash for WinGet manifest)
 
@@ -135,6 +142,7 @@ jmo.exe schedule --help
 ```
 
 **Success Criteria:**
+
 - [  ] Installer runs without errors
 - [  ] `jmo.exe` accessible from PATH
 - [  ] All 5 smoke tests pass
@@ -157,6 +165,7 @@ Get-Content dist\jmo-security-0.9.0-win64.exe.sha256
 **File:** `packaging/winget/manifests/j/jmo/jmo-security/0.9.0/jmo.jmo-security.installer.yaml`
 
 Replace:
+
 ```yaml
 Installers:
   - Architecture: x64
@@ -165,6 +174,7 @@ Installers:
 ```
 
 With:
+
 ```yaml
 Installers:
   - Architecture: x64
@@ -187,6 +197,7 @@ komac validate packaging/winget/manifests/j/jmo/jmo-security/0.9.0/
 ```
 
 **Expected Output:**
+
 ```text
 ✅ Manifest validation successful
    - jmo.jmo-security.installer.yaml: VALID
@@ -201,6 +212,7 @@ winget validate --manifest packaging/winget/manifests/j/jmo/jmo-security/0.9.0/
 ```
 
 **Success Criteria:**
+
 - [  ] SHA256 updated in installer manifest
 - [  ] ARM64 entry removed (if not building ARM64)
 - [  ] Komac validation passes
@@ -228,11 +240,13 @@ gh release upload v0.9.0 \
 ```
 
 **Verify:**
+
 ```bash
 gh release view v0.9.0
 ```
 
 **Success Criteria:**
+
 - [  ] Release draft created
 - [  ] Windows installer uploaded
 - [  ] SHA256 file uploaded
@@ -250,11 +264,13 @@ gh run watch
 ```
 
 **Expected:**
+
 - Workflow completes successfully
 - PR created in `Homebrew/homebrew-core`
 - PR contains correct formula version and SHA256
 
 **Success Criteria:**
+
 - [  ] Workflow run successful
 - [  ] Homebrew PR created
 - [  ] Formula version updated to 0.9.0
@@ -267,11 +283,13 @@ gh run watch
 ```
 
 **Expected:**
+
 - Workflow completes successfully
 - PR created in `microsoft/winget-pkgs`
 - Manifests updated with correct SHA256
 
 **Success Criteria:**
+
 - [  ] Workflow run successful
 - [  ] WinGet PR created
 - [  ] Manifest SHA256 matches installer
@@ -299,6 +317,7 @@ gh release edit v0.9.0 --draft=false
 ```
 
 **This triggers:**
+
 - `release.yml` workflow
 - PyPI publish (OIDC)
 - Docker builds (GHCR/ECR/Docker Hub)
@@ -308,18 +327,21 @@ gh release edit v0.9.0 --draft=false
 ### 5.3 Monitor Package Manager PRs
 
 **Homebrew:**
+
 ```bash
 # Check PR status
 gh pr view <PR_NUMBER> --repo Homebrew/homebrew-core
 ```
 
 **WinGet:**
+
 ```bash
 # Check PR status
 gh pr view <PR_NUMBER> --repo microsoft/winget-pkgs
 ```
 
 **Timeline:**
+
 - Homebrew review: 1-3 days (usually fast for updates)
 - WinGet review: 3-7 days (Microsoft maintainers review)
 
@@ -328,18 +350,22 @@ gh pr view <PR_NUMBER> --repo microsoft/winget-pkgs
 ## 📊 Success Criteria Summary
 
 ### Implementation (2/2 Complete) ✅
+
 - [x] Windows installer builder updated
 - [x] WinGet manifests updated
 
 ### Windows Build (0/2 Pending) 🚧
+
 - [  ] Windows installer built successfully
 - [  ] Smoke tests passed
 
 ### Manifests (0/2 Pending) 🚧
+
 - [  ] SHA256 updated in WinGet manifest
 - [  ] Manifests validated
 
 ### Release (0/3 Pending) 🚧
+
 - [  ] Installer uploaded to GitHub Release
 - [  ] Automation workflows tested
 - [  ] Release published
@@ -354,6 +380,7 @@ gh pr view <PR_NUMBER> --repo microsoft/winget-pkgs
 
 **Error:** `ModuleNotFoundError: No module named 'scripts'`
 **Fix:** Run from project root:
+
 ```powershell
 cd C:\Projects\jmo-security-repo
 python packaging/windows/build_installer.py
@@ -363,6 +390,7 @@ python packaging/windows/build_installer.py
 
 **Error:** `makensis: command not found`
 **Fix:**
+
 1. Download NSIS from https://nsis.sourceforge.io/Download
 2. Install to `C:\Program Files (x86)\NSIS`
 3. Add to PATH: `C:\Program Files (x86)\NSIS`
@@ -372,6 +400,7 @@ python packaging/windows/build_installer.py
 
 **Error:** `Schema validation failed: InstallerSha256 is required`
 **Fix:** Ensure SHA256 is filled in `jmo.jmo-security.installer.yaml`:
+
 ```yaml
 InstallerSha256: <64-char-hex-string>
 ```
@@ -380,6 +409,7 @@ InstallerSha256: <64-char-hex-string>
 
 **Error:** `HOMEBREW_BUMP_TOKEN not found`
 **Fix:** Verify secrets configured:
+
 ```bash
 gh secret list
 # Should show:
@@ -392,6 +422,7 @@ gh secret list
 ## 📝 Notes
 
 **Why We Can't Build in WSL:**
+
 - PyInstaller requires native Windows Python
 - NSIS installer only works on Windows
 - Windows .exe cannot be cross-compiled from Linux

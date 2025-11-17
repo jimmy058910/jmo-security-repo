@@ -26,9 +26,11 @@ security scan results, enabling:
 
 - **Query Findings**: Ask Copilot "What are the HIGH severity findings in
   src/api?"
+
 - **Get Context**: Request full source code context around vulnerabilities
 - **Fix Suggestions**: Get AI-generated remediation suggestions with
   confidence scores
+
 - **Track Resolutions**: Mark findings as fixed, false positive, or
   accepted risk
 
@@ -343,6 +345,7 @@ jmo --version
 
 - Installs to `/usr/local/bin/jmo` (Intel) or
   `/opt/homebrew/bin/jmo` (Apple Silicon)
+
 - Automatically adds to PATH
 - Updates via `brew upgrade jmo-security`
 

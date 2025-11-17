@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef, useCallback, lazy, Suspense } from 'react'
 import FindingsTable from './components/FindingsTable'
-import FilterPanel from './components/FilterPanel'
 import SeverityChart from './components/SeverityChart'
 import DarkModeToggle from './components/DarkModeToggle'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp'
@@ -12,7 +11,7 @@ import { useDarkMode } from './hooks/useDarkMode'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useScanHistory } from './hooks/useScanHistory'
 import { useDiffMode } from './hooks/useDiffMode'
-import { GitCompare, Table, TrendingUp, Shield } from 'lucide-react'
+import { GitCompare, Table, TrendingUp, Shield, BarChart3 } from 'lucide-react'
 import { CommonFinding } from './types/findings'
 
 // Lazy load Recharts-dependent components (Phase 5.1)
@@ -40,8 +39,8 @@ export default function App() {
     baselineScanId || undefined
   )
 
-  // View mode (findings, trends, compliance)
-  type ViewMode = 'findings' | 'trends' | 'compliance'
+  // View mode (findings, trends, compliance, analytics)
+  type ViewMode = 'findings' | 'trends' | 'compliance' | 'analytics'
   const [viewMode, setViewMode] = useState<ViewMode>('findings')
 
   // Load all findings for trends (Map of scan_id -> findings)
@@ -147,7 +146,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors">
-      <div className="max-w-screen-2xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             🛡️ JMo Security Dashboard
@@ -235,60 +234,139 @@ export default function App() {
               <Shield className="w-4 h-4" />
               Compliance
             </button>
+
+            <button
+              onClick={() => {
+                setViewMode('analytics')
+                if (isDiffMode) disableDiffMode()
+              }}
+              className={`${
+                viewMode === 'analytics'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Analytics
+            </button>
           </nav>
         </div>
 
-        {/* Findings View: Sidebar + Table/Diff */}
+        {/* Findings View: Full-Width Layout */}
         {viewMode === 'findings' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sidebar: Filters */}
-            <div className="lg:col-span-1 space-y-4">
-              {/* History Panel */}
-              {scans.length > 0 && (
-                <HistoryPanel
-                  scans={scans}
-                  selectedScanId={selectedScanId}
-                  onScanSelect={setSelectedScanId}
-                  baselineScanId={baselineScanId}
-                  onBaselineScanSelect={setBaselineScanId}
-                  isDiffMode={isDiffMode}
-                />
-              )}
-
-              {/* Severity Distribution Chart */}
-              <SeverityChart findings={filteredFindings} />
-
-              {/* Filter Panel */}
-              <FilterPanel
-                ref={searchInputRef}
-                severities={severities}
-                onSeverityChange={toggleSeverity}
-                selectedTool={selectedTool}
-                onToolChange={setSelectedTool}
-                tools={tools}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
+          <div className="space-y-4">
+            {/* History Panel (if scans exist) */}
+            {scans.length > 0 && (
+              <HistoryPanel
+                scans={scans}
+                selectedScanId={selectedScanId}
+                onScanSelect={setSelectedScanId}
+                baselineScanId={baselineScanId}
+                onBaselineScanSelect={setBaselineScanId}
+                isDiffMode={isDiffMode}
               />
+            )}
 
-              {/* Count Badge */}
+            {/* Filters Row: Severity Chips + Tool Dropdown + Search + Count */}
+            {!isDiffMode && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 transition-colors">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing <span className="font-bold">{filteredFindings.length}</span> of{' '}
-                  <span className="font-bold">{findings.length}</span> findings
-                </p>
-              </div>
-            </div>
+                <div className="flex flex-wrap gap-4 items-center">
+                  {/* Severity Filter Chips */}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      Severity:
+                    </span>
+                    {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].map((sev) => {
+                      const isActive = severities.has(sev)
+                      const colors = {
+                        CRITICAL: isActive
+                          ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+                          : 'bg-white dark:bg-gray-700 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-gray-600',
+                        HIGH: isActive
+                          ? 'bg-orange-600 text-white border-orange-600 hover:bg-orange-700'
+                          : 'bg-white dark:bg-gray-700 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-800 hover:bg-orange-50 dark:hover:bg-gray-600',
+                        MEDIUM: isActive
+                          ? 'bg-yellow-600 text-white border-yellow-600 hover:bg-yellow-700'
+                          : 'bg-white dark:bg-gray-700 text-yellow-600 dark:text-yellow-400 border-yellow-300 dark:border-yellow-800 hover:bg-yellow-50 dark:hover:bg-gray-600',
+                        LOW: isActive
+                          ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+                          : 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-gray-600',
+                        INFO: isActive
+                          ? 'bg-gray-600 text-white border-gray-600 hover:bg-gray-700'
+                          : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600',
+                      }
+                      return (
+                        <button
+                          key={sev}
+                          onClick={() => toggleSeverity(sev)}
+                          className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition-all ${
+                            colors[sev as keyof typeof colors]
+                          } ${
+                            isActive ? 'ring-2 ring-offset-2 ring-opacity-50' : ''
+                          }`}
+                          aria-pressed={isActive}
+                          aria-label={`Filter ${sev} severity findings`}
+                        >
+                          {sev}
+                          {isActive && (
+                            <span className="ml-2 font-bold">
+                              ({findings.filter((f) => f.severity === sev).length})
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
 
-            {/* Main: Findings Table or Diff View */}
-            <div className="lg:col-span-3">
-              {isDiffMode && diff ? (
-                <DiffView diff={diff} />
-              ) : (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow transition-colors">
-                  <FindingsTable findings={filteredFindings} />
+                  {/* Tool Filter Dropdown */}
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="tool-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Tool:
+                    </label>
+                    <select
+                      id="tool-filter"
+                      value={selectedTool}
+                      onChange={(e) => setSelectedTool(e.target.value)}
+                      className="rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm py-2 px-3 min-w-[150px]"
+                    >
+                      <option value="">All Tools</option>
+                      {tools.map((tool) => (
+                        <option key={tool} value={tool}>
+                          {tool}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="flex-1 min-w-[200px]">
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder="Search rule, message, or path..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm py-2 px-3"
+                    />
+                  </div>
+
+                  {/* Count Badge */}
+                  <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                    Showing <span className="font-bold">{filteredFindings.length}</span> of{' '}
+                    <span className="font-bold">{findings.length}</span>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Full-Width Findings Table or Diff View */}
+            {isDiffMode && diff ? (
+              <DiffView diff={diff} />
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow transition-colors">
+                <FindingsTable findings={filteredFindings} />
+              </div>
+            )}
           </div>
         )}
 
@@ -330,6 +408,110 @@ export default function App() {
           >
             <ComplianceRadar findings={findings} />
           </Suspense>
+        )}
+
+        {/* Analytics View */}
+        {viewMode === 'analytics' && (
+          <div className="space-y-6">
+            {/* Severity Distribution Chart - Full Width */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                📊 Severity Distribution
+              </h2>
+              <SeverityChart findings={filteredFindings} />
+            </div>
+
+            {/* Summary Statistics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Findings */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Total Findings
+                </div>
+                <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                  {findings.length}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Across all tools
+                </div>
+              </div>
+
+              {/* Critical + High */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Critical + High
+                </div>
+                <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+                  {findings.filter(f => f.severity === 'CRITICAL' || f.severity === 'HIGH').length}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Requires immediate attention
+                </div>
+              </div>
+
+              {/* Tools Used */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Tools Used
+                </div>
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  {tools.length}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Security scanners
+                </div>
+              </div>
+
+              {/* Files Affected */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Files Affected
+                </div>
+                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                  {new Set(findings.map(f => f.location.path)).size}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Unique file paths
+                </div>
+              </div>
+            </div>
+
+            {/* Top Tools by Findings */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 transition-colors">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                🔍 Top Tools by Findings
+              </h2>
+              <div className="space-y-3">
+                {tools
+                  .map(tool => ({
+                    name: tool,
+                    count: findings.filter(f => f.tool.name === tool).length,
+                  }))
+                  .sort((a, b) => b.count - a.count)
+                  .slice(0, 10)
+                  .map(tool => (
+                    <div key={tool.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[120px]">
+                          {tool.name}
+                        </span>
+                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all"
+                            style={{
+                              width: `${(tool.count / findings.length) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300 ml-4 min-w-[40px] text-right">
+                        {tool.count}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

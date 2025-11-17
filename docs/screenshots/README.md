@@ -66,12 +66,12 @@ python3 scripts/cli/jmo.py report /path/to/results --profile
 xdg-open /path/to/results/summaries/dashboard.html  # mac: open
 ```
 
-2) Use a screen capture tool while interacting with the dashboard:
+1) Use a screen capture tool while interacting with the dashboard:
 
 - Linux: `peek`, `vokoscreenNG`, or `kazam`
 - macOS: QuickTime screen recording
 
-3) Save outputs into `docs/screenshots/` (filenames are suggestions):
+1) Save outputs into `docs/screenshots/` (filenames are suggestions):
 
 - dashboard-overview.png
 - severity-breakdown.png

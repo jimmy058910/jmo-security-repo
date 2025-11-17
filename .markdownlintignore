@@ -4,3 +4,6 @@
 
 # Archived documentation - historical reference only
 docs/archive/*.md
+
+# Results guide has intentionally duplicate section headings for different compliance frameworks
+docs/RESULTS_GUIDE.md:MD024

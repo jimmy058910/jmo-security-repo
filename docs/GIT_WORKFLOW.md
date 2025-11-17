@@ -50,7 +50,7 @@ git push origin dev
 
 ## Branch Structure
 
-```
+```text
 main ← stable releases only (v0.8.0, v0.9.0, v1.0.0)
   └── dev ← active development (v1.0.0 work in progress)
         ├── feature/tools-1.0.0

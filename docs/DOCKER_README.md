@@ -235,6 +235,30 @@ results/
 
 ## Image Variants
 
+### Quick Variant Selection
+
+**Choose the right Docker image based on your use case:**
+
+| Variant | Size | Scan Time | Use Case | Command |
+|---------|------|-----------|----------|---------|
+| **fast** | 502 MB | 5-10 min | Pre-commit hooks, PR gates | `docker run jmosecurity/jmo-security:fast ...` |
+| **balanced** | 1.41 GB | 18-25 min | CI/CD pipelines | `docker run jmosecurity/jmo-security:balanced ...` |
+| **slim** | 557 MB | 12-18 min | Cloud/K8s focused | `docker run jmosecurity/jmo-security:slim ...` |
+| **full** (`:latest`) | 1.97 GB | 40-70 min | Complete audits | `docker run jmosecurity/jmo-security:latest ...` |
+
+**Tool Distribution:**
+
+- **fast (8 tools):** trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft, osv-scanner
+- **balanced (21 tools):** fast + prowler, kubescape, zap, nuclei, akto, cdxgen, scancode, gosec, grype, yara, bearer, horusec, dependency-check
+- **slim (15 tools):** Cloud/Kubernetes focused subset
+- **full (28 tools):** All scanners including noseyparker, semgrep-secrets, bandit, trivy-rbac, falco, afl++, mobsf, lynis
+
+📖 **Complete tool breakdown:** [docs/DOCKER_VARIANTS_MASTER.md](DOCKER_VARIANTS_MASTER.md)
+
+---
+
+### Detailed Variant Information
+
 Three optimized images for different needs (v0.6.1+ with multi-stage builds):
 
 | Variant | Size (v0.6.1) | Size (v0.6.0) | Reduction | Tools | Best For |

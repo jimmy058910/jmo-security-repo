@@ -66,6 +66,7 @@ jmotools balanced --repos-dir C:\Projects
 **Coverage:** Secrets, SAST, SCA, containers, IaC, Dockerfiles, limited DAST
 
 **Recommendation:** Use Docker for full balanced profile:
+
 ```powershell
 jmotools wizard --docker --profile balanced
 ```
@@ -81,6 +82,7 @@ jmotools wizard --docker --profile balanced
 - ❌ AFL++ (fuzzing)
 
 **Recommendation:** MUST use Docker:
+
 ```powershell
 jmotools wizard --docker --profile deep
 ```
@@ -97,6 +99,7 @@ jmotools wizard --docker --profile deep
 **Steps:**
 
 1. **Install WSL2:**
+
    ```powershell
    # Run as Administrator
    wsl --install
@@ -110,16 +113,19 @@ jmotools wizard --docker --profile deep
 3. **Install JMo Security (choose one):**
 
    **Option A: Winget (recommended)**
+
    ```powershell
    winget install jmo.jmo-security
    ```
 
    **Option B: pip (in WSL2)**
+
    ```bash
    pip install jmo-security
    ```
 
 4. **Run scans with full tool suite:**
+
    ```powershell
    # From Windows PowerShell
    jmotools wizard --docker
@@ -145,11 +151,13 @@ jmotools wizard --docker --profile deep
 **Steps:**
 
 1. **Install via Winget:**
+
    ```powershell
    winget install jmo.jmo-security
    ```
 
 2. **Run scans with limited tools:**
+
    ```powershell
    # Use fast profile (best for native Windows)
    jmotools fast --repos-dir C:\Projects
@@ -188,6 +196,7 @@ If using **Path 2 (Native Windows)**, you can install tools individually for bet
 ### Core Tools (Work on Windows)
 
 **TruffleHog:**
+
 ```powershell
 # Via scoop
 scoop install trufflehog
@@ -197,6 +206,7 @@ scoop install trufflehog
 ```
 
 **Trivy:**
+
 ```powershell
 # Via scoop
 scoop install trivy
@@ -206,6 +216,7 @@ scoop install trivy
 ```
 
 **Syft:**
+
 ```powershell
 # Via scoop
 scoop install syft
@@ -215,17 +226,20 @@ scoop install syft
 ```
 
 **Checkov:**
+
 ```powershell
 pip install checkov
 ```
 
 **Hadolint:**
+
 ```powershell
 # Download from:
 # https://github.com/hadolint/hadolint/releases
 ```
 
 **Nuclei:**
+
 ```powershell
 # Via go install
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
@@ -235,11 +249,13 @@ go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 ```
 
 **Bandit:**
+
 ```powershell
 pip install bandit
 ```
 
 **After installing tools, verify:**
+
 ```powershell
 jmotools setup --check
 ```
@@ -285,6 +301,7 @@ Windows is a secondary platform for most security tools.
 ### Q: Which profile should I use on native Windows?
 
 **A:** Use **fast profile** for best experience:
+
 ```powershell
 jmotools fast --repos-dir C:\Projects
 ```
@@ -310,6 +327,7 @@ jmotools fast --repos-dir C:\Projects
 2. **Use fast profile** if running native Windows only
 3. **Use `--allow-missing-tools`** flag to skip unavailable tools gracefully
 4. **Check tool availability** before choosing profile:
+
    ```powershell
    jmotools setup --check
    ```
@@ -337,6 +355,7 @@ jmotools fast --repos-dir C:\Projects
 ### Issue: "Tool not found" errors on native Windows
 
 **Solution:**
+
 ```powershell
 # Check which tools are available
 jmotools setup --check
@@ -351,6 +370,7 @@ jmotools fast --repos-dir C:\Projects --allow-missing-tools
 
 1. Install Java JRE 11+, OR
 2. Use Docker mode:
+
    ```powershell
    jmotools wizard --docker
    ```
@@ -358,6 +378,7 @@ jmotools fast --repos-dir C:\Projects --allow-missing-tools
 ### Issue: Semgrep rules fail
 
 **Solution:** Some rules are Linux-specific. Use Docker for full Semgrep coverage:
+
 ```powershell
 jmotools wizard --docker
 ```

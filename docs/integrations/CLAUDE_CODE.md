@@ -46,10 +46,13 @@ JMo Security's MCP server enables Claude Code to:
 
 - **Terminal-native workflow** - Works seamlessly in your terminal with
   Claude Code
+
 - **Context-aware suggestions** - AI analyzes 20 lines of context around
   each finding
+
 - **Multi-framework compliance** - Maps findings to OWASP, CWE, NIST CSF,
   PCI DSS, CIS Controls, MITRE ATT&CK
+
 - **Flexible deployment** - Local Python, Docker, or system package managers
 
 ## Prerequisites

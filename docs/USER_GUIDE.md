@@ -136,7 +136,7 @@ The `reporting` extra bundles PyYAML and jsonschema so YAML output and schema va
 make verify-env
 ```
 
-1. Run a fast multi-repo scan + report in one step
+2. Run a fast multi-repo scan + report in one step
 
 ```bash
 # Scan all immediate subfolders under ~/repos with the default (balanced) profile

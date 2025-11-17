@@ -94,6 +94,7 @@ Leverages completed ROADMAP #1:
 #### 4. Artifact Generation
 
 **Makefile Target** (`--emit-make-target`):
+
 ```makefile
 .PHONY: security-scan
 security-scan:
@@ -101,6 +102,7 @@ security-scan:
 ```
 
 **Shell Script** (`--emit-script`):
+
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -309,6 +311,7 @@ make -f Makefile.security security-scan
 ### Complexity Reduction
 
 **Before Wizard:**
+
 ```bash
 # User needs to know:
 python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced \
@@ -318,6 +321,7 @@ open results/summaries/dashboard.html
 ```
 
 **After Wizard:**
+
 ```bash
 jmotools wizard
 # Interactive prompts handle all configuration

@@ -129,40 +129,29 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 
 ## 📦 Installation (in 2 Minutes)
 
-**Choose your installation method:**
+**Choose your installation method based on your platform:**
 
-### Method 1: Docker (Easiest - Zero Tool Installation)
+| Platform | Recommended Method | Installation Time | Guide |
+|----------|-------------------|-------------------|-------|
+| **Any Platform** | Docker (4 variants) | 2 min | [QUICKSTART — Docker](../QUICKSTART.md#1-docker-recommended---zero-installation-) |
+| **macOS** | Native Python (Homebrew) | 5 min | [QUICKSTART — macOS](../QUICKSTART.md#2-macos-native-python-) |
+| **Windows 10/11** | Winget + pip OR WSL | 10-15 min | [QUICKSTART — Windows](../QUICKSTART.md#3-windows-winget---recommended-) |
+| **Linux** | apt/dnf/yum + pip | 5 min | [QUICKSTART — Linux](../QUICKSTART.md#5-linux-aptdnfyum-) |
 
-```bash
-# Download from: https://www.docker.com/products/docker-desktop
-# Then pull JMo image:
-docker pull ghcr.io/jimmy058910/jmo-security:latest
-
-# Ready to scan!
-docker run -it --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest wizard
-```
-
-### Method 2: Python Package (pip)
+### Quick Start (Any Platform)
 
 ```bash
-# Install JMo CLI
+# Option 1: Docker (zero installation, all platforms)
+docker run --rm -v "$(pwd):/scan" jmosecurity/jmo-security:fast scan --repo /scan
+
+# Option 2: Python pip (requires Python 3.10+)
 pip install jmo-security
-
-# Add to PATH (Linux/macOS/WSL)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-
-# Verify
 jmo --help
-jmotools --help
-
-# Install security tools (auto-install)
-git clone https://github.com/jimmy058910/jmo-security-repo.git
-cd jmo-security-repo
-make tools
 ```
 
-**📖 Detailed guide:** [QUICKSTART.md — Installation](../QUICKSTART.md#-installation-in-2-minutes)
+**📖 Complete installation guide with platform-specific instructions:** [QUICKSTART.md — Installation Methods](../QUICKSTART.md#-installation-methods)
+
+**🛠️ Platform-specific troubleshooting:** [PLATFORM_SPECIFIC.md](PLATFORM_SPECIFIC.md)
 
 ---
 
@@ -173,7 +162,8 @@ make tools
 | Document | Purpose | Audience |
 |----------|---------|----------|
 | [README.md](../README.md) | Project overview, "Three Ways to Get Started" | Everyone |
-| [QUICKSTART.md](../QUICKSTART.md) | 5-minute universal guide | Developers |
+| [QUICKSTART.md](../QUICKSTART.md) | 5-minute universal guide with all installation methods | Developers |
+| [**PLATFORM_SPECIFIC.md**](PLATFORM_SPECIFIC.md) | **Platform-specific troubleshooting (macOS, Windows, WSL, Linux)** | **Everyone** |
 | [**RESULTS_GUIDE.md**](RESULTS_GUIDE.md) | **Complete guide to understanding, triaging, and acting on scan results** | **Everyone** |
 | [USER_GUIDE.md](USER_GUIDE.md) | Comprehensive reference | Advanced users |
 | [DOCKER_README.md](DOCKER_README.md) | Complete Docker guide (beginner → advanced) | All levels |
@@ -220,6 +210,8 @@ make tools
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
+| [**YAML Configuration Files**](../CLAUDE.md#yaml-configuration-files-root-directory) | **10 YAML/YML files in root directory explained** | **Everyone** |
+| [**Docker Variants**](DOCKER_VARIANTS_MASTER.md) | **4 Docker image variants (Dockerfile, Dockerfile.balanced, Dockerfile.slim, Dockerfile.fast)** | **Everyone** |
 | [MCP Setup](MCP_SETUP.md) | MCP server integration (general) | Advanced |
 | [CommonFinding Schema](schemas/common_finding.v1.json) | Data schema spec | Developers |
 | [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
@@ -312,6 +304,7 @@ cat results/summaries/SUMMARY.md
 
 - **General questions:** [README.md](../README.md) and [USER_GUIDE.md](USER_GUIDE.md)
 - **Setup issues:** [QUICKSTART.md](../QUICKSTART.md) troubleshooting section
+- **Platform-specific problems:** [PLATFORM_SPECIFIC.md](PLATFORM_SPECIFIC.md) (macOS, Windows, WSL, Linux)
 - **Docker problems:** [DOCKER_README.md — Troubleshooting](DOCKER_README.md#troubleshooting)
 - **CI failures:** [User Guide — CI Troubleshooting](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
 
@@ -344,13 +337,13 @@ cat results/summaries/SUMMARY.md
 make verify-env
 ```
 
-1. Run a quick scan
+2. Run a quick scan
 
 ```bash
 jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 ```
 
-1. Open the dashboard (results/summaries/dashboard.html)
+3. Open the dashboard (results/summaries/dashboard.html)
 
 - Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
 

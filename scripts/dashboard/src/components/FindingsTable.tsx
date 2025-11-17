@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { CommonFinding } from '../types/findings'
 
@@ -14,6 +14,66 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(25)
+  const [showScrollbar, setShowScrollbar] = useState<boolean>(false)
+
+  // Refs for syncing horizontal scroll between table and fixed scrollbar
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+  const stickyScrollbarRef = useRef<HTMLDivElement>(null)
+  const scrollbarContentRef = useRef<HTMLDivElement>(null)
+
+  // Sync scroll positions and update scrollbar width
+  useEffect(() => {
+    const tableContainer = tableContainerRef.current
+    const stickyScrollbar = stickyScrollbarRef.current
+    const scrollbarContent = scrollbarContentRef.current
+    if (!tableContainer || !stickyScrollbar || !scrollbarContent) return
+
+    // Update scrollbar content width to match table scroll width and check if scrollbar is needed
+    const updateScrollbarWidth = () => {
+      const scrollWidth = tableContainer.scrollWidth
+      const clientWidth = tableContainer.clientWidth
+      scrollbarContent.style.width = `${scrollWidth}px`
+
+      // Only show scrollbar if table is wider than container (needs horizontal scrolling)
+      setShowScrollbar(scrollWidth > clientWidth)
+    }
+    updateScrollbarWidth()
+
+    // Use flags to prevent infinite loop
+    let isTableScrolling = false
+    let isScrollbarScrolling = false
+
+    const handleTableScroll = () => {
+      if (isScrollbarScrolling) {
+        isScrollbarScrolling = false
+        return
+      }
+      isTableScrolling = true
+      stickyScrollbar.scrollLeft = tableContainer.scrollLeft
+    }
+
+    const handleStickyScroll = () => {
+      if (isTableScrolling) {
+        isTableScrolling = false
+        return
+      }
+      isScrollbarScrolling = true
+      tableContainer.scrollLeft = stickyScrollbar.scrollLeft
+    }
+
+    // Add event listeners
+    tableContainer.addEventListener('scroll', handleTableScroll)
+    stickyScrollbar.addEventListener('scroll', handleStickyScroll)
+
+    // Also update scrollbar width on window resize
+    window.addEventListener('resize', updateScrollbarWidth)
+
+    return () => {
+      tableContainer.removeEventListener('scroll', handleTableScroll)
+      stickyScrollbar.removeEventListener('scroll', handleStickyScroll)
+      window.removeEventListener('resize', updateScrollbarWidth)
+    }
+  }, [])
 
   // Pagination Controls Component (rendered both top and bottom)
   const PaginationControls = () => {
@@ -176,9 +236,9 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
         {/* TOP PAGINATION CONTROLS */}
         {sortedFindings.length > 0 && <PaginationControls />}
 
-        {/* TABLE */}
-        <div className="overflow-x-auto max-w-full">
-          <table className="min-w-max divide-y divide-gray-200 dark:divide-gray-700">
+        {/* TABLE - Horizontal scrollable with minimum width (native scrollbar hidden, using custom sticky scrollbar below) */}
+        <div ref={tableContainerRef} className="overflow-x-auto hide-scrollbar">
+          <table className="w-full divide-y divide-gray-200 dark:divide-gray-700" style={{ minWidth: '1200px' }}>
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
             <th
@@ -339,9 +399,20 @@ export default function FindingsTable({ findings }: FindingsTableProps) {
       </table>
       </div>
 
-      {/* BOTTOM PAGINATION CONTROLS */}
+      {/* STICKY HORIZONTAL SCROLLBAR - Above pagination (only shown when table needs horizontal scrolling) */}
+      {showScrollbar && (
+        <div
+          ref={stickyScrollbarRef}
+          className="sticky bottom-16 overflow-x-auto bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-20 shadow-lg"
+          style={{ height: '20px' }}
+        >
+          <div ref={scrollbarContentRef} style={{ width: '1200px', height: '1px' }}></div>
+        </div>
+      )}
+
+      {/* BOTTOM PAGINATION CONTROLS - STICKY */}
       {sortedFindings.length > 0 && (
-        <div className="border-t border-gray-200 dark:border-gray-700">
+        <div className="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-10 shadow-lg">
           <PaginationControls />
         </div>
       )}

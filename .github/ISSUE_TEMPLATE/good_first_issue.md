@@ -2,6 +2,7 @@
 name: Good first issue
 about: Small, well-scoped issue ideal for first-time contributors
 labels: good first issue
+
 ---
 
 ## Summary

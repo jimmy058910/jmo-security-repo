@@ -2481,6 +2481,122 @@ When adding/updating documentation:
 - [ ] Verified examples are copy-pasteable
 - [ ] Updated CLAUDE.md if documentation structure changed
 
+## YAML Configuration Files (Root Directory)
+
+JMo Security uses 10 YAML/YML files in the root directory, organized by purpose:
+
+### **JMo-Specific Configuration (3 files)**
+
+| File | Purpose | Moveable? |
+|------|---------|-----------|
+| `jmo.yml` | Main JMo configuration: tool selection, profiles, thresholds, email, scheduling | ❌ NO - Hardcoded in 50+ tests/scripts |
+| `jmo.suppress.yml` | Suppression rules for false positives (by fingerprint, ruleId, path) | ❌ NO - Scanned during report phase |
+| `versions.yaml` | Central tool version registry (v0.6.1+) for all security tools | ❌ NO - Referenced by CI and update_versions.py |
+
+### **Tooling Configuration (4 files)**
+
+| File | Purpose | Moveable? |
+|------|---------|-----------|
+| `.pre-commit-config.yaml` | Pre-commit hook configuration (formatting, linting, validation) | ❌ NO - MUST be in root per pre-commit spec |
+| `.yamllint.yaml` | Yamllint rules (line length, indentation) | ❌ NO - MUST be in root for yamllint to find it |
+| `bandit.yaml` | Bandit security scanner configuration (excludes, skipped tests) | ❌ NO - MUST be in root for bandit to find it |
+| `docker-compose.yml` | Docker Compose examples for running JMo scans | ⚠️ OPTIONAL - Standard convention is root |
+
+### **CI/CD & Documentation (3 files)**
+
+| File | Purpose | Moveable? |
+|------|---------|-----------|
+| `codecov.yml` | Codecov coverage reporting configuration | ⚠️ OPTIONAL - Root is conventional but could use `.github/codecov.yml` |
+| `.readthedocs.yaml` | Read the Docs documentation build configuration | ❌ NO - MUST be in root per RTD spec |
+| `mkdocs.yml` | MkDocs documentation site configuration | ⚠️ OPTIONAL - Standard convention is root |
+
+### **Organization Rationale**
+
+**Why NOT move to `config/` directory:**
+
+1. **Industry conventions:** Most tools expect configs in root (pre-commit, Docker, RTD, yamllint, bandit)
+2. **Breaking changes:** Moving `jmo.yml` or `versions.yaml` would break 50+ test files and CI workflows
+3. **Low clutter:** 10 config files is reasonable for mature projects (Django has 15+, Linux kernel has 20+)
+4. **Clear naming:** `.` prefix = tooling config (hidden), `jmo.` prefix = JMo-specific
+5. **Time vs ROI:** 2-4 hours to reorganize with near-zero functional benefit and high breakage risk
+
+**Modification Guidelines:**
+
+- **jmo.yml:** Edit directly for tool/profile changes (see [Configuration](#configuration) section)
+- **versions.yaml:** Use `update_versions.py` script, NEVER manual edits (see [Version Management](#version-management-v061))
+- **jmo.suppress.yml:** Add suppressions during report phase when identifying false positives
+- **Tooling configs:** Edit when adding new hooks, linting rules, or CI integrations
+
+## Docker Image Variants (Root Directory)
+
+JMo Security provides **4 Docker image variants** optimized for different use cases:
+
+| Dockerfile | Purpose | Size | Tools | Use Case |
+|------------|---------|------|-------|----------|
+| `Dockerfile` | Full variant - All 28 security tools | ~1.97 GB | 26 Docker-ready (28 total, 2 manual) | Security audits, compliance, pre-release validation |
+| `Dockerfile.balanced` | Production-ready comprehensive coverage | ~1.41 GB | 21 scanners | CI/CD pipelines, regular audits, production scans |
+| `Dockerfile.slim` | Cloud/Kubernetes focused | ~557 MB | 15 cloud-focused tools | Cloud CSPM, Kubernetes security, serverless |
+| `Dockerfile.fast` | CI/CD gate optimized | ~502 MB | 8 fastest scanners | Pre-commit checks, PR validation, quick scans |
+
+### Variant Selection Guide
+
+**Use `Dockerfile` (full) when:**
+
+- Running comprehensive security audits
+- Compliance scans requiring maximum coverage
+- Pre-release validation needing exhaustive checks
+- Time is not critical (30-60 min scans acceptable)
+
+**Use `Dockerfile.balanced` (default) when:**
+
+- Running regular CI/CD pipeline scans
+- Balancing coverage and speed (15-20 min scans)
+- Production deployment security checks
+- Need DAST (ZAP) + core SAST/SCA
+
+**Use `Dockerfile.slim` when:**
+
+- Scanning cloud infrastructure (AWS/Azure/GCP)
+- Kubernetes cluster security auditing
+- Need Prowler + Kubescape + Trivy
+- Optimizing for smaller image size
+
+**Use `Dockerfile.fast` when:**
+
+- Pre-commit hooks (5-8 min scans)
+- Pull request validation gates
+- Developer local scans
+- CI/CD resource constraints (GitHub Actions free tier)
+
+### Organization Rationale
+
+**Why NOT move to `docker/` directory:**
+
+1. **Docker conventions:** Docker CLI expects `Dockerfile` in project root by default
+2. **Variant naming standard:** `Dockerfile.<variant>` is industry convention (Prometheus, GitLab, Kubernetes)
+3. **CI/CD tight coupling:** 5+ workflows reference `Dockerfile.${{ matrix.variant }}`
+4. **Build simplicity:** `docker build -f Dockerfile.balanced .` is simpler than `docker build -f docker/Dockerfile.balanced .`
+5. **Time vs ROI:** 2-3 hours to reorganize with high breakage risk, near-zero functional benefit
+
+### Modification Guidelines
+
+**CRITICAL: Use version management automation for tool updates:**
+
+```bash
+# Update tool versions (NEVER edit Dockerfiles manually)
+python3 scripts/dev/update_versions.py --tool trivy --version 0.58.0
+python3 scripts/dev/update_versions.py --sync  # Sync all Dockerfiles
+
+# Verify consistency
+python3 scripts/dev/update_versions.py --sync --dry-run
+```
+
+**See:**
+
+- Complete variant guide: [docs/DOCKER_VARIANTS_MASTER.md](docs/DOCKER_VARIANTS_MASTER.md)
+- Version management: [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
+- Tool distribution matrix: [docs/DOCKER_VARIANTS_MASTER.md#tool-distribution-matrix](docs/DOCKER_VARIANTS_MASTER.md#tool-distribution-matrix)
+
 ## Key Files Reference
 
 | File | Purpose |

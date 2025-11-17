@@ -392,21 +392,21 @@ This matrix shows test coverage for different CI/CD platforms and configurations
 
 ### Important Gaps (Medium Impact)
 
-4. **falco/afl++ Minimal Testing**
+1. **falco/afl++ Minimal Testing**
    - **Impact:** Deep profile tools (falco, afl++) barely tested
    - **Risk:** Users enabling deep profile hit untested code paths
    - **Priority:** MEDIUM
    - **Effort:** Medium (requires runtime environment setup)
    - **Recommendation:** Add [tests/adapters/test_falco_adapter.py](tests/adapters/test_falco_adapter.py) with fabricated fixtures
 
-5. **GitLab CI/Jenkins Integration Examples**
+2. **GitLab CI/Jenkins Integration Examples**
    - **Impact:** Only GitHub Actions fully documented/tested
    - **Risk:** GitLab/Jenkins users lack validated examples
    - **Priority:** MEDIUM
    - **Effort:** Low (add example workflows to [docs/examples/](../docs/examples/))
    - **Recommendation:** Create `.gitlab-ci.yml` and `Jenkinsfile` examples
 
-6. **Multi-Target Scanning Edge Cases**
+3. **Multi-Target Scanning Edge Cases**
    - **Impact:** Limited tests for scanning 2+ target types simultaneously
    - **Risk:** Cross-target deduplication logic untested
    - **Priority:** MEDIUM
@@ -415,14 +415,14 @@ This matrix shows test coverage for different CI/CD platforms and configurations
 
 ### Nice-to-Have Gaps (Low Impact)
 
-7. **macOS Docker Testing**
+1. **macOS Docker Testing**
    - **Impact:** Docker on macOS untested (CI runs Linux Docker only)
    - **Risk:** macOS-specific Docker issues (volume mounts, networking)
    - **Priority:** LOW
    - **Effort:** Medium (requires macOS CI runner with Docker)
    - **Recommendation:** Add to manual testing checklist
 
-8. **Per-Tool Timeout/Retry Testing**
+2. **Per-Tool Timeout/Retry Testing**
    - **Impact:** Profile-specific timeout/retry overrides partially tested
    - **Risk:** Per-tool overrides may not work as expected
    - **Priority:** LOW
@@ -455,17 +455,17 @@ This matrix shows test coverage for different CI/CD platforms and configurations
 
 **Goal:** Strengthen deep profile and CI/CD integration
 
-4. **Add falco/afl++ Adapter Tests** (3-4 hours)
+1. **Add falco/afl++ Adapter Tests** (3-4 hours)
    - Create fabricated JSON fixtures for falco/afl++ output
    - Test CommonFinding normalization
    - Validate compliance enrichment
 
-5. **Add GitLab CI Example** (2-3 hours)
+2. **Add GitLab CI Example** (2-3 hours)
    - Create [docs/examples/.gitlab-ci.yml](../docs/examples/.gitlab-ci.yml)
    - Include Docker-based scanning, SARIF upload, compliance gating
    - Add to [docs/USER_GUIDE.md](../docs/USER_GUIDE.md) CI/CD section
 
-6. **Expand Multi-Target Tests** (2-3 hours)
+3. **Expand Multi-Target Tests** (2-3 hours)
    - Add `--repo + --image + --url` combination tests
    - Verify cross-target deduplication (same finding from trivy on repo vs image)
    - Test compliance report aggregation across target types
@@ -474,12 +474,12 @@ This matrix shows test coverage for different CI/CD platforms and configurations
 
 **Goal:** Polish and optimize
 
-7. **Add Per-Tool Override Tests** (2-3 hours)
+1. **Add Per-Tool Override Tests** (2-3 hours)
    - Expand [tests/integration/test_cli_profiles.py](tests/integration/test_cli_profiles.py)
    - Test `per_tool.trivy.timeout`, `per_tool.semgrep.flags`, `per_tool.noseyparker.retries`
    - Verify overrides apply correctly in fast/balanced/deep profiles
 
-8. **Document macOS Docker Testing** (1 hour)
+2. **Document macOS Docker Testing** (1 hour)
    - Add manual macOS Docker validation to [docs/RELEASE.md](../docs/RELEASE.md)
    - Include volume mount, networking, and performance testing
 

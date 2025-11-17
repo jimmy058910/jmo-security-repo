@@ -76,25 +76,25 @@
 - Fix: Use environment variables + `.env` file with `.gitignore`
 - Tool: TruffleHog verified secrets scanning
 
-2. **SQL Injection via String Formatting**
+1. **SQL Injection via String Formatting**
 - Example: `cursor.execute(f"SELECT * FROM users WHERE id={user_id}")`
 - Impact: Attacker can read/modify/delete database
 - Fix: Use parameterized queries or ORM
 - Tool: Semgrep rule `python.lang.security.audit.sqli`
 
-3. **Insecure Deserialization (pickle)**
+1. **Insecure Deserialization (pickle)**
 - Example: `pickle.loads(user_input)`
 - Impact: Remote code execution
 - Fix: Use JSON for untrusted data, or validate pickle sources
 - Tool: Bandit rule B301
 
-4. **Missing Input Validation (Flask/Django)**
+1. **Missing Input Validation (Flask/Django)**
 - Example: Accepting user input without sanitization
 - Impact: XSS, command injection
 - Fix: Use framework validators, escape HTML output
 - Tool: Semgrep XSS rules
 
-5. **Weak Cryptographic Functions**
+1. **Weak Cryptographic Functions**
 - Example: `hashlib.md5(password)` for password hashing
 - Impact: Easy to crack with rainbow tables
 - Fix: Use `bcrypt`, `scrypt`, or `Argon2`
@@ -137,24 +137,24 @@
 - ❌ `FROM random-user/python-custom`
 - Why: Official images are maintained and scanned
 
-2. **Pin Specific Versions**
+1. **Pin Specific Versions**
 - ✅ `FROM node:18.19.0-alpine3.18`
 - ❌ `FROM node:latest`
 - Why: Reproducible builds, predictable security posture
 
-3. **Run as Non-Root User**
+1. **Run as Non-Root User**
 
    ```dockerfile
    RUN addgroup -S appgroup && adduser -S appuser -G appgroup
    USER appuser
    ```
 
-4. **Multi-Stage Builds**
+1. **Multi-Stage Builds**
 
    - Separate build dependencies from runtime
    - Reduces attack surface by 70%
 
-5. **Scan Images in CI/CD**
+2. **Scan Images in CI/CD**
 
    ```yaml
    - name: Trivy Scan
@@ -163,19 +163,19 @@
 
 ### Phase 2: Runtime Security
 
-6. **Read-Only Filesystem**
+1. **Read-Only Filesystem**
 
    ```bash
    docker run --read-only -v /tmp:/tmp:rw myapp
    ```
 
-7. **Drop Unnecessary Capabilities**
+2. **Drop Unnecessary Capabilities**
 
    ```bash
    docker run --cap-drop=ALL --cap-add=NET_BIND_SERVICE myapp
    ```
 
-8. **Resource Limits**
+3. **Resource Limits**
 
    ```bash
    docker run --memory="512m" --cpus="1.0" myapp
@@ -183,7 +183,7 @@
 
 ### Phase 3: Orchestration Security
 
-9. **Kubernetes Security Context**
+1. **Kubernetes Security Context**
 
    ```yaml
    securityContext:
@@ -192,17 +192,17 @@
      allowPrivilegeEscalation: false
    ```
 
-10. **Network Policies**
+2. **Network Policies**
 
     - Restrict pod-to-pod communication
     - Deny all by default, allow specific
 
-11. **Secrets Management**
+3. **Secrets Management**
 
     - Use Kubernetes Secrets or Vault
     - Never `ENV API_KEY=...` in Dockerfile
 
-12. **Regular Patching**
+4. **Regular Patching**
 
     - Rebuild images weekly
     - Automate with Dependabot or Renovate
@@ -256,7 +256,7 @@ jmo scan --image your-image:tag --tools trivy syft
 - Only reports verified active credentials
 - 95% fewer false positives than regex-based tools
 
-2. **Nosey Parker for Historical Secrets**
+1. **Nosey Parker for Historical Secrets**
 
    ```bash
    jmo scan --repo . --profile deep  # Includes noseyparker
@@ -265,7 +265,7 @@ jmo scan --image your-image:tag --tools trivy syft
 - Scans entire git history
 - Finds secrets deleted years ago
 
-3. **Pre-Commit Hook Prevention**
+1. **Pre-Commit Hook Prevention**
 
    ```yaml
    # .pre-commit-config.yaml
@@ -449,22 +449,22 @@ aws secretsmanager create-secret --name prod/api-key --secret-string sk_live_abc
 - Worst case: Django app with 89 CVEs (dependencies not updated in 2 years)
 - Fix: `npm audit fix`, `pip list --outdated`, Dependabot
 
-2. **Hardcoded Secrets (40% of projects)**
+1. **Hardcoded Secrets (40% of projects)**
 - Found in: `config.py`, `.env` committed to git, Dockerfiles
 - Most dangerous: AWS key with full admin access
 - Fix: Environment variables, AWS Secrets Manager
 
-3. **SQL Injection (30% of projects)**
+1. **SQL Injection (30% of projects)**
 - Found in: Custom search features, admin panels
 - Impact: Full database read/write access
 - Fix: Parameterized queries, ORM usage
 
-4. **Missing Input Validation (50% of projects)**
+1. **Missing Input Validation (50% of projects)**
 - Found in: API endpoints, form handlers
 - Impact: XSS, command injection
 - Fix: Framework validators, sanitization libraries
 
-5. **Insecure Docker Images (100% of projects using Docker)**
+1. **Insecure Docker Images (100% of projects using Docker)**
 - Average: 47 vulnerabilities per image
 - Root cause: Running as root, outdated base images
 - Fix: Non-root user, multi-stage builds, regular patching
@@ -504,22 +504,22 @@ jmo ci --repo ./ecommerce-app --profile balanced --fail-on HIGH
 - Risk: Anyone with repo access can charge cards
 - Fix time: 5 minutes (move to environment variable)
 
-2. **HIGH: SQL Injection in Search**
+1. **HIGH: SQL Injection in Search**
 - File: `products/views.py`
 - Code: `cursor.execute(f"SELECT * FROM products WHERE name LIKE '%{query}%'")`
 - Risk: Read all customer data, modify orders
 - Fix time: 10 minutes (use Django ORM)
 
-3. **HIGH: Outdated Django (3.1 → 4.2)**
+1. **HIGH: Outdated Django (3.1 → 4.2)**
 - Risk: 23 known CVEs, including RCE
 - Fix time: 2 hours (upgrade + test)
 
-4. **MEDIUM: Missing CSRF Protection**
+1. **MEDIUM: Missing CSRF Protection**
 - Files: 8 forms without `{% csrf_token %}`
 - Risk: Attackers can trigger actions as logged-in users
 - Fix time: 20 minutes (add token to all forms)
 
-5. **MEDIUM: Weak Password Hashing (MD5)**
+1. **MEDIUM: Weak Password Hashing (MD5)**
 - File: `users/auth.py`
 - Risk: Passwords crackable in minutes with rainbow tables
 - Fix time: 1 hour (migrate to bcrypt)
@@ -644,11 +644,11 @@ jmo ci --repos-dir ~/projects --profile balanced --fail-on HIGH
 - Question vs statement
 - Number-based vs curiosity-based
 
-2. **Content Length:**
+1. **Content Length:**
 - Short (500 words) vs Long (1,200 words)
 - Single topic vs multiple sections
 
-3. **CTAs:**
+1. **CTAs:**
 - "Try JMo Security" vs "Scan Your Project Now"
 - Button vs text link
 

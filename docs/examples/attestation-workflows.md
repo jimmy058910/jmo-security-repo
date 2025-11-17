@@ -499,7 +499,8 @@ jobs:
               --signature findings.json.att.sigstore.json \
               --check-rekor
             ```
-```
+
+```text
 
 ## Compliance Scenarios
 

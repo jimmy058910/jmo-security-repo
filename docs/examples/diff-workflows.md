@@ -92,7 +92,8 @@ cursor.execute(query, (user_id,))
 ```
 
 </details>
-```
+
+```text
 
 ---
 

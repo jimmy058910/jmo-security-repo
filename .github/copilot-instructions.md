@@ -8,6 +8,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 - Two main phases:
   1) scan: invoke external scanners (semgrep, trivy, checkov, bandit, noseyparker, syft, trufflehog, hadolint, zap, falco, afl++) and write raw JSON per repo under `results/individual-repos/<repo>/`.
   2) report: normalize + dedupe into a CommonFinding shape and emit summaries (`findings.json`, `SUMMARY.md`, `dashboard.html`, optional SARIF) under `results/summaries/`.
+
 - Goals: unified outputs, stable fingerprints for dedupe, resilient to missing tools, and fast local iteration.
 
 ## Key entry points

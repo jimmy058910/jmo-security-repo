@@ -166,6 +166,7 @@ API_KEY = "sk-1234567890abcdef"  # ❌ CRITICAL: Verified secret detected
    See [docs/schemas/common_finding.v1.json](../docs/schemas/common_finding.v1.json) for complete schema reference.
 
    **Key Fields:**
+
    - `schemaVersion`: "1.2.0"
    - `id`: Fingerprint (stable across scans)
    - `severity`: CRITICAL/HIGH/MEDIUM/LOW/INFO

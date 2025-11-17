@@ -2044,7 +2044,7 @@ Then edit the generated workflow to add `--fail-on HIGH`:
    jmotools wizard --emit-script ~/weekly-scan.sh
    ```
 
-1. Add to crontab:
+2. Add to crontab:
 
 ```bash
 crontab -e
@@ -2067,13 +2067,13 @@ crontab -e
    git clone https://github.com/org/repo3.git
    ```
 
-1. Run wizard:
+2. Run wizard:
 
    ```bash
    jmotools wizard
    ```
 
-1. Select:
+3. Select:
    - Profile: **deep**
    - Mode: **native** or **docker**
    - Target: **repos-dir** → `/home/user/security-audit`
@@ -2090,13 +2090,13 @@ crontab -e
    https://github.com/org/repo3.git  Mobile app
    ```
 
-1. Run wizard:
+2. Run wizard:
 
    ```bash
    jmotools wizard
    ```
 
-1. Select:
+3. Select:
    - Profile: **balanced**
    - Mode: **docker** (recommended)
    - Target: **tsv** → `./repos.tsv`

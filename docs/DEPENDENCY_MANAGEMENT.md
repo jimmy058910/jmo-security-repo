@@ -545,20 +545,20 @@ make deps-validate
    make deps-audit  # Check for known CVEs
    ```
 
-2. **Dependency Graph Visualization:**
+1. **Dependency Graph Visualization:**
 
    ```bash
    pip install pipdeptree
    make deps-tree  # Show dependency tree
    ```
 
-3. **Lockfile Comparison:**
+2. **Lockfile Comparison:**
 
    ```bash
    make deps-diff v0.7.0 v0.7.1  # Compare dependency changes between versions
    ```
 
-4. **Automated PR Creation:**
+3. **Automated PR Creation:**
 
    ```bash
    # After make deps-upgrade, auto-create PR with changelog

@@ -30,72 +30,179 @@ jmotools wizard  # Start scanning!
 
 ---
 
-## 📦 Installation (in 2 Minutes)
+## 📦 Installation Methods
 
-### Path 1: Package Manager (Recommended - v0.9.0+)
+**Choose your installation method based on your environment:**
 
-**macOS / Linux (Homebrew):**
+### 1. Docker (Recommended - Zero Installation) 🐳
+
+**Best for:** All platforms, CI/CD, beginners
+
+**Choose your variant:**
+
+| Variant | Size | Scan Time | Use Case |
+|---------|------|-----------|----------|
+| **fast** | 502 MB | 5-10 min | Pre-commit hooks, PR validation |
+| **balanced** | 1.41 GB | 18-25 min | CI/CD pipelines, regular audits |
+| **slim** | 557 MB | 12-18 min | Cloud/K8s focused |
+| **full** | 1.97 GB | 40-70 min | Complete security audits |
+
+**Quick Start:**
 
 ```bash
-brew install jmo-security
-# ✅ Done! Tools bundled, added to PATH automatically
+# Fast scan (any platform with Docker)
+docker run --rm -v $PWD:/scan jmosecurity/jmo-security:fast scan --repo /scan
+
+# Balanced scan (recommended)
+docker run --rm -v $PWD:/scan jmosecurity/jmo-security:balanced scan --repo /scan
 ```
 
-**Windows (Winget):**
+**Platform-specific volume syntax:**
 
-```powershell
-winget install jmo.jmo-security
-# ✅ Done! Installed to C:\Users\<user>\AppData\Local\JMo Security
-```
+- **Linux/macOS/WSL:** `"$(pwd):/scan"`
+- **Windows PowerShell:** `"${PWD}:/scan"`
+- **Windows CMD:** `"%CD%:/scan"`
 
-**Benefits:**
-
-- ✅ One command install
-- ✅ Automatic updates (`brew upgrade` / `winget upgrade`)
-- ✅ Clean uninstall (`brew uninstall` / `winget uninstall`)
-
-**Skip to:** [Choose Your Path](#-choose-your-path)
+📖 **Complete Docker guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
 
 ---
 
-### Path 2: Python Package (pip install)
+### 2. macOS (Native Python) 🍎
 
-**Skip this if using Docker** (Option 2 below) - **Docker includes everything**.
+**Best for:** Local development, macOS developers
 
-### Quick Install (Python Package)
+**Prerequisites:**
+
+- Python 3.10+ (install via Homebrew: `brew install python@3.11`)
+- Git (pre-installed on macOS)
+
+**Installation:**
 
 ```bash
-# 1. Install JMo Security CLI
+# Install JMo Security
+pip3 install jmo-security
+
+# Verify installation
+jmotools --help
+
+# Install external security tools (optional)
+jmotools setup
+```
+
+**macOS-Specific Considerations:**
+
+- Use `pip3` instead of `pip` (macOS system Python protection)
+- Homebrew-installed tools automatically detected (trivy, semgrep, checkov)
+- Rosetta 2 required for M1/M2 Macs if running x86 Docker images
+
+📖 **Troubleshooting:** [docs/PLATFORM_SPECIFIC.md#macos](docs/PLATFORM_SPECIFIC.md#macos)
+
+---
+
+### 3. Windows (Winget - Recommended) 🪟
+
+**Best for:** Windows 10/11 users, native Windows development
+
+**Prerequisites:**
+
+- Windows 10 version 1809 or later
+- winget (pre-installed on Windows 11, [install on Windows 10](https://aka.ms/getwinget))
+
+**Installation:**
+
+```powershell
+# Install Python 3.11 via winget
+winget install Python.Python.3.11
+
+# Install JMo Security
 pip install jmo-security
 
-# 2. Add to PATH (Linux/macOS/WSL - skip on native Windows)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-
-# 3. Verify installation
-jmo --help
+# Verify installation
 jmotools --help
 ```
 
-**✅ JMo CLI installed!** Now install security tools:
+**Windows-Specific Considerations:**
 
-### Option A: Auto-Install Security Tools (Easiest)
+- Use PowerShell (not CMD) for best experience
+- Add `C:\Users\<username>\AppData\Local\Programs\Python\Python311\Scripts` to PATH
+- Some tools (Trivy, Semgrep) require WSL2 for full functionality
+
+📖 **Troubleshooting:** [docs/PLATFORM_SPECIFIC.md#windows-native](docs/PLATFORM_SPECIFIC.md#windows-native)
+
+---
+
+### 4. Windows WSL (Ubuntu) 🐧
+
+**Best for:** Windows users needing full Linux tooling, CI/CD parity
+
+**Prerequisites:**
+
+- Windows 10 version 2004+ or Windows 11
+- WSL2 enabled ([enable guide](https://docs.microsoft.com/en-us/windows/wsl/install))
+
+**Installation:**
 
 ```bash
-# Clone repo for installation scripts
-git clone https://github.com/jimmy058910/jmo-security-repo.git
-cd jmo-security-repo
+# From WSL Ubuntu terminal
+sudo apt update && sudo apt install -y python3.11 python3-pip git
 
-# Auto-install all tools (Linux/WSL/macOS)
-make tools
+# Install JMo Security
+pip3 install jmo-security
 
-# Verify tools installed correctly
-make verify-env
+# Verify installation
+jmotools --help
+
+# Install external security tools
+jmotools setup
 ```
 
-### Option B: Manual Tool Installation
+**WSL-Specific Considerations:**
 
-See [README — Tool Installation](README.md#-tool-installation) section for platform-specific instructions.
+- Access Windows files via `/mnt/c/Users/<username>/...`
+- Docker Desktop integration: `docker run` works from WSL
+- Use WSL2 (not WSL1) for best performance
+
+📖 **Troubleshooting:** [docs/PLATFORM_SPECIFIC.md#wsl](docs/PLATFORM_SPECIFIC.md#wsl)
+
+---
+
+### 5. Linux (apt/dnf/yum) 🐧
+
+**Best for:** Linux developers, CI/CD environments
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update && sudo apt install -y python3.11 python3-pip git
+pip3 install jmo-security
+```
+
+**RHEL/CentOS/Fedora:**
+
+```bash
+sudo dnf install -y python3.11 python3-pip git
+pip3 install jmo-security
+```
+
+📖 **Troubleshooting:** [docs/PLATFORM_SPECIFIC.md#linux](docs/PLATFORM_SPECIFIC.md#linux)
+
+---
+
+### 6. Interactive Wizard (All Platforms) 🧙
+
+**Best for:** First-time users, guided setup
+
+After installation via ANY method above:
+
+```bash
+# Launch interactive wizard
+jmotools wizard
+
+# Non-interactive wizard (automation)
+jmotools wizard --yes
+```
+
+📖 **Full wizard guide:** [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
 
 ---
 
@@ -934,6 +1041,7 @@ jmotools balanced --repos-dir ~/projects
 4. **Install Windows-compatible tools only:**
 
    **Available tools (6 of 11+):**
+
    - Semgrep (SAST): `pip install semgrep`
    - Bandit (Python SAST): `pip install bandit`
    - Checkov (IaC): `pip install checkov`
@@ -942,6 +1050,7 @@ jmotools balanced --repos-dir ~/projects
    - Syft (SBOM): Download from <https://github.com/anchore/syft/releases>
 
    **Missing tools (5 of 11+):**
+
    - ❌ Hadolint (Dockerfile linting)
    - ❌ Nosey Parker (secrets - high precision)
    - ❌ OWASP ZAP (DAST - web security)

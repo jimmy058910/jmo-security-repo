@@ -306,7 +306,7 @@ The HTML dashboard is a modern React application (built with TypeScript + Vite) 
 
 **File Structure:**
 
-```
+```text
 results/summaries/
 ├── dashboard.html        # ~610 KB (React app only)
 └── findings.json         # ~1.6 MB for 1500 findings
