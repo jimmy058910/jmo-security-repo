@@ -49,7 +49,13 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         # Try test fixture as fallback for CI/test environments
         # Go up to repo root: scripts/core/reporters/ -> scripts/core -> scripts -> repo_root
         repo_root = Path(__file__).parent.parent.parent.parent
-        fixture_path = repo_root / "tests" / "fixtures" / "dashboard" / "test-inline-dashboard.html"
+        fixture_path = (
+            repo_root
+            / "tests"
+            / "fixtures"
+            / "dashboard"
+            / "test-inline-dashboard.html"
+        )
         if fixture_path.exists():
             template = fixture_path.read_text(encoding="utf-8")
         else:

@@ -131,6 +131,8 @@ coverage/
 *_report.html
 test-*.html
 *-dashboard.html
+# Exception: Keep test fixtures for CI (must come AFTER ignore patterns)
+!tests/fixtures/dashboard/*.html
 dependency-images.txt
 detected-images.txt
 

@@ -11,6 +11,7 @@ pre-commit
 mypy
 types-PyYAML
 types-tabulate
+types-requests
 croniter
 types-croniter
 
