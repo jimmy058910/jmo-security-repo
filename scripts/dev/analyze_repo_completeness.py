@@ -30,7 +30,7 @@ class RepositoryAnalyzer:
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
-        self.findings = {
+        self.findings: Dict[str, List] = {
             "undocumented_features": [],
             "doc_code_drift": [],
             "missing_docs": [],
@@ -90,7 +90,7 @@ class RepositoryAnalyzer:
 
     def _extract_python_apis(self) -> Dict[str, Dict]:
         """Extract all public APIs from Python files."""
-        apis = defaultdict(lambda: {"functions": [], "classes": [], "cli_commands": []})
+        apis: Dict[str, Dict] = defaultdict(lambda: {"functions": [], "classes": [], "cli_commands": []})
 
         python_files = [
             self.repo_root / "scripts" / "cli" / "jmo.py",
