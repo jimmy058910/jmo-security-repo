@@ -16,7 +16,7 @@ import json
 import random
 import hashlib
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any
 import argparse
 
@@ -411,7 +411,7 @@ def main():
 
     print()
     print(f"✅ Generated {total_generated} findings total → {output_file}")
-    print(f"📊 Severity distribution:")
+    print("📊 Severity distribution:")
     for severity, weight in SEVERITIES.items():
         expected = int(total_generated * weight)
         actual = sum(1 for f in all_findings if f.get("severity") == severity)
@@ -419,7 +419,7 @@ def main():
             f"   {severity:10s}: {actual:4d} findings (~{expected:4d} expected, {weight*100:.0f}%)"
         )
     print()
-    print(f"🔧 Tool distribution:")
+    print("🔧 Tool distribution:")
     tool_counts: Dict[str, int] = {}
     for finding in all_findings:
         tool_info = finding.get("tool", {})
@@ -429,10 +429,10 @@ def main():
     for tool in sorted(tool_counts.keys()):
         print(f"   {tool:20s}: {tool_counts[tool]:4d} findings")
     print()
-    print(f"🎯 Next steps:")
-    print(f"   1. Copy findings-data.json for external dashboard mode:")
+    print("🎯 Next steps:")
+    print("   1. Copy findings-data.json for external dashboard mode:")
     print(f"      cp {output_file} {summaries_dir}/findings-data.json")
-    print(f"   2. Open dashboard.html from results-final or similar")
+    print("   2. Open dashboard.html from results-final or similar")
     print(
         f"   3. Test: All {len(TOOLS)} tools, all severities, all compliance frameworks"
     )

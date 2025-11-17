@@ -155,7 +155,7 @@ For detailed migration guide, see: https://github.com/jimmy058910/jmo-security-r
 """
     else:
         # Generic upgrade notes for future releases
-        return f"""**Upgrading from previous version:**
+        return """**Upgrading from previous version:**
 
 1. Review CHANGELOG.md for breaking changes
 2. Update `jmo.yml` configuration if needed
@@ -211,8 +211,8 @@ def format_release_notes(version: str, tag: str) -> str:
     notes += "```\n\n"
     notes += "**From source:**\n\n"
     notes += "```bash\n"
-    notes += f"git clone https://github.com/jimmy058910/jmo-security-repo.git\n"
-    notes += f"cd jmo-security-repo\n"
+    notes += "git clone https://github.com/jimmy058910/jmo-security-repo.git\n"
+    notes += "cd jmo-security-repo\n"
     notes += f"git checkout {tag}\n"
     notes += "pip install -e .\n"
     notes += "```\n\n"

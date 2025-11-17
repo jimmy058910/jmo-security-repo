@@ -5,7 +5,11 @@ Tests both inline mode (≤1000 findings) and external mode (>1000 findings).
 """
 import json
 from pathlib import Path
-from scripts.core.reporters.html_reporter import write_html, INLINE_THRESHOLD
+from scripts.core.reporters.html_reporter import (
+    write_html,
+    INLINE_THRESHOLD,
+    Path as ReporterPath,
+)
 
 
 # Create test findings
@@ -62,8 +66,6 @@ assert len(loaded_json) == INLINE_THRESHOLD + 100, "External JSON has wrong coun
 print(f"✅ External JSON valid with {len(loaded_json)} findings")
 
 # Test React build exists
-from scripts.core.reporters.html_reporter import Path as ReporterPath
-
 dashboard_dir = ReporterPath(__file__).parent / "scripts" / "dashboard"
 react_build = dashboard_dir / "dist" / "index.html"
 assert react_build.exists(), f"React build not found at {react_build}"

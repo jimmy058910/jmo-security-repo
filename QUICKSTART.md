@@ -67,12 +67,13 @@ docker run --rm -v $PWD:/scan jmosecurity/jmo-security:balanced scan --repo /sca
 
 ---
 
-### 2. macOS (Native Python) 🍎
+### 2. macOS (Homebrew - Recommended) 🍎
 
 **Best for:** Local development, macOS developers
 
 **Prerequisites:**
 
+- Homebrew (install from [brew.sh](https://brew.sh))
 - Python 3.10+ (install via Homebrew: `brew install python@3.11`)
 - Git (pre-installed on macOS)
 

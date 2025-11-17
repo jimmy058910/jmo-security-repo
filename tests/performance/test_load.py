@@ -15,10 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -26,7 +24,6 @@ import pytest
 
 # Import core modules
 from scripts.core.history_db import (
-    DEFAULT_DB_PATH,
     get_connection,
     init_database,
     list_scans,
@@ -166,7 +163,6 @@ class TestLargeRepositoryScanning:
 
         # In real scenario, this would invoke scan orchestrator
         # For load testing, we measure storage and processing overhead
-        from scripts.core.normalize_and_report import gather_results
 
         # Simulate tool outputs
         for tool in ["trivy", "semgrep", "bandit"]:

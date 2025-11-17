@@ -14,11 +14,10 @@ Exit codes:
     2 - Critical checks failed (blocks release)
 """
 
-import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List
 
 
 class ReleaseReadinessVerifier:

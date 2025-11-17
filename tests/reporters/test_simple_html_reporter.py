@@ -1,7 +1,5 @@
 """Tests for simple HTML reporter (email-compatible static HTML table)."""
 
-import pytest
-from pathlib import Path
 
 from scripts.core.reporters.simple_html_reporter import (
     write_simple_html,

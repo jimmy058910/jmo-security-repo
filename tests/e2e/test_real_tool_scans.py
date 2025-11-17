@@ -12,13 +12,10 @@ Phase 1.3.1 of TESTING_RELEASE_READINESS_PLAN.md
 """
 
 import json
-import subprocess
-from pathlib import Path
 
 import pytest
 
 from scripts.cli.jmo import cmd_scan
-from scripts.core.history_db import get_connection, list_scans
 
 
 @pytest.mark.slow
@@ -441,7 +438,7 @@ resource "aws_s3_bucket" "secure_example" {
 
         found_s3_public = False
         for check in failed_checks:
-            check_id = check.get("check_id", "")
+            _ = check.get("check_id", "")
             check_name = check.get("check_name", "").lower()
             resource = check.get("resource", "").lower()
 

@@ -23,7 +23,6 @@ import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 import pytest
 
@@ -31,8 +30,6 @@ from scripts.core.history_db import (
     init_database,
     store_scan,
     list_scans,
-    get_scan_by_id,
-    get_connection,
 )
 
 
@@ -133,7 +130,7 @@ def test_concurrent_writes_thread_safety(concurrency_db, sample_findings, tmp_pa
 
     # Debug: Print first few errors if any failed
     if failed_scans:
-        print(f"\n=== First 3 failures ===")
+        print("\n=== First 3 failures ===")
         for fail in failed_scans[:3]:
             print(f"Thread {fail['thread_id']}: {fail['error']}")
 
@@ -309,7 +306,7 @@ def test_sqlite_locking_under_contention(concurrency_db, sample_findings, tmp_pa
 
     # Verify most writes succeeded (allow some lock timeouts)
     successful_scans = [r for r in all_results if r["success"]]
-    locked_errors = [
+    _locked_errors = [
         r for r in all_results if not r["success"] and r.get("error") == "locked"
     ]
 
@@ -350,7 +347,7 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
         json.dump({"findings": sample_findings}, f)
 
     # Store initial scan
-    scan_id = store_scan(
+    _ = store_scan(
         results_dir=results_dir,
         profile="fast",
         tools=["trufflehog"],
@@ -452,7 +449,7 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
 
     # Verify subsequent writes succeed after interrupted operations
     # (SQLite's WAL mode provides automatic recovery)
-    scan_id_2 = store_scan(
+    _ = store_scan(
         results_dir=results_dir,
         profile="fast",
         tools=["trufflehog"],
@@ -461,7 +458,7 @@ def test_partial_write_recovery(concurrency_db, sample_findings, tmp_path):
         branch="main",
     )
 
-    scan_id_3 = store_scan(
+    _ = store_scan(
         results_dir=results_dir,
         profile="fast",
         tools=["trufflehog"],
@@ -523,7 +520,7 @@ def test_connection_pool_thread_safety(concurrency_db, sample_findings, tmp_path
 
         # Perform some work
         conn.row_factory = sqlite3.Row
-        scans = list(list_scans(conn, limit=10))
+        _ = list(list_scans(conn, limit=10))
 
         conn.close()
         return {"thread_id": thread_id, "conn_id": conn_id}

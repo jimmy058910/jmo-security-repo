@@ -14,14 +14,12 @@ Exit codes:
 """
 
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Callable, List, Tuple
 
 import tomli  # Use tomli for TOML parsing (pyproject.toml)
-import yaml
 
 
 def check_version_consistency() -> None:
@@ -70,7 +68,7 @@ def check_version_consistency() -> None:
 
         if outdated_critical:
             raise AssertionError(
-                f"CRITICAL tools outdated (must update before release):\n"
+                "CRITICAL tools outdated (must update before release):\n"
                 + "\n".join(f"   - {tool}" for tool in outdated_critical)
                 + "\n\n   Run: python3 scripts/dev/update_versions.py --update-all"
             )

@@ -134,7 +134,7 @@ See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
 | Platform | Recommended Method | Installation Time | Guide |
 |----------|-------------------|-------------------|-------|
 | **Any Platform** | Docker (4 variants) | 2 min | [QUICKSTART — Docker](../QUICKSTART.md#1-docker-recommended---zero-installation-) |
-| **macOS** | Native Python (Homebrew) | 5 min | [QUICKSTART — macOS](../QUICKSTART.md#2-macos-native-python-) |
+| **macOS** | Homebrew + pip | 5 min | [QUICKSTART — macOS](../QUICKSTART.md#2-macos-homebrew---recommended-) |
 | **Windows 10/11** | Winget + pip OR WSL | 10-15 min | [QUICKSTART — Windows](../QUICKSTART.md#3-windows-winget---recommended-) |
 | **Linux** | apt/dnf/yum + pip | 5 min | [QUICKSTART — Linux](../QUICKSTART.md#5-linux-aptdnfyum-) |
 

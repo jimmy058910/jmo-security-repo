@@ -3436,7 +3436,7 @@ class TestSearchFindings:
                 ]
             )
         )
-        scan_id2 = store_scan(
+        _ = store_scan(
             results_dir2, profile="balanced", tools=["bandit"], branch="main"
         )
 
@@ -5376,7 +5376,7 @@ class TestFindingContext:
                 ]
             )
         )
-        scan_id = store_scan(
+        _ = store_scan(
             results_dir, profile="fast", tools=["semgrep"], branch="main"
         )
 
@@ -5641,14 +5641,12 @@ class TestTimelineData:
         # Patch store_scan to use old timestamp
         import scripts.core.history_db as history_db_module
 
-        original_time_func = history_db_module.time.time
-
         def mock_time_for_store():
             return old_timestamp
 
         monkeypatch.setattr(history_db_module.time, "time", mock_time_for_store)
 
-        scan_id = store_scan(
+        _ = store_scan(
             results_dir, branch="main", profile="balanced", tools=["semgrep"]
         )
 

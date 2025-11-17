@@ -19,7 +19,7 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List
 
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -331,7 +331,7 @@ class RepositoryAnalyzer:
         content = claude_md.read_text(encoding="utf-8")
 
         # Extract YAML code blocks
-        yaml_blocks = re.findall(r"```yaml\n(.*?)```", content, re.DOTALL)
+        _ = re.findall(r"```yaml\n(.*?)```", content, re.DOTALL)
 
         # Known v1.0.0 config options
         expected_config_keys = [
@@ -600,12 +600,12 @@ def main():
     print("📊 ANALYSIS COMPLETE")
     print("=" * 80)
     print()
-    print(f"📈 Statistics:")
+    print("📈 Statistics:")
     print(f"  - Python files analyzed: {report['statistics']['total_python_files']}")
     print(f"  - Total functions: {report['statistics']['total_functions']}")
     print(f"  - Total classes: {report['statistics']['total_classes']}")
     print()
-    print(f"🔍 Findings Summary:")
+    print("🔍 Findings Summary:")
     print(
         f"  - Undocumented features: {len(report['findings']['undocumented_features'])}"
     )

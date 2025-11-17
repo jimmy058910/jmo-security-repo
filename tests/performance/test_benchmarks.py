@@ -14,8 +14,7 @@ Mark tests with @pytest.mark.benchmark for CI filtering.
 
 import json
 import time
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import List, Dict, Any
 
 import pytest
@@ -26,11 +25,9 @@ from scripts.core.history_db import (
     init_database,
     store_scan,
     get_scan_by_id,
-    list_scans,
 )
 from scripts.core.diff_engine import DiffEngine
 from scripts.core.trend_analyzer import TrendAnalyzer
-from scripts.core.dedup_enhanced import FindingClusterer, SimilarityCalculator
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
 
@@ -201,7 +198,7 @@ def create_clusterable_findings(count: int = 1000) -> List[Dict[str, Any]]:
                     severity="MEDIUM",
                     path=f"src/file{base_idx}.py",
                     line=10 + base_idx,
-                    message=f"Cross-site scripting vulnerability detected",  # Similar message
+                    message="Cross-site scripting vulnerability detected",  # Similar message
                 )
             )
 
@@ -528,7 +525,6 @@ class TestPerformanceBenchmarks:
 
         # Process findings (simulate normalize_and_report)
         # This includes: loading, normalization, deduplication, enrichment
-        from scripts.core.normalize_and_report import gather_results
 
         # Write findings to temp directory
         results_dir = tmp_path / "results"

@@ -15,12 +15,11 @@ Phase 1.2.2 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
-from pathlib import Path
 
 import pytest
 
 from scripts.cli.jmo import cmd_scan, cmd_report
-from scripts.core.history_db import get_connection, get_scan_by_id, list_scans
+from scripts.core.history_db import get_connection, list_scans
 
 
 class TestMultiTargetHistoryIntegration:
@@ -364,7 +363,7 @@ resource "aws_s3_bucket" "test" {
 
         # Verify results exist
         assert results_dir.exists()
-        iac_results = results_dir / "individual-iac" / "main"
+        _ = results_dir / "individual-iac" / "main"
         # Note: May not exist if checkov not installed
 
 

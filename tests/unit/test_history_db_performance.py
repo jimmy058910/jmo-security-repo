@@ -21,7 +21,6 @@ Performance Targets (from CLAUDE.md):
 import json
 import sqlite3
 import time
-from pathlib import Path
 
 import pytest
 
@@ -30,8 +29,6 @@ from scripts.core.history_db import (
     store_scan,
     list_scans,
     get_scan_by_id,
-    prune_old_scans,
-    get_connection,
 )
 
 

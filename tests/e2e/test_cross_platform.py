@@ -15,11 +15,10 @@ Phase 1.3.2 of TESTING_RELEASE_READINESS_PLAN.md
 import json
 import os
 import sys
-from pathlib import Path
 
 import pytest
 
-from scripts.cli.jmo import cmd_ci, cmd_scan, cmd_report
+from scripts.cli.jmo import cmd_scan, cmd_report
 from scripts.core.history_db import get_connection, list_scans
 
 

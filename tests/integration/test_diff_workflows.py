@@ -14,12 +14,9 @@ Phase 1.2.3 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
-from pathlib import Path
 
 import pytest
 
-from scripts.core.diff_engine import DiffEngine
-from scripts.core.history_db import store_scan
 
 
 @pytest.fixture

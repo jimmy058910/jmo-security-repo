@@ -1605,7 +1605,7 @@ class TestTrendIntegration:
         import scripts.core.trend_analyzer
 
         # Mock the TrendAnalyzer import
-        original_trend_analyzer = getattr(
+        _original_trend_analyzer = getattr(
             scripts.core.trend_analyzer, "TrendAnalyzer", None
         )
         monkeypatch.setattr(

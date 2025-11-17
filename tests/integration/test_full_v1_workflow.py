@@ -14,13 +14,11 @@ Phase 1.2.1 of TESTING_RELEASE_READINESS_PLAN.md
 import json
 import subprocess
 import time
-from pathlib import Path
 
 import pytest
 
 from scripts.cli.jmo import cmd_ci, cmd_report, cmd_scan
 from scripts.core.history_db import get_connection, list_scans, store_scan
-from scripts.core.diff_engine import DiffEngine
 
 
 class TestV1WorkflowIntegration:

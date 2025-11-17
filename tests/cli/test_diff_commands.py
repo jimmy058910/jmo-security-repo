@@ -1551,7 +1551,7 @@ class TestCmdDiffExceptionHandling:
         current.mkdir()
 
         # Mock DiffEngine.compare_directories to raise FileNotFoundError
-        original_compare = DiffEngine.compare_directories
+        _original_compare = DiffEngine.compare_directories
 
         def mock_compare_directories(self, *args, **kwargs):
             raise FileNotFoundError("Test file not found")
@@ -1656,7 +1656,7 @@ class TestCmdDiffExceptionHandling:
         # Mock a reporter to raise an exception
         from scripts.core.reporters import diff_json_reporter
 
-        original_write = diff_json_reporter.write_json_diff
+        _original_write = diff_json_reporter.write_json_diff
 
         def mock_write_json_diff(*args, **kwargs):
             raise IOError("Failed to write file")

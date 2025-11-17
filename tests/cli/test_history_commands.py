@@ -1,10 +1,8 @@
 """Tests for history CLI commands."""
 
 import json
-import os
 import sqlite3
 import time
-from pathlib import Path
 
 import pytest
 
@@ -25,7 +23,6 @@ from scripts.cli.history_commands import (
     cmd_history_repair,
     parse_time_delta,
 )
-from scripts.core.history_db import DEFAULT_DB_PATH
 
 
 @pytest.fixture
@@ -1065,7 +1062,7 @@ class TestCmdHistoryTrends:
             days = 30
             json = False
 
-        result = cmd_history_trends(Args())
+        _ = cmd_history_trends(Args())
 
         # May succeed or fail depending on trend data
         captured = capsys.readouterr()
