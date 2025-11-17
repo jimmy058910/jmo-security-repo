@@ -166,7 +166,11 @@ def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
     log("Checking latest versions for Python tools...")
     for tool, info in versions.get("python_tools", {}).items():
         current = info["version"]
-        latest = get_latest_pypi_version(info["pypi_package"])
+        pypi_package = info.get("pypi_package")
+        if not pypi_package:
+            # Skip tools without PyPI package (e.g., lynis)
+            continue
+        latest = get_latest_pypi_version(pypi_package)
         if latest:
             is_outdated = current != latest
             results[tool] = (current, latest, is_outdated)

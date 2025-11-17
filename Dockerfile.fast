@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog
-RUN TRUFFLEHOG_VERSION="3.90.12" && \
+RUN TRUFFLEHOG_VERSION="3.91.0" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -28,7 +28,7 @@ RUN TRUFFLEHOG_VERSION="3.90.12" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.36.0" && \
+RUN SYFT_VERSION="1.37.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -49,7 +49,7 @@ RUN HADOLINT_VERSION="2.14.0" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download Nuclei (minimal templates for fast scans)
-RUN NUCLEI_VERSION="3.4.10" && \
+RUN NUCLEI_VERSION="3.5.1" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -60,9 +60,8 @@ RUN NUCLEI_VERSION="3.4.10" && \
     nuclei -update-templates -tl cves,exposures -silent
 
 # Download OSV-Scanner
-RUN OSV_VERSION="1.10.1" && \
-    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_${OSV_VERSION}_linux_${OSV_ARCH}" \
+RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
     -o /usr/local/bin/osv-scanner && \
     chmod +x /usr/local/bin/osv-scanner
 
@@ -98,9 +97,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.141.0 \
-    checkov==3.2.488 \
-    ruff==0.14.2 \
+    semgrep==1.143.1 \
+    checkov==3.2.493 \
+    ruff==0.14.5 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 

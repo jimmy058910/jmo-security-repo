@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
-RUN TRUFFLEHOG_VERSION="3.90.12" && \
+RUN TRUFFLEHOG_VERSION="3.91.0" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -31,7 +31,7 @@ RUN TRUFFLEHOG_VERSION="3.90.12" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.36.0" && \
+RUN SYFT_VERSION="1.37.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -83,7 +83,7 @@ RUN ZAP_VERSION="2.16.1" && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
 # Download Nuclei (DAST + API Security)
-RUN NUCLEI_VERSION="3.4.10" && \
+RUN NUCLEI_VERSION="3.5.1" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -94,7 +94,7 @@ RUN NUCLEI_VERSION="3.4.10" && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
 # Download Prowler (Cloud CSPM)
-RUN PROWLER_VERSION="4.0.0" && \
+RUN PROWLER_VERSION="5.13.1" && \
     PROWLER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/prowler-cloud/prowler/releases/download/${PROWLER_VERSION}/prowler-${PROWLER_VERSION}-linux-${PROWLER_ARCH}.zip" \
     -o /tmp/prowler.zip && \
@@ -103,14 +103,14 @@ RUN PROWLER_VERSION="4.0.0" && \
     rm /tmp/prowler.zip
 
 # Download Kubescape (Kubernetes Security)
-RUN KUBESCAPE_VERSION="3.0.19" && \
+RUN KUBESCAPE_VERSION="3.0.45" && \
     KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
     -o /usr/local/bin/kubescape && \
     chmod +x /usr/local/bin/kubescape
 
 # Download Gosec (Go SAST)
-RUN GOSEC_VERSION="2.25.1" && \
+RUN GOSEC_VERSION="2.22.10" && \
     GOSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/securego/gosec/releases/download/v${GOSEC_VERSION}/gosec_${GOSEC_VERSION}_linux_${GOSEC_ARCH}.tar.gz" \
     -o /tmp/gosec.tar.gz && \
@@ -118,7 +118,7 @@ RUN GOSEC_VERSION="2.25.1" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.91.0" && \
+RUN GRYPE_VERSION="0.103.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -126,14 +126,13 @@ RUN GRYPE_VERSION="0.91.0" && \
     chmod +x /usr/local/bin/grype
 
 # Download OSV-Scanner (SCA + Vuln - Google)
-RUN OSV_VERSION="1.10.1" && \
-    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_${OSV_VERSION}_linux_${OSV_ARCH}" \
+RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
     -o /usr/local/bin/osv-scanner && \
     chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
-RUN BEARER_VERSION="1.50.0" && \
+RUN BEARER_VERSION="1.51.1" && \
     BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
     -o /tmp/bearer.tar.gz && \
@@ -156,7 +155,7 @@ RUN DC_VERSION="11.1.1" && \
     rm /tmp/dependency-check.zip
 
 # Download Horusec (Multi-language SAST)
-RUN HORUSEC_VERSION="2.9.0" && \
+RUN HORUSEC_VERSION="2.8.0" && \
     HORUSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/ZupIT/horusec/releases/download/v${HORUSEC_VERSION}/horusec_linux_${HORUSEC_ARCH}" \
     -o /usr/local/bin/horusec && \
@@ -220,9 +219,9 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
     bandit==1.8.6 \
-    semgrep==1.141.0 \
-    checkov==3.2.488 \
-    ruff==0.14.2 \
+    semgrep==1.143.1 \
+    checkov==3.2.493 \
+    ruff==0.14.5 \
     yara-python==4.5.2 \
     scancode-toolkit==32.3.0 \
     prowler==4.0.0 \

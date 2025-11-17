@@ -7,37 +7,37 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.141.0
+    version: 1.143.1
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.488
+    version: 3.2.493
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.14.2
+    version: 0.14.5
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
     critical: false
   scancode-toolkit:
-    version: 32.3.0
+    version: 32.4.1
     pypi_package: scancode-toolkit
     description: License and copyright scanner
     update_check: pip index versions scancode-toolkit
     critical: false
-    notes: 'v1.0.0 - License compliance (OSS/GPL/MIT/Apache)'
+    notes: v1.0.0 - License compliance (OSS/GPL/MIT/Apache)
   cdxgen:
     version: 10.15.7
     pypi_package: '@cyclonedx/cdxgen'
     description: Multi-language SBOM generator (CycloneDX/SPDX)
     update_check: npm view @cyclonedx/cdxgen version
     critical: false
-    notes: 'v1.0.0 - 30+ language support, npm package'
+    notes: v1.0.0 - 30+ language support, npm package
     installation: npm install -g @cyclonedx/cdxgen
   lynis:
     version: 3.1.3
@@ -46,11 +46,11 @@ python_tools:
     update_check: gh api repos/CISOfy/lynis/releases/latest
     github_repo: CISOfy/lynis
     critical: false
-    notes: 'v1.0.0 - Shell script based, no PyPI package'
+    notes: v1.0.0 - Shell script based, no PyPI package
     installation: apt-get install lynis
 binary_tools:
   trufflehog:
-    version: 3.90.12
+    version: 3.91.0
     github_repo: trufflesecurity/trufflehog
     description: Verified secrets scanner (primary)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -70,7 +70,7 @@ binary_tools:
     update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
     critical: false
   syft:
-    version: 1.36.0
+    version: 1.37.0
     github_repo: anchore/syft
     description: SBOM generator
     release_pattern: syft_{version}_linux_{arch}.tar.gz
@@ -121,7 +121,7 @@ binary_tools:
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
   nuclei:
-    version: 3.4.10
+    version: 3.5.1
     github_repo: projectdiscovery/nuclei
     description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
     release_pattern: nuclei_{version}_linux_{arch}.zip
@@ -132,7 +132,7 @@ binary_tools:
     critical: false
     notes: 'Requires templates update: nuclei -update-templates'
   prowler:
-    version: 4.0.0
+    version: 5.13.1
     github_repo: prowler-cloud/prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     release_pattern: prowler-{version}-linux-{arch}
@@ -141,9 +141,9 @@ binary_tools:
       arm64: aarch64
     update_check: gh api repos/prowler-cloud/prowler/releases/latest
     critical: true
-    notes: 'v1.0.0 - 400+ security checks across compliance frameworks'
+    notes: v1.0.0 - 400+ security checks across compliance frameworks
   kubescape:
-    version: 3.0.19
+    version: 3.0.45
     github_repo: kubescape/kubescape
     description: Kubernetes security scanner (NSA/CISA hardening)
     release_pattern: kubescape-linux-{arch}
@@ -152,9 +152,9 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/kubescape/kubescape/releases/latest
     critical: true
-    notes: 'v1.0.0 - K8s hardening and compliance'
+    notes: v1.0.0 - K8s hardening and compliance
   gosec:
-    version: 2.25.1
+    version: 2.22.10
     github_repo: securego/gosec
     description: Go security analyzer
     release_pattern: gosec_{version}_linux_{arch}.tar.gz
@@ -163,9 +163,9 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/securego/gosec/releases/latest
     critical: false
-    notes: 'v1.0.0 - Go-specific SAST'
+    notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.91.0
+    version: 0.103.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -174,9 +174,9 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/anchore/grype/releases/latest
     critical: false
-    notes: 'v1.0.0 - Dual scanning with Trivy (Anchore DB)'
+    notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
   osv-scanner:
-    version: 1.10.1
+    version: 2.2.4
     github_repo: google/osv-scanner
     description: Open source vulnerability scanner (osv.dev)
     release_pattern: osv-scanner_{version}_linux_{arch}.zip
@@ -185,9 +185,9 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/google/osv-scanner/releases/latest
     critical: false
-    notes: 'v1.0.0 - Google OSV database'
+    notes: v1.0.0 - Google OSV database
   bearer:
-    version: 1.50.0
+    version: 1.51.1
     github_repo: Bearer/bearer
     description: Data security and privacy scanner (GDPR/CCPA)
     release_pattern: bearer_linux_{arch}
@@ -196,7 +196,7 @@ binary_tools:
       arm64: arm64
     update_check: gh api repos/Bearer/bearer/releases/latest
     critical: false
-    notes: 'v1.0.0 - Data privacy and sensitive data flows'
+    notes: v1.0.0 - Data privacy and sensitive data flows
 special_tools:
   zap:
     version: 2.16.1
@@ -215,7 +215,7 @@ special_tools:
     critical: false
     installation: Source build required
   mobsf:
-    version: 4.2.0
+    version: 4.4.2
     github_repo: MobSF/Mobile-Security-Framework-MobSF
     description: Mobile Security Framework (Android/iOS SAST/DAST)
     release_pattern: v{version}.tar.gz
@@ -223,40 +223,44 @@ special_tools:
     critical: false
     installation: Python package + Android SDK subset
     docker_ready: false
-    notes: >
-      v1.0.0 - MANUAL INSTALLATION REQUIRED (complex Android SDK dependencies).
-      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.
+    notes: 'v1.0.0 - MANUAL INSTALLATION REQUIRED (complex Android SDK dependencies).
+      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup
+      guide.
+
+      '
   akto:
-    version: 1.0.0
+    version: mini-testing-1.53.7
     github_repo: akto-api-security/akto
     description: API Security testing (OWASP API Top 10)
     release_pattern: v{version}.tar.gz
     update_check: gh api repos/akto-api-security/akto/releases/latest
     critical: false
-    notes: >
-      v1.0.0 - MANUAL INSTALLATION REQUIRED (requires separate Docker service).
-      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup guide.
+    notes: 'v1.0.0 - MANUAL INSTALLATION REQUIRED (requires separate Docker service).
+      Docker support planned for v1.0.1. See docs/MANUAL_INSTALLATION.md for setup
+      guide.
+
+      '
     docker_ready: false
   yara:
-    version: 4.5.2
+    version: 4.5.5
     github_repo: VirusTotal/yara
     description: Malware pattern detection
     release_pattern: v{version}.tar.gz
     update_check: gh api repos/VirusTotal/yara/releases/latest
     critical: false
     installation: yara-python pip package
-    notes: 'v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules)'
+    notes: v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules)
   dependency-check:
-    version: 11.1.1
+    version: 12.1.0
     github_repo: jeremylong/DependencyCheck
     description: OWASP SCA for known vulnerabilities
     release_pattern: dependency-check-{version}-release.zip
     update_check: gh api repos/jeremylong/DependencyCheck/releases/latest
     critical: false
     installation: Java-based CLI
-    notes: 'v1.0.0 - OWASP NVD integration'
+    notes: v1.0.0 - OWASP NVD integration
   horusec:
-    version: 2.9.0
+    version: 2.8.0
     github_repo: ZupIT/horusec
     description: Multi-language SAST (18+ languages)
     release_pattern: horusec_{version}_linux_{arch}.tar.gz
@@ -265,9 +269,9 @@ special_tools:
       arm64: arm64
     update_check: gh api repos/ZupIT/horusec/releases/latest
     critical: false
-    notes: 'v1.0.0 - Alternative SAST for broad language coverage'
+    notes: v1.0.0 - Alternative SAST for broad language coverage
   opa:
-    version: 0.70.0
+    version: 1.10.1
     github_repo: open-policy-agent/opa
     description: Open Policy Agent (policy-as-code engine)
     release_pattern: opa_linux_{arch}_static
@@ -329,6 +333,253 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated opa
+  tools_updated:
+  - tool: opa
+    old_version: 0.70.0
+    new_version: 1.10.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated horusec
+  tools_updated:
+  - tool: horusec
+    old_version: 2.9.0
+    new_version: 2.8.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated dependency-check
+  tools_updated:
+  - tool: dependency-check
+    old_version: 11.1.1
+    new_version: 12.1.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated yara
+  tools_updated:
+  - tool: yara
+    old_version: 4.5.2
+    new_version: 4.5.5
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated akto
+  tools_updated:
+  - tool: akto
+    old_version: 1.0.0
+    new_version: mini-testing-1.53.7
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated mobsf
+  tools_updated:
+  - tool: mobsf
+    old_version: 4.2.0
+    new_version: 4.4.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated bearer
+  tools_updated:
+  - tool: bearer
+    old_version: 1.50.0
+    new_version: 1.51.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated osv-scanner
+  tools_updated:
+  - tool: osv-scanner
+    old_version: 1.10.1
+    new_version: 2.2.4
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.91.0
+    new_version: 0.103.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated gosec
+  tools_updated:
+  - tool: gosec
+    old_version: 2.25.1
+    new_version: 2.22.10
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated kubescape
+  tools_updated:
+  - tool: kubescape
+    old_version: 3.0.19
+    new_version: 3.0.45
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 4.0.0
+    new_version: 5.13.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated nuclei
+  tools_updated:
+  - tool: nuclei
+    old_version: 3.4.10
+    new_version: 3.5.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated syft
+  tools_updated:
+  - tool: syft
+    old_version: 1.36.0
+    new_version: 1.37.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.90.12
+    new_version: 3.91.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated scancode-toolkit
+  tools_updated:
+  - tool: scancode-toolkit
+    old_version: 32.3.0
+    new_version: 32.4.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.14.2
+    new_version: 0.14.5
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.488
+    new_version: 3.2.493
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-17'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-17'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.141.0
+    new_version: 1.143.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-10-28'
   action: Automated version update
   tools_updated: []
