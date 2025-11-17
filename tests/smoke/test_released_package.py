@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.smoke
 class TestPyPIPackage:
     """Smoke tests for PyPI package."""
 
@@ -138,6 +139,7 @@ class TestPyPIPackage:
         assert results_dir.exists(), "Results directory not created"
 
 
+@pytest.mark.smoke
 class TestDockerImages:
     """Smoke tests for Docker images."""
 
@@ -205,6 +207,7 @@ class TestDockerImages:
         assert "usage" in result.stdout.lower()
 
 
+@pytest.mark.smoke
 class TestDocumentation:
     """Smoke tests for documentation availability."""
 
@@ -242,6 +245,7 @@ class TestDocumentation:
         assert len(result.stdout) > 2000, "USER_GUIDE.md too short"
 
 
+@pytest.mark.smoke
 class TestPyPIMetadata:
     """Smoke tests for PyPI metadata."""
 
