@@ -15,9 +15,9 @@
     "MD046": false,
     "MD051": false
   },
-  "globs": [
-    "**/*.md",
-    "!results-*/**",
-    "!.playwright-mcp/**"
+  "ignores": [
+    "results-*/**",
+    ".playwright-mcp/**",
+    "node_modules/**"
   ]
 }
