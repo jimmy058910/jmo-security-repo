@@ -283,7 +283,10 @@ class TestPrioritizationWorkflow:
         # Check if React build exists (determines which assertions to run)
         import os
         from pathlib import Path as RealPath
-        dashboard_dir = RealPath(__file__).parent.parent.parent / "scripts" / "dashboard"
+
+        dashboard_dir = (
+            RealPath(__file__).parent.parent.parent / "scripts" / "dashboard"
+        )
         react_build_exists = (dashboard_dir / "dist" / "index.html").exists()
 
         if react_build_exists:
@@ -300,14 +303,19 @@ class TestPrioritizationWorkflow:
             assert "0.75" in html_content  # EPSS value from test-002
 
             # React dashboard has root div for mounting
-            assert '<div id="root"></div>' in html_content or 'id="root"' in html_content
+            assert (
+                '<div id="root"></div>' in html_content or 'id="root"' in html_content
+            )
         else:
             # Fallback HTML mode (CI without React build)
             # Just verify basic HTML structure
             assert "<!DOCTYPE html>" in html_content
             assert "JMo Security" in html_content
             # Fallback mode shows summary, not individual findings
-            assert "Total Findings: 2" in html_content or "Total Findings:</strong> 2" in html_content
+            assert (
+                "Total Findings: 2" in html_content
+                or "Total Findings:</strong> 2" in html_content
+            )
 
     @patch("scripts.core.priority_calculator.EPSSClient")
     @patch("scripts.core.priority_calculator.KEVClient")
