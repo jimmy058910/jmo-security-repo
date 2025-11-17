@@ -154,7 +154,11 @@ def test_noseyparker_docker_fallback(tmp_path: Path):
         timeout=120,
         capture_output=True,
         text=True,
-        env={"PATH": str(minimal_bin), "PYTHONPATH": "."},
+        env={
+            "PATH": str(minimal_bin),
+            "PYTHONPATH": ".",
+            "SKIP_REACT_BUILD_CHECK": "true",  # Skip React build in tests
+        },
     )
     assert result.returncode == 0, f"Scan failed: {result.stderr}"
 
