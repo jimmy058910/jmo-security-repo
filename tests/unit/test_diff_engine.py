@@ -756,7 +756,7 @@ class TestDirectoryLoading:
                 "timestamp": "2025-11-05T10:00:00Z",
                 "profile": "balanced",
             },
-            "findings": [
+            "results": [  # Wrong key - should be "findings" for v1.0.0 format
                 {"id": "fp1", "severity": "CRITICAL"},
                 {"id": "fp2", "severity": "HIGH"},
             ],
@@ -767,7 +767,7 @@ class TestDirectoryLoading:
 
         engine = DiffEngine()
 
-        # _load_directory_findings expects plain list, not dict
+        # _load_directory_findings expects list or v1.0.0 wrapper with "findings" key
         with pytest.raises(ValueError, match="Expected findings.json to contain"):
             engine._load_directory_findings(results_dir)
 
