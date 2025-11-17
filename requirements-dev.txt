@@ -231,7 +231,7 @@ types-croniter==6.0.0.20250809
     # via -r requirements-dev.in
 types-pyyaml==6.0.12.20250915
     # via -r requirements-dev.in
-types-requests==2.31.0.20241231
+types-requests==2.32.4.20250913
     # via -r requirements-dev.in
 types-tabulate==0.9.0.20241207
     # via -r requirements-dev.in
