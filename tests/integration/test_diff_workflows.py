@@ -18,7 +18,6 @@ import subprocess
 import pytest
 
 
-
 @pytest.fixture
 def sample_findings():
     """Generate sample CommonFinding objects for testing."""

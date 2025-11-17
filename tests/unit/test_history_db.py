@@ -5376,9 +5376,7 @@ class TestFindingContext:
                 ]
             )
         )
-        _ = store_scan(
-            results_dir, profile="fast", tools=["semgrep"], branch="main"
-        )
+        _ = store_scan(results_dir, profile="fast", tools=["semgrep"], branch="main")
 
         conn = get_connection()
         context = get_finding_context(conn, "fp-test")
