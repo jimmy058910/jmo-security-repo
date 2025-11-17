@@ -372,8 +372,8 @@ def test_build_command_parts_native_repo(tmp_path):
 
     cmd = build_command_parts(config)
 
-    assert cmd[0] == "jmotools"
-    assert cmd[1] == "balanced"
+    assert cmd[0] == "jmo"
+    assert cmd[1] == "scan"
     assert "--repos-dir" in cmd
     assert "--results-dir" in cmd
     assert "--threads" in cmd
