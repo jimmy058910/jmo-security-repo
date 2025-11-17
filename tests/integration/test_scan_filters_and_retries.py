@@ -50,7 +50,13 @@ exclude: ["test-*"]
         "--allow-missing-tools",  # Use stubs if trufflehog missing
     ]
 
-    result = subprocess.run(cmd, timeout=30, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd,
+        timeout=30,
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+    )
     assert result.returncode == 0, f"Scan failed: {result.stderr}"
 
     # app-1 should be scanned (included by pattern)
@@ -95,7 +101,13 @@ retries: 2
         "--allow-missing-tools",
     ]
 
-    result = subprocess.run(cmd, timeout=30, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd,
+        timeout=30,
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+    )
     assert result.returncode == 0
 
     # Verify output exists (retry config was accepted)
@@ -138,7 +150,13 @@ tools: [semgrep, trivy]
         "--allow-missing-tools",  # Use stubs if tools missing
     ]
 
-    result = subprocess.run(cmd, timeout=60, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd,
+        timeout=60,
+        capture_output=True,
+        text=True,
+        env={"PYTHONPATH": ".", "SKIP_REACT_BUILD_CHECK": "true"},
+    )
     # Scan should succeed despite non-zero exit codes from tools
     assert result.returncode == 0, f"Scan failed unexpectedly: {result.stderr}"
 
@@ -187,6 +205,7 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
     test_env = {
         "PATH": python_dir,
         "PYTHONPATH": ".",
+        "SKIP_REACT_BUILD_CHECK": "true",  # Skip React build in tests
     }
 
     # Use sys.executable instead of relying on 'python3' being in PATH
@@ -258,6 +277,7 @@ tools: [trufflehog]
     test_env = os.environ.copy()
     test_env["JMO_THREADS"] = "not-an-int"
     test_env["PYTHONPATH"] = "."
+    test_env["SKIP_REACT_BUILD_CHECK"] = "true"  # Skip React build in tests
 
     result = subprocess.run(
         cmd,
