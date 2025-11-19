@@ -316,6 +316,7 @@ class TestCaptureCIMetadata:
             "GITHUB_REPOSITORY": "test/repo",
             # Missing other GitHub fields
         },
+        clear=True,
     )
     def test_capture_partial_github_metadata(self):
         """Test capturing partial GitHub metadata (missing fields)."""
@@ -336,6 +337,7 @@ class TestCaptureCIMetadata:
             "CI_PROJECT_PATH": "test/project",
             # Missing other GitLab fields
         },
+        clear=True,
     )
     def test_capture_partial_gitlab_metadata(self):
         """Test capturing partial GitLab metadata (missing fields)."""
