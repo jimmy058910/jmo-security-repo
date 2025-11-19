@@ -66,7 +66,11 @@ class TestSignerInitialization:
 class TestCIEnvironmentDetection:
     """Tests for CI environment detection."""
 
-    @patch.dict("os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url"})
+    @patch.dict(
+        "os.environ",
+        {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url"},
+        clear=True,
+    )
     def test_detect_github_actions(self):
         """Test GitHub Actions detection."""
         signer = SigstoreSigner()
@@ -75,7 +79,7 @@ class TestCIEnvironmentDetection:
 
         assert result == "github"
 
-    @patch.dict("os.environ", {"CI_JOB_JWT": "jwt_token_here"})
+    @patch.dict("os.environ", {"CI_JOB_JWT": "jwt_token_here"}, clear=True)
     def test_detect_gitlab_ci(self):
         """Test GitLab CI detection."""
         signer = SigstoreSigner()
