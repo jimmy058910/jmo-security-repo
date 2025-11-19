@@ -86,6 +86,39 @@ class Config:
 
 
 def load_config(path: str | None) -> Config:
+    """Load and parse JMo Security configuration from YAML file.
+
+    Reads jmo.yml configuration file and returns parsed Config dataclass with
+    tool selection, profiles, output formats, and per-tool overrides.
+
+    Args:
+        path (str | None): Path to jmo.yml configuration file, or None for defaults
+
+    Returns:
+        Config: Parsed configuration dataclass with keys:
+            - tools (list): Enabled security tools
+            - profiles (dict): Named profile configurations
+            - outputs (list): Output format selection
+            - per_tool (dict): Per-tool overrides
+            - email (dict): Email notification settings
+            - schedule (dict): Scheduled scan settings
+
+    Raises:
+        None: Returns default Config() if path is None, file missing, or YAML error
+
+    Example:
+        >>> config = load_config('jmo.yml')
+        >>> print(config.default_profile)
+        balanced
+        >>> config = load_config(None)  # Returns defaults
+        >>> print(config.tools)
+        []
+
+    Note:
+        If jmo.yml not found or YAML library missing, returns default Config with empty values.
+        All configuration fields are optional and have sensible defaults.
+
+    """
     if not path:
         return Config()
     p = Path(path)

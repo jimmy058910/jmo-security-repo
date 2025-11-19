@@ -228,6 +228,132 @@ NEW_COUNT=$(jq '(.statistics.new_by_severity.CRITICAL // 0) + (.statistics.new_b
 
 ---
 
+### v1.0.0 - Dual-Mode HTML Dashboard (November 2025) 📊
+
+**PERFORMANCE ENHANCEMENT: 95% Reduction in Dashboard Load Time**
+
+JMo Security's HTML dashboard automatically switches between two rendering modes based on scan size, preventing browser freezing on large scans:
+
+**Inline Mode (<1000 findings):**
+
+- ✅ All findings embedded directly in HTML file
+- ✅ Instant rendering with no external dependencies
+- ✅ Perfect for typical scans (fast 5-10 second load time)
+- ✅ Single-file portability - share via email or Slack
+
+**External Mode (>1000 findings):**
+
+- ✅ Findings stored in separate `findings-data.json` file
+- ✅ Dashboard loads data asynchronously
+- ✅ **95% reduction in load time** (30-60s → <2s)
+- ✅ Prevents browser freezing on large scans
+- ✅ Progressive rendering with lazy loading
+
+**Performance Benchmarks:**
+
+| Finding Count | Inline Mode Load | External Mode Load | Improvement |
+|---------------|------------------|--------------------|-------------|
+| 100 findings  | <1s              | <1s                | N/A         |
+| 1,000 findings| 5-8s             | <2s                | 60-75%      |
+| 5,000 findings| 30-45s           | <3s                | 90-93%      |
+| 10,000 findings| 60-90s          | <5s                | 92-95%      |
+
+**Key Benefits:**
+
+- 🚀 **No configuration needed** - Automatic mode detection based on finding count
+- 📦 **Portable** - Inline mode creates single HTML file for easy sharing
+- ⚡ **Fast** - External mode handles massive scans without browser freezing
+- 🎯 **Smart** - Automatically selects optimal mode for scan size
+
+**Example:**
+
+```bash
+# Small scan (inline mode)
+jmo scan --repo ./myapp --results-dir results-small
+# → results-small/summaries/dashboard.html (all data embedded)
+
+# Large scan (external mode)
+jmo scan --repos-dir ~/repos --results-dir results-large
+# → results-large/summaries/dashboard.html (loads findings-data.json)
+# → results-large/summaries/findings-data.json (separate data file)
+```
+
+**Technical Details:** See [docs/USER_GUIDE.md — Dual-Mode Dashboard](docs/USER_GUIDE.md#dual-mode-html-dashboard) for implementation details and troubleshooting.
+
+---
+
+## Version History
+
+JMo Security follows [Semantic Versioning](https://semver.org/). Major feature milestones:
+
+### Schema Versions
+
+**v1.2.0 - Compliance Framework Addition**
+
+- Added `compliance` field to CommonFinding schema
+- 6 framework mappings: OWASP Top 10, CWE Top 25, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK
+- Automatic enrichment during report phase
+- See [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
+
+**v1.1.0 - Risk Field Addition**
+
+- Added `risk` field with CWE, confidence, likelihood, impact
+- Enhanced remediation context
+- Improved CVSS scoring
+
+**v1.0.0 - Production Release**
+
+- SQLite historical storage with 13 CLI commands
+- Machine-readable diffs (4 output formats)
+- Statistical trend analysis with Mann-Kendall validation
+- Cross-tool deduplication (30-40% noise reduction)
+- See [CHANGELOG.md](CHANGELOG.md) for full details
+
+### Tool & Feature Versions
+
+**v0.9.0 - Intelligence & Automation**
+
+- Plugin architecture for tool adapters
+- EPSS risk scoring and CISA KEV integration
+- Email notifications and scheduled scans
+- Refactored CLI orchestrators
+
+**v0.8.0 - GitLab CI Integration**
+
+- GitLab CI workflow generation
+- CI stability improvements
+- Resource management with cron-based scheduling
+
+**v0.7.0 - Performance & UX**
+
+- Auto-detect CPU threads (75% of cores)
+- Real-time progress tracking
+- Smart defaults for optimal performance
+
+**v0.6.0 - Multi-Target Scanning**
+
+- Container image scanning
+- IaC file scanning (Terraform, CloudFormation, K8s)
+- Web URL scanning (DAST with ZAP/Nuclei)
+- GitLab repository scanning
+- Kubernetes cluster scanning
+
+**v0.5.1 - Compliance Foundations**
+
+- Compliance framework mappings
+- MITRE ATT&CK Navigator export
+- PCI DSS compliance reporting
+
+**v0.5.0 - Profile System**
+
+- Fast, balanced, deep profiles
+- Configurable timeouts and threads
+- Tool suite consolidation
+
+For complete version history with detailed changes, see [CHANGELOG.md](CHANGELOG.md).
+
+---
+
 ### v0.8.0 - GitLab CI & Stability (October 2025)
 
 **GitLab CI/CD Integration:**

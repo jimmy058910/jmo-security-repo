@@ -652,6 +652,29 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
 
     # Common arguments
     def add_db_arg(parser):
+        """Add --db argument to argparse parser for SQLite database location.
+
+        Adds a command-line argument that allows users to specify a custom path
+        for the SQLite history database. Used by history and trends commands.
+
+        Args:
+            parser (argparse.ArgumentParser): Parser to modify in-place
+
+        Returns:
+            None (modifies parser in-place by adding argument)
+
+        Example:
+            >>> parser = argparse.ArgumentParser()
+            >>> add_db_arg(parser)
+            >>> args = parser.parse_args(['--db', '/custom/path.db'])
+            >>> print(args.db)
+            /custom/path.db
+
+        Note:
+            Default database location is .jmo/history.db relative to current directory.
+            Database file is created automatically if it doesn't exist.
+
+        """
         parser.add_argument(
             "--db",
             default=None,
@@ -881,6 +904,29 @@ See: dev-only/1.0.0/TREND_ANALYSIS_COMPLETE_PLAN.md for complete documentation.
 
     # Common arguments
     def add_common_trend_args(parser):
+        """Add common trend analysis arguments to argparse parser.
+
+        Adds arguments shared by multiple trend subcommands (analyze, show, insights)
+        including database path and branch selection.
+
+        Args:
+            parser (argparse.ArgumentParser): Parser to modify in-place
+
+        Returns:
+            None (modifies parser in-place by adding arguments)
+
+        Example:
+            >>> parser = argparse.ArgumentParser()
+            >>> add_common_trend_args(parser)
+            >>> args = parser.parse_args(['--db', 'custom.db', '--branch', 'dev'])
+            >>> print(args.db, args.branch)
+            custom.db dev
+
+        Note:
+            These arguments are automatically added to all trend analysis subcommands
+            (analyze, show, regressions, score, compare, insights, explain, developers).
+
+        """
         parser.add_argument(
             "--db",
             default=None,
@@ -1707,8 +1753,7 @@ def _show_kofi_reminder(args) -> None:
 
 
 def _get_max_workers(args, eff: dict, cfg) -> int | None:
-    """
-    Determine max_workers from CLI args, effective settings, env var, or config.
+    """Determine max_workers from CLI args, effective settings, env var, or config.
 
     Priority order:
     1. --threads CLI flag
@@ -1719,6 +1764,7 @@ def _get_max_workers(args, eff: dict, cfg) -> int | None:
 
     Returns:
         int: Number of worker threads, or None to let ThreadPoolExecutor decide
+
     """
     import os
 
@@ -1751,8 +1797,7 @@ def _get_max_workers(args, eff: dict, cfg) -> int | None:
 
 
 def _auto_detect_threads(args) -> int:
-    """
-    Auto-detect optimal thread count based on CPU cores.
+    """Auto-detect optimal thread count based on CPU cores.
 
     Wrapper around shared cpu_utils.auto_detect_threads() with logging.
 
@@ -1761,25 +1806,25 @@ def _auto_detect_threads(args) -> int:
 
     Returns:
         int: Optimal thread count
+
     """
     return _auto_detect_threads_shared(log_fn=lambda level, msg: _log(args, level, msg))
 
 
 class ProgressTracker:
-    """
-    Simple progress tracker for scan operations (no external dependencies).
+    """Simple progress tracker for scan operations (no external dependencies).
 
     Tracks completed/total targets and provides formatted progress updates.
     Thread-safe for concurrent scan operations.
     """
 
     def __init__(self, total: int, args):
-        """
-        Initialize progress tracker.
+        """Initialize progress tracker.
 
         Args:
             total: Total number of targets to scan
             args: CLI arguments (for logging)
+
         """
         import threading
 
@@ -1796,13 +1841,13 @@ class ProgressTracker:
         self._start_time = time.time()
 
     def update(self, target_type: str, target_name: str, elapsed: float):
-        """
-        Update progress after completing a target scan.
+        """Update progress after completing a target scan.
 
         Args:
             target_type: Type of target (repo, image, url, etc.)
             target_name: Name/identifier of target
             elapsed: Elapsed time in seconds for this target
+
         """
         import time
 
@@ -1845,8 +1890,7 @@ class ProgressTracker:
 
 
 def cmd_scan(args) -> int:
-    """
-    Scan security targets (repos, images, IaC, URLs, GitLab, K8s) with multiple tools.
+    """Scan security targets (repos, images, IaC, URLs, GitLab, K8s) with multiple tools.
 
     REFACTORED VERSION: Uses scan_orchestrator and scan_jobs modules for clean separation.
     Complexity reduced from 321 to ~15 (95% improvement).
@@ -2314,6 +2358,7 @@ def cmd_attest(args) -> int:
 
     Returns:
         0 on success, non-zero on error
+
     """
     import json
 
@@ -2398,6 +2443,7 @@ def cmd_verify(args) -> int:
 
     Returns:
         0 if verification succeeds, non-zero on error or tampering
+
     """
     from scripts.core.attestation.verifier import AttestationVerifier
 

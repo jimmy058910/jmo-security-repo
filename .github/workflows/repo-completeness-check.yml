@@ -1,0 +1,117 @@
+name: Repository Completeness Check
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly Monday 6 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write  # For PR comments
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run repository completeness analysis
+        run: |
+          python3 scripts/dev/analyze_repo_completeness.py
+
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: repo-completeness-analysis
+          path: dev-only/REPO_COMPLETENESS_ANALYSIS.json
+
+      - name: Check for critical issues
+        id: check
+        run: |
+          CRITICAL_COUNT=$(jq '.summary.critical_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json)
+          TOTAL_COUNT=$(jq '.summary.total_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json)
+
+          echo "critical=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "⚠️  Found $CRITICAL_COUNT critical issues (total: $TOTAL_COUNT)"
+            echo "📄 Review: dev-only/REPO_COMPLETENESS_ANALYSIS.json"
+            # Warning only for now - change to exit 1 when issues resolved
+            exit 0
+          fi
+
+          echo "✅ No critical issues found (total: $TOTAL_COUNT)"
+
+      - name: Post summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('dev-only/REPO_COMPLETENESS_ANALYSIS.json', 'utf8'));
+
+            const criticalCount = report.summary.critical_issues;
+            const totalCount = report.summary.total_issues;
+
+            const statusEmoji = criticalCount === 0 ? '✅' : '⚠️';
+            const statusText = criticalCount === 0 ? 'PASS' : 'WARNING';
+
+            const summary = `
+            ## ${statusEmoji} Repository Completeness Analysis: ${statusText}
+
+            **Total Issues:** ${totalCount}
+            **Critical Issues:** ${criticalCount}
+
+            ### Breakdown
+            - 📝 Undocumented features: ${report.findings.undocumented_features.length}
+            - 🔄 Doc-code drift: ${report.findings.doc_code_drift.length}
+            - 🧪 Test gaps: ${report.findings.test_gaps.length}
+            - ⚖️ Inconsistencies: ${report.findings.inconsistencies.length}
+
+            ### Top Recommendations
+            ${report.findings.recommendations.slice(0, 5).map(r => `- **[${r.priority}]** ${r.action} (${r.count} items)`).join('\n')}
+
+            <details>
+            <summary>📊 View Full Report</summary>
+
+            #### Undocumented Features (${report.findings.undocumented_features.length})
+            ${report.findings.undocumented_features.slice(0, 10).map(f => `- \`${f.file}:${f.line}\` - ${f.name} (${f.severity})`).join('\n')}
+            ${report.findings.undocumented_features.length > 10 ? `\n_...and ${report.findings.undocumented_features.length - 10} more_` : ''}
+
+            #### Doc-Code Drift (${report.findings.doc_code_drift.length})
+            ${report.findings.doc_code_drift.map(d => `- ${d.issue} (${d.severity})`).join('\n')}
+
+            #### Test Gaps (${report.findings.test_gaps.length})
+            ${report.findings.test_gaps.slice(0, 10).map(t => `- \`${t.file}\``).join('\n')}
+            ${report.findings.test_gaps.length > 10 ? `\n_...and ${report.findings.test_gaps.length - 10} more_` : ''}
+
+            </details>
+
+            ---
+
+            📄 **Full Analysis:** [Download artifact](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            🔧 **Action Plan:** [UNIFICATION_ACTION_PLAN.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/dev-only/UNIFICATION_ACTION_PLAN.md)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });

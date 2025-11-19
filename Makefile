@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
+.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -113,6 +113,21 @@ verify-env:
 
 analyze-completeness:
 	$(PY) scripts/dev/analyze_repo_completeness.py
+
+verify-completeness:  ## Verify no critical completeness issues (for CI)
+	@echo "🔍 Verifying repository completeness..."
+	@$(PY) scripts/dev/analyze_repo_completeness.py
+	@CRITICAL=$$(jq '.summary.critical_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json); \
+	TOTAL=$$(jq '.summary.total_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json); \
+	if [ "$$CRITICAL" -gt 0 ]; then \
+		echo ""; \
+		echo "❌ Found $$CRITICAL critical issues (total: $$TOTAL)"; \
+		echo "📄 Review: dev-only/REPO_COMPLETENESS_ANALYSIS.json"; \
+		echo "🔧 Action Plan: dev-only/UNIFICATION_ACTION_PLAN.md"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "✅ No critical completeness issues (total: $$TOTAL)"
 
 dev-deps:
 	$(PY) -m pip install -r requirements-dev.txt || true

@@ -42,6 +42,7 @@ class FindingCluster:
         representative: Primary finding (highest severity in cluster)
         findings: All findings in this cluster
         similarity_scores: Mapping of finding ID to similarity score
+
     """
 
     representative: dict[str, Any]
@@ -60,6 +61,7 @@ class FindingCluster:
         Args:
             finding: Finding to add to cluster
             similarity: Similarity score between finding and representative
+
         """
         self.findings.append(finding)
         self.similarity_scores[finding["id"]] = similarity
@@ -90,6 +92,7 @@ class FindingCluster:
                 - confidence: Object with level and tool_count
                 - severity: Elevated to highest in cluster
                 - context.duplicates: Array of non-representative findings
+
         """
         # Start with representative as base
         consensus = self.representative.copy()
@@ -157,6 +160,7 @@ class FindingCluster:
                 - level: "HIGH", "MEDIUM", "LOW"
                 - tool_count: Number of tools detecting this issue
                 - avg_similarity: Average similarity score
+
         """
         tool_count = len(self.findings)
 
@@ -229,6 +233,7 @@ class SimilarityCalculator:
             message_weight: Weight for message similarity (default 0.40)
             metadata_weight: Weight for metadata similarity (default 0.25)
             similarity_threshold: Threshold for clustering (default 0.75)
+
         """
         assert (
             abs(location_weight + message_weight + metadata_weight - 1.0) < 0.01
@@ -243,6 +248,7 @@ class SimilarityCalculator:
 
         Returns:
             Float 0.0-1.0 where 1.0 = identical, 0.0 = completely different
+
         """
         # Component similarities
         loc_sim = self.location_similarity(
@@ -454,6 +460,7 @@ class SimilarityCalculator:
             1.0 if exact CWE or CVE match
             0.7-0.9 if rule ID family match
             0.0 otherwise
+
         """
         # Extract CWEs from raw data (handle various formats)
         cwes1 = self._extract_cwes_from_raw(raw1)
@@ -534,6 +541,7 @@ class SimilarityCalculator:
             python.lang.security.audit.sqli-format-string
             → Shared prefix: python.lang.security.audit.sqli
             → Similarity: 0.80
+
         """
         if rule1 == rule2:
             return 1.0
@@ -601,6 +609,7 @@ class FindingClusterer:
 
         Args:
             similarity_threshold: Minimum similarity score for clustering (default 0.75)
+
         """
         self.threshold = similarity_threshold
         self.calculator = SimilarityCalculator(
@@ -620,6 +629,7 @@ class FindingClusterer:
 
         Returns:
             List of FindingCluster objects
+
         """
         if not findings:
             return []
@@ -663,6 +673,31 @@ class FindingClusterer:
         """Sort findings by severity (CRITICAL → INFO)."""
 
         def severity_key(f: dict) -> int:
+            """Convert severity level to numeric sort key for ordering findings.
+
+            Maps severity strings to integers for consistent sorting from highest
+            to lowest severity: CRITICAL → HIGH → MEDIUM → LOW → INFO.
+
+            Args:
+                f (dict): Finding dictionary with 'severity' field
+
+            Returns:
+                int: Numeric sort key (4=CRITICAL, 3=HIGH, 2=MEDIUM, 1=LOW, 0=INFO)
+
+            Example:
+                >>> severity_key({'severity': 'CRITICAL'})
+                4
+                >>> severity_key({'severity': 'low'})
+                1
+                >>> sorted([{'severity': 'LOW'}, {'severity': 'CRITICAL'}],
+                ...        key=severity_key, reverse=True)
+                [{'severity': 'CRITICAL'}, {'severity': 'LOW'}]
+
+            Note:
+                Unknown severity levels default to 0 (same as INFO).
+                Used internally by _sort_by_severity for finding prioritization.
+
+            """
             sev = Severity.from_string(f.get("severity", "INFO"))
             # Reverse order: CRITICAL=4, HIGH=3, ..., INFO=0
             order = {

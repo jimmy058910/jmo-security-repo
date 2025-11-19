@@ -1600,9 +1600,50 @@ For comprehensive schedule management documentation, see:
 
 ## Key CLI commands and flags
 
-Subcommands: scan, report, ci
+Subcommands: scan, report, ci, setup, wizard, history, trends, diff, schedule, adapters
 
-Common flags:
+### `jmo setup`
+
+**Interactive setup wizard for first-time JMo Security configuration.**
+
+```bash
+jmo setup
+```
+
+**Description:**
+
+Interactive setup wizard for first-time JMo Security configuration. Guides users through:
+
+- Tool installation verification
+- Configuration file creation (jmo.yml)
+- Database initialization (.jmo/history.db)
+- Environment validation
+
+**Use Cases:**
+
+- First-time installation
+- Resetting configuration to defaults
+- Verifying tool availability
+
+**Example:**
+
+```bash
+# Run interactive setup
+jmo setup
+
+# Setup automatically:
+# 1. Checks for installed security tools
+# 2. Creates jmo.yml with recommended profile
+# 3. Initializes SQLite history database
+# 4. Validates Python dependencies
+```
+
+**See Also:**
+
+- `jmo wizard` - Full guided scanning workflow
+- Installation - Manual installation steps
+
+### Common flags
 
 - --config jmo.yml: choose a config file (default: jmo.yml)
 - --profile-name NAME: apply a named profile from config
@@ -2901,6 +2942,53 @@ Metadata:
   - Duration:  245.2 seconds
 ```
 
+#### `jmo history compare`
+
+**Compare two historical scans from the SQLite database.**
+
+```bash
+jmo history compare SCAN_ID_1 SCAN_ID_2 [OPTIONS]
+```
+
+**Arguments:**
+
+- `SCAN_ID_1` - First scan ID (typically baseline or older scan)
+- `SCAN_ID_2` - Second scan ID (typically current or newer scan)
+
+**Options:**
+
+- `--severity LEVEL` - Filter by severity levels (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+- `--only {new,fixed,modified}` - Show only specific change types
+- `--format {json,md,html}` - Output format (default: console)
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Use Cases:**
+
+- Compare baseline scan vs current scan
+- Track remediation progress over time
+- Detect security regressions
+
+**Example:**
+
+```bash
+# List available scans
+jmo history list
+
+# Compare two scans
+jmo history compare abc123 def456
+
+# Show only new HIGH/CRITICAL findings
+jmo history compare abc123 def456 --severity HIGH CRITICAL --only new
+
+# Generate HTML report
+jmo history compare abc123 def456 --format html > comparison.html
+```
+
+**See Also:**
+
+- `jmo diff` - Compare result directories
+- `jmo trends compare` - Compare against baseline with statistics
+
 #### `jmo history query`
 
 **Query findings across stored scans.**
@@ -3037,6 +3125,100 @@ Top Tools:
   trufflehog                615 findings
   checkov                   412 findings
 ```
+
+#### `jmo history vacuum`
+
+**Optimize the SQLite history database by reclaiming unused space and rebuilding indexes.**
+
+```bash
+jmo history vacuum [OPTIONS]
+```
+
+**Options:**
+
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Description:**
+
+Optimize the SQLite history database by:
+
+- Reclaiming unused space
+- Rebuilding indexes
+- Improving query performance
+
+**Use Cases:**
+
+- After pruning old scans (`jmo history prune`)
+- Database growing too large
+- Query performance degradation
+- Scheduled maintenance
+
+**Example:**
+
+```bash
+# Vacuum database
+jmo history vacuum
+
+# Typical output:
+# ✅ Database vacuumed successfully
+# 📊 Space reclaimed: 15.2 MB → 8.4 MB (45% reduction)
+# ⚡ Query performance improved
+```
+
+**See Also:**
+
+- `jmo history prune` - Remove old scans
+- `jmo history verify` - Check database integrity
+
+#### `jmo history verify`
+
+**Verify SQLite history database integrity.**
+
+```bash
+jmo history verify [OPTIONS]
+```
+
+**Options:**
+
+- `--db PATH` - Database path (default: `.jmo/history.db`)
+
+**Description:**
+
+Verify SQLite history database integrity by:
+
+- Checking for corruption
+- Validating foreign key constraints
+- Ensuring schema consistency
+- Testing read/write operations
+
+**Use Cases:**
+
+- Troubleshooting database errors
+- Post-upgrade verification
+- Scheduled health checks
+- Before database backup
+
+**Example:**
+
+```bash
+# Verify database integrity
+jmo history verify
+
+# Successful output:
+# ✅ Database integrity check passed
+# ✅ Foreign key constraints valid
+# ✅ Schema version: 1.0.0
+# ✅ Read/write test successful
+
+# Failed output (if corrupted):
+# ❌ Database corruption detected
+# 💡 Recommendation: Restore from backup or reinitialize
+```
+
+**See Also:**
+
+- `jmo history vacuum` - Optimize database
+- Troubleshooting - SQLite issues
 
 ### Database Schema
 

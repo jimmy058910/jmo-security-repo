@@ -1156,6 +1156,38 @@ def _run_trend_command_interactive(
 
         # Build mock args
         class TrendArgs:
+            """
+            Argument container for trend analysis workflows in the interactive wizard.
+
+            This class stores user preferences collected during the wizard's trend analysis
+            flow, enabling post-scan trend analysis and security posture tracking.
+
+            Attributes:
+                db (str): Path to SQLite history database.
+                last (int): Number of most recent scans to analyze.
+                format (str): Output format ('terminal', 'json', 'html', 'csv', 'prometheus', 'grafana', 'dashboard').
+                output (Optional[str]): Output file path (None = stdout).
+                top (int): Number of top items to display (default: 10).
+                team_file (Optional[str]): Path to team mapping file (default: None).
+                threshold (Optional[int]): Threshold for regression detection (default: None).
+                repo (str): Repository path for git blame attribution (default: current directory).
+
+            Example:
+                >>> args = TrendArgs()
+                >>> args.last = 50
+                >>> args.format = 'html'
+                >>> # Used internally by wizard to generate trend commands
+
+            See Also:
+                - jmo trends analyze: Core trend analysis command
+                - scripts/cli/trend_commands.py: Trend command implementations
+                - scripts/core/trend_analyzer.py: Statistical trend analysis engine
+
+            Note:
+                This class is used internally by the wizard and not exposed as a public API.
+                For programmatic access, use `jmo trends` commands directly.
+            """
+
             def __init__(self):
                 self.db = str(db_path)
                 self.last = last_n
@@ -1278,6 +1310,33 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         # Build args
         class CompareArgs:
+            """
+            Argument container for historical scan comparison workflows in the wizard.
+
+            Stores user selections for comparing two historical scans from the SQLite
+            database, enabling regression detection and remediation tracking.
+
+            Attributes:
+                db (str): Path to SQLite history database.
+                scan_ids (list[str]): List of two scan IDs to compare [baseline_id, current_id].
+                format (str): Output format ('terminal', 'json', 'md', 'html').
+                output (Optional[str]): Output file path (None = stdout).
+
+            Example:
+                >>> args = CompareArgs()
+                >>> args.scan_ids = ['baseline_abc123', 'current_def456']
+                >>> args.format = 'md'
+                >>> # Generates: jmo history compare baseline_abc123 current_def456 --format md
+
+            See Also:
+                - jmo history compare: Historical scan comparison
+                - jmo diff: Result directory comparison
+                - scripts/core/diff_engine.py: Diff computation engine
+
+            Note:
+                Wizard validates that both scan IDs exist in database before execution.
+            """
+
             def __init__(self):
                 self.db = str(db_path)
                 self.scan_ids = [baseline_id, current_id]
@@ -1652,6 +1711,40 @@ def run_diff_wizard(use_docker: bool = False) -> int:
 
         # Build command args (mock argparse namespace)
         class DiffArgs:
+            """
+            Argument container for result directory diff workflows in the wizard.
+
+            Stores user selections for comparing two result directories, enabling
+            regression detection in CI/CD pipelines and PR reviews.
+
+            Attributes:
+                directories (Optional[list[str]]): List of two result directories [baseline, current] (directory mode).
+                scan_ids (Optional[list[str]]): List of two scan IDs [baseline, current] (history mode).
+                db (str): Path to SQLite history database (for history mode).
+                severity (Optional[list[str]]): Filter by severity levels (e.g., ['CRITICAL', 'HIGH']).
+                tool (Optional[str]): Filter by specific tool (default: None = all tools).
+                only (str): Filter by change type ('all', 'new', 'fixed', 'modified').
+                no_modifications (bool): Skip modification detection for faster diffs (default: False).
+                format (str): Output format ('json', 'md', 'html', 'sarif').
+                output (str): Output file path.
+
+            Example:
+                >>> args = DiffArgs()
+                >>> args.directories = ['results-main', 'results-feature-branch']
+                >>> args.severity = ['HIGH', 'CRITICAL']
+                >>> args.only = 'new'
+                >>> args.format = 'md'
+                >>> # Generates: jmo diff results-main/ results-feature-branch/ --severity HIGH CRITICAL --only new --format md
+
+            See Also:
+                - jmo diff: Result directory comparison
+                - jmo history compare: Historical scan comparison
+                - docs/examples/diff-workflows.md: CI/CD integration examples
+
+            Note:
+                Wizard validates that both directories exist and contain summaries/findings.json.
+            """
+
             def __init__(self):
                 self.directories = (
                     [baseline_path, current_path] if mode == "directory" else None

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Basic reporters for CommonFindings: JSON dump and Markdown summary
-"""
+"""Basic reporters for CommonFindings: JSON dump and Markdown summary"""
 
 from __future__ import annotations
 
@@ -27,6 +25,7 @@ def _get_jmo_version() -> str:
 
     Returns:
         Version string (e.g., "1.0.0")
+
     """
     try:
         # Try tomllib first (Python 3.11+)
@@ -63,6 +62,7 @@ def _generate_metadata(
 
     Returns:
         Metadata dictionary with output version, jmo version, timestamp, etc.
+
     """
     return {
         "output_version": "1.0.0",
@@ -89,6 +89,7 @@ def write_json(
         findings: List of CommonFinding dictionaries
         out_path: Output file path
         metadata: Optional metadata dict (will be auto-generated if not provided)
+
     """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -314,6 +315,28 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
 
         # Sort files by: 1) highest severity, 2) count
         def file_sort_key(item):
+            """Generate sort key for consistent file path ordering in reports.
+
+            Creates tuple for sorting files by severity (highest first) and
+            finding count (most findings first). Ensures consistent file ordering.
+
+            Args:
+                item (tuple): (file_path, list of findings) tuple
+
+            Returns:
+                tuple: (severity_index, -finding_count) for natural sorting
+
+            Example:
+                >>> item1 = ('src/main.py', [{'severity': 'CRITICAL'}])
+                >>> item2 = ('src/utils.py', [{'severity': 'LOW'}, {'severity': 'LOW'}])
+                >>> file_sort_key(item1) < file_sort_key(item2)
+                True  # CRITICAL sorts before LOW
+
+            Note:
+                Severity ordering: CRITICAL < HIGH < MEDIUM < LOW < INFO.
+                Negative count ensures higher counts sort first.
+
+            """
             path, file_finds = item
             max_sev_idx = min(
                 SEV_ORDER.index(f.get("severity", "INFO")) for f in file_finds
@@ -566,6 +589,34 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
 
 
 def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+    """Write findings to Markdown SUMMARY.md file.
+
+    Generates human-readable Markdown summary with severity counts,
+    top rules, and grouped findings by severity and file.
+
+    Args:
+        findings (list[dict[str, Any]]): List of CommonFinding dictionaries
+        out_path (str | Path): Path to write SUMMARY.md (e.g., results/summaries/SUMMARY.md)
+
+    Returns:
+        None (writes file to disk)
+
+    Raises:
+        IOError: If output_path directory creation fails or not writable
+
+    Example:
+        >>> findings = [{'severity': 'HIGH', 'ruleId': 'G101', ...}]
+        >>> write_markdown(findings, 'results/summaries/SUMMARY.md')
+        # Creates SUMMARY.md with severity breakdown and grouped findings
+
+    Note:
+        Output includes:
+        - Severity distribution (CRITICAL/HIGH/MEDIUM/LOW/INFO counts)
+        - Top 10 most common rules
+        - Findings grouped by severity, then by file
+        - Automatically creates parent directories if needed
+
+    """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(to_markdown_summary(findings), encoding="utf-8")

@@ -355,13 +355,103 @@ Before submitting to Homebrew/WinGet:
 
 ## Git workflow
 
-- Create a feature branch from `main`.
-- Keep diffs small and focused.
-- Write/update tests when changing behavior.
-- Run `make fmt && make lint && make test` before pushing.
-- Run `make pre-commit-run` to apply YAML linting and validate GitHub Actions workflows via actionlint.
-- Open a PR and fill out the template (if present). Link related issues.
-  - CI runs on a matrix (OS/Python). Workflows use concurrency to cancel redundant runs and set 20-minute timeouts per job.
+### Branch strategy
+
+- **main**: Stable releases only (tagged versions)
+- **dev**: Active development work
+- **feature/**: Individual features branched from `dev`
+
+### Starting a new feature
+
+```bash
+# Always start from latest dev
+git checkout dev
+git pull origin dev
+git checkout -b feature/my-feature dev
+
+# Example: Add new security tool adapter
+git checkout -b feature/add-snyk-adapter dev
+```
+
+### Daily work cycle
+
+```bash
+# Make changes
+vim scripts/core/adapters/snyk_adapter.py
+
+# Stage and commit
+git add scripts/core/adapters/snyk_adapter.py
+git commit -m "feat(tools): add Snyk adapter"
+
+# Push to GitHub (backs up your work)
+git push origin feature/add-snyk-adapter
+```
+
+### Merging feature to dev
+
+```bash
+# When feature is complete
+pytest tests/adapters/test_snyk_adapter.py -v
+make lint
+make test
+
+# Switch to dev and merge
+git checkout dev
+git pull origin dev
+git merge feature/add-snyk-adapter
+
+# Push merged dev
+git push origin dev
+
+# Optional: Delete feature branch
+git branch -d feature/add-snyk-adapter
+```
+
+### Status checks
+
+```bash
+# Where am I?
+git branch --show-current
+
+# What changed?
+git status --short
+
+# Recent commits
+git log --oneline -5
+
+# All feature branches
+git branch -a | grep feature/
+
+# What's merged to dev?
+git log dev --oneline --graph
+```
+
+### Undo/Fix commands
+
+```bash
+# Uncommit last commit (keep changes)
+git reset --soft HEAD~1
+
+# Discard all local changes (DANGER)
+git reset --hard HEAD
+
+# Stash changes temporarily
+git stash
+git stash pop  # Restore later
+
+# Revert a merge
+git revert -m 1 HEAD
+```
+
+### Best practices
+
+- Create feature branches from `dev`, not `main`
+- Keep diffs small and focused
+- Write/update tests when changing behavior
+- Run `make fmt && make lint && make test` before pushing
+- Run `make pre-commit-run` to apply YAML linting and validate GitHub Actions workflows via actionlint
+- Open a PR and fill out the template (if present). Link related issues
+  - CI runs on a matrix (OS/Python). Workflows use concurrency to cancel redundant runs and set 20-minute timeouts per job
 
 ### Commit guidelines and pre-push validation
 

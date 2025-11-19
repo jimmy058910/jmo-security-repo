@@ -6,9 +6,6 @@ omit =
     scripts/cli/jmotools.py
     scripts/cli/clone_from_tsv.py
     scripts/core/generate_dashboard.py
-    scripts/core/reporters/suppression_reporter.py
-    scripts/core/schema_utils.py
-    scripts/core/suppress.py
     # MCP server - separate integration
     scripts/jmo_mcp/*
     # Email service requires SMTP infrastructure
@@ -16,11 +13,8 @@ omit =
     # Interactive wizard - difficult to test comprehensively
     scripts/cli/wizard.py
     scripts/cli/wizard_flows/policy_flow.py
-    scripts/cli/wizard_generators.py
     # Experimental policy engine
     scripts/core/policy_engine.py
-    scripts/core/reporters/policy_reporter.py
-    scripts/cli/policy_commands.py
     # Path sanitizers utility
     scripts/cli/path_sanitizers.py
 
@@ -36,9 +30,6 @@ omit =
     scripts/cli/jmotools.py
     scripts/cli/clone_from_tsv.py
     scripts/core/generate_dashboard.py
-    scripts/core/reporters/suppression_reporter.py
-    scripts/core/schema_utils.py
-    scripts/core/suppress.py
     # MCP server - separate integration
     scripts/jmo_mcp/*
     # Email service requires SMTP infrastructure
@@ -46,10 +37,7 @@ omit =
     # Interactive wizard - difficult to test comprehensively
     scripts/cli/wizard.py
     scripts/cli/wizard_flows/policy_flow.py
-    scripts/cli/wizard_generators.py
     # Experimental policy engine
     scripts/core/policy_engine.py
-    scripts/core/reporters/policy_reporter.py
-    scripts/cli/policy_commands.py
     # Path sanitizers utility
     scripts/cli/path_sanitizers.py
