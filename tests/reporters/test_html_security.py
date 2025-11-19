@@ -12,9 +12,18 @@ Tests cover:
 - Integration with existing HTML escaping
 """
 
+import os
 import pytest
 import re
 from scripts.core.reporters.html_reporter import write_html
+
+
+@pytest.fixture(autouse=True)
+def skip_react_build_check():
+    """Skip React build check for all tests in this file (CI compatibility)."""
+    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
+    yield
+    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
 
 
 class TestSecurityHeaders:
