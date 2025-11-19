@@ -218,7 +218,9 @@ class TestRunDetailsCreation:
         assert run_details.metadata.finishedOn == "2025-01-01T01:00:00Z"
 
     @patch.dict(
-        "os.environ", {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "test/repo"}
+        "os.environ",
+        {"GITHUB_ACTIONS": "true", "GITHUB_REPOSITORY": "test/repo"},
+        clear=True,
     )
     def test_detect_builder_id_github(self):
         """Test builder ID detection for GitHub Actions."""
@@ -231,6 +233,7 @@ class TestRunDetailsCreation:
     @patch.dict(
         "os.environ",
         {"GITLAB_CI": "true", "CI_PROJECT_URL": "https://gitlab.com/test/project"},
+        clear=True,
     )
     def test_detect_builder_id_gitlab(self):
         """Test builder ID detection for GitLab CI."""
