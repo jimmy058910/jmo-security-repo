@@ -108,6 +108,7 @@ class TestOIDCTokenAcquisition:
             "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.actions.githubusercontent.com",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request_token_here",
         },
+        clear=True,
     )
     def test_get_github_oidc_token_success(self, mock_get):
         """Test successful GitHub OIDC token acquisition."""
@@ -135,6 +136,7 @@ class TestOIDCTokenAcquisition:
             "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url",
             "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "request_token",
         },
+        clear=True,
     )
     def test_get_github_oidc_token_failure(self, mock_get):
         """Test GitHub OIDC token acquisition failure."""
@@ -146,7 +148,7 @@ class TestOIDCTokenAcquisition:
         with pytest.raises(requests.exceptions.HTTPError):
             signer._get_github_oidc_token()
 
-    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab_jwt_token_abc"})
+    @patch.dict("os.environ", {"CI_JOB_JWT": "gitlab_jwt_token_abc"}, clear=True)
     def test_get_gitlab_oidc_token(self):
         """Test GitLab OIDC token acquisition."""
         signer = SigstoreSigner()
@@ -183,7 +185,9 @@ class TestOIDCTokenAcquisition:
             signer._get_local_oidc_token()
 
     @patch.object(SigstoreSigner, "_get_github_oidc_token")
-    @patch.dict("os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url"})
+    @patch.dict(
+        "os.environ", {"ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.url"}, clear=True
+    )
     def test_get_oidc_token_github(self, mock_github_token):
         """Test _get_oidc_token routes to GitHub method."""
         signer = SigstoreSigner()
