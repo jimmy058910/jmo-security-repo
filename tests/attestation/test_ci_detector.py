@@ -9,7 +9,6 @@ Tests the three-tier priority system for auto-attestation:
 Also tests CI provider detection (GitHub Actions, GitLab CI, generic, local).
 """
 
-import pytest
 from unittest.mock import patch
 from scripts.core.attestation.ci_detector import CIDetector
 
@@ -45,7 +44,7 @@ class TestCIProviderDetection:
         detector = CIDetector()
         assert detector.get_ci_provider() == "github"
 
-    @patch.dict("os.environ", {"GITLAB_CI": "true"})
+    @patch.dict("os.environ", {"GITLAB_CI": "true"}, clear=True)
     def test_gitlab_ci_detection(self):
         """Test GitLab CI detection."""
         detector = CIDetector()
