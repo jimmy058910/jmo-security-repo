@@ -8,12 +8,9 @@ Tests the AttestationVerifier class which handles:
 - Policy checking
 """
 
-import pytest
 import json
 import hashlib
-from pathlib import Path
 from unittest.mock import patch, MagicMock
-import subprocess
 from scripts.core.attestation.verifier import AttestationVerifier, VerificationResult
 from scripts.core.attestation.tamper_detector import (
     TamperIndicator,

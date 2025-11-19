@@ -9,9 +9,7 @@ Tests the SigstoreSigner class which handles:
 
 import pytest
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
-import subprocess
+from unittest.mock import patch, MagicMock
 import requests
 from scripts.core.attestation.signer import SigstoreSigner
 from scripts.core.attestation.constants import (
@@ -242,7 +240,7 @@ class TestSignMethod:
         }
 
         with patch("pathlib.Path.read_text", return_value=json.dumps(bundle_data)):
-            with patch("pathlib.Path.write_text") as mock_write:
+            with patch("pathlib.Path.write_text"):
                 result = signer.sign(str(attestation_file))
 
         assert result["signature_path"] is not None

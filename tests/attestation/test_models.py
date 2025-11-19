@@ -12,7 +12,6 @@ Tests the dataclass models used in SLSA provenance and in-toto statements:
 - InTotoStatement (complete attestation)
 """
 
-import pytest
 from scripts.core.attestation.models import (
     Digest,
     Subject,

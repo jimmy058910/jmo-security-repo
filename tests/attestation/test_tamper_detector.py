@@ -8,11 +8,9 @@ Tests the TamperDetector class which detects:
 - Suspicious patterns (path traversal, localhost builders, missing fields)
 """
 
-import pytest
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone, timedelta
+from unittest.mock import patch
+from datetime import datetime, timezone
 from scripts.core.attestation.tamper_detector import (
     TamperDetector,
     TamperIndicator,
