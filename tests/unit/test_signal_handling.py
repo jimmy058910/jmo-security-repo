@@ -1,8 +1,19 @@
+import os
 import types
 from pathlib import Path
 import sys
 
+import pytest
+
 from scripts.cli import jmo
+
+
+@pytest.fixture(autouse=True)
+def skip_react_build_check():
+    """Skip React build check for all tests in this file (CI compatibility)."""
+    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
+    yield
+    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
 
 
 def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
