@@ -34,7 +34,11 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     react_build_path = dashboard_dir / "dist" / "index.html"
 
     # Allow skipping React build check in CI/test environments
-    skip_react_check = os.getenv("SKIP_REACT_BUILD_CHECK", "false").lower() == "true"
+    # Check both SKIP_REACT_BUILD_CHECK and CI environment variables
+    skip_react_check = (
+        os.getenv("SKIP_REACT_BUILD_CHECK", "false").lower() == "true"
+        or os.getenv("CI", "false").lower() == "true"
+    )
 
     if not skip_react_check and not react_build_path.exists():
         raise FileNotFoundError(
