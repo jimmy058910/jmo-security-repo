@@ -7,7 +7,6 @@ Tests metadata capture from three sources:
 3. CI environment (capture_ci_metadata)
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 import subprocess
 from scripts.core.attestation.metadata_capture import MetadataCapture
@@ -274,6 +273,7 @@ class TestCaptureCIMetadata:
             "CI_JOB_ID": "54321",
             "CI_JOB_NAME": "test",
         },
+        clear=True,
     )
     def test_capture_gitlab_ci_metadata(self):
         """Test capturing GitLab CI metadata."""
