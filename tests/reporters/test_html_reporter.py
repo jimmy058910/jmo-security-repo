@@ -401,8 +401,9 @@ def test_write_html_react_build_check_enforced(tmp_path, sample_findings):
     """Test that React build check is enforced when SKIP_REACT_BUILD_CHECK=false."""
     output_path = tmp_path / "dashboard.html"
 
-    # Ensure SKIP_REACT_BUILD_CHECK is not set
+    # Ensure SKIP_REACT_BUILD_CHECK and CI are not set
     os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+    os.environ.pop("CI", None)
 
     # Mock the __file__ location to ensure React build path doesn't exist
     fake_file_path = tmp_path / "fake_module.py"
