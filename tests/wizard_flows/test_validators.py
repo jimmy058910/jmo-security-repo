@@ -7,7 +7,6 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
 
 from scripts.cli.wizard_flows.validators import (
     check_docker_running,

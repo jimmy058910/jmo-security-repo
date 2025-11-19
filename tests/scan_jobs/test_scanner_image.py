@@ -10,7 +10,6 @@ Coverage targets:
 - Per-tool configuration
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 

@@ -13,7 +13,6 @@ Coverage targets:
 """
 
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from scripts.cli.scan_jobs.gitlab_scanner import (

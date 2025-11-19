@@ -22,7 +22,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -187,9 +187,7 @@ def test_evaluate_policies_user_override_builtin(tmp_path, sample_findings):
             )
             mock_engine.evaluate.return_value = mock_result
 
-            results = evaluate_policies(
-                sample_findings, ["policy"], builtin_dir, user_dir
-            )
+            evaluate_policies(sample_findings, ["policy"], builtin_dir, user_dir)
 
             # Verify user policy was used (user_dir policy file should be passed to evaluate)
             call_args = mock_engine.evaluate.call_args
@@ -448,9 +446,7 @@ def test_evaluate_policies_logging(tmp_path, sample_findings, caplog):
             mock_engine.evaluate.return_value = mock_result
 
             with caplog.at_level(logging.INFO):
-                results = evaluate_policies(
-                    sample_findings, ["log_test"], builtin_dir, user_dir
-                )
+                evaluate_policies(sample_findings, ["log_test"], builtin_dir, user_dir)
 
                 assert "Evaluating policy: log_test" in caplog.text
 

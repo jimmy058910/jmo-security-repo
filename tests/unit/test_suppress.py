@@ -15,7 +15,6 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-import pytest
 
 from scripts.core.suppress import Suppression, filter_suppressed, load_suppressions
 

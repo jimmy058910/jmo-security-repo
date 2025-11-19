@@ -12,7 +12,7 @@ Coverage targets:
 
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 from scripts.cli.scan_jobs.repository_scanner import scan_repository
 from scripts.core.tool_runner import ToolResult

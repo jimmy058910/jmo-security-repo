@@ -16,7 +16,6 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import pytest
 
 from scripts.core.common_finding import (
     FINGERPRINT_LENGTH,
