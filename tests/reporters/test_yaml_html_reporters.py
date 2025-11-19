@@ -1,9 +1,18 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.reporters.html_reporter import write_html
+
+
+@pytest.fixture(autouse=True)
+def skip_react_build_check():
+    """Skip React build check for all tests in this file (CI compatibility)."""
+    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
+    yield
+    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
 
 
 SAMPLE = [
