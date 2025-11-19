@@ -91,8 +91,13 @@ jobs:
             <summary>📊 View Full Report</summary>
 
             #### Undocumented Features (${report.findings.undocumented_features.length})
-            ${report.findings.undocumented_features.slice(0, 10).map(f => `- \`${f.file}:${f.line}\` - ${f.name} (${f.severity})`).join('\n')}
-            ${report.findings.undocumented_features.length > 10 ? `\n_...and ${report.findings.undocumented_features.length - 10} more_` : ''}
+            ${report.findings.undocumented_features
+              .slice(0, 10)
+              .map(f => `- \`${f.file}:${f.line}\` - ${f.name} (${f.severity})`)
+              .join('\n')}
+            ${report.findings.undocumented_features.length > 10
+              ? `\n_...and ${report.findings.undocumented_features.length - 10} more_`
+              : ''}
 
             #### Doc-Code Drift (${report.findings.doc_code_drift.length})
             ${report.findings.doc_code_drift.map(d => `- ${d.issue} (${d.severity})`).join('\n')}
@@ -105,8 +110,11 @@ jobs:
 
             ---
 
-            📄 **Full Analysis:** [Download artifact](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
-            🔧 **Action Plan:** [UNIFICATION_ACTION_PLAN.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/dev-only/UNIFICATION_ACTION_PLAN.md)
+            📄 **Full Analysis:**
+            [Download artifact](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+            🔧 **Action Plan:**
+            [UNIFICATION_ACTION_PLAN.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/dev-only/UNIFICATION_ACTION_PLAN.md)
             `;
 
             github.rest.issues.createComment({
