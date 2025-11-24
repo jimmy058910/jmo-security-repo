@@ -1,25 +1,25 @@
 schema_version: '1.0'
 python_tools:
   bandit:
-    version: 1.8.6
+    version: 1.9.2
     pypi_package: bandit
     description: Python security linter
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.143.1
+    version: 1.144.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.493
+    version: 3.2.495
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.14.5
+    version: 0.14.6
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -50,7 +50,7 @@ python_tools:
     installation: apt-get install lynis
 binary_tools:
   trufflehog:
-    version: 3.91.0
+    version: 3.91.1
     github_repo: trufflesecurity/trufflehog
     description: Verified secrets scanner (primary)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -70,7 +70,7 @@ binary_tools:
     update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
     critical: false
   syft:
-    version: 1.37.0
+    version: 1.38.0
     github_repo: anchore/syft
     description: SBOM generator
     release_pattern: syft_{version}_linux_{arch}.tar.gz
@@ -165,7 +165,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.103.0
+    version: 0.104.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -175,17 +175,6 @@ binary_tools:
     update_check: gh api repos/anchore/grype/releases/latest
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
-  osv-scanner:
-    version: 2.2.4
-    github_repo: google/osv-scanner
-    description: Open source vulnerability scanner (osv.dev)
-    release_pattern: osv-scanner_{version}_linux_{arch}.zip
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/google/osv-scanner/releases/latest
-    critical: false
-    notes: v1.0.0 - Google OSV database
   bearer:
     version: 1.51.1
     github_repo: Bearer/bearer
@@ -319,7 +308,6 @@ update_policies:
     - nuclei
     - gosec
     - grype
-    - osv-scanner
     - bearer
     - scancode-toolkit
     - cdxgen
@@ -333,6 +321,97 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.103.0
+    new_version: 0.104.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated syft
+  tools_updated:
+  - tool: syft
+    old_version: 1.37.0
+    new_version: 1.38.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.91.0
+    new_version: 3.91.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.14.5
+    new_version: 0.14.6
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.493
+    new_version: 3.2.495
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.143.1
+    new_version: 1.144.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2025-11-24'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-11-24'
+  action: Updated bandit
+  tools_updated:
+  - tool: bandit
+    old_version: 1.8.6
+    new_version: 1.9.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-11-17'
   action: Automated version update
   tools_updated: []
@@ -429,14 +508,6 @@ version_history:
   tools_updated: []
   updated_by: update_versions.py
   notes: ''
-- date: '2025-11-17'
-  action: Updated osv-scanner
-  tools_updated:
-  - tool: osv-scanner
-    old_version: 1.10.1
-    new_version: 2.2.4
-  updated_by: update_versions.py
-  notes: Manual update via --tool flag
 - date: '2025-11-17'
   action: Automated version update
   tools_updated: []

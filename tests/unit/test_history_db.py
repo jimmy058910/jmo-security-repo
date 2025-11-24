@@ -1986,6 +1986,120 @@ class TestGetTrendSummary:
         assert trend["top_rules"][0]["count"] >= 15
 
 
+class TestSerializeForSqlite:
+    """Test _serialize_for_sqlite function for SQLite parameter binding (BUG #17 fix)."""
+
+    def test_serialize_dict_to_json(self):
+        """Test that dict values are serialized to JSON strings."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = {"key": "value", "nested": {"a": 1}}
+        result = _serialize_for_sqlite(value)
+
+        assert isinstance(result, str)
+        assert result == '{"key": "value", "nested": {"a": 1}}'
+
+    def test_serialize_list_to_json(self):
+        """Test that list values are serialized to JSON strings."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = [1, 2, "three", {"four": 4}]
+        result = _serialize_for_sqlite(value)
+
+        assert isinstance(result, str)
+        assert result == '[1, 2, "three", {"four": 4}]'
+
+    def test_string_passthrough(self):
+        """Test that string values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = "already a string"
+        result = _serialize_for_sqlite(value)
+
+        assert result == "already a string"
+        assert isinstance(result, str)
+
+    def test_int_passthrough(self):
+        """Test that integer values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = 42
+        result = _serialize_for_sqlite(value)
+
+        assert result == 42
+        assert isinstance(result, int)
+
+    def test_float_passthrough(self):
+        """Test that float values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = 3.14
+        result = _serialize_for_sqlite(value)
+
+        assert result == 3.14
+        assert isinstance(result, float)
+
+    def test_none_passthrough(self):
+        """Test that None values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = None
+        result = _serialize_for_sqlite(value)
+
+        assert result is None
+
+    def test_empty_dict_serializes(self):
+        """Test that empty dicts are serialized to JSON."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = {}
+        result = _serialize_for_sqlite(value)
+
+        assert result == "{}"
+        assert isinstance(result, str)
+
+    def test_empty_list_serializes(self):
+        """Test that empty lists are serialized to JSON."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = []
+        result = _serialize_for_sqlite(value)
+
+        assert result == "[]"
+        assert isinstance(result, str)
+
+    def test_nested_structure_serializes(self):
+        """Test that deeply nested structures serialize correctly."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = {"level1": {"level2": {"level3": ["a", "b", "c"]}}}
+        result = _serialize_for_sqlite(value)
+
+        assert isinstance(result, str)
+        # Verify it's valid JSON by parsing it
+        import json
+
+        parsed = json.loads(result)
+        assert parsed["level1"]["level2"]["level3"] == ["a", "b", "c"]
+
+    def test_boolean_passthrough(self):
+        """Test that boolean values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        assert _serialize_for_sqlite(True) is True
+        assert _serialize_for_sqlite(False) is False
+
+    def test_bytes_passthrough(self):
+        """Test that bytes values are passed through unchanged."""
+        from scripts.core.history_db import _serialize_for_sqlite
+
+        value = b"binary data"
+        result = _serialize_for_sqlite(value)
+
+        assert result == b"binary data"
+        assert isinstance(result, bytes)
+
+
 class TestSecretRedaction:
     """Test secret redaction functionality for sensitive data."""
 

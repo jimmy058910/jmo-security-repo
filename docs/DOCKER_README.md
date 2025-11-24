@@ -248,7 +248,7 @@ results/
 
 **Tool Distribution:**
 
-- **fast (8 tools):** trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft, osv-scanner
+- **fast (7 tools):** trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft
 - **balanced (21 tools):** fast + prowler, kubescape, zap, nuclei, akto, cdxgen, scancode, gosec, grype, yara, bearer, horusec, dependency-check
 - **slim (15 tools):** Cloud/Kubernetes focused subset
 - **full (28 tools):** All scanners including noseyparker, semgrep-secrets, bandit, trivy-rbac, falco, afl++, mobsf, lynis
@@ -1197,6 +1197,59 @@ docker run --rm --user $(id -u):$(id -g) \
   -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile balanced
 ```
+
+#### WSL2 Docker builds are very slow
+
+**Problem:** Building Docker images on WSL2 takes 20-30 minutes due to slow filesystem I/O between WSL2 and Docker daemon.
+
+**Expected Build Times on WSL2:**
+
+| Variant | Tools | Build Time | Use Case |
+|---------|-------|------------|----------|
+| Fast | 7 | 5-10 min | CI/CD gates, pre-commit |
+| Slim | 14 | 10-15 min | Standard scanning |
+| Balanced | 20 | 15-20 min | Production audits |
+| Full | 27 | 20-30 min | Comprehensive security |
+
+**Solutions:**
+
+**Solution 1:** Use pre-built images (recommended)
+
+```bash
+# Pull from GHCR instead of building locally
+docker pull ghcr.io/jimmy058910/jmo-security:fast
+docker pull ghcr.io/jimmy058910/jmo-security:slim
+docker pull ghcr.io/jimmy058910/jmo-security:balanced
+docker pull ghcr.io/jimmy058910/jmo-security:latest
+```
+
+**Solution 2:** Use smaller variants for testing
+
+```bash
+# Use fast variant (7 tools, 5-10 min build) instead of full
+docker build -f Dockerfile.fast -t jmo-security:fast .
+```
+
+**Solution 3:** Enable Docker BuildKit
+
+```bash
+DOCKER_BUILDKIT=1 docker build -t jmo-security:latest .
+```
+
+**Solution 4:** Move project to Windows filesystem
+
+```bash
+# Better I/O performance than WSL2 home directory
+cd /mnt/c/Projects/jmo-security-repo
+docker build -t jmo-security:latest .
+```
+
+**Solution 5:** Use native Linux
+
+- Native Linux builds are 3-5x faster than WSL2
+- Consider a Linux VM or dual-boot for frequent Docker builds
+
+**Root Cause:** WSL2 runs Docker in a separate VM, requiring cross-filesystem copying for build context. This is a WSL2 limitation, not a JMo Security issue.
 
 ---
 

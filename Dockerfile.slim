@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets)
-RUN TRUFFLEHOG_VERSION="3.91.0" && \
+RUN TRUFFLEHOG_VERSION="3.91.1" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -28,7 +28,7 @@ RUN TRUFFLEHOG_VERSION="3.91.0" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.37.0" && \
+RUN SYFT_VERSION="1.38.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -68,12 +68,9 @@ RUN KUBESCAPE_VERSION="3.0.45" && \
 
 # Download OSV-Scanner (SCA)
 RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
-    -o /usr/local/bin/osv-scanner && \
-    chmod +x /usr/local/bin/osv-scanner
 
 # Download Grype (SCA + Vuln)
-RUN GRYPE_VERSION="0.103.0" && \
+RUN GRYPE_VERSION="0.104.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -104,7 +101,7 @@ RUN HORUSEC_VERSION="2.8.0" && \
     chmod +x /usr/local/bin/horusec
 
 #
-# Stage 2: Runtime - Cloud-optimized with 15 tools
+# Stage 2: Runtime - Cloud-optimized with 14 tools
 #
 FROM ubuntu:22.04 AS runtime
 
@@ -143,9 +140,9 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Install Python tools
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.143.1 \
-    checkov==3.2.493 \
-    ruff==0.14.5 \
+    semgrep==1.144.0 \
+    checkov==3.2.495 \
+    ruff==0.14.6 \
     yara-python==4.5.2 \
     prowler==4.0.0 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
@@ -158,7 +155,6 @@ COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
-COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
@@ -170,7 +166,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/trivy \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
-    /usr/local/bin/osv-scanner \
     /usr/local/bin/grype \
     /usr/local/bin/bearer \
     /usr/local/bin/horusec \
@@ -193,7 +188,7 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 15 slim tools
+# Verify 14 slim tools
 RUN echo "=== Verifying 15 cloud-focused tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
@@ -205,13 +200,12 @@ RUN echo "=== Verifying 15 cloud-focused tools ===" && \
     nuclei -version && \
     prowler --version && \
     kubescape version && \
-    osv-scanner --version && \
     grype version && \
     bearer version && \
     dependency-check --version && \
     horusec version && \
     shellcheck --version && \
-    echo "=== All 15 slim tools verified ==="
+    echo "=== All 14 slim tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 RUN useradd -m -u 1000 -s /bin/bash jmo && \

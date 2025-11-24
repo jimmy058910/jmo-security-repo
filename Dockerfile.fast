@@ -1,10 +1,10 @@
 # JMo Security Suite - Fast Docker Image (v1.0.0)
-# Base: Alpine 3.18 with 8 CI/CD gate tools
-# Size: ~502 MB (optimized) | Tools: 8 scanners (fastest scan profile) | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 7 CI/CD gate tools
+# Size: ~502 MB (optimized) | Tools: 7 scanners (fastest scan profile) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
 
 #
-# Stage 1: Builder - Download 8 fast tools
+# Stage 1: Builder - Download 7 fast tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog
-RUN TRUFFLEHOG_VERSION="3.91.0" && \
+RUN TRUFFLEHOG_VERSION="3.91.1" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -28,7 +28,7 @@ RUN TRUFFLEHOG_VERSION="3.91.0" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.37.0" && \
+RUN SYFT_VERSION="1.38.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -59,19 +59,13 @@ RUN NUCLEI_VERSION="3.5.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,exposures -silent
 
-# Download OSV-Scanner
-RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
-    -o /usr/local/bin/osv-scanner && \
-    chmod +x /usr/local/bin/osv-scanner
-
 #
-# Stage 2: Runtime - Minimal CI/CD environment with 8 tools
+# Stage 2: Runtime - Minimal CI/CD environment with 7 tools
 #
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
-LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 7 core scanners optimized for speed (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -97,9 +91,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.143.1 \
-    checkov==3.2.493 \
-    ruff==0.14.5 \
+    semgrep==1.144.0 \
+    checkov==3.2.495 \
+    ruff==0.14.6 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -109,7 +103,6 @@ COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
-COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 
 # Binary stripping
 RUN strip /usr/local/bin/trufflehog \
@@ -117,7 +110,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/trivy \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
-    /usr/local/bin/osv-scanner \
     2>/dev/null || true
 
 VOLUME ["/root/.cache/trivy"]
@@ -133,8 +125,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 8 fast tools
-RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
+# Verify 7 fast tools
+RUN echo "=== Verifying 7 fast CI/CD tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -143,9 +135,8 @@ RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
     checkov --version && \
     hadolint --version && \
     nuclei -version && \
-    osv-scanner --version && \
     shellcheck --version && \
-    echo "=== All 8 fast tools verified ==="
+    echo "=== All 7 fast tools verified ==="
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]

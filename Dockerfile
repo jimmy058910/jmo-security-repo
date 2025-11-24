@@ -4,7 +4,7 @@
 # v1.0.0: Feature #1 - Added 16 new tools (26 Docker-ready, 2 manual: MobSF, Akto) (Prowler, Kubescape, Gosec, Grype, OSV-Scanner, Bearer, ScanCode, cdxgen, Lynis, MobSF, Akto, YARA, Dependency-Check, Horusec, Semgrep-Secrets, Trivy-RBAC)
 
 #
-# Stage 1: Builder - Download and extract ALL 28 tools
+# Stage 1: Builder - Download and extract ALL 27 tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
-RUN TRUFFLEHOG_VERSION="3.91.0" && \
+RUN TRUFFLEHOG_VERSION="3.91.1" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -31,7 +31,7 @@ RUN TRUFFLEHOG_VERSION="3.91.0" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.37.0" && \
+RUN SYFT_VERSION="1.38.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -118,7 +118,7 @@ RUN GOSEC_VERSION="2.22.10" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.103.0" && \
+RUN GRYPE_VERSION="0.104.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -127,9 +127,6 @@ RUN GRYPE_VERSION="0.103.0" && \
 
 # Download OSV-Scanner (SCA + Vuln - Google)
 RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
-    -o /usr/local/bin/osv-scanner && \
-    chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
 RUN BEARER_VERSION="1.51.1" && \
@@ -218,10 +215,10 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Clean __pycache__ and .pyc files immediately after install (Phase 1: 40 MB savings)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    bandit==1.8.6 \
-    semgrep==1.143.1 \
-    checkov==3.2.493 \
-    ruff==0.14.5 \
+    bandit==1.9.2 \
+    semgrep==1.144.0 \
+    checkov==3.2.495 \
+    ruff==0.14.6 \
     yara-python==4.5.2 \
     scancode-toolkit==32.3.0 \
     prowler==4.0.0 \
@@ -246,7 +243,6 @@ COPY --from=builder /usr/local/bin/prowler /usr/local/bin/prowler
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
-COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /opt/zaproxy /opt/zaproxy
@@ -266,7 +262,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/gosec \
     /usr/local/bin/grype \
-    /usr/local/bin/osv-scanner \
     /usr/local/bin/bearer \
     /usr/local/bin/horusec \
     2>/dev/null || true
@@ -298,8 +293,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify ALL 28 tools are installed and accessible
-RUN echo "=== Verifying ALL 28 tools ===" && \
+# Verify ALL 27 tools are installed and accessible
+RUN echo "=== Verifying ALL 27 tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
     jmotools --help > /dev/null && \
@@ -321,14 +316,13 @@ RUN echo "=== Verifying ALL 28 tools ===" && \
     kubescape version && \
     gosec --version && \
     grype version && \
-    osv-scanner --version && \
     bearer version && \
     lynis --version && \
     dependency-check --version && \
     horusec version && \
     scancode --version && \
     cdxgen --version && \
-    echo "=== All 28 tools verified ==="
+    echo "=== All 27 tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 RUN useradd -m -u 1000 -s /bin/bash jmo && \
@@ -352,7 +346,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
 # Usage examples (documented in metadata):
-# Basic scan (deep profile, all 28 tools):
+# Basic scan (deep profile, all 27 tools):
 # docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-full scan --repo /scan --results /scan/results --profile deep
 #
 # CI mode with caching (30s faster on subsequent runs):
@@ -363,4 +357,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
 # - Phase 1 optimizations: Nuclei template filtering (65 MB), Python bytecode cleanup (40 MB), binary stripping (15 MB), Java cleanup (30 MB), Git metadata exclusion (5 MB)
 # - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
-# - Tool count: 12 → 28 tools (26 Docker-ready, 2 manual install)
+# - Tool count: 12 → 27 tools (26 Docker-ready, 2 manual install)

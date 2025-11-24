@@ -360,24 +360,67 @@ class RepositoryAnalyzer:
                 )
 
     def _map_test_coverage(self, apis: Dict) -> None:
-        """Map test files to implementation files."""
+        """Map test files to implementation files with flexible matching."""
         test_files = list((self.repo_root / "tests").rglob("test_*.py"))
 
         # Build mapping of implementation -> tests
         impl_to_tests = defaultdict(list)
 
+        # Create lookup tables for flexible matching
+        test_stems = {}  # Maps simplified names to test files
         for test_file in test_files:
-            # Derive implementation file from test file
+            test_name = test_file.stem.replace("test_", "")
+            # Store the test file path
+            test_stems[test_name] = str(test_file.relative_to(self.repo_root))
+            # Also store without common prefixes/suffixes for flexible matching
+            for prefix in ["scanner_", "wizard_", ""]:
+                for suffix in ["_additional", "_direct", "_simple", ""]:
+                    simplified = test_name.replace(prefix, "").replace(suffix, "")
+                    if simplified and simplified != test_name:
+                        test_stems[simplified] = str(
+                            test_file.relative_to(self.repo_root)
+                        )
+
+        for test_file in test_files:
             test_name = test_file.stem  # e.g., test_history_db
             impl_name = test_name.replace("test_", "")  # e.g., history_db
 
-            # Find corresponding implementation
-            impl_candidates = [
-                self.repo_root / "scripts" / "core" / f"{impl_name}.py",
-                self.repo_root / "scripts" / "cli" / f"{impl_name}.py",
-                self.repo_root / "scripts" / "core" / "adapters" / f"{impl_name}.py",
-                self.repo_root / "scripts" / "core" / "reporters" / f"{impl_name}.py",
-            ]
+            # Build list of implementation candidates with flexible matching
+            impl_candidates = []
+
+            # Direct name matches in various directories
+            for base_dir in [
+                self.repo_root / "scripts" / "core",
+                self.repo_root / "scripts" / "cli",
+                self.repo_root / "scripts" / "core" / "adapters",
+                self.repo_root / "scripts" / "core" / "reporters",
+                self.repo_root / "scripts" / "core" / "attestation",
+                self.repo_root / "scripts" / "cli" / "scan_jobs",
+                self.repo_root / "scripts" / "cli" / "wizard_flows",
+                self.repo_root / "scripts" / "core" / "workflow_generators",
+            ]:
+                impl_candidates.append(base_dir / f"{impl_name}.py")
+
+            # Handle naming variations (e.g., test_scanner_base -> base_scanner.py)
+            if impl_name.startswith("scanner_"):
+                scanner_name = impl_name.replace("scanner_", "") + "_scanner"
+                impl_candidates.append(
+                    self.repo_root
+                    / "scripts"
+                    / "cli"
+                    / "scan_jobs"
+                    / f"{scanner_name}.py"
+                )
+
+            # Handle test names with suffixes (e.g., test_compliance_mapper_direct -> compliance_mapper.py)
+            for suffix in ["_additional", "_direct", "_simple", "_e2e"]:
+                if impl_name.endswith(suffix):
+                    base_name = impl_name[: -len(suffix)]
+                    for base_dir in [
+                        self.repo_root / "scripts" / "core",
+                        self.repo_root / "scripts" / "cli",
+                    ]:
+                        impl_candidates.append(base_dir / f"{base_name}.py")
 
             for candidate in impl_candidates:
                 if candidate.exists():
@@ -386,10 +429,103 @@ class RepositoryAnalyzer:
                     )
                     break
 
-        # Check for untested implementation files
+        # Check for untested implementation files with smarter matching
         for file_path in apis.keys():
-            if file_path not in impl_to_tests and "adapters" not in file_path:
-                # Adapters have separate test structure
+            # Skip if already has tests
+            if file_path in impl_to_tests:
+                continue
+
+            # Skip adapters (have separate test structure)
+            if "adapters" in file_path and file_path.endswith("_adapter.py"):
+                continue
+
+            # Extract the base name for flexible matching
+            impl_path = Path(file_path)
+            impl_stem = impl_path.stem  # e.g., base_scanner
+
+            # Check for tests in category-specific directories
+            has_test = False
+
+            # Check attestation tests
+            if "attestation" in file_path:
+                test_dir = self.repo_root / "tests" / "attestation"
+                if test_dir.exists():
+                    for test_file in test_dir.glob("test_*.py"):
+                        if (
+                            impl_stem in test_file.stem
+                            or impl_stem.replace("_", "") in test_file.stem
+                        ):
+                            impl_to_tests[file_path].append(
+                                str(test_file.relative_to(self.repo_root))
+                            )
+                            has_test = True
+                            break
+
+            # Check scanner tests (test_scanner_base.py -> base_scanner.py)
+            if "scan_jobs" in file_path:
+                test_dir = self.repo_root / "tests" / "scan_jobs"
+                if test_dir.exists():
+                    # Convert base_scanner -> scanner_base for matching
+                    if impl_stem.endswith("_scanner"):
+                        test_pattern = (
+                            f"test_scanner_{impl_stem.replace('_scanner', '')}"
+                        )
+                    else:
+                        test_pattern = f"test_{impl_stem}"
+                    for test_file in test_dir.glob("test_*.py"):
+                        if (
+                            test_pattern in test_file.stem
+                            or impl_stem in test_file.stem
+                        ):
+                            impl_to_tests[file_path].append(
+                                str(test_file.relative_to(self.repo_root))
+                            )
+                            has_test = True
+                            break
+
+            # Check wizard flow tests
+            if "wizard_flows" in file_path:
+                test_dir = self.repo_root / "tests" / "wizard_flows"
+                if test_dir.exists():
+                    for test_file in test_dir.glob("test_*.py"):
+                        if impl_stem in test_file.stem:
+                            impl_to_tests[file_path].append(
+                                str(test_file.relative_to(self.repo_root))
+                            )
+                            has_test = True
+                            break
+
+            # Check workflow generator tests
+            if "workflow_generators" in file_path:
+                test_dir = self.repo_root / "tests" / "workflow_generators"
+                if test_dir.exists():
+                    for test_file in test_dir.glob("test_*.py"):
+                        if impl_stem in test_file.stem:
+                            impl_to_tests[file_path].append(
+                                str(test_file.relative_to(self.repo_root))
+                            )
+                            has_test = True
+                            break
+
+            # Flexible search across all test directories
+            if not has_test:
+                for test_file in test_files:
+                    test_stem = test_file.stem.replace("test_", "")
+                    # Check various matching patterns
+                    if (
+                        impl_stem == test_stem
+                        or impl_stem in test_stem
+                        or test_stem in impl_stem
+                        or impl_stem.replace("_", "") == test_stem.replace("_", "")
+                    ):
+                        impl_to_tests[file_path].append(
+                            str(test_file.relative_to(self.repo_root))
+                        )
+                        has_test = True
+                        break
+
+            # Only report as gap if no test found after all checks
+            if not has_test and file_path not in impl_to_tests:
                 self.findings["test_gaps"].append(
                     {
                         "file": file_path,

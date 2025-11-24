@@ -4,7 +4,7 @@
 # v1.0.0: Balanced variant - Excludes specialized tools (Noseyparker, Bandit, Semgrep-Secrets, Trivy-RBAC, Falco, AFL++, MobSF, Lynis)
 
 #
-# Stage 1: Builder - Download and extract 21 tools (exclude 7 specialized)
+# Stage 1: Builder - Download and extract 20 tools (exclude 7 specialized)
 #
 FROM ubuntu:22.04 AS builder
 
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
-RUN TRUFFLEHOG_VERSION="3.91.0" && \
+RUN TRUFFLEHOG_VERSION="3.91.1" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -28,7 +28,7 @@ RUN TRUFFLEHOG_VERSION="3.91.0" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.37.0" && \
+RUN SYFT_VERSION="1.38.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -91,18 +91,12 @@ RUN GOSEC_VERSION="2.22.10" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.103.0" && \
+RUN GRYPE_VERSION="0.104.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
     tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
     chmod +x /usr/local/bin/grype
-
-# Download OSV-Scanner (SCA + Vuln - Google)
-RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_${OSV_ARCH}" \
-    -o /usr/local/bin/osv-scanner && \
-    chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
 RUN BEARER_VERSION="1.51.1" && \
@@ -128,7 +122,7 @@ RUN HORUSEC_VERSION="2.8.0" && \
     chmod +x /usr/local/bin/horusec
 
 #
-# Stage 2: Runtime - Production-ready runtime with 21 tools
+# Stage 2: Runtime - Production-ready runtime with 20 tools
 #
 FROM ubuntu:22.04 AS runtime
 
@@ -169,9 +163,9 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Install Python tools (Phase 1: 40 MB bytecode cleanup)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.143.1 \
-    checkov==3.2.493 \
-    ruff==0.14.5 \
+    semgrep==1.144.0 \
+    checkov==3.2.495 \
+    ruff==0.14.6 \
     yara-python==4.5.2 \
     scancode-toolkit==32.3.0 \
     prowler==4.0.0 \
@@ -193,7 +187,6 @@ COPY --from=builder /usr/local/bin/prowler /usr/local/bin/prowler
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
-COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /opt/zaproxy /opt/zaproxy
@@ -207,7 +200,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/gosec \
     /usr/local/bin/grype \
-    /usr/local/bin/osv-scanner \
     /usr/local/bin/bearer \
     /usr/local/bin/horusec \
     2>/dev/null || true
@@ -231,8 +223,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 21 tools
-RUN echo "=== Verifying 21 balanced tools ===" && \
+# Verify 20 tools
+RUN echo "=== Verifying 20 balanced tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -246,14 +238,13 @@ RUN echo "=== Verifying 21 balanced tools ===" && \
     kubescape version && \
     gosec --version && \
     grype version && \
-    osv-scanner --version && \
     bearer version && \
     dependency-check --version && \
     horusec version && \
     scancode --version && \
     cdxgen --version && \
     shellcheck --version && \
-    echo "=== All 21 balanced tools verified ==="
+    echo "=== All 20 balanced tools verified ==="
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]
