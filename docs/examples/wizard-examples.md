@@ -6,22 +6,22 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 
 ## Table of Contents
 
-- [Five Workflow Types (v0.9.0+)](#five-workflow-types-v090)
-- [Visual Interface (v0.9.0+)](#visual-interface-v090)
+- [Five Workflow Types](#five-workflow-types)
+- [Visual Interface](#visual-interface)
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
 - [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
 - [Windows Docker Mode](#windows-docker-mode)
-- [Multi-Target Scanning (v0.6.2+)](#multi-target-scanning-v062)
-- [Privacy-First Telemetry (v0.7.0+)](#privacy-first-telemetry-v070)
+- [Multi-Target Scanning](#multi-target-scanning)
+- [Privacy-First Telemetry](#privacy-first-telemetry)
 - [Artifact Generation](#artifact-generation)
 - [Common Workflows](#common-workflows)
 
 ---
 
-## Visual Interface (v0.9.0+)
+## Visual Interface
 
-**NEW in v0.9.0:** Enhanced visual interface with progress tracking, colored output, and structured information displays.
+Enhanced visual interface with progress tracking, colored output, and structured information displays.
 
 ### Progress Tracking
 
@@ -181,9 +181,9 @@ Clear profile comparison before selection:
 
 ---
 
-## Five Workflow Types (v0.9.0+)
+## Five Workflow Types
 
-**NEW in v0.9.0:** The wizard now supports 5 specialized workflows tailored to different use cases. Each workflow auto-detects targets, provides smart recommendations, and generates workflow-specific artifacts.
+The wizard supports 5 specialized workflows tailored to different use cases. Each workflow auto-detects targets, provides smart recommendations, and generates workflow-specific artifacts.
 
 ### 1. Single Repository Scanning (RepoFlow)
 
@@ -436,7 +436,7 @@ Choose how to run the scan:
 
 The wizard automatically detects if Docker is installed and running.
 
-#### Step 3a: Select Target Type (v0.6.2+)
+#### Step 3a: Select Target Type
 
 Choose what type of asset to scan:
 
@@ -677,7 +677,7 @@ newgrp docker
 
 ---
 
-## Multi-Target Scanning (v0.6.2+)
+## Multi-Target Scanning
 
 The wizard now supports scanning 6 different target types beyond repositories.
 
@@ -904,7 +904,7 @@ All findings deduplicated and aggregated to `comprehensive-audit/summaries/`.
 
 ---
 
-## Privacy-First Telemetry (v0.7.0+)
+## Privacy-First Telemetry
 
 JMo Security includes optional, anonymous usage analytics to help improve the tool. The wizard provides clear opt-in/opt-out prompts.
 
@@ -1033,9 +1033,9 @@ For complete details, see [docs/TELEMETRY.md](../TELEMETRY.md).
 
 ---
 
-## Trend Analysis Integration (v1.0.0+)
+## Trend Analysis Integration
 
-**NEW in v1.0.0:** The wizard now offers interactive trend analysis after each scan, enabling statistical tracking of security posture improvements over time.
+The wizard offers interactive trend analysis after each scan, enabling statistical tracking of security posture improvements over time.
 
 ### Post-Scan Trend Prompt
 
@@ -1835,7 +1835,7 @@ docker run --rm \
 
 For complete documentation, see:
 
-- [docs/USER_GUIDE.md — Trend Analysis](../USER_GUIDE.md#trend-analysis-v100)
+- [docs/USER_GUIDE.md — Trend Analysis](../USER_GUIDE.md#trend-analysis)
 - [docs/API_REFERENCE.md — TrendAnalyzer API](../API_REFERENCE.md#trendanalyzer)
 - [docs/examples/ci-cd-trends.md](./ci-cd-trends.md) - Complete CI/CD patterns
 

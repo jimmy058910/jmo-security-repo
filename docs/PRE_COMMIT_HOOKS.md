@@ -4,7 +4,7 @@
 
 JMo Security uses [pre-commit](https://pre-commit.com/) to enforce code quality, security, and consistency before commits reach the repository.
 
-**Key Feature (v0.7.1+):** The `deps-compile` hook automatically re-executes with Python 3.10+ if run with an older Python version, preventing dependency version mismatches.
+**Key Feature:** The `deps-compile` hook automatically re-executes with Python 3.10+ if run with an older Python version, preventing dependency version mismatches.
 
 ---
 
@@ -74,7 +74,7 @@ Once installed, hooks run automatically:
 
 1. **actionlint** — Validate GitHub Actions workflows
 
-#### Dependency Management (v0.7.1+)
+#### Dependency Management
 
 1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.10+
 
@@ -82,7 +82,7 @@ Once installed, hooks run automatically:
 
 ## Hook Details
 
-### deps-compile (Critical for v0.7.1+)
+### deps-compile (Critical)
 
 **Purpose:** Ensures `requirements-dev.txt` is always compiled with Python 3.10+ to match CI/CD environments.
 
@@ -117,13 +117,13 @@ $ git commit -m "deps: update pytest"
 
 **Why This Matters:**
 
-Before v0.7.1, running `make deps-compile` with Python 3.8 would cause:
+Running `make deps-compile` with Python 3.8 can cause:
 
-- 5 dependency conflicts
-- 4 package downgrades
+- Dependency conflicts
+- Package downgrades
 - CI incompatibility (CI uses Python 3.10/3.11/3.12)
 
-Now, the hook automatically uses the correct Python version, preventing these issues.
+The hook automatically uses the correct Python version, preventing these issues.
 
 ### bandit (Security)
 
@@ -198,7 +198,7 @@ git push
 # Skip all hooks (NOT RECOMMENDED)
 git commit --no-verify -m "emergency fix"
 
-# Skip specific hook (v0.7.1+)
+# Skip specific hook
 SKIP=deps-compile git commit -m "fix: typo in docs"
 
 # Skip multiple hooks
@@ -472,17 +472,11 @@ repos:
 
 ---
 
-## Lessons Learned (v0.7.1)
+## Lessons Learned
 
-### What We Fixed
+### Python Version Detection
 
-**Before v0.7.1:**
-
-- `deps-compile` hook used active Python (often 3.8 in venvs)
-- Caused dependency conflicts and downgrades
-- Required manual `SKIP=deps-compile` or `python3.11 -m piptools compile`
-
-**After v0.7.1:**
+The `deps-compile` hook includes automatic Python version detection:
 
 - Hook auto-detects and re-executes with Python 3.10+
 - Prevents dependency mismatches automatically
@@ -512,6 +506,6 @@ repos:
 
 ---
 
-**Last Updated:** 2025-10-23 (v0.7.1)
+**Last Updated:** 2025-10-23
 **Maintainer:** JMo Security Team
 **Next Review:** 2025-11-23 (monthly)

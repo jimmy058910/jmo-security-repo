@@ -1,7 +1,6 @@
 # Docker Variants Master Reference
 
 **Last Updated:** 2025-11-11
-**Version:** v1.0.0
 
 ## Overview
 
@@ -333,7 +332,7 @@ START: What is your primary use case?
 
 ## Alpine Deprecation Notice
 
-**Dockerfile.alpine has been deprecated** as of v1.0.0 and replaced by the balanced/slim variants.
+**Dockerfile.alpine has been deprecated** and replaced by the balanced/slim variants.
 
 **Rationale:**
 

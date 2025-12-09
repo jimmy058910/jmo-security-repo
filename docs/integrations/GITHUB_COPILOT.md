@@ -71,7 +71,7 @@ security scan results, enabling:
 ```bash
 # In VS Code, open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
 # Type: "Copilot: Check MCP Support"
-# Expected: "MCP protocol supported (v1.0.0+)"
+# Expected: "MCP protocol supported"
 ```
 
 If MCP is not supported, update GitHub Copilot extension:

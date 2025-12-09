@@ -1,6 +1,6 @@
 # Manual Installation Guide (MobSF, Akto)
 
-**v1.0.0 Status**: Two tools (MobSF, Akto) require manual installation due to complex dependencies. Full Docker support is planned for v1.0.1.
+Two tools (MobSF, Akto) require manual installation due to complex dependencies. Full Docker support is planned for a future release.
 
 ## Why Manual Installation?
 
@@ -8,7 +8,7 @@
 
 - Requires Android SDK subset (~200 MB)
 - Needs specific APK tooling (aapt2, apktool, jadx)
-- Complex multi-stage Docker build (not ready for v1.0.0)
+- Complex multi-stage Docker build (requires additional development)
 
 **Akto (API Security)**:
 
@@ -16,7 +16,7 @@
 - Requires separate port mapping and service orchestration
 - Best deployed as sidecar container in CI/CD
 
-## Docker Image Tool Counts (v1.0.0)
+## Docker Image Tool Counts
 
 | Variant | Total Tools | Docker-Ready Tools | Manual Tools | Status |
 |---------|-------------|--------------------|--------------| ------|
@@ -264,9 +264,9 @@ jobs:
 
 ---
 
-## Roadmap: Full Docker Support (v1.0.1)
+## Future: Full Docker Support
 
-**Planned for v1.0.1** (2-4 weeks after v1.0.0 release):
+**Planned for a future release:**
 
 ### MobSF Docker Integration
 
@@ -285,13 +285,13 @@ jobs:
 - **Configuration**: Auto-start Akto service on container launch
 - **Limitations**: Single-container deployment (no external Mongo)
 
-**Expected v1.0.1 Tool Count**: **28 Docker-ready tools** (all tools)
+**Expected Tool Count (with full Docker support)**: **28 Docker-ready tools** (all tools)
 
 ---
 
 ## Community Contributions
 
-**Want to help add Docker support for MobSF/Akto in v1.0.1?**
+**Want to help add Docker support for MobSF/Akto?**
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
 
@@ -304,5 +304,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2025-11-01 (v1.0.0)
+**Last Updated**: 2025-11-01
 **Questions?**: [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)

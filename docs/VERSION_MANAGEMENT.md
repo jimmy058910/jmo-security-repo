@@ -1,6 +1,6 @@
 # Version Management Guide
 
-**Status:** ✅ Implemented (v0.6.1+)
+**Status:** ✅ Implemented
 **Related:** [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
 
 ## Table of Contents

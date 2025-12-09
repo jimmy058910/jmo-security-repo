@@ -16,22 +16,22 @@
 
 ---
 
-## 🎉 Latest Updates (v1.0.0 - November 2025)
+## Key Features
 
-- 🔒 **NEW: SLSA Attestation (Supply Chain Security)** - Tamper-evident scan results with provenance
+- 🔒 **SLSA Attestation (Supply Chain Security)** - Tamper-evident scan results with provenance
   - SLSA Level 2 compliance: Signed provenance with keyless Sigstore integration
   - Tamper detection: Timestamp anomalies, builder consistency, tool rollback detection
   - Multi-hash digests (SHA-256/384/512) for defense-in-depth
   - Auto-attestation in CI: GitHub Actions + GitLab CI with OIDC (no key management)
-  - See [USER_GUIDE.md — SLSA Attestation](USER_GUIDE.md#slsa-attestation-v100) and [examples/attestation-workflows.md](examples/attestation-workflows.md)
-- ⚖️ **NEW: Policy-as-Code (ROADMAP #7)** - OPA-based security policy enforcement with CI/CD gating
+  - See [USER_GUIDE.md — SLSA Attestation](USER_GUIDE.md#slsa-attestation) and [examples/attestation-workflows.md](examples/attestation-workflows.md)
+- ⚖️ **Policy-as-Code** - OPA-based security policy enforcement with CI/CD gating
   - 5 built-in policies: zero-secrets, OWASP Top 10, PCI DSS, production-hardening, HIPAA compliance
   - Custom policy authoring with Rego v1 syntax (OPA 1.0+)
   - CI mode integration: `--fail-on-policy-violation` for automated policy gating
   - Performance: <100ms per policy evaluation (21.81ms average across all policies)
   - See [POLICY_AS_CODE.md](POLICY_AS_CODE.md) and [examples/policy-workflows.md](examples/policy-workflows.md)
-- 🔄 **NEW: Machine-Readable Diffs (ROADMAP #3)** - Compare scans over time with fingerprint-based diff engine
-  - Four output formats: JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
+- 🔄 **Machine-Readable Diffs** - Compare scans over time with fingerprint-based diff engine
+  - Four output formats: JSON, Markdown (PR comments), HTML (interactive), SARIF 2.1.0
   - CI/CD integration: GitHub Actions & GitLab CI examples with automated PR/MR comments
   - Performance: <500ms for 1000-finding diffs, <2s for 10K-finding diffs
   - See [examples/diff-workflows.md](examples/diff-workflows.md) for complete workflows
@@ -41,9 +41,9 @@
 - 📚 **ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
 - 📝 **Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
 - 💰 **GitHub Sponsors** - Support ongoing development
-- 📊 **Privacy-First Telemetry (v0.7.0)** - Optional anonymous usage analytics (opt-out model, GDPR/CCPA compliant)
-- 🧠 **Memory System (v0.7.0)** - Lightweight JSON-based caching for faster repeated analysis
-- 🧙 **Interactive Wizard (v0.6.2)** - Supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
+- 📊 **Privacy-First Telemetry** - Optional anonymous usage analytics (opt-out model, GDPR/CCPA compliant)
+- 🧠 **Memory System** - Lightweight JSON-based caching for faster repeated analysis
+- 🧙 **Interactive Wizard** - Supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
 - 🐳 **Docker Optimized** - Multi-stage builds, layer caching, persistent Trivy DB
 - 📊 **Enriched SARIF 2.1.0** - CWE/OWASP/CVE taxonomies for code scanning platforms
 
@@ -174,14 +174,14 @@ jmo --help
 |----------|---------|----------|
 | [**Quick Reference**](QUICK_REFERENCE.md) | **One-page command reference (scanning, Docker, troubleshooting)** | **Everyone** |
 | [**Results Quick Reference**](RESULTS_QUICK_REFERENCE.md) | **One-page printable triage card (30-minute workflow)** | **Everyone** |
-| [**Schedule Guide**](SCHEDULE_GUIDE.md) | **Complete guide to automated scan scheduling (v0.8.0+)** | **DevOps/SRE** |
-| [**Slack Notifications**](examples/slack-notifications.md) | **Real-world Slack integration patterns (v0.8.0+)** | **DevOps/SRE** |
-| [**Attestation Workflows (v1.0.0)**](examples/attestation-workflows.md) | **SLSA attestation CI/CD patterns (GitHub Actions, GitLab CI, Docker)** | **DevOps/SRE** |
-| [**Policy-as-Code (v1.0.0)**](POLICY_AS_CODE.md) | **OPA-based policy enforcement for security compliance (zero-secrets, OWASP, PCI DSS)** | **Everyone** |
-| [Policy Workflows (v1.0.0)](examples/policy-workflows.md) | CI/CD integration examples for policy gating | DevOps/SRE |
-| [Custom Policy Examples (v1.0.0)](examples/custom-policy-examples.md) | 5 complete custom policy templates (SQL injection, container vulns, license compliance) | Advanced |
-| [Diff Workflows (v1.0.0)](examples/diff-workflows.md) | Machine-readable diff usage examples | DevOps |
-| [Trend Analysis (v1.0.0)](examples/ci-cd-trends.md) | Trend analysis CI/CD integration | DevOps |
+| [**Schedule Guide**](SCHEDULE_GUIDE.md) | **Complete guide to automated scan scheduling** | **DevOps/SRE** |
+| [**Slack Notifications**](examples/slack-notifications.md) | **Real-world Slack integration patterns** | **DevOps/SRE** |
+| [**Attestation Workflows**](examples/attestation-workflows.md) | **SLSA attestation CI/CD patterns (GitHub Actions, GitLab CI, Docker)** | **DevOps/SRE** |
+| [**Policy-as-Code**](POLICY_AS_CODE.md) | **OPA-based policy enforcement for security compliance (zero-secrets, OWASP, PCI DSS)** | **Everyone** |
+| [Policy Workflows](examples/policy-workflows.md) | CI/CD integration examples for policy gating | DevOps/SRE |
+| [Custom Policy Examples](examples/custom-policy-examples.md) | 5 complete custom policy templates (SQL injection, container vulns, license compliance) | Advanced |
+| [Diff Workflows](examples/diff-workflows.md) | Machine-readable diff usage examples | DevOps |
+| [Trend Analysis](examples/ci-cd-trends.md) | Trend analysis CI/CD integration | DevOps |
 | [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows | Beginners |
 | [TSV Scanning](examples/scan_from_tsv.md) | Clone and scan from TSV files | DevOps |
 | [GitHub Actions Docker](examples/github-actions-docker.yml) | CI/CD workflow examples | DevOps/SRE |
@@ -198,7 +198,7 @@ jmo --help
 | [TEST.md](../TEST.md) | Testing guide | Contributors |
 | [RELEASE.md](RELEASE.md) | Release process | Maintainers |
 
-### AI Integrations (NEW - v1.0.0)
+### AI Integrations
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
@@ -219,7 +219,7 @@ jmo --help
 | [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
 | [Badge Automation](BADGE_AUTOMATION.md) | PyPI badge auto-update system | Maintainers |
 | [Compliance Framework Analysis](archive/COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail (archived) | Advanced |
-| [Telemetry](TELEMETRY.md) | Privacy-first usage tracking (v0.7.0+) | Everyone |
+| [Telemetry](TELEMETRY.md) | Privacy-first usage tracking | Everyone |
 | [Testing Matrix](TESTING_MATRIX.md) | Test coverage dimensions | Contributors |
 | [Usage Matrix](USAGE_MATRIX.md) | Use case configurations | Everyone |
 
@@ -324,7 +324,7 @@ cat results/summaries/SUMMARY.md
 ## What's in this toolkit
 
 - Orchestrates secrets (TruffleHog verified, Nosey Parker), SAST (Semgrep, Bandit), SBOM+vulnerabilities (Syft, Trivy), IaC (Checkov), Dockerfile (Hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++) scanners via a unified CLI
-- Normalizes outputs into a CommonFinding schema (v1.0.0) for consistent reporting with stable fingerprinting
+- Normalizes outputs into a CommonFinding schema for consistent reporting with stable fingerprinting
 - Ships human-friendly HTML dashboard (XSS-secured) and machine-friendly JSON/YAML/SARIF 2.1.0 (enriched with taxonomies)
 - Supports profiles, per-tool flags/timeouts, retries, include/exclude patterns, and fine-grained suppression
 - Type-safe severity enum (CRITICAL > HIGH > MEDIUM > LOW > INFO) with comparison operators
@@ -433,7 +433,7 @@ Q: How do I suppress false positives?
 
 - A: Create a `jmo.suppress.yml` as described in [User Guide — Suppressions](USER_GUIDE.md#suppressions). A summary is written to `SUPPRESSIONS.md` during report/ci.
 
-## Why These Tools? (v0.5.0 Tool Selection Rationale)
+## Why These Tools?
 
 ### Why TruffleHog over Gitleaks?
 

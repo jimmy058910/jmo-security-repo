@@ -1145,7 +1145,7 @@ curl -X POST http://grafana:3000/api/dashboards/db \
    ```bash
    # Default: p < 0.05 (95% confidence)
    # More sensitive: p < 0.10 (90% confidence)
-   # NOTE: Not configurable in v1.0.0, use insights for interpretation
+   # NOTE: Not configurable, use insights for interpretation
    ```
 
 3. **Analyze insights:**

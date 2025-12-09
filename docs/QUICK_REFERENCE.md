@@ -21,7 +21,7 @@ jmo scan --repo . --profile-name deep
 # Custom results directory
 jmo scan --repo ~/projects/myapp --results-dir ~/security-audits/myapp-2025-10-23
 
-# Multi-target scanning (v0.6.0+)
+# Multi-target scanning
 jmo scan --repo . --image nginx:latest --url https://example.com --results-dir results
 ```
 
@@ -169,11 +169,11 @@ results/
 │       ├── trufflehog.json
 │       ├── semgrep.json
 │       └── ...
-├── individual-images/         # Container image scans (v0.6.0+)
-├── individual-iac/            # IaC file scans (v0.6.0+)
-├── individual-web/            # Web app scans (v0.6.0+)
-├── individual-gitlab/         # GitLab repo scans (v0.6.0+)
-├── individual-k8s/            # K8s cluster scans (v0.6.0+)
+├── individual-images/         # Container image scans
+├── individual-iac/            # IaC file scans
+├── individual-web/            # Web app scans
+├── individual-gitlab/         # GitLab repo scans
+├── individual-k8s/            # K8s cluster scans
 └── summaries/                 # Unified reports
     ├── findings.json
     ├── SUMMARY.md
@@ -246,5 +246,4 @@ make attack-navigator
 
 ---
 
-**Version**: v0.6.2
 **Last Reviewed**: 2025-10-23

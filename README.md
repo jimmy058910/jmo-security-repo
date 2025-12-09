@@ -75,7 +75,7 @@ Quick link: CI Troubleshooting → [Interpreting CI failures](docs/USER_GUIDE.md
 
 ## 🎉 Recent Improvements
 
-### v1.0.0 - SQLite Historical Storage (November 2025) 📊
+### SQLite Historical Storage 📊
 
 **MAJOR FEATURE: Track Security Posture Over Time (ROADMAP #1):**
 
@@ -122,7 +122,7 @@ jmo history export --output audit-report.json
 
 ---
 
-### v1.0.0 - Statistical Trend Analysis (November 2025) 📈
+### Statistical Trend Analysis 📈
 
 **MAJOR FEATURE: Mann-Kendall Statistical Validation (ROADMAP #4):**
 
@@ -171,7 +171,7 @@ jmo trends analyze --export prometheus
 
 ---
 
-### v1.0.0 - Machine-Readable Diffs (November 2025) 🎯
+### Machine-Readable Diffs 🎯
 
 **MAJOR FEATURE: Compare Security Scans Over Time (ROADMAP #3):**
 
@@ -183,7 +183,7 @@ Track security posture improvements, identify regressions, and automate CI/CD se
   - Calculates trend: improving, stable, worsening
   - O(n) performance for large scans (10K findings in <2s)
 - ✅ **4 Output Formats** - Machine-readable reports for all workflows
-  - **JSON** (v1.0.0) - Structured data with metadata wrapper for tooling integration
+  - **JSON** - Structured data with metadata wrapper for tooling integration
   - **Markdown** - PR/MR comments with collapsible details and emoji indicators
   - **HTML** - Interactive dashboard with charts and trend visualization
   - **SARIF 2.1.0** - GitHub/GitLab Code Scanning integration with baselineState
@@ -228,7 +228,7 @@ NEW_COUNT=$(jq '(.statistics.new_by_severity.CRITICAL // 0) + (.statistics.new_b
 
 ---
 
-### v1.0.0 - Dual-Mode HTML Dashboard (November 2025) 📊
+### Dual-Mode HTML Dashboard 📊
 
 **PERFORMANCE ENHANCEMENT: 95% Reduction in Dashboard Load Time**
 
@@ -282,150 +282,7 @@ jmo scan --repos-dir ~/repos --results-dir results-large
 
 ---
 
-## Version History
-
-JMo Security follows [Semantic Versioning](https://semver.org/). Major feature milestones:
-
-### Schema Versions
-
-**v1.2.0 - Compliance Framework Addition**
-
-- Added `compliance` field to CommonFinding schema
-- 6 framework mappings: OWASP Top 10, CWE Top 25, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK
-- Automatic enrichment during report phase
-- See [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
-
-**v1.1.0 - Risk Field Addition**
-
-- Added `risk` field with CWE, confidence, likelihood, impact
-- Enhanced remediation context
-- Improved CVSS scoring
-
-**v1.0.0 - Production Release**
-
-- SQLite historical storage with 13 CLI commands
-- Machine-readable diffs (4 output formats)
-- Statistical trend analysis with Mann-Kendall validation
-- Cross-tool deduplication (30-40% noise reduction)
-- See [CHANGELOG.md](CHANGELOG.md) for full details
-
-### Tool & Feature Versions
-
-**v0.9.0 - Intelligence & Automation**
-
-- Plugin architecture for tool adapters
-- EPSS risk scoring and CISA KEV integration
-- Email notifications and scheduled scans
-- Refactored CLI orchestrators
-
-**v0.8.0 - GitLab CI Integration**
-
-- GitLab CI workflow generation
-- CI stability improvements
-- Resource management with cron-based scheduling
-
-**v0.7.0 - Performance & UX**
-
-- Auto-detect CPU threads (75% of cores)
-- Real-time progress tracking
-- Smart defaults for optimal performance
-
-**v0.6.0 - Multi-Target Scanning**
-
-- Container image scanning
-- IaC file scanning (Terraform, CloudFormation, K8s)
-- Web URL scanning (DAST with ZAP/Nuclei)
-- GitLab repository scanning
-- Kubernetes cluster scanning
-
-**v0.5.1 - Compliance Foundations**
-
-- Compliance framework mappings
-- MITRE ATT&CK Navigator export
-- PCI DSS compliance reporting
-
-**v0.5.0 - Profile System**
-
-- Fast, balanced, deep profiles
-- Configurable timeouts and threads
-- Tool suite consolidation
-
-For complete version history with detailed changes, see [CHANGELOG.md](CHANGELOG.md).
-
----
-
-### v0.8.0 - GitLab CI & Stability (October 2025)
-
-**GitLab CI/CD Integration:**
-
-- ✅ **GitLab CI Workflow Generation** - Generate `.gitlab-ci.yml` for automated security scanning
-  - Resource management with cron-based scheduling
-  - Job templates for Docker-based scans
-  - Flexible scan profiles (fast/balanced/deep)
-- ✅ **CI Stability** - Fixed flaky Docker build test timeouts
-  - Reduced CI runtime from 30m to 1-2m on affected platforms
-  - Cleaner git workflow with `.hypothesis/` gitignore
-
-### v0.7.0 - Performance & UX (October 2025)
-
-**Smart Defaults & Real-Time Feedback:**
-
-- ✅ **Auto-Detect CPU Threads** - Automatically uses 75% of CPU cores for optimal performance (min 2, max 16)
-  - No more guessing thread counts
-  - Docker scans now utilize full CPU capacity
-  - Override with `threads: auto` in jmo.yml or `JMO_THREADS=auto`
-- ✅ **Real-Time Progress Tracking** - Live updates during long-running scans
-  - Format: `[3/10] ✓ repo: my-app (45s) | Progress: 30% | ETA: 2m 15s`
-  - Per-target timing shows which targets are slow
-  - No more wondering if scan is frozen
-
-**Why This Matters:**
-
-- 🚀 **Faster Scans** - Proper CPU utilization reduces scan times by 40-60%
-- 👀 **Better Visibility** - Know exactly what's happening during long scans (15-60 min)
-- 🎯 **Smarter Defaults** - Works out-of-the-box without manual configuration
-
-### v0.6.0 - Multi-Target Scanning (October 2025)
-
-**BREAKTHROUGH: Unified Security Platform (ROADMAP #4 - Phase 1):**
-
-Scan repositories AND infrastructure in one unified workflow!
-
-- ✅ **Container Image Scanning** - Scan Docker/OCI images with Trivy + Syft for vulnerabilities, secrets, and SBOMs
-- ✅ **IaC File Scanning** - Scan Terraform/CloudFormation/K8s manifests with Checkov + Trivy
-- ✅ **Live Web URL Scanning** - DAST scanning of web apps and APIs with OWASP ZAP
-- ✅ **GitLab Integration** - Scan GitLab repos with TruffleHog verified secrets detection
-- ✅ **Kubernetes Cluster Scanning** - Live K8s cluster scanning with Trivy for vulnerabilities and misconfigurations
-- ✅ **Unified Results** - All targets aggregated, deduplicated, and reported in one dashboard
-- ✅ **Multi-Target CI/CD** - Scan multiple target types in one pipeline run
-
-**Key Benefits:**
-
-- 🎯 **Single Tool** - Replace 5+ separate security tools with one unified CLI
-- 🚀 **Parallel Execution** - Scan images/IaC/URLs/repos simultaneously for faster results
-- 📊 **Unified Reporting** - One dashboard for all findings across all targets
-- 🔁 **CI/CD Ready** - Multi-target scanning with severity gating in one command
-- 🔧 **Flexible** - Scan single targets or batch process from files
-
-**Example: Complete Security Audit in One Command:**
-
-```bash
-# Scan repo + container image + live web app + K8s cluster together
-jmo scan \
-  --repo ./myapp \
-  --image myapp:latest \
-  --url https://myapp.com \
-  --k8s-context prod \
-  --results-dir ./audit-results
-```
-
-See [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060) for complete documentation.
-
----
-
----
-
-### 📅 Schedule Automated Scans (v0.9.0)
+### 📅 Schedule Automated Scans
 
 **Automate recurring security scans with Kubernetes-inspired scheduling:**
 
@@ -454,11 +311,11 @@ jmo schedule export weekly-scan --backend gitlab-ci > .gitlab-ci.yml
 jmo schedule list
 ```
 
-**Complete guide:** [QUICKSTART.md — Schedule Automated Scans](QUICKSTART.md#-schedule-automated-scans-new-in-v090) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md)
+**Complete guide:** [QUICKSTART.md — Schedule Automated Scans](QUICKSTART.md#-schedule-automated-scans) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md)
 
 ---
 
-### 🎯 Intelligent Risk Prioritization (v0.9.0)
+### 🎯 Intelligent Risk Prioritization
 
 **Smart vulnerability triage with exploit prediction and active exploitation detection:**
 
@@ -513,44 +370,11 @@ jmo report results --human-logs
 - `SUMMARY.md` sorted by priority (highest risk first)
 - CSV export includes priority scores for custom filtering
 
-**Complete guide:** [docs/USER_GUIDE.md — EPSS/KEV Risk Prioritization](docs/USER_GUIDE.md#epsskev-risk-prioritization-v090) | [QUICKSTART.md](QUICKSTART.md#epsskev-risk-prioritization-new-in-v090)
-
-### v0.5.0 - Tool Suite Consolidation (October 2025)
-
-**Tool Suite Consolidation (ROADMAP #3):**
-
-- ✅ **DAST coverage added** with OWASP ZAP (20-30% more vulnerabilities detected)
-- ✅ **Runtime security monitoring** with Falco (zero-day exploit detection for containers/K8s)
-- ✅ **Fuzzing capabilities** with AFL++ (coverage-guided vulnerability discovery)
-- ✅ **Verified secrets** with TruffleHog (95% false positive reduction)
-- ✅ **Removed deprecated tools** (gitleaks, tfsec, osv-scanner)
-- ✅ **Profile restructuring** - Fast: 3 tools, Balanced: 7 tools, Deep: 11 tools
-
-**Security & Bug Fixes (Phase 1 - October 2025):**
-
-- ✅ **XSS vulnerability patched** in HTML dashboard with comprehensive input escaping
-- ✅ **OSV scanner fully integrated** for open-source vulnerability detection
-- ✅ **Type-safe severity enum** with comparison operators for cleaner code
-- ✅ **Backward-compatible suppression keys** (`suppressions` and legacy `suppress`)
-
-**Enhanced Features:**
-
-- 🚀 **Enriched SARIF output** with CWE/OWASP/CVE taxonomies, code snippets, and CVSS scores
-- ⚙️ **Configurable thread recommendations** via `jmo.yml` profiling section
-- 📝 **Magic numbers extracted** to named constants for better maintainability
-- 📚 **9 new roadmap enhancements** including Policy-as-Code (OPA), SLSA attestation, GitHub App, and more
-
-**Quality Metrics:**
-
-- ✅ 272/272 tests passing
-- ✅ 91% code coverage (exceeds 85% requirement)
-- ✅ No breaking changes to existing workflows
-
-See [CHANGELOG.md](CHANGELOG.md) for complete details.
+**Complete guide:** [docs/USER_GUIDE.md — EPSS/KEV Risk Prioritization](docs/USER_GUIDE.md#epsskev-risk-prioritization) | [QUICKSTART.md](QUICKSTART.md#epsskev-risk-prioritization)
 
 ## 🚀 Five Ways to Get Started
 
-### NEW in v0.9.0: 📦 Package Managers (Easiest Installation)
+### 📦 Package Managers (Easiest Installation)
 
 **The fastest way to get JMo Security on your system:**
 
@@ -608,7 +432,7 @@ jmotools wizard
 - ✅ **Step-by-step guidance** through all configuration options
 - ✅ **Profile selection** (fast/balanced/deep) with time estimates
 - ✅ **Docker vs native mode** - zero-installation Docker option!
-- ✅ **Multi-target support (v0.6.2+)** - scan repos, images, IaC, URLs, GitLab, K8s
+- ✅ **Multi-target support** - scan repos, images, IaC, URLs, GitLab, K8s
 - ✅ **Smart detection** - auto-discovers repos, validates URLs/K8s contexts
 - ✅ **Command preview** - see what will run before executing
 - ✅ **Auto-open results** - dashboard and summary automatically displayed
@@ -669,7 +493,7 @@ cat results/summaries/SUMMARY.md  # Quick text overview
 
 ```bash
 
-**Four image variants available (v1.0.0):**
+**Four image variants available:**
 
 - `latest` / `full` (~1.97 GB) - 26 Docker-ready tools for comprehensive scanning
 - `balanced` (~1.41 GB) - 21 tools for production CI/CD pipelines
@@ -739,7 +563,7 @@ Note: Under the hood, wrapper commands verify your OS/tools, optionally clone fr
 
 **Choose your installation path:**
 
-### Path 1: Package Manager (Fastest - NEW in v0.9.0) ⭐
+### Path 1: Package Manager (Fastest) ⭐
 
 **Time:** 30 seconds | **Tools:** All scanners ready to use
 
@@ -935,7 +759,7 @@ jmotools wizard --docker
 
 ---
 
-## 🤖 AI-Powered Remediation (NEW - v1.0.0)
+## 🤖 AI-Powered Remediation
 
 **Transform security findings into actionable fixes with AI assistance!**
 
@@ -1001,7 +825,7 @@ claude "Suggest fixes for CWE-79 (XSS) findings"
 
 📖 **Full guide:** [docs/integrations/CLAUDE_CODE.md](docs/integrations/CLAUDE_CODE.md)
 
-### MCP Server Features (v1.0.0)
+### MCP Server Features
 
 **4 MCP Tools:**
 
@@ -1061,9 +885,9 @@ jmo mcp-server --results-dir ./scan-results
 
 ---
 
-## 🎯 Multi-Target Scanning Examples (v0.6.0+)
+## 🎯 Multi-Target Scanning Examples
 
-**New in v0.6.0:** Scan 6 different target types in one unified workflow!
+Scan 6 different target types in one unified workflow!
 
 ### Quick Examples
 
@@ -1160,7 +984,7 @@ results/
     └── findings.sarif
 ```
 
-📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
+📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning)
 
 ---
 
@@ -1172,7 +996,7 @@ This project provides an automated framework for conducting thorough security au
 
 ### Key Features
 
-- 🎯 **Multi-Target Scanning (v0.6.0+)**: Scan 6 target types in one unified workflow
+- 🎯 **Multi-Target Scanning**: Scan 6 target types in one unified workflow
   - Repositories (source code)
   - Container images (Docker/OCI)
   - IaC files (Terraform/CloudFormation/K8s)
@@ -1194,8 +1018,8 @@ This project provides an automated framework for conducting thorough security au
   - **Runtime**: Trivy-RBAC, Falco
   - **Fuzzing**: AFL++
   - **License**: Bearer
-  - *Manual installation required (v1.0.0) - see [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md)
-- ⏰ **Schedule Management (v0.8.0)**: Kubernetes-inspired scan scheduling with GitLab CI generation
+  - *Manual installation required - see [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md)
+- ⏰ **Schedule Management**: Kubernetes-inspired scan scheduling with GitLab CI generation
   - Cron-based scheduling with local persistence (`~/.jmo/schedules.json`)
   - GitLab CI workflow generation with Slack notifications
   - Support for GitHub Actions, GitLab CI, and local cron backends
@@ -1204,14 +1028,14 @@ This project provides an automated framework for conducting thorough security au
 - 🎨 **Easy-to-Read Outputs**: Well-formatted reports with severity categorization using type-safe enums
 - 🔄 **Automated Workflows**: One CLI to scan, aggregate, and gate on severity (scan/report/ci)
 - 🧭 **Profiles and Overrides**: Named profiles, per-tool flags/timeouts, include/exclude patterns, configurable thread recommendations
-- 🚀 **Performance & UX (v0.7.0)**: Real-time progress tracking, auto-CPU thread detection, intelligent telemetry
+- 🚀 **Performance & UX**: Real-time progress tracking, auto-CPU thread detection, intelligent telemetry
   - Live ETA estimation during scans (zero dependencies)
   - Auto-detect CPU cores for optimal parallelism (75% utilization)
   - Privacy-first telemetry system (opt-out, anonymous, GDPR/CCPA compliant)
   - Memory system for persistent learning across sessions
 - 🔁 **Resilience**: Timeouts, retries with per-tool success codes, human-friendly logs, graceful cancel
 - 🔒 **Security-First**: XSS vulnerability patched, comprehensive input escaping, secure-by-default configurations
-- 🔐 **SLSA Attestation (v1.0.0)**: Supply chain security with SLSA Level 2 compliance
+- 🔐 **SLSA Attestation**: Supply chain security with SLSA Level 2 compliance
   - Keyless signing via Sigstore (Fulcio + Rekor transparency log)
   - Advanced tamper detection: signature verification, multi-hash digests (SHA-256/384/512), certificate chain validation, Rekor transparency log verification
   - Build provenance tracking: Git commit, branch, tag, CI/CD context, builder identity, reproducible builds
@@ -1219,7 +1043,7 @@ This project provides an automated framework for conducting thorough security au
   - Auto-attestation in CI/CD: GitHub Actions and GitLab CI workflows with automatic signing and upload
   - 6 CLI commands: `generate`, `verify`, `sign`, `inspect`, `list`, `export` (JSON, SARIF, human-readable reports)
   - 200 tests passing (100% coverage), <100ms generation, <500ms verification (STRICT mode)
-  - See [docs/USER_GUIDE.md#slsa-attestation-v100](docs/USER_GUIDE.md#slsa-attestation-v100) and [docs/examples/attestation-workflows.md](docs/examples/attestation-workflows.md)
+  - See [docs/USER_GUIDE.md#slsa-attestation](docs/USER_GUIDE.md#slsa-attestation) and [docs/examples/attestation-workflows.md](docs/examples/attestation-workflows.md)
 
 ## 🚀 Quick Start (Local Installation)
 
@@ -1292,7 +1116,7 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 python3 scripts/cli/jmo.py report --results-dir ./results --profile --human-logs
 ```
 
-#### Multi-target scanning (v0.6.0+)
+#### Multi-target scanning
 
 ```bash
 # Scan container image
@@ -1319,7 +1143,7 @@ python3 scripts/cli/jmo.py scan \
 # Repository CI
 python3 scripts/cli/jmo.py ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
 
-# Multi-target CI (v0.6.0+)
+# Multi-target CI
 python3 scripts/cli/jmo.py ci --image myapp:latest --url https://staging.myapp.com --fail-on HIGH --human-logs
 ```
 
@@ -1405,21 +1229,21 @@ results/
 │       ├── bandit.json        # deep only
 │       ├── falco.json         # deep only
 │       └── afl++.json         # deep only
-├── individual-images/          # ✨ NEW v0.6.0: Container image scans
+├── individual-images/          # Container image scans
 │   └── <sanitized-image>/
 │       ├── trivy.json
 │       └── syft.json
-├── individual-iac/             # ✨ NEW v0.6.0: IaC file scans
+├── individual-iac/             # IaC file scans
 │   └── <file-stem>/
 │       ├── checkov.json
 │       └── trivy.json
-├── individual-web/             # ✨ NEW v0.6.0: Web app/API scans
+├── individual-web/             # Web app/API scans
 │   └── <domain>/
 │       └── zap.json
-├── individual-gitlab/          # ✨ NEW v0.6.0: GitLab scans
+├── individual-gitlab/          # GitLab scans
 │   └── <group>_<repo>/
 │       └── trufflehog.json
-├── individual-k8s/             # ✨ NEW v0.6.0: K8s cluster scans
+├── individual-k8s/             # K8s cluster scans
 │   └── <context>_<namespace>/
 │       └── trivy.json
 └── summaries/                  # Unified reports (ALL targets)
@@ -1977,5 +1801,4 @@ This is useful when you want to:
 
 ---
 
-**Last Updated**: October 16th, 2025 (v0.6.0)
 **Author**: James Moceri

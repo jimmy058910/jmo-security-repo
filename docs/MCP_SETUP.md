@@ -177,9 +177,9 @@ export JMO_MCP_RATE_LIMIT_REFILL_RATE="0.167"
 export JMO_MCP_RATE_LIMIT_ENABLED="false"
 ```
 
-### Authentication (v1.0.2+)
+### Authentication
 
-**Note:** Full authentication enforcement awaits FastMCP middleware support (v1.0.2). Currently, only rate limiting is enforced.
+**Note:** Full authentication enforcement awaits FastMCP middleware support. Currently, only rate limiting is enforced.
 
 **Infrastructure Ready:**
 

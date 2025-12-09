@@ -1,12 +1,12 @@
 # Quick Start – JMo Security CLI
 
-**Get scanning in under 1 minute with package managers (NEW in v0.9.0)!**
+**Get scanning in under 1 minute with package managers!**
 
 ---
 
 ## ⚡ Fastest Path to Scanning
 
-### NEW: Package Managers (30 seconds) ⭐
+### Package Managers (30 seconds) ⭐
 
 **macOS / Linux:**
 
@@ -221,7 +221,7 @@ jmotools wizard
 
 - Guides profile selection (fast/balanced/deep with time estimates)
 - Detects Docker availability (zero-installation path!)
-- **NEW (v0.6.2+):** Supports 6 target types (repos, images, IaC, URLs, GitLab, K8s)
+- Supports 6 target types (repos, images, IaC, URLs, GitLab, K8s)
 - Auto-discovers repositories in directories
 - Validates URLs and Kubernetes contexts
 - Configures threads and timeouts
@@ -308,7 +308,7 @@ make full DIR=~/repos        # Run deep profile
 
 ---
 
-## 📅 Schedule Automated Scans (NEW in v0.9.0)
+## 📅 Schedule Automated Scans
 
 **Run security scans automatically with GitHub Actions, GitLab CI, or local cron.**
 
@@ -388,7 +388,7 @@ jmo schedule export nightly-deep --backend gitlab-ci >> .gitlab-ci.yml
 
 ## 🔄 Compare Scans Over Time (`jmo diff`)
 
-**NEW in v1.0.0:** Track security improvements and identify regressions by comparing two scans.
+Track security improvements and identify regressions by comparing two scans.
 
 ### Quick Example
 
@@ -435,7 +435,7 @@ cat diff.md
 
 ## 📊 Track Security Trends Over Time (`jmo trends`)
 
-**NEW in v1.0.0:** Statistical trend analysis with Mann-Kendall significance testing to track security posture improvements over time.
+Statistical trend analysis with Mann-Kendall significance testing to track security posture improvements over time.
 
 ### Quick Example
 
@@ -647,98 +647,9 @@ bob@example.com              8         6       2              30
 
 **Complete Guides:**
 
-- [docs/USER_GUIDE.md — Trend Analysis](docs/USER_GUIDE.md#trend-analysis-v100)
+- [docs/USER_GUIDE.md — Trend Analysis](docs/USER_GUIDE.md#trend-analysis)
 - [docs/API_REFERENCE.md — TrendAnalyzer API](docs/API_REFERENCE.md#trendanalyzer)
 - [docs/examples/ci-cd-trends.md](docs/examples/ci-cd-trends.md) - CI/CD integration patterns
-
----
-
-## ✨ What's New
-
-### v0.9.0 - EPSS/KEV Risk Prioritization (October 30, 2025)
-
-#### 🎯 Automatic CVE Prioritization
-
-**Sort findings by real-world exploit risk, not just severity!**
-
-- 📊 **EPSS Scoring** - Exploit probability (0-100%) from FIRST.org with 7-day caching
-- 🚨 **CISA KEV Detection** - Flags actively exploited CVEs with remediation deadlines
-- 🏆 **Priority Score** - Combines severity + EPSS + KEV into 0-100 actionable priority
-- 🎨 **Enhanced Dashboard** - Priority column, color-coded badges, KEV indicators
-- 📝 **Priority Analysis** - SUMMARY.md shows KEV findings, high EPSS risks, priority distribution
-
-**Impact:** 40% faster triage, 60% reduction in false prioritization
-
-**Quick Example:**
-
-```bash
-# Scan and prioritize
-jmo scan --repo ./myapp --profile-name balanced
-jmo report ./results --human-logs
-
-# View prioritized results
-open results/summaries/dashboard.html  # Sort by Priority column!
-cat results/summaries/SUMMARY.md      # See "Priority Analysis (EPSS/KEV)" section
-```
-
-📖 **Full guide:** [docs/USER_GUIDE.md — EPSS/KEV Risk Prioritization](docs/USER_GUIDE.md#epsskev-risk-prioritization-v090)
-
----
-
-### v0.6.0 - Multi-Target Scanning (October 2025)
-
-#### 🚀 BREAKTHROUGH: Unified Security Platform
-
-Scan repositories AND infrastructure in one workflow!
-
-- 🐳 **Container Image Scanning** - Scan Docker/OCI images with Trivy + Syft
-- ⚙️ **IaC File Scanning** - Scan Terraform/CloudFormation/K8s manifests with Checkov + Trivy
-- 🌐 **Live Web URL Scanning** - DAST scanning with OWASP ZAP
-- 🦊 **GitLab Integration** - Scan GitLab repos with TruffleHog
-- ☸️ **Kubernetes Cluster Scanning** - Live K8s audits with Trivy
-- 📊 **Unified Reporting** - All targets aggregated in one dashboard
-
-**Quick Examples:**
-
-```bash
-# Scan a container image
-jmo scan --image nginx:latest
-
-# Scan Terraform state
-jmo scan --terraform-state terraform.tfstate
-
-# Scan live web app
-jmo scan --url https://example.com --tools zap
-
-# Scan everything together!
-jmo scan --repo ./myapp --image myapp:latest --url https://myapp.com --k8s-context prod
-```
-
-📖 **Full guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
-
----
-
-### v0.5.0 - Tool Suite Consolidation (October 2025)
-
-**Tool Suite Consolidation:**
-
-- 🎯 **DAST Added** - OWASP ZAP for runtime vulnerability detection (20-30% more findings)
-- 🛡️ **Runtime Security** - Falco for container/K8s monitoring (deep profile)
-- 🔬 **Fuzzing** - AFL++ for coverage-guided vulnerability discovery (deep profile)
-- ✅ **Verified Secrets** - TruffleHog with 95% false positive reduction
-- 🧹 **Removed Deprecated** - gitleaks, tfsec, osv-scanner removed
-- 📊 **Profile Restructuring** - Fast: 3 tools, Balanced: 7 tools, Deep: 11 tools
-
-**Previous Enhancements (Phase 1):**
-
-- 🧙 **Interactive Wizard** - Beginner-friendly guided scanning
-- 🐳 **Docker Images** - Zero-installation security scanning
-- 🔒 **XSS Patched** - HTML dashboard security hardened
-- 📊 **Enriched SARIF** - CWE/OWASP/CVE taxonomies
-- ⚙️ **Type-Safe Severity** - Cleaner code with enum
-- 🎯 **91% Coverage** - 272/272 tests passing
-
-See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
 ---
 
@@ -1190,9 +1101,9 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 
 ---
 
-## 🆕 Multi-Target Scanning (v0.6.0+)
+## 🆕 Multi-Target Scanning
 
-**New in v0.6.0:** Scan 6 different target types beyond just repositories!
+Scan 6 different target types beyond just repositories!
 
 ### Quick Start: Container Image Scanning
 
@@ -1295,7 +1206,7 @@ results/
 
 **Key insight:** All target types are aggregated, deduplicated, and reported in one unified dashboard!
 
-📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning-v060)
+📖 **Complete multi-target guide:** [docs/USER_GUIDE.md — Multi-Target Scanning](docs/USER_GUIDE.md#multi-target-scanning)
 
 ---
 
@@ -1356,7 +1267,7 @@ The toolkit uses a type-safe severity enum with comparison operators for consist
 | LOW | Minor issues | Address during regular maintenance |
 | INFO | Informational findings | Review for context |
 
-### Cross-Tool Consensus (v1.0.0)
+### Cross-Tool Consensus
 
 After scanning, findings are automatically deduplicated in two phases:
 
@@ -1471,7 +1382,7 @@ EOF
 chmod +x ~/weekly-audit.sh
 ```
 
-### Workflow 4: Multi-Target CI/CD Integration (v0.6.0+)
+### Workflow 4: Multi-Target CI/CD Integration
 
 **Scan code + container + web app in one CI pipeline:**
 
@@ -1618,7 +1529,7 @@ If a failure isn’t listed here, click into the failed step logs in GitHub Acti
 
 1. **Review all CRITICAL findings** - These require immediate action
 2. **Rotate any verified secrets** - Use the tool comparison report to understand findings
-3. **Enable AI Remediation (Optional - v1.0.0+)** - Get AI-powered fix suggestions
+3. **Enable AI Remediation (Optional)** - Get AI-powered fix suggestions
    - **GitHub Copilot**: [docs/integrations/GITHUB_COPILOT.md](docs/integrations/GITHUB_COPILOT.md)
    - **Claude Code**: [docs/integrations/CLAUDE_CODE.md](docs/integrations/CLAUDE_CODE.md)
    - AI analyzes findings, suggests fixes, and tracks resolution

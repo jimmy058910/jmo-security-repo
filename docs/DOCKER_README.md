@@ -107,7 +107,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 - ✅ **Multi-arch support** (amd64 + arm64)
 - ✅ **Free for all users**
 
-**Docker Hub - Available in v0.5.2+:**
+**Docker Hub:**
 
 ```bash
 docker pull jmogaming/jmo-security:latest
@@ -259,15 +259,15 @@ results/
 
 ### Detailed Variant Information
 
-Three optimized images for different needs (v0.6.1+ with multi-stage builds):
+Three optimized images for different needs (with multi-stage builds):
 
-| Variant | Size (v0.6.1) | Size (v0.6.0) | Reduction | Tools | Best For |
-|---------|---------------|---------------|-----------|-------|----------|
-| **`:latest`** | ~1.7GB | ~2.3GB | 27% | 11+ scanners | Complete scanning, local development |
-| **`:slim`** | ~900MB | ~1.5GB | 40% | 7 core scanners | CI/CD pipelines, faster pulls |
-| **`:alpine`** | ~600MB | ~1.0GB | 41% | 7 core scanners | Minimal footprint, resource-constrained |
+| Variant | Size | Tools | Best For |
+|---------|------|-------|----------|
+| **`:latest`** | ~1.7GB | 11+ scanners | Complete scanning, local development |
+| **`:slim`** | ~900MB | 7 core scanners | CI/CD pipelines, faster pulls |
+| **`:alpine`** | ~600MB | 7 core scanners | Minimal footprint, resource-constrained |
 
-**v0.6.1 Optimizations (ROADMAP #1):**
+**Optimizations:**
 
 - **Multi-stage builds:** Separate builder and runtime stages eliminate build tools (curl, wget, tar, build-essential, clang, llvm)
 - **Layer caching cleanup:** Aggressive removal of apt cache, pip cache, and Python bytecode
@@ -535,7 +535,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile-name custom --human-logs
 ```
 
-### Trivy Database Caching (v0.6.1+)
+### Trivy Database Caching
 
 **Optimize scan performance with persistent Trivy vulnerability database caching:**
 
@@ -701,7 +701,7 @@ docker-compose run --rm fast
 
 **Track security improvements over time using persistent SQLite history database.**
 
-JMo Security v1.0.0+ includes comprehensive trend analysis capabilities that work seamlessly in Docker with proper volume mounting. This enables historical tracking, regression detection, and developer attribution across container runs.
+JMo Security includes comprehensive trend analysis capabilities that work seamlessly in Docker with proper volume mounting. This enables historical tracking, regression detection, and developer attribution across container runs.
 
 ### Prerequisites
 
@@ -1350,7 +1350,7 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 - **Wizard Examples:** [examples/wizard-examples.md](examples/wizard-examples.md)
 - **GitHub Actions Examples:** [examples/github-actions-docker.yml](examples/github-actions-docker.yml)
 - **GitHub Container Registry (Primary):** <https://ghcr.io/jimmy058910/jmo-security>
-- **Docker Hub (Available v0.5.2+):** <https://hub.docker.com/r/jmogaming/jmo-security>
+- **Docker Hub:** <https://hub.docker.com/r/jmogaming/jmo-security>
 
 ---
 

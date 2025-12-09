@@ -1,6 +1,6 @@
 # Output Formats
 
-JMo Security supports 7 output formats for security findings, all following the v1.0.0 metadata wrapper structure.
+JMo Security supports 7 output formats for security findings, all following a standardized metadata wrapper structure.
 
 ## Overview
 
@@ -230,7 +230,7 @@ MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app
 
 ### 5. HTML (`dashboard.html`)
 
-**Interactive React dashboard with dual-mode support (v1.0.0+).**
+**Interactive React dashboard with dual-mode support.**
 
 The HTML dashboard is a modern React application (built with TypeScript + Vite) that provides an interactive interface for exploring security findings. The dashboard automatically selects the optimal mode based on finding count:
 
@@ -501,7 +501,7 @@ jmo report results/ --html --max-findings 1000
 
 ### 6. Simple HTML (`simple-report.html`)
 
-**Email-compatible static HTML table with inline CSS (v1.2.0+).**
+**Email-compatible static HTML table with inline CSS.**
 
 The simple HTML reporter generates a static HTML table designed for maximum email client compatibility (Gmail, Outlook, Apple Mail, etc.). Unlike the interactive dashboard, it contains no JavaScript and uses only inline CSS.
 
@@ -762,7 +762,7 @@ jmo report results/ --simple-html
 | **HTML (external)** | **Dashboard (>1000)** | **610 KB + 1.6 MB JSON** | **Async (<3s)** | **High** |
 | SARIF | Code scanning | ~700 KB | Medium | Low |
 
-**Note:** HTML dashboard sizes reflect React build (v1.0.0+). Legacy inline-only approach produced 50-100 MB files for >1000 findings (95% size reduction achieved).
+**Note:** HTML dashboard sizes reflect React build. Legacy inline-only approach produced 50-100 MB files for >1000 findings (95% size reduction achieved).
 
 ## Configuration
 
@@ -775,7 +775,7 @@ outputs:
   - yaml       # Optional (requires PyYAML)
   - html       # Interactive dashboard
   - sarif      # Code scanning platforms
-  - csv        # Spreadsheet analysis (v1.0.0+)
+  - csv        # Spreadsheet analysis
 ```
 
 **Default:** All formats except YAML (requires extra dependency)

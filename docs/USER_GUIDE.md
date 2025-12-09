@@ -6,67 +6,7 @@ Note: The CLI is available as the console command `jmo` (via PyPI) and also as a
 
 If you're brand new, you can also use the beginner‑friendly wrapper `jmotools` described below.
 
-## ✨ Recent Improvements
-
-### EPSS/KEV Risk Prioritization (v0.9.0, October 30, 2025)
-
-**Major Enhancement:** Automatic CVE prioritization using real-world exploit data
-
-**Key Features:**
-
-- 🎯 **EPSS Integration**: Exploit probability scores (0-100%) from FIRST.org API with 7-day SQLite caching
-- 🚨 **CISA KEV Detection**: Flags actively exploited CVEs with federal remediation deadlines
-- 📊 **Priority Scoring**: Combines severity + EPSS + KEV status into actionable 0-100 priority score
-- 🔍 **Enhanced Dashboard**: Priority column with color-coded badges, KEV indicators, sortable by priority
-- 📝 **Priority Analysis Section**: SUMMARY.md shows KEV findings, high EPSS risks, priority distribution
-- ⚡ **Bulk API Optimization**: Fetches all CVEs in single API call for speed
-
-**Impact:** 40% faster triage by focusing on actively exploited CVEs first, 60% reduction in false prioritization
-
-**Formula:** `priority = (severity_score × epss_multiplier × kev_multiplier) / 1.5` normalized to 0-100
-
-### HTML Dashboard v2: Actionable Findings & Enhanced UX (October 15, 2025)
-
-**Major Enhancement:** Transformed dashboard from "good detection" to "actionable remediation platform"
-
-**Key Features:**
-
-- 🎯 **Code Context**: Expandable rows show syntax-highlighted code snippets (2-5 lines) right in the dashboard
-- 🔧 **Suggested Fixes**: Copy-paste ready fixes from Semgrep autofix with one-click copy button
-- 🔑 **Secret Context**: Full secret details with commit/author/entropy for rotation workflows
-- 📊 **Grouping Modes**: Group by File | Rule | Tool | Severity with collapsible groups
-- 🔍 **Enhanced Filters**: CWE/OWASP filters, path patterns, multi-select severity
-- ✅ **Triage Workflow**: Bulk actions, localStorage persistence, export to `triage.json`
-- 🏷️ **Risk Metadata**: CWE/OWASP badges with tooltips, confidence indicators
-
-**Schema Evolution:** CommonFinding v1.1.0 adds `context`, `risk`, `secretContext`, enhanced `remediation`
-
-**Impact:** 50% faster triage, 70% faster fixes, 80% noise reduction
-
-### Phase 1 (October 2025)
-
-**Security & Code Quality:**
-
-- 🔒 **XSS vulnerability patched** in HTML dashboard with comprehensive input escaping
-- 🛡️ **OSV scanner fully integrated** for open-source vulnerability detection
-- ⚙️ **Type-safe severity enum** with comparison operators for cleaner, more maintainable code
-- 🔄 **Backward-compatible suppression keys** supporting both `suppressions` (recommended) and `suppress` (legacy)
-
-**Enhanced Features:**
-
-- 📊 **Enriched SARIF 2.1.0 output** with CWE/OWASP/CVE taxonomies, code snippets, and CVSS scores
-- 🎯 **Configurable thread recommendations** via `jmo.yml` profiling section
-- 📝 **Magic numbers extracted** to named constants (FINGERPRINT_LENGTH, MESSAGE_SNIPPET_LENGTH)
-
-**Quality Metrics:**
-
-- ✅ 140/140 tests passing
-- ✅ 74% code coverage (adapters/reporters focus)
-- ✅ No breaking changes to existing workflows
-
-See [CHANGELOG.md](../CHANGELOG.md) for complete details.
-
-## Package Manager Installation (v0.9.0+)
+## Package Manager Installation
 
 ### Homebrew (macOS/Linux)
 
@@ -214,9 +154,9 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 
 Tip: You can also run `make tools` to install/upgrade the curated external scanners (trufflehog, semgrep, trivy, syft, checkov, bandit, hadolint, zap, noseyparker, falco, afl++, etc.) and `make verify-env` to validate your setup.
 
-## Multi-Target Scanning (v0.6.0+)
+## Multi-Target Scanning
 
-**New in v0.6.0:** Scan beyond local repositories to cover your entire infrastructure.
+Scan beyond local repositories to cover your entire infrastructure.
 
 ### Supported Target Types
 
@@ -326,7 +266,7 @@ https://admin.example.com/login
 https://staging.example.com
 ```
 
-**Tools used (v0.6.2):**
+**Tools used:**
 
 - **OWASP ZAP:** Dynamic application security testing (DAST) with spider, active scanner
 - **Nuclei:** Fast vulnerability scanner with 4000+ community templates (CVEs, misconfigurations, API security)
@@ -346,7 +286,7 @@ https://staging.example.com
 - `--gitlab-group GROUP`: Scan all repositories in a group
 - `--gitlab-repo REPO`: Single GitLab repository (format: `group/repo`)
 
-**Tools used (v0.6.2):** Full repository scanner (TruffleHog, Semgrep, Bandit, Trivy, Syft, Checkov, Hadolint, Noseyparker, Falco, AFL++)
+**Tools used:** Full repository scanner (TruffleHog, Semgrep, Bandit, Trivy, Syft, Checkov, Hadolint, Noseyparker, Falco, AFL++)
 
 **Architecture:** GitLab repos are cloned temporarily and scanned using the same repository scanner as local repos, providing comprehensive coverage instead of secrets-only scanning
 
@@ -401,21 +341,21 @@ results/
 │       ├── trufflehog.json
 │       ├── semgrep.json
 │       └── trivy.json
-├── individual-images/         # Container image scans (v0.6.0)
+├── individual-images/         # Container image scans
 │   └── nginx_latest/
 │       ├── trivy.json
 │       └── syft.json
-├── individual-iac/            # IaC file scans (v0.6.0)
+├── individual-iac/            # IaC file scans
 │   └── infrastructure/
 │       ├── checkov.json
 │       └── trivy.json
-├── individual-web/            # Web URL scans (v0.6.0)
+├── individual-web/            # Web URL scans
 │   └── example_com/
 │       └── zap.json
-├── individual-gitlab/         # GitLab repository scans (v0.6.0)
+├── individual-gitlab/         # GitLab repository scans
 │   └── mygroup_myrepo/
 │       └── trufflehog.json
-├── individual-k8s/            # Kubernetes cluster scans (v0.6.0)
+├── individual-k8s/            # Kubernetes cluster scans
 │   └── prod_default/
 │       └── trivy.json
 └── summaries/                 # Unified aggregated reports
@@ -598,7 +538,7 @@ done
 | GitLab Repos | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Kubernetes | ✓ | - | - | - | - | - |
 
-**Note (v0.6.2):**
+**Note:**
 
 - **GitLab Repos** now run full repository scanner (10/28 tools) instead of TruffleHog-only
 - **Web URLs** now include Nuclei (API security scanner) in addition to ZAP
@@ -646,20 +586,20 @@ done
 
 ## Output overview
 
-**v1.0.0:** All output formats use a metadata wrapper structure `{"meta": {...}, "findings": [...]}`. See [OUTPUT_FORMATS.md](OUTPUT_FORMATS.md) for complete specification.
+All output formats use a metadata wrapper structure `{"meta": {...}, "findings": [...]}`. See [OUTPUT_FORMATS.md](OUTPUT_FORMATS.md) for complete specification.
 
 Unified summaries live in `results/summaries/`:
 
-- **findings.json** — Machine‑readable normalized findings (v1.0.0: includes metadata envelope)
-- **findings.csv** — NEW in v1.0.0: Spreadsheet-friendly format with metadata header
+- **findings.json** — Machine‑readable normalized findings with metadata envelope
+- **findings.csv** — Spreadsheet-friendly format with metadata header
 - **SUMMARY.md** — Enhanced Markdown summary (see below)
-- **findings.yaml** — Optional YAML (if PyYAML available, v1.0.0: includes metadata)
-- **dashboard.html** — Interactive dashboard with dual-mode support (v1.0.0: inline ≤1000 findings, external >1000 findings)
+- **findings.yaml** — Optional YAML (if PyYAML available, includes metadata)
+- **dashboard.html** — Interactive dashboard with dual-mode support (inline ≤1000 findings, external >1000 findings)
 - **findings.sarif** — SARIF 2.1.0 output (enabled by default)
 - **timings.json** — Present when `jmo report --profile` is used
 - **SUPPRESSIONS.md** — Summary of filtered IDs when suppressions are applied
 
-**v1.0.0 Metadata Structure:**
+**Metadata Structure:**
 
 All JSON/YAML outputs now include scan metadata:
 
@@ -736,9 +676,9 @@ Data model: Aggregated findings conform to a CommonFinding shape used by all rep
 - tool { name, version }, message, location { path, startLine, endLine? }
 - optional: title, description, remediation, references, tags, cvss, context, raw
 
-### EPSS/KEV Risk Prioritization (v0.9.0+)
+### EPSS/KEV Risk Prioritization
 
-**New in v0.9.0:** JMo Security now automatically enriches CVE findings with EPSS (Exploit Prediction Scoring System) and CISA KEV (Known Exploited Vulnerabilities) data to help you prioritize remediation efforts based on real-world exploit activity.
+JMo Security automatically enriches CVE findings with EPSS (Exploit Prediction Scoring System) and CISA KEV (Known Exploited Vulnerabilities) data to help you prioritize remediation efforts based on real-world exploit activity.
 
 **How It Works:**
 
@@ -838,7 +778,7 @@ priority = (severity_score × epss_multiplier × kev_multiplier × reachability_
 - **Metrics**: Track "Critical Priority" count over time as a security KPI
 - **Communication**: Share KEV count with executives ("3 actively exploited CVEs found")
 
-## Cross-Tool Deduplication (v1.0.0)
+## Cross-Tool Deduplication
 
 JMo Security automatically clusters duplicate findings detected by multiple tools, reducing noise by 30-40%.
 
@@ -948,8 +888,8 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 `jmo.yml` controls what runs and how results are emitted. Top‑level fields supported by the CLI include:
 
 - tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++, bandit]
-  - Note (v0.6.2): Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
-  - Note (v0.5.0): Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
+  - Note: Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
+  - Note: Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
 - outputs: [json, md, yaml, html, sarif]
 - fail_on: "CRITICAL|HIGH|MEDIUM|LOW|INFO" (empty means do not gate)
 - threads: integer worker hint (auto if unset)
@@ -1017,7 +957,7 @@ Notes and precedence:
 - Threads/timeout/tool lists are merged from config + profile; CLI flags override config/profile where provided.
 - Per‑tool overrides are merged with root config; values set in a profile win over root.
 
-### Telemetry Configuration (v0.7.0+)
+### Telemetry Configuration
 
 JMo Security can collect anonymous usage statistics to help prioritize features and improve the tool. Telemetry is **disabled by default** (opt-in only) and fully respects your privacy with a privacy-first, opt-in design.
 
@@ -1091,8 +1031,8 @@ jmo scan --repo ./myapp
 
 #### Telemetry Backend
 
-- **MVP (v0.7.0):** GitHub Gist (private, append-only JSONL)
-- **Future (v0.8.0+):** Cloudflare Workers for scale (when >10k users)
+- **MVP:** GitHub Gist (private, append-only JSONL)
+- **Future:** Cloudflare Workers for scale (when >10k users)
 
 #### Transparency Reports
 
@@ -1131,7 +1071,7 @@ Full privacy policy and data handling details:
 
 **Questions or concerns?** Open an issue at [github.com/jimmy058910/jmo-security-repo/issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
-## Plugin System (v0.9.0+)
+## Plugin System
 
 ### Extensible architecture for custom security tool integrations
 
@@ -1329,11 +1269,11 @@ for name, plugin_class in registry.list().items():
 
 **Complete guide:** [CONTRIBUTING.md — Adding Tool Adapters](../CONTRIBUTING.md#adding-tool-adapters) | [.claude/skills/jmo-adapter-generator/SKILL.md](../.claude/skills/jmo-adapter-generator/SKILL.md)
 
-## Schedule Management (v0.8.0+)
+## Schedule Management
 
 ### Automate recurring security scans with Kubernetes-inspired scheduling
 
-JMo Security v0.8.0 introduces a comprehensive schedule management system for automated, recurring scans with:
+JMo Security provides a comprehensive schedule management system for automated, recurring scans with:
 
 - **Cron-based scheduling** with full cron syntax support
 - **Local persistence** in `~/.jmo/schedules.json` with secure permissions (0o600)
@@ -1386,7 +1326,7 @@ print(f"✅ Created schedule: {schedule.metadata.name}")
 print(f"📅 Next run: {schedule.status.nextScheduleTime}")
 ```
 
-### Schedule CLI Commands (v0.9.0+)
+### Schedule CLI Commands
 
 **Status:** Implemented for GitLab CI backend. GitHub Actions and local cron support in active development.
 
@@ -1741,7 +1681,7 @@ The HTML dashboard (`dashboard.html`) is a fully self-contained, zero-dependency
 
 #### Core Features
 
-**Traditional Features (v1.0):**
+**Traditional Features:**
 
 - Client-side sorting by any column (severity, tool, file, line, rule)
 - Tool filtering dropdown with finding counts
@@ -1868,11 +1808,11 @@ CVSS: 7.5 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N)
 
 #### Dashboard Architecture
 
-**All v1.1.0+ fields are optional**: Dashboard gracefully handles missing fields with progressive enhancement.
+**All extended fields are optional**: Dashboard gracefully handles missing fields with progressive enhancement.
 
-#### v1.0.0 Dual-Mode Architecture
+#### Dual-Mode Architecture
 
-**NEW in v1.0.0:** The HTML dashboard now automatically switches between two rendering modes based on dataset size to optimize performance and prevent browser freezing.
+The HTML dashboard automatically switches between two rendering modes based on dataset size to optimize performance and prevent browser freezing.
 
 **Inline Mode (≤1000 findings):**
 
@@ -1931,9 +1871,9 @@ If `findings.json` fails to load (network error, missing file):
 
 **Performance Benefits:** External mode prevents browser freeze and supports massive datasets (10,000+ findings) with professional loading UX.
 
-### CSV Reporter (v1.0.0+)
+### CSV Reporter
 
-**NEW in v1.0.0:** Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or data analysis workflows.
+Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or data analysis workflows.
 
 **Output File:** `results/summaries/findings.csv`
 
@@ -1970,7 +1910,7 @@ outputs:
   - md         # Default
   - html       # Default
   - sarif      # Default
-  - csv        # NEW in v1.0.0
+  - csv
 ```
 
 **Or via CLI:**
@@ -2007,7 +1947,7 @@ jmo report results/ --outputs csv
 - ~200 KB file size for 1000 findings (vs ~500 KB JSON)
 - Instant Excel import (no parsing delay)
 
-## AI Integration (v1.0.0+)
+## AI Integration
 
 ### AI-Powered Remediation via Model Context Protocol (MCP)
 
@@ -2487,7 +2427,7 @@ Use `--log-level DEBUG` to troubleshoot integration issues. Logs show which tool
 - **MCP Protocol Spec:** <https://modelcontextprotocol.io/>
 - **CommonFinding Schema:** [docs/schemas/common_finding.v1.json](schemas/common_finding.v1.json)
 
-## Historical Storage (v1.0.0+)
+## Historical Storage
 
 **Track security scans over time for trend analysis, regression detection, and compliance reporting.**
 
@@ -2535,7 +2475,7 @@ jmo history store --results-dir ./results --profile balanced
 jmo history store --results-dir ./results --profile balanced --db ./scans.db
 ```
 
-### Security & Privacy Features (v1.0.0)
+### Security & Privacy Features
 
 The historical storage system includes comprehensive security and privacy controls designed with a **privacy-first, defense-in-depth approach**.
 
@@ -2630,7 +2570,7 @@ jmo scan --repo ./myapp --store-history --no-store-raw-findings
 
 **Database Schema Impact:**
 
-- The `findings.raw_finding` column is **nullable** (was NOT NULL in pre-v1.0.0)
+- The `findings.raw_finding` column is **nullable**
 - Redacted secrets show `"[REDACTED]"` placeholder
 - `--no-store-raw-findings` stores `NULL` in `raw_finding` column
 
@@ -3239,7 +3179,7 @@ The history database uses SQLite with the following schema:
 - **Views**: `latest_scan_by_branch`, `finding_history` for quick queries
 - **WAL Mode**: Write-Ahead Logging for concurrency and crash resilience
 
-**Schema Changes in v1.0.0 (Security & Privacy):**
+**Schema (Security & Privacy):**
 
 - **`findings.raw_finding` column**: Changed from `NOT NULL` to **nullable** to support `--no-store-raw-findings` flag
 - **`scans.hostname` column**: Changed from always populated to **NULL by default** (requires `--collect-metadata` opt-in)
@@ -3356,7 +3296,7 @@ security_scan:
 
 ### Performance Benchmarks
 
-**Validated:** November 2025 (v1.0.0)
+**Validated:** November 2025
 **Test Environment:** Linux (WSL2), Python 3.11, SQLite 3.x
 
 The historical storage database is **production-ready** with performance exceeding all targets by 9-117x:
@@ -3412,13 +3352,13 @@ The historical storage database is **production-ready** with performance exceedi
 
 ### Historical Storage Future Enhancements
 
-- 📊 **Time-series dashboard** - Interactive charts showing trends over time (v1.0.0 Feature #9)
-- 🔄 **Automated comparisons** - Diff between scans with highlighted regressions (v1.0.0 Feature #3)
-- 📈 **Metrics API** - REST API for external monitoring systems (v1.1.0+)
-- 🏷️ **Custom tags** - Label scans with custom metadata (environment, team, project) (v1.1.0+)
-- 🔔 **Alert thresholds** - Notify when findings exceed baselines (v1.1.0+)
-- 📥 **Import command** - `jmo history import` for loading external scan data (v1.1.0+)
-- 🔄 **Schema migrations** - Automatic database upgrades for future versions (v1.1.0+)
+- 📊 **Time-series dashboard** - Interactive charts showing trends over time
+- 🔄 **Automated comparisons** - Diff between scans with highlighted regressions
+- 📈 **Metrics API** - REST API for external monitoring systems
+- 🏷️ **Custom tags** - Label scans with custom metadata (environment, team, project)
+- 🔔 **Alert thresholds** - Notify when findings exceed baselines
+- 📥 **Import command** - `jmo history import` for loading external scan data
+- 🔄 **Schema migrations** - Automatic database upgrades for future versions
 
 **For Developers:** The history database API (`scripts/core/history_db.py`) is designed for extensibility. Future features can use:
 
@@ -3909,7 +3849,7 @@ These functions are designed for extensibility:
 
 See [scripts/core/history_db.py](../scripts/core/history_db.py) (lines 1790-3008) for complete function signatures and implementation details.
 
-## Trend Analysis (v1.0.0+)
+## Trend Analysis
 
 **Analyze security scan trends over time using statistical methods, detect regressions, and track developer remediation efforts.**
 
@@ -4704,7 +4644,7 @@ else: "stable" (no significant trend)
 
 ### Future Enhancements
 
-**v1.1.0 Planned Features:**
+**Planned Features:**
 
 - 🔔 **Threshold Alerting** - Slack/email notifications when trends degrade
 - 📊 **Interactive Web Dashboard** - React-based time-series visualizations
@@ -4714,7 +4654,7 @@ else: "stable" (no significant trend)
 - 🔄 **Automated Baselines** - Auto-detect "good" baseline scans for comparison
 - 📥 **Import Historical Data** - Import scans from other security tools
 
-## Machine-Readable Diffs (v1.0.0+)
+## Machine-Readable Diffs
 
 **Compare two security scans to identify new, resolved, and modified findings.**
 
@@ -4725,7 +4665,7 @@ The `jmo diff` command enables intelligent comparison of scan results using fing
 - **Fingerprint Matching**: O(n) performance with stable finding IDs
 - **Four Classifications**: NEW, RESOLVED, UNCHANGED, MODIFIED
 - **Modification Detection**: Tracks severity upgrades, compliance changes, priority shifts
-- **Four Output Formats**: JSON (v1.0.0), Markdown (PR comments), HTML (interactive), SARIF 2.1.0
+- **Four Output Formats**: JSON, Markdown (PR comments), HTML (interactive), SARIF 2.1.0
 - **Flexible Filtering**: By severity, tool, category, or combination
 - **CI/CD Ready**: GitHub Actions and GitLab CI examples included
 
@@ -4811,7 +4751,7 @@ jmo diff [OPTIONS] [BASELINE] [CURRENT]
 
 #### JSON (Machine-Readable)
 
-v1.0.0 schema with metadata wrapper:
+Schema with metadata wrapper:
 
 ```json
 {
@@ -5127,7 +5067,7 @@ COUNT=$(jq '[.findings.new[] | select(.compliance.owaspTop10_2021 != null)] | le
 
 **For complete workflows and examples, see:** [docs/examples/diff-workflows.md](../docs/examples/diff-workflows.md)
 
-## SLSA Attestation (v1.0.0+)
+## SLSA Attestation
 
 **What it is:** Supply chain attestation using SLSA (Supply-chain Levels for Software Artifacts) provenance and Sigstore keyless signing. Proves who scanned what, when, and with which tools - making scan results tamper-evident and verifiable.
 
@@ -5641,9 +5581,9 @@ make tools-upgrade   # upgrade/refresh installed scanners
 make verify-env      # detect OS/WSL/macOS and show install hints
 ```
 
-**SHA256 Verification for Homebrew (macOS, v0.7.1+):**
+**SHA256 Verification for Homebrew (macOS):**
 
-v0.7.1 adds defense-in-depth for macOS developer environments by verifying the Homebrew installer before execution:
+JMo provides defense-in-depth for macOS developer environments by verifying the Homebrew installer before execution:
 
 1. Downloads Homebrew installer to temp file (no immediate execution)
 2. Displays SHA256 hash for manual verification
@@ -6217,9 +6157,9 @@ If the failure isn't listed, expand the step logs in GitHub Actions for detailed
 
 ## General Troubleshooting
 
-### Enhanced Debug Logging (v0.7.1+)
+### Enhanced Debug Logging
 
-v0.7.1 adds comprehensive exception logging for faster troubleshooting. Enable with `--log-level DEBUG`:
+JMo provides comprehensive exception logging for faster troubleshooting. Enable with `--log-level DEBUG`:
 
 ```bash
 jmo scan --repos-dir ~/repos --log-level DEBUG
@@ -6278,7 +6218,7 @@ TruffleHog output looks empty
 
 ## Reference: CLI synopsis
 
-Scan (v0.6.0+ with multi-target support)
+Scan (with multi-target support)
 
 ```bash
 jmo scan [--repo PATH | --repos-dir DIR | --targets FILE] \
@@ -6298,7 +6238,7 @@ jmo report RESULTS_DIR [--out DIR] [--config FILE] [--fail-on SEV] [--profile] \
   [--threads N] [--log-level LEVEL] [--human-logs]
 ```
 
-CI (scan + report with v0.6.0 multi-target support)
+CI (scan + report with multi-target support)
 
 ```bash
 jmo ci [--repo PATH | --repos-dir DIR | --targets FILE] \
@@ -6312,7 +6252,7 @@ jmo ci [--repo PATH | --repos-dir DIR | --targets FILE] \
   [--log-level LEVEL] [--human-logs]
 ```
 
-Trends (v1.0.0+ - Statistical trend analysis)
+Trends (Statistical trend analysis)
 
 ```bash
 # Main analysis command
@@ -6344,7 +6284,7 @@ jmo trends developers [--scan-id ID] [--branch NAME] [--format terminal|json] \
   [--team-map FILE] [--velocity] [--db PATH]
 ```
 
-Diff (v1.0.0+ - Machine-readable diff)
+Diff (Machine-readable diff)
 
 ```bash
 jmo diff BASELINE_DIR CURRENT_DIR [--format terminal|json|md|sarif|html] \

@@ -1,6 +1,6 @@
 # Policy-as-Code
 
-JMo Security v1.0.0+ includes **Policy-as-Code** integration using [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) for automated security policy enforcement.
+JMo Security includes **Policy-as-Code** integration using [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) for automated security policy enforcement.
 
 ## Quick Start (5 Minutes)
 

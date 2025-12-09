@@ -2,7 +2,7 @@
 
 **Branching Strategy:** Git Flow with `dev` + feature branches
 
-**Current Development:** v1.0.0 (8 major features)
+**Current Development:** Active feature development on `dev` branch
 
 ---
 
@@ -51,9 +51,8 @@ git push origin dev
 ## Branch Structure
 
 ```text
-main ← stable releases only (v0.8.0, v0.9.0, v1.0.0)
-  └── dev ← active development (v1.0.0 work in progress)
-        ├── feature/tools-1.0.0
+main ← stable releases only (tagged versions)
+  └── dev ← active development
         ├── feature/ai-remediation
         ├── feature/diff-reports
         └── ... (other features)
@@ -182,7 +181,7 @@ git pull origin main
 git merge dev
 
 # Tag release
-git tag v1.0.0
+git tag vX.Y.Z
 
 # Push to trigger CI/CD
 git push origin main --tags
@@ -195,7 +194,7 @@ git push origin main --tags
 ```bash
 # Create hotfix from main
 git checkout main
-git checkout -b hotfix/v0.9.1
+git checkout -b hotfix/vX.Y.Z
 
 # Fix bug
 vim scripts/cli/schedule_commands.py
@@ -206,13 +205,13 @@ make test
 
 # Merge to main and tag
 git checkout main
-git merge hotfix/v0.9.1
-git tag v0.9.1
+git merge hotfix/vX.Y.Z
+git tag vX.Y.Z
 git push origin main --tags
 
 # Merge back to dev
 git checkout dev
-git merge hotfix/v0.9.1
+git merge hotfix/vX.Y.Z
 git push origin dev
 ```
 
@@ -290,8 +289,8 @@ git reset --hard HEAD
 
 ## Additional Resources
 
-- **v1.0.0 Roadmap:** [dev-only/VERSION_ROADMAP_1.0.0.md](../dev-only/VERSION_ROADMAP_1.0.0.md) (gitignored)
-- **Tools Planning:** [dev-only/TOOLS-1.0.0.md](../dev-only/TOOLS-1.0.0.md) (gitignored)
+- **Roadmap:** [dev-only/](../dev-only/) (gitignored development docs)
+- **Tools Planning:** [dev-only/](../dev-only/) (gitignored development docs)
 - **Contributing Guide:** [CONTRIBUTING.md](../CONTRIBUTING.md)
 - **Release Process:** [docs/RELEASE.md](RELEASE.md)
 

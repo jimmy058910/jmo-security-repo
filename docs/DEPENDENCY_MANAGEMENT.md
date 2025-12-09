@@ -20,11 +20,11 @@ JMo Security uses a **Python version-locked dependency system** to ensure consis
 
 ---
 
-## The Problem (v0.7.1 Discovery)
+## The Problem
 
-### What Happened
+### What Can Happen
 
-During v0.7.1 release prep, we discovered `requirements-dev.txt` was compiled with Python 3.8, while CI uses Python 3.10/3.11/3.12. This caused:
+If `requirements-dev.txt` is compiled with Python 3.8 while CI uses Python 3.10/3.11/3.12, this can cause:
 
 1. **4 Unintended Downgrades:**
    - bandit: 1.8.6 → 1.7.10 ❌
@@ -189,7 +189,7 @@ git commit -m "deps: monthly dependency update (YYYY-MM)
 Related: Monthly maintenance cycle"
 ```text
 
-### Before Every Release (v0.7.1 Lesson)
+### Before Every Release
 
 **Pre-release checklist:**
 
@@ -555,7 +555,7 @@ make deps-validate
 2. **Lockfile Comparison:**
 
    ```bash
-   make deps-diff v0.7.0 v0.7.1  # Compare dependency changes between versions
+   make deps-diff vX.Y.0 vX.Y.1  # Compare dependency changes between versions
    ```
 
 3. **Automated PR Creation:**
@@ -577,7 +577,7 @@ make deps-validate
 
 ---
 
-## Lessons Learned (v0.7.1)
+## Lessons Learned
 
 ### What We Fixed
 
@@ -604,6 +604,6 @@ make deps-validate
 
 ---
 
-**Last Updated:** 2025-10-23 (v0.7.1)
+**Last Updated:** 2025-10-23
 **Maintainer:** JMo Security Team
 **Next Review:** 2025-11-23 (quarterly)

@@ -505,4 +505,3 @@ jmo diff --scan abc123 --scan def456 --format json
 ---
 
 **Last Updated:** 2025-11-05
-**Version:** 1.0.0

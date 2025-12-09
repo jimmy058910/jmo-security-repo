@@ -219,7 +219,7 @@ open htmlcov/index.html
 
 1. Identify uncovered lines from report
 2. Write tests for those code paths
-3. Test error handling, edge cases, v1.1.0/v1.2.0 features
+3. Test error handling and edge cases
 4. Aim for >90% (buffer below 85% threshold)
 
 ---

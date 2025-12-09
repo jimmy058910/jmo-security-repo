@@ -47,7 +47,7 @@ This matrix shows which tools can scan which target types (✅ = supported, ❌ 
 - **GitLab Repos:** 10/12 tools (all except zap, nuclei) - **✅ IMPROVED from 1/12**
 - **Kubernetes Clusters:** 2/12 tools (trivy, falco)
 
-**Gap Analysis (Updated after v0.6.2 improvements):**
+**Gap Analysis:**
 
 - **✅ RESOLVED:** GitLab repos now run full repository scanner (10/12 tools vs 1/12 previously)
 - **✅ RESOLVED:** Web URL scanning improved with Nuclei addition (2/12 tools vs 1/12 previously)
@@ -330,7 +330,7 @@ This matrix shows which tools are invoked for each profile and target type combi
 | **Balanced** | 75% (6/8) | 25% (2/8) | 25% (2/8) | 25% (2/8) | 75% (6/8) | 13% (1/8) | **40%** |
 | **Deep** | 83% (10/12) | 17% (2/12) | 17% (2/12) | 17% (2/12) | 83% (10/12) | 17% (2/12) | **39%** |
 
-**Key Insights (Updated after v0.6.2):**
+**Key Insights:**
 
 - **✅ IMPROVED:** GitLab repos now have same coverage as repositories (75-83% vs 9% previously)
 - **✅ IMPROVED:** Web URLs now have 17-25% coverage (vs 9% previously) with Nuclei + ZAP
@@ -547,8 +547,8 @@ This matrix shows recommended tool combinations for different security use cases
 - ✅ **Strong Linux CLI testing:** All 6 target types tested on Linux native execution
 - ✅ **Universal compliance enrichment:** All tools × all frameworks (100% coverage)
 - ✅ **Robust integration tests:** Multi-target scanning, profiles, CI gating, SARIF generation
-- ✅ **GitLab architecture (v0.6.2):** Full repository scanner integration (10/12 tools vs 1/12 previously)
-- ✅ **Web/API security (v0.6.2):** Nuclei adapter adds API security scanning (2/12 tools vs 1/12 previously)
+- ✅ **GitLab architecture:** Full repository scanner integration (10/12 tools vs 1/12 previously)
+- ✅ **Web/API security:** Nuclei adapter adds API security scanning (2/12 tools vs 1/12 previously)
 
 **Weaknesses:**
 

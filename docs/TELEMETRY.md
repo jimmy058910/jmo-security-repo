@@ -1,6 +1,5 @@
 # JMo Security — Telemetry Implementation Guide
 
-**Version:** 1.0.0 (Draft for v0.7.0)
 **Status:** Implementation Pending
 **Privacy Policy:** <https://jmotools.com/privacy>
 
@@ -41,7 +40,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 
 ### Core Principles
 
-1. **Opt-Out Model (v0.7.1+)** — Telemetry enabled by default, users can easily opt-out. Auto-disables in CI/CD.
+1. **Opt-Out Model** — Telemetry enabled by default, users can easily opt-out. Auto-disables in CI/CD.
 2. **Anonymous by Design** — No user names, IP addresses, repository names, or finding details.
 3. **Minimal Collection** — Only data necessary to improve the tool.
 4. **Transparent Storage** — Data stored in privacy-respecting infrastructure (GitHub Gist → Cloudflare D1).
@@ -56,7 +55,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 | VS Code | Opt-out, anonymous | **Enabled** (can disable) |
 | npm | Opt-out, anonymous | **Enabled** |
 | pip | No telemetry | N/A |
-| **JMo Security** | Opt-out, anonymous | **Enabled** (v0.7.1+) |
+| **JMo Security** | Opt-out, anonymous | **Enabled** |
 
 **Rationale:** Opt-out provides better data for feature prioritization (80-90% vs 5-15% adoption) while respecting user privacy. Auto-disables in CI/CD environments. Users see informative banner on first 3 scans.
 
@@ -439,9 +438,9 @@ jobs:
 
 ## Technical Architecture
 
-### Backend Architecture (v1.0 — GitHub Gist MVP)
+### Backend Architecture
 
-#### Phase 1: GitHub Gist (v0.7.0 — MVP)
+#### Phase 1: GitHub Gist (MVP)
 
 ```text
 ┌─────────────┐         ┌─────────────────┐         ┌───────────────┐
@@ -477,7 +476,7 @@ jobs:
 
 ---
 
-#### Phase 2: Cloudflare Workers + D1 (v0.8.0+)
+#### Phase 2: Cloudflare Workers + D1 (Scaled Deployment)
 
 When usage scales (10k+ users), upgrade to serverless backend:
 
@@ -818,7 +817,7 @@ jq -r 'select(.event == "scan.started") | .metadata.mode' telemetry-events.jsonl
 ## Top Insights
 
 1. **Wizard is key onboarding tool** — 35% of scans use wizard mode
-2. **Trivy timeout issues** — 15% of scans report trivy timeouts (→ increase default timeout to 1200s in v0.7.1)
+2. **Trivy timeout issues** — 15% of scans report trivy timeouts (→ increase default timeout to 1200s)
 3. **Docker adoption growing** — 23% Docker usage (up from 18% in Q4 2025)
 
 ## Privacy Compliance
@@ -897,7 +896,7 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 
 ## Implementation Roadmap
 
-### v0.7.0 (Target: November 2025)
+### Phase 1: MVP
 
 - [ ] Implement `scripts/core/telemetry.py` (stdlib only)
 - [ ] Add wizard opt-in prompt (`scripts/cli/wizard.py`)
@@ -908,12 +907,12 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 - [ ] Update [docs/USER_GUIDE.md](USER_GUIDE.md) with telemetry documentation
 - [ ] Add telemetry FAQ to [docs/index.md](index.md)
 
-### v0.7.1 (Target: December 2025)
+### Phase 2: Optimization
 
-- [ ] Publish first transparency report (Q4 2025)
+- [ ] Publish first transparency report
 - [ ] Optimize based on telemetry insights (e.g., trivy timeout increase)
 
-### v0.8.0 (Target: Q1 2026)
+### Phase 3: Scale
 
 - [ ] Migrate to Cloudflare Workers + D1 backend
 - [ ] Add real-time analytics dashboard (Cloudflare Analytics)
@@ -923,7 +922,7 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 
 ## Cloudflare Worker Setup
 
-### For Maintainers: Deploying the Telemetry Backend (v0.8.0+)
+### For Maintainers: Deploying the Telemetry Backend (Phase 3)
 
 ### Prerequisites
 
@@ -1075,6 +1074,5 @@ JMo Security's telemetry system is designed with **privacy first**, **user contr
 
 ---
 
-**Document Version:** 1.0.0 (Draft)
 **Last Updated:** 2025-10-19
-**Next Review:** 2025-11-19 (monthly during v0.7.0 development)
+**Next Review:** 2025-11-19 (monthly)

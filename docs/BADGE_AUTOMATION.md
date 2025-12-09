@@ -287,5 +287,5 @@ Badge verification runs automatically:
 
 ---
 
-**Last Updated:** 2025-10-25 (v0.7.1)
+**Last Updated:** 2025-10-25
 **Maintainer:** James Moceri
