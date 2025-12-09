@@ -446,6 +446,5 @@ Before submitting to homebrew-core or winget-pkgs:
 
 ---
 
-**Last Updated:** 2025-10-30
-**Version:** v0.9.0
+**Last Updated:** December 2025
 **Maintainer:** Jimmy Moceri (@jimmy058910)

@@ -54,6 +54,46 @@ from scripts.core.developer_attribution import (
 )
 
 
+# Windows-safe Unicode fallback mappings
+UNICODE_FALLBACKS = {
+    "─": "-",
+    "━": "=",
+    "✅": "[OK]",
+    "❌": "[X]",
+    "🔍": "[?]",
+    "📊": "[#]",
+    "📈": "[^]",
+    "📉": "[v]",
+    "⚠️": "[!]",
+    "→": "->",
+}
+
+
+def _can_encode_unicode() -> bool:
+    """Check if stdout can encode Unicode characters."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            return False
+        "─".encode(encoding)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def safe_write(text: str, stream=None) -> None:
+    """Write text with Unicode fallback for Windows compatibility."""
+    if stream is None:
+        stream = sys.stdout
+    if _can_encode_unicode():
+        stream.write(text)
+    else:
+        result = text
+        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
+            result = result.replace(unicode_char, ascii_fallback)
+        stream.write(result)
+
+
 # ============================================================================
 # Command 1: jmo trends analyze
 # ============================================================================
@@ -116,16 +156,16 @@ def cmd_trends_analyze(args) -> int:
 
             # Show statistical validation if present
             if "statistical_validation" in analysis:
-                sys.stdout.write("\n📊 Statistical Validation (Mann-Kendall Test):\n")
+                safe_write("\n📊 Statistical Validation (Mann-Kendall Test):\n")
                 sys.stdout.write("=" * 70 + "\n")
                 for severity, results in analysis["statistical_validation"].items():
                     if severity in ["CRITICAL", "HIGH"]:
                         trend = results["trend"]
                         p_value = results["p_value"]
                         significant = (
-                            "✅ SIGNIFICANT"
+                            "[OK] SIGNIFICANT"
                             if results["significant"]
-                            else "❌ Not significant"
+                            else "[X] Not significant"
                         )
                         sys.stdout.write(
                             f"{severity:10s}: {trend:15s} (p={p_value:.4f}) {significant}\n"
@@ -144,34 +184,34 @@ def cmd_trends_analyze(args) -> int:
             export_path = Path(args.export_json)
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(format_json_report(analysis))
-            sys.stdout.write(f"\n✅ Exported JSON to: {export_path}\n")
+            safe_write(f"\n✅ Exported JSON to: {export_path}\n")
 
         if getattr(args, "export_html", None):
             export_path = Path(args.export_html)
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(format_html_report(analysis))
-            sys.stdout.write(f"\n✅ Exported HTML to: {export_path}\n")
+            safe_write(f"\n✅ Exported HTML to: {export_path}\n")
 
         # Phase 5: Additional export formats
         if getattr(args, "export_csv", None):
             export_path = Path(args.export_csv)
             export_to_csv(analysis, export_path)
-            sys.stdout.write(f"\n✅ Exported CSV to: {export_path}\n")
+            safe_write(f"\n✅ Exported CSV to: {export_path}\n")
 
         if getattr(args, "export_prometheus", None):
             export_path = Path(args.export_prometheus)
             export_to_prometheus(analysis, export_path)
-            sys.stdout.write(f"\n✅ Exported Prometheus metrics to: {export_path}\n")
+            safe_write(f"\n✅ Exported Prometheus metrics to: {export_path}\n")
 
         if getattr(args, "export_grafana", None):
             export_path = Path(args.export_grafana)
             export_to_grafana(analysis, export_path)
-            sys.stdout.write(f"\n✅ Exported Grafana dashboard to: {export_path}\n")
+            safe_write(f"\n✅ Exported Grafana dashboard to: {export_path}\n")
 
         if getattr(args, "export_dashboard", None):
             export_path = Path(args.export_dashboard)
             export_for_dashboard(analysis, export_path)
-            sys.stdout.write(f"\n✅ Exported dashboard data to: {export_path}\n")
+            safe_write(f"\n✅ Exported dashboard data to: {export_path}\n")
 
         return 0
 
@@ -248,7 +288,7 @@ def cmd_trends_show(args) -> int:
         conn.close()
 
         # Output
-        sys.stdout.write(f"\n📊 Trend Context for Scan: {scan_id[:8]}...\n")
+        safe_write(f"\n📊 Trend Context for Scan: {scan_id[:8]}...\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         sys.stdout.write("Target Scan:\n")
@@ -266,7 +306,7 @@ def cmd_trends_show(args) -> int:
 
         for i, ctx_scan in enumerate(context_scans):
             is_target = ctx_scan["id"] == scan_id
-            marker = "👉" if is_target else "  "
+            marker = "->" if is_target else "  "
             timestamp = ctx_scan["timestamp_iso"][:10]
             total = ctx_scan["total_findings"]
             critical = ctx_scan["critical_count"]
@@ -333,11 +373,11 @@ def cmd_trends_regressions(args) -> int:
             ]
 
         # Output
-        sys.stdout.write(f"\n⚠️  Regression Analysis: {branch}\n")
+        safe_write(f"\n⚠️  Regression Analysis: {branch}\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         if not regressions:
-            sys.stdout.write("✅ No regressions detected\n\n")
+            safe_write("✅ No regressions detected\n\n")
             return 0
 
         sys.stdout.write(f"Found {len(regressions)} regression(s):\n\n")
@@ -347,13 +387,13 @@ def cmd_trends_regressions(args) -> int:
             sys.stdout.write(f"   Scan:      {reg['scan_id'][:8]}...\n")
             sys.stdout.write(f"   Timestamp: {reg['timestamp'][:19]}\n")
             sys.stdout.write(
-                f"   Change:    {reg['previous_count']} → {reg['current_count']} (+{reg['increase']})\n"
+                f"   Change:    {reg['previous_count']} -> {reg['current_count']} (+{reg['increase']})\n"
             )
             sys.stdout.write("\n")
 
         # Fail if requested
         if fail_on_any and len(regressions) > 0:
-            sys.stderr.write(f"❌ FAIL: {len(regressions)} regression(s) detected\n")
+            safe_write(f"❌ FAIL: {len(regressions)} regression(s) detected\n", sys.stderr)
             return 1
 
         return 0
@@ -911,7 +951,7 @@ def cmd_trends_developers(args) -> int:
             return 0
 
         # Display results
-        sys.stdout.write(
+        safe_write(
             f"📊 Top {min(top, len(dev_stats))} Developers by Remediation:\n"
         )
         sys.stdout.write("=" * 70 + "\n\n")
@@ -924,7 +964,7 @@ def cmd_trends_developers(args) -> int:
         if team_file:
             sys.stdout.write("\n")
             sys.stdout.write("=" * 70 + "\n")
-            sys.stdout.write("🏢 Team Performance Aggregation\n")
+            sys.stdout.write("Team Performance Aggregation\n")
             sys.stdout.write("=" * 70 + "\n\n")
 
             try:
@@ -943,7 +983,7 @@ def cmd_trends_developers(args) -> int:
         # Summary statistics
         sys.stdout.write("\n")
         sys.stdout.write("=" * 70 + "\n")
-        sys.stdout.write("📈 Summary Statistics\n")
+        safe_write("📈 Summary Statistics\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         total_resolved = sum(d.findings_resolved for d in dev_stats)

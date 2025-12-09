@@ -17,7 +17,7 @@ The project uses **4 actively maintained Docker variants**:
 | **Slim** | `:slim` | ~557 MB | 15 | Cloud-focused, IaC, containers |
 | **Fast** | `:fast` | ~502 MB | 8 | CI/CD gates, pre-commit hooks |
 
-See [docs/DOCKER_VARIANTS_MASTER.md](../../../docs/DOCKER_VARIANTS_MASTER.md) for complete tool distribution and usage guide.
+See [docs/DOCKER_README.md](../../../docs/DOCKER_README.md) for complete tool distribution and usage guide.
 
 ## Alpine Deprecation (v1.0.0)
 
@@ -76,6 +76,5 @@ python3 scripts/dev/update_versions.py --sync
 
 ## See Also
 
-- [Docker Variants Master](../../../docs/DOCKER_VARIANTS_MASTER.md) — Complete tool distribution
-- [Docker Usage Guide](../../../docs/DOCKER_README.md) — Docker deep-dive
+- [Docker Guide](../../../docs/DOCKER_README.md) — Complete tool distribution and usage
 - [Version Management](../../../docs/VERSION_MANAGEMENT.md) — Tool version control

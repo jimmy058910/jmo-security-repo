@@ -52,8 +52,38 @@ from scripts.cli.wizard_flows.telemetry_helper import (
     send_wizard_telemetry,
 )
 
+import sys
+
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+# Windows-safe Unicode fallback mappings for cp1252 compatibility
+_UNICODE_FALLBACKS = {
+    "📊": "[#]",  # Chart
+    "📖": "[?]",  # Book
+    "⚠": "[!]",  # Warning
+    "✅": "[OK]",  # Check mark
+    "❌": "[X]",  # Cross mark
+    "✗": "[x]",  # X mark
+    "✓": "[v]",  # Check mark small
+    "•": "*",  # Bullet
+    "→": "->",  # Arrow
+}
+
+
+def _safe_print(text: str) -> None:
+    """Print with Unicode fallback for Windows cp1252 compatibility."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+                text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+    except UnicodeEncodeError:
+        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+            text = text.replace(unicode_char, ascii_fallback)
+        print(text)
 
 # Version (from pyproject.toml)
 __version__ = "0.7.1"
@@ -914,7 +944,7 @@ def run_wizard(
                                     )
 
                     except Exception as e:
-                        print(_colorize(f"\n⚠ Trend analysis failed: {e}", "yellow"))
+                        _safe_print(_colorize(f"\n⚠ Trend analysis failed: {e}", "yellow"))
                         logger.debug(f"Trend analysis error: {e}")
             else:
                 # Interactive offers (only if no non-interactive flags)
@@ -984,14 +1014,14 @@ def offer_trend_analysis_after_scan(results_dir: str) -> None:
             return
 
         print("\n" + _colorize("=" * 60, "blue"))
-        print(_colorize("📊 Trend Analysis Available", "bold"))
+        _safe_print(_colorize("📊 Trend Analysis Available", "bold"))
         print(_colorize("=" * 60, "blue"))
         print(f"\nYou have {_colorize(str(scan_count), 'green')} scans in history.")
         print("Would you like to explore security trends?")
-        print("  • View overall security trend")
-        print("  • Identify regressions")
-        print("  • Track remediation velocity")
-        print("  • See top remediators")
+        _safe_print("  • View overall security trend")
+        _safe_print("  • Identify regressions")
+        _safe_print("  • Track remediation velocity")
+        _safe_print("  • See top remediators")
 
         if _prompt_yes_no("\nExplore trends now?", default=False):
             explore_trends_interactive(db_path, results_dir)
@@ -1058,7 +1088,7 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
 
     except Exception as e:
         # Don't block user if policy evaluation fails
-        print(_colorize(f"\n⚠ Policy evaluation failed: {e}", "yellow"))
+        _safe_print(_colorize(f"\n⚠ Policy evaluation failed: {e}", "yellow"))
         logger.debug(f"Policy evaluation error: {e}")
 
 
@@ -1083,7 +1113,7 @@ def explore_trends_interactive(db_path: Path, results_dir: str = "results") -> N
     """
     while True:
         print("\n" + _colorize("=" * 60, "blue"))
-        print(_colorize("📊 Trend Analysis Menu", "bold"))
+        _safe_print(_colorize("📊 Trend Analysis Menu", "bold"))
         print(_colorize("=" * 60, "blue"))
 
         print("\n  [1] Overall security trend (last 30 days)")
@@ -1218,20 +1248,20 @@ def _run_trend_command_interactive(
         result = cmd_func(args)
 
         if result != 0:
-            print(_colorize(f"\n⚠ Command failed with exit code {result}", "yellow"))
+            _safe_print(_colorize(f"\n⚠ Command failed with exit code {result}", "yellow"))
 
         # Pause for user to read output
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(
+        _safe_print(
             _colorize(
                 "\n⚠ Trend analysis not available (missing dependencies)", "yellow"
             )
         )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
-        print(_colorize(f"\n✗ Error: {e}", "red"))
+        _safe_print(_colorize(f"\n✗ Error: {e}", "red"))
         logger.error(f"Trend command failed: {e}", exc_info=True)
         input(_colorize("\nPress Enter to continue...", "blue"))
 
@@ -1254,7 +1284,7 @@ def _compare_scans_interactive(db_path: Path) -> None:
         scans = list_recent_scans(db_path, limit=20)
 
         if len(scans) < 2:
-            print(_colorize("\n⚠ Need at least 2 scans in history", "yellow"))
+            _safe_print(_colorize("\n⚠ Need at least 2 scans in history", "yellow"))
             input(_colorize("\nPress Enter to continue...", "blue"))
             return
 
@@ -1345,7 +1375,7 @@ def _compare_scans_interactive(db_path: Path) -> None:
 
         args = CompareArgs()
 
-        print(
+        _safe_print(
             _colorize(
                 f"\n=== Comparing {baseline_id[:8]} → {current_id[:8]} ===\n", "bold"
             )
@@ -1353,19 +1383,19 @@ def _compare_scans_interactive(db_path: Path) -> None:
         result = cmd_trends_compare(args)
 
         if result != 0:
-            print(_colorize(f"\n⚠ Comparison failed with exit code {result}", "yellow"))
+            _safe_print(_colorize(f"\n⚠ Comparison failed with exit code {result}", "yellow"))
 
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(
+        _safe_print(
             _colorize(
                 "\n⚠ Trend comparison not available (missing dependencies)", "yellow"
             )
         )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
-        print(_colorize(f"\n✗ Error: {e}", "red"))
+        _safe_print(_colorize(f"\n✗ Error: {e}", "red"))
         logger.error(f"Scan comparison failed: {e}", exc_info=True)
         input(_colorize("\nPress Enter to continue...", "blue"))
 
@@ -1422,7 +1452,7 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
             html_content = format_html_report(report)
             output_file.write_text(html_content)
 
-            print(_colorize(f"✓ HTML report exported: {output_file}", "green"))
+            _safe_print(_colorize(f"✓ HTML report exported: {output_file}", "green"))
 
             if _prompt_yes_no("\nOpen report in browser?", default=True):
                 import webbrowser
@@ -1435,17 +1465,17 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
             json_content = format_json_report(report)
             output_file.write_text(json_content)
 
-            print(_colorize(f"✓ JSON report exported: {output_file}", "green"))
+            _safe_print(_colorize(f"✓ JSON report exported: {output_file}", "green"))
 
         input(_colorize("\nPress Enter to continue...", "blue"))
 
     except ImportError:
-        print(
+        _safe_print(
             _colorize("\n⚠ Trend export not available (missing dependencies)", "yellow")
         )
         input(_colorize("\nPress Enter to continue...", "blue"))
     except Exception as e:
-        print(_colorize(f"\n✗ Error: {e}", "red"))
+        _safe_print(_colorize(f"\n✗ Error: {e}", "red"))
         logger.error(f"Trend export failed: {e}", exc_info=True)
         input(_colorize("\nPress Enter to continue...", "blue"))
 
@@ -1457,10 +1487,10 @@ def _explain_metrics_interactive() -> None:
     Displays help text for each metric with examples.
     """
     print("\n" + _colorize("=" * 60, "bold"))
-    print(_colorize("📖 Trend Analysis Metrics Explained", "bold"))
+    _safe_print(_colorize("📖 Trend Analysis Metrics Explained", "bold"))
     print(_colorize("=" * 60, "bold"))
 
-    print(
+    _safe_print(
         """
 1. OVERALL SECURITY TREND
    • Shows direction: improving, worsening, stable
@@ -1765,7 +1795,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         result = cmd_diff(args)
 
         if result == 0:
-            print(_colorize(f"\n✓ Diff report generated: {output_file}", "green"))
+            _safe_print(_colorize(f"\n✓ Diff report generated: {output_file}", "green"))
 
             # Auto-open HTML reports
             if output_format == "html" and Path(output_file).exists():
@@ -1774,7 +1804,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
 
                     webbrowser.open(f"file://{Path(output_file).resolve()}")
         else:
-            print(_colorize("\n✗ Diff generation failed", "red"))
+            _safe_print(_colorize("\n✗ Diff generation failed", "red"))
 
         return result
 

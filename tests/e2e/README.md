@@ -365,6 +365,5 @@ run_test "TEST_ID" "Test Description" \
 
 ---
 
-**Version:** 1.0 (v0.6.0)
 **Maintainer:** JMo Security Team
-**Last Updated:** 2025-10-16
+**Last Updated:** December 2025

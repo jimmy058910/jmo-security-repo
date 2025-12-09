@@ -1,7 +1,53 @@
 # JMo Security — Telemetry Implementation Guide
 
-**Status:** Implementation Pending
+**Status:** ✅ Fully Implemented (Opt-Out Model, v0.7.1+)
 **Privacy Policy:** <https://jmotools.com/privacy>
+
+---
+
+## Quick Reference
+
+### Default Behavior
+
+- ✅ **Enabled by default** (opt-out model)
+- ✅ **Auto-disabled in CI/CD** environments
+- ✅ **Banner shown on first 3 scans**
+- ✅ **100% anonymous** (random UUID, no PII)
+
+### How to Opt-Out
+
+```bash
+# Method 1: Environment Variable (Recommended)
+export JMO_TELEMETRY_DISABLE=1
+
+# Method 2: Edit jmo.yml
+# telemetry:
+#   enabled: false
+
+# Method 3: Docker
+docker run -e JMO_TELEMETRY_DISABLE=1 ghcr.io/jimmy058910/jmo-security:latest ...
+```
+
+### For Maintainers
+
+```bash
+# View telemetry dashboard
+./scripts/dev/view_telemetry.sh
+
+# View raw JSONL
+./scripts/dev/view_telemetry.sh --raw
+
+# Export to CSV
+./scripts/dev/view_telemetry.sh --export
+```
+
+### Distribution Methods
+
+| Method | Telemetry Banner | Opt-Out |
+|--------|------------------|---------|
+| **PyPI** | First 3 CLI scans | `JMO_TELEMETRY_DISABLE=1` or `jmo.yml` |
+| **Homebrew** | First 3 CLI scans | `JMO_TELEMETRY_DISABLE=1` or `jmo.yml` |
+| **Docker** | Every run | `-e JMO_TELEMETRY_DISABLE=1` |
 
 ---
 
@@ -1074,5 +1120,4 @@ JMo Security's telemetry system is designed with **privacy first**, **user contr
 
 ---
 
-**Last Updated:** 2025-10-19
-**Next Review:** 2025-11-19 (monthly)
+**Last Updated:** December 2025

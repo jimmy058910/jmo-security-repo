@@ -28,6 +28,45 @@ except ImportError:
     console = None  # type: ignore[assignment]
 
 
+# Windows-safe Unicode fallback mappings
+UNICODE_FALLBACKS = {
+    "─": "-",
+    "━": "=",
+    "✅": "[OK]",
+    "❌": "[X]",
+    "🔍": "[?]",
+    "📊": "[#]",
+    "📈": "[^]",
+    "📉": "[v]",
+    "⚠️": "[!]",
+}
+
+
+def _can_encode_unicode() -> bool:
+    """Check if stdout can encode Unicode characters."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            return False
+        "─".encode(encoding)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def safe_print(text: str, file=None) -> None:
+    """Print text with Unicode fallback for Windows compatibility."""
+    if file is None:
+        file = sys.stdout
+    if _can_encode_unicode():
+        print(text, file=file)
+    else:
+        result = text
+        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
+            result = result.replace(unicode_char, ascii_fallback)
+        print(result, file=file)
+
+
 def detect_git_context() -> Optional[Dict[str, Any]]:
     """
     Detect Git context for auto-detection mode.
@@ -300,7 +339,7 @@ def cmd_diff(args) -> int:
         args.scan_ids = None
 
         # Display auto-detection results
-        print("🔍 Auto-detected configuration:", file=sys.stderr)
+        safe_print("🔍 Auto-detected configuration:", file=sys.stderr)
         print(f"   Baseline: {baseline}", file=sys.stderr)
         print(f"   Current:  {current}", file=sys.stderr)
         print(f"   Format:   {args.format}", file=sys.stderr)
@@ -400,7 +439,7 @@ def cmd_diff(args) -> int:
         if format_type == "json":
             if output_path:
                 diff_json_reporter.write_json_diff(diff_result, Path(output_path))
-                print(f"✅ JSON diff report: {output_path}")
+                safe_print(f"✅ JSON diff report: {output_path}")
             else:
                 # Write to stdout
                 import json
@@ -411,7 +450,7 @@ def cmd_diff(args) -> int:
         elif format_type == "md":
             if output_path:
                 diff_md_reporter.write_markdown_diff(diff_result, Path(output_path))
-                print(f"✅ Markdown diff report: {output_path}")
+                safe_print(f"✅ Markdown diff report: {output_path}")
             else:
                 # Write to stdout
                 import tempfile
@@ -428,14 +467,14 @@ def cmd_diff(args) -> int:
             if not output_path:
                 output_path = "diff-report.html"
             diff_html_reporter.write_html_diff(diff_result, Path(output_path))
-            print(f"✅ HTML diff report: {output_path}")
+            safe_print(f"✅ HTML diff report: {output_path}")
             print(f"   Open in browser: file://{Path(output_path).absolute()}")
 
         elif format_type == "sarif":
             if not output_path:
                 output_path = "diff.sarif"
             diff_sarif_reporter.write_sarif_diff(diff_result, Path(output_path))
-            print(f"✅ SARIF diff report: {output_path}")
+            safe_print(f"✅ SARIF diff report: {output_path}")
             print("   Upload to GitHub Security or GitLab Code Scanning")
 
     except Exception as e:
@@ -450,7 +489,7 @@ def cmd_diff(args) -> int:
             print_diff_summary_rich(diff_result)
         else:
             stats = diff_result.statistics
-            print(
+            safe_print(
                 f"\n📊 Summary: {stats['total_new']} new, {stats['total_resolved']} resolved, "
                 f"{stats['total_modified']} modified (trend: {stats['trend']})",
                 file=sys.stderr,

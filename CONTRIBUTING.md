@@ -353,15 +353,28 @@ Before submitting to Homebrew/WinGet:
 
 **Complete packaging guide:** [packaging/README.md](packaging/README.md) | [packaging/TESTING.md](packaging/TESTING.md)
 
-## Git workflow
+## Git Workflow
 
-### Branch strategy
+**Branching Strategy:** Git Flow with `dev` + feature branches
 
-- **main**: Stable releases only (tagged versions)
-- **dev**: Active development work
-- **feature/**: Individual features branched from `dev`
+### Branch Structure
 
-### Starting a new feature
+```text
+main ← stable releases only (tagged versions)
+  └── dev ← active development
+        ├── feature/ai-remediation
+        ├── feature/diff-reports
+        └── ... (other features)
+```
+
+**Branch Purposes:**
+
+- **`main`** — Stable releases only, tagged with version numbers
+- **`dev`** — Active development, integration point for all features
+- **`feature/*`** — Individual features, one per major change
+- **`hotfix/*`** — Critical bug fixes for released versions
+
+### Starting a New Feature
 
 ```bash
 # Always start from latest dev
@@ -373,13 +386,13 @@ git checkout -b feature/my-feature dev
 git checkout -b feature/add-snyk-adapter dev
 ```
 
-### Daily work cycle
+### Daily Work Cycle
 
 ```bash
 # Make changes
 vim scripts/core/adapters/snyk_adapter.py
 
-# Stage and commit
+# Stage and commit with conventional commit format
 git add scripts/core/adapters/snyk_adapter.py
 git commit -m "feat(tools): add Snyk adapter"
 
@@ -387,7 +400,36 @@ git commit -m "feat(tools): add Snyk adapter"
 git push origin feature/add-snyk-adapter
 ```
 
-### Merging feature to dev
+### Conventional Commit Prefixes
+
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation changes
+- `test:` Test additions/changes
+- `refactor:` Code refactoring
+- `perf:` Performance improvements
+- `chore:` Maintenance tasks
+
+### Working on Multiple Features
+
+```bash
+# Start Feature #1
+git checkout -b feature/tools-1.0.0 dev
+# ... work ...
+git commit -m "feat: add tools"
+
+# Switch to Feature #2 (pause #1)
+git checkout dev
+git checkout -b feature/ai-remediation dev
+# ... work ...
+git commit -m "feat: add AI MCP"
+
+# Return to Feature #1
+git checkout feature/tools-1.0.0
+# ... continue work ...
+```
+
+### Merging Feature to Dev
 
 ```bash
 # When feature is complete
@@ -407,7 +449,50 @@ git push origin dev
 git branch -d feature/add-snyk-adapter
 ```
 
-### Status checks
+### Release Process
+
+```bash
+# After all features complete on dev
+git checkout main
+git pull origin main
+git merge dev
+
+# Tag release
+git tag vX.Y.Z
+
+# Push to trigger CI/CD
+git push origin main --tags
+
+# CI automatically publishes to PyPI + Docker Hub
+```
+
+### Hotfix for Released Version
+
+```bash
+# Create hotfix from main
+git checkout main
+git checkout -b hotfix/vX.Y.Z
+
+# Fix bug
+vim scripts/cli/schedule_commands.py
+git add . && git commit -m "fix(schedule): handle missing directory"
+
+# Test thoroughly
+make test
+
+# Merge to main and tag
+git checkout main
+git merge hotfix/vX.Y.Z
+git tag vX.Y.Z
+git push origin main --tags
+
+# Merge back to dev
+git checkout dev
+git merge hotfix/vX.Y.Z
+git push origin dev
+```
+
+### Status Checks
 
 ```bash
 # Where am I?
@@ -426,7 +511,50 @@ git branch -a | grep feature/
 git log dev --oneline --graph
 ```
 
-### Undo/Fix commands
+### Troubleshooting Git
+
+**Merge Conflicts:**
+
+```bash
+# During merge, conflicts appear
+git merge feature/your-feature
+
+# Manually resolve conflicts
+vim conflicted-file.py  # Fix <<< === >>> markers
+
+# Stage resolved files
+git add conflicted-file.py
+
+# Complete merge
+git commit -m "merge: resolve conflicts"
+```
+
+**Feature Branch Behind Dev:**
+
+```bash
+# Update feature branch with latest dev
+git checkout feature/your-feature
+git merge dev
+
+# Or rebase (cleaner history, but rewrites commits)
+git rebase dev
+```
+
+**Stash Changes Temporarily:**
+
+```bash
+# Save work without committing
+git stash
+
+# Switch branches
+git checkout other-branch
+
+# Return and restore work
+git checkout original-branch
+git stash pop
+```
+
+**Undo/Fix Commands:**
 
 ```bash
 # Uncommit last commit (keep changes)
@@ -435,15 +563,11 @@ git reset --soft HEAD~1
 # Discard all local changes (DANGER)
 git reset --hard HEAD
 
-# Stash changes temporarily
-git stash
-git stash pop  # Restore later
-
 # Revert a merge
 git revert -m 1 HEAD
 ```
 
-### Best practices
+### Best Practices
 
 - Create feature branches from `dev`, not `main`
 - Keep diffs small and focused
@@ -648,3 +772,7 @@ This project was built by **James (Jimmy) Moceri** as a capstone for the **Insti
 **Let's connect:** [LinkedIn](https://linkedin.com/in/jimmy-moceri) | [GitHub](https://github.com/jimmy058910)
 
 Thanks again for contributing!
+
+---
+
+**Last Updated:** December 2025

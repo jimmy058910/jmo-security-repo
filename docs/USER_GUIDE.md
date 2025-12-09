@@ -586,7 +586,7 @@ done
 
 ## Output overview
 
-All output formats use a metadata wrapper structure `{"meta": {...}, "findings": [...]}`. See [OUTPUT_FORMATS.md](OUTPUT_FORMATS.md) for complete specification.
+All output formats use a metadata wrapper structure `{"meta": {...}, "findings": [...]}`. See [RESULTS_GUIDE.md](RESULTS_GUIDE.md) for complete specification.
 
 Unified summaries live in `results/summaries/`:
 
@@ -6292,6 +6292,8 @@ jmo diff BASELINE_DIR CURRENT_DIR [--format terminal|json|md|sarif|html] \
   [--show-context] [--attribution]
 ```
 
-—
+---
 
 Happy scanning!
+
+**Last Updated:** December 2025

@@ -19,7 +19,7 @@ All notable changes to JMo Security will be documented in this file.
     - Test coverage: 13 tests (100% coverage)
   - Build time: 28.17s (down from 43.17s), bundle size: 688.71 KB
   - Impact: Improved usability for security teams, faster navigation of large datasets, accessible findings for all stakeholders
-  - See [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) for simple-html documentation
+  - See [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) for simple-html documentation
 
 ## [1.0.0] - 2025-11-10
 
@@ -29,7 +29,7 @@ All notable changes to JMo Security will be documented in this file.
   - All output formats now include `{"meta": {...}, "findings": [...]}` structure
   - Meta includes: `output_version`, `jmo_version`, `schema_version`, `timestamp`, `scan_id`, `profile`, `tools`, `target_count`, `finding_count`, `platform`
   - Impact: Machine-parseable metadata, version tracking, full scan context
-  - See [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) for complete specification
+  - See [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) for complete specification
 
 - **Feature #2: CSV Reporter** - Spreadsheet-friendly output format
   - `scripts/core/reporters/csv_reporter.py`: CSV export with metadata header
@@ -146,7 +146,7 @@ All notable changes to JMo Security will be documented in this file.
   - v1.0.0 format: `findings.json` = `{"meta": {...}, "findings": [{finding1}, {finding2}, ...]}`
   - All output formats (JSON, YAML, CSV, Markdown, HTML, SARIF) follow this structure
   - Impact: Access findings via `.findings` field; metadata available via `.meta`
-  - See [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) for complete specification
+  - See [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) for complete specification
 
 - **Output Formats Table** - Added CSV to supported formats
   - v1.0.0 formats: JSON, Markdown, YAML, HTML, SARIF, **CSV** (6 formats)
@@ -165,6 +165,22 @@ All notable changes to JMo Security will be documented in this file.
 - **HTML Dashboard File Size:** 94% reduction for 1500 findings (100 MB → 6 MB total)
 - **CSV Export Speed:** <500ms for 10,000 findings
 - **Metadata Overhead:** <5% increase in JSON file size (acceptable trade-off)
+
+### Documentation
+
+- Unified documentation treating v1.0.0 as definitive release
+- Removed all version-specific language from user documentation
+- Consolidated overlapping documentation:
+  - Docker docs (3 files → 1)
+  - Results/Output docs (2 files → 1)
+  - Installation docs (3 files → 1)
+  - MCP docs (2 files → 1)
+  - Telemetry docs (2 files → 1)
+  - Git/Release docs (2 files → 1)
+- Fixed RESULTS_GUIDE.md duplication bug (67,947 → ~1,200 lines)
+- Streamlined README.md and QUICKSTART.md
+- Updated docs/index.md navigation hub
+- Archived historical documentation to docs/archive/
 
 ## 0.9.0 (2025-11-XX)
 

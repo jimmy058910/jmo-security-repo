@@ -78,8 +78,10 @@ docs/VERSION_TAG.md
 BUSINESS_PLAN.md
 
 # Archived documentation (historical reference)
-# v0.6.0 archive is included for historical reference
-docs/archive/*
+# Archive structure is tracked (README.md, v0.6.0/)
+# Individual archived files are gitignored
+docs/archive/merged/*
+!docs/archive/README.md
 !docs/archive/v0.6.0/
 
 # Private local scripts and outputs (developer-only workspace)

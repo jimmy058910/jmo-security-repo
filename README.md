@@ -239,7 +239,7 @@ security_scan:
 
 | Document | Purpose |
 |----------|---------|
-| [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) | Output format details |
+| [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) | Results and output formats |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Python API docs |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [ROADMAP.md](ROADMAP.md) | Future plans |
@@ -350,5 +350,5 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 ---
 
 **Author:** James Moceri
-
 **Project:** <https://jmotools.com> | [GitHub](https://github.com/jimmy058910/jmo-security-repo)
+**Last Updated:** December 2025

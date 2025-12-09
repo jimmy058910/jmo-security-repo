@@ -36,6 +36,77 @@ from scripts.core.history_migrations import run_migrations, get_current_version
 from scripts.core.history_integrity import verify_database_integrity, recover_database
 
 
+# Windows-safe Unicode fallback mappings
+# Maps Unicode characters to ASCII alternatives for cp1252 compatibility
+UNICODE_FALLBACKS = {
+    "─": "-",  # Box drawing horizontal (U+2500)
+    "━": "=",  # Box drawing heavy horizontal (U+2501)
+    "│": "|",  # Box drawing vertical (U+2502)
+    "┌": "+",  # Box drawing corner
+    "┐": "+",
+    "└": "+",
+    "┘": "+",
+    "├": "+",
+    "┤": "+",
+    "┬": "+",
+    "┴": "+",
+    "┼": "+",
+    "═": "=",  # Double horizontal
+    "║": "|",  # Double vertical
+    "╔": "+",
+    "╗": "+",
+    "╚": "+",
+    "╝": "+",
+    "✅": "[OK]",  # Check mark (U+2705)
+    "❌": "[X]",  # Cross mark (U+274C)
+    "✓": "[v]",  # Check mark
+    "✗": "[x]",  # X mark
+    "🔍": "[?]",  # Magnifying glass (U+1F50D)
+    "📊": "[#]",  # Chart (U+1F4CA)
+    "📈": "[^]",  # Chart increasing
+    "📉": "[v]",  # Chart decreasing
+    "⚠️": "[!]",  # Warning
+    "•": "*",  # Bullet
+    "→": "->",  # Right arrow (U+2192)
+    "←": "<-",  # Left arrow (U+2190)
+    "↑": "^",  # Up arrow (U+2191)
+    "↓": "v",  # Down arrow (U+2193)
+}
+
+
+def _can_encode_unicode() -> bool:
+    """Check if stdout can encode Unicode characters."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        # cp1252 and similar Windows encodings can't handle many Unicode chars
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            return False
+        # Test by trying to encode a box drawing character
+        "─".encode(encoding)
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def safe_write(text: str, stream=None) -> None:
+    """
+    Write text to stream with Unicode fallback for Windows compatibility.
+
+    On Windows with cp1252 encoding, replaces Unicode characters with ASCII alternatives.
+    """
+    if stream is None:
+        stream = sys.stdout
+
+    if _can_encode_unicode():
+        stream.write(text)
+    else:
+        # Replace Unicode characters with ASCII fallbacks
+        result = text
+        for unicode_char, ascii_fallback in UNICODE_FALLBACKS.items():
+            result = result.replace(unicode_char, ascii_fallback)
+        stream.write(result)
+
+
 def parse_time_delta(delta_str: str) -> int:
     """
     Parse time delta string to seconds.
@@ -114,8 +185,8 @@ def cmd_history_store(args) -> int:
             tag=getattr(args, "tag", None),
         )
 
-        sys.stdout.write(f"✅ Stored scan: {scan_id}\n")
-        sys.stdout.write(f"   Database: {db_path}\n")
+        safe_write(f"✅ Stored scan: {scan_id}\n")
+        safe_write(f"   Database: {db_path}\n")
         return 0
 
     except FileNotFoundError as e:
@@ -263,8 +334,8 @@ def cmd_history_show(args) -> int:
             sys.stdout.write(json.dumps(output, indent=2) + "\n")
         else:
             # Human-readable output
-            sys.stdout.write(f"\nScan: {scan['id']}\n")
-            sys.stdout.write("─" * 70 + "\n")
+            safe_write(f"\nScan: {scan['id']}\n")
+            safe_write("─" * 70 + "\n")
             sys.stdout.write(f"Timestamp:       {scan['timestamp_iso']}\n")
             if scan["branch"]:
                 sys.stdout.write(f"Branch:          {scan['branch']}\n")
@@ -289,7 +360,7 @@ def cmd_history_show(args) -> int:
             sys.stdout.write(f"  MEDIUM:        {scan['medium_count']}\n")
             sys.stdout.write(f"  LOW:           {scan['low_count']}\n")
             sys.stdout.write(f"  INFO:          {scan['info_count']}\n")
-            sys.stdout.write("  " + "─" * 14 + "\n")
+            safe_write("  " + "─" * 14 + "\n")
             sys.stdout.write(f"  TOTAL:         {scan['total_findings']}\n")
             sys.stdout.write("\n")
 
@@ -407,7 +478,7 @@ def cmd_history_prune(args) -> int:
             if not dry_run:
                 deleted = prune_old_scans(conn, seconds)
                 conn.commit()
-                sys.stdout.write(f"✅ Deleted {deleted} scans\n")
+                safe_write(f"✅ Deleted {deleted} scans\n")
             else:
                 sys.stdout.write(f"[DRY RUN] Would delete {count} scans\n")
 
@@ -540,9 +611,9 @@ def cmd_history_stats(args) -> int:
         if getattr(args, "json", False):
             sys.stdout.write(json.dumps(stats, indent=2) + "\n")
         else:
-            sys.stdout.write(f"\nDatabase: {db_path}\n")
-            sys.stdout.write(f"Size:     {stats['db_size_mb']} MB\n")
-            sys.stdout.write("─" * 60 + "\n")
+            safe_write(f"\nDatabase: {db_path}\n")
+            safe_write(f"Size:     {stats['db_size_mb']} MB\n")
+            safe_write("─" * 60 + "\n")
             sys.stdout.write(f"Scans:            {stats['total_scans']}\n")
             sys.stdout.write(f"Findings:         {stats['total_findings']:,}\n")
             if stats["min_date"] and stats["max_date"]:
@@ -626,13 +697,13 @@ def cmd_history_diff(args) -> int:
             sys.stdout.write(json.dumps(diff, indent=2) + "\n")
         else:
             # Human-readable summary
-            sys.stdout.write(f"\n🔍 Diff: {scan_id_1[:8]}... → {scan_id_2[:8]}...\n\n")
-            sys.stdout.write(f"✅ New findings:       {len(diff['new'])}\n")
-            sys.stdout.write(f"✅ Resolved findings:  {len(diff['resolved'])}\n")
-            sys.stdout.write(f"⚪ Unchanged findings: {len(diff['unchanged'])}\n")
+            safe_write(f"\n🔍 Diff: {scan_id_1[:8]}... → {scan_id_2[:8]}...\n\n")
+            safe_write(f"✅ New findings:       {len(diff['new'])}\n")
+            safe_write(f"✅ Resolved findings:  {len(diff['resolved'])}\n")
+            sys.stdout.write(f"   Unchanged findings: {len(diff['unchanged'])}\n")
 
             if diff["new"]:
-                sys.stdout.write("\n📋 New Findings (top 10):\n")
+                sys.stdout.write("\n   New Findings (top 10):\n")
                 for f in diff["new"][:10]:
                     severity = f["severity"]
                     rule_id = f["rule_id"]
@@ -642,7 +713,7 @@ def cmd_history_diff(args) -> int:
                     sys.stdout.write(f"  ... and {len(diff['new']) - 10} more\n")
 
             if diff["resolved"]:
-                sys.stdout.write("\n✅ Resolved Findings (top 10):\n")
+                safe_write("\n✅ Resolved Findings (top 10):\n")
                 for f in diff["resolved"][:10]:
                     severity = f["severity"]
                     rule_id = f["rule_id"]
@@ -700,7 +771,7 @@ def cmd_history_trends(args) -> int:
             sys.stdout.write(json.dumps(trend, indent=2) + "\n")
         else:
             # Human-readable summary
-            sys.stdout.write(f"\n📊 Security Trends: {branch} (last {days} days)\n")
+            safe_write(f"\n📊 Security Trends: {branch} (last {days} days)\n")
             sys.stdout.write("=" * 70 + "\n\n")
 
             # Scan count and date range
@@ -712,16 +783,15 @@ def cmd_history_trends(args) -> int:
 
             # Improvement metrics
             metrics = trend["improvement_metrics"]
+            # Use ASCII-safe trend indicators
             trend_icon = {
-                "improving": "📈 ✅",
-                "degrading": "📉 ⚠️",
-                "stable": "➡️ 🔵",
-                "insufficient_data": "❓",
-            }.get(metrics["trend"], "❓")
+                "improving": "[^] IMPROVING",
+                "degrading": "[v] DEGRADING",
+                "stable": "[-] STABLE",
+                "insufficient_data": "[?] INSUFFICIENT DATA",
+            }.get(metrics["trend"], "[?]")
 
-            sys.stdout.write(
-                f"Trend:            {trend_icon} {metrics['trend'].upper()}\n"
-            )
+            sys.stdout.write(f"Trend:            {trend_icon}\n")
             sys.stdout.write(
                 f"Total change:     {metrics['total_change']:+d} findings\n"
             )
@@ -764,7 +834,7 @@ def cmd_history_optimize(args) -> int:
         if args.json:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
-            sys.stdout.write("\n✅ Optimization complete\n\n")
+            safe_write("\n✅ Optimization complete\n\n")
             sys.stdout.write(f"Size before:       {result['size_before_mb']:.2f} MB\n")
             sys.stdout.write(f"Size after:        {result['size_after_mb']:.2f} MB\n")
             sys.stdout.write(
@@ -807,9 +877,9 @@ def cmd_history_migrate(args) -> int:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
             if len(result["applied"]) == 0:
-                sys.stdout.write("\n✅ No pending migrations (already up-to-date)\n")
+                safe_write("\n✅ No pending migrations (already up-to-date)\n")
             else:
-                sys.stdout.write(
+                safe_write(
                     f"\n✅ Applied {len(result['applied'])} migration(s):\n"
                 )
                 for version in result["applied"]:
@@ -817,7 +887,7 @@ def cmd_history_migrate(args) -> int:
                 sys.stdout.write(f"\nFinal version: {result['final_version']}\n")
 
             if result["errors"]:
-                sys.stderr.write("\n❌ Errors during migration:\n")
+                safe_write("\n❌ Errors during migration:\n", sys.stderr)
                 for err in result["errors"]:
                     sys.stderr.write(f"  - {err['version']}: {err['error']}\n")
                 return 1
@@ -849,9 +919,9 @@ def cmd_history_verify(args) -> int:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
             if result["is_valid"]:
-                sys.stdout.write("\n✅ Database integrity verification PASSED\n\n")
+                safe_write("\n✅ Database integrity verification PASSED\n\n")
             else:
-                sys.stdout.write("\n❌ Database integrity verification FAILED\n\n")
+                safe_write("\n❌ Database integrity verification FAILED\n\n")
                 sys.stdout.write(f"Errors found: {len(result['errors'])}\n")
                 for err in result["errors"]:
                     sys.stdout.write(f"  - {err}\n")
@@ -890,7 +960,7 @@ def cmd_history_repair(args) -> int:
 
     # Confirm before proceeding (unless --force)
     if not args.force:
-        sys.stdout.write("\n⚠️  Database Repair\n")
+        safe_write("\n⚠️  Database Repair\n")
         sys.stdout.write("=" * 70 + "\n\n")
         sys.stdout.write("This will:\n")
         sys.stdout.write(f"  1. Create a backup: {db_path}.backup\n")
@@ -913,7 +983,7 @@ def cmd_history_repair(args) -> int:
             sys.stdout.write(json.dumps(result, indent=2) + "\n")
         else:
             if result["success"]:
-                sys.stdout.write("\n✅ Database repair SUCCESSFUL\n\n")
+                safe_write("\n✅ Database repair SUCCESSFUL\n\n")
                 sys.stdout.write(f"Backup created:    {result['backup_path']}\n")
                 sys.stdout.write(
                     f"Recovery time:     {result['recovery_time_sec']:.2f}s\n\n"
@@ -922,7 +992,7 @@ def cmd_history_repair(args) -> int:
                 for table, count in result["rows_recovered"].items():
                     sys.stdout.write(f"  {table:20s}: {count}\n")
             else:
-                sys.stdout.write("\n❌ Database repair FAILED\n\n")
+                safe_write("\n❌ Database repair FAILED\n\n")
                 sys.stdout.write("Errors:\n")
                 for err in result["errors"]:
                     sys.stdout.write(f"  - {err}\n")

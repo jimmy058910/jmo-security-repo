@@ -2,6 +2,43 @@
 
 This guide explains how to set up and use Model Context Protocol (MCP) servers with Claude Code in the jmo-security-repo project.
 
+## Quick Reference
+
+### 3-Step Setup
+
+```bash
+# 1. Run a scan
+jmo scan --repo . --profile-name fast
+
+# 2. Add config file
+cp .mcp.json.example .claude/mcp.json
+
+# 3. Reload AI assistant
+# Claude Code: Restart / VS Code: Ctrl+Shift+P → "Developer: Reload Window"
+```
+
+### Common AI Queries
+
+```text
+@jmo-security What are the CRITICAL and HIGH severity findings?
+@jmo-security Show me all semgrep findings
+@jmo-security What findings are in src/api/auth.py?
+@jmo-security Suggest fix for XSS in src/app.js line 42
+@jmo-security Mark fingerprint-abc123 as false_positive "Test code"
+```
+
+### MCP Tools Summary
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `get_security_findings` | Query with filters | `Show HIGH in src/` |
+| `get_finding_context` | Get code context | `Get context for abc123` |
+| `apply_fix` | Apply AI patches | `Fix CWE-79 in app.js:42` |
+| `mark_resolved` | Track remediation | `Mark as false_positive` |
+| `get_server_info` | Server status | `Server status?` |
+
+---
+
 ## Overview
 
 MCP servers extend Claude Code's capabilities by providing additional context and tools. This guide covers two types of MCP servers:
@@ -841,7 +878,7 @@ For issues or questions:
 
 ---
 
-**Last Updated:** October 14, 2025
+**Last Updated:** December 2025
 **Related Docs:** [CLAUDE.md](../CLAUDE.md), [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

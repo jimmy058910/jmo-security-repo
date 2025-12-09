@@ -635,8 +635,7 @@ python3 scripts/dev/update_versions.py --check-outdated --create-issues  # Auto-
 
 ---
 
-**Last updated:** 2025-01-16
+**Last Updated:** December 2025
 **Maintainer:** jimmy058910
-**Status:** Production-ready
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

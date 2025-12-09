@@ -19,12 +19,34 @@ import argparse
 import json
 import logging
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Dict, cast
 
 from scripts.core.policy_engine import PolicyEngine
 
 logger = logging.getLogger(__name__)
+
+
+# Windows-safe Unicode fallback mappings for cp1252 compatibility
+_UNICODE_FALLBACKS = {
+    "✅": "[OK]",  # Check mark
+    "❌": "[X]",  # Cross mark
+}
+
+
+def _safe_print(text: str) -> None:
+    """Print with Unicode fallback for Windows cp1252 compatibility."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+                text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+    except UnicodeEncodeError:
+        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+            text = text.replace(unicode_char, ascii_fallback)
+        print(text)
 
 
 def get_builtin_policies_dir() -> Path:
@@ -166,11 +188,11 @@ def cmd_policy_validate(args: argparse.Namespace) -> int:
     is_valid, error = engine.validate_policy(policy_path)
 
     if is_valid:
-        print(f"✅ Policy '{policy_name}' is valid")
+        _safe_print(f"✅ Policy '{policy_name}' is valid")
         print(f"   Path: {policy_path}")
         return 0
     else:
-        print(f"❌ Policy '{policy_name}' is invalid")
+        _safe_print(f"❌ Policy '{policy_name}' is invalid")
         print(f"   Path: {policy_path}")
         print(f"\nError:\n{error}")
         return 1
@@ -216,9 +238,9 @@ def cmd_policy_test(args: argparse.Namespace) -> int:
         print()
 
         if result.passed:
-            print("✅ PASSED")
+            _safe_print("✅ PASSED")
         else:
-            print("❌ FAILED")
+            _safe_print("❌ FAILED")
 
         print()
         print(f"Message: {result.message}")
@@ -343,7 +365,7 @@ def cmd_policy_install(args: argparse.Namespace) -> int:
     # Copy policy
     shutil.copy2(policy_path, user_policy_path)
 
-    print(f"✅ Installed policy '{policy_name}' to: {user_policy_path}")
+    _safe_print(f"✅ Installed policy '{policy_name}' to: {user_policy_path}")
     print("\nYou can now customize the policy and use it with:")
     print(f"  jmo report --policy {policy_name}")
 

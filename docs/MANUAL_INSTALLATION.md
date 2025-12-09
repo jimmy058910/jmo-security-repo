@@ -1,308 +1,570 @@
-# Manual Installation Guide (MobSF, Akto)
+# Installation Guide
 
-Two tools (MobSF, Akto) require manual installation due to complex dependencies. Full Docker support is planned for a future release.
+Complete reference for installing JMo Security and its external security tools.
 
-## Why Manual Installation?
+## Table of Contents
 
-**MobSF (Mobile Security Framework)**:
-
-- Requires Android SDK subset (~200 MB)
-- Needs specific APK tooling (aapt2, apktool, jadx)
-- Complex multi-stage Docker build (requires additional development)
-
-**Akto (API Security)**:
-
-- Runs as standalone Docker service (not embeddable in JMo container)
-- Requires separate port mapping and service orchestration
-- Best deployed as sidecar container in CI/CD
-
-## Docker Image Tool Counts
-
-| Variant | Total Tools | Docker-Ready Tools | Manual Tools | Status |
-|---------|-------------|--------------------|--------------| ------|
-| **Full** | 28 | **26** | 2 (MobSF, Akto) | ✅ Production |
-| **Balanced** | 21 | **21** | 0 | ✅ Production |
-| **Slim** | 15 | **15** | 0 | ✅ Production |
-| **Fast** | 8 | **8** | 0 | ✅ Production |
-
-**Note**: MobSF and Akto are available in `jmo.yml` deep profile but excluded from Docker images.
+- [Quick Start](#quick-start)
+- [JMo Security Installation](#jmo-security-installation)
+- [External Tool Installation](#external-tool-installation)
+- [Platform-Specific Guide](#platform-specific-guide)
+- [MobSF and Akto (Manual)](#mobsf-and-akto-manual)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## MobSF: Manual Installation
+## Quick Start
 
-### Prerequisites
-
-- **Platform**: Linux, macOS, or WSL2
-- **Python**: 3.10+ (`python3 --version`)
-- **Java**: JDK 8+ (`java -version`)
-- **Storage**: 2 GB for Android SDK subset
-
-### Installation Steps
-
-#### Step 1: Install MobSF via pip
+**Fastest option (Docker - zero installation):**
 
 ```bash
-# Install MobSF Python package
-pip install mobsf==4.2.0
-
-# Verify installation
-mobsf --help
+# All tools pre-installed, works on all platforms
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
+  scan --repo /scan --results-dir /scan/results --profile-name balanced
 ```
 
-#### Step 2: Install Android SDK Tools (Minimal)
+**Native installation:**
 
 ```bash
-# Download Android SDK command-line tools
+# 1. Install JMo Security
+pip install jmo-security
+
+# 2. Install external tools (automated)
+jmo setup
+
+# 3. Verify installation
+jmo --help
+```
+
+---
+
+## JMo Security Installation
+
+### pip (All Platforms)
+
+```bash
+pip install jmo-security
+```
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew install jmo-security
+```
+
+### Winget (Windows)
+
+```powershell
+winget install jmo-security
+```
+
+### From Source
+
+```bash
+git clone https://github.com/jimmy058910/jmo-security-repo.git
+cd jmo-security-repo
+pip install -e .
+```
+
+---
+
+## External Tool Installation
+
+JMo Security orchestrates 12+ external security tools. Use automated scripts or install manually.
+
+### Automated Installation (Recommended)
+
+**macOS / Linux (Homebrew):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-homebrew.sh | bash
+jmo setup --check
+```
+
+**Linux (Native Package Managers):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-linux.sh | bash
+jmo setup --check
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-windows.ps1" -OutFile install-tools.ps1
+.\install-tools.ps1
+jmo setup --check
+```
+
+### Manual Tool Installation
+
+#### Secrets Scanning
+
+**TruffleHog** (Verified secrets detection):
+
+```bash
+# macOS/Linux
+brew install trufflesecurity/trufflehog/trufflehog
+
+# Windows (Scoop)
+scoop install trufflehog
+```
+
+**Nosey Parker** (Deep secrets scanning - Docker only):
+
+```bash
+docker pull ghcr.io/praetorian-inc/noseyparker:latest
+```
+
+#### SAST (Static Analysis)
+
+**Semgrep** (Multi-language SAST):
+
+```bash
+# macOS/Linux
+brew install semgrep
+
+# Python (all platforms)
+pip install semgrep
+```
+
+**Bandit** (Python security linter):
+
+```bash
+pip install bandit
+```
+
+#### Vulnerabilities + SBOM
+
+**Trivy** (Comprehensive vulnerability scanner):
+
+```bash
+# macOS/Linux
+brew install aquasecurity/trivy/trivy
+
+# Windows (Scoop)
+scoop install trivy
+
+# Ubuntu/Debian
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update && sudo apt-get install trivy
+```
+
+**Syft** (SBOM generation):
+
+```bash
+# macOS/Linux
+brew install syft
+
+# Windows (Scoop)
+scoop install syft
+```
+
+#### IaC Security
+
+**Checkov** (Infrastructure as Code):
+
+```bash
+pip install checkov
+# or
+brew install checkov
+```
+
+#### Dockerfile Linting
+
+**Hadolint** (Dockerfile best practices):
+
+```bash
+# macOS/Linux
+brew install hadolint
+
+# Windows: Download from https://github.com/hadolint/hadolint/releases
+```
+
+#### DAST (Dynamic Analysis)
+
+**OWASP ZAP** (Web application security):
+
+```bash
+# macOS
+brew install --cask owasp-zap
+
+# Linux/Windows: https://www.zaproxy.org/download/
+```
+
+**Nuclei** (Fast vulnerability scanner):
+
+```bash
+# macOS/Linux
+brew install nuclei
+
+# Windows (Go)
+go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+```
+
+### Tool Compatibility Matrix
+
+| Tool | macOS | Linux | Windows | Docker |
+|------|-------|-------|---------|--------|
+| TruffleHog | ✅ | ✅ | ✅ | ✅ |
+| Semgrep | ✅ | ✅ | ⚠️ | ✅ |
+| Trivy | ✅ | ✅ | ✅ | ✅ |
+| Syft | ✅ | ✅ | ✅ | ✅ |
+| Checkov | ✅ | ✅ | ✅ | ✅ |
+| Hadolint | ✅ | ✅ | ✅ | ✅ |
+| Nuclei | ✅ | ✅ | ✅ | ✅ |
+| Bandit | ✅ | ✅ | ✅ | ✅ |
+| OWASP ZAP | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| Nosey Parker | ❌ | ✅ | ❌ | ✅ |
+| Falco | ❌ | ✅ | ❌ | ✅ |
+| AFL++ | ❌ | ✅ | ❌ | ✅ |
+
+**Legend:** ✅ Full support | ⚠️ Limited support | ❌ Docker only
+
+---
+
+## Platform-Specific Guide
+
+### macOS
+
+**Prerequisites:**
+
+- macOS 10.15+ (11.0 Big Sur recommended)
+- Python 3.10+ (3.11 recommended)
+- Homebrew
+
+**Installation:**
+
+```bash
+# Install Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Python 3.11
+brew install python@3.11
+
+# Install JMo Security
+pip3 install jmo-security
+jmo setup
+```
+
+**M1/M2 Apple Silicon:**
+
+Some tools require Rosetta 2:
+
+```bash
+softwareupdate --install-rosetta --agree-to-license
+```
+
+Tools with native ARM64 support: Trivy (v0.47.0+), Checkov, TruffleHog
+Use Docker for: Semgrep, OWASP ZAP on M1/M2
+
+**PATH Configuration:**
+
+```bash
+# Add to ~/.zshrc
+export PATH="/opt/homebrew/bin:$PATH"
+export PATH="/opt/homebrew/opt/python@3.11/libexec/bin:$PATH"
+```
+
+### Windows (Native)
+
+**Prerequisites:**
+
+- Windows 10 version 1809+ or Windows 11
+- Winget or Scoop package manager
+- PowerShell 5.1+ (7.x recommended)
+
+**Installation:**
+
+```powershell
+# Install Python 3.11
+winget install Python.Python.3.11
+
+# Install JMo Security
+pip install jmo-security
+jmo setup
+```
+
+**PATH Configuration:**
+
+Add to Environment Variables:
+`C:\Users\<username>\AppData\Local\Programs\Python\Python311\Scripts`
+
+**Execution Policy:**
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Windows Defender:**
+
+Security tools may be flagged as false positives. Add exclusion:
+
+```powershell
+Add-MpPreference -ExclusionPath "$env:USERPROFILE\AppData\Local\Programs\Python\Python311\Scripts"
+```
+
+**Limitation:** 5/12 tools require WSL2 or Docker. Use Docker mode for full coverage.
+
+### Windows WSL
+
+**Prerequisites:**
+
+- Windows 10 version 2004+ or Windows 11
+- WSL2 enabled
+- Ubuntu 22.04 LTS recommended
+
+**Installation:**
+
+```bash
+# Install WSL2 (from PowerShell as Administrator)
+wsl --install -d Ubuntu-22.04
+
+# From WSL Ubuntu terminal
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3.11 python3-pip git
+pip3 install jmo-security
+jmo setup
+```
+
+**Docker Desktop Integration:**
+
+Enable WSL2 integration: Docker Desktop → Settings → Resources → WSL Integration
+
+**Accessing Windows Files:**
+
+```bash
+# Windows drives at /mnt/<drive-letter>
+cd /mnt/c/Users/<username>/Projects/myrepo
+jmo scan --repo .
+
+# For better performance, copy to WSL2 native filesystem
+cp -r /mnt/c/Users/<username>/Projects/myrepo ~/myrepo
+```
+
+**Memory Limits:**
+
+Create `C:\Users\<username>\.wslconfig`:
+
+```ini
+[wsl2]
+memory=4GB
+processors=2
+```
+
+### Linux
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y python3.11 python3-pip git curl
+pip3 install jmo-security
+jmo setup
+```
+
+**RHEL/CentOS/Fedora:**
+
+```bash
+sudo dnf update -y
+sudo dnf install -y python3.11 python3-pip git curl
+pip3 install jmo-security
+jmo setup
+```
+
+**Alpine Linux:**
+
+```bash
+apk update && apk upgrade
+apk add python3 py3-pip git curl bash
+pip3 install jmo-security
+```
+
+**User vs System Installation:**
+
+```bash
+# User installation (recommended)
+pip3 install --user jmo-security
+export PATH="$HOME/.local/bin:$PATH"
+
+# Virtual environment
+python3 -m venv ~/.jmo-venv
+source ~/.jmo-venv/bin/activate
+pip install jmo-security
+```
+
+**SELinux (RHEL/CentOS):**
+
+```bash
+# Temporarily set permissive mode
+sudo setenforce 0
+
+# Or add policy
+sudo ausearch -c 'jmo' --raw | audit2allow -M jmo-policy
+sudo semodule -i jmo-policy.pp
+```
+
+**Docker Permissions:**
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+---
+
+## MobSF and Akto (Manual)
+
+Two tools require manual installation due to complex dependencies.
+
+### Docker Image Tool Counts
+
+| Variant | Docker-Ready | Manual Tools |
+|---------|--------------|--------------|
+| **Full** | 26 | 2 (MobSF, Akto) |
+| **Balanced** | 21 | 0 |
+| **Slim** | 15 | 0 |
+| **Fast** | 8 | 0 |
+
+### MobSF Installation
+
+**Prerequisites:** Python 3.10+, JDK 8+, 2 GB storage
+
+```bash
+# Install MobSF
+pip install mobsf==4.2.0
+
+# Install Android SDK tools
 wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
 unzip commandlinetools-linux-9477386_latest.zip -d ~/android-sdk
 export ANDROID_HOME=~/android-sdk
 
-# Install minimal SDK components
 $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
-  "build-tools;30.0.3" \
-  "platforms;android-30"
+  "build-tools;30.0.3" "platforms;android-30"
 
-# Persist environment variable
-echo "export ANDROID_HOME=~/android-sdk" >> ~/.bashrc
-```
-
-#### Step 3: Install APK Tooling
-
-```bash
-# Install aapt2 (Android Asset Packaging Tool)
+# Install APK tools
 sudo apt-get install -y aapt
-
-# Install apktool (APK reverse engineering)
 wget https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
 sudo mv apktool_2.10.0.jar /usr/local/bin/apktool.jar
-echo '#!/bin/bash\njava -jar /usr/local/bin/apktool.jar "$@"' | sudo tee /usr/local/bin/apktool
-sudo chmod +x /usr/local/bin/apktool
 
-# Install jadx (Dex to Java decompiler)
-wget https://github.com/skylot/jadx/releases/download/v1.5.0/jadx-1.5.0.zip
-unzip jadx-1.5.0.zip -d ~/jadx
-export PATH="$HOME/jadx/bin:$PATH"
-echo 'export PATH="$HOME/jadx/bin:$PATH"' >> ~/.bashrc
-```
-
-#### Step 4: Verify MobSF Setup
-
-```bash
-# Test APK analysis
+# Verify
 mobsf --version
-mobsf analyze --apk ./test-app.apk --output ./mobsf-results.json
-
-# Expected: JSON output with security findings
 ```
 
-### JMo Integration
-
-Once MobSF is installed, it's automatically available to JMo:
+**JMo Integration:**
 
 ```bash
-# Scan with MobSF enabled
 jmo scan --repo ./mobile-app --profile deep --tools mobsf
-
-# Verify MobSF tool detected
-jmotools setup
-# Output: ✅ MobSF v4.2.0 - Mobile app security
 ```
 
-### Troubleshooting
+### Akto Installation
 
-**Issue**: `mobsf command not found`
-
-- **Fix**: Add pip install location to PATH: `export PATH="$HOME/.local/bin:$PATH"`
-
-**Issue**: `ANDROID_HOME not set`
-
-- **Fix**: Verify environment variable: `echo $ANDROID_HOME`
-- Re-run Step 2
-
-**Issue**: `APK analysis fails with aapt2 error`
-
-- **Fix**: Install missing build-tools: `sdkmanager "build-tools;30.0.3"`
-
----
-
-## Akto: Manual Installation
-
-### Prerequisites
-
-- **Platform**: Linux, macOS, WSL2, or Docker Desktop
-- **Docker**: 20.10+ (`docker --version`)
-- **Docker Compose**: 1.29+ (`docker-compose --version`)
-- **Network**: Port 8080 available (Akto dashboard)
-
-### Installation Steps
-
-#### Step 1: Deploy Akto Docker Service
+**Prerequisites:** Docker 20.10+, Docker Compose 1.29+
 
 ```bash
-# Clone Akto repository
+# Deploy Akto
 git clone https://github.com/akto-api-security/akto.git
 cd akto
-
-# Start Akto services
 docker-compose up -d
 
-# Verify services running
-docker-compose ps
-# Expected output:
-#   akto-api-security_mongo_1     Up   27017/tcp
-#   akto-api-security_akto_1      Up   0.0.0.0:8080->8080/tcp
-```
-
-#### Step 2: Configure Akto API Endpoint
-
-```bash
-# Create Akto config for JMo
+# Configure JMo
 mkdir -p ~/.jmo
 cat > ~/.jmo/akto.yml << EOF
 akto:
   endpoint: http://localhost:8080/api
-  api_key: YOUR_AKTO_API_KEY_HERE
-  timeout: 600
+  api_key: YOUR_API_KEY
 EOF
 
-# Set environment variable (alternative)
-export AKTO_API_ENDPOINT=http://localhost:8080/api
-export AKTO_API_KEY=YOUR_API_KEY
+# Get API key from Akto dashboard: http://localhost:8080
+# Settings → API Keys → Generate
 ```
 
-#### Step 3: Obtain Akto API Key
-
-1. Open Akto dashboard: http://localhost:8080
-2. Navigate to **Settings → API Keys**
-3. Click **Generate New API Key**
-4. Copy API key and update `~/.jmo/akto.yml`
-
-#### Step 4: Verify Akto Integration
+**JMo Integration:**
 
 ```bash
-# Test Akto API connectivity
-curl -H "Authorization: Bearer YOUR_API_KEY" \
-  http://localhost:8080/api/health
-
-# Expected: {"status": "healthy"}
-```
-
-### JMo Integration
-
-Once Akto is running, JMo automatically detects it:
-
-```bash
-# Scan API with Akto enabled
 jmo scan --url https://api.example.com --profile deep --tools akto
-
-# Verify Akto tool detected
-jmotools setup
-# Output: ✅ Akto v1.0.0 - API business logic testing
 ```
 
-### CI/CD Integration (Docker Sidecar)
+---
 
-For GitHub Actions or GitLab CI, deploy Akto as a sidecar service:
+## Troubleshooting
 
-#### GitHub Actions Example
+### "jmo: command not found"
 
-```yaml
-name: Security Scan with Akto
+**All Platforms:**
 
-on: [push, pull_request]
+```bash
+# Verify installation
+pip3 show jmo-security
 
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    services:
-      akto:
-        image: akto-api-security/akto:latest
-        ports:
-          - 8080:8080
-        options: >-
-          --health-cmd="curl -f http://localhost:8080/api/health || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+# Check PATH
+echo $PATH | grep -i python  # Linux/macOS
+$env:Path -split ";" | Select-String "Python"  # Windows
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run JMo Security Scan
-        run: |
-          export AKTO_API_ENDPOINT=http://akto:8080/api
-          export AKTO_API_KEY=${{ secrets.AKTO_API_KEY }}
-          docker run --rm --network host \
-            -v $(pwd):/scan \
-            -e AKTO_API_ENDPOINT \
-            -e AKTO_API_KEY \
-            ghcr.io/jimmy058910/jmo-security:1.0.0-full \
-            scan --url https://api.example.com --profile deep --tools akto
+# Add to PATH
+export PATH="$HOME/.local/bin:$PATH"  # Linux/macOS
 ```
 
-### Troubleshooting
+### "Tool not found: trivy"
 
-**Issue**: `Akto service not responding`
+```bash
+# Option 1: Install tools
+jmo setup
 
-- **Fix**: Check Docker logs: `docker-compose logs akto`
-- Restart services: `docker-compose restart`
+# Option 2: Use Docker
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
 
-**Issue**: `API key authentication failed`
+# Option 3: Allow missing tools
+jmo scan --repo . --allow-missing-tools
+```
 
-- **Fix**: Regenerate API key from Akto dashboard
-- Update `~/.jmo/akto.yml`
+### Docker Permission Denied (Linux)
 
-**Issue**: `Port 8080 already in use`
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+docker ps  # Should work without sudo
+```
 
-- **Fix**: Change port in `docker-compose.yml`:
+### Slow Scans on WSL2
 
-  ```yaml
-  ports:
-    - "8090:8080"  # Use port 8090 instead
-  ```
+```bash
+# Copy to WSL2 native filesystem
+cp -r /mnt/c/Users/<user>/Projects/myrepo ~/myrepo
+jmo scan --repo ~/myrepo
+```
 
----
+### Windows Defender False Positives
 
-## Future: Full Docker Support
+```powershell
+# Add exclusion
+Add-MpPreference -ExclusionPath "$env:USERPROFILE\scoop\apps"
 
-**Planned for a future release:**
-
-### MobSF Docker Integration
-
-- **Approach**: Multi-stage build with minimal Android SDK subset
-- **Size Impact**: +200 MB to Full variant (1.97 GB → 2.17 GB)
-- **Tools Included**:
-  - aapt2 (binary only, ~15 MB)
-  - apktool (JAR only, ~12 MB)
-  - jadx (JAR only, ~18 MB)
-  - Minimal platform tools (~150 MB)
-
-### Akto Docker Integration
-
-- **Approach**: Embedded MongoDB + Akto API server in JMo container
-- **Size Impact**: +150 MB to Full variant
-- **Configuration**: Auto-start Akto service on container launch
-- **Limitations**: Single-container deployment (no external Mongo)
-
-**Expected Tool Count (with full Docker support)**: **28 Docker-ready tools** (all tools)
+# Or use Docker mode
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
+```
 
 ---
 
-## Community Contributions
+## Platform Comparison
 
-**Want to help add Docker support for MobSF/Akto?**
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
-
-- Docker multi-stage build patterns
-- Tool integration guidelines
-- Testing requirements (≥85% coverage)
-- PR submission process
-
-**Bounty**: First PR that adds full MobSF/Akto Docker support gets mentioned in CHANGELOG.md release notes! 🎉
+| Feature | macOS | Windows | WSL | Linux | Docker |
+|---------|-------|---------|-----|-------|--------|
+| **Setup Time** | 5 min | 10 min | 15 min | 5 min | 2 min |
+| **Tool Support** | 90% | 50% | 100% | 100% | 100% |
+| **Performance** | Fast | Fast | Fast | Fast | Fast |
+| **CI/CD Ready** | Yes | Limited | Yes | Yes | Yes |
+| **Recommended** | Local dev | Docker | Full tooling | Servers | All |
 
 ---
 
-**Last Updated**: 2025-11-01
-**Questions?**: [GitHub Discussions](https://github.com/jimmy058910/jmo-security-repo/discussions)
+## Additional Resources
+
+- **Docker Guide:** [DOCKER_README.md](DOCKER_README.md)
+- **User Guide:** [USER_GUIDE.md](USER_GUIDE.md)
+- **Quick Start:** [QUICKSTART.md](../QUICKSTART.md)
+
+---
+
+**Last Updated:** December 2025

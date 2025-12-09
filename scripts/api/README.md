@@ -515,5 +515,4 @@ const response = await fetch('<https://jmo-security-subscribe-api.vercel.app/api
 
 ---
 
-**Last Updated:** October 16, 2025
-**Version:** 1.0.0
+**Last Updated:** December 2025

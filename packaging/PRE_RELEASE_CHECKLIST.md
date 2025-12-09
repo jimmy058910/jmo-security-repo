@@ -446,6 +446,5 @@ After completing this checklist:
 
 ---
 
-**Last Updated:** 2025-10-31
+**Last Updated:** December 2025
 **Responsible:** @jimmy058910
-**Status:** Ready for Windows build

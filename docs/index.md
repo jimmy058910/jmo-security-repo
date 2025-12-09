@@ -49,24 +49,22 @@
 |----------|---------|
 | [README](../README.md) | Project overview |
 | [Quick Start](../QUICKSTART.md) | 5-minute installation guide |
-| [Docker Guide](DOCKER_README.md) | Docker installation and usage |
-| [Platform-Specific](PLATFORM_SPECIFIC.md) | macOS, Windows, WSL, Linux setup |
+| [Docker Guide](DOCKER_README.md) | Docker installation, variants, CI/CD |
+| [Installation Guide](MANUAL_INSTALLATION.md) | Platform-specific installation (macOS, Windows, WSL, Linux) |
 
 ### Reference
 
 | Document | Purpose |
 |----------|---------|
 | [User Guide](USER_GUIDE.md) | Comprehensive reference (CLI, configuration, features) |
-| [Quick Reference](QUICK_REFERENCE.md) | One-page command cheat sheet |
-| [Output Formats](OUTPUT_FORMATS.md) | JSON, SARIF, HTML, Markdown output details |
+| [Command Reference](QUICK_REFERENCE.md) | Quick command cheat sheet |
 | [API Reference](API_REFERENCE.md) | Python API documentation |
 
 ### Results and Reporting
 
 | Document | Purpose |
 |----------|---------|
-| [Results Guide](RESULTS_GUIDE.md) | Understanding and triaging findings |
-| [Results Quick Reference](RESULTS_QUICK_REFERENCE.md) | 30-minute triage workflow |
+| [Results Guide](RESULTS_GUIDE.md) | Understanding findings, output formats, triage workflow |
 | [Sample Outputs](../SAMPLE_OUTPUTS.md) | Example scan outputs |
 
 ### Features
@@ -81,8 +79,7 @@
 
 | Document | Purpose |
 |----------|---------|
-| [MCP Quick Reference](MCP_QUICK_REFERENCE.md) | One-page MCP cheat sheet |
-| [MCP Setup](MCP_SETUP.md) | General MCP server setup |
+| [MCP Setup](MCP_SETUP.md) | MCP server setup (includes quick reference) |
 | [GitHub Copilot](integrations/GITHUB_COPILOT.md) | VS Code Copilot integration |
 | [Claude Code](integrations/CLAUDE_CODE.md) | Claude Code CLI integration |
 
@@ -103,17 +100,15 @@
 | Document | Purpose |
 |----------|---------|
 | [CI Troubleshooting](CI_TROUBLESHOOTING.md) | Debugging CI failures |
-| [Release Process](RELEASE.md) | Release workflow |
+| [Release Process](RELEASE.md) | Release workflow, WSL/macOS validation |
 | [Version Management](VERSION_MANAGEMENT.md) | Tool version system |
-| [Docker Variants](DOCKER_VARIANTS_MASTER.md) | Docker image variants |
 
 ### Contributing
 
 | Document | Purpose |
 |----------|---------|
-| [Contributing](../CONTRIBUTING.md) | Development setup and standards |
+| [Contributing](../CONTRIBUTING.md) | Development setup, git workflow, standards |
 | [Testing Guide](../TEST.md) | Test suite documentation |
-| [Git Workflow](GIT_WORKFLOW.md) | Branch and commit conventions |
 | [Dependency Management](DEPENDENCY_MANAGEMENT.md) | Managing dependencies |
 
 ### Project
@@ -152,7 +147,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 
 ### Documentation
 
-- **Installation issues:** [Quick Start](../QUICKSTART.md) or [Platform-Specific](PLATFORM_SPECIFIC.md)
+- **Installation issues:** [Quick Start](../QUICKSTART.md) or [Installation Guide](MANUAL_INSTALLATION.md)
 - **Docker problems:** [Docker Guide: Troubleshooting](DOCKER_README.md#troubleshooting)
 - **CI failures:** [CI Troubleshooting](CI_TROUBLESHOOTING.md)
 - **General questions:** [User Guide](USER_GUIDE.md)
@@ -168,3 +163,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 - **Ko-fi:** <https://ko-fi.com/jmogaming>
 - **GitHub Sponsors:** <https://github.com/sponsors/jimmy058910>
 - **Star on GitHub:** <https://github.com/jimmy058910/jmo-security-repo>
+
+---
+
+**Last Updated:** December 2025

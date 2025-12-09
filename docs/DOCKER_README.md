@@ -235,81 +235,165 @@ results/
 
 ## Image Variants
 
+JMo Security provides **4 optimized Docker image variants** for different use cases and resource constraints.
+
 ### Quick Variant Selection
 
-**Choose the right Docker image based on your use case:**
+| Variant | Tag | Size | Tools | Scan Time | Best For |
+|---------|-----|------|-------|-----------|----------|
+| **Full** | `:latest`, `:0.9.0` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
+| **Balanced** | `:balanced` | ~1.41 GB | 21 | 18-25 min | Production CI/CD, regular audits |
+| **Slim** | `:slim` | ~557 MB | 15 | 12-18 min | Cloud-focused, IaC, container security |
+| **Fast** | `:fast` | ~502 MB | 8 | 5-10 min | CI/CD gates, pre-commit hooks |
 
-| Variant | Size | Scan Time | Use Case | Command |
-|---------|------|-----------|----------|---------|
-| **fast** | 502 MB | 5-10 min | Pre-commit hooks, PR gates | `docker run jmosecurity/jmo-security:fast ...` |
-| **balanced** | 1.41 GB | 18-25 min | CI/CD pipelines | `docker run jmosecurity/jmo-security:balanced ...` |
-| **slim** | 557 MB | 12-18 min | Cloud/K8s focused | `docker run jmosecurity/jmo-security:slim ...` |
-| **full** (`:latest`) | 1.97 GB | 40-70 min | Complete audits | `docker run jmosecurity/jmo-security:latest ...` |
+**Notes:**
 
-**Tool Distribution:**
+- **28 total tools**: 26 Docker-ready (automatically included), 2 manual install (MobSF, Akto)
+- **Scan times**: Estimated for typical repository (10K-50K LOC, 100-500 dependencies)
 
-- **fast (7 tools):** trufflehog, semgrep, trivy, checkov, checkov-cicd, hadolint, syft
-- **balanced (21 tools):** fast + prowler, kubescape, zap, nuclei, akto, cdxgen, scancode, gosec, grype, yara, bearer, horusec, dependency-check
-- **slim (15 tools):** Cloud/Kubernetes focused subset
-- **full (28 tools):** All scanners including noseyparker, semgrep-secrets, bandit, trivy-rbac, falco, afl++, mobsf, lynis
+### Decision Tree
 
-📖 **Complete tool breakdown:** [docs/DOCKER_VARIANTS_MASTER.md](DOCKER_VARIANTS_MASTER.md)
+```text
+START: What is your primary use case?
+
+├─ Complete security audit (pre-release, compliance)
+│  → Use FULL variant (:latest)
+│     - 28 tools, 40-70 min scans
+│     - Best for: Security teams, audits, compliance
+
+├─ Production CI/CD (daily/weekly scans)
+│  → Use BALANCED variant (:balanced)
+│     - 21 tools, 18-25 min scans
+│     - Best for: DevOps, regular audits, balanced coverage
+
+├─ Cloud/K8s/IaC focused (containers, infrastructure)
+│  → Use SLIM variant (:slim)
+│     - 15 tools, 12-18 min scans
+│     - Best for: Cloud-native, IaC, container security
+
+└─ Fast feedback (pre-commit, PR checks)
+   → Use FAST variant (:fast)
+      - 8 tools, 5-10 min scans
+      - Best for: Developers, CI gates, quick validation
+```
+
+### Resource Constraints
+
+| Variant | Min RAM | Min Disk | Min CPU | Network Bandwidth |
+|---------|---------|----------|---------|-------------------|
+| **Full** | 2 GB | 4 GB | 2 cores | Medium (initial pull) |
+| **Balanced** | 1.5 GB | 3 GB | 2 cores | Medium (initial pull) |
+| **Slim** | 1 GB | 2 GB | 1 core | Low (fast pull) |
+| **Fast** | 512 MB | 1.5 GB | 1 core | Low (fast pull) |
 
 ---
 
-### Detailed Variant Information
+### Tool Distribution by Category
 
-Three optimized images for different needs (with multi-stage builds):
+**Legend:** ✅ Included | ❌ Excluded | 🔧 Manual install required
 
-| Variant | Size | Tools | Best For |
-|---------|------|-------|----------|
-| **`:latest`** | ~1.7GB | 11+ scanners | Complete scanning, local development |
-| **`:slim`** | ~900MB | 7 core scanners | CI/CD pipelines, faster pulls |
-| **`:alpine`** | ~600MB | 7 core scanners | Minimal footprint, resource-constrained |
+#### Secrets Detection
 
-**Optimizations:**
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **TruffleHog** | ✅ | ✅ | ✅ | ✅ | Core tool, always included |
+| **Nosey Parker** | ✅ | ❌ | ❌ | ❌ | Deep profile only |
+| **Semgrep-Secrets** | ✅ | ❌ | ❌ | ❌ | Semgrep secret rules |
+
+#### Static Analysis (SAST)
+
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **Semgrep** | ✅ | ❌ | ❌ | ❌ | 4000+ rules, 30+ languages |
+| **Bandit** | ✅ | ❌ | ❌ | ❌ | Python-specific |
+| **Gosec** | ✅ | ✅ | ❌ | ❌ | Go security scanner |
+| **Horusec** | ✅ | ✅ | ✅ | ❌ | 18 languages, 10+ analyzers |
+
+#### Software Composition Analysis (SCA)
+
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **Syft** | ✅ | ✅ | ✅ | ✅ | Core SBOM tool |
+| **Trivy** | ✅ | ✅ | ✅ | ✅ | Core scanner |
+| **OSV-Scanner** | ✅ | ✅ | ✅ | ✅ | Google OSV database |
+| **Grype** | ✅ | ✅ | ✅ | ❌ | Anchore scanner |
+| **Dependency-Check** | ✅ | ❌ | ✅ | ❌ | OWASP vuln database |
+
+#### Infrastructure as Code (IaC) & Containers
+
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **Checkov** | ✅ | ❌ | ❌ | ❌ | Terraform, CloudFormation, K8s |
+| **Checkov-CICD** | ✅ | ❌ | ❌ | ❌ | CI/CD pipeline security |
+| **Hadolint** | ✅ | ✅ | ✅ | ✅ | Dockerfile best practices |
+
+#### Cloud Security (CSPM) & Kubernetes
+
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **Prowler** | ✅ | ✅ | ✅ | ❌ | AWS/Azure/GCP/K8s auditing |
+| **Kubescape** | ✅ | ✅ | ✅ | ❌ | K8s RBAC, NSA/CISA frameworks |
+| **Trivy-RBAC** | ✅ | ❌ | ❌ | ❌ | K8s RBAC misconfig |
+
+#### Dynamic Application Security Testing (DAST)
+
+| Tool | Full | Balanced | Slim | Fast | Notes |
+|------|------|----------|------|------|-------|
+| **OWASP ZAP** | ✅ | ✅ | ❌ | ❌ | Web app security testing |
+| **Nuclei** | ✅ | ✅ | ✅ | ✅ | 4000+ vulnerability templates |
+| **Akto** | 🔧 | 🔧 | 🔧 | 🔧 | Manual install, API security |
+
+#### Specialized Tools (Full Variant Only)
+
+| Tool | Category | Notes |
+|------|----------|-------|
+| **Falco** | Runtime Monitoring | eBPF-based, deep profile |
+| **YARA** | Malware Detection | Web shells, backdoors |
+| **Lynis** | System Hardening | Unix security, CIS baselines |
+| **AFL++** | Fuzzing | Coverage-guided, binaries |
+| **ScanCode** | License Compliance | License detection, provenance |
+| **cdxgen** | SBOM | CycloneDX format |
+| **shellcheck** | Shell Linting | Bash/sh script analysis |
+| **MobSF** | Mobile Security | Manual install, Android/iOS |
+| **Bearer** | Security + Privacy | Data flow, OWASP risks |
+
+---
+
+### Image Optimizations
 
 - **Multi-stage builds:** Separate builder and runtime stages eliminate build tools (curl, wget, tar, build-essential, clang, llvm)
 - **Layer caching cleanup:** Aggressive removal of apt cache, pip cache, and Python bytecode
-- **Volume mounting support:** Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching (first scan downloads DB ~30-60s, subsequent scans use cached DB)
+- **Volume mounting support:** Use `-v trivy-cache:/root/.cache/trivy` for persistent Trivy DB caching
 
 **Note:** Trivy database pre-download was intentionally removed (adds 800MB to image) in favor of volume caching approach for better size/performance trade-off.
-
-### Tools Included
-
-**Full (`:latest`):**
-
-- **Secrets:** trufflehog (verified), noseyparker (deep profile)
-- **SAST:** semgrep, bandit (deep profile)
-- **SBOM+Vuln:** syft, trivy
-- **IaC:** checkov
-- **Dockerfile:** hadolint
-- **DAST:** OWASP ZAP (balanced + deep)
-- **Runtime Security:** Falco (deep profile)
-- **Fuzzing:** AFL++ (deep profile)
-- **Utilities:** shellcheck, shfmt, ruff
-
-**Slim/Alpine (`:slim`, `:alpine`):**
-
-- **Secrets:** trufflehog (verified secrets only)
-- **SAST:** semgrep
-- **SBOM+Vuln:** syft, trivy
-- **IaC:** checkov
-- **Dockerfile:** hadolint
-- **DAST:** OWASP ZAP (balanced profile support)
 
 ### Choosing a Variant
 
 ```bash
-# Full - Maximum coverage
+# Full - Maximum coverage (28 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
-# Slim - Balanced for CI/CD
+# Balanced - Production CI/CD (21 tools)
+docker pull ghcr.io/jimmy058910/jmo-security:balanced
+
+# Slim - Cloud/K8s focused (15 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:slim
 
-# Alpine - Smallest size
-docker pull ghcr.io/jimmy058910/jmo-security:alpine
+# Fast - Quick validation (8 tools)
+docker pull ghcr.io/jimmy058910/jmo-security:fast
 ```
+
+### Alpine Deprecation Notice
+
+**Dockerfile.alpine has been deprecated** and replaced by the balanced/slim variants.
+
+**Rationale:**
+
+1. Alpine's musl libc caused compatibility issues with 8+ tools
+2. Slim variant (557 MB) provides better tool coverage than Alpine (~600 MB)
+3. Many security tools require glibc (not available in Alpine)
+
+**Migration:** `docker pull ghcr.io/jimmy058910/jmo-security:slim`
 
 ---
 
@@ -1379,4 +1463,6 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 
 ---
 
-Happy Scanning! 🔒
+Happy Scanning!
+
+**Last Updated:** December 2025

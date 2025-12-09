@@ -442,5 +442,5 @@ When CI breaks repeatedly:
 
 ---
 
-*Last Updated: 2025-10-24*
-*Maintained By: JMo Security Contributors*
+**Last Updated:** December 2025
+**Maintained By:** JMo Security Contributors

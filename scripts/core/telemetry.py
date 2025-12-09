@@ -17,8 +17,36 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import sys
 from urllib import request
 from urllib.error import URLError, HTTPError
+
+
+# Windows-safe Unicode fallback mappings for cp1252 compatibility
+_UNICODE_FALLBACKS = {
+    "📊": "[*]",  # Chart (U+1F4CA)
+    "✅": "[v]",  # Check mark
+    "❌": "[x]",  # Cross mark
+    "🔒": "[L]",  # Lock
+    "🌐": "[W]",  # Globe
+    "💡": "[i]",  # Light bulb
+    "•": "*",  # Bullet
+}
+
+
+def _safe_print(text: str) -> None:
+    """Print with Unicode fallback for Windows cp1252 compatibility."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+                text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+    except UnicodeEncodeError:
+        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+            text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+
 
 # Telemetry endpoint (GitHub Gist API for MVP)
 GIST_ID = os.environ.get("JMO_TELEMETRY_GIST_ID", "")
@@ -436,28 +464,28 @@ def show_telemetry_banner(mode: str = "cli") -> None:
     """
     print()
     print("=" * 70)
-    print("📊 Anonymous Usage Analytics")
+    _safe_print("📊 Anonymous Usage Analytics")
     print("=" * 70)
     print("JMo Security collects anonymous usage data to improve the tool.")
     print()
-    print("✅ What we collect:")
-    print("   • Tool usage (which scanners ran)")
-    print("   • Scan duration (bucketed: <5min, 5-15min, etc.)")
-    print("   • Execution mode (CLI/Docker/Wizard)")
-    print("   • Platform (Linux/macOS/Windows)")
-    print("   • JMo version (e.g., 0.9.0)")
+    _safe_print("✅ What we collect:")
+    _safe_print("   • Tool usage (which scanners ran)")
+    _safe_print("   • Scan duration (bucketed: <5min, 5-15min, etc.)")
+    _safe_print("   • Execution mode (CLI/Docker/Wizard)")
+    _safe_print("   • Platform (Linux/macOS/Windows)")
+    _safe_print("   • JMo version (e.g., 0.9.0)")
     print()
-    print("❌ What we DON'T collect:")
-    print("   • Repository names, file paths, or URLs")
-    print("   • Finding details, secrets, or vulnerabilities")
-    print("   • IP addresses or personally identifiable information")
+    _safe_print("❌ What we DON'T collect:")
+    _safe_print("   • Repository names, file paths, or URLs")
+    _safe_print("   • Finding details, secrets, or vulnerabilities")
+    _safe_print("   • IP addresses or personally identifiable information")
     print()
-    print("🔒 Privacy: 100% anonymous (random UUID, no PII)")
-    print("🌐 Policy: https://jmotools.com/privacy")
+    _safe_print("🔒 Privacy: 100% anonymous (random UUID, no PII)")
+    _safe_print("🌐 Policy: https://jmotools.com/privacy")
     print()
-    print("💡 Opt-out anytime:")
-    print("   • Set: export JMO_TELEMETRY_DISABLE=1")
-    print("   • Edit jmo.yml: telemetry.enabled: false")
+    _safe_print("💡 Opt-out anytime:")
+    _safe_print("   • Set: export JMO_TELEMETRY_DISABLE=1")
+    _safe_print("   • Edit jmo.yml: telemetry.enabled: false")
     print()
     print("This notice shows once only.")
     print("=" * 70)
@@ -521,7 +549,7 @@ if __name__ == "__main__":
             config,
             version="0.7.0-dev",
         )
-        print("✅ Event sent (check Gist in a few seconds)")
+        _safe_print("✅ Event sent (check Gist in a few seconds)")
 
     elif command == "check":
         # Check telemetry configuration

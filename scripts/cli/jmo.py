@@ -40,6 +40,34 @@ logger = logging.getLogger(__name__)
 __version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
 
 
+# Windows-safe Unicode fallback mappings for cp1252 compatibility
+_UNICODE_FALLBACKS = {
+    "🎉": "[*]",  # Party (U+1F389)
+    "📧": "[@]",  # Email (U+1F4E7)
+    "💚": "<3",  # Green heart (U+1F49A)
+    "👍": "[+1]",  # Thumbs up (U+1F44D)
+    "✅": "[OK]",  # Check mark
+    "❌": "[X]",  # Cross mark
+    "⚠️": "[!]",  # Warning
+    "→": "->",  # Right arrow
+    "•": "*",  # Bullet
+}
+
+
+def _safe_print(text: str) -> None:
+    """Print with Unicode fallback for Windows cp1252 compatibility."""
+    try:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+                text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+    except UnicodeEncodeError:
+        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+            text = text.replace(unicode_char, ascii_fallback)
+        print(text)
+
+
 def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     out = dict(a) if a else {}
     if b:
@@ -1604,8 +1632,8 @@ def _collect_email_opt_in(args) -> None:
     if not sys.stdin.isatty():
         return
 
-    print("\n🎉 Welcome to JMo Security!\n")
-    print("📧 Get notified about new features, updates, and security tips?")
+    _safe_print("\n🎉 Welcome to JMo Security!\n")
+    _safe_print("📧 Get notified about new features, updates, and security tips?")
     print("   (We'll never spam you. Unsubscribe anytime.)\n")
 
     try:
@@ -1637,16 +1665,16 @@ def _collect_email_opt_in(args) -> None:
                     yaml.dump(config, f)
 
                 if success:
-                    print("\n✅ Thanks! Check your inbox for a welcome message.\n")
+                    _safe_print("\n✅ Thanks! Check your inbox for a welcome message.\n")
                 else:
-                    print("\n✅ Thanks! You're all set.\n")
+                    _safe_print("\n✅ Thanks! You're all set.\n")
                     _log(
                         args,
                         "DEBUG",
                         "Email collection succeeded but welcome email not sent (resend may not be configured)",
                     )
             else:
-                print("\n❌ Invalid email address. Skipping...\n")
+                _safe_print("\n❌ Invalid email address. Skipping...\n")
                 # Mark onboarding complete even if email invalid
                 import yaml
 
@@ -1655,7 +1683,7 @@ def _collect_email_opt_in(args) -> None:
                     yaml.dump(config, f)
         except ImportError:
             # email_service module not available (resend not installed)
-            print("\n✅ Thanks! You're all set.\n")
+            _safe_print("\n✅ Thanks! You're all set.\n")
             import yaml
 
             config = {
@@ -1673,7 +1701,7 @@ def _collect_email_opt_in(args) -> None:
         except (OSError, PermissionError, UnicodeEncodeError) as e:
             # File write errors - fail gracefully
             logger.debug(f"Failed to write config during email collection: {e}")
-            print("\n✅ Thanks! You're all set.\n")
+            _safe_print("\n✅ Thanks! You're all set.\n")
             import yaml
 
             config = {
@@ -1685,7 +1713,7 @@ def _collect_email_opt_in(args) -> None:
                 yaml.dump(config, f)
             _log(args, "DEBUG", f"Email collection error (non-blocking): {e}")
     else:
-        print("\n👍 No problem! You can always add your email later with:")
+        _safe_print("\n👍 No problem! You can always add your email later with:")
         print("   jmo config --email your@email.com\n")
 
         # Mark onboarding complete even if skipped
@@ -1736,7 +1764,7 @@ def _show_kofi_reminder(args) -> None:
 
     # Show Ko-Fi message every 3rd scan
     if scan_count % 3 == 0:
-        print(
+        _safe_print(
             "\n"
             + "=" * 70
             + "\n"
@@ -2156,10 +2184,10 @@ def cmd_adapters(args) -> int:
             loader = PluginLoader(registry)
             loader._load_plugin(plugin_file)
 
-            print(f"✅ Valid plugin: {plugin_file}")
+            _safe_print(f"✅ Valid plugin: {plugin_file}")
             return 0
         except Exception as e:
-            print(f"❌ Invalid plugin: {e}")
+            _safe_print(f"❌ Invalid plugin: {e}")
             return 1
 
     return 0
@@ -2563,7 +2591,16 @@ def _log(args, level: str, message: str) -> None:
         }.get(level, "")
         reset = "\x1b[0m"
         ts = datetime.datetime.utcnow().strftime("%H:%M:%S")
-        sys.stderr.write(f"{color}{level:5}{reset} {ts} {message}\n")
+        # Windows-safe Unicode handling for stderr
+        safe_message = message
+        try:
+            encoding = getattr(sys.stderr, "encoding", None) or "utf-8"
+            if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
+                for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
+                    safe_message = safe_message.replace(unicode_char, ascii_fallback)
+        except (AttributeError, LookupError):
+            pass
+        sys.stderr.write(f"{color}{level:5}{reset} {ts} {safe_message}\n")
         return
     rec = {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",

@@ -218,7 +218,7 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 | Full CLI reference | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) |
 | Understanding results | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) |
 | Docker deep-dive | [docs/DOCKER_README.md](docs/DOCKER_README.md) |
-| Platform setup | [docs/PLATFORM_SPECIFIC.md](docs/PLATFORM_SPECIFIC.md) |
+| Platform setup | [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) |
 
 ### Key Features
 
@@ -259,7 +259,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 ### More help
 
 - [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) - CI/CD issues
-- [docs/PLATFORM_SPECIFIC.md](docs/PLATFORM_SPECIFIC.md) - Platform-specific issues
+- [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) - Platform-specific issues
 - [GitHub Issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 
 ---
@@ -269,3 +269,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 - **Ko-fi:** <https://ko-fi.com/jmogaming>
 - **GitHub Sponsors:** <https://github.com/sponsors/jimmy058910>
 - **Newsletter:** <https://jmotools.com/subscribe.html>
+
+---
+
+**Last Updated:** December 2025

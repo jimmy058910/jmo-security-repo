@@ -604,6 +604,5 @@ make deps-validate
 
 ---
 
-**Last Updated:** 2025-10-23
+**Last Updated:** December 2025
 **Maintainer:** JMo Security Team
-**Next Review:** 2025-11-23 (quarterly)

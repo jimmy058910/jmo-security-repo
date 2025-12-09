@@ -247,7 +247,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 - [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) - Tool version management
 - [docs/DOCKER_README.md](docs/DOCKER_README.md) - Docker deep-dive
-- [docs/OUTPUT_FORMATS.md](docs/OUTPUT_FORMATS.md) - Report format details
+- [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Results and output formats
 - [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md) - Compliance mappings
 
 **Operations:**

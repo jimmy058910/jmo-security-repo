@@ -359,5 +359,4 @@ We provide security updates for:
 
 ---
 
-**Last Updated:** October 16, 2025
-**Version:** 0.6.0
+**Last Updated:** December 2025

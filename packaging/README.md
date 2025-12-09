@@ -760,26 +760,4 @@ See [LICENSE](../LICENSE) for details.
 
 ---
 
-**Last Updated:** 2025-10-30
-**Version:** v0.9.0
-
-
----
-
-## 👥 Contributors
-
-- **Jimmy Moceri** (@jimmy058910) — Primary maintainer
-- **Claude Code** — Packaging automation
-
----
-
-## 📄 License
-
-MIT OR Apache-2.0 (dual-licensed)
-
-See [LICENSE](../LICENSE) for details.
-
----
-
-**Last Updated:** 2025-10-30
-**Version:** v0.9.0
+**Last Updated:** December 2025
