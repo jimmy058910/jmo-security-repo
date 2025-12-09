@@ -1,612 +1,170 @@
-# JMO Security Suite — Documentation Hub
+# JMo Security Documentation
 
 [![Tests](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jimmy058910/jmo-security-repo/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/jimmy058910/jmo-security-repo/branch/main/graph/badge.svg)](https://app.codecov.io/gh/jimmy058910/jmo-security-repo)
 [![PyPI version](https://badge.fury.io/py/jmo-security.svg)](https://badge.fury.io/py/jmo-security)
-[![Python Versions](https://img.shields.io/pypi/pyversions/jmo-security.svg)](https://pypi.org/project/jmo-security/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
-[![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
-[![Ko-fi](https://img.shields.io/badge/💚_Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
-[![GitHub Sponsors](https://img.shields.io/badge/💰_Sponsor-GitHub-ea4aaa?logo=github&logoColor=white)](https://github.com/sponsors/jimmy058910)
-[![Documentation](https://img.shields.io/badge/docs-ReadTheDocs-blue.svg)](https://docs.jmotools.com)
-[![Blog](https://img.shields.io/badge/blog-Hashnode-2962FF.svg)](https://blog.jmotools.com)
 
-**Central navigation for all JMo Security documentation. Find what you need based on your role and experience level.**
+**Central navigation for all JMo Security documentation.**
 
 ---
 
-## Key Features
+## Start Here
 
-- 🔒 **SLSA Attestation (Supply Chain Security)** - Tamper-evident scan results with provenance
-  - SLSA Level 2 compliance: Signed provenance with keyless Sigstore integration
-  - Tamper detection: Timestamp anomalies, builder consistency, tool rollback detection
-  - Multi-hash digests (SHA-256/384/512) for defense-in-depth
-  - Auto-attestation in CI: GitHub Actions + GitLab CI with OIDC (no key management)
-  - See [USER_GUIDE.md — SLSA Attestation](USER_GUIDE.md#slsa-attestation) and [examples/attestation-workflows.md](examples/attestation-workflows.md)
-- ⚖️ **Policy-as-Code** - OPA-based security policy enforcement with CI/CD gating
-  - 5 built-in policies: zero-secrets, OWASP Top 10, PCI DSS, production-hardening, HIPAA compliance
-  - Custom policy authoring with Rego v1 syntax (OPA 1.0+)
-  - CI mode integration: `--fail-on-policy-violation` for automated policy gating
-  - Performance: <100ms per policy evaluation (21.81ms average across all policies)
-  - See [POLICY_AS_CODE.md](POLICY_AS_CODE.md) and [examples/policy-workflows.md](examples/policy-workflows.md)
-- 🔄 **Machine-Readable Diffs** - Compare scans over time with fingerprint-based diff engine
-  - Four output formats: JSON, Markdown (PR comments), HTML (interactive), SARIF 2.1.0
-  - CI/CD integration: GitHub Actions & GitLab CI examples with automated PR/MR comments
-  - Performance: <500ms for 1000-finding diffs, <2s for 10K-finding diffs
-  - See [examples/diff-workflows.md](examples/diff-workflows.md) for complete workflows
-- 🚀 **GitLab CI/CD Integration** - Auto-generate `.gitlab-ci.yml` from schedules with one command
-- 📅 **Schedule Management** - Kubernetes-style scan scheduling with cron syntax support
-- 💬 **Slack Notifications** - Built-in webhook integration for real-time pipeline alerts
-- 📚 **ReadTheDocs Integration** - Auto-building docs at [docs.jmotools.com](https://docs.jmotools.com)
-- 📝 **Hashnode Blog** - Technical tutorials at [blog.jmotools.com](https://blog.jmotools.com)
-- 💰 **GitHub Sponsors** - Support ongoing development
-- 📊 **Privacy-First Telemetry** - Optional anonymous usage analytics (opt-out model, GDPR/CCPA compliant)
-- 🧠 **Memory System** - Lightweight JSON-based caching for faster repeated analysis
-- 🧙 **Interactive Wizard** - Supports 6 target types: repos, images, IaC, URLs, GitLab, K8s
-- 🐳 **Docker Optimized** - Multi-stage builds, layer caching, persistent Trivy DB
-- 📊 **Enriched SARIF 2.1.0** - CWE/OWASP/CVE taxonomies for code scanning platforms
-
-See [../CHANGELOG.md](../CHANGELOG.md) for complete details.
+| I am a... | Start with... |
+|-----------|---------------|
+| **Complete beginner** | [Docker Quick Start](DOCKER_README.md#quick-start-absolute-beginners) |
+| **Developer** | [Quick Start Guide](../QUICKSTART.md) |
+| **DevOps/SRE** | [CI/CD Integration](DOCKER_README.md#cicd-integration) |
+| **Advanced user** | [User Guide](USER_GUIDE.md) |
+| **Contributor** | [Contributing Guide](../CONTRIBUTING.md) |
 
 ---
 
-## 🚀 Getting Started (By User Type)
+## Quick Lookup
 
-### Complete Beginner (Never Used Security Tools)
-
-**Start Here:**
-
-1. **Install:** [Docker Desktop](https://www.docker.com/products/docker-desktop) (5 minutes) OR [pip install jmo-security](#-installation-in-2-minutes) (2 minutes)
-2. **Run:** `jmotools wizard` (if pip installed) OR Docker command (see [Docker Guide](DOCKER_README.md#quick-start-absolute-beginners))
-3. **Done:** Wizard walks you through everything interactively
-
-**Why:** Zero-installation path (Docker) or simple pip install (Python). The wizard handles everything else.
-
-**Next Steps:**
-
-1. Run your first scan (wizard handles it)
-2. Learn about results: [Understanding Results](#-understanding-results)
-3. Explore wizard patterns: [Wizard Examples](examples/wizard-examples.md)
-
----
-
-### Developer (Familiar with CLI)
-
-**Start Here:** [Quick Start Guide](../QUICKSTART.md)
-
-**Why:** Fast 5-minute setup with platform-specific instructions (Linux/WSL/macOS).
-
-**Next Steps:**
-
-1. Install and verify tools: [QUICKSTART — Step 1](../QUICKSTART.md#step-1-verify-environment)
-2. Run your first scan: [QUICKSTART — Step 3](../QUICKSTART.md#step-3-run-the-security-audit)
-3. Explore advanced features: [User Guide](USER_GUIDE.md)
+| I want to... | Go to... |
+|--------------|----------|
+| Install JMo Security | [Quick Start](../QUICKSTART.md) |
+| Use Docker | [Docker Guide](DOCKER_README.md) |
+| Configure scanning | [User Guide: Configuration](USER_GUIDE.md#configuration-jmoyml) |
+| Set up CI/CD | [Docker Guide: CI/CD](DOCKER_README.md#cicd-integration) |
+| Suppress false positives | [User Guide: Suppressions](USER_GUIDE.md#suppressions) |
+| Compare scans (diff) | [User Guide: jmo diff](USER_GUIDE.md#jmo-diff) |
+| Track trends over time | [User Guide: jmo trends](USER_GUIDE.md#jmo-trends) |
+| View scan history | [User Guide: jmo history](USER_GUIDE.md#jmo-history) |
+| Understand results | [Results Guide](RESULTS_GUIDE.md) |
+| Use policy-as-code | [Policy-as-Code Guide](POLICY_AS_CODE.md) |
+| Set up AI remediation | [MCP Setup](MCP_SETUP.md) |
+| Schedule automated scans | [Schedule Guide](SCHEDULE_GUIDE.md) |
+| Troubleshoot CI failures | [CI Troubleshooting](CI_TROUBLESHOOTING.md) |
 
 ---
 
-### DevOps/SRE (CI/CD Integration Focus)
+## Documentation Index
 
-**Start Here:** [Docker Guide](DOCKER_README.md#cicd-integration)
+### Getting Started
 
-**Why:** Container-based deployment, proven CI/CD patterns for GitHub Actions, GitLab CI, Jenkins.
+| Document | Purpose |
+|----------|---------|
+| [README](../README.md) | Project overview |
+| [Quick Start](../QUICKSTART.md) | 5-minute installation guide |
+| [Docker Guide](DOCKER_README.md) | Docker installation and usage |
+| [Platform-Specific](PLATFORM_SPECIFIC.md) | macOS, Windows, WSL, Linux setup |
 
-**Next Steps:**
+### Reference
 
-1. Review CI/CD examples: [GitHub Actions Docker Examples](examples/github-actions-docker.yml)
-2. Configure severity gating: [Docker Guide — CI Gating](DOCKER_README.md#scan-with-ci-gating)
-3. Set up SARIF uploads: [User Guide — SARIF](USER_GUIDE.md#sarif-and-html-dashboard)
+| Document | Purpose |
+|----------|---------|
+| [User Guide](USER_GUIDE.md) | Comprehensive reference (CLI, configuration, features) |
+| [Quick Reference](QUICK_REFERENCE.md) | One-page command cheat sheet |
+| [Output Formats](OUTPUT_FORMATS.md) | JSON, SARIF, HTML, Markdown output details |
+| [API Reference](API_REFERENCE.md) | Python API documentation |
 
----
+### Results and Reporting
 
-### Advanced User (Fine-Tuning & Custom Profiles)
+| Document | Purpose |
+|----------|---------|
+| [Results Guide](RESULTS_GUIDE.md) | Understanding and triaging findings |
+| [Results Quick Reference](RESULTS_QUICK_REFERENCE.md) | 30-minute triage workflow |
+| [Sample Outputs](../SAMPLE_OUTPUTS.md) | Example scan outputs |
 
-**Start Here:** [User Guide](USER_GUIDE.md)
+### Features
 
-**Why:** Comprehensive configuration reference, CLI synopsis, suppressions, advanced workflows.
+| Document | Purpose |
+|----------|---------|
+| [Policy-as-Code](POLICY_AS_CODE.md) | OPA-based security policies |
+| [Schedule Guide](SCHEDULE_GUIDE.md) | Automated scan scheduling |
+| [Telemetry](TELEMETRY.md) | Privacy-first usage analytics |
 
-**Next Steps:**
+### AI Integration
 
-1. Create custom profiles: [User Guide — Configuration](USER_GUIDE.md#configuration-jmoyml)
-2. Set up suppressions: [User Guide — Suppressions](USER_GUIDE.md#suppressions)
-3. Optimize performance: [User Guide — Profiling](USER_GUIDE.md#profiling-and-performance)
+| Document | Purpose |
+|----------|---------|
+| [MCP Quick Reference](MCP_QUICK_REFERENCE.md) | One-page MCP cheat sheet |
+| [MCP Setup](MCP_SETUP.md) | General MCP server setup |
+| [GitHub Copilot](integrations/GITHUB_COPILOT.md) | VS Code Copilot integration |
+| [Claude Code](integrations/CLAUDE_CODE.md) | Claude Code CLI integration |
 
----
+### Examples
 
-### Contributor (Code Contributions)
+| Document | Purpose |
+|----------|---------|
+| [Examples Index](examples/README.md) | All examples overview |
+| [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows |
+| [Diff Workflows](examples/diff-workflows.md) | Scan comparison patterns |
+| [CI/CD Trends](examples/ci-cd-trends.md) | Trend analysis in CI/CD |
+| [Attestation Workflows](examples/attestation-workflows.md) | SLSA attestation patterns |
+| [Policy Workflows](examples/policy-workflows.md) | Policy enforcement in CI/CD |
+| [Slack Notifications](examples/slack-notifications.md) | Slack integration patterns |
 
-**Start Here:** [Contributing Guide](../CONTRIBUTING.md)
+### Operations
 
-**Why:** Dev setup, coding standards, PR workflow, testing requirements.
+| Document | Purpose |
+|----------|---------|
+| [CI Troubleshooting](CI_TROUBLESHOOTING.md) | Debugging CI failures |
+| [Release Process](RELEASE.md) | Release workflow |
+| [Version Management](VERSION_MANAGEMENT.md) | Tool version system |
+| [Docker Variants](DOCKER_VARIANTS_MASTER.md) | Docker image variants |
 
-**Next Steps:**
+### Contributing
 
-1. Set up dev environment: [CONTRIBUTING — Dev Setup](../CONTRIBUTING.md#development-setup)
-2. Understand testing: [Testing Guide](../TEST.md)
-3. Learn release process: [Release Guide](RELEASE.md)
+| Document | Purpose |
+|----------|---------|
+| [Contributing](../CONTRIBUTING.md) | Development setup and standards |
+| [Testing Guide](../TEST.md) | Test suite documentation |
+| [Git Workflow](GIT_WORKFLOW.md) | Branch and commit conventions |
+| [Dependency Management](DEPENDENCY_MANAGEMENT.md) | Managing dependencies |
 
----
+### Project
 
-## 📦 Installation (in 2 Minutes)
-
-**Choose your installation method based on your platform:**
-
-| Platform | Recommended Method | Installation Time | Guide |
-|----------|-------------------|-------------------|-------|
-| **Any Platform** | Docker (4 variants) | 2 min | [QUICKSTART — Docker](../QUICKSTART.md#1-docker-recommended---zero-installation-) |
-| **macOS** | Homebrew + pip | 5 min | [QUICKSTART — macOS](../QUICKSTART.md#2-macos-homebrew---recommended-) |
-| **Windows 10/11** | Winget + pip OR WSL | 10-15 min | [QUICKSTART — Windows](../QUICKSTART.md#3-windows-winget---recommended-) |
-| **Linux** | apt/dnf/yum + pip | 5 min | [QUICKSTART — Linux](../QUICKSTART.md#5-linux-aptdnfyum-) |
-
-### Quick Start (Any Platform)
-
-```bash
-# Option 1: Docker (zero installation, all platforms)
-docker run --rm -v "$(pwd):/scan" jmosecurity/jmo-security:fast scan --repo /scan
-
-# Option 2: Python pip (requires Python 3.10+)
-pip install jmo-security
-jmo --help
-```
-
-**📖 Complete installation guide with platform-specific instructions:** [QUICKSTART.md — Installation Methods](../QUICKSTART.md#-installation-methods)
-
-**🛠️ Platform-specific troubleshooting:** [PLATFORM_SPECIFIC.md](PLATFORM_SPECIFIC.md)
-
----
-
-## 📚 Complete Documentation Index
-
-### Core Documentation
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [README.md](../README.md) | Project overview, "Three Ways to Get Started" | Everyone |
-| [QUICKSTART.md](../QUICKSTART.md) | 5-minute universal guide with all installation methods | Developers |
-| [**PLATFORM_SPECIFIC.md**](PLATFORM_SPECIFIC.md) | **Platform-specific troubleshooting (macOS, Windows, WSL, Linux)** | **Everyone** |
-| [**RESULTS_GUIDE.md**](RESULTS_GUIDE.md) | **Complete guide to understanding, triaging, and acting on scan results** | **Everyone** |
-| [USER_GUIDE.md](USER_GUIDE.md) | Comprehensive reference | Advanced users |
-| [DOCKER_README.md](DOCKER_README.md) | Complete Docker guide (beginner → advanced) | All levels |
-
-### Guides & Examples
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [**Quick Reference**](QUICK_REFERENCE.md) | **One-page command reference (scanning, Docker, troubleshooting)** | **Everyone** |
-| [**Results Quick Reference**](RESULTS_QUICK_REFERENCE.md) | **One-page printable triage card (30-minute workflow)** | **Everyone** |
-| [**Schedule Guide**](SCHEDULE_GUIDE.md) | **Complete guide to automated scan scheduling** | **DevOps/SRE** |
-| [**Slack Notifications**](examples/slack-notifications.md) | **Real-world Slack integration patterns** | **DevOps/SRE** |
-| [**Attestation Workflows**](examples/attestation-workflows.md) | **SLSA attestation CI/CD patterns (GitHub Actions, GitLab CI, Docker)** | **DevOps/SRE** |
-| [**Policy-as-Code**](POLICY_AS_CODE.md) | **OPA-based policy enforcement for security compliance (zero-secrets, OWASP, PCI DSS)** | **Everyone** |
-| [Policy Workflows](examples/policy-workflows.md) | CI/CD integration examples for policy gating | DevOps/SRE |
-| [Custom Policy Examples](examples/custom-policy-examples.md) | 5 complete custom policy templates (SQL injection, container vulns, license compliance) | Advanced |
-| [Diff Workflows](examples/diff-workflows.md) | Machine-readable diff usage examples | DevOps |
-| [Trend Analysis](examples/ci-cd-trends.md) | Trend analysis CI/CD integration | DevOps |
-| [Wizard Examples](examples/wizard-examples.md) | Interactive wizard workflows | Beginners |
-| [TSV Scanning](examples/scan_from_tsv.md) | Clone and scan from TSV files | DevOps |
-| [GitHub Actions Docker](examples/github-actions-docker.yml) | CI/CD workflow examples | DevOps/SRE |
-| [Examples Index](examples/README.md) | All examples overview | Everyone |
-
-### Project Management
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [CHANGELOG.md](../CHANGELOG.md) | Version history | Everyone |
-| [ROADMAP.md](../ROADMAP.md) | Future plans & milestones | Everyone |
-| [CONTRIBUTORS.md](../CONTRIBUTORS.md) | Community contributors & recognition | Everyone |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution guidelines | Contributors |
-| [TEST.md](../TEST.md) | Testing guide | Contributors |
-| [RELEASE.md](RELEASE.md) | Release process | Maintainers |
-
-### AI Integrations
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [**MCP Quick Reference**](MCP_QUICK_REFERENCE.md) | **One-page MCP cheat sheet (installation, queries, troubleshooting)** | **Everyone** |
-| [**GitHub Copilot Integration**](integrations/GITHUB_COPILOT.md) | **MCP setup for VS Code Copilot** | **Everyone** |
-| [**Claude Code Integration**](integrations/CLAUDE_CODE.md) | **MCP setup for Claude Code CLI** | **Everyone** |
-
-### Technical References
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| [**YAML Configuration Files**](../CLAUDE.md#yaml-configuration-files-root-directory) | **10 YAML/YML files in root directory explained** | **Everyone** |
-| [**Docker Variants**](DOCKER_VARIANTS_MASTER.md) | **4 Docker image variants (Dockerfile, Dockerfile.balanced, Dockerfile.slim, Dockerfile.fast)** | **Everyone** |
-| [MCP Setup](MCP_SETUP.md) | MCP server integration (general) | Advanced |
-| [CommonFinding Schema](schemas/common_finding.v1.json) | Data schema spec | Developers |
-| [Screenshots Guide](screenshots/README.md) | Screenshot capture | Contributors |
-| [SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md) | Example scan outputs | Everyone |
-| [Version Management](VERSION_MANAGEMENT.md) | 5-layer version system | Maintainers |
-| [Badge Automation](BADGE_AUTOMATION.md) | PyPI badge auto-update system | Maintainers |
-| [Compliance Framework Analysis](archive/COMPLIANCE_FRAMEWORK_ANALYSIS.md) | Framework mappings detail (archived) | Advanced |
-| [Telemetry](TELEMETRY.md) | Privacy-first usage tracking | Everyone |
-| [Testing Matrix](TESTING_MATRIX.md) | Test coverage dimensions | Contributors |
-| [Usage Matrix](USAGE_MATRIX.md) | Use case configurations | Everyone |
-
-> **Note:** Infrastructure and business documentation (CAPTCHA setup, email telemetry, newsletter templates) is maintained separately in `dev-only/` (gitignored). These are maintainer-only resources not needed for general development or usage.
+| Document | Purpose |
+|----------|---------|
+| [Changelog](../CHANGELOG.md) | Version history |
+| [Roadmap](../ROADMAP.md) | Future plans |
+| [Contributors](../CONTRIBUTORS.md) | Community contributors |
 
 ---
 
-## 🔍 Understanding Results
+## Tools Overview
 
-**📖 Complete guide:** [RESULTS_GUIDE.md](RESULTS_GUIDE.md) - The definitive guide to understanding, triaging, and acting on your scan results.
+JMo Security orchestrates 28 security scanners across 11 categories:
 
-**Quick reference:**
+| Category | Tools |
+|----------|-------|
+| Secrets | TruffleHog, Nosey Parker, Semgrep-Secrets |
+| SAST | Semgrep, Bandit, Gosec, Horusec |
+| SBOM | Syft, CDXgen, ScanCode |
+| SCA | Trivy, Grype, OSV-Scanner, Dependency-Check |
+| IaC | Checkov, Checkov-CICD |
+| Cloud/CSPM | Prowler, Kubescape |
+| DAST | OWASP ZAP, Nuclei |
+| Dockerfile | Hadolint |
+| Malware | YARA |
+| System | Lynis |
+| Runtime | Trivy-RBAC, Falco, AFL++ |
 
-### Severity Levels
-
-| Level | Meaning | Action Required |
-|-------|---------|-----------------|
-| **CRITICAL** | Immediate security risk (hardcoded passwords, RCE) | Fix immediately |
-| **HIGH** | Serious issue (SQL injection, XSS, high-severity CVEs) | Fix within 1 week |
-| **MEDIUM** | Moderate risk (weak crypto, missing auth checks) | Fix within 1 month |
-| **LOW** | Minor issue (info disclosure, weak headers) | Fix when convenient |
-| **INFO** | Informational (deprecated APIs, style issues) | Optional improvement |
-
-### Output Files
-
-**After scanning, check these files in `results/summaries/`:**
-
-- **`dashboard.html`** - Interactive web dashboard (recommended first view)
-- **`SUMMARY.md`** - Human-readable text summary with top issues
-- **`findings.json`** - Machine-readable normalized findings
-- **`findings.sarif`** - SARIF 2.1.0 for GitHub/GitLab Security tabs
-- **`findings.yaml`** - YAML format (requires PyYAML)
-- **`SUPPRESSIONS.md`** - Suppressed findings summary (if suppressions used)
-- **`timings.json`** - Performance profiling data (when `--profile` used)
-- **`COMPLIANCE_SUMMARY.md`** - Multi-framework compliance report (OWASP, CWE, NIST, PCI DSS, CIS, ATT&CK)
-- **`PCI_DSS_COMPLIANCE.md`** - Detailed PCI DSS compliance report
-- **`attack-navigator.json`** - MITRE ATT&CK Navigator visualization
+**Tool details:** [User Guide: Tool Overview](USER_GUIDE.md#tool-overview)
 
 ---
 
-## 🛠️ Common Tasks
-
-### Quick Reference
-
-**Run your first scan:**
-
-```bash
-# Wizard (easiest)
-jmotools wizard
-
-# Docker (zero tools)
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
-  scan --repo /scan --results /scan/results --profile balanced --human-logs
-
-# CLI (local tools)
-jmotools balanced --repos-dir ~/repos
-```
-
-**View results:**
-
-```bash
-# Open dashboard
-open results/summaries/dashboard.html  # macOS
-xdg-open results/summaries/dashboard.html  # Linux
-
-# Read summary
-cat results/summaries/SUMMARY.md
-```
-
-**Common workflows:**
-
-- [Fast pre-commit scan](examples/wizard-examples.md#quick-validation-before-commit)
-- [CI/CD integration](DOCKER_README.md#cicd-integration)
-- [Multi-repo audit](examples/scan_from_tsv.md)
-- [Scheduled scans](../QUICKSTART.md#workflow-3-scheduled-weekly-audit)
-
----
-
-## 🆘 Getting Help
+## Getting Help
 
 ### Documentation
 
-- **General questions:** [README.md](../README.md) and [USER_GUIDE.md](USER_GUIDE.md)
-- **Setup issues:** [QUICKSTART.md](../QUICKSTART.md) troubleshooting section
-- **Platform-specific problems:** [PLATFORM_SPECIFIC.md](PLATFORM_SPECIFIC.md) (macOS, Windows, WSL, Linux)
-- **Docker problems:** [DOCKER_README.md — Troubleshooting](DOCKER_README.md#troubleshooting)
-- **CI failures:** [User Guide — CI Troubleshooting](USER_GUIDE.md#interpreting-ci-failures-deeper-guide)
+- **Installation issues:** [Quick Start](../QUICKSTART.md) or [Platform-Specific](PLATFORM_SPECIFIC.md)
+- **Docker problems:** [Docker Guide: Troubleshooting](DOCKER_README.md#troubleshooting)
+- **CI failures:** [CI Troubleshooting](CI_TROUBLESHOOTING.md)
+- **General questions:** [User Guide](USER_GUIDE.md)
 
 ### Support Channels
 
 - **Issues:** <https://github.com/jimmy058910/jmo-security-repo/issues>
 - **Discussions:** <https://github.com/jimmy058910/jmo-security-repo/discussions>
-- **Email:** <general@jmogaming.com>
 - **Website:** <https://jmotools.com>
 
 ### Support the Project
 
 - **Ko-fi:** <https://ko-fi.com/jmogaming>
+- **GitHub Sponsors:** <https://github.com/sponsors/jimmy058910>
 - **Star on GitHub:** <https://github.com/jimmy058910/jmo-security-repo>
-- **Contribute:** [CONTRIBUTING.md](../CONTRIBUTING.md)
-
-## What's in this toolkit
-
-- Orchestrates secrets (TruffleHog verified, Nosey Parker), SAST (Semgrep, Bandit), SBOM+vulnerabilities (Syft, Trivy), IaC (Checkov), Dockerfile (Hadolint), DAST (OWASP ZAP), runtime security (Falco), and fuzzing (AFL++) scanners via a unified CLI
-- Normalizes outputs into a CommonFinding schema for consistent reporting with stable fingerprinting
-- Ships human-friendly HTML dashboard (XSS-secured) and machine-friendly JSON/YAML/SARIF 2.1.0 (enriched with taxonomies)
-- Supports profiles, per-tool flags/timeouts, retries, include/exclude patterns, and fine-grained suppression
-- Type-safe severity enum (CRITICAL > HIGH > MEDIUM > LOW > INFO) with comparison operators
-
-## Start here
-
-1. Verify environment
-
-```bash
-make verify-env
-```
-
-2. Run a quick scan
-
-```bash
-jmo ci --repos-dir ~/repos --profile-name fast --fail-on HIGH --profile --human-logs
-```
-
-3. Open the dashboard (results/summaries/dashboard.html)
-
-- Learn more about features and profiling: [User Guide — SARIF and HTML dashboard](USER_GUIDE.md#sarif-and-html-dashboard)
-
-Note: CI runs on ubuntu-latest and macos-latest across Python 3.10, 3.11, and 3.12, with concurrency and job timeouts to keep runs fast and reliable.
-
-## 🪟 Windows Users Quick Start
-
-**Windows has three options - choose based on your skill level:**
-
-### ✅ Recommended: Docker Desktop OR WSL 2
-
-Both options provide full 11+ tool support. Native Windows only supports 6 tools (55% coverage).
-
-**Docker Desktop (Easiest - 5 minutes):**
-
-- Download: <https://www.docker.com/products/docker-desktop>
-- Pull image: `docker pull ghcr.io/jimmy058910/jmo-security:latest`
-- Run scan (PowerShell): `docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced --human-logs`
-- View results: `start results\summaries\dashboard.html`
-- **Key Windows syntax:** Use `${PWD}` (with curly braces) and quotes
-
-**WSL 2 (Best Performance - 15 minutes):**
-
-1. Install WSL 2 (PowerShell as Admin): `wsl --install`
-2. Restart, then launch Ubuntu from Start Menu
-3. Update packages: `sudo apt-get update -y && sudo apt-get upgrade -y`
-4. Install dependencies: `sudo apt-get install -y build-essential git jq python3 python3-pip curl wget`
-5. Install JMo: `pip install jmo-security`
-6. Add to PATH: `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`
-7. Auto-install tools: `git clone https://github.com/jimmy058910/jmo-security-repo.git && cd jmo-security-repo && make tools`
-8. Run scan: `jmotools balanced --repos-dir ~/projects`
-9. View results: `explorer.exe results/summaries/dashboard.html`
-
-**Performance tip:** Use WSL filesystem (`~` paths) instead of Windows filesystem (`/mnt/c/`) for 2-3x faster scans.
-
-**⚠️ Native Windows (NOT recommended):**
-
-- Only 6 out of 11+ tools work (55% coverage)
-- Missing DAST (ZAP), runtime security (Falco), fuzzing (AFL++), Hadolint, Nosey Parker
-- You will miss 20-30% of vulnerabilities
-- Only use if Docker/WSL prohibited by organization
-
-📖 **Full Windows guide:** [QUICKSTART.md — Windows Users](../QUICKSTART.md#-windows-users-start-here)
-
-## WSL quick install checklist
-
-If you're on Windows Subsystem for Linux (WSL), this gets you to green fast:
-
-- Use WSL2 with Ubuntu 20.04+ (22.04+ recommended)
-- Update core packages: `sudo apt-get update -y && sudo apt-get install -y build-essential git jq python3 python3-pip`
-- Verify environment and get tool hints: `make verify-env`
-- Optional curated tools install/upgrade: `make tools` and `make tools-upgrade`
-- Nosey Parker (native, recommended on WSL): see [User Guide — Nosey Parker on WSL](USER_GUIDE.md#nosey-parker-on-wsl-native-recommended-and-auto-fallback-docker)
-- Ensure `~/.local/bin` is on PATH (for user-local tools): `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`
-
-## Key docs
-
-- Configuration reference: see [USER_GUIDE.md](USER_GUIDE.md#configuration-jmoyml)
-- Suppressions: see [USER_GUIDE.md](USER_GUIDE.md#suppressions)
-- CLI synopsis: see [USER_GUIDE.md](USER_GUIDE.md#reference-cli-synopsis)
-
-## Contributing and releases
-
-- Tests: [../TEST.md](../TEST.md)
-- Changelog: [../CHANGELOG.md](../CHANGELOG.md)
-- License: [../LICENSE](../LICENSE)
-
-## FAQ
-
-Q: Tools not found or partial toolchain installed?
-
-- A: Run `make verify-env` for OS-aware hints. You can also run with `--allow-missing-tools` to generate empty stubs and still exercise the pipeline.
-
-Q: No repositories detected when using `--repos-dir`?
-
-- A: Only immediate subfolders are considered repos. Ensure each contains a `.git` folder or pass `--repo` for a single path, or `--targets` file.
-
-Q: YAML output missing?
-
-- A: Install `pyyaml` to enable the YAML reporter. Otherwise JSON/MD/HTML still work; see [User Guide — Troubleshooting](USER_GUIDE.md#troubleshooting).
-
-Q: Scans are slow on large directories?
-
-- A: Use the `fast` profile, increase `threads`, and consult `timings.json` by running `jmo report --profile`. See [User Guide — Configuration](USER_GUIDE.md#configuration-jmoyml).
-
-Q: How do I suppress false positives?
-
-- A: Create a `jmo.suppress.yml` as described in [User Guide — Suppressions](USER_GUIDE.md#suppressions). A summary is written to `SUPPRESSIONS.md` during report/ci.
-
-## Why These Tools?
-
-### Why TruffleHog over Gitleaks?
-
-**Decision:** Removed Gitleaks, kept TruffleHog as primary secrets scanner
-
-**Rationale:**
-
-- **Verification Advantage:** TruffleHog actively verifies secrets against 800+ service APIs, eliminating **95% of false positives**
-- **Precision:** 74% precision (TruffleHog) vs 46% precision (Gitleaks) in academic benchmarks
-- **Platform Coverage:** TruffleHog scans Git repos, Docker images, S3 buckets, Slack, and 17+ platforms; Gitleaks is code-only
-- **Actionable Results:** `--only-verified` flag provides verified credentials that actually authenticate, not just pattern matches
-- **False Positive Reduction:** 70-80% reduction in triage time compared to pattern-only scanners
-
-**Use Case:** Run TruffleHog with `--only-verified` in CI/CD for zero-false-positive secrets detection
-
----
-
-### Why Remove TFSec?
-
-**Decision:** Removed TFSec completely, consolidated to Trivy
-
-**Rationale:**
-
-- **Deprecated:** TFSec acquired by Aqua Security in July 2021, fully merged into Trivy
-- **Official Statement:** TFSec GitHub repository explicitly states "tfsec is now part of Trivy"
-- **Zero New Development:** TFSec is in maintenance mode with zero new features
-- **100% Redundant:** Trivy inherited TFSec's entire Terraform scanning engine (154 policies)
-- **Superior Coverage:** Trivy provides **322 total IaC policies** (vs TFSec's 154) plus container scanning, vulnerability detection, and SBOM generation
-
-**Migration:** All TFSec functionality available in Trivy's IaC scanning mode
-
----
-
-### Why Remove OSV-Scanner?
-
-**Decision:** Removed OSV-Scanner, kept Trivy as primary vulnerability scanner
-
-**Rationale:**
-
-- **Container Limitation:** OSV-Scanner's documented weakness in scanning containerized applications is a showstopper for modern DevSecOps
-- **Vendor-Aware Detection:** Trivy handles backported fixes correctly (e.g., Red Hat patches CVEs in older package versions without version number changes)
-- **Layer-Aware Scanning:** Trivy identifies which container layer introduced vulnerabilities, OSV-Scanner cannot
-- **OS Package Coverage:** Trivy provides superior OS package vulnerability coverage with vendor-specific advisories (RHEL, Debian, Ubuntu)
-- **42Analytics Testing:** OSV-Scanner misses vulnerabilities in language-specific libraries installed within Docker images
-
-**Use Case:** Trivy for container-based workflows, OSV-Scanner optional only for pure source code scanning
-
----
-
-### Why Keep Nosey Parker (Deep Profile Only)?
-
-**Decision:** Kept Nosey Parker in deep profile despite tool consolidation goals
-
-**Rationale:**
-
-- **Best-in-Class Precision:** 98.5% precision (best of all secrets scanners per Praetorian testing)
-- **ML-Powered Denoising:** Finds secrets TruffleHog misses (266 vs 197 true positives in research)
-- **Complementary Coverage:** ML approach catches patterns verification-based scanners miss
-- **Deep Profile Philosophy:** Accept longer scan times for maximum coverage in comprehensive audits
-- **Use Case:** Historical repository audits, compliance scans, security audits requiring exhaustive coverage
-
-**Trade-off:** Slightly higher tool count in deep profile for significantly better coverage
-
----
-
-### Why Keep Bandit (Deep Profile Only)?
-
-**Decision:** Kept Bandit in deep profile for Python-specific edge cases
-
-**Rationale:**
-
-- **Unique Findings:** Real-world Zulip testing showed 10% of findings unique to Bandit
-- **68 Refined Checks:** Python-specific checks refined over years from OpenStack Security Project
-- **Confidence Ratings:** Provides both confidence and severity ratings (Semgrep only has severity)
-- **Edge Case Coverage:** Detects patterns Semgrep misses (e.g., Django `QuerySet.extra()` usage, capitalized environment variables)
-- **Deep Profile Philosophy:** Maximize coverage, not minimize tool count
-
-**Alternative:** Organizations can consolidate to Semgrep Pro for multi-language SAST, accepting 5-10% edge case detection loss
-
----
-
-### Why Add OWASP ZAP (DAST)?
-
-**Decision:** Added OWASP ZAP to balanced + deep profiles
-
-**Rationale:**
-
-- **Critical Gap:** Static analysis (SAST) misses environment-specific issues and runtime vulnerabilities
-- **20-30% More Vulnerabilities:** DAST finds an average of 20-30% more vulnerabilities than SAST alone (industry research)
-- **Runtime Testing:** Detects authentication bypass, session hijacking, business logic flaws, production misconfigurations
-- **API Coverage:** 83% of web traffic is APIs, ZAP provides REST API and GraphQL testing
-- **Free + Mature:** 12,000+ GitHub stars, Apache 2.0 license, active community
-
-**Use Case:** Run ZAP in test environments during build stage (15-30 min)
-
----
-
-### Why Add Falco (Runtime Security)?
-
-**Decision:** Added Falco to deep profile for container/Kubernetes security
-
-**Rationale:**
-
-- **Zero-Day Detection:** Static scanning (Trivy) only catches known vulnerabilities; runtime security detects zero-day exploits
-- **eBPF-Based Monitoring:** Kernel-level visibility without overhead
-- **Container Escapes:** Detects container escape attempts, privilege escalation, unauthorized file access
-- **CNCF Graduated:** Industry-standard runtime security for Kubernetes (used by major enterprises)
-- **Policy Violations:** Real-time detection of policy violations during execution
-
-**Use Case:** Continuous monitoring in production Kubernetes environments
-
----
-
-### Why Add AFL++ (Fuzzing)?
-
-**Decision:** Added AFL++ to deep profile for coverage-guided fuzzing
-
-**Rationale:**
-
-- **Unknown Vulnerabilities:** Fuzzing discovers bugs that traditional testing misses (not pattern-matching)
-- **10,000+ Bugs Found:** Google's OSS-Fuzz has found 10,000+ bugs in critical open-source projects using AFL-based fuzzing
-- **Coverage-Guided:** Mutates inputs to maximize code path exploration (smarter than random fuzzing)
-- **Proven Track Record:** Most advanced fork of American Fuzzy Lop with feedback-based mutation engine
-
-**Use Case:** Nightly fuzzing runs on 3-5 critical components (parsers, input handlers, cryptographic functions)
-
----
-
-### Why Trivy as Multi-Purpose Champion?
-
-**Decision:** Trivy is the core of all three profiles
-
-**Rationale:**
-
-- **Multi-Purpose:** Vulnerabilities, container security, IaC scanning, secrets detection (secondary), SBOM generation
-- **Lightning Fast:** Scans complete in seconds (critical for CI/CD)
-- **Inherited TFSec:** Complete Terraform scanning engine from deprecated TFSec
-- **Container-Native:** Layer-aware scanning, vendor-aware detection, Docker/OCI image support
-- **Low False Positives:** Conservative secrets scanning, backport-aware vulnerability detection
-
-**Use Case:** Run Trivy in all profiles for speed + breadth of coverage
-
----
-
-### Profile Philosophy
-
-**Fast (3 tools):** Best-in-breed tools for each major category (secrets, SAST, SCA/container/IaC)
-
-- Use Case: Pre-commit checks, quick validation, CI/CD gates (5-8 minutes)
-
-**Balanced (7 tools):** Production-ready comprehensive coverage with DAST
-
-- Use Case: CI/CD pipelines, regular audits, production scans (15-20 minutes)
-
-**Deep (28 tools (26 Docker-ready)):** Maximum coverage accepting tool overhead for exhaustive detection
-
-- Use Case: Security audits, compliance scans, pre-release validation (30-60 minutes)
-
----
-
-### Industry Validation
-
-**Survey Data (2024-2025):**
-
-- 74% of organizations want toolchain consolidation (GitLab Global DevSecOps Survey)
-- Best-in-class teams use 6-8 tools orchestrated through ASPM platforms
-- Organizations with 11+ tools report highest false positive rates
-
-**OWASP DevSecOps Maturity Model:**
-
-- Level 2 (Walk): 5-7 tools (our balanced profile)
-- Level 3 (Run): 6-8 tools orchestrated (our approach)
-
-**Key Principle:** One excellent tool beats three mediocre tools. Prioritize developer experience and low false positives over tool count.
-
----
