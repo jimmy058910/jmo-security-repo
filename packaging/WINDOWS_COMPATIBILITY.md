@@ -36,10 +36,10 @@ JMo Security orchestrates **12 external security tools**. On Windows, only **7 o
 
 ### Fast Profile ✅ **Works on Native Windows**
 
-**Time:** 5-8 minutes | **Tools:** 3 core tools
+**Time:** 5-10 minutes | **Tools:** 8 tools
 
 ```powershell
-jmotools fast --repos-dir C:\Projects
+jmo fast --repos-dir C:\Projects
 ```
 
 **Tools included:**
@@ -52,10 +52,10 @@ jmotools fast --repos-dir C:\Projects
 
 ### Balanced Profile ⚠️ **Partially Works on Native Windows**
 
-**Time:** 15-20 minutes | **Tools:** 8 tools (7 work natively, 1 requires Docker)
+**Time:** 18-25 minutes | **Tools:** 21 tools (7 work natively, rest require Docker)
 
 ```powershell
-jmotools balanced --repos-dir C:\Projects
+jmo balanced --repos-dir C:\Projects
 ```
 
 **Tools included:**
@@ -68,12 +68,12 @@ jmotools balanced --repos-dir C:\Projects
 **Recommendation:** Use Docker for full balanced profile:
 
 ```powershell
-jmotools wizard --docker --profile balanced
+jmo wizard --docker --profile balanced
 ```
 
 ### Deep Profile ❌ **Requires Docker/WSL2**
 
-**Time:** 30-60 minutes | **Tools:** 12 comprehensive tools
+**Time:** 40-70 minutes | **Tools:** 28 comprehensive tools
 
 **Tools NOT available natively:**
 
@@ -84,7 +84,7 @@ jmotools wizard --docker --profile balanced
 **Recommendation:** MUST use Docker:
 
 ```powershell
-jmotools wizard --docker --profile deep
+jmo wizard --docker --profile deep
 ```
 
 ---
@@ -128,10 +128,10 @@ jmotools wizard --docker --profile deep
 
    ```powershell
    # From Windows PowerShell
-   jmotools wizard --docker
+   jmo wizard --docker
 
    # Or from WSL2 terminal
-   jmotools wizard --docker
+   jmo wizard --docker
    ```
 
 **Why this is best:**
@@ -160,10 +160,10 @@ jmotools wizard --docker --profile deep
 
    ```powershell
    # Use fast profile (best for native Windows)
-   jmotools fast --repos-dir C:\Projects
+   jmo fast --repos-dir C:\Projects
 
    # Or balanced profile (ZAP will be skipped)
-   jmotools balanced --repos-dir C:\Projects --allow-missing-tools
+   jmo balanced --repos-dir C:\Projects --allow-missing-tools
    ```
 
 **Limitations:**
@@ -257,7 +257,7 @@ pip install bandit
 **After installing tools, verify:**
 
 ```powershell
-jmotools setup --check
+jmo setup --check
 ```
 
 ---
@@ -303,7 +303,7 @@ Windows is a secondary platform for most security tools.
 **A:** Use **fast profile** for best experience:
 
 ```powershell
-jmotools fast --repos-dir C:\Projects
+jmo fast --repos-dir C:\Projects
 ```
 
 **Avoid deep profile on native Windows** - it will fail due to missing tools.
@@ -329,7 +329,7 @@ jmotools fast --repos-dir C:\Projects
 4. **Check tool availability** before choosing profile:
 
    ```powershell
-   jmotools setup --check
+   jmo setup --check
    ```
 
 ### ❌ DON'T
@@ -358,10 +358,10 @@ jmotools fast --repos-dir C:\Projects
 
 ```powershell
 # Check which tools are available
-jmotools setup --check
+jmo setup --check
 
 # Run with missing tools allowed
-jmotools fast --repos-dir C:\Projects --allow-missing-tools
+jmo fast --repos-dir C:\Projects --allow-missing-tools
 ```
 
 ### Issue: ZAP fails to start
@@ -372,7 +372,7 @@ jmotools fast --repos-dir C:\Projects --allow-missing-tools
 2. Use Docker mode:
 
    ```powershell
-   jmotools wizard --docker
+   jmo wizard --docker
    ```
 
 ### Issue: Semgrep rules fail
@@ -380,7 +380,7 @@ jmotools fast --repos-dir C:\Projects --allow-missing-tools
 **Solution:** Some rules are Linux-specific. Use Docker for full Semgrep coverage:
 
 ```powershell
-jmotools wizard --docker
+jmo wizard --docker
 ```
 
 ---

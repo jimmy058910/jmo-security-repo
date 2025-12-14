@@ -453,6 +453,131 @@ def _add_setup_args(subparsers):
     return setup_parser
 
 
+def _add_tools_args(subparsers):
+    """Add 'tools' subcommand for tool management."""
+    tools_parser = subparsers.add_parser(
+        "tools",
+        help="Check, install, and update security tools",
+        description="""
+Manage security tools for JMo scans.
+
+Commands:
+  check      Verify tool installation status
+  install    Install missing tools
+  update     Update outdated tools
+  list       List available tools and profiles
+  outdated   Show outdated tools
+
+Examples:
+  jmo tools check                     # Check all tool status
+  jmo tools check --profile balanced  # Check profile tools
+  jmo tools install                   # Install missing (interactive)
+  jmo tools install --yes             # Install without prompts
+  jmo tools update --critical-only    # Update critical tools
+  jmo tools list --profiles           # Show available profiles
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    tools_subparsers = tools_parser.add_subparsers(dest="tools_command")
+
+    # CHECK
+    check_parser = tools_subparsers.add_parser("check", help="Check tool installation status")
+    check_parser.add_argument("tools", nargs="*", help="Specific tools to check")
+    check_parser.add_argument(
+        "--profile",
+        choices=["fast", "slim", "balanced", "deep"],
+        help="Check tools for specific profile",
+    )
+    check_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # INSTALL
+    install_parser = tools_subparsers.add_parser("install", help="Install missing tools")
+    install_parser.add_argument("tools", nargs="*", help="Specific tools to install")
+    install_parser.add_argument(
+        "--profile",
+        choices=["fast", "slim", "balanced", "deep"],
+        default="balanced",
+        help="Install tools for profile (default: balanced)",
+    )
+    install_parser.add_argument(
+        "--yes", "-y", action="store_true", help="Non-interactive mode"
+    )
+    install_parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be installed"
+    )
+    install_parser.add_argument(
+        "--print-script", action="store_true", help="Print install script"
+    )
+
+    # UPDATE
+    update_parser = tools_subparsers.add_parser("update", help="Update outdated tools")
+    update_parser.add_argument("tools", nargs="*", help="Specific tools to update")
+    update_parser.add_argument(
+        "--critical-only", action="store_true", help="Only update critical tools"
+    )
+    update_parser.add_argument(
+        "--yes", "-y", action="store_true", help="Non-interactive mode"
+    )
+
+    # LIST
+    list_parser = tools_subparsers.add_parser("list", help="List available tools")
+    list_parser.add_argument(
+        "--profile",
+        choices=["fast", "slim", "balanced", "deep"],
+        help="List tools in profile",
+    )
+    list_parser.add_argument(
+        "--profiles", action="store_true", help="List available profiles"
+    )
+    list_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # OUTDATED
+    outdated_parser = tools_subparsers.add_parser("outdated", help="Show outdated tools")
+    outdated_parser.add_argument(
+        "--critical-only", action="store_true", help="Only show critical tools"
+    )
+    outdated_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # UNINSTALL
+    uninstall_parser = tools_subparsers.add_parser(
+        "uninstall",
+        help="Uninstall JMo Security suite and optionally tools",
+        description="""
+Uninstall JMo Security from your system.
+
+Options:
+  (default)    Remove JMo suite only, keep security tools installed
+  --all        Remove JMo AND all security tools
+
+What gets removed with --all:
+  - ~/.jmo/ directory (config, cache, history, bins)
+  - jmo-security pip package (if installed)
+  - pip-installed tools (semgrep, checkov, bandit, etc.)
+  - npm-installed tools (retire.js, etc.)
+  - Binary tools in ~/.jmo/bin/
+  - ~/.kubescape/ directory
+
+Examples:
+  jmo tools uninstall              # Remove JMo only
+  jmo tools uninstall --all        # Remove everything
+  jmo tools uninstall --dry-run    # Preview what would be removed
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    uninstall_parser.add_argument(
+        "--all", "-a", action="store_true", help="Also uninstall all security tools"
+    )
+    uninstall_parser.add_argument(
+        "--dry-run", action="store_true", help="Show what would be removed without removing"
+    )
+    uninstall_parser.add_argument(
+        "--yes", "-y", action="store_true", help="Skip confirmation prompt"
+    )
+
+    return tools_parser
+
+
 def _add_adapters_args(subparsers):
     """Add 'adapters' subcommand arguments for plugin management."""
     adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
@@ -1448,6 +1573,7 @@ Documentation: https://docs.jmotools.com
     _add_history_args(sub)
     _add_trends_args(sub)
     _add_policy_args(sub)  # Policy-as-Code commands
+    _add_tools_args(sub)  # Tool management commands
 
     try:
         return ap.parse_args()
@@ -1599,6 +1725,183 @@ def _iter_k8s_resources(args) -> list[dict[str, str]]:
         )
 
     return k8s_resources
+
+
+def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list[str]]:
+    """
+    Check tool availability before scan and handle missing tools.
+
+    This is the scan-time pre-flight check that:
+    1. Detects which requested tools are installed
+    2. If any are missing and not --allow-missing-tools, prompts user
+    3. Offers to install missing tools or continue without them
+
+    Args:
+        args: Parsed command line arguments
+        requested_tools: List of tool names requested for the scan
+
+    Returns:
+        Tuple of (available_tools, missing_tool_names)
+        If user cancels, returns ([], []) to signal abort
+    """
+    import sys
+
+    try:
+        from scripts.cli.tool_manager import ToolManager, get_missing_tools_for_scan
+
+        available, missing_statuses = get_missing_tools_for_scan(requested_tools)
+
+        if not missing_statuses:
+            # All tools available
+            return available, []
+
+        missing_names = [s.name for s in missing_statuses]
+
+        # If --allow-missing-tools, just return available tools
+        if getattr(args, "allow_missing_tools", False):
+            return available, missing_names
+
+        # Check if any tools are available
+        if not available:
+            _log(
+                args,
+                "ERROR",
+                f"None of the requested tools are installed: {', '.join(missing_names)}",
+            )
+            print("\nRun 'jmo tools install' to install required tools.")
+            return [], missing_names
+
+        # Interactive prompt (skip if not a TTY)
+        if not sys.stdin.isatty():
+            # Non-interactive: use available tools
+            return available, missing_names
+
+        # Show what's missing
+        print(f"\n{len(missing_statuses)} of {len(requested_tools)} tool(s) not installed:")
+        for status in missing_statuses[:5]:
+            print(f"  - {status.name}")
+        if len(missing_statuses) > 5:
+            print(f"  ... and {len(missing_statuses) - 5} more")
+
+        print(f"\n{len(available)} tool(s) available for scanning.")
+        print("\nOptions:")
+        print("  [1] Install missing tools now")
+        print("  [2] Continue with available tools")
+        print("  [3] Cancel scan")
+
+        while True:
+            try:
+                choice = input("\nChoice [2]: ").strip() or "2"
+            except (EOFError, KeyboardInterrupt):
+                return [], missing_names
+
+            if choice == "1":
+                # Install missing tools
+                return _install_and_retry(missing_statuses, available)
+            elif choice == "2":
+                return available, missing_names
+            elif choice == "3":
+                return [], missing_names
+            else:
+                print("Please enter 1, 2, or 3")
+
+    except ImportError as e:
+        # Tool manager not available - continue with all requested tools
+        logger.debug(f"Tool check unavailable: {e}")
+        return requested_tools, []
+    except Exception as e:
+        logger.warning(f"Tool check failed: {e}")
+        return requested_tools, []
+
+
+def _install_and_retry(
+    missing_statuses: list,
+    available: list[str],
+) -> tuple[list[str], list[str]]:
+    """
+    Install missing tools and return updated available list.
+
+    Args:
+        missing_statuses: List of ToolStatus for missing tools
+        available: Currently available tool names
+
+    Returns:
+        Tuple of (updated_available, still_missing)
+    """
+    try:
+        from scripts.cli.tool_installer import ToolInstaller, InstallProgress
+
+        print(f"\nInstalling {len(missing_statuses)} missing tool(s)...")
+
+        installer = ToolInstaller()
+
+        progress = InstallProgress(total=len(missing_statuses))
+        still_missing = []
+
+        for status in missing_statuses:
+            print(f"  Installing {status.name}...", end=" ", flush=True)
+            result = installer.install_tool(status.name)
+            progress.add_result(result)
+            if result.success:
+                available.append(status.name)
+                print("done")
+            else:
+                still_missing.append(status.name)
+                print(f"failed ({result.message[:30]})")
+
+        print()
+        if not still_missing:
+            print(f"All {progress.successful} tool(s) installed successfully!")
+        else:
+            print(f"{progress.successful} installed, {len(still_missing)} failed")
+
+        return available, still_missing
+
+    except ImportError as e:
+        logger.warning(f"Tool installer unavailable: {e}")
+        print(f"\nInstaller unavailable: {e}")
+        return available, [s.name for s in missing_statuses]
+    except Exception as e:
+        logger.error(f"Installation failed: {e}")
+        print(f"\nInstallation error: {e}")
+        return available, [s.name for s in missing_statuses]
+
+
+def _warn_critical_updates() -> None:
+    """
+    Show non-blocking warning if critical tools have updates.
+
+    This is called at the start of scans to remind users about important updates.
+    It does not block execution, just prints a warning.
+    """
+    import os
+
+    # Skip in Docker (tools bundled in image)
+    if os.environ.get("DOCKER_CONTAINER"):
+        return
+
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        critical_outdated = manager.get_critical_outdated()
+
+        if critical_outdated:
+            _safe_print("\n" + "=" * 60)
+            _safe_print("  CRITICAL TOOL UPDATES AVAILABLE")
+            _safe_print("=" * 60)
+            for status in critical_outdated[:3]:
+                _safe_print(
+                    f"  - {status.name}: {status.installed_version} -> {status.expected_version}"
+                )
+            if len(critical_outdated) > 3:
+                _safe_print(f"  ... and {len(critical_outdated) - 3} more")
+            _safe_print("\n  Run 'jmo tools update --critical-only' to update")
+            _safe_print("=" * 60 + "\n")
+    except ImportError:
+        pass  # Tool manager not available
+    except Exception as e:
+        logger.debug(f"Critical update check failed: {e}")
 
 
 def _check_first_run() -> bool:
@@ -1937,6 +2240,9 @@ def cmd_scan(args) -> int:
     if should_show_telemetry_banner():
         show_telemetry_banner(mode="cli")
 
+    # Check for critical tool updates (non-blocking warning)
+    _warn_critical_updates()
+
     # Check for first-run email prompt (non-blocking)
     if _check_first_run():
         _collect_email_opt_in(args)
@@ -1959,6 +2265,17 @@ def cmd_scan(args) -> int:
                 "Invalid tool name: contains shell metacharacters",
             )
             return 1  # Return non-zero exit code for security rejection
+
+    # Tool availability pre-flight check (skip in Docker mode)
+    import os
+
+    if not os.environ.get("DOCKER_CONTAINER"):
+        tools, missing_tools = _check_scan_tools(args, tools)
+        if not tools:
+            # All tools missing and user cancelled
+            return 1
+        if missing_tools:
+            _log(args, "WARN", f"Skipping {len(missing_tools)} missing tool(s): {', '.join(missing_tools)}")
 
     # Create ScanConfig from effective settings
     scan_config = ScanConfig(
@@ -2560,6 +2877,10 @@ def main():
         return cmd_verify(args)
     elif args.cmd == "policy":
         return cmd_policy(args)
+    elif args.cmd == "tools":
+        from scripts.cli.tool_commands import cmd_tools
+
+        return cmd_tools(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1

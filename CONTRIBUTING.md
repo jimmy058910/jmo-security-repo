@@ -18,10 +18,10 @@ Be respectful and constructive. We expect contributors to follow a standard code
 - Recommended commands:
 
 ```bash
-make dev-deps     # install Python dev dependencies
-make pre-commit-install  # install git hooks (YAML + Actions validation, etc.)
-make verify-env   # check OS/WSL/macOS & external tool availability
-make test         # run unit tests and coverage
+make dev-deps                          # Install Python dev dependencies
+make pre-commit-install                # Install git hooks
+jmo tools install --profile balanced   # Install security tools
+make test                              # Run unit tests and coverage
 make fmt && make lint
 ```
 
@@ -82,31 +82,26 @@ CI note: Pull requests include an automated check that `requirements-dev.txt` ma
 
 ### External security tools (CLI)
 
-- Install curated tools (trufflehog, semgrep, trivy, syft, checkov, bandit, hadolint, OWASP ZAP, Falco, AFL++, etc.):
+Use the built-in tool manager to install security tools (cross-platform):
 
 ```bash
-make tools
-```
+# Check which tools are installed for your profile
+jmo tools check --profile balanced
 
-- Upgrade/refresh installed tools in place:
+# Install missing tools (auto-detects platform)
+jmo tools install --profile balanced
 
-```bash
-make tools-upgrade
-# or directly:
-bash scripts/dev/install_tools.sh --upgrade
-```
+# Update outdated tools
+jmo tools update
 
-- Targeted updates (user-local):
+# Update only critical security tools
+jmo tools update --critical-only
 
-```bash
-bash scripts/dev/update_tools.sh trufflehog
-bash scripts/dev/update_tools.sh trivy
-```
+# Show outdated tools
+jmo tools outdated
 
-- Verify your environment at any time:
-
-```bash
-make verify-env
+# Update a specific tool
+jmo tools update --tool trivy
 ```
 
 ### Pre-commit hooks

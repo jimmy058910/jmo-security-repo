@@ -1,10 +1,10 @@
 # JMo Security Suite - Balanced Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 21 production-ready security tools
-# Size: ~1.41 GB (optimized) | Tools: 21 scanners | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 18 production-ready security tools
+# Size: ~1.41 GB (optimized) | Tools: 18 scanners | Multi-arch: amd64, arm64
 # v1.0.0: Balanced variant - Excludes specialized tools (Noseyparker, Bandit, Semgrep-Secrets, Trivy-RBAC, Falco, AFL++, MobSF, Lynis)
 
 #
-# Stage 1: Builder - Download and extract 20 tools (exclude 7 specialized)
+# Stage 1: Builder - Download and extract 18 tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -223,8 +223,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 20 tools
-RUN echo "=== Verifying 20 balanced tools ===" && \
+# Verify 18 tools
+RUN echo "=== Verifying 18 balanced tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -244,7 +244,7 @@ RUN echo "=== Verifying 20 balanced tools ===" && \
     scancode --version && \
     cdxgen --version && \
     shellcheck --version && \
-    echo "=== All 20 balanced tools verified ==="
+    echo "=== All 18 balanced tools verified ==="
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]

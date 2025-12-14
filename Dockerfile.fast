@@ -1,10 +1,10 @@
 # JMo Security Suite - Fast Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 7 CI/CD gate tools
-# Size: ~502 MB (optimized) | Tools: 7 scanners (fastest scan profile) | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 8 CI/CD gate tools
+# Size: ~502 MB (optimized) | Tools: 8 scanners (fastest scan profile) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
 
 #
-# Stage 1: Builder - Download 7 fast tools
+# Stage 1: Builder - Download 8 fast tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -60,12 +60,12 @@ RUN NUCLEI_VERSION="3.5.1" && \
     nuclei -update-templates -tl cves,exposures -silent
 
 #
-# Stage 2: Runtime - Minimal CI/CD environment with 7 tools
+# Stage 2: Runtime - Minimal CI/CD environment with 8 tools
 #
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
-LABEL org.opencontainers.image.description="Fast CI/CD security gate with 7 core scanners optimized for speed (v1.0.0)"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -125,8 +125,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 7 fast tools
-RUN echo "=== Verifying 7 fast CI/CD tools ===" && \
+# Verify 8 fast tools
+RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -136,7 +136,7 @@ RUN echo "=== Verifying 7 fast CI/CD tools ===" && \
     hadolint --version && \
     nuclei -version && \
     shellcheck --version && \
-    echo "=== All 7 fast tools verified ==="
+    echo "=== All 8 fast tools verified ==="
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]

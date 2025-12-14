@@ -27,6 +27,7 @@
 |--------------|----------|
 | Install JMo Security | [Quick Start](../QUICKSTART.md) |
 | Use Docker | [Docker Guide](DOCKER_README.md) |
+| Install/update security tools | [User Guide: Tool Management](USER_GUIDE.md#tool-management) |
 | Configure scanning | [User Guide: Configuration](USER_GUIDE.md#configuration-jmoyml) |
 | Set up CI/CD | [Docker Guide: CI/CD](DOCKER_README.md#cicd-integration) |
 | Suppress false positives | [User Guide: Suppressions](USER_GUIDE.md#suppressions) |

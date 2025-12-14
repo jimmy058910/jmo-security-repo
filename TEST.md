@@ -11,10 +11,10 @@ This document explains how to run tests, coverage, linting, and selected end-to-
 make dev-deps
 ```
 
-- Optional linters/tools for full local CI:
+- Optional security tools for full local CI:
 
 ```bash
-make tools  # installs shellcheck, shfmt, ruff, bandit, and curated scanners
+jmo tools install --profile balanced  # Install security scanners
 ```
 
 ## Unit & Integration Tests
@@ -37,7 +37,7 @@ make lint    # lint (shellcheck, ruff, bandit)
 
 Notes:
 
-- If ruff/bandit/shellcheck are missing, install via `make tools`.
+- If ruff/bandit/shellcheck are missing, install via `pip install ruff bandit` or `jmo tools install`.
 
 ## End-to-End Smoke (optional)
 
@@ -213,8 +213,8 @@ cat /tmp/jmo-e2e-results-*/U1/test.log
 bash tests/e2e/run_comprehensive_tests.sh --test U1
 
 # Verify tool installations
-make verify-env
-make tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 ```
 
 **Docker tests failing:**
@@ -251,7 +251,7 @@ For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST
 
 ## General Troubleshooting
 
-- Missing tools: run `make verify-env` and `make tools`.
+- Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
 - Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
 - Different Python version: tests target 3.11 in CI; using older versions may cause minor differences.

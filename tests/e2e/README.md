@@ -92,7 +92,7 @@ tests/e2e/
 
 - A1: GitLab repo scan (requires GITLAB_TOKEN)
 - A2: K8s cluster scan (requires kubectl + cluster)
-- A3: Deep profile (all 11 tools, 30-60 min)
+- A3: Deep profile (all 28 tools, 40-70 min)
 
 ## Usage Examples
 
@@ -248,8 +248,8 @@ bash tests/e2e/run_comprehensive_tests.sh --test U1
 
 ```bash
 # Verify tool installations
-make verify-env
-make tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 
 # Check specific tool
 which trufflehog

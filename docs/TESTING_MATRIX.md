@@ -10,7 +10,7 @@
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
 - **12 Tools:** trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++
 - **3 OS Platforms:** Linux, macOS, WSL (Windows Subsystem for Linux)
-- **5 Execution Modes:** CLI (native), Docker (full), Docker (slim), Docker (alpine), Wizard
+- **5 Execution Modes:** CLI (native), Docker (deep), Docker (balanced), Docker (slim), Docker (fast), Wizard
 - **6 Compliance Frameworks:** OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK v16.1
 
 **Total Possible Combinations:** 6 × 12 × 3 × 5 × 6 = **6,480 test scenarios**
@@ -283,7 +283,7 @@ This matrix shows which compliance frameworks are enriched for findings from eac
 
 This matrix shows which tools are invoked for each profile and target type combination.
 
-### 5.1: Fast Profile (5-8 minutes)
+### 5.1: Fast Profile (5-10 minutes)
 
 **Tools:** trufflehog, semgrep, trivy
 
@@ -296,7 +296,7 @@ This matrix shows which tools are invoked for each profile and target type combi
 | **GitLab Repos** | ✅ | ❌ | ❌ | **1/3** |
 | **Kubernetes Clusters** | ❌ | ❌ | ✅ | **1/3** |
 
-### 5.2: Balanced Profile (15-20 minutes)
+### 5.2: Balanced Profile (18-25 minutes)
 
 **Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei
 
@@ -309,7 +309,7 @@ This matrix shows which tools are invoked for each profile and target type combi
 | **GitLab Repos** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | **6/8** |
 | **Kubernetes Clusters** | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | **1/8** |
 
-### 5.3: Deep Profile (30-60 minutes)
+### 5.3: Deep Profile (40-70 minutes)
 
 **Tools:** trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++
 

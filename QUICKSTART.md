@@ -19,14 +19,14 @@
 
 ```bash
 brew install jmo-security
-jmotools wizard
+jmo wizard
 ```
 
 **Windows:**
 
 ```powershell
 winget install jmo.jmo-security
-jmotools wizard
+jmo wizard
 ```
 
 ---
@@ -54,12 +54,12 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 **Image variants:**
 
-| Variant | Size | Use Case |
-|---------|------|----------|
-| `fast` | 502 MB | CI/CD gates, pre-commit |
-| `balanced` | 1.4 GB | Production pipelines |
-| `slim` | 557 MB | Cloud/IaC focused |
-| `full` | 2.0 GB | Complete audits |
+| Variant | Tools | Size | Use Case |
+|---------|-------|------|----------|
+| `fast` | 8 | 502 MB | CI/CD gates, pre-commit |
+| `slim` | 14 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 18 | 1.4 GB | Production pipelines |
+| `deep` | 28 | 2.0 GB | Complete audits |
 
 **Complete guide:** [docs/DOCKER_README.md](docs/DOCKER_README.md)
 
@@ -73,13 +73,15 @@ pip install jmo-security
 
 # Verify installation
 jmo --help
-jmotools --help
 
-# Optional: Install security tools
-git clone https://github.com/jimmy058910/jmo-security-repo.git
-cd jmo-security-repo
-make tools
-make verify-env
+# Check which tools are installed
+jmo tools check --profile balanced
+
+# Install missing tools (cross-platform)
+jmo tools install --profile balanced
+
+# Verify tools are ready
+jmo tools check --profile balanced
 ```
 
 **For contributing/development:** [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -91,17 +93,18 @@ make verify-env
 ### Interactive Wizard (Recommended for Beginners)
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 The wizard guides you through:
 
-- Profile selection (fast/balanced/deep)
+- Profile selection (fast/slim/balanced/deep)
+- **Tool pre-flight check** (detects missing/outdated tools, offers to install)
 - Target discovery (repos, images, URLs)
 - Docker vs native mode
 - Command preview before execution
 
-**Non-interactive:** `jmotools wizard --yes`
+**Non-interactive:** `jmo wizard --yes`
 
 ---
 
@@ -138,7 +141,8 @@ jmo ci --repo . --fail-on HIGH --profile balanced
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
 | `fast` | 8 | 5-10 min | Pre-commit, PR validation |
-| `balanced` | 21 | 18-25 min | CI/CD pipelines |
+| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 18 | 18-25 min | CI/CD pipelines |
 | `deep` | 28 | 40-70 min | Full security audits |
 
 ---
@@ -224,6 +228,7 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 
 | Feature | Guide |
 |---------|-------|
+| Tool management | [docs/USER_GUIDE.md#tool-management](docs/USER_GUIDE.md#tool-management) |
 | Compare scans | [docs/USER_GUIDE.md#jmo-diff](docs/USER_GUIDE.md#jmo-diff) |
 | Track trends | [docs/USER_GUIDE.md#jmo-trends](docs/USER_GUIDE.md#jmo-trends) |
 | Scan history | [docs/USER_GUIDE.md#jmo-history](docs/USER_GUIDE.md#jmo-history) |
@@ -246,8 +251,27 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 ### Tools not found
 
 ```bash
-jmotools setup --check       # Verify installation
-jmotools setup --auto-install # Auto-install (Linux/macOS/WSL)
+# Check tool status for your profile
+jmo tools check --profile balanced
+
+# Install missing tools (cross-platform)
+jmo tools install --profile balanced
+
+# Or generate install script to review
+jmo tools install --print-script > install-tools.sh
+```
+
+### Tools outdated
+
+```bash
+# Show outdated tools
+jmo tools outdated
+
+# Update all outdated tools
+jmo tools update
+
+# Update only critical security tools
+jmo tools update --critical-only
 ```
 
 ### Permission denied

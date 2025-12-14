@@ -730,6 +730,162 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
 # Telemetry functions now imported from telemetry_helper module
 
 
+def check_tools_for_profile(
+    profile: str,
+    yes: bool = False,
+    use_docker: bool = False,
+) -> tuple[bool, list[str]]:
+    """
+    Check tool availability for the selected profile.
+
+    This is the pre-flight tool check that runs before scan execution.
+    If tools are missing, offers to install them or continue anyway.
+
+    Args:
+        profile: Selected scan profile (fast, slim, balanced, deep)
+        yes: Non-interactive mode (skip prompts)
+        use_docker: True if using Docker (tools bundled in image)
+
+    Returns:
+        Tuple of (should_continue: bool, available_tools: list[str])
+    """
+    # Docker mode has all tools bundled - skip check
+    if use_docker:
+        return True, []
+
+    _print_step(2, 7, "Tool Pre-flight Check")
+
+    try:
+        from scripts.cli.tool_manager import ToolManager
+        from scripts.core.tool_registry import PROFILE_TOOLS
+
+        manager = ToolManager()
+        tools_in_profile = PROFILE_TOOLS.get(profile, [])
+
+        print(f"\nChecking {len(tools_in_profile)} tools for '{profile}' profile...")
+
+        statuses = manager.check_profile(profile)
+        missing = [s for s in statuses.values() if not s.installed]
+        outdated = [s for s in statuses.values() if s.is_outdated]
+        available = [name for name, s in statuses.items() if s.installed]
+
+        # All tools present
+        if not missing:
+            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools installed!", "green"))
+            if outdated:
+                print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient", "yellow"))
+            return True, available
+
+        # Some tools missing
+        print(f"\n{_colorize(f'{len(missing)} tool(s) missing:', 'yellow')}")
+        for status in missing[:5]:  # Show first 5
+            print(f"  {_UNICODE_FALLBACKS.get('❌', '[X]')} {status.name}")
+        if len(missing) > 5:
+            print(f"  ... and {len(missing) - 5} more")
+
+        print(f"\n{_colorize(f'{len(available)} tool(s) available:', 'green')}")
+
+        # Non-interactive mode: continue with available tools
+        if yes:
+            print(_colorize("\nNon-interactive mode: continuing with available tools", "yellow"))
+            return True, available
+
+        # Interactive: offer choices
+        print("\nOptions:")
+        print("  [1] Install missing tools now")
+        print("  [2] Continue with available tools only")
+        print("  [3] Cancel wizard")
+
+        while True:
+            choice = input("\nChoice [1]: ").strip() or "1"
+            if choice == "1":
+                # Install missing tools
+                return _install_missing_tools_interactive(missing, profile, available)
+            elif choice == "2":
+                print(_colorize(f"\nContinuing with {len(available)} available tools", "yellow"))
+                print("Note: Some scan categories may be skipped")
+                return True, available
+            elif choice == "3":
+                return False, []
+            else:
+                print("Please enter 1, 2, or 3")
+
+    except ImportError as e:
+        # Tool manager not available - continue anyway
+        logger.warning(f"Tool check unavailable: {e}")
+        print(_colorize("\nTool check unavailable - continuing anyway", "yellow"))
+        return True, []
+    except Exception as e:
+        logger.warning(f"Tool check failed: {e}")
+        print(_colorize(f"\nTool check failed: {e} - continuing anyway", "yellow"))
+        return True, []
+
+
+def _install_missing_tools_interactive(
+    missing: list,
+    profile: str,
+    available: list[str],
+) -> tuple[bool, list[str]]:
+    """
+    Install missing tools with progress display.
+
+    Args:
+        missing: List of ToolStatus for missing tools
+        profile: Profile name
+        available: Currently available tool names
+
+    Returns:
+        Tuple of (should_continue, updated_available_tools)
+    """
+    try:
+        from scripts.cli.tool_installer import ToolInstaller, print_install_progress
+
+        print(_colorize(f"\nInstalling {len(missing)} missing tool(s)...", "blue"))
+
+        installer = ToolInstaller()
+
+        def progress_callback(tool_name: str, current: int, total: int) -> None:
+            print(f"  [{current}/{total}] Installing {tool_name}...")
+
+        installer.set_progress_callback(progress_callback)
+
+        # Install only the missing tools
+        from scripts.cli.tool_installer import InstallProgress
+
+        progress = InstallProgress(total=len(missing))
+        for status in missing:
+            result = installer.install_tool(status.name)
+            progress.add_result(result)
+            if result.success:
+                available.append(status.name)
+
+        # Summary
+        print()
+        if progress.failed == 0:
+            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {progress.successful} tool(s) installed!", "green"))
+        else:
+            print(_colorize(f"{progress.successful} installed, {progress.failed} failed", "yellow"))
+            if progress.failed > 0:
+                print("Some tools require manual installation. See: docs/MANUAL_INSTALLATION.md")
+
+        # Continue with whatever we have
+        return True, available
+
+    except ImportError as e:
+        logger.warning(f"Tool installer unavailable: {e}")
+        print(_colorize(f"\nInstaller unavailable: {e}", "red"))
+        print("Install manually using: jmo tools install --profile " + profile)
+
+        cont = input("Continue anyway? [y/N]: ").strip().lower()
+        return cont == "y", available
+    except Exception as e:
+        logger.error(f"Installation failed: {e}")
+        print(_colorize(f"\nInstallation error: {e}", "red"))
+
+        cont = input("Continue anyway? [y/N]: ").strip().lower()
+        return cont == "y", available
+
+
 def run_wizard(
     yes: bool = False,
     force_docker: bool = False,
@@ -792,10 +948,25 @@ def run_wizard(
             config.target.repo_mode = "repos-dir"
             config.target.repo_path = str(Path.cwd())
             config.results_dir = "results"
+
+            # Tool check for non-interactive mode
+            should_continue, _ = check_tools_for_profile(
+                config.profile, yes=True, use_docker=config.use_docker
+            )
+            if not should_continue:
+                return 0
         else:
             # Interactive mode with new multi-target selection
             config.profile = select_profile()
             config.use_docker = select_execution_mode(force_docker)
+
+            # Tool pre-flight check (only for native mode)
+            should_continue, _ = check_tools_for_profile(
+                config.profile, yes=False, use_docker=config.use_docker
+            )
+            if not should_continue:
+                print(_colorize("\nWizard cancelled", "yellow"))
+                return 0
 
             # Step 3a: Select target type
             target_type = select_target_type()

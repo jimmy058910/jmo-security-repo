@@ -59,7 +59,7 @@ The wizard now displays a 6-step progress bar during execution:
 ┌─ 🚀 Preflight Check ───────────────────────────────────────────────
 │ • Profile: balanced
 │ • Command: jmo ci --profile balanced --fail-on HIGH --image nginx:latest
-│ • Estimated time: 15-20 minutes
+│ • Estimated time: 18-25 minutes
 └────────────────────────────────────────────────────────────────────
 
 → [Step 5/6] Awaiting confirmation...  [████████████████████░] 83%
@@ -126,7 +126,7 @@ When deploying to production, the wizard displays strict requirements:
 │ • Infrastructure-as-Code validated
 └────────────────────────────────────────────────────────────────────
 
-⚠️  Production deployments require 'deep' profile (30-60 min)
+⚠️  Production deployments require 'deep' profile (40-70 min)
 ```
 
 ### Profile Information (RepoFlow)
@@ -135,9 +135,10 @@ Clear profile comparison before selection:
 
 ```text
 ┌─ 📊 Profile Options ───────────────────────────────────────────────
-│ • fast: 3 tools, 5-8 minutes (pre-commit, quick checks)
-│ • balanced: 8 tools, 15-20 minutes (CI/CD, regular audits)
-│ • deep: 12 tools, 30-60 minutes (security audits, compliance)
+│ • fast: 8 tools, 5-10 minutes (pre-commit, quick checks)
+│ • slim: 14 tools, 12-18 minutes (cloud/IaC, AWS/Azure/GCP/K8s)
+│ • balanced: 18 tools, 18-25 minutes (CI/CD, regular audits)
+│ • deep: 28 tools, 40-70 minutes (security audits, compliance)
 └────────────────────────────────────────────────────────────────────
 ```
 
@@ -152,7 +153,7 @@ Clear profile comparison before selection:
 │ • Container images: 2 found in pipelines
 └────────────────────────────────────────────────────────────────────
 
-ℹ️  Recommended: 'fast' profile for CI/CD pipelines (5-8 minutes)
+ℹ️  Recommended: 'fast' profile for CI/CD pipelines (5-10 minutes)
 ```
 
 ### Dependency Detection (DependencyFlow)
@@ -197,7 +198,7 @@ The wizard supports 5 specialized workflows tailored to different use cases. Eac
 **Example:**
 
 ```bash
-jmotools wizard
+jmo wizard
 # Select workflow: "Single Repository"
 # Profile: balanced (recommended)
 # Generates: Makefile with security-scan target
@@ -233,7 +234,7 @@ jmotools wizard
 **Example:**
 
 ```bash
-jmotools wizard
+jmo wizard
 # Select workflow: "Entire Development Stack"
 # Profile: balanced
 # Parallel scanning: yes
@@ -261,8 +262,8 @@ jmotools wizard
   - `security-scan-repos` - Repositories only
   - `security-scan-images` - Images only
   - `security-scan-iac` - IaC files only
-  - `security-scan-fast` - Quick scan (5-8 min)
-  - `security-scan-deep` - Comprehensive (30-60 min)
+  - `security-scan-fast` - Quick scan (5-10 min)
+  - `security-scan-deep` - Comprehensive (40-70 min)
   - `security-report` - Generate report
   - `security-clean` - Clean results
 - Multi-target GitHub Actions workflow
@@ -284,7 +285,7 @@ jmotools wizard
 **Example:**
 
 ```bash
-jmotools wizard
+jmo wizard
 # Select workflow: "CI/CD Security Audit"
 # Profile: fast (recommended for CI/CD)
 # Scan pipeline files: yes
@@ -327,7 +328,7 @@ jmotools wizard
 **Example:**
 
 ```bash
-jmotools wizard
+jmo wizard
 # Select workflow: "Pre-Deployment Checklist"
 # Environment detected: production
 #
@@ -367,7 +368,7 @@ jmotools wizard
 **Example:**
 
 ```bash
-jmotools wizard
+jmo wizard
 # Select workflow: "Dependency Security Audit"
 #
 # 🔍 Detected dependency files:
@@ -397,13 +398,13 @@ jmotools wizard
 
 | Workflow | Best For | Time | Tools |
 |----------|----------|------|-------|
-| **Single Repository** | Individual repos, quick checks | 5-8 min (fast) | 3-8 tools |
-| **Entire Stack** | Full development environment | 15-20 min | 8 tools |
+| **Single Repository** | Individual repos, quick checks | 5-10 min (fast) | 8 tools |
+| **Entire Stack** | Full development environment | 18-25 min | 21 tools |
 | **CI/CD Audit** | Pipeline security validation | 5-10 min | 2-3 tools |
 | **Pre-Deployment** | Production deployment gates | 15-30 min | 8-12 tools |
 | **Dependency Audit** | SBOM + vulnerability focus | 5-10 min | 2 tools |
 
-**Pro Tip:** Use `jmotools wizard` and select the workflow that matches your current task. The wizard will auto-detect targets and provide smart recommendations.
+**Pro Tip:** Use `jmo wizard` and select the workflow that matches your current task. The wizard will auto-detect targets and provide smart recommendations.
 
 ---
 
@@ -414,18 +415,19 @@ The wizard guides you through six steps to configure and run a security scan.
 ### Starting the Wizard
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 ### Interactive Steps
 
 #### Step 1: Select Scanning Profile
 
-Choose from three profiles based on your needs:
+Choose from four profiles based on your needs:
 
-- **fast** (2-5 minutes): Quick scan with core tools (trufflehog, semgrep, trivy)
-- **balanced** (5-15 minutes): Comprehensive scan with all recommended tools
-- **deep** (15-45 minutes): Exhaustive scan with all tools
+- **fast** (5-10 min, 8 tools): Quick scan with core tools
+- **slim** (12-18 min, 14 tools): Cloud/IaC focused (AWS/Azure/GCP/K8s)
+- **balanced** (18-25 min, 18 tools): Comprehensive scan with all recommended tools
+- **deep** (40-70 min, 28 tools): Exhaustive scan with all tools
 
 #### Step 2: Select Execution Mode
 
@@ -506,18 +508,18 @@ Use defaults for automated workflows or scripting.
 
 ```bash
 # Use balanced profile on current directory
-jmotools wizard --yes
+jmo wizard --yes
 ```
 
 ### With Custom Options
 
 ```bash
 # Fast profile in Docker mode
-jmotools wizard --yes --docker
+jmo wizard --yes --docker
 
 # Specific directory
 cd /path/to/repos
-jmotools wizard --yes
+jmo wizard --yes
 ```
 
 **Note:** Non-interactive mode uses these defaults:
@@ -544,7 +546,7 @@ Benefits:
 ### Interactive Docker Mode
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 At Step 2, choose **docker** mode. The wizard will use `ghcr.io/jimmy058910/jmo-security:latest`.
@@ -552,7 +554,7 @@ At Step 2, choose **docker** mode. The wizard will use `ghcr.io/jimmy058910/jmo-
 ### Force Docker Mode
 
 ```bash
-jmotools wizard --docker
+jmo wizard --docker
 ```
 
 This skips the execution mode prompt and uses Docker directly (if available).
@@ -596,7 +598,7 @@ cd jmo-security-repo
 pip install -e .
 
 # Run wizard with Docker auto-detection
-jmotools wizard --docker
+jmo wizard --docker
 
 # Wizard will:
 # 1. Detect Docker is available
@@ -613,7 +615,7 @@ jmotools wizard --docker
 ```bash
 # Access Windows drives via /mnt/
 cd /mnt/c/Users/YourName/Projects/my-repo
-jmotools wizard --docker
+jmo wizard --docker
 ```
 
 **Opening Results:**
@@ -633,7 +635,7 @@ wslview results/summaries/dashboard.html
 cd ~
 git clone https://github.com/your-org/your-repo.git
 cd your-repo
-jmotools wizard --docker
+jmo wizard --docker
 
 # AVOID: /mnt/c/ (Windows mount) - much slower
 ```
@@ -686,7 +688,7 @@ The wizard now supports scanning 6 different target types beyond repositories.
 Scan Docker/OCI container images for vulnerabilities:
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 **Steps:**
@@ -715,7 +717,7 @@ jmo scan --image nginx:latest --results-dir results --profile-name balanced --th
 Scan Terraform state files, CloudFormation templates, or K8s manifests:
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 **Steps:**
@@ -751,7 +753,7 @@ The wizard automatically detects IaC type from:
 Scan live web applications and APIs:
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 **Steps:**
@@ -794,7 +796,7 @@ Run wizard and select **file** option when prompted.
 Scan GitLab-hosted repositories with full tool suite:
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 **Steps:**
@@ -829,7 +831,7 @@ Scan all repos in a GitLab group:
 export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Run wizard, select gitlab → group
-jmotools wizard
+jmo wizard
 
 # Enter group: myorg
 ```
@@ -841,7 +843,7 @@ Wizard discovers all repos in `myorg` and scans them.
 Scan live Kubernetes clusters for security issues:
 
 ```bash
-jmotools wizard
+jmo wizard
 ```
 
 **Steps:**
@@ -919,7 +921,7 @@ We collect:
 ✅ Tool usage counts (which scanners you use)
 ✅ Scan durations and success rates
 ✅ Error types (no error messages)
-✅ Profile selection (fast/balanced/deep)
+✅ Profile selection (fast/slim/balanced/deep)
 
 We NEVER collect:
 ❌ Code content or file paths
@@ -993,14 +995,14 @@ Visit [https://jmotools.com/subscribe.html](https://jmotools.com/subscribe.html)
 
 ```bash
 # If user already opted in/out, wizard respects choice
-jmotools wizard --yes
+jmo wizard --yes
 ```
 
 **Explicitly disable telemetry for automated workflows:**
 
 ```bash
 jmo telemetry --disable
-jmotools wizard --yes
+jmo wizard --yes
 ```
 
 **CI/CD environment (telemetry auto-disabled):**
@@ -1017,7 +1019,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
-      - run: jmotools balanced --repos-dir .
+      - run: jmo balanced --repos-dir .
         # Telemetry automatically disabled in CI
 ```
 
@@ -1608,7 +1610,7 @@ For automation and CI/CD, use CLI flags instead of the interactive menu:
 #### Analyze Trends After Scan
 
 ```bash
-jmotools wizard --yes --analyze-trends
+jmo wizard --yes --analyze-trends
 ```
 
 **Workflow:**
@@ -1621,7 +1623,7 @@ jmotools wizard --yes --analyze-trends
 #### Export Trends After Scan
 
 ```bash
-jmotools wizard --yes --export-trends-html trends.html
+jmo wizard --yes --export-trends-html trends.html
 ```
 
 **Workflow:**
@@ -1633,7 +1635,7 @@ jmotools wizard --yes --export-trends-html trends.html
 #### Export JSON for CI/CD
 
 ```bash
-jmotools wizard --yes --export-trends-json trends.json
+jmo wizard --yes --export-trends-json trends.json
 ```
 
 **Use case:** Store trend data as CI/CD artifact
@@ -1641,7 +1643,7 @@ jmotools wizard --yes --export-trends-json trends.json
 ```yaml
 # GitHub Actions example
 - name: Run scan with trends
-  run: jmotools wizard --yes --export-trends-json trends.json
+  run: jmo wizard --yes --export-trends-json trends.json
 
 - name: Upload trends
   uses: actions/upload-artifact@v4
@@ -1653,7 +1655,7 @@ jmotools wizard --yes --export-trends-json trends.json
 #### Multiple Export Formats
 
 ```bash
-jmotools wizard --yes \
+jmo wizard --yes \
   --analyze-trends \
   --export-trends-html trends.html \
   --export-trends-csv trends.csv \
@@ -1848,7 +1850,7 @@ Generate reusable artifacts without running a scan.
 ### Generate Makefile Target
 
 ```bash
-jmotools wizard --emit-make-target Makefile.security
+jmo wizard --emit-make-target Makefile.security
 ```
 
 **Output:**
@@ -1857,7 +1859,7 @@ jmotools wizard --emit-make-target Makefile.security
 # JMo Security Scan Target (generated by wizard)
 .PHONY: security-scan
 security-scan:
-  jmotools balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
+  jmo balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
 ```
 
 **Usage:**
@@ -1869,7 +1871,7 @@ make -f Makefile.security security-scan
 ### Generate Shell Script
 
 ```bash
-jmotools wizard --emit-script scan.sh
+jmo wizard --emit-script scan.sh
 ```
 
 **Output:**
@@ -1879,7 +1881,7 @@ jmotools wizard --emit-script scan.sh
 # JMo Security Scan Script (generated by wizard)
 set -euo pipefail
 
-jmotools balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
+jmo balanced --repos-dir /home/user/repos --results-dir results --threads 4 --timeout 600 --human-logs
 ```
 
 **Usage:**
@@ -1894,7 +1896,7 @@ chmod +x scan.sh
 #### Native Mode
 
 ```bash
-jmotools wizard --emit-gha .github/workflows/security.yml
+jmo wizard --emit-gha .github/workflows/security.yml
 ```
 
 **Output:**
@@ -1932,7 +1934,7 @@ jobs:
 
       - name: Run Security Scan
         run: |
-          jmotools balanced --repos-dir . --results-dir results \
+          jmo balanced --repos-dir . --results-dir results \
             --threads 4 \
             --timeout 600
 
@@ -1953,7 +1955,7 @@ jobs:
 #### Docker Mode Variant
 
 ```bash
-jmotools wizard --docker --emit-gha .github/workflows/security-docker.yml
+jmo wizard --docker --emit-gha .github/workflows/security-docker.yml
 ```
 
 **Output:**
@@ -2005,7 +2007,7 @@ jobs:
 
 ```bash
 # Use Docker mode to avoid tool installation
-jmotools wizard --docker
+jmo wizard --docker
 ```
 
 **Steps:**
@@ -2021,7 +2023,7 @@ jmotools wizard --docker
 
 ```bash
 # Generate GitHub Actions workflow with HIGH threshold
-jmotools wizard --emit-gha .github/workflows/security.yml
+jmo wizard --emit-gha .github/workflows/security.yml
 ```
 
 Then edit the generated workflow to add `--fail-on HIGH`:
@@ -2030,7 +2032,7 @@ Then edit the generated workflow to add `--fail-on HIGH`:
 
 - name: Run Security Scan
   run: |
-    jmotools balanced --repos-dir . --results-dir results \
+    jmo balanced --repos-dir . --results-dir results \
       --threads 4 \
       --timeout 600 \
       --fail-on HIGH
@@ -2041,7 +2043,7 @@ Then edit the generated workflow to add `--fail-on HIGH`:
 1. Generate a shell script:
 
    ```bash
-   jmotools wizard --emit-script ~/weekly-scan.sh
+   jmo wizard --emit-script ~/weekly-scan.sh
    ```
 
 2. Add to crontab:
@@ -2070,7 +2072,7 @@ crontab -e
 2. Run wizard:
 
    ```bash
-   jmotools wizard
+   jmo wizard
    ```
 
 3. Select:
@@ -2093,7 +2095,7 @@ crontab -e
 2. Run wizard:
 
    ```bash
-   jmotools wizard
+   jmo wizard
    ```
 
 3. Select:
@@ -2107,7 +2109,7 @@ crontab -e
 ```bash
 # Fast scan on current repo
 cd /path/to/my-repo
-jmotools wizard --yes
+jmo wizard --yes
 ```
 
 Uses defaults:
@@ -2133,10 +2135,10 @@ If you're repeating scans with similar settings:
 
 ```bash
 # Save the generated command from first run
-jmotools wizard --yes 2>&1 | grep "jmotools balanced"
+jmo wizard --yes 2>&1 | grep "jmo balanced"
 
 # Run directly next time
-jmotools balanced --repos-dir ~/repos --results-dir results --threads 4 --timeout 600
+jmo balanced --repos-dir ~/repos --results-dir results --threads 4 --timeout 600
 ```
 
 ### 2. Docker Mode for Clean Environments
@@ -2154,7 +2156,7 @@ Share generated artifacts with your team:
 
 ```bash
 # Generate Makefile for team
-jmotools wizard --emit-make-target Makefile.security
+jmo wizard --emit-make-target Makefile.security
 git add Makefile.security
 git commit -m "Add security scan Makefile target"
 ```
@@ -2167,9 +2169,10 @@ make -f Makefile.security security-scan
 
 ### 4. Profile Selection Guide
 
-- **fast**: Pre-commit hooks, quick validation (2-5 min)
-- **balanced**: CI/CD pipelines, regular audits (5-15 min)
-- **deep**: Weekly/monthly deep audits, compliance (15-45 min)
+- **fast**: Pre-commit hooks, quick validation (5-10 min, 8 tools)
+- **slim**: Cloud/IaC, AWS/Azure/GCP/K8s (12-18 min, 14 tools)
+- **balanced**: CI/CD pipelines, regular audits (18-25 min, 18 tools)
+- **deep**: Weekly/monthly deep audits, compliance (40-70 min, 28 tools)
 
 ### 5. Severity Threshold for CI
 

@@ -34,24 +34,24 @@ git clone https://github.com/OWASP/NodeGoat.git
 git clone https://github.com/OWASP/juice-shop.git
 
 # 2. Scan repositories
-jmotools balanced --repos-dir /tmp/test-repos --results-dir results-repos
+jmo balanced --repos-dir /tmp/test-repos --results-dir results-repos
 
 # 3. Scan container images
-jmotools balanced --images-file samples/images.txt --results-dir results-images
+jmo balanced --images-file samples/images.txt --results-dir results-images
 
 # 4. Scan IaC files
-jmotools balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results-iac
-jmotools balanced --cloudformation samples/iac-files/cloudformation-s3.yaml --results-dir results-iac-cf
-jmotools balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml --results-dir results-iac-k8s
+jmo balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results-iac
+jmo balanced --cloudformation samples/iac-files/cloudformation-s3.yaml --results-dir results-iac-cf
+jmo balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml --results-dir results-iac-k8s
 
 # 5. Scan web URLs (requires running local apps first)
 docker run -d -p 3000:3000 bkimminich/juice-shop
-jmotools balanced --url http://localhost:3000 --results-dir results-web
+jmo balanced --url http://localhost:3000 --results-dir results-web
 
 # 6. Scan Kubernetes cluster (requires local cluster)
 minikube start
 kubectl apply -f samples/iac-files/kubernetes-deployment.yaml
-jmotools balanced --k8s-context minikube --k8s-namespace test-namespace --results-dir results-k8s
+jmo balanced --k8s-context minikube --k8s-namespace test-namespace --results-dir results-k8s
 ```
 
 ## Target Type Details
@@ -80,7 +80,7 @@ echo 'eval(user_input)' > app.py
 git add . && git commit -m "Initial commit"
 
 # Scan
-jmotools fast --repo ./dev-only/test-repos/fake-vulnerable-app
+jmo fast --repo ./dev-only/test-repos/fake-vulnerable-app
 ```
 
 **Your Own Repos:**
@@ -107,10 +107,10 @@ jmotools fast --repo ./dev-only/test-repos/fake-vulnerable-app
 
 ```bash
 # Scan single image
-jmotools balanced --image nginx:latest --results-dir results-nginx
+jmo balanced --image nginx:latest --results-dir results-nginx
 
 # Scan batch from file
-jmotools balanced --images-file samples/images.txt --results-dir results-images
+jmo balanced --images-file samples/images.txt --results-dir results-images
 
 # Tools used: trivy (vulnerabilities), syft (SBOM)
 ```
@@ -137,13 +137,13 @@ jmotools balanced --images-file samples/images.txt --results-dir results-images
 
 ```bash
 # Terraform
-jmotools balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf
+jmo balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf
 
 # CloudFormation
-jmotools balanced --cloudformation samples/iac-files/cloudformation-s3.yaml
+jmo balanced --cloudformation samples/iac-files/cloudformation-s3.yaml
 
 # Kubernetes manifest
-jmotools balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
+jmo balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
 
 # Tools used: checkov (policy-as-code), trivy (misconfigurations)
 ```
@@ -161,11 +161,11 @@ jmotools balanced --k8s-manifest samples/iac-files/kubernetes-deployment.yaml
 ```bash
 # OWASP Juice Shop
 docker run -d -p 3000:3000 bkimminich/juice-shop
-# Then scan: jmotools balanced --url http://localhost:3000
+# Then scan: jmo balanced --url http://localhost:3000
 
 # DVWA
 docker run -d -p 80:80 vulnerables/web-dvwa
-# Then scan: jmotools balanced --url http://localhost
+# Then scan: jmo balanced --url http://localhost
 ```
 
 **IMPORTANT:**
@@ -178,10 +178,10 @@ docker run -d -p 80:80 vulnerables/web-dvwa
 
 ```bash
 # Single URL
-jmotools balanced --url http://testphp.vulnweb.com --results-dir results-web
+jmo balanced --url http://testphp.vulnweb.com --results-dir results-web
 
 # Batch from file
-jmotools balanced --urls-file samples/web-urls.txt --results-dir results-web-batch
+jmo balanced --urls-file samples/web-urls.txt --results-dir results-web-batch
 
 # Tools used: OWASP ZAP (DAST), Nuclei (API security)
 ```
@@ -198,7 +198,7 @@ jmotools balanced --urls-file samples/web-urls.txt --results-dir results-web-bat
 
 ```bash
 # Use your own GitLab repos
-jmotools balanced \
+jmo balanced \
   --gitlab-repo mygroup/myrepo \
   --gitlab-token YOUR_TOKEN \
   --gitlab-url https://gitlab.com
@@ -226,7 +226,7 @@ minikube start
 kubectl apply -f samples/iac-files/kubernetes-deployment.yaml
 
 # Scan cluster
-jmotools balanced \
+jmo balanced \
   --k8s-context minikube \
   --k8s-namespace test-namespace \
   --results-dir results-k8s
@@ -242,7 +242,7 @@ Scan multiple target types in one command:
 
 ```bash
 # Comprehensive scan across all types
-jmotools balanced \
+jmo balanced \
   --repos-dir /tmp/test-repos \
   --images-file samples/images.txt \
   --terraform-state samples/iac-files/terraform-aws-ec2.tf \
@@ -260,7 +260,7 @@ open results-comprehensive/summaries/dashboard.html
 Use `--profile` flag to capture timing data:
 
 ```bash
-jmotools balanced --repos-dir /tmp/test-repos --profile --results-dir results
+jmo balanced --repos-dir /tmp/test-repos --profile --results-dir results
 
 # View timings
 cat results/summaries/timings.json
@@ -268,9 +268,10 @@ cat results/summaries/timings.json
 
 **Typical Scan Times:**
 
-- **fast** profile: 5-8 minutes (3 tools)
-- **balanced** profile: 15-20 minutes (8 tools)
-- **deep** profile: 30-60 minutes (12 tools)
+- **fast** profile: 5-10 minutes (8 tools)
+- **slim** profile: 12-18 minutes (14 tools)
+- **balanced** profile: 18-25 minutes (18 tools)
+- **deep** profile: 40-70 minutes (28 tools)
 
 ## Ethical Guidelines
 
@@ -325,13 +326,13 @@ cat results/summaries/timings.json
 
    ```bash
    # Fast
-   jmotools fast --repos-dir /tmp/test-repos --profile --results-dir results-fast
+   jmo fast --repos-dir /tmp/test-repos --profile --results-dir results-fast
 
    # Balanced
-   jmotools balanced --repos-dir /tmp/test-repos --profile --results-dir results-balanced
+   jmo balanced --repos-dir /tmp/test-repos --profile --results-dir results-balanced
 
    # Deep
-   jmotools full --repos-dir /tmp/test-repos --profile --results-dir results-deep
+   jmo full --repos-dir /tmp/test-repos --profile --results-dir results-deep
 
    # Compare timings
    diff results-fast/summaries/timings.json results-balanced/summaries/timings.json
@@ -381,13 +382,13 @@ test-samples:
   git clone --depth 1 https://github.com/OWASP/juice-shop.git
 
  # 2. Scan repos
- jmotools balanced --repos-dir /tmp/jmo-benchmark-repos --results-dir results/benchmark-repos
+ jmo balanced --repos-dir /tmp/jmo-benchmark-repos --results-dir results/benchmark-repos
 
  # 3. Scan images
- jmotools balanced --images-file samples/images.txt --results-dir results/benchmark-images
+ jmo balanced --images-file samples/images.txt --results-dir results/benchmark-images
 
  # 4. Scan IaC
- jmotools balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results/benchmark-iac
+ jmo balanced --terraform-state samples/iac-files/terraform-aws-ec2.tf --results-dir results/benchmark-iac
 
  # 5. Generate report
  @echo "Benchmark complete! View results at results/benchmark-*/summaries/dashboard.html"
@@ -397,7 +398,7 @@ test-samples-full: test-samples
  # Additional: Start local apps, scan web URLs, K8s cluster
  docker run -d -p 3000:3000 --name juice-shop bkimminich/juice-shop
  sleep 10
- jmotools balanced --url http://localhost:3000 --results-dir results/benchmark-web
+ jmo balanced --url http://localhost:3000 --results-dir results/benchmark-web
  docker stop juice-shop && docker rm juice-shop
 ```
 
@@ -550,8 +551,8 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup.
 **"Tool not found" errors:**
 
 ```bash
-make verify-env  # Check which tools are installed
-make tools       # Install missing tools
+jmo tools check --profile balanced    # Check which tools are installed
+jmo tools install --profile balanced  # Install missing tools
 ```
 
 **Docker image pull failures:**

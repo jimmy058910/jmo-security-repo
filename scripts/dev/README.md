@@ -152,7 +152,7 @@ Installs external security scanning tools (semgrep, trivy, checkov, etc.) based 
 **Usage:**
 
 ```bash
-make tools
+jmo tools install --profile balanced
 ```
 
 **Integration into workflow:**
@@ -186,12 +186,8 @@ Installs external security scanning tools (semgrep, trivy, checkov, etc.) based 
 **Usage:**
 
 ```bash
-make tools
+jmo tools install --profile balanced
 ```
-
-make tools
-
-```text
 
 ---
 

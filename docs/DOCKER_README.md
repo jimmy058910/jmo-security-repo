@@ -2,7 +2,9 @@
 
 **Zero-installation security scanning using Docker containers.**
 
-All 11+ security tools pre-installed and ready to use. Perfect for beginners, CI/CD pipelines, and production environments.
+All security tools pre-installed and ready to use. Perfect for beginners, CI/CD pipelines, and production environments.
+
+**Note:** Docker users do NOT need to use `jmo tools` commands - all tools are pre-installed in Docker images. The `jmo tools` command is for native/pip installations only. See [User Guide: Tool Management](USER_GUIDE.md#tool-management) for native tool management.
 
 ---
 
@@ -241,9 +243,9 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 
 | Variant | Tag | Size | Tools | Scan Time | Best For |
 |---------|-----|------|-------|-----------|----------|
-| **Full** | `:latest`, `:0.9.0` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
-| **Balanced** | `:balanced` | ~1.41 GB | 21 | 18-25 min | Production CI/CD, regular audits |
-| **Slim** | `:slim` | ~557 MB | 15 | 12-18 min | Cloud-focused, IaC, container security |
+| **Deep** | `:deep`, `:latest` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
+| **Balanced** | `:balanced` | ~1.41 GB | 18 | 18-25 min | Production CI/CD, regular audits |
+| **Slim** | `:slim` | ~557 MB | 14 | 12-18 min | Cloud-focused, IaC, container security |
 | **Fast** | `:fast` | ~502 MB | 8 | 5-10 min | CI/CD gates, pre-commit hooks |
 
 **Notes:**
@@ -257,18 +259,18 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 START: What is your primary use case?
 
 ├─ Complete security audit (pre-release, compliance)
-│  → Use FULL variant (:latest)
+│  → Use DEEP variant (:deep)
 │     - 28 tools, 40-70 min scans
 │     - Best for: Security teams, audits, compliance
 
 ├─ Production CI/CD (daily/weekly scans)
 │  → Use BALANCED variant (:balanced)
-│     - 21 tools, 18-25 min scans
+│     - 18 tools, 18-25 min scans
 │     - Best for: DevOps, regular audits, balanced coverage
 
 ├─ Cloud/K8s/IaC focused (containers, infrastructure)
 │  → Use SLIM variant (:slim)
-│     - 15 tools, 12-18 min scans
+│     - 14 tools, 12-18 min scans
 │     - Best for: Cloud-native, IaC, container security
 
 └─ Fast feedback (pre-commit, PR checks)
@@ -281,7 +283,7 @@ START: What is your primary use case?
 
 | Variant | Min RAM | Min Disk | Min CPU | Network Bandwidth |
 |---------|---------|----------|---------|-------------------|
-| **Full** | 2 GB | 4 GB | 2 cores | Medium (initial pull) |
+| **Deep** | 2 GB | 4 GB | 2 cores | Medium (initial pull) |
 | **Balanced** | 1.5 GB | 3 GB | 2 cores | Medium (initial pull) |
 | **Slim** | 1 GB | 2 GB | 1 core | Low (fast pull) |
 | **Fast** | 512 MB | 1.5 GB | 1 core | Low (fast pull) |
@@ -1290,10 +1292,10 @@ docker run --rm --user $(id -u):$(id -g) \
 
 | Variant | Tools | Build Time | Use Case |
 |---------|-------|------------|----------|
-| Fast | 7 | 5-10 min | CI/CD gates, pre-commit |
-| Slim | 14 | 10-15 min | Standard scanning |
-| Balanced | 20 | 15-20 min | Production audits |
-| Full | 27 | 20-30 min | Comprehensive security |
+| Fast | 8 | 5-10 min | CI/CD gates, pre-commit |
+| Slim | 15 | 10-15 min | Standard scanning |
+| Balanced | 21 | 18-25 min | Production audits |
+| Full | 28 | 20-30 min | Comprehensive security |
 
 **Solutions:**
 

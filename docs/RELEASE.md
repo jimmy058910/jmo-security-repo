@@ -203,16 +203,16 @@ cd jmo-security-repo
 make dev-deps
 
 # Install external tools
-make tools
+jmo tools install --profile balanced
 
-# Verify environment
-make verify-env
+# Verify tools installed
+jmo tools check --profile balanced
 ```
 
 **Success Criteria:**
 
 - [ ] All dependencies install without errors
-- [ ] `make verify-env` shows all tools detected
+- [ ] `jmo tools check` shows all tools installed
 - [ ] No path-related errors (e.g., "cannot find /mnt/c/...")
 
 **Known Issues:**
@@ -227,7 +227,7 @@ make verify-env
 
 ```bash
 # Run fast profile scan
-jmotools fast --repo .
+jmo fast --repo .
 
 # Verify results generated
 ls -lh results/summaries/
@@ -313,7 +313,7 @@ file scripts/cli/jmo.py
 
 ```bash
 # Generate dashboard
-jmotools fast --repo .
+jmo fast --repo .
 
 # Open dashboard in Windows browser
 # Option 1: Use WSL path in Windows browser
@@ -358,10 +358,10 @@ ls results-symlink-test/
 
 ```bash
 # Time a fast scan
-time jmotools fast --repo .
+time jmo fast --repo .
 
 # Expected: Within 20% of native Linux performance
-# Fast profile: 5-8 minutes (WSL should be 6-10 minutes)
+# Fast profile: 5-10 minutes (WSL should be 6-12 minutes)
 ```
 
 **Success Criteria:**

@@ -7,13 +7,16 @@ Quick command reference for common operations.
 ## Scanning Commands
 
 ```bash
-# Fast scan (5-8 min)
+# Fast scan (8 tools, 5-10 min)
 jmo scan --repo . --profile-name fast
 
-# Balanced scan (15-20 min)
+# Slim scan (14 tools, 12-18 min)
+jmo scan --repo . --profile-name slim
+
+# Balanced scan (18 tools, 18-25 min)
 jmo scan --repo . --profile-name balanced
 
-# Deep scan (30-60 min)
+# Deep scan (28 tools, 40-70 min)
 jmo scan --repo . --profile-name deep
 
 # Custom results directory
@@ -91,19 +94,6 @@ docker run --rm \
 
 ---
 
-## Make Targets
-
-```bash
-make fast              # Fast scan + report
-make balanced          # Balanced scan + report
-make full              # Deep scan + report
-make verify-env        # Check tool installation
-make tools             # Install security tools
-make attack-navigator  # Open ATT&CK threat map
-```
-
----
-
 ## View Results
 
 ```bash
@@ -129,14 +119,41 @@ cmd.exe /c start results/summaries/dashboard.html  # WSL
 
 ---
 
+## Tool Management
+
+```bash
+# Check tool status for your profile
+jmo tools check --profile balanced
+
+# Install missing tools (cross-platform)
+jmo tools install --profile balanced
+
+# Update outdated tools
+jmo tools update
+
+# Update only critical tools
+jmo tools update --critical-only
+
+# Show outdated tools
+jmo tools outdated
+
+# List tools by profile
+jmo tools list --profile deep
+
+# Uninstall JMo and optionally tools
+jmo tools uninstall
+```
+
+---
+
 ## Troubleshooting
 
 ```bash
 # Check installed tools
-make verify-env
+jmo tools check --profile balanced
 
 # Install missing tools
-make tools
+jmo tools install --profile balanced
 
 # Increase timeout for large repos
 jmo scan --repo . --timeout 1200

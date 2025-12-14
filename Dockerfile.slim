@@ -1,10 +1,10 @@
 # JMo Security Suite - Slim Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 15 cloud-focused security tools
-# Size: ~557 MB (optimized) | Tools: 15 scanners (cloud CSPM + core SAST/SCA) | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 14 cloud-focused security tools
+# Size: ~557 MB (optimized) | Tools: 14 scanners (cloud CSPM + core SAST/SCA) | Multi-arch: amd64, arm64
 # v1.0.0: Slim variant - Cloud/K8s optimized (Prowler, Kubescape, Trivy, Checkov, etc.)
 
 #
-# Stage 1: Builder - Download 15 cloud-focused tools
+# Stage 1: Builder - Download 14 cloud-focused tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -65,9 +65,6 @@ RUN KUBESCAPE_VERSION="3.0.45" && \
     curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
     -o /usr/local/bin/kubescape && \
     chmod +x /usr/local/bin/kubescape
-
-# Download OSV-Scanner (SCA)
-RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
 
 # Download Grype (SCA + Vuln)
 RUN GRYPE_VERSION="0.104.0" && \
@@ -189,7 +186,7 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Verify 14 slim tools
-RUN echo "=== Verifying 15 cloud-focused tools ===" && \
+RUN echo "=== Verifying 14 cloud-focused tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \

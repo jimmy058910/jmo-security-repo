@@ -21,9 +21,9 @@ open results/summaries/dashboard.html
 
 | Tag | Size | Tools | Use Case |
 |-----|------|-------|----------|
-| `latest`, `X.Y.Z-full` | ~1.97 GB | 26 tools | Complete scanning (deep profile, all Docker-ready tools) |
-| `X.Y.Z-balanced` | ~1.41 GB | 21 tools | Production CI/CD pipelines (balanced profile) |
-| `X.Y.Z-slim` | ~557 MB | 15 tools | Cloud-focused scanning (IaC, K8s, containers) |
+| `latest`, `X.Y.Z-deep` | ~1.97 GB | 28 tools | Complete scanning (deep profile, all tools) |
+| `X.Y.Z-balanced` | ~1.41 GB | 18 tools | Production CI/CD pipelines (balanced profile) |
+| `X.Y.Z-slim` | ~557 MB | 14 tools | Cloud-focused scanning (IaC, K8s, containers) |
 | `X.Y.Z-fast` | ~502 MB | 8 tools | CI/CD gate, pre-commit hooks (fast profile) |
 
 ## Features

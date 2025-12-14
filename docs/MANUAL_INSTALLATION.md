@@ -29,11 +29,14 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
 # 1. Install JMo Security
 pip install jmo-security
 
-# 2. Install external tools (automated)
-jmo setup
+# 2. Check tool status for your profile
+jmo tools check --profile balanced
 
-# 3. Verify installation
-jmo --help
+# 3. Install missing tools (cross-platform)
+jmo tools install --profile balanced
+
+# 4. Verify installation
+jmo tools check --profile balanced
 ```
 
 ---
@@ -70,30 +73,35 @@ pip install -e .
 
 ## External Tool Installation
 
-JMo Security orchestrates 12+ external security tools. Use automated scripts or install manually.
+JMo Security orchestrates 28+ external security tools. Use the built-in tool manager or install manually.
 
 ### Automated Installation (Recommended)
 
-**macOS / Linux (Homebrew):**
+**Using `jmo tools` (All Platforms):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-homebrew.sh | bash
-jmo setup --check
+# Check what's needed for your profile
+jmo tools check --profile balanced
+
+# Install missing tools (auto-detects platform)
+jmo tools install --profile balanced
+
+# Or install all tools for deep scanning
+jmo tools install --profile deep
 ```
 
-**Linux (Native Package Managers):**
+**Installation methods by platform:**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-linux.sh | bash
-jmo setup --check
-```
+| Platform | Methods (in priority order) |
+|----------|----------------------------|
+| Linux | apt, pip, npm, binary download, brew |
+| macOS | brew, pip, npm, binary download |
+| Windows | pip, npm, binary download, manual |
 
 **Windows (PowerShell):**
 
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/install-tools-windows.ps1" -OutFile install-tools.ps1
-.\install-tools.ps1
-jmo setup --check
+jmo tools install --profile balanced
 ```
 
 ### Manual Tool Installation
@@ -509,14 +517,28 @@ export PATH="$HOME/.local/bin:$PATH"  # Linux/macOS
 ### "Tool not found: trivy"
 
 ```bash
-# Option 1: Install tools
-jmo setup
+# Option 1: Check and install tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 
-# Option 2: Use Docker
+# Option 2: Use Docker (all tools included)
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --repo /scan
 
 # Option 3: Allow missing tools
 jmo scan --repo . --allow-missing-tools
+```
+
+### "Tool outdated" warnings
+
+```bash
+# Check outdated tools
+jmo tools outdated
+
+# Update all outdated tools
+jmo tools update
+
+# Update only critical tools
+jmo tools update --critical-only
 ```
 
 ### Docker Permission Denied (Linux)

@@ -21,11 +21,12 @@ profiles:
     tools:
     - trufflehog
     - semgrep
+    - syft
     - trivy
     - checkov
-    - checkov-cicd
     - hadolint
-    - syft
+    - nuclei
+    - shellcheck
     threads: 8
     timeout: 300
     policy:
@@ -43,32 +44,84 @@ profiles:
         - --no-progress
         - --scanners
         - vuln,secret,misconfig
-      checkov-cicd:
+      nuclei:
+        timeout: 300
+        flags:
+        - -severity
+        - critical,high
+      checkov:
         flags:
         - --quiet
-  balanced:
-    # v1.0.0: 21 tools for production scans (18-25 min)
+  slim:
+    # v1.0.0: 14 tools for cloud/IaC focused scans (12-18 min)
+    # Optimized for AWS/Azure/GCP, Kubernetes, and infrastructure scanning
     tools:
     - trufflehog
     - semgrep
     - syft
     - trivy
     - checkov
-    - checkov-cicd
+    - hadolint
+    - nuclei
+    - prowler
+    - kubescape
+    - grype
+    - bearer
+    - horusec
+    - dependency-check
+    - shellcheck
+    threads: 4
+    timeout: 500
+    policy:
+      default_policies:
+      - owasp-top-10
+      - zero-secrets
+    per_tool:
+      semgrep:
+        flags:
+        - --exclude
+        - node_modules
+        - --exclude
+        - .git
+      trivy:
+        flags:
+        - --no-progress
+        - --scanners
+        - vuln,secret,misconfig
+      nuclei:
+        timeout: 500
+        flags:
+        - -severity
+        - critical,high,medium
+      prowler:
+        timeout: 600
+        flags:
+        - --quiet
+      kubescape:
+        timeout: 500
+        flags:
+        - --silent
+  balanced:
+    # v1.0.0: 18 tools for production scans (18-25 min)
+    tools:
+    - trufflehog
+    - semgrep
+    - syft
+    - trivy
+    - checkov
     - hadolint
     - zap
     - nuclei
     - prowler
     - kubescape
-    - akto
     - scancode
     - cdxgen
     - gosec
-    - yara
     - grype
     - bearer
     - horusec
     - dependency-check
+    - shellcheck
     threads: 4
     timeout: 600
     policy:
@@ -104,10 +157,6 @@ profiles:
         timeout: 600
         flags:
         - --silent
-      yara:
-        timeout: 600
-        flags:
-        - --max-rules-per-file=500
   deep:
     # v1.0.0: 28 tools for comprehensive audits (40-70 min)
     tools:

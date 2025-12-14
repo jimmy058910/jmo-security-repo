@@ -704,7 +704,7 @@ docs/archive/
 After adding suppressions, re-run the scan:
 
 ```bash
-jmotools balanced --repos-dir .
+jmo balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
 ```text
 **Example output:**
@@ -738,7 +738,7 @@ cat results/summaries/SUPPRESSIONS.md
 
     - id: jmo-security-scan
 
-      entry: bash -c 'jmotools fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
+      entry: bash -c 'jmo fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
       language: system
       pass_filenames: false
       always_run: true
@@ -1067,7 +1067,7 @@ cp results/summaries/COMPLIANCE_SUMMARY.md compliance/soc2/
 **Pro Tip:** Use `--fail-on HIGH` in CI to prevent merging code with HIGH findings:
 
 ```bash
-jmotools ci --repo . --fail-on HIGH
+jmo ci --repo . --fail-on HIGH
 ```text
 ---
 

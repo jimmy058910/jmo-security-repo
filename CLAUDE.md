@@ -13,7 +13,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 - 28 security scanners with plugin adapter architecture
 - SQLite historical storage for trend analysis (v1.0.0)
 - Machine-readable diffs for CI/CD integration (v1.0.0)
-- Profile-based scanning (fast/balanced/deep)
+- Profile-based scanning (fast/slim/balanced/deep) - 4 unified profiles
 - Multi-target support: repos, containers, IaC, URLs, GitLab, K8s
 - Cross-tool deduplication (30-40% noise reduction)
 - 6 compliance framework mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
@@ -25,11 +25,10 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 ### Development Setup
 
 ```bash
-make dev-deps            # Install Python dependencies
-make pre-commit-install  # Setup pre-commit hooks
-make tools              # Install security tools
-make verify-env         # Verify environment
-make test               # Run tests with coverage
+pip install -e ".[dev]"                # Install in editable mode with dev deps
+make pre-commit-install                # Setup pre-commit hooks
+jmo tools install --profile balanced   # Install security tools
+make test                              # Run tests with coverage
 ```
 
 ### Common Commands
@@ -38,13 +37,19 @@ make test               # Run tests with coverage
 |---------|---------|
 | `jmo wizard` | Interactive setup wizard |
 | `jmo wizard --yes` | Non-interactive with defaults |
-| `jmo scan --profile fast` | Quick scan (5-10 min) |
-| `jmo scan --profile balanced` | Production scan (15-20 min) |
-| `jmo scan --profile deep` | Comprehensive audit (40-70 min) |
+| `jmo scan --profile fast` | Quick scan, 8 tools (5-10 min) |
+| `jmo scan --profile slim` | Cloud/IaC scan, 14 tools (12-18 min) |
+| `jmo scan --profile balanced` | Production scan, 18 tools (18-25 min) |
+| `jmo scan --profile deep` | Comprehensive audit, 28 tools (40-70 min) |
 | `jmo scan --image nginx:latest` | Scan container image |
 | `jmo scan --url https://api.com` | DAST scanning |
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
+| `jmo tools check --profile balanced` | Check tool installation status |
+| `jmo tools install --profile balanced` | Install missing tools |
+| `jmo tools update` | Update outdated tools |
+| `jmo tools outdated` | Show outdated tools |
+| `jmo tools uninstall --all` | Uninstall JMo and tools |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
 | `jmo trends analyze --days 30` | Trend analysis |
@@ -96,6 +101,10 @@ Adapters use `@adapter_plugin` decorator. See existing adapters for patterns.
 | File | Purpose |
 |------|---------|
 | `scripts/cli/jmo.py` | Main CLI entry point |
+| `scripts/cli/tool_commands.py` | Tool management CLI handlers (v1.0.0) |
+| `scripts/cli/tool_manager.py` | Tool status/version checking (v1.0.0) |
+| `scripts/cli/tool_installer.py` | Cross-platform tool installation (v1.0.0) |
+| `scripts/core/tool_registry.py` | Tool info from versions.yaml (v1.0.0) |
 | `scripts/core/normalize_and_report.py` | Aggregation engine |
 | `scripts/core/config.py` | Config loader for jmo.yml |
 | `scripts/core/common_finding.py` | CommonFinding schema |
@@ -106,7 +115,7 @@ Adapters use `@adapter_plugin` decorator. See existing adapters for patterns.
 | `scripts/dev/update_versions.py` | Version management |
 | `jmo.yml` | Main configuration |
 | `versions.yaml` | Tool version registry |
-| `Dockerfile*` | Docker variants (full/balanced/slim/fast) |
+| `Dockerfile*` | Docker variants matching CLI profiles (fast/slim/balanced/deep) |
 
 ## Development Tasks
 
@@ -199,13 +208,33 @@ See [docs/RELEASE.md](docs/RELEASE.md) for details.
 | Issue | Solution |
 |-------|----------|
 | Tests failing | `make test --maxfail=1`, check coverage ≥85% |
-| Tool not found | `make verify-env`, `make tools` |
+| Tool not found | `jmo tools check`, then `jmo tools install` |
+| Tool outdated | `jmo tools update` or `jmo tools update --critical-only` |
 | Pre-commit fails | `make fmt`, `make lint` |
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history vacuum` |
 | Docker persistence | Mount `.jmo/history.db` volume |
 
 See [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) for detailed solutions.
+
+## Unified Scan Profiles (v1.0.0)
+
+CLI profiles and Docker variants are unified - same 4 profiles, same tools:
+
+| Profile | Tools | Time | Use Case | Docker Tag |
+|---------|-------|------|----------|------------|
+| `fast` | 8 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
+| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `jmo-security:slim` |
+| `balanced` | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
+| `deep` | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+
+**Fast (8 tools):** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck
+
+**Slim (14 tools):** Fast + prowler, kubescape, grype, bearer, horusec, dependency-check
+
+**Balanced (18 tools):** Slim + zap, scancode, cdxgen, gosec
+
+**Deep (28 tools):** Balanced + noseyparker, semgrep-secrets, bandit, trivy-rbac, checkov-cicd, akto, yara, falco, afl++, mobsf, lynis
 
 ## Configuration Files
 

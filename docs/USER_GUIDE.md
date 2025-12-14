@@ -70,10 +70,11 @@ pip install --user "jmo-security[reporting]"
 
 The `reporting` extra bundles PyYAML and jsonschema so YAML output and schema validation work automatically. If you only need JSON/Markdown/SARIF, install the base package (`jmo-security`) instead.
 
-1. Verify your environment and get install tips for optional tools
+1. Check tool status and install missing tools
 
 ```bash
-make verify-env
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 ```
 
 2. Run a fast multi-repo scan + report in one step
@@ -89,30 +90,30 @@ open results/summaries/dashboard.html       # macOS
 
 Outputs are written under `results/` by default, with unified summaries in `results/summaries/` (JSON/MD/YAML/HTML/SARIF). SARIF is enabled by default via `jmo.yml`.
 
-### Beginner mode: jmotools wrapper (optional, simpler commands)
+### Beginner mode: jmo wrapper (optional, simpler commands)
 
-Prefer memorable commands that verify tools, optionally clone from a TSV, run the right profile, and open results at the end? Use `jmotools`:
+Prefer memorable commands that verify tools, optionally clone from a TSV, run the right profile, and open results at the end? Use `jmo`:
 
 ```bash
 # Quick fast scan (auto-opens results)
-jmotools fast --repos-dir ~/security-testing
+jmo fast --repos-dir ~/security-testing
 
 # Deep/full scan using the curated 'deep' profile
-jmotools full --repos-dir ~/security-testing --allow-missing-tools
+jmo full --repos-dir ~/security-testing --allow-missing-tools
 
 # Clone from TSV first, then balanced scan
-jmotools balanced --tsv ./candidates.tsv --dest ./repos-tsv
+jmo balanced --tsv ./candidates.tsv --dest ./repos-tsv
 
 # Bootstrap and verify curated tools (Linux/WSL/macOS)
-jmotools setup --check
-jmotools setup --auto-install
+jmo setup --check
+jmo setup --auto-install
 ```
 
 Makefile shortcuts are also available:
 
 ```bash
-make setup             # jmotools setup --check (installs package if needed)
-make fast DIR=~/repos  # jmotools fast --repos-dir ~/repos
+make setup             # jmo setup --check (installs package if needed)
+make fast DIR=~/repos  # jmo fast --repos-dir ~/repos
 make balanced DIR=~/repos
 make full DIR=~/repos
 ```
@@ -152,7 +153,187 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 ./scripts/core/populate_targets.sh --dest ~/security-testing --parallel 8
 ```
 
-Tip: You can also run `make tools` to install/upgrade the curated external scanners (trufflehog, semgrep, trivy, syft, checkov, bandit, hadolint, zap, noseyparker, falco, afl++, etc.) and `make verify-env` to validate your setup.
+Tip: You can also run `jmo tools install` to install the security scanners for your profile, and `jmo tools check` to verify your setup.
+
+## Tool Management
+
+JMo Security orchestrates 28+ security scanners. For native installations (non-Docker), use the `jmo tools` command to manage these tools.
+
+**Docker users:** Skip this section - Docker images include all tools pre-installed. Tool management is for native/pip installations only.
+
+### Checking Tool Status
+
+```bash
+# Show profile overview (default)
+jmo tools
+
+# Check all tools for a specific profile
+jmo tools check --profile balanced
+
+# Check specific tools
+jmo tools check trivy semgrep checkov
+
+# JSON output for automation
+jmo tools check --profile balanced --json
+```
+
+**Output shows:**
+
+- Installation status (installed/missing)
+- Installed vs expected versions
+- Outdated indicators
+- Platform-specific install hints
+
+### Installing Tools
+
+```bash
+# Interactive installation for profile (prompts for confirmation)
+jmo tools install --profile balanced
+
+# Non-interactive (CI/CD)
+jmo tools install --profile balanced --yes
+
+# Install specific tools
+jmo tools install trivy semgrep checkov
+
+# Dry-run (show what would be installed)
+jmo tools install --profile balanced --dry-run
+
+# Generate install script for review
+jmo tools install --profile balanced --print-script > install-tools.sh
+```
+
+**Installation methods (platform-specific):**
+
+| Platform | Methods (in priority order) |
+|----------|----------------------------|
+| Linux | apt, pip, npm, binary download, brew |
+| macOS | brew, pip, npm, binary download |
+| Windows | pip, npm, binary download, manual |
+
+**Binary downloads:** Tools like Trivy, Grype, and Syft are downloaded from GitHub releases to `~/.jmo/bin/`.
+
+### Updating Tools
+
+```bash
+# Update all outdated tools
+jmo tools update
+
+# Update critical security tools only
+jmo tools update --critical-only
+
+# Update specific tool
+jmo tools update trivy
+
+# Non-interactive
+jmo tools update --yes
+```
+
+**Critical tools** are flagged in `versions.yaml` and include tools where outdated versions may miss vulnerabilities (e.g., Trivy, TruffleHog).
+
+### Viewing Outdated Tools
+
+```bash
+# Show all outdated tools
+jmo tools outdated
+
+# Show only critical outdated tools
+jmo tools outdated --critical-only
+
+# JSON output
+jmo tools outdated --json
+```
+
+### Listing Tools and Profiles
+
+```bash
+# List all available tools
+jmo tools list
+
+# List tools in specific profile
+jmo tools list --profile balanced
+
+# List available profiles
+jmo tools list --profiles
+
+# JSON output
+jmo tools list --json
+```
+
+### Uninstalling
+
+```bash
+# Remove JMo suite only (keeps tools)
+jmo tools uninstall
+
+# Remove JMo AND all installed tools
+jmo tools uninstall --all
+
+# Preview what would be removed
+jmo tools uninstall --dry-run
+
+# Skip confirmation
+jmo tools uninstall --yes
+```
+
+**What gets removed with `--all`:**
+
+- `~/.jmo/` directory (config, cache, history.db, bin/)
+- pip-installed tools (semgrep, checkov, bandit, etc.)
+- npm-installed tools (retire.js, etc.)
+- Binary tools in `~/.jmo/bin/`
+- `~/.kubescape/` directory
+
+**What requires manual removal:**
+
+- Homebrew-installed tools (run `brew uninstall <tool>`)
+- System packages installed via apt
+
+### Pre-Scan Tool Checks
+
+The `jmo scan` and `jmo wizard` commands automatically check for missing tools:
+
+**Interactive mode:**
+
+1. Detects missing tools from requested profile
+2. Prompts with options:
+   - Install missing tools now
+   - Continue with available tools
+   - Cancel scan
+
+**Non-interactive mode:**
+
+- Continues with available tools (respects `--allow-missing-tools`)
+
+**Critical update warnings:**
+
+- Non-blocking warning at scan start if critical tools are outdated
+- Suggests `jmo tools update --critical-only`
+
+### Profile Tool Counts
+
+| Profile | Tools | Description |
+|---------|-------|-------------|
+| `fast` | 8 | Pre-commit, PR validation |
+| `slim` | 14 | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 18 | Production CI/CD |
+| `deep` | 28 | Comprehensive audits |
+
+**Fast profile tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck
+
+**Slim profile adds:** prowler, kubescape, grype, bearer, horusec, dependency-check
+
+**Balanced profile adds:** zap, scancode, cdxgen, gosec
+
+**Deep profile adds:** noseyparker, semgrep-secrets, bandit, trivy-rbac, checkov-cicd, akto, yara, falco, afl++, mobsf, lynis
+
+### Platform Support
+
+| Platform | Installation Methods | Notes |
+|----------|---------------------|-------|
+| Linux | apt, pip, npm, binary, brew | apt requires sudo |
+| macOS | brew, pip, npm, binary | Homebrew preferred |
+| Windows | pip, npm, binary, manual | WSL recommended for full support |
 
 ## Multi-Target Scanning
 
@@ -969,7 +1150,7 @@ JMo Security can collect anonymous usage statistics to help prioritize features 
 - Scan duration (bucketed: <5min, 5-15min, etc.)
 - Execution mode (CLI/Docker/Wizard)
 - Platform (Linux/macOS/Windows)
-- Profile selected (fast/balanced/deep)
+- Profile selected (fast/slim/balanced/deep)
 - Target count (bucketed: 1, 2-5, 6-10, etc.)
 - CI detection (running in CI/CD environment)
 
@@ -996,7 +1177,7 @@ JMo Security can collect anonymous usage statistics to help prioritize features 
 The wizard will ask on first run:
 
 ```bash
-jmotools wizard
+jmo wizard
 
 # Prompted:
 # 📊 Help Improve JMo Security
@@ -1422,7 +1603,7 @@ with open(".gitlab-ci.yml", "w") as f:
 
 **Generated YAML includes:**
 
-- Profile-based scan job (fast/balanced/deep)
+- Profile-based scan job (fast/slim/balanced/deep)
 - Multi-target support (all 6 target types)
 - Slack success/failure notifications
 - SARIF upload for GitLab security dashboard
@@ -1641,10 +1822,9 @@ Threading and performance:
 
 You can suppress specific finding IDs during report/ci. The reporter looks for `jmo.suppress.yml` first in `results/` and then in the current working directory.
 
-File format (supports both `suppressions` and legacy `suppress` keys):
+File format:
 
 ```yaml
-# Recommended format (new):
 suppressions:
 
   - id: abcdef1234567890
@@ -2768,7 +2948,7 @@ jmo history store --results-dir RESULTS_DIR [OPTIONS]
 **Options:**
 
 - `--results-dir DIR` - Results directory containing `summaries/findings.json` (REQUIRED)
-- `--profile PROFILE` - Profile name (fast/balanced/deep, default: balanced)
+- `--profile PROFILE` - Profile name (fast/slim/balanced/deep, default: balanced)
 - `--commit HASH` - Git commit hash (auto-detected if in Git repo)
 - `--branch NAME` - Git branch name (auto-detected if in Git repo)
 - `--tag TAG` - Git tag (auto-detected if in Git repo)
@@ -2791,7 +2971,7 @@ jmo history list [OPTIONS]
 **Options:**
 
 - `--branch NAME` - Filter by Git branch
-- `--profile PROFILE` - Filter by profile (fast/balanced/deep)
+- `--profile PROFILE` - Filter by profile (fast/slim/balanced/deep)
 - `--since TIMESTAMP` - Filter by timestamp (Unix epoch or ISO 8601 format)
 - `--limit N` - Limit results (default: 50)
 - `--json` - Output as JSON instead of table
@@ -5566,20 +5746,27 @@ jmo verify results/summaries/findings.json results/summaries/findings.json.att.j
 
 ## OS notes (installing tools)
 
-Run `make verify-env` to detect your OS/WSL and see smart install hints. Typical options:
-
-- macOS: `brew install semgrep trivy syft checkov hadolint && brew install --cask owasp-zap && brew install trufflesecurity/trufflehog/trufflehog`
-- Linux: use apt/yum/pacman for basics; use official install scripts for trivy/syft; use pipx for Python‑based tools like checkov/semgrep; see hints printed by `verify-env`.
-
-You can run with `--allow-missing-tools` to generate empty stubs for any tools you haven’t installed yet.
-
-Curated installer:
+**Recommended:** Use `jmo tools` for cross-platform tool management:
 
 ```bash
-make tools           # install core scanners
-make tools-upgrade   # upgrade/refresh installed scanners
-make verify-env      # detect OS/WSL/macOS and show install hints
+# Check what's installed/missing
+jmo tools check --profile balanced
+
+# Install missing tools (cross-platform, automatic method selection)
+jmo tools install --profile balanced
+
+# Update outdated tools
+jmo tools update
 ```
+
+See [Tool Management](#tool-management) for complete documentation.
+
+**Alternative methods:**
+
+- macOS: `brew install semgrep trivy syft checkov hadolint && brew install --cask owasp-zap && brew install trufflesecurity/trufflehog/trufflehog`
+- Linux: use apt/yum/pacman for basics; use official install scripts for trivy/syft; use pipx for Python-based tools like checkov/semgrep
+
+You can run with `--allow-missing-tools` to generate empty stubs for any tools you haven't installed yet.
 
 **SHA256 Verification for Homebrew (macOS):**
 
@@ -5593,7 +5780,7 @@ JMo provides defense-in-depth for macOS developer environments by verifying the 
 
 **Why this matters:** Mitigates supply chain risks by ensuring Homebrew installer hasn't been tampered with during transit or by a compromised mirror.
 
-**Example output during `make tools` on macOS:**
+**Example output during `jmo tools install` on macOS:**
 
 ```bash
 Homebrew not found. Installing Homebrew...
@@ -5747,12 +5934,12 @@ jobs:
           sarif_file: results/summaries/findings.sarif
 ```
 
-**Expected Runtime:** 5-8 minutes
+**Expected Runtime:** 5-10 minutes
 **Failure Criteria:** CRITICAL or HIGH severity findings
 
 ---
 
-#### Stage 3: Build Stage (Comprehensive - 15-30 Minutes)
+#### Stage 3: Build Stage (Comprehensive - 18-25 Minutes)
 
 **Goal:** Complete coverage for merge/release using **balanced profile**
 
@@ -5826,12 +6013,12 @@ jobs:
             });
 ```
 
-**Expected Runtime:** 15-20 minutes
+**Expected Runtime:** 18-25 minutes
 **Failure Criteria:** HIGH severity findings (configurable)
 
 ---
 
-#### Stage 4: Nightly/Weekly Deep Audits (30-60 Minutes)
+#### Stage 4: Nightly/Weekly Deep Audits (40-70 Minutes)
 
 **Goal:** Maximum coverage with **deep profile** for compliance/audits
 
@@ -5906,7 +6093,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
 ```
 
-**Expected Runtime:** 30-60 minutes
+**Expected Runtime:** 40-70 minutes
 **Failure Criteria:** MEDIUM severity or higher (more relaxed for deep audits)
 
 ---
@@ -6025,9 +6212,9 @@ jobs:
 | Stage | Profile | Tools | Runtime | Trigger | Fail On |
 |-------|---------|-------|---------|---------|------------|
 | **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
-| **Commit/PR** | fast | 3 tools | 5-8 min | Push, PR | HIGH+ |
-| **Build** | balanced | 8 tools | 15-20 min | Main branch, PR | HIGH+ |
-| **Deep Audit** | deep | 28 tools | 30-60 min | Weekly, manual | MEDIUM+ |
+| **Commit/PR** | fast | 8 tools | 5-10 min | Push, PR | HIGH+ |
+| **Build** | balanced | 21 tools | 18-25 min | Main branch, PR | HIGH+ |
+| **Deep Audit** | deep | 28 tools | 40-70 min | Weekly, manual | MEDIUM+ |
 | **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
 
 **Key Principle:** Fail fast with fast profile in PR stage, comprehensive coverage in build stage, exhaustive audits weekly.
@@ -6064,7 +6251,7 @@ security:scan:
 **Key features:**
 
 - Docker-based scanning (zero installation)
-- Profile-based configuration (fast, balanced, deep)
+- Profile-based configuration (fast, slim, balanced, deep)
 - SARIF upload for GitLab Security Dashboard
 - Multi-target support (repositories, containers, IaC, URLs)
 
@@ -6163,7 +6350,7 @@ JMo provides comprehensive exception logging for faster troubleshooting. Enable 
 
 ```bash
 jmo scan --repos-dir ~/repos --log-level DEBUG
-jmotools wizard --log-level DEBUG
+jmo wizard --log-level DEBUG
 ```
 
 **What you get:**
@@ -6190,7 +6377,7 @@ jmotools wizard --log-level DEBUG
 
 Tools not found
 
-- Run `make verify-env` for detection and install hints, or install missing tools; use `--allow-missing-tools` for exploratory runs.
+- Run `jmo tools check` to see tool status, then `jmo tools install --profile balanced` to install; use `--allow-missing-tools` for exploratory runs.
 
 No repositories to scan
 

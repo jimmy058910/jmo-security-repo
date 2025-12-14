@@ -127,7 +127,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
   "timestamp": "2025-10-19T14:32:00Z",
   "metadata": {
     "mode": "wizard",                     // "cli" | "docker" | "wizard"
-    "profile": "balanced",                // "fast" | "balanced" | "deep" | "custom"
+    "profile": "balanced",                // "fast" | "slim" | "balanced" | "deep" | "custom"
     "tools": ["trufflehog", "semgrep"],   // Tool list (no outputs)
     "target_types": {
       "repos": 3,                         // Count only, no names
@@ -336,7 +336,7 @@ rm ~/.jmo-security/telemetry-id
 
 #### Wizard Mode (Recommended)
 
-When running `jmotools wizard` for the first time, you'll see:
+When running `jmo wizard` for the first time, you'll see:
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
@@ -389,7 +389,7 @@ vi jmo.yml
 # Set: telemetry.enabled: true
 
 # Option 2: Use wizard
-jmotools wizard
+jmo wizard
 # Answer 'y' when prompted
 ```
 
@@ -423,7 +423,7 @@ export JMO_TELEMETRY_DISABLE=1
 **Verify telemetry is disabled:**
 
 ```bash
-jmotools balanced --repos-dir ~/repos
+jmo balanced --repos-dir ~/repos
 # No telemetry events will be sent
 ```
 
@@ -471,7 +471,7 @@ jobs:
       JMO_TELEMETRY_DISABLE: 1  # Disable telemetry in CI
     steps:
       - name: Run security scan
-        run: jmotools balanced --repos-dir .
+        run: jmo balanced --repos-dir .
 ```
 
 **Why disable in CI?**
@@ -713,7 +713,7 @@ def run_wizard(args):
 
 **User Experience:**
 
-1. User runs `jmotools wizard` for the first time
+1. User runs `jmo wizard` for the first time
 2. Wizard prompts for telemetry consent **before** scanning
 3. User response saved to `jmo.yml`
 4. Future wizard runs **skip** the prompt (preference already set)

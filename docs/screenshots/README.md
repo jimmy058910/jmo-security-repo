@@ -17,7 +17,7 @@ Saved under `docs/screenshots/` by default:
   - macOS: `google-chrome`
 - For GIF recording (optional): `peek` (Linux) or QuickTime (macOS)
 
-Tip: Use `make verify-env` to see detected tools and install hints.
+Tip: Use `jmo tools check` to see detected tools and install hints.
 
 ## One-command demo (recommended)
 

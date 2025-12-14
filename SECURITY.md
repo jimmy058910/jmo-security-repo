@@ -170,7 +170,7 @@ Install JMo Security via pip instead of Docker to avoid bundled tool vulnerabili
 
 ```bash
 pip install jmo-security
-jmotools wizard  # Installs only the tools you need
+jmo wizard  # Installs only the tools you need
 ```
 
 **Pros:**
@@ -251,7 +251,7 @@ We **do not suppress** vulnerabilities via `.trivyignore`. All vulnerabilities a
 docker run --read-only --tmpfs /tmp ghcr.io/jimmy058910/jmo-security:0.6.0-slim scan --repos-dir /repos
 
 # Native: Run as non-root user
-jmotools fast --repos-dir ~/repos
+jmo fast --repos-dir ~/repos
 ```
 
 ### 2. **Network Isolation**

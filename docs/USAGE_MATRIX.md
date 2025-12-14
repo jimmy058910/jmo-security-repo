@@ -12,7 +12,7 @@ This matrix provides prescriptive guidance for selecting the right tools, profil
 - **12 Use Cases:** Pre-commit, PR gate, nightly audit, container release, IaC validation, web app scan, compliance audit, secret scanning, CVE monitoring, fuzzing, incident response, third-party audit
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
 - **11 Tools:** trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++
-- **3 Profiles:** fast (5-8 min), balanced (15-20 min), deep (30-60 min)
+- **4 Profiles:** fast (8 tools, 5-10 min), slim (14 tools, 12-18 min), balanced (18 tools, 18-25 min), deep (28 tools, 40-70 min)
 - **6 Compliance Frameworks:** OWASP Top 10, CWE Top 25, CIS Controls, NIST CSF, PCI DSS, MITRE ATT&CK
 
 ---
@@ -23,13 +23,13 @@ This matrix maps common security use cases to optimal tool configurations.
 
 | Use Case | Target Types | Tools | Profile | Fail Threshold | Est. Duration | Primary Compliance |
 |----------|--------------|-------|---------|----------------|---------------|-------------------|
-| **Pre-Commit Hook** | Repositories | trufflehog, semgrep, trivy | fast | CRITICAL | 5-8 min | OWASP, CWE |
+| **Pre-Commit Hook** | Repositories | trufflehog, semgrep, trivy | fast | CRITICAL | 5-10 min | OWASP, CWE |
 | **PR Gate (Standard)** | Repositories | trufflehog, semgrep, trivy, syft | balanced | HIGH | 10-15 min | OWASP, CWE, PCI DSS |
-| **PR Gate (Strict)** | Repositories, Images | trufflehog, semgrep, trivy, syft, checkov, hadolint | balanced | MEDIUM | 15-20 min | All 6 frameworks |
-| **Nightly Audit** | All 6 types | All 11 tools | deep | LOW | 30-60 min | All 6 frameworks |
+| **PR Gate (Strict)** | Repositories, Images | trufflehog, semgrep, trivy, syft, checkov, hadolint | balanced | MEDIUM | 18-25 min | All 6 frameworks |
+| **Nightly Audit** | All 6 types | All 11 tools | deep | LOW | 40-70 min | All 6 frameworks |
 | **Container Release** | Images, K8s | trivy, syft, falco | balanced | HIGH | 10-15 min | CWE, NIST CSF, PCI DSS |
 | **IaC Validation** | IaC Files, Repositories | trivy, checkov, semgrep | balanced | HIGH | 10-15 min | CIS Controls, NIST CSF |
-| **Web App Scan (DAST)** | URLs | zap | balanced | HIGH | 15-20 min | OWASP, PCI DSS |
+| **Web App Scan (DAST)** | URLs | zap | balanced | HIGH | 18-25 min | OWASP, PCI DSS |
 | **Compliance Audit** | Repositories, IaC | trivy, checkov, semgrep, hadolint | deep | MEDIUM | 20-30 min | All 6 frameworks |
 | **Secret Scanning** | Repositories, GitLab | trufflehog, noseyparker | deep | CRITICAL | 15-25 min | MITRE ATT&CK, PCI DSS |
 | **CVE Monitoring** | Images, K8s, Repositories | trivy, syft | fast | HIGH | 5-10 min | CWE, NIST CSF |
@@ -45,7 +45,7 @@ This matrix maps common security use cases to optimal tool configurations.
 **Command:**
 
 ```bash
-jmotools fast --repo . --fail-on CRITICAL --human-logs
+jmo fast --repo . --fail-on CRITICAL --human-logs
 ```
 
 **jmo.yml Override:**
@@ -490,7 +490,7 @@ This matrix shows optimal workflows for different team structures.
 
 **Workflow:**
 
-1. **Pre-Commit:** Developer runs `jmotools fast --repo .` locally (5 min)
+1. **Pre-Commit:** Developer runs `jmo fast --repo .` locally (5 min)
 2. **PR Gate:** CI runs `jmo scan --profile-name balanced` (15 min)
 3. **Nightly Audit:** Scheduled job runs `jmo scan --profile-name deep` on all repos (60 min)
 4. **Weekly Review:** Security team reviews `COMPLIANCE_SUMMARY.md` and `dashboard.html`
@@ -612,7 +612,7 @@ This matrix shows when to use each tool and common configurations.
 **Key Takeaways:**
 
 1. **Start Small:** Use `fast` profile for pre-commit, `balanced` for PRs, `deep` for audits
-2. **Match Use Case to Tools:** Don't run all 11 tools on every commit (5-8 min vs 30-60 min)
+2. **Match Use Case to Tools:** Don't run all 11 tools on every commit (5-10 min vs 40-70 min)
 3. **Compliance First:** Define required frameworks (PCI DSS, NIST CSF) and work backwards
 4. **Threshold Tuning:** CRITICAL for pre-commit, HIGH for PRs, MEDIUM for releases, LOW for audits
 5. **Execution Mode:** Native CLI for speed, Docker for CI/CD isolation, Wizard for onboarding
@@ -621,7 +621,7 @@ This matrix shows when to use each tool and common configurations.
 
 **Common Pitfalls:**
 
-- ❌ Running deep profile on every PR (too slow, 30-60 min)
+- ❌ Running deep profile on every PR (too slow, 40-70 min)
 - ❌ Using `--fail-on LOW` for pre-commit (blocks developers on noise)
 - ❌ Ignoring compliance reports (defeats purpose of JMo Security)
 - ❌ Not tuning per-tool flags (zap spider duration, semgrep excludes)
@@ -660,7 +660,7 @@ outputs: [json, md, html, sarif]
 
 1. Review [TESTING_MATRIX.md](.claude/TESTING_MATRIX.md) for test coverage gaps
 2. Customize profiles in `jmo.yml` for your use cases
-3. Run `jmotools wizard` to generate starter configurations
+3. Run `jmo wizard` to generate starter configurations
 4. Integrate into CI/CD using [docs/examples/github-actions-docker.yml](../docs/examples/github-actions-docker.yml)
 5. Review compliance reports weekly: `COMPLIANCE_SUMMARY.md`, `PCI_DSS_COMPLIANCE.md`, `attack-navigator.json`
 

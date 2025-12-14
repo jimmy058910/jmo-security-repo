@@ -48,7 +48,7 @@ JMo Security is an automated security audit framework for scanning code reposito
 |------|--------|
 | **Scan now (Docker)** | `docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan` |
 | **Install CLI** | `pip install jmo-security` |
-| **Guided setup** | `jmotools wizard` |
+| **Guided setup** | `jmo wizard` |
 | **Full guide** | [QUICKSTART.md](QUICKSTART.md) |
 
 ### Quick Example
@@ -102,7 +102,8 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
 | `fast` | 8 | 5-10 min | Pre-commit, PR validation |
-| `balanced` | 21 | 18-25 min | CI/CD pipelines |
+| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
+| `balanced` | 18 | 18-25 min | CI/CD pipelines |
 | `deep` | 28 | 40-70 min | Comprehensive audits |
 
 ---
@@ -158,13 +159,19 @@ jmo scan --repo . --image myapp:latest --url https://myapp.com
 
 ```bash
 # Interactive wizard
-jmotools wizard
+jmo wizard
 
 # Scan with profile
 jmo scan --repos-dir ~/repos --profile balanced
 
 # CI mode (scan + gate)
 jmo ci --repo . --fail-on HIGH
+
+# Tool management (native installs)
+jmo tools check --profile balanced  # Check tool status
+jmo tools install --profile balanced  # Install missing tools
+jmo tools update --critical-only  # Update critical tools
+jmo tools outdated  # Show outdated tools
 
 # Compare scans
 jmo diff baseline/ current/ --format md
@@ -303,7 +310,8 @@ All findings auto-enriched with 6 frameworks:
 
 | Issue | Solution |
 |-------|----------|
-| Tools not found | `jmotools setup --check` |
+| Tools not found | `jmo tools check` then `jmo tools install` |
+| Tool outdated | `jmo tools update` |
 | Permission denied | `chmod +x scripts/**/*.sh` |
 | Docker issues | [docs/DOCKER_README.md#troubleshooting](docs/DOCKER_README.md#troubleshooting) |
 | CI failures | [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) |
