@@ -48,6 +48,13 @@ python_tools:
     critical: false
     notes: v1.0.0 - Shell script based, no PyPI package
     installation: apt-get install lynis
+  prowler:
+    version: 5.13.1
+    pypi_package: prowler
+    description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+    update_check: pip index versions prowler
+    critical: true
+    notes: v1.0.0 - 400+ security checks across compliance frameworks (pip package since v4.x)
 binary_tools:
   trufflehog:
     version: 3.91.1
@@ -136,17 +143,6 @@ binary_tools:
     critical: false
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
-  prowler:
-    version: 5.13.1
-    github_repo: prowler-cloud/prowler
-    description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-    release_pattern: prowler-{version}-linux-{arch}
-    architectures:
-      amd64: x86_64
-      arm64: aarch64
-    update_check: gh api repos/prowler-cloud/prowler/releases/latest
-    critical: true
-    notes: v1.0.0 - 400+ security checks across compliance frameworks
   kubescape:
     version: 3.0.45
     github_repo: kubescape/kubescape

@@ -93,14 +93,8 @@ RUN NUCLEI_VERSION="3.5.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
-# Download Prowler (Cloud CSPM)
-RUN PROWLER_VERSION="5.13.1" && \
-    PROWLER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/prowler-cloud/prowler/releases/download/${PROWLER_VERSION}/prowler-${PROWLER_VERSION}-linux-${PROWLER_ARCH}.zip" \
-    -o /tmp/prowler.zip && \
-    unzip -q /tmp/prowler.zip -d /usr/local/bin && \
-    chmod +x /usr/local/bin/prowler && \
-    rm /tmp/prowler.zip
+# NOTE: Prowler 5.x is Python-based (pip install), no binary download needed
+# Prowler is installed via pip in the runtime stage
 
 # Download Kubescape (Kubernetes Security)
 RUN KUBESCAPE_VERSION="3.0.45" && \
@@ -221,7 +215,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     ruff==0.14.6 \
     yara-python==4.5.2 \
     scancode-toolkit==32.3.0 \
-    prowler==4.0.0 \
+    prowler==5.13.1 \
     horusec-cli==2.9.0 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
@@ -239,7 +233,7 @@ COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/shfmt /usr/local/bin/shfmt
 COPY --from=builder /usr/local/bin/falcoctl /usr/local/bin/falcoctl
 COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
-COPY --from=builder /usr/local/bin/prowler /usr/local/bin/prowler
+# NOTE: Prowler 5.x is installed via pip, no binary to copy
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype

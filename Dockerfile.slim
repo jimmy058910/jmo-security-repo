@@ -141,7 +141,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     checkov==3.2.495 \
     ruff==0.14.6 \
     yara-python==4.5.2 \
-    prowler==4.0.0 \
+    prowler==5.13.1 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
