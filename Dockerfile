@@ -1,7 +1,7 @@
 # JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
-# Base: Ubuntu 22.04 with 27 security tools pre-installed
-# Size: ~1.9 GB (optimized) | Tools: 25 Docker-ready scanners (27 total, 2 require manual install - MobSF, Akto) | Multi-arch: amd64, arm64
-# Note: AFL++ removed due to complex LLVM build deps - install manually if needed for fuzzing
+# Base: Ubuntu 22.04 with 25 security tools pre-installed
+# Size: ~1.9 GB (optimized) | Tools: 25 Docker-ready scanners | Multi-arch: amd64, arm64
+# Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
 
 #
 # Stage 1: Builder - Download and extract tools
@@ -281,17 +281,18 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify ALL 27 tools are installed and accessible
-RUN echo "=== Verifying ALL 27 tools ===" && \
+# Verify all 25 tools are installed and accessible
+RUN echo "=== Verifying all 25 tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
-    jmotools --help > /dev/null && \
+    jmo tools --help > /dev/null && \
     trufflehog --version && \
     noseyparker --version && \
     semgrep --version && \
     bandit --version && \
     syft version && \
     trivy --version && \
+    osv-scanner --version && \
     checkov --version && \
     hadolint --version && \
     zap -version && \
@@ -309,7 +310,7 @@ RUN echo "=== Verifying ALL 27 tools ===" && \
     horusec version && \
     scancode --version && \
     cdxgen --version && \
-    echo "=== All 27 tools verified ==="
+    echo "=== All 25 tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 RUN useradd -m -u 1000 -s /bin/bash jmo && \
