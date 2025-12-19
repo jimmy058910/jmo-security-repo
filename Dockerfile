@@ -1,10 +1,10 @@
-# JMo Security Suite - All-in-One Docker Image (Full - v1.0.0)
-# Base: Ubuntu 22.04 with ALL 28 security tools pre-installed
-# Size: ~1.97 GB (optimized) | Tools: 26 Docker-ready scanners (28 total, 2 require manual install - see docs/MANUAL_INSTALLATION.md) | Multi-arch: amd64, arm64
-# v1.0.0: Feature #1 - Added 16 new tools (26 Docker-ready, 2 manual: MobSF, Akto) (Prowler, Kubescape, Gosec, Grype, OSV-Scanner, Bearer, ScanCode, cdxgen, Lynis, MobSF, Akto, YARA, Dependency-Check, Horusec, Semgrep-Secrets, Trivy-RBAC)
+# JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
+# Base: Ubuntu 22.04 with 27 security tools pre-installed
+# Size: ~1.9 GB (optimized) | Tools: 25 Docker-ready scanners (27 total, 2 require manual install - MobSF, Akto) | Multi-arch: amd64, arm64
+# Note: AFL++ removed due to complex LLVM build deps - install manually if needed for fuzzing
 
 #
-# Stage 1: Builder - Download and extract ALL 27 tools
+# Stage 1: Builder - Download and extract tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -156,16 +156,8 @@ RUN HORUSEC_VERSION="2.8.0" && \
     -o /usr/local/bin/horusec && \
     chmod +x /usr/local/bin/horusec
 
-# Build AFL++ (Fuzzing) - core tools only (skip LLVM/GCC plugins which need dev headers)
-RUN AFL_VERSION="4.34c" && \
-    curl -sSL "https://github.com/AFLplusplus/AFLplusplus/archive/refs/tags/v${AFL_VERSION}.tar.gz" \
-    -o /tmp/aflplusplus.tar.gz && \
-    tar -xzf /tmp/aflplusplus.tar.gz -C /tmp && \
-    cd /tmp/AFLplusplus-${AFL_VERSION} && \
-    make -j$(nproc) source-only && \
-    make install && \
-    cd / && \
-    rm -rf /tmp/aflplusplus.tar.gz /tmp/AFLplusplus-${AFL_VERSION}
+# NOTE: AFL++ removed from Docker image - requires LLVM/GCC dev headers for full build
+# AFL++ is a specialized fuzzing tool; install manually if needed: https://github.com/AFLplusplus/AFLplusplus
 
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
@@ -248,10 +240,7 @@ COPY --from=builder /opt/zaproxy /opt/zaproxy
 COPY --from=builder /opt/lynis /opt/lynis
 COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
 
-# Copy AFL++ binaries (compiled in builder stage)
-COPY --from=builder /usr/local/bin/afl-* /usr/local/bin/
-COPY --from=builder /usr/local/lib/afl /usr/local/lib/afl
-COPY --from=builder /usr/local/share/afl /usr/local/share/afl
+# NOTE: AFL++ removed - see comment in builder stage
 
 # Binary stripping (Phase 1 optimization: 15 MB savings)
 RUN strip /usr/local/bin/trufflehog \
@@ -308,7 +297,6 @@ RUN echo "=== Verifying ALL 27 tools ===" && \
     zap -version && \
     nuclei -version && \
     falcoctl version && \
-    (afl-fuzz -h > /dev/null 2>&1 || true) && \
     shellcheck --version && \
     shfmt --version && \
     prowler --version && \
