@@ -8,7 +8,7 @@ Complete reference for installing JMo Security and its external security tools.
 - [JMo Security Installation](#jmo-security-installation)
 - [External Tool Installation](#external-tool-installation)
 - [Platform-Specific Guide](#platform-specific-guide)
-- [MobSF and Akto (Manual)](#mobsf-and-akto-manual)
+- [Manual Installation Tools](#manual-installation-tools)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -226,9 +226,9 @@ go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 | OWASP ZAP | ⚠️ | ⚠️ | ⚠️ | ✅ |
 | Nosey Parker | ❌ | ✅ | ❌ | ✅ |
 | Falco | ❌ | ✅ | ❌ | ✅ |
-| AFL++ | ❌ | ✅ | ❌ | ✅ |
+| AFL++ | ❌ | ✅ | ❌ | Manual |
 
-**Legend:** ✅ Full support | ⚠️ Limited support | ❌ Docker only
+**Legend:** ✅ Full support | ⚠️ Limited support | ❌ Docker only | Manual = See [Manual Installation](#manual-installation-tools)
 
 ---
 
@@ -422,18 +422,58 @@ newgrp docker
 
 ---
 
-## MobSF and Akto (Manual)
+## Manual Installation Tools
 
-Two tools require manual installation due to complex dependencies.
+Three tools require manual installation due to complex dependencies.
 
 ### Docker Image Tool Counts
 
 | Variant | Docker-Ready | Manual Tools |
 |---------|--------------|--------------|
-| **Full** | 26 | 2 (MobSF, Akto) |
-| **Balanced** | 21 | 0 |
-| **Slim** | 15 | 0 |
+| **Deep/Full** | 25 | 3 (MobSF, Akto, AFL++) |
+| **Balanced** | 18 | 0 |
+| **Slim** | 14 | 0 |
 | **Fast** | 8 | 0 |
+
+### AFL++ Installation (Fuzzing)
+
+AFL++ is a powerful fuzzing framework but requires LLVM development headers for full compilation. It's optional for most security scanning workflows.
+
+**Ubuntu/Debian:**
+
+```bash
+# Install build dependencies
+sudo apt-get install -y build-essential clang llvm-14-dev libc++-dev \
+  libc++abi-dev libunwind-dev libglib2.0-dev
+
+# Clone and build
+git clone https://github.com/AFLplusplus/AFLplusplus.git
+cd AFLplusplus
+make distrib
+sudo make install
+
+# Verify
+afl-fuzz --help
+```
+
+**Docker (Easiest):**
+
+```bash
+# Use official AFL++ Docker image
+docker pull aflplusplus/aflplusplus
+
+# Run AFL++ from Docker
+docker run -it -v $(pwd):/src aflplusplus/aflplusplus
+```
+
+**JMo Integration:**
+
+AFL++ is primarily used for fuzz testing compiled binaries, not typical security scanning workflows. If you need fuzzing capabilities:
+
+```bash
+# Run AFL++ separately on compiled targets
+afl-fuzz -i input/ -o findings/ -- ./target_binary @@
+```
 
 ### MobSF Installation
 
