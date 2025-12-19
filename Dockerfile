@@ -227,7 +227,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Install Node.js tools (cdxgen)
-RUN npm install -g @cyclonedx/cdxgen@10.15.7 && \
+RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
     npm cache clean --force
 
 # Copy compiled binaries from builder stage

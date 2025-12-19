@@ -32,7 +32,7 @@ python_tools:
     critical: false
     notes: v1.0.0 - License compliance (OSS/GPL/MIT/Apache)
   cdxgen:
-    version: 10.15.7
+    version: 12.0.0
     pypi_package: '@cyclonedx/cdxgen'
     description: Multi-language SBOM generator (CycloneDX/SPDX)
     update_check: npm view @cyclonedx/cdxgen version
@@ -339,6 +339,19 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2025-12-19'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2025-12-19'
+  action: Updated cdxgen
+  tools_updated:
+  - tool: cdxgen
+    old_version: 10.15.7
+    new_version: 12.0.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-11-24'
   action: Automated version update
   tools_updated: []

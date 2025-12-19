@@ -17,6 +17,7 @@ from scripts.cli.schedule_commands import cmd_schedule
 from scripts.cli.history_commands import cmd_history
 from scripts.cli.diff_commands import cmd_diff
 from scripts.cli.trend_commands import cmd_trends
+from scripts.cli.build_commands import cmd_build, add_build_args
 
 # PHASE 1 REFACTORING: Import refactored modules
 from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
@@ -1539,6 +1540,7 @@ ADVANCED COMMANDS:
   adapters            Manage adapter plugins
   policy              Policy-as-Code management (install, validate, test, list, show)
   mcp-server          Start MCP server for AI-powered remediation
+  build               Build Docker images (replaces make docker-build)
 
 QUICK START:
   jmo wizard                         # Interactive guided scanning
@@ -1574,6 +1576,7 @@ Documentation: https://docs.jmotools.com
     _add_trends_args(sub)
     _add_policy_args(sub)  # Policy-as-Code commands
     _add_tools_args(sub)  # Tool management commands
+    add_build_args(sub)  # Docker build commands
 
     try:
         return ap.parse_args()
@@ -2881,6 +2884,8 @@ def main():
         from scripts.cli.tool_commands import cmd_tools
 
         return cmd_tools(args)
+    elif args.cmd == "build":
+        return cmd_build(args)
     else:
         sys.stderr.write(f"Unknown command: {args.cmd}\n")
         return 1

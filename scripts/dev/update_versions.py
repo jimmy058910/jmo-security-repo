@@ -7,6 +7,9 @@ used by JMo Security Suite. It serves as Layer 4 of the 5-layer version manageme
 system described in ROADMAP.md #14.
 
 Usage:
+  # Validate all versions exist upstream BEFORE building (RECOMMENDED)
+  python3 scripts/dev/update_versions.py --validate
+
   # Check for latest versions of all tools
   python3 scripts/dev/update_versions.py --check-latest
 
@@ -151,6 +154,150 @@ def get_latest_pypi_version(package: str) -> str | None:
         return match.group(1) if match else None
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
+
+
+def get_npm_version_exists(package: str, version: str) -> bool:
+    """Check if a specific npm package version exists."""
+    try:
+        result = subprocess.run(
+            ["npm", "view", f"{package}@{version}", "version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def check_github_release_exists(repo: str, version: str) -> bool:
+    """Check if a specific GitHub release version exists."""
+    try:
+        # Try both with and without 'v' prefix
+        for tag in [f"v{version}", version]:
+            result = subprocess.run(
+                ["gh", "api", f"repos/{repo}/releases/tags/{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                return True
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def check_pypi_version_exists(package: str, version: str) -> bool:
+    """Check if a specific PyPI package version exists."""
+    try:
+        result = subprocess.run(
+            ["pip", "index", "versions", package],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return False
+        # Check if version appears in available versions
+        return version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def validate_all_versions() -> tuple[list[str], list[str]]:
+    """
+    Validate that all versions in versions.yaml exist upstream.
+
+    Returns:
+        Tuple of (passed_tools, failed_tools)
+    """
+    versions = load_versions()
+    passed = []
+    failed = []
+
+    log("Validating Python tool versions on PyPI...")
+    for tool, info in versions.get("python_tools", {}).items():
+        version = info["version"]
+        pypi_package = info.get("pypi_package")
+        if not pypi_package:
+            # Skip tools without PyPI package
+            ok(f"{tool}: {version} (skipped - no PyPI package)")
+            passed.append(tool)
+            continue
+
+        if check_pypi_version_exists(pypi_package, version):
+            ok(f"{tool}: {version} (exists on PyPI)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on PyPI ({pypi_package})")
+            failed.append(tool)
+
+    log("Validating binary tool versions on GitHub...")
+    for tool, info in versions.get("binary_tools", {}).items():
+        version = info["version"]
+        github_repo = info.get("github_repo")
+        if not github_repo:
+            ok(f"{tool}: {version} (skipped - no GitHub repo)")
+            passed.append(tool)
+            continue
+
+        if check_github_release_exists(github_repo, version):
+            ok(f"{tool}: {version} (exists on GitHub)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
+            failed.append(tool)
+
+    log("Validating special tool versions...")
+    for tool, info in versions.get("special_tools", {}).items():
+        version = info["version"]
+        github_repo = info.get("github_repo")
+        npm_package = info.get("npm_package")
+
+        if npm_package:
+            if check_npm_version_exists(npm_package, version):
+                ok(f"{tool}: {version} (exists on npm)")
+                passed.append(tool)
+            else:
+                err(f"{tool}: {version} NOT FOUND on npm ({npm_package})")
+                failed.append(tool)
+        elif github_repo:
+            if check_github_release_exists(github_repo, version):
+                ok(f"{tool}: {version} (exists on GitHub)")
+                passed.append(tool)
+            else:
+                err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
+                failed.append(tool)
+        else:
+            ok(f"{tool}: {version} (skipped - manual validation required)")
+            passed.append(tool)
+
+    # Check npm tools specifically (cdxgen is in special_tools but uses npm)
+    log("Validating npm tool versions...")
+    npm_tools = {
+        "cdxgen": ("@cyclonedx/cdxgen", versions.get("python_tools", {}).get("cdxgen", {}).get("version")),
+    }
+    # Also check from special_tools if cdxgen is there
+    if "cdxgen" in versions.get("special_tools", {}):
+        npm_tools["cdxgen"] = (
+            "@cyclonedx/cdxgen",
+            versions["special_tools"]["cdxgen"]["version"],
+        )
+
+    for tool, (package, version) in npm_tools.items():
+        if not version:
+            continue
+        if tool in passed or tool in failed:
+            continue  # Already validated
+        if check_npm_version_exists(package, version):
+            ok(f"{tool}: {version} (exists on npm)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on npm ({package})")
+            failed.append(tool)
+
+    return passed, failed
 
 
 def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
@@ -609,6 +756,11 @@ def main() -> int:
         action="store_true",
         help="Update ALL tools to latest versions automatically",
     )
+    group.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate all versions exist upstream (GitHub, PyPI, npm) before Docker build",
+    )
 
     parser.add_argument("--version", type=str, help="Version to set (used with --tool)")
     parser.add_argument(
@@ -686,6 +838,19 @@ def main() -> int:
                 )
                 return 0
             return 0
+
+        elif args.validate:
+            log("Validating all tool versions exist upstream...")
+            passed, failed = validate_all_versions()
+            print()
+            log(f"Validation complete: {len(passed)} passed, {len(failed)} failed")
+            if failed:
+                err(f"Failed tools: {', '.join(failed)}")
+                err("Fix these versions before building Docker images")
+                return 1
+            else:
+                ok("All versions validated successfully - safe to build")
+                return 0
 
     except Exception as e:
         err(f"Unexpected error: {e}")
