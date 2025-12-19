@@ -205,18 +205,43 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Install build deps temporarily for packages that may need compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     python3-dev \
     libffi-dev \
-    && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && python3 -m pip install --no-cache-dir \
-    bandit==1.9.2 \
-    semgrep==1.144.0 \
-    checkov==3.2.495 \
-    ruff==0.14.6 \
-    yara-python==4.5.2 \
-    scancode-toolkit==32.4.1 \
-    prowler==5.13.1 \
-    && apt-get purge -y gcc python3-dev libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip first
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install Python security tools one by one for better error visibility
+RUN python3 -m pip install --no-cache-dir bandit==1.9.2 && \
+    echo "✓ bandit installed"
+
+RUN python3 -m pip install --no-cache-dir semgrep==1.144.0 && \
+    semgrep --version && \
+    echo "✓ semgrep installed"
+
+RUN python3 -m pip install --no-cache-dir checkov==3.2.495 && \
+    checkov --version && \
+    echo "✓ checkov installed"
+
+RUN python3 -m pip install --no-cache-dir ruff==0.14.6 && \
+    echo "✓ ruff installed"
+
+RUN python3 -m pip install --no-cache-dir yara-python==4.5.2 && \
+    echo "✓ yara-python installed"
+
+RUN python3 -m pip install --no-cache-dir scancode-toolkit==32.4.1 && \
+    scancode --version && \
+    echo "✓ scancode-toolkit installed"
+
+RUN python3 -m pip install --no-cache-dir prowler==5.13.1 && \
+    prowler --version && \
+    echo "✓ prowler installed"
+
+# Clean up build dependencies to reduce image size
+RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
