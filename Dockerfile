@@ -200,9 +200,9 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/share/man \
     /usr/share/locale
 
-# Upgrade pip, setuptools, wheel and install Python tools in single layer
+# Install Python security tools (pip)
+# Note: horusec is a Go binary (from builder stage), not a pip package
 # Use --no-cache-dir to prevent pip cache bloat
-# Clean __pycache__ and .pyc files immediately after install (Phase 1: 40 MB savings)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
     bandit==1.9.2 \
@@ -210,9 +210,8 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     checkov==3.2.495 \
     ruff==0.14.6 \
     yara-python==4.5.2 \
-    scancode-toolkit==32.3.0 \
+    scancode-toolkit==32.4.1 \
     prowler==5.13.1 \
-    horusec-cli==2.9.0 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
