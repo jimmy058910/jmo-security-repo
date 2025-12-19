@@ -202,9 +202,13 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 
 # Install Python security tools (pip)
 # Note: horusec is a Go binary (from builder stage), not a pip package
-# Use --no-cache-dir to prevent pip cache bloat
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir \
+# Install build deps temporarily for packages that may need compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    libffi-dev \
+    && python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python3 -m pip install --no-cache-dir \
     bandit==1.9.2 \
     semgrep==1.144.0 \
     checkov==3.2.495 \
@@ -212,8 +216,11 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     yara-python==4.5.2 \
     scancode-toolkit==32.4.1 \
     prowler==5.13.1 \
-    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
-    find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+    && apt-get purge -y gcc python3-dev libffi-dev \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Install Node.js tools (cdxgen)
 RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
