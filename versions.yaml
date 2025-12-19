@@ -176,6 +176,17 @@ binary_tools:
     update_check: gh api repos/anchore/grype/releases/latest
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
+  osv-scanner:
+    version: 2.3.1
+    github_repo: google/osv-scanner
+    description: Google OSV vulnerability scanner
+    release_pattern: osv-scanner_linux_{arch}
+    architectures:
+      amd64: amd64
+      arm64: arm64
+    update_check: gh api repos/google/osv-scanner/releases/latest
+    critical: false
+    notes: v1.0.0 - Uses Google OSV database for comprehensive vulnerability data
   bearer:
     version: 1.51.1
     github_repo: Bearer/bearer

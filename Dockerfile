@@ -120,7 +120,11 @@ RUN GRYPE_VERSION="0.104.0" && \
     chmod +x /usr/local/bin/grype
 
 # Download OSV-Scanner (SCA + Vuln - Google)
-RUN OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+RUN OSV_VERSION="2.3.1" && \
+    OSV_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_${OSV_ARCH}" \
+    -o /usr/local/bin/osv-scanner && \
+    chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
 RUN BEARER_VERSION="1.51.1" && \
@@ -237,6 +241,7 @@ COPY --from=builder /usr/local/bin/noseyparker /usr/local/bin/noseyparker
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
+COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /opt/zaproxy /opt/zaproxy
