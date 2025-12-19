@@ -156,13 +156,13 @@ RUN HORUSEC_VERSION="2.8.0" && \
     -o /usr/local/bin/horusec && \
     chmod +x /usr/local/bin/horusec
 
-# Build AFL++ (Fuzzing)
+# Build AFL++ (Fuzzing) - core tools only (skip LLVM/GCC plugins which need dev headers)
 RUN AFL_VERSION="4.34c" && \
     curl -sSL "https://github.com/AFLplusplus/AFLplusplus/archive/refs/tags/v${AFL_VERSION}.tar.gz" \
     -o /tmp/aflplusplus.tar.gz && \
     tar -xzf /tmp/aflplusplus.tar.gz -C /tmp && \
     cd /tmp/AFLplusplus-${AFL_VERSION} && \
-    make -j$(nproc) && \
+    make -j$(nproc) source-only && \
     make install && \
     cd / && \
     rm -rf /tmp/aflplusplus.tar.gz /tmp/AFLplusplus-${AFL_VERSION}
