@@ -203,12 +203,15 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Install Python security tools (pip)
 # Note: horusec is a Go binary (from builder stage), not a pip package
 # Install build deps temporarily for packages that may need compilation
+# pkg-config + libicu-dev needed for pyicu (scancode-toolkit dependency)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     python3-dev \
     libffi-dev \
     libssl-dev \
+    pkg-config \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip first
@@ -241,7 +244,8 @@ RUN python3 -m pip install --no-cache-dir prowler==5.13.1 && \
     echo "✓ prowler installed"
 
 # Clean up build dependencies to reduce image size
-RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev \
+# Note: keep libicu70 runtime lib, only remove dev packages
+RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev pkg-config libicu-dev \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
