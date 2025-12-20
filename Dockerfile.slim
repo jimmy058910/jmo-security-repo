@@ -60,9 +60,9 @@ RUN NUCLEI_VERSION="3.5.1" && \
     nuclei -update-templates -tl cves,misconfigurations,exposures,vulnerabilities,apis -silent
 
 # Download Kubescape (K8s Security)
-RUN KUBESCAPE_VERSION="3.0.45" && \
+RUN KUBESCAPE_VERSION="3.0.47" && \
     KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
+    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape_${KUBESCAPE_VERSION}_linux_${KUBESCAPE_ARCH}" \
     -o /usr/local/bin/kubescape && \
     chmod +x /usr/local/bin/kubescape
 
@@ -205,8 +205,10 @@ RUN echo "=== Verifying 14 cloud-focused tools ===" && \
     echo "=== All 14 slim tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
+# Note: /root/.local may not exist if pip installed to /usr/local instead
 RUN useradd -m -u 1000 -s /bin/bash jmo && \
-    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local && \
+    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user

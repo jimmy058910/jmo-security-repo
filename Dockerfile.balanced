@@ -70,9 +70,10 @@ RUN NUCLEI_VERSION="3.5.1" && \
 # Prowler is installed via pip in the runtime stage
 
 # Download Kubescape (Kubernetes Security)
-RUN KUBESCAPE_VERSION="3.0.45" && \
+# Note: Release naming changed from kubescape-ubuntu-{arch} to kubescape_{version}_linux_{arch}
+RUN KUBESCAPE_VERSION="3.0.47" && \
     KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
+    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape_${KUBESCAPE_VERSION}_linux_${KUBESCAPE_ARCH}" \
     -o /usr/local/bin/kubescape && \
     chmod +x /usr/local/bin/kubescape
 
@@ -116,12 +117,12 @@ RUN HORUSEC_VERSION="2.8.0" && \
     chmod +x /usr/local/bin/horusec
 
 #
-# Stage 2: Runtime - Production-ready runtime with 20 tools
+# Stage 2: Runtime - Production-ready runtime with 18 tools
 #
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
-LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 21 scanners optimized for CI/CD pipelines (v1.0.0)"
+LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 18 scanners optimized for CI/CD pipelines (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -133,19 +134,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/root/.local/bin:${PATH}" \
     DOCKER_CONTAINER=1
 
-# Install runtime dependencies
+# Install runtime dependencies (build deps for scancode-toolkit)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-dev \
     git \
+    curl \
     ca-certificates \
     jq \
     shellcheck \
     openjdk-17-jre-headless \
-    nodejs \
-    npm \
+    build-essential \
+    pkg-config \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install Node.js 20 LTS from NodeSource (required for cdxgen)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    node --version && npm --version
 
 # Clean Java runtime (Phase 1 optimization: 30 MB savings)
 RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
@@ -155,16 +165,16 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
     /usr/share/locale
 
 # Install Python tools (Phase 1: 40 MB bytecode cleanup)
+# Note: horusec binary is copied from builder stage, no pip package needed
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
     semgrep==1.144.0 \
     checkov==3.2.495 \
     ruff==0.14.6 \
     yara-python==4.5.2 \
-    scancode-toolkit==32.3.0 \
-    prowler==5.13.1 \
-    horusec-cli==2.9.0 \
-    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    prowler==5.13.1 && \
+    python3 -m pip install --no-cache-dir scancode-toolkit==32.3.0 && \
+    find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
 # Install Node.js tools
@@ -239,6 +249,16 @@ RUN echo "=== Verifying 18 balanced tools ===" && \
     cdxgen --version && \
     shellcheck --version && \
     echo "=== All 18 balanced tools verified ==="
+
+# Create non-root user and set ownership (Security best practice)
+# Note: /root/.local may not exist if pip installed to /usr/local instead
+RUN useradd -m -u 1000 -s /bin/bash jmo &&     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local &&     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo &&     chmod -R 755 /opt/jmo-security
+
+# Update PATH environment variable for non-root user
+ENV PATH="/home/jmo/.local/bin:${PATH}"
+
+# Switch to non-root user
+USER jmo
 
 ENTRYPOINT ["jmo"]
 CMD ["--help"]

@@ -155,8 +155,10 @@ RUN echo "=== Verifying Alpine tools (${TARGETARCH}) ===" && \
     echo "=== Alpine tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
+# Note: /root/.local may not exist if pip installed to /usr/lib instead
 RUN adduser -D -u 1000 -s /bin/bash jmo && \
-    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local && \
+    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
