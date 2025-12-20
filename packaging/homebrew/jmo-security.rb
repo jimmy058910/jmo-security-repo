@@ -2,9 +2,9 @@
 class JmoSecurity < Formula
   include Language::Python::Virtualenv
 
-  desc "Unified security scanning suite with 12+ tools and plugin system"
+  desc "Unified security scanning suite with 28+ tools and 4 scan profiles"
   homepage "https://jmotools.com"
-  url "https://github.com/jimmy058910/jmo-security-repo/archive/refs/tags/v0.9.0.tar.gz"
+  url "https://github.com/jimmy058910/jmo-security-repo/archive/refs/tags/v1.0.0.tar.gz"
   sha256 "" # Will be calculated during release
   license "MIT"
   head "https://github.com/jimmy058910/jmo-security-repo.git", branch: "main"
@@ -78,11 +78,11 @@ class JmoSecurity < Formula
       Quick Start:
         jmo wizard                   # Interactive guided scanning
         jmo wizard --yes             # Non-interactive with defaults
-        jmo fast --repo ./myapp      # Fast scan (3 tools, 5-8 min)
-        jmo balanced --repos-dir ~/repos  # Balanced scan (8 tools, 15-20 min)
+        jmo scan --profile fast      # Fast scan (8 tools, 5-10 min)
+        jmo scan --profile balanced  # Balanced scan (18 tools, 18-25 min)
 
       🐳 Zero-Installation Option (Recommended):
-        Use Docker mode for instant scanning with all 12 security tools:
+        Use Docker mode for instant scanning with all 28 security tools:
         jmo wizard --docker          # Auto-detects Docker and runs in container
 
       🔧 Optional: Install Security Tools Locally (Faster Scans):
@@ -119,12 +119,12 @@ class JmoSecurity < Formula
         Issues:  https://github.com/jimmy058910/jmo-security-repo/issues
         Discord: https://discord.gg/jmotools (coming soon)
 
-      What's New in v0.9.0:
-        ✅ CLI consolidation: jmotools merged into jmo (simpler UX)
-        ✅ Schedule management: automated scans via cron or CI/CD
-        ✅ Plugin system for adapters (75% faster tool integration)
-        ✅ Windows installer with NSIS (WinGet support)
-        ✅ Enhanced beginner-friendly commands (wizard, fast, balanced, full)
+      What's New in v1.0.0:
+        ✅ 28 security scanners with unified profiles (fast/slim/balanced/deep)
+        ✅ SQLite historical storage for trend analysis
+        ✅ Machine-readable diffs for CI/CD integration (jmo diff)
+        ✅ Tool management commands (jmo tools install/check/update)
+        ✅ 6 compliance framework mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
 
     EOS
   end

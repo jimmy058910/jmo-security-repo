@@ -35,8 +35,8 @@ INSTALL_PRIORITIES: dict[Platform, list[str]] = {
 }
 
 # Tools that require special installation handling
+# NOTE: kubescape moved to BINARY_URLS (v1.0.0) - direct binary download is more reliable
 SPECIAL_INSTALL: dict[str, str] = {
-    "kubescape": "kubescape",  # Uses its own installer
     "zap": "manual",  # Requires manual download
     "falco": "manual",  # Kernel module
     "afl++": "manual",  # Build from source
@@ -46,6 +46,8 @@ SPECIAL_INSTALL: dict[str, str] = {
 }
 
 # Binary download URLs (GitHub releases)
+# NOTE: {os} uses _get_os_name() output: Linux, Darwin, Windows
+# Some tools need lowercase - use {os_lower} pattern and handle in _install_binary
 BINARY_URLS: dict[str, str] = {
     "trivy": "https://github.com/aquasecurity/trivy/releases/latest/download/trivy_{version}_{os}_{arch}.tar.gz",
     "grype": "https://github.com/anchore/grype/releases/latest/download/grype_{version}_{os}_{arch}.tar.gz",
@@ -58,6 +60,9 @@ BINARY_URLS: dict[str, str] = {
     "bearer": "https://github.com/Bearer/bearer/releases/latest/download/bearer_{version}_{os}_{arch}.tar.gz",
     "horusec": "https://github.com/ZupIT/horusec/releases/latest/download/horusec_{os}_{arch}",
     "noseyparker": "https://github.com/praetorian-inc/noseyparker/releases/latest/download/noseyparker-{version}-{os}-{arch}.tar.gz",
+    # Kubescape: v1.0.0 - Direct binary download (was using install.sh script)
+    # NOTE: Uses lowercase linux/darwin and amd64/arm64
+    "kubescape": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_{os_lower}_{arch_lower}",
 }
 
 
@@ -511,6 +516,33 @@ class ToolInstaller:
                 message="npm not installed",
             )
 
+        # Check Node.js version for packages that require newer versions
+        # cdxgen requires Node.js 18+ (fails silently on older versions)
+        if tool_name == "cdxgen":
+            node_cmd = shutil.which("node")
+            if node_cmd:
+                try:
+                    ver_result = subprocess.run(
+                        [node_cmd, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    if ver_result.returncode == 0:
+                        # Parse version: v20.10.0 -> 20
+                        ver_str = ver_result.stdout.strip().lstrip("v")
+                        major_ver = int(ver_str.split(".")[0])
+                        if major_ver < 18:
+                            return InstallResult(
+                                tool_name=tool_name,
+                                success=False,
+                                method="npm",
+                                message=f"cdxgen requires Node.js 18+, found v{ver_str}. "
+                                "Install Node.js 20 LTS: https://nodejs.org/",
+                            )
+                except (subprocess.TimeoutExpired, ValueError, IndexError):
+                    pass  # Proceed with install, let it fail naturally if needed
+
         package = tool_info.npm_package
         if not package:
             return InstallResult(
@@ -586,10 +618,15 @@ class ToolInstaller:
         arch = self._get_arch()
 
         url_template = BINARY_URLS[tool_name]
+        # Map architecture to common formats
+        # x86_64 -> amd64 for lowercase variant (kubescape uses amd64)
+        arch_lower = "amd64" if arch == "x86_64" else arch.lower()
         url = url_template.format(
             version=tool_info.version,
             os=os_name,
             arch=arch,
+            os_lower=os_name.lower(),  # linux, darwin, windows
+            arch_lower=arch_lower,  # amd64, arm64
         )
 
         try:
@@ -679,9 +716,7 @@ class ToolInstaller:
 
         special_type = SPECIAL_INSTALL.get(tool_name)
 
-        if special_type == "kubescape":
-            return self._install_kubescape(tool_name, start_time)
-        elif special_type == "docker":
+        if special_type == "docker":
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
@@ -707,52 +742,6 @@ class ToolInstaller:
             message=f"Unknown special install type: {special_type}",
             duration_seconds=time.time() - start_time,
         )
-
-    def _install_kubescape(self, tool_name: str, start_time: float) -> InstallResult:
-        """Install kubescape using official installer."""
-        import time
-
-        try:
-            # Kubescape has its own installer script
-            cmd = ["curl", "-s", "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh"]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode == 0:
-                # Pipe to bash
-                install_result = subprocess.run(
-                    ["bash"],
-                    input=result.stdout,
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                )
-
-                if install_result.returncode == 0:
-                    status = self.manager.check_tool(tool_name)
-                    return InstallResult(
-                        tool_name=tool_name,
-                        success=True,
-                        method="installer",
-                        message="Installed via official kubescape installer",
-                        version_installed=status.installed_version,
-                        duration_seconds=time.time() - start_time,
-                    )
-
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="installer",
-                message="Kubescape installer failed",
-                duration_seconds=time.time() - start_time,
-            )
-        except Exception as e:
-            return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                method="installer",
-                message=str(e),
-                duration_seconds=time.time() - start_time,
-            )
 
     def _install_git_clone(
         self, tool_name: str, tool_info: ToolInfo, start_time: float

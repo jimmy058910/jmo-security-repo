@@ -1,0 +1,136 @@
+# Created using winget create
+# Documentation: https://github.com/microsoft/winget-pkgs
+
+PackageIdentifier: jmo.jmo-security
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: JMo Tools
+PublisherUrl: https://jmotools.com
+PublisherSupportUrl: https://github.com/jimmy058910/jmo-security-repo/issues
+Author: James Moceri
+PackageName: JMo Security
+PackageUrl: https://jmotools.com
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/LICENSE
+Copyright: Copyright (C) 2024-2026 James Moceri
+CopyrightUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/LICENSE
+ShortDescription: Unified security scanning suite with 28+ tools and 4 scan profiles
+Description: |-
+  JMo Security is a terminal-first security audit toolkit that orchestrates
+  28+ scanners with unified outputs and multi-target scanning capabilities.
+
+  WINDOWS COMPATIBILITY:
+  - Full tool suite available via WSL2 + Docker Desktop (recommended)
+  - Native Windows: Use --profile fast or --profile balanced for best experience
+  - All 4 scan profiles work with Docker mode
+
+  Features:
+  - Multi-target scanning (repositories, containers, IaC, web apps, GitLab, Kubernetes)
+  - 28+ integrated security tools organized into 4 unified profiles
+  - SQLite historical storage for trend analysis
+  - Machine-readable diffs for CI/CD integration (jmo diff)
+  - Tool management commands (jmo tools install/check/update)
+  - 6 compliance framework mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
+  - Interactive wizard for guided scanning workflows
+  - Unified reporting (JSON, Markdown, HTML dashboard, SARIF 2.1.0)
+  - Profile-based configuration (fast/slim/balanced/deep)
+  - Cross-platform (Windows, macOS, Linux)
+
+  Scan Profiles:
+  - fast: 8 tools, 5-10 min (pre-commit, PR validation)
+  - slim: 14 tools, 12-18 min (Cloud/IaC, AWS/Azure/GCP/K8s)
+  - balanced: 18 tools, 18-25 min (Production scans, CI/CD)
+  - deep: 28 tools, 40-70 min (Compliance audits, pentests)
+
+  What's New in v1.0.0:
+  - 28 security scanners with unified profiles
+  - SQLite historical storage for trend analysis
+  - Machine-readable diffs for CI/CD integration
+  - Tool management commands (jmo tools)
+  - 6 compliance framework mappings
+
+  Target Users:
+  - DevSecOps engineers automating security in CI/CD pipelines
+  - Security teams performing comprehensive audits
+  - Developers integrating security into development workflows
+  - Platform engineers securing containerized and cloud infrastructure
+
+Moniker: jmo-security
+Tags:
+  - security
+  - scanning
+  - devops
+  - devsecops
+  - sast
+  - sca
+  - sbom
+  - secrets-detection
+  - secrets-scanning
+  - vulnerabilities
+  - vulnerability-scanner
+  - compliance
+  - owasp
+  - cwe
+  - nist
+  - pci-dss
+  - mitre-attack
+  - trivy
+  - semgrep
+  - trufflehog
+  - syft
+  - checkov
+  - zap
+  - nuclei
+  - docker
+  - kubernetes
+  - terraform
+  - iac
+  - infrastructure-as-code
+  - gitlab
+  - ci-cd
+  - automation
+  - multi-target
+  - cybersecurity
+ReleaseNotes: |-
+  JMo Security v1.0.0 - Production Release
+
+  Major Features:
+  - 28 security scanners with unified profiles (fast/slim/balanced/deep)
+  - SQLite historical storage for trend analysis
+  - Machine-readable diffs for CI/CD integration (jmo diff)
+  - Tool management commands (jmo tools install/check/update)
+  - 6 compliance framework mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
+
+  Unified Scan Profiles:
+  - fast: 8 tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck)
+  - slim: 14 tools (fast + prowler, kubescape, grype, bearer, horusec, dependency-check)
+  - balanced: 18 tools (slim + zap, scancode, cdxgen, gosec)
+  - deep: 28 tools (balanced + noseyparker, bandit, lynis, yara, falco, afl++, mobsf, akto)
+
+  New Commands:
+  - jmo diff: Compare scans for CI/CD (new/fixed/unchanged findings)
+  - jmo history: View scan history from SQLite storage
+  - jmo trends: Analyze security trends over time
+  - jmo tools: Manage tool installation and updates
+
+  Performance:
+  - 30-40% noise reduction via cross-tool deduplication
+  - 87% test coverage (2,981 tests)
+  - CommonFinding schema v1.2.0 with fingerprint-based deduplication
+
+  Breaking Changes:
+  - Profiles renamed for consistency (deep now has 28 tools)
+  - Results include v1.0.0 metadata wrapper
+  - Docker volumes must mount .jmo/history.db for persistence
+
+  Full Changelog: https://github.com/jimmy058910/jmo-security-repo/blob/main/CHANGELOG.md
+ReleaseNotesUrl: https://github.com/jimmy058910/jmo-security-repo/releases/tag/v1.0.0
+Documentations:
+  - DocumentLabel: User Guide
+    DocumentUrl: https://docs.jmotools.com/USER_GUIDE
+  - DocumentLabel: Quick Start
+    DocumentUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/QUICKSTART.md
+  - DocumentLabel: Docker Guide
+    DocumentUrl: https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/DOCKER_README.md
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
