@@ -181,6 +181,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Install ONLY runtime dependencies (no curl, wget, tar, build-essential)
 # Combined in single RUN to reduce layers, with aggressive cache cleanup
+# Note: nodejs/npm installed separately below (need Node 18+ for cdxgen)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -189,10 +190,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     shellcheck \
     openjdk-17-jre-headless \
-    nodejs \
-    npm \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install Node.js 20 LTS from NodeSource (Ubuntu 22.04 default is v12, too old for cdxgen)
+# cdxgen 12.x requires Node.js 18+ for optional chaining (?.) syntax
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    node --version && npm --version
 
 # Clean Java runtime (Phase 1 optimization: 30 MB savings)
 RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
