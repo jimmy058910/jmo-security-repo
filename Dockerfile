@@ -291,13 +291,20 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/horusec \
     2>/dev/null || true
 
-# Create symlinks for easier invocation
+# Create symlinks and wrapper scripts for easier invocation
+# ZAP and Dependency-Check work fine as symlinks
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap && \
-    ln -s /opt/lynis/lynis /usr/local/bin/lynis && \
-    chmod +x /usr/local/bin/lynis && \
     ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
     chmod +x /usr/local/bin/dependency-check
+
+# Lynis requires its include/db/plugins directories in specific locations.
+# It searches: /usr/local/include/lynis, /usr/local/lynis/include, /usr/share/lynis/include
+# We install to /usr/local/lynis (one of the expected paths) and symlink the binary.
+RUN mkdir -p /usr/local/lynis && \
+    cp -r /opt/lynis/* /usr/local/lynis/ && \
+    ln -sf /usr/local/lynis/lynis /usr/local/bin/lynis && \
+    chmod +x /usr/local/bin/lynis /usr/local/lynis/lynis
 
 # Mark cache directories as volumes for persistence
 VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
