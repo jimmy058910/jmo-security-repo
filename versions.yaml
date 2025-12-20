@@ -144,10 +144,10 @@ binary_tools:
     brew_package: nuclei
     notes: 'Requires templates update: nuclei -update-templates'
   kubescape:
-    version: 3.0.45
+    version: 3.0.47
     github_repo: kubescape/kubescape
     description: Kubernetes security scanner (NSA/CISA hardening)
-    release_pattern: kubescape-linux-{arch}
+    release_pattern: kubescape_{version}_linux_{arch}
     architectures:
       amd64: amd64
       arm64: arm64

@@ -97,9 +97,10 @@ RUN NUCLEI_VERSION="3.5.1" && \
 # Prowler is installed via pip in the runtime stage
 
 # Download Kubescape (Kubernetes Security)
-RUN KUBESCAPE_VERSION="3.0.45" && \
+# Note: Release naming changed from kubescape-ubuntu-{arch} to kubescape_{version}_linux_{arch}
+RUN KUBESCAPE_VERSION="3.0.47" && \
     KUBESCAPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape-ubuntu-${KUBESCAPE_ARCH}" \
+    curl -sSL "https://github.com/kubescape/kubescape/releases/download/v${KUBESCAPE_VERSION}/kubescape_${KUBESCAPE_VERSION}_linux_${KUBESCAPE_ARCH}" \
     -o /usr/local/bin/kubescape && \
     chmod +x /usr/local/bin/kubescape
 
