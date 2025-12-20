@@ -243,17 +243,18 @@ RUN python3 -m pip install --no-cache-dir prowler==5.13.1 && \
     prowler --version && \
     echo "✓ prowler installed"
 
+# Install Node.js tools (cdxgen) - MUST be before apt cleanup
+RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
+    npm cache clean --force && \
+    echo "✓ cdxgen installed"
+
 # Clean up build dependencies to reduce image size
 # Note: keep libicu70 runtime lib, only remove dev packages
+# Don't use autoremove as it may remove nodejs/npm
 RUN apt-get update && apt-get purge -y gcc g++ python3-dev libffi-dev libssl-dev pkg-config libicu-dev \
-    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
     && find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
-
-# Install Node.js tools (cdxgen)
-RUN npm install -g @cyclonedx/cdxgen@12.0.0 && \
-    npm cache clean --force
 
 # Copy compiled binaries from builder stage
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
