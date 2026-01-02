@@ -14,6 +14,10 @@
 8. [Suppressing False Positives](#suppressing-false-positives)
 9. [Integrating with Your Workflow](#integrating-with-your-workflow)
 10. [Advanced: SARIF and CI/CD Integration](#advanced-sarif-and-cicd-integration)
+11. [EPSS/KEV Risk Prioritization](#epsskev-risk-prioritization)
+12. [Cross-Tool Deduplication](#cross-tool-deduplication)
+13. [Output Format Reference](#output-format-reference)
+14. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1181,6 +1185,208 @@ jq '[.[] | select(.location.path | contains("tests/") or contains(".venv/") | no
 
 ---
 
+## EPSS/KEV Risk Prioritization
+
+JMo Security automatically enriches CVE findings with EPSS (Exploit Prediction Scoring System) and CISA KEV (Known Exploited Vulnerabilities) data to help you prioritize remediation efforts based on real-world exploit activity.
+
+### How It Works
+
+When findings contain CVE identifiers, the system:
+
+1. **Queries EPSS API** (FIRST.org) - Gets exploit probability (0.0-1.0) and percentile ranking
+2. **Checks CISA KEV Catalog** - Identifies CVEs actively exploited in the wild
+3. **Calculates Priority Score** (0-100) - Combines severity, EPSS, KEV status, and reachability
+
+### Priority Formula
+
+```text
+severity_score = {CRITICAL: 10, HIGH: 7, MEDIUM: 4, LOW: 2, INFO: 1}
+epss_multiplier = 1.0 + (epss_score * 4.0)  # Scale 0.0-1.0 -> 1.0-5.0
+kev_multiplier = 3.0 if is_kev else 1.0
+reachability_multiplier = 1.0  # Placeholder for future enhancement
+
+priority = (severity_score * epss_multiplier * kev_multiplier * reachability_multiplier) / 1.5
+# Normalized to 0-100 scale, capped at 100
+```
+
+### Priority Thresholds
+
+| Priority Range | Classification | Action |
+|----------------|----------------|--------|
+| **>=80** | Critical | Immediate action required (KEV findings, high EPSS + CRITICAL severity) |
+| **60-79** | High | Prioritize in next sprint (high EPSS or HIGH severity) |
+| **40-59** | Medium | Address in upcoming release (moderate risk) |
+| **<40** | Low | Backlog (low exploitability) |
+
+### Where You'll See It
+
+1. **HTML Dashboard** - Priority column with color-coded badges, KEV indicator badges, sortable by priority
+2. **SUMMARY.md** - Dedicated "Priority Analysis (EPSS/KEV)" section showing:
+   - KEV findings (actively exploited CVEs)
+   - High EPSS findings (>50% exploit probability in next 30 days)
+   - Priority distribution (Critical/High/Medium/Low)
+   - Top priority findings with score breakdown
+3. **findings.json** - `priority` object with:
+   - `priority`: float (0-100)
+   - `epss`: float (0.0-1.0, probability of exploitation)
+   - `epss_percentile`: float (0.0-1.0, ranking against all CVEs)
+   - `is_kev`: boolean (true if CISA KEV)
+   - `kev_due_date`: string (YYYY-MM-DD, federal agency deadline if KEV)
+   - `components`: dict (severity_score, epss_multiplier, kev_multiplier, breakdown)
+
+### Example SUMMARY.md Output
+
+```markdown
+## Priority Analysis (EPSS/KEV)
+
+### CISA KEV: Actively Exploited (Immediate Action Required)
+
+1. **CVE-2024-1234** (lodash@4.17.19)
+   - Priority: 100/100 (CRITICAL + KEV)
+   - EPSS: 0.95 (95% exploit probability, 99.9th percentile)
+   - KEV Due Date: 2024-10-15
+   - Location: package.json:12
+
+### High EPSS (>50% Exploit Probability in Next 30 Days)
+
+1. **CVE-2024-5678** (express@4.17.1)
+   - Priority: 68/100 (HIGH)
+   - EPSS: 0.76 (76% exploit probability, 92nd percentile)
+   - Location: package.json:15
+```
+
+### Caching for Performance
+
+- **EPSS**: SQLite cache with 7-day TTL (~/.jmo/cache/epss.db)
+- **KEV**: JSON cache with 1-day TTL (~/.jmo/cache/kev_catalog.json)
+- **Bulk API optimization**: Fetches all CVEs in single API call for speed
+
+### Graceful Degradation
+
+- If EPSS/KEV APIs unavailable, prioritization falls back to severity-only scoring
+- Non-CVE findings (secrets, code quality) still receive priority scores based on severity
+- No configuration required - automatic enrichment when CVEs detected
+
+### Recommendations
+
+- **Triage**: Sort dashboard by priority to focus on highest-risk findings first
+- **SLA Management**: Use KEV due dates for federal compliance or internal SLAs
+- **Metrics**: Track "Critical Priority" count over time as a security KPI
+- **Communication**: Share KEV count with executives ("3 actively exploited CVEs found")
+
+---
+
+## Cross-Tool Deduplication
+
+JMo Security automatically clusters duplicate findings detected by multiple tools, reducing noise by 30-40%.
+
+### How It Works
+
+When multiple tools detect the same underlying issue, JMo clusters them into a single "consensus finding":
+
+**Before (3 separate findings):**
+
+- Trivy: HIGH - SQL Injection in app.py:42
+- Semgrep: HIGH - SQL injection detected in app.py:42
+- Bandit: MEDIUM - Possible SQL injection in app.py:43
+
+**After (1 consensus finding):**
+
+- Detected by 3 tools | HIGH CONFIDENCE
+- Tools: trivy, semgrep, bandit
+- SQL Injection vulnerability in query construction
+- app.py:42-43
+
+### Confidence Levels
+
+| Level | Tool Count | Interpretation |
+|-------|------------|----------------|
+| **HIGH** | 4+ tools | Very likely true positive |
+| **MEDIUM** | 2-3 tools | Likely true positive |
+| **LOW** | 1 tool | Requires validation |
+
+### Configuration
+
+```yaml
+# jmo.yml
+deduplication:
+  cross_tool_clustering: true  # Enable/disable
+  similarity_threshold: 0.75   # Strictness (0.70-0.85)
+```
+
+### The Algorithm
+
+Cross-tool deduplication uses a multi-dimensional similarity algorithm combining:
+
+- **Location (35%):** Path + line range overlap
+- **Message (40%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
+- **Metadata (25%):** CWE/CVE/Rule ID matching
+
+Findings with >=75% similarity are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
+
+### Example Consensus Finding
+
+```json
+{
+  "id": "cluster-abc123",
+  "severity": "HIGH",
+  "message": "SQL Injection vulnerability in query construction",
+  "detected_by": [
+    {"name": "trivy", "version": "0.50.0"},
+    {"name": "semgrep", "version": "1.60.0"},
+    {"name": "bandit", "version": "1.7.0"}
+  ],
+  "confidence": {
+    "level": "HIGH",
+    "tool_count": 3,
+    "avg_similarity": 0.87
+  },
+  "context": {
+    "duplicates": [
+      {
+        "id": "fp2",
+        "tool": {"name": "semgrep"},
+        "similarity_score": 0.90
+      },
+      {
+        "id": "fp3",
+        "tool": {"name": "bandit"},
+        "similarity_score": 0.85
+      }
+    ]
+  }
+}
+```
+
+### Disabling Clustering
+
+If you prefer to see all findings from all tools separately:
+
+```yaml
+# jmo.yml
+deduplication:
+  cross_tool_clustering: false
+```
+
+This reverts to Phase 1 deduplication only (same tool, same location).
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Time | <2 seconds for 1000 findings |
+| Reduction | 30-40% fewer reported findings (noise elimination) |
+| Accuracy | >=85% clustering accuracy (validated on 200+ finding sample) |
+
+### Best Practices
+
+1. **Trust HIGH confidence findings first** - Multiple tools agreeing is strong signal
+2. **Validate MEDIUM confidence** - 2 tools may still have false positives
+3. **Review LOW confidence carefully** - Single tool detections need scrutiny
+4. **Check duplicate findings** - Expand duplicates in dashboard to see all detections
+
+---
+
 ## Output Format Reference
 
 JMo Security supports 7 output formats, all with a standardized metadata wrapper:
@@ -1307,5 +1513,34 @@ outputs:
 - [Open an Issue](https://github.com/jimmy058910/jmo-security-repo/issues)
 
 ---
+
+## Related Documentation
+
+**Core Guides:**
+
+- [User Guide](USER_GUIDE.md) - Complete reference documentation
+- [Quick Start](../QUICKSTART.md) - 5-minute setup
+- [Profiles and Tools](PROFILES_AND_TOOLS.md) - Tool lists and dependencies
+
+**Historical and Comparison:**
+
+- [Historical Storage Guide](HISTORY_GUIDE.md) - SQLite database for scan persistence
+- [Trend Analysis Guide](TRENDS_GUIDE.md) - Statistical trend analysis over time
+- [Machine-Readable Diffs Guide](DIFF_GUIDE.md) - Compare two scans
+
+**Supply Chain and Compliance:**
+
+- [SLSA Attestation Guide](SLSA_GUIDE.md) - Provenance and tamper detection
+- [Policy as Code](POLICY_AS_CODE.md) - Compliance framework mappings
+
+**Integration:**
+
+- [MCP Setup Guide](MCP_SETUP.md) - AI remediation orchestration
+- [CI/CD Integration](USER_GUIDE.md#cicd-pipeline-integration-strategy) - CI/CD integration help
+- [Docker Guide](DOCKER_README.md) - Container deployment
+
+---
+
+**Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
 
 **Last Updated:** December 2025

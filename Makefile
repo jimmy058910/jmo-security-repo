@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges
+.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -39,6 +39,25 @@ help:
 	@echo "  balanced  - Balanced profile scan via jmotools"
 	@echo "  full      - Deep profile scan via jmotools"
 	@echo "  attack-navigator - Open ATT&CK Navigator with scan findings (auto-serve)"
+	@echo ""
+	@echo "Sample Fixture Targets:"
+	@echo "  regenerate-samples   - Full sample regeneration (scan + report + verify)"
+	@echo "  samples-scan         - Scan samples/fixtures/infra-demo with balanced profile"
+	@echo "  samples-report       - Generate reports from sample scan results"
+	@echo "  samples-verify       - Verify sample outputs have v1.0.0 format"
+	@echo "  samples-clean        - Remove old sample outputs"
+	@echo ""
+	@echo "Distribution/Build Targets:"
+	@echo "  dist                 - Build sdist and wheel packages"
+	@echo "  dist-verify          - Verify built packages are installable"
+	@echo "  dist-clean           - Remove build/ dist/ *.egg-info/"
+	@echo ""
+	@echo "Extended Clean Targets:"
+	@echo "  clean                - Quick clean (Python caches only)"
+	@echo "  clean-all            - Full clean (caches + build + test + samples)"
+	@echo "  clean-build          - Remove build artifacts only"
+	@echo "  clean-test           - Remove test artifacts only"
+	@echo "  clean-caches         - Remove Python caches only"
 	@echo ""
 	@echo "Docker Targets:"
 	@echo "  docker-build         - Build Docker image (VARIANT=full|slim|alpine, default: full)"
@@ -252,6 +271,210 @@ full:
 	@if [ -n "$(DIR)" ]; then jmotools full --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
 	elif [ -n "$(TARGETS)" ]; then jmotools full --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
 	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
+
+# ============================================================================
+# Sample Fixture Targets
+# ============================================================================
+# These targets regenerate sample outputs for documentation and testing.
+# The primary fixture is samples/fixtures/infra-demo/ which contains:
+#   - Terraform (main.tf) - IaC security scanning
+#   - Kubernetes (deployment.yaml) - Container orchestration security
+#   - Docker (Dockerfile) - Container security
+#   - Secrets (secrets.json) - Secret detection testing
+#
+# Sample outputs demonstrate v1.0.0 format with metadata wrapper:
+#   {"meta": {"output_version": "1.0.0", ...}, "findings": [...]}
+#
+# Usage:
+#   make regenerate-samples    # Full regeneration (scan + report + verify)
+#   make samples-verify        # Verify outputs are valid v1.0.0 format
+#
+# Time estimates:
+#   - samples-scan: 5-15 minutes (depends on installed tools)
+#   - samples-report: ~30 seconds
+#   - Full regeneration: 5-20 minutes total
+# ============================================================================
+
+SAMPLES_FIXTURE := samples/fixtures/infra-demo
+SAMPLES_OUTPUT := samples/fixtures/infra-demo/sample-results
+
+samples-clean:
+	@echo "[samples-clean] Removing old sample outputs..."
+	@rm -rf $(SAMPLES_OUTPUT)
+	@echo "[samples-clean] Done"
+
+samples-scan: samples-clean
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║  Scanning sample fixture: $(SAMPLES_FIXTURE)                 ║"
+	@echo "║  Profile: balanced (18 tools)                                ║"
+	@echo "║  Estimated time: 5-15 minutes                                ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	PYTHONPATH=. $(PY) scripts/cli/jmo.py scan \
+		--repo $(SAMPLES_FIXTURE) \
+		--results $(SAMPLES_OUTPUT) \
+		--profile balanced \
+		--allow-missing-tools \
+		--human-logs
+	@echo ""
+	@echo "[samples-scan] ✅ Scan complete: $(SAMPLES_OUTPUT)"
+
+samples-report:
+	@if [ ! -d "$(SAMPLES_OUTPUT)/individual-repos" ]; then \
+		echo "[samples-report] ❌ No scan results found."; \
+		echo ""; \
+		echo "Run 'make samples-scan' first, or 'make regenerate-samples' for full workflow."; \
+		exit 1; \
+	fi
+	@echo "[samples-report] Generating reports from: $(SAMPLES_OUTPUT)"
+	PYTHONPATH=. $(PY) scripts/cli/jmo.py report $(SAMPLES_OUTPUT) \
+		--out $(SAMPLES_OUTPUT)/summaries \
+		--human-logs
+	@echo ""
+	@echo "[samples-report] ✅ Reports generated:"
+	@ls -la $(SAMPLES_OUTPUT)/summaries/ 2>/dev/null | tail -10 || echo "  (no files)"
+
+samples-verify:
+	@echo "[samples-verify] Verifying sample outputs..."
+	@echo ""
+	@if [ ! -d "$(SAMPLES_OUTPUT)/summaries" ]; then \
+		echo "❌ No sample outputs found at $(SAMPLES_OUTPUT)/summaries"; \
+		echo "   Run 'make regenerate-samples' first."; \
+		exit 1; \
+	fi
+	@echo "Checking required output files:"
+	@for f in findings.json SUMMARY.md dashboard.html findings.sarif findings.csv simple-report.html; do \
+		if [ -f "$(SAMPLES_OUTPUT)/summaries/$$f" ]; then \
+			echo "  ✅ $$f"; \
+		else \
+			echo "  ❌ $$f (MISSING)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "Validating v1.0.0 metadata format:"
+	@if [ -f "$(SAMPLES_OUTPUT)/summaries/findings.json" ]; then \
+		if command -v jq >/dev/null 2>&1; then \
+			VERSION=$$(jq -r '.meta.output_version // "missing"' $(SAMPLES_OUTPUT)/summaries/findings.json 2>/dev/null); \
+			SCHEMA=$$(jq -r '.meta.schema_version // "missing"' $(SAMPLES_OUTPUT)/summaries/findings.json 2>/dev/null); \
+			COUNT=$$(jq -r '.meta.finding_count // .findings | length' $(SAMPLES_OUTPUT)/summaries/findings.json 2>/dev/null); \
+			echo "  ✅ output_version: $$VERSION"; \
+			echo "  ✅ schema_version: $$SCHEMA"; \
+			echo "  ✅ finding_count: $$COUNT"; \
+		else \
+			echo "  ⚠️  jq not installed, skipping JSON validation"; \
+		fi; \
+	else \
+		echo "  ❌ findings.json not found"; \
+	fi
+	@echo ""
+	@echo "[samples-verify] Done"
+
+regenerate-samples: samples-scan samples-report samples-verify
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║  ✅ Sample outputs regenerated successfully!                 ║"
+	@echo "╠══════════════════════════════════════════════════════════════╣"
+	@echo "║  Location: $(SAMPLES_OUTPUT)/summaries/                      ║"
+	@echo "║                                                              ║"
+	@echo "║  Output files (v1.0.0 format):                               ║"
+	@echo "║    findings.json      - Machine-readable with metadata       ║"
+	@echo "║    findings.sarif     - GitHub/GitLab code scanning          ║"
+	@echo "║    findings.csv       - Spreadsheet export                   ║"
+	@echo "║    SUMMARY.md         - PR comments, documentation           ║"
+	@echo "║    dashboard.html     - Interactive browser viewing          ║"
+	@echo "║    simple-report.html - Email-compatible static report       ║"
+	@echo "║                                                              ║"
+	@echo "║  These outputs are used by SAMPLE_OUTPUTS.md examples.       ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"
+
+# ============================================================================
+# Distribution/Build Targets
+# ============================================================================
+# Build and verify Python distribution packages (sdist + wheel).
+# These are used for PyPI releases and local testing.
+#
+# Usage:
+#   make dist          # Build distribution packages
+#   make dist-verify   # Verify packages are installable
+#   make dist-clean    # Clean build artifacts
+#
+# Note: CI handles actual PyPI publishing via trusted publisher (OIDC).
+# These targets are for local development and pre-release testing.
+# ============================================================================
+
+dist-clean:
+	@echo "[dist-clean] Removing build artifacts..."
+	@rm -rf build/ dist/ *.egg-info/
+	@echo "[dist-clean] Done"
+
+dist: dist-clean
+	@echo "[dist] Building source distribution and wheel..."
+	@$(PY) -m pip install --quiet build 2>/dev/null || true
+	$(PY) -m build
+	@echo ""
+	@echo "[dist] ✅ Built packages:"
+	@ls -lh dist/
+
+dist-verify: dist
+	@echo ""
+	@echo "[dist-verify] Verifying distribution packages..."
+	@echo "[dist-verify] Creating temporary venv..."
+	@$(PY) -m venv /tmp/jmo-dist-test
+	@/tmp/jmo-dist-test/bin/pip install --quiet --upgrade pip
+	@echo "[dist-verify] Installing wheel..."
+	@/tmp/jmo-dist-test/bin/pip install --quiet dist/*.whl
+	@echo "[dist-verify] Testing CLI..."
+	@/tmp/jmo-dist-test/bin/jmo --version
+	@/tmp/jmo-dist-test/bin/jmo --help >/dev/null
+	@echo ""
+	@echo "[dist-verify] ✅ Distribution verified successfully"
+	@rm -rf /tmp/jmo-dist-test
+
+# ============================================================================
+# Extended Clean Targets
+# ============================================================================
+# Comprehensive cleanup for various artifact types.
+# The base 'clean' target is intentionally minimal (caches only).
+# Use 'clean-all' for a full workspace reset.
+#
+# Usage:
+#   make clean         # Quick: Python caches only
+#   make clean-all     # Full: caches + build + test + samples
+#   make clean-build   # Build artifacts only
+#   make clean-test    # Test artifacts only
+# ============================================================================
+
+clean-caches:
+	@echo "[clean-caches] Removing Python caches..."
+	@rm -rf .ruff_cache/ .mypy_cache/
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -name "*.pyc" -delete 2>/dev/null || true
+	@find . -name "*.pyo" -delete 2>/dev/null || true
+	@echo "[clean-caches] Done"
+
+clean-build:
+	@echo "[clean-build] Removing build artifacts..."
+	@rm -rf build/ dist/ *.egg-info/
+	@find . -name "*.whl" -not -path "./.venv/*" -delete 2>/dev/null || true
+	@find . -name "*.egg" -not -path "./.venv/*" -delete 2>/dev/null || true
+	@echo "[clean-build] Done"
+
+clean-test:
+	@echo "[clean-test] Removing test artifacts..."
+	@rm -rf htmlcov/ .coverage coverage.xml coverage.json
+	@rm -rf results/ results-*/
+	@rm -rf .pytest_cache/ .hypothesis/
+	@rm -f *-images.txt
+	@echo "[clean-test] Done"
+
+clean-all: clean-caches clean-build clean-test samples-clean
+	@echo ""
+	@echo "[clean-all] ✅ Comprehensive cleanup complete"
+	@echo "  Removed: caches, build artifacts, test outputs, sample outputs"
+	@echo ""
+	@echo "  Note: Virtual environments (.venv/) are preserved."
+	@echo "  To remove stale venvs, manually delete: venv-*/, .venv-pypi/, .post-release-venv/"
 
 # ============================================================================
 # Docker Build Targets

@@ -1,10 +1,10 @@
 # JMo Security Suite - Balanced Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 18 production-ready security tools
-# Size: ~1.41 GB (optimized) | Tools: 18 scanners | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 19 production-ready security tools + OPA
+# Size: ~1.41 GB (optimized) | Tools: 19 scanners | Multi-arch: amd64, arm64
 # v1.0.0: Balanced variant - Excludes specialized tools (Noseyparker, Bandit, Semgrep-Secrets, Trivy-RBAC, Falco, AFL++, MobSF, Lynis)
 
 #
-# Stage 1: Builder - Download and extract 18 tools
+# Stage 1: Builder - Download and extract 19 tools
 #
 FROM ubuntu:22.04 AS builder
 
@@ -102,7 +102,7 @@ RUN BEARER_VERSION="1.51.1" && \
     chmod +x /usr/local/bin/bearer
 
 # Download OWASP Dependency-Check (SCA + License)
-RUN DC_VERSION="11.1.1" && \
+RUN DC_VERSION="12.1.0" && \
     wget -q "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
     -O /tmp/dependency-check.zip && \
     unzip -q /tmp/dependency-check.zip -d /opt && \
@@ -116,13 +116,20 @@ RUN HORUSEC_VERSION="2.8.0" && \
     -o /usr/local/bin/horusec && \
     chmod +x /usr/local/bin/horusec
 
+# Download OPA (Policy-as-Code engine)
+RUN OPA_VERSION="1.12.0" && \
+    OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
+    -o /usr/local/bin/opa && \
+    chmod +x /usr/local/bin/opa
+
 #
-# Stage 2: Runtime - Production-ready runtime with 18 tools
+# Stage 2: Runtime - Production-ready runtime with 19 tools
 #
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
-LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 18 scanners optimized for CI/CD pipelines (v1.0.0)"
+LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 19 scanners optimized for CI/CD pipelines (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -166,13 +173,14 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 
 # Install Python tools (Phase 1: 40 MB bytecode cleanup)
 # Note: horusec binary is copied from builder stage, no pip package needed
+# Note: checkov and prowler have conflicting dependencies - install separately
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.144.0 \
+    semgrep==1.146.0 \
     checkov==3.2.495 \
     ruff==0.14.6 \
-    yara-python==4.5.2 \
-    prowler==5.13.1 && \
+    yara-python==4.5.2 && \
+    python3 -m pip install --no-cache-dir prowler==5.13.1 && \
     python3 -m pip install --no-cache-dir scancode-toolkit==32.3.0 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
@@ -193,6 +201,7 @@ COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
+COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
 
@@ -206,6 +215,7 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/grype \
     /usr/local/bin/bearer \
     /usr/local/bin/horusec \
+    /usr/local/bin/opa \
     2>/dev/null || true
 
 # Create symlinks
@@ -227,8 +237,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 18 tools
-RUN echo "=== Verifying 18 balanced tools ===" && \
+# Verify 19 tools
+RUN echo "=== Verifying 19 balanced tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -248,14 +258,17 @@ RUN echo "=== Verifying 18 balanced tools ===" && \
     scancode --version && \
     cdxgen --version && \
     shellcheck --version && \
-    echo "=== All 18 balanced tools verified ==="
+    opa version && \
+    echo "=== All 19 balanced tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 # Note: /root/.local may not exist if pip installed to /usr/local instead
 RUN useradd -m -u 1000 -s /bin/bash jmo &&     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local &&     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo &&     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
-ENV PATH="/home/jmo/.local/bin:${PATH}"
+# Set DOCKER_CONTAINER=1 to enable Docker-specific behaviors (skip first-run prompts)
+ENV PATH="/home/jmo/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
 
 # Switch to non-root user
 USER jmo

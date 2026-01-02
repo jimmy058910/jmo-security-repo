@@ -297,6 +297,116 @@ export JMO_MCP_RATE_LIMIT_CAPACITY="200"
 export JMO_MCP_RATE_LIMIT_ENABLED="false"
 ```
 
+### MCP Resource
+
+JMo Security also exposes a resource for full finding context:
+
+**`finding://{fingerprint}`** - Returns:
+
+- Full CommonFinding object with all metadata
+- Source code snippet (20 lines of context around the vulnerability)
+- Compliance framework mappings (OWASP, CWE, NIST, PCI DSS, CIS, ATT&CK)
+- Remediation guidance and references
+- Tool-specific metadata (CVSS scores, confidence ratings)
+
+**Example Usage:**
+
+```text
+@jmo-security Show context for finding fp-abc123
+```
+
+Returns structured data for AI-assisted triage.
+
+### GitHub Copilot Integration
+
+For VS Code users with GitHub Copilot, add JMo Security as an MCP server:
+
+**VS Code settings.json:**
+
+```json
+{
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.mcp.servers": {
+    "jmo-security": {
+      "command": "uv",
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
+      "env": {
+        "MCP_RESULTS_DIR": "./results",
+        "MCP_REPO_ROOT": "."
+      }
+    }
+  }
+}
+```
+
+**Usage in Copilot Chat:**
+
+```text
+"What are the CRITICAL findings?"
+"Fix the SQL injection in src/api/db.py"
+"Show compliance mappings for finding abc123"
+```
+
+### Security & Privacy
+
+**Read-Only by Default:**
+
+- MCP server starts in read-only mode
+- `get_security_findings`, `get_server_info` are always safe
+- `apply_fix` requires careful review (dry_run recommended)
+
+**Local Execution:**
+
+- All data stays on your machine
+- No external API calls (except AI assistant communication)
+- Works offline after initial scan
+
+**Results Directory Scoping:**
+
+- MCP server only accesses specified `MCP_RESULTS_DIR`
+- Cannot read files outside results directory
+- Repository root (`MCP_REPO_ROOT`) used only for code context display
+
+### AI Triage Workflow
+
+**Example: Batch Triage with AI Assistance**
+
+```text
+# 1. Query high-priority findings
+@jmo-security Show HIGH and CRITICAL findings in src/api/
+
+# 2. Get context for specific finding
+@jmo-security Get context for fingerprint abc123
+
+# 3. Generate fix suggestion
+@jmo-security Suggest a fix for the SQL injection in db.py:42
+
+# 4. Preview fix (dry_run)
+@jmo-security Apply fix with dry_run=true for finding abc123
+
+# 5. Mark as resolved
+@jmo-security Mark abc123 as fixed with comment "Applied parameterized query"
+```
+
+**CI/CD Integration Example:**
+
+```yaml
+# .github/workflows/security-triage.yml
+- name: Run security scan
+  run: |
+    jmo scan --repo . --results-dir ./results --profile balanced
+
+- name: Start MCP server for AI triage
+  run: |
+    uv run mcp dev scripts/jmo_mcp/server.py &
+    sleep 5  # Wait for server to start
+
+- name: Generate triage summary
+  run: |
+    # Use Claude Code or similar to query findings
+    claude "Summarize CRITICAL findings and suggest fixes"
+```
+
 ---
 
 ## Third-Party MCP Servers
@@ -878,7 +988,28 @@ For issues or questions:
 
 ---
 
-**Last Updated:** December 2025
-**Related Docs:** [CLAUDE.md](../CLAUDE.md), [CONTRIBUTING.md](../CONTRIBUTING.md)
+## Related Documentation
+
+**Core Guides:**
+
+- [User Guide](USER_GUIDE.md) - Complete reference documentation
+- [Results Guide](RESULTS_GUIDE.md) - Understanding scan output formats
+- [Quick Start](../QUICKSTART.md) - 5-minute setup
+
+**Historical and Analysis:**
+
+- [Historical Storage Guide](HISTORY_GUIDE.md) - SQLite database for scan persistence
+- [Trend Analysis Guide](TRENDS_GUIDE.md) - Statistical trend analysis over time
+- [Machine-Readable Diffs Guide](DIFF_GUIDE.md) - Compare two scans
+
+**Integration:**
+
+- [CI/CD Integration](USER_GUIDE.md#cicd-pipeline-integration-strategy) - CI/CD integration help
+- [Docker Guide](DOCKER_README.md) - Container deployment
+- [SLSA Attestation Guide](SLSA_GUIDE.md) - Supply chain attestation
+
+---
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
+
+**Last Updated:** December 2025

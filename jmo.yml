@@ -13,6 +13,7 @@ outputs:
 - yaml
 - html
 - sarif
+- csv
 fail_on: ''
 default_profile: balanced
 profiles:

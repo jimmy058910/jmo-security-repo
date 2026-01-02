@@ -57,7 +57,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, tool_exists, write_stub
 
 
 def scan_repository(
@@ -70,6 +70,8 @@ def scan_repository(
     allow_missing_tools: bool,
     tool_exists_func: Callable[[str], bool] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
+    find_tool_func: Callable[[str], str | None] | None = None,
+    progress_callback: Callable[[str, str, int], None] | None = None,
 ) -> tuple[str, dict[str, bool]]:
     """
     Scan a Git repository with multiple security tools.
@@ -84,6 +86,9 @@ def scan_repository(
         allow_missing_tools: If True, write empty stubs for missing tools
         tool_exists_func: Optional function to check if tool exists (for testing)
         write_stub_func: Optional function to write stub files (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
+        progress_callback: Optional callback(tool_name, status, findings_count)
+                          Called when tools start and complete for progress tracking
 
     Returns:
         Tuple of (repo_name, statuses_dict)
@@ -95,6 +100,7 @@ def scan_repository(
     # Use provided functions or defaults
     _tool_exists = tool_exists_func or tool_exists
     _write_stub = write_stub_func or write_stub
+    _find_tool = find_tool_func or find_tool
 
     name = repo.name
     out_dir = results_dir / name
@@ -438,7 +444,8 @@ def scan_repository(
         zap_out = out_dir / "zap.json"
         # ZAP baseline scan can analyze HTML/JS files in repository
         # This is a limited use case; full DAST requires --url target
-        if _tool_exists("zap-baseline.py") or _tool_exists("docker"):
+        zap_baseline_path = _find_tool("zap-baseline.py")
+        if zap_baseline_path or _tool_exists("docker"):
             zap_flags = get_tool_flags("zap")
             # Check for web-related files (HTML, JS, PHP, etc.)
             web_files = (
@@ -450,9 +457,9 @@ def scan_repository(
                 # Use ZAP baseline scan on first web file found
                 # Note: This is a simplified approach; full ZAP requires live server
                 target_file = web_files[0]
-                if _tool_exists("zap-baseline.py"):
+                if zap_baseline_path:
                     zap_cmd = [
-                        "zap-baseline.py",
+                        zap_baseline_path,  # Use full path from find_tool
                         "-t",
                         str(target_file),
                         "-J",
@@ -1059,10 +1066,12 @@ def scan_repository(
     # Dependency-Check: OWASP SCA for known vulnerabilities
     if "dependency-check" in tools:
         dependency_check_out = out_dir / "dependency-check.json"
-        if _tool_exists("dependency-check"):
+        # find_tool checks both PATH and ~/.jmo/bin/dependency-check/bin/dependency-check.sh
+        dc_path = _find_tool("dependency-check")
+        if dc_path:
             dependency_check_flags = get_tool_flags("dependency-check")
             dependency_check_cmd = [
-                "dependency-check",
+                dc_path,  # Use full path from find_tool
                 "--project",
                 name,
                 "--scan",
@@ -1102,6 +1111,7 @@ def scan_repository(
 
     runner = ToolRunner(
         tools=tool_defs,
+        progress_callback=progress_callback,
     )
     results = runner.run_all_parallel()
 

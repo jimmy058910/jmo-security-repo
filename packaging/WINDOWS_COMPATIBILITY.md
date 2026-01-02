@@ -52,7 +52,7 @@ jmo fast --repos-dir C:\Projects
 
 ### Balanced Profile ⚠️ **Partially Works on Native Windows**
 
-**Time:** 18-25 minutes | **Tools:** 21 tools (7 work natively, rest require Docker)
+**Time:** 18-25 minutes | **Tools:** 18 tools (7 work natively, rest require Docker)
 
 ```powershell
 jmo balanced --repos-dir C:\Projects

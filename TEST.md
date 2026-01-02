@@ -97,7 +97,7 @@ The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
 
 - Native CLI (`jmo` command)
 - Wizard (`jmotools wizard`)
-- Docker containers (full/slim variants)
+- Docker containers (deep/balanced/slim/fast variants)
 
 ### Test Suites
 
@@ -130,7 +130,7 @@ bash tests/e2e/run_comprehensive_tests.sh --test A1
 # Kubernetes scanning (requires kubectl + cluster)
 bash tests/e2e/run_comprehensive_tests.sh --test A2
 
-# Deep profile with all 11 tools
+# Deep profile with all 28 tools
 bash tests/e2e/run_comprehensive_tests.sh --test A3
 ```
 

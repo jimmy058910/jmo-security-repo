@@ -1,10 +1,10 @@
 # JMo Security Suite - Fast Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 8 CI/CD gate tools
-# Size: ~502 MB (optimized) | Tools: 8 scanners (fastest scan profile) | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 8 CI/CD gate tools + OPA for policy-as-code
+# Size: ~502 MB (optimized) | Tools: 9 (8 scanners + OPA) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
 
 #
-# Stage 1: Builder - Download 8 fast tools
+# Stage 1: Builder - Download 9 fast tools (8 scanners + OPA)
 #
 FROM ubuntu:22.04 AS builder
 
@@ -59,8 +59,15 @@ RUN NUCLEI_VERSION="3.5.1" && \
     rm /tmp/nuclei.zip && \
     nuclei -update-templates -tl cves,exposures -silent
 
+# Download OPA (Policy-as-Code engine)
+RUN OPA_VERSION="1.12.0" && \
+    OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
+    -o /usr/local/bin/opa && \
+    chmod +x /usr/local/bin/opa
+
 #
-# Stage 2: Runtime - Minimal CI/CD environment with 8 tools
+# Stage 2: Runtime - Minimal CI/CD environment with 9 tools
 #
 FROM ubuntu:22.04 AS runtime
 
@@ -77,10 +84,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/root/.local/bin:${PATH}" \
     DOCKER_CONTAINER=1
 
-# Install minimal runtime dependencies
+# Install runtime dependencies and build tools for Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    python3-dev \
+    build-essential \
     git \
     ca-certificates \
     jq \
@@ -91,11 +100,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    semgrep==1.144.0 \
+    semgrep==1.146.0 \
     checkov==3.2.495 \
     ruff==0.14.6 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+
+# Remove build dependencies to reduce image size (keep python3-dev for potential runtime needs)
+RUN apt-get purge -y build-essential && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy binaries from builder
 COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
@@ -103,6 +117,7 @@ COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
 COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
+COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 
 # Binary stripping
 RUN strip /usr/local/bin/trufflehog \
@@ -110,6 +125,7 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/trivy \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
+    /usr/local/bin/opa \
     2>/dev/null || true
 
 VOLUME ["/root/.cache/trivy"]
@@ -125,8 +141,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify 8 fast tools
-RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
+# Verify 9 fast tools (8 scanners + OPA for policy-as-code)
+RUN echo "=== Verifying 9 fast CI/CD tools ===" && \
     jmo --help > /dev/null && \
     trufflehog --version && \
     semgrep --version && \
@@ -136,7 +152,8 @@ RUN echo "=== Verifying 8 fast CI/CD tools ===" && \
     hadolint --version && \
     nuclei -version && \
     shellcheck --version && \
-    echo "=== All 8 fast tools verified ==="
+    opa version && \
+    echo "=== All 9 fast tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 # Note: /root/.local may not exist if pip installed to /usr/local instead
@@ -146,7 +163,9 @@ RUN useradd -m -u 1000 -s /bin/bash jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
-ENV PATH="/home/jmo/.local/bin:${PATH}"
+# Set DOCKER_CONTAINER=1 to enable Docker-specific behaviors (skip first-run prompts)
+ENV PATH="/home/jmo/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
 
 # Switch to non-root user
 USER jmo

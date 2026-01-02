@@ -7,7 +7,7 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.144.0
+    version: 1.146.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
@@ -24,7 +24,7 @@ python_tools:
     description: Python linter and formatter
     update_check: pip index versions ruff
     critical: false
-  scancode-toolkit:
+  scancode:
     version: 32.4.1
     pypi_package: scancode-toolkit
     description: License and copyright scanner
@@ -46,10 +46,14 @@ python_tools:
     update_check: gh api repos/CISOfy/lynis/releases/latest
     github_repo: CISOfy/lynis
     critical: false
-    notes: v1.0.0 - Shell script based, no PyPI package
-    installation: apt-get install lynis
+    notes: |
+      v1.0.0 - Shell script based, no PyPI package.
+      Installation method: git clone to ~/.jmo/bin/lynis/ at pinned version tag.
+      The lynis script at ~/.jmo/bin/lynis/lynis is detected for version check.
+      System apt-installed lynis may be older and will be shadowed.
+    installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.13.1
+    version: 5.16.0
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -207,14 +211,17 @@ special_tools:
     update_check: gh api repos/zaproxy/zaproxy/releases/latest
     critical: true
     installation: tar.gz with Java dependency
-  aflplusplus:
+  afl++:
     version: 4.34c
     github_repo: AFLplusplus/AFLplusplus
     description: Coverage-guided fuzzing (optional, deep profile)
     release_pattern: v{version}.tar.gz
     update_check: gh api repos/AFLplusplus/AFLplusplus/releases/latest
     critical: false
-    installation: Source build required
+    installation: Source build required (manual)
+    notes: |
+      MANUAL INSTALLATION REQUIRED - must be built from source.
+      See docs/PROFILES_AND_TOOLS.md for installation guide.
   mobsf:
     version: 4.4.2
     github_repo: MobSF/Mobile-Security-Framework-MobSF
@@ -243,14 +250,19 @@ special_tools:
       '
     docker_ready: false
   yara:
-    version: 4.5.5
+    version: 4.5.4
+    pypi_package: yara-python
     github_repo: VirusTotal/yara
     description: Malware pattern detection
     release_pattern: v{version}.tar.gz
     update_check: gh api repos/VirusTotal/yara/releases/latest
     critical: false
-    installation: yara-python pip package
-    notes: v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules)
+    installation: yara-python pip package (Python library, not CLI)
+    notes: |
+      v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules).
+      NOTE: yara-python is a Python library, NOT a CLI binary. Version check
+      uses 'import yara' instead of 'yara --version'. The native yara CLI
+      is a separate package from the VirusTotal/yara repo.
   dependency-check:
     version: 12.1.0
     github_repo: jeremylong/DependencyCheck
@@ -272,7 +284,7 @@ special_tools:
     critical: false
     notes: v1.0.0 - Alternative SAST for broad language coverage
   opa:
-    version: 1.10.1
+    version: 1.12.0
     github_repo: open-policy-agent/opa
     description: Open Policy Agent (policy-as-code engine)
     release_pattern: opa_linux_{arch}_static
@@ -334,7 +346,7 @@ update_policies:
     - gosec
     - grype
     - bearer
-    - scancode-toolkit
+    - scancode
     - cdxgen
     - lynis
     - mobsf

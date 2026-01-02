@@ -1,6 +1,6 @@
 # JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
-# Base: Ubuntu 22.04 with 25 security tools pre-installed
-# Size: ~1.9 GB (optimized) | Tools: 25 Docker-ready scanners | Multi-arch: amd64, arm64
+# Base: Ubuntu 22.04 with 26 security tools pre-installed + OPA
+# Size: ~1.9 GB (optimized) | Tools: 26 Docker-ready scanners | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
 
 #
@@ -143,7 +143,7 @@ RUN LYNIS_VERSION="3.1.3" && \
     mv /opt/lynis-${LYNIS_VERSION} /opt/lynis
 
 # Download OWASP Dependency-Check (SCA + License)
-RUN DC_VERSION="11.1.1" && \
+RUN DC_VERSION="12.1.0" && \
     wget -q "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
     -O /tmp/dependency-check.zip && \
     unzip -q /tmp/dependency-check.zip -d /opt && \
@@ -157,6 +157,13 @@ RUN HORUSEC_VERSION="2.8.0" && \
     -o /usr/local/bin/horusec && \
     chmod +x /usr/local/bin/horusec
 
+# Download OPA (Policy-as-Code engine)
+RUN OPA_VERSION="1.12.0" && \
+    OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
+    -o /usr/local/bin/opa && \
+    chmod +x /usr/local/bin/opa
+
 # NOTE: AFL++ removed from Docker image - requires LLVM/GCC dev headers for full build
 # AFL++ is a specialized fuzzing tool; install manually if needed: https://github.com/AFLplusplus/AFLplusplus
 
@@ -166,7 +173,7 @@ RUN HORUSEC_VERSION="2.8.0" && \
 FROM ubuntu:22.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 28 pre-installed scanners + plugin system + schedule management (v1.0.0)"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 27 pre-installed scanners + OPA policy engine + plugin system (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -189,6 +196,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     jq \
     shellcheck \
+    yara \
     openjdk-17-jre-headless \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -229,7 +237,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN python3 -m pip install --no-cache-dir bandit==1.9.2 && \
     echo "✓ bandit installed"
 
-RUN python3 -m pip install --no-cache-dir semgrep==1.144.0 && \
+RUN python3 -m pip install --no-cache-dir semgrep==1.146.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
@@ -280,6 +288,7 @@ COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
+COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 COPY --from=builder /opt/lynis /opt/lynis
 COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli
@@ -296,6 +305,7 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/grype \
     /usr/local/bin/bearer \
     /usr/local/bin/horusec \
+    /usr/local/bin/opa \
     2>/dev/null || true
 
 # Create symlinks and wrapper scripts for easier invocation
@@ -332,8 +342,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify all 25 tools are installed and accessible
-RUN echo "=== Verifying all 25 tools ===" && \
+# Verify all 27 tools are installed and accessible
+RUN echo "=== Verifying all 27 tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
     jmo tools --help > /dev/null && \
@@ -348,6 +358,7 @@ RUN echo "=== Verifying all 25 tools ===" && \
     hadolint --version && \
     zap -version && \
     nuclei -version && \
+    yara --version && \
     falcoctl version && \
     shellcheck --version && \
     shfmt --version && \
@@ -361,7 +372,8 @@ RUN echo "=== Verifying all 25 tools ===" && \
     horusec version && \
     scancode --version && \
     cdxgen --version && \
-    echo "=== All 25 tools verified ==="
+    opa version && \
+    echo "=== All 27 tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 # Note: /root/.local may not exist if pip installed to /usr/local instead
@@ -371,7 +383,9 @@ RUN useradd -m -u 1000 -s /bin/bash jmo && \
     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
-ENV PATH="/home/jmo/.local/bin:${PATH}"
+# Set DOCKER_CONTAINER=1 to enable Docker-specific behaviors (skip first-run prompts)
+ENV PATH="/home/jmo/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
 
 # Switch to non-root user
 USER jmo

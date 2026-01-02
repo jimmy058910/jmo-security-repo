@@ -177,6 +177,42 @@ docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:latest scan -
 | **Windows PowerShell 5.1+** | `"${PWD}:/scan"` | `docker run -v "${PWD}:/scan" ...` |
 | **Windows CMD** | `"%CD%:/scan"` | `docker run -v "%CD%:/scan" ...` |
 
+#### Recommended: Use the jmo-docker Wrapper (Windows)
+
+For the easiest experience on Windows, use our wrapper scripts that handle path conversion automatically:
+
+**Download the wrapper (one-time setup):**
+
+```powershell
+# PowerShell - download to your PATH or project
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/jmo-docker.ps1" -OutFile "jmo-docker.ps1"
+
+# Or for CMD users
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jimmy058910/jmo-security-repo/main/packaging/scripts/jmo-docker.cmd" -OutFile "jmo-docker.cmd"
+```
+
+**Then simply run:**
+
+```powershell
+# PowerShell
+.\jmo-docker.ps1 scan --repo /scan --profile fast
+
+# CMD
+jmo-docker scan --repo /scan --profile fast
+
+# Git Bash (if you downloaded the bash version)
+./jmo-docker scan --repo /scan --profile fast
+```
+
+**What the wrapper does automatically:**
+
+- Sets `MSYS_NO_PATHCONV=1` (fixes Git Bash path issues)
+- Mounts your current directory to `/scan`
+- Mounts `.jmo/` for scan history persistence
+- Passes all your arguments to Docker
+
+This gives you a CLI-like experience with zero path headaches!
+
 **Why quotes matter:** Paths with spaces (e.g., `C:\My Projects\`) will fail without quotes.
 
 ### Step 4: View Your Results
@@ -250,7 +286,7 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 
 **Notes:**
 
-- **28 total tools**: 26 Docker-ready (automatically included), 2 manual install (MobSF, Akto)
+- **28 total tools**: 25 Docker-ready (automatically included), 3 manual install (AFL++, MobSF, Akto)
 - **Scan times**: Estimated for typical repository (10K-50K LOC, 100-500 dependencies)
 
 ### Decision Tree
@@ -296,7 +332,7 @@ START: What is your primary use case?
 
 #### Secrets Detection
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
 | **TruffleHog** | ✅ | ✅ | ✅ | ✅ | Core tool, always included |
 | **Nosey Parker** | ✅ | ❌ | ❌ | ❌ | Deep profile only |
@@ -304,34 +340,33 @@ START: What is your primary use case?
 
 #### Static Analysis (SAST)
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
-| **Semgrep** | ✅ | ❌ | ❌ | ❌ | 4000+ rules, 30+ languages |
+| **Semgrep** | ✅ | ✅ | ✅ | ✅ | 4000+ rules, 30+ languages |
 | **Bandit** | ✅ | ❌ | ❌ | ❌ | Python-specific |
 | **Gosec** | ✅ | ✅ | ❌ | ❌ | Go security scanner |
 | **Horusec** | ✅ | ✅ | ✅ | ❌ | 18 languages, 10+ analyzers |
 
 #### Software Composition Analysis (SCA)
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
 | **Syft** | ✅ | ✅ | ✅ | ✅ | Core SBOM tool |
 | **Trivy** | ✅ | ✅ | ✅ | ✅ | Core scanner |
-| **OSV-Scanner** | ✅ | ✅ | ✅ | ✅ | Google OSV database |
 | **Grype** | ✅ | ✅ | ✅ | ❌ | Anchore scanner |
-| **Dependency-Check** | ✅ | ❌ | ✅ | ❌ | OWASP vuln database |
+| **Dependency-Check** | ✅ | ✅ | ✅ | ❌ | OWASP vuln database |
 
 #### Infrastructure as Code (IaC) & Containers
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
-| **Checkov** | ✅ | ❌ | ❌ | ❌ | Terraform, CloudFormation, K8s |
+| **Checkov** | ✅ | ✅ | ✅ | ✅ | Terraform, CloudFormation, K8s |
 | **Checkov-CICD** | ✅ | ❌ | ❌ | ❌ | CI/CD pipeline security |
 | **Hadolint** | ✅ | ✅ | ✅ | ✅ | Dockerfile best practices |
 
 #### Cloud Security (CSPM) & Kubernetes
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
 | **Prowler** | ✅ | ✅ | ✅ | ❌ | AWS/Azure/GCP/K8s auditing |
 | **Kubescape** | ✅ | ✅ | ✅ | ❌ | K8s RBAC, NSA/CISA frameworks |
@@ -339,13 +374,13 @@ START: What is your primary use case?
 
 #### Dynamic Application Security Testing (DAST)
 
-| Tool | Full | Balanced | Slim | Fast | Notes |
+| Tool | Deep | Balanced | Slim | Fast | Notes |
 |------|------|----------|------|------|-------|
 | **OWASP ZAP** | ✅ | ✅ | ❌ | ❌ | Web app security testing |
 | **Nuclei** | ✅ | ✅ | ✅ | ✅ | 4000+ vulnerability templates |
 | **Akto** | 🔧 | 🔧 | 🔧 | 🔧 | Manual install, API security |
 
-#### Specialized Tools (Full Variant Only)
+#### Specialized Tools (Deep Variant Only)
 
 | Tool | Category | Notes |
 |------|----------|-------|
@@ -372,13 +407,13 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Full - Maximum coverage (28 tools)
+# Deep - Maximum coverage (28 tools, 25 Docker-ready)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
-# Balanced - Production CI/CD (21 tools)
+# Balanced - Production CI/CD (18 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:balanced
 
-# Slim - Cloud/K8s focused (15 tools)
+# Slim - Cloud/K8s focused (14 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:slim
 
 # Fast - Quick validation (8 tools)
@@ -406,22 +441,22 @@ docker pull ghcr.io/jimmy058910/jmo-security:fast
 #### Fast Scan (Quick Check)
 
 ```bash
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast \
   scan --repo /scan --results /scan/results --profile fast --human-logs
 ```
 
-**Time:** ~30-60 seconds
-**Tools:** trufflehog, semgrep, trivy (3 tools)
+**Time:** 5-10 minutes
+**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck (8 tools)
 
 #### Balanced Scan (Recommended Default)
 
 ```bash
-docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
+docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
   scan --repo /scan --results /scan/results --profile balanced --human-logs
 ```
 
-**Time:** 2-5 minutes
-**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, zap (7 tools)
+**Time:** 18-25 minutes
+**Tools:** Fast + prowler, kubescape, grype, bearer, horusec, dependency-check, zap, scancode, cdxgen, gosec (18 tools)
 
 #### Deep Scan (Comprehensive)
 
@@ -430,8 +465,8 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results /scan/results --profile deep --human-logs
 ```
 
-**Time:** 5-15 minutes
-**Tools:** All 11+ scanners
+**Time:** 40-70 minutes
+**Tools:** All 28 tools (25 Docker-ready + 3 manual installation)
 
 ### Scan Multiple Projects
 
@@ -1259,6 +1294,39 @@ echo "threads: 8" > jmo.yml
 docker run --rm -v "C:/Users/YourName/project:/scan" ghcr.io/jimmy058910/jmo-security:latest scan --repo /scan --results /scan/results --profile balanced
 ```
 
+#### "No scan targets provided" when using Git Bash on Windows
+
+**Problem:** Git Bash's MSYS layer automatically converts Unix-style paths (like `/scan/repo`) to Windows paths (like `C:/Program Files/Git/scan/repo`), breaking Docker volume mounts.
+
+**Symptoms:**
+
+- Error message: "No scan targets provided"
+- Warning about MSYS PATH CONVERSION DETECTED
+- Path in error looks like `C:/Program Files/Git/...`
+
+**Solution 1 (Recommended):** Set `MSYS_NO_PATHCONV=1` environment variable:
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "C:\Projects\myrepo:/scan" \
+  ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast
+```
+
+**Solution 2:** Use PowerShell or Command Prompt instead of Git Bash:
+
+```powershell
+# PowerShell (no path conversion issues)
+docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast
+```
+
+**Solution 3:** Use double-slash prefix to prevent MSYS conversion:
+
+```bash
+docker run --rm -v "C:\Projects\myrepo://scan" \
+  ghcr.io/jimmy058910/jmo-security:fast scan --repo //scan --profile fast
+```
+
+**Why this happens:** Git Bash includes MSYS/MinGW which tries to be helpful by converting paths that look like Unix paths to Windows paths. When you type `/scan`, MSYS assumes you mean a local Unix path and converts it to `C:/Program Files/Git/scan`.
+
 #### Results folder not created
 
 **Check:**
@@ -1293,9 +1361,9 @@ docker run --rm --user $(id -u):$(id -g) \
 | Variant | Tools | Build Time | Use Case |
 |---------|-------|------------|----------|
 | Fast | 8 | 5-10 min | CI/CD gates, pre-commit |
-| Slim | 15 | 10-15 min | Standard scanning |
-| Balanced | 21 | 18-25 min | Production audits |
-| Full | 28 | 20-30 min | Comprehensive security |
+| Slim | 14 | 10-15 min | Cloud/IaC scanning |
+| Balanced | 18 | 18-25 min | Production audits |
+| Deep | 28 | 20-30 min | Comprehensive security |
 
 **Solutions:**
 
@@ -1312,7 +1380,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 **Solution 2:** Use smaller variants for testing
 
 ```bash
-# Use fast variant (7 tools, 5-10 min build) instead of full
+# Use fast variant (8 tools, 5-10 min build) instead of deep
 docker build -f Dockerfile.fast -t jmo-security:fast .
 ```
 

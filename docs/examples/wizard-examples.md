@@ -399,7 +399,7 @@ jmo wizard
 | Workflow | Best For | Time | Tools |
 |----------|----------|------|-------|
 | **Single Repository** | Individual repos, quick checks | 5-10 min (fast) | 8 tools |
-| **Entire Stack** | Full development environment | 18-25 min | 21 tools |
+| **Entire Stack** | Full development environment | 18-25 min | 18 tools |
 | **CI/CD Audit** | Pipeline security validation | 5-10 min | 2-3 tools |
 | **Pre-Deployment** | Production deployment gates | 15-30 min | 8-12 tools |
 | **Dependency Audit** | SBOM + vulnerability focus | 5-10 min | 2 tools |
@@ -671,7 +671,7 @@ newgrp docker
 
 ### Why WSL2 + Docker for Windows?
 
-- ✅ **Full compatibility:** All 12 tools work (many don't on native Windows)
+- ✅ **Full compatibility:** All 28 tools work (many don't on native Windows)
 - ✅ **Zero native installs:** No Python/git/tools on Windows required
 - ✅ **Linux performance:** Scans run at native Linux speed
 - ✅ **Easy file access:** Access Windows files via `/mnt/c/Users/...`

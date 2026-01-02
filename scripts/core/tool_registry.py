@@ -127,6 +127,24 @@ TOOL_VARIANTS: dict[str, str] = {
     "checkov-cicd": "checkov",
 }
 
+# Execution requirements - commands/dependencies needed to actually run tools (Fix 1.4)
+# Maps tool name to list of commands that must be available for execution
+TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
+    "zap": ["zap.sh"],  # ZAP launcher script (installed via jmo tools install)
+    "nuclei": ["nuclei"],  # Standard binary
+    "horusec": ["horusec"],  # horusec binary (optionally needs docker)
+    "cdxgen": ["cdxgen", "node"],  # Requires Node.js 20+
+    "dependency-check": ["dependency-check.sh"],  # Java wrapper script
+    "prowler": ["prowler"],
+    "kubescape": ["kubescape"],
+    "gosec": ["gosec"],
+}
+
+# Version requirements for tools with specific dependency versions
+TOOL_VERSION_REQUIREMENTS: dict[str, dict[str, str]] = {
+    "cdxgen": {"node": "20.0.0"},  # Requires Node.js 20+
+}
+
 
 @dataclass
 class ToolInfo:

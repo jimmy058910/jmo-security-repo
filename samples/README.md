@@ -307,7 +307,10 @@ cat results/summaries/timings.json
 1. **Run Quick Benchmark:**
 
    ```bash
-   make test-samples  # TODO: Create this Makefile target
+   make regenerate-samples  # Full scan + report + verify
+   make samples-scan        # Scan only (5-15 min)
+   make samples-report      # Generate reports from existing scan
+   make samples-verify      # Verify v1.0.0 output format
    ```
 
 2. **Create Your Own Test Repo:**

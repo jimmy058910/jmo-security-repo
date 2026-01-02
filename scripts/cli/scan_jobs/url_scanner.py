@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, tool_exists, write_stub
 
 
 def scan_url(
@@ -30,6 +30,7 @@ def scan_url(
     allow_missing_tools: bool,
     tool_exists_func: Callable[[str], bool] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
+    find_tool_func: Callable[[str], str | None] | None = None,
 ) -> tuple[str, dict[str, bool]]:
     """
     Scan a live web URL with DAST tools (ZAP and Nuclei).
@@ -44,6 +45,7 @@ def scan_url(
         allow_missing_tools: If True, write empty stubs for missing tools
         tool_exists_func: Optional function to check if tool exists (for testing)
         write_stub_func: Optional function to write stub files (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
 
     Returns:
         Tuple of (url, statuses_dict)
@@ -52,6 +54,7 @@ def scan_url(
     # Use provided functions or defaults
     _tool_exists = tool_exists_func or tool_exists
     _write_stub = write_stub_func or write_stub
+    _find_tool = find_tool_func or find_tool
 
     statuses: dict[str, bool] = {}
     tool_defs = []
@@ -93,16 +96,14 @@ def scan_url(
     # ZAP scan for web URLs
     if "zap" in tools:
         zap_out = out_dir / "zap.json"
-        if _tool_exists("zap"):
+        # Find ZAP binary (zap.sh on Linux/macOS, zap on Windows)
+        # find_tool checks PATH and ~/.jmo/bin/zap/zap.sh
+        zap_path = _find_tool("zap.sh") or _find_tool("zap")
+        if zap_path:
             zap_flags = get_tool_flags("zap")
 
-            # Determine ZAP command (zap.sh on Linux/macOS, zap on Windows)
-            import shutil
-
-            zap_cmd = "zap.sh" if shutil.which("zap.sh") else "zap"
-
             zap_cmd_list = [
-                zap_cmd,
+                zap_path,  # Use full path from find_tool
                 "-cmd",
                 "-quickurl",
                 url,

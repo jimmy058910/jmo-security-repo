@@ -66,6 +66,9 @@ security-results-*/
 results/
 results-*/
 
+# Sample fixture scan outputs (regenerated via `make regenerate-samples`)
+samples/fixtures/*/sample-results/
+
 # Test reports and documentation (comprehensive testing artifacts)
 docs/comprehensive-test-report.md
 
@@ -135,12 +138,15 @@ test-*.html
 *-dashboard.html
 # Exception: Keep test fixtures for CI (must come AFTER ignore patterns)
 !tests/fixtures/dashboard/*.html
-dependency-images.txt
-detected-images.txt
+# Test artifacts (image lists from scans)
+*-images.txt
 
 # Playwright screenshots
 .playwright-mcp/
 *.playwright.png
+
+# Serena MCP auto-generated project config
+.serena/
 
 # Backup files (additional patterns)
 *.backup

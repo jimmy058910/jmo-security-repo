@@ -314,7 +314,7 @@ All findings auto-enriched with 6 frameworks:
 | Tool outdated | `jmo tools update` |
 | Permission denied | `chmod +x scripts/**/*.sh` |
 | Docker issues | [docs/DOCKER_README.md#troubleshooting](docs/DOCKER_README.md#troubleshooting) |
-| CI failures | [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) |
+| CI failures | [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) |
 
 ---
 

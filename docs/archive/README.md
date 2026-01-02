@@ -6,8 +6,9 @@ This directory contains archived documentation from JMo Security.
 
 ```text
 docs/archive/
-├── README.md          # This file - archive index
-└── merged/            # Files consolidated during v1.0.0 unification
+├── README.md                  # This file - archive index
+├── ROADMAP_pre-v1.0.0.md      # Original roadmap (outdated after v1.0.0 release)
+└── merged/                    # Files consolidated during v1.0.0 unification
 ```
 
 ## Why Archive?
@@ -17,6 +18,14 @@ Documentation is archived when:
 - **Consolidated**: Multiple overlapping documents merged into single authoritative sources
 - **Superseded**: Content replaced by newer, more comprehensive documentation
 - **Historical**: Version-specific documentation preserved for reference
+
+## Archived Files
+
+| File | Reason | Replacement |
+|------|--------|-------------|
+| `ROADMAP_pre-v1.0.0.md` | Outdated (referenced v0.8.0-dev, v1.0.0 target 2027) | New `ROADMAP.md` in repo root |
+
+---
 
 ## v1.0.0 Documentation Unification
 

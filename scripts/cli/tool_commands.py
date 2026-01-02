@@ -94,6 +94,7 @@ def cmd_tools(args: argparse.Namespace) -> int:
         "list": cmd_tools_list,
         "outdated": cmd_tools_outdated,
         "uninstall": cmd_tools_uninstall,
+        "debug": cmd_tools_debug,
     }
 
     handler = handlers.get(subcommand)
@@ -188,6 +189,157 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
 
     if not missing and not outdated:
         print(colorize("All tools installed and up to date!", "green"))
+
+    return 0
+
+
+def cmd_tools_debug(args: argparse.Namespace) -> int:
+    """
+    Debug version detection for a specific tool.
+
+    Usage:
+        jmo tools debug shellcheck    # Debug shellcheck version detection
+        jmo tools debug zap           # Debug ZAP version detection
+
+    This command shows:
+    - Binary path found
+    - Version command used
+    - Raw stdout/stderr output
+    - Pattern matching result
+
+    Returns:
+        0 on success
+    """
+    import platform
+    import subprocess
+    from scripts.cli.tool_manager import (
+        ToolManager,
+        VERSION_COMMANDS,
+        VERSION_PATTERNS,
+        VERSION_TIMEOUTS,
+    )
+
+    tools = getattr(args, "tools", None) or []
+    if not tools:
+        print("Usage: jmo tools debug <tool_name>")
+        print("Example: jmo tools debug shellcheck")
+        return 1
+
+    # Show system info first
+    print(f"\n{'=' * 60}")
+    print("System Information")
+    print(f"{'=' * 60}")
+    print(f"Platform: {platform.system()}")
+    print(f"Machine: {platform.machine()}")
+    print(f"Python: {platform.python_version()}")
+
+    manager = ToolManager()
+
+    for tool_name in tools:
+        print(f"\n{'=' * 60}")
+        print(f"Debugging version detection for: {colorize(tool_name, 'cyan')}")
+        print(f"{'=' * 60}")
+
+        # Get tool info
+        tool_info = manager.registry.get_tool(tool_name)
+        if tool_info:
+            binary_name = tool_info.get_binary_name()
+            print(f"Expected version: {tool_info.version}")
+        else:
+            binary_name = tool_name
+            print(f"Warning: Tool '{tool_name}' not found in registry")
+
+        print(f"Binary name: {binary_name}")
+
+        # Find binary
+        binary_path = manager._find_binary(binary_name)
+        if binary_path:
+            print(f"Binary path: {colorize(binary_path, 'green')}")
+            # Show file type (helps diagnose architecture mismatches)
+            try:
+                file_result = subprocess.run(
+                    ["file", binary_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if file_result.returncode == 0:
+                    print(f"File type: {file_result.stdout.strip()}")
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass  # 'file' command not available
+        else:
+            print(f"Binary path: {colorize('NOT FOUND', 'red')}")
+            print("\nThe tool binary could not be found in PATH or ~/.jmo/bin/")
+            continue
+
+        # Determine version command
+        if tool_name in VERSION_COMMANDS:
+            cmd = list(VERSION_COMMANDS[tool_name])
+            cmd[0] = binary_path
+            print(f"Version command: {' '.join(cmd)}")
+        else:
+            cmd = [binary_path, "--version"]
+            print(f"Version command: {' '.join(cmd)} (default)")
+
+        # Get timeout
+        timeout = VERSION_TIMEOUTS.get(tool_name, 10)
+        print(f"Timeout: {timeout}s")
+
+        # Show pattern
+        pattern = VERSION_PATTERNS.get(tool_name, VERSION_PATTERNS["default"])
+        print(f"Pattern: {pattern.pattern}")
+
+        # Run version command
+        print(f"\n--- Running version command ---")
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=manager._get_clean_env(),
+            )
+            print(f"Exit code: {result.returncode}")
+            print(f"\nstdout ({len(result.stdout)} chars):")
+            if result.stdout:
+                print(f"  {repr(result.stdout[:500])}")
+            else:
+                print("  (empty)")
+            print(f"\nstderr ({len(result.stderr)} chars):")
+            if result.stderr:
+                print(f"  {repr(result.stderr[:500])}")
+            else:
+                print("  (empty)")
+
+            # Try parsing
+            output = (result.stdout or "") + (result.stderr or "")
+            if output.strip():
+                match = pattern.search(output)
+                print(f"\n--- Pattern matching ---")
+                if match:
+                    print(f"Matched version: {colorize(match.group(1), 'green')}")
+                else:
+                    print(f"Pattern match: {colorize('NO MATCH', 'red')}")
+                    # Try default pattern as fallback
+                    default_match = VERSION_PATTERNS["default"].search(output)
+                    if default_match:
+                        print(
+                            f"Default pattern matched: {default_match.group(1)} "
+                            f"(consider updating tool-specific pattern)"
+                        )
+            else:
+                print(f"\n{colorize('No output to parse', 'yellow')}")
+
+        except subprocess.TimeoutExpired:
+            print(f"{colorize(f'TIMEOUT after {timeout}s', 'red')}")
+            print("The tool is taking too long to respond.")
+            print("This may indicate a Java startup issue or missing dependencies.")
+        except FileNotFoundError:
+            print(f"{colorize('Binary not executable or not found', 'red')}")
+        except PermissionError:
+            print(f"{colorize('Permission denied executing binary', 'red')}")
+        except Exception as e:
+            print(f"{colorize(f'Error: {type(e).__name__}: {e}', 'red')}")
 
     return 0
 

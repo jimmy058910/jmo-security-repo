@@ -19,7 +19,9 @@ from typing import Callable
 
 from scripts.core.tool_registry import (
     PROFILE_TOOLS,
+    TOOL_EXECUTION_COMMANDS,
     TOOL_VARIANTS,
+    TOOL_VERSION_REQUIREMENTS,
     ToolInfo,
     ToolRegistry,
     detect_platform,
@@ -30,28 +32,348 @@ logger = logging.getLogger(__name__)
 
 # Version extraction patterns for different tools
 VERSION_PATTERNS: dict[str, re.Pattern] = {
-    # Standard semver pattern
+    # Standard semver pattern - used as fallback
     "default": re.compile(r"v?(\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?)"),
-    # Tool-specific patterns
-    "trivy": re.compile(r"Version:\s*(\d+\.\d+\.\d+)"),
+    # Tool-specific patterns (order matters - more specific patterns first)
+    "trivy": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "grype": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "syft": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "nuclei": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "kubescape": re.compile(r"version is:\s*v?(\d+\.\d+\.\d+)", re.IGNORECASE),
+    "trufflehog": re.compile(r"trufflehog\s+v?(\d+\.\d+\.\d+)"),
+    "bearer": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "horusec": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    # shellcheck outputs: "ShellCheck - ...\nversion: 0.10.0\n..."
+    # Match "version: X.Y.Z" or just plain "X.Y.Z" on a line
+    "shellcheck": re.compile(r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE),
+    "gosec": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "hadolint": re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)"),
     "checkov": re.compile(r"(\d+\.\d+\.\d+)"),
     "prowler": re.compile(r"Prowler\s+(\d+\.\d+\.\d+)"),
-    "zap": re.compile(r"ZAP\s+(\d+\.\d+\.\d+)"),
-    "dependency-check": re.compile(r"Dependency-Check\s+(\d+\.\d+\.\d+)"),
+    # ZAP -version outputs: "Found Java version 17.0.17\n...\n2.16.1"
+    # Must NOT match Java version - use negative lookbehinds:
+    # - (?<!version ) - not preceded by "version " (excludes "Java version 17.0.17")
+    # - (?<!\d) - not preceded by digit (prevents matching "7.0.17" substring of "17.0.17")
+    # Also matches "OWASP ZAP 2.16.1" or standalone "2.16.1" on its own line
+    "zap": re.compile(r"(?<!version )(?<!\d)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)", re.IGNORECASE),
+    # dependency-check outputs: "Dependency-Check Core version X.Y.Z"
+    # or "dependency-check version: X.Y.Z" or just "version X.Y.Z"
+    "dependency-check": re.compile(
+        r"(?:dependency.?check\s+)?(?:core\s+)?version:?\s*(\d+\.\d+\.\d+)",
+        re.IGNORECASE
+    ),
+    "noseyparker": re.compile(r"noseyparker\s+(\d+\.\d+\.\d+)"),
+    "cdxgen": re.compile(r"(\d+\.\d+\.\d+)"),
+    "lynis": re.compile(r"(\d+\.\d+\.\d+)"),
+    # yara-python outputs just the version number (e.g., "4.5.4")
+    "yara": re.compile(r"^v?(\d+\.\d+\.\d+)"),
+    "opa": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
+    "falcoctl": re.compile(r"(\d+\.\d+\.\d+)"),
+    "osv-scanner": re.compile(r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)"),
 }
 
 # Version commands for tools that don't use --version
 VERSION_COMMANDS: dict[str, list[str]] = {
+    # Tools using 'version' subcommand (no dashes)
+    "grype": ["grype", "version"],
+    "syft": ["syft", "version"],
+    "kubescape": ["kubescape", "version"],
+    "bearer": ["bearer", "version"],
+    "horusec": ["horusec", "version"],
+    "opa": ["opa", "version"],
+    "falcoctl": ["falcoctl", "version"],
+    # Tools using single dash -version
+    "nuclei": ["nuclei", "-version"],
     "zap": ["zap.sh", "-version"],
+    # Tools using special commands
     "dependency-check": ["dependency-check.sh", "--version"],
     "lynis": ["lynis", "show", "version"],
-    "yara": ["yara", "--version"],
+    # yara-python is a Python library, not a CLI - check via Python import
+    # The native 'yara' CLI is a separate package from yara-python
+    "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
+    "cdxgen": ["cdxgen", "--version"],
+    "osv-scanner": ["osv-scanner", "--version"],
 }
+
+# Tools that need longer timeout for version check (e.g., Java-based tools)
+# Default timeout is 10 seconds, these get extended
+VERSION_TIMEOUTS: dict[str, int] = {
+    "zap": 30,  # ZAP is Java-based, needs JVM startup time
+    "dependency-check": 30,  # Java-based
+    "mobsf": 30,  # Heavyweight
+}
+
+# Remediation commands for tools with issues
+# Each entry is a dict with:
+#   - "install": command to install the tool
+#   - "deps": list of system dependencies and their install commands
+#   - "manual": manual instructions if auto-install not possible
+REMEDIATION_COMMANDS: dict[str, dict] = {
+    "zap": {
+        "install": {
+            # ZAP is not in Ubuntu repos - use jmo tools install which downloads from GitHub
+            "linux": "jmo tools install zap",
+            "macos": "brew install --cask owasp-zap",
+            "windows": "choco install zap -y",
+        },
+        "deps": {
+            "java": {
+                "linux": "sudo apt install openjdk-17-jre -y",
+                "macos": "brew install openjdk@17",
+                "windows": "choco install openjdk17 -y",
+            }
+        },
+        "jmo_install": "jmo tools install zap",
+    },
+    "cdxgen": {
+        "install": {
+            "linux": "sudo npm install -g @cyclonedx/cdxgen",
+            "macos": "npm install -g @cyclonedx/cdxgen",
+            "windows": "npm install -g @cyclonedx/cdxgen",
+        },
+        "deps": {
+            "node20": {
+                "linux": "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs",
+                "macos": "brew install node@20 && brew link --overwrite node@20",
+                "windows": "choco install nodejs-lts -y",
+                "nvm": "nvm install 20 && nvm use 20 && nvm alias default 20",
+            }
+        },
+        "jmo_install": "jmo tools install cdxgen",
+    },
+    "dependency-check": {
+        "install": {
+            "linux": "jmo tools install dependency-check",
+            "macos": "jmo tools install dependency-check",
+            "windows": "jmo tools install dependency-check",
+        },
+        "deps": {
+            "java": {
+                "linux": "sudo apt install openjdk-17-jre -y",
+                "macos": "brew install openjdk@17",
+                "windows": "choco install openjdk17 -y",
+            }
+        },
+        "jmo_install": "jmo tools install dependency-check",
+    },
+    "shellcheck": {
+        "install": {
+            "linux": "sudo apt install shellcheck -y",
+            "macos": "brew install shellcheck",
+            "windows": "choco install shellcheck -y",
+        },
+        "jmo_install": "jmo tools install shellcheck",
+    },
+    "prowler": {
+        "install": {
+            "linux": "pip install prowler",
+            "macos": "pip install prowler",
+            "windows": "pip install prowler",
+        },
+        "jmo_install": "jmo tools install prowler",
+    },
+    "kubescape": {
+        "install": {
+            "linux": "curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash",
+            "macos": "brew install kubescape",
+            "windows": "iwr -useb https://raw.githubusercontent.com/kubescape/kubescape/master/install.ps1 | iex",
+        },
+        "jmo_install": "jmo tools install kubescape",
+    },
+    "trivy": {
+        "install": {
+            "linux": "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin",
+            "macos": "brew install trivy",
+            "windows": "choco install trivy -y",
+        },
+        "jmo_install": "jmo tools install trivy",
+    },
+    "semgrep": {
+        "install": {
+            "linux": "pip install semgrep",
+            "macos": "brew install semgrep",
+            "windows": "pip install semgrep",
+        },
+        "jmo_install": "jmo tools install semgrep",
+    },
+    "trufflehog": {
+        "install": {
+            "linux": "curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin",
+            "macos": "brew install trufflehog",
+            "windows": "choco install trufflehog -y",
+        },
+        "jmo_install": "jmo tools install trufflehog",
+    },
+    "grype": {
+        "install": {
+            "linux": "curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin",
+            "macos": "brew install grype",
+            "windows": "choco install grype -y",
+        },
+        "jmo_install": "jmo tools install grype",
+    },
+    "syft": {
+        "install": {
+            "linux": "curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin",
+            "macos": "brew install syft",
+            "windows": "choco install syft -y",
+        },
+        "jmo_install": "jmo tools install syft",
+    },
+    "checkov": {
+        "install": {
+            "linux": "pip install checkov",
+            "macos": "pip install checkov",
+            "windows": "pip install checkov",
+        },
+        "jmo_install": "jmo tools install checkov",
+    },
+    "hadolint": {
+        "install": {
+            "linux": "wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64 && chmod +x /usr/local/bin/hadolint",
+            "macos": "brew install hadolint",
+            "windows": "choco install hadolint -y",
+        },
+        "jmo_install": "jmo tools install hadolint",
+    },
+    "nuclei": {
+        "install": {
+            "linux": "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+            "macos": "brew install nuclei",
+            "windows": "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        },
+        "jmo_install": "jmo tools install nuclei",
+    },
+    "bearer": {
+        "install": {
+            "linux": "curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh",
+            "macos": "brew install bearer/tap/bearer",
+            "windows": "iwr -useb https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.ps1 | iex",
+        },
+        "jmo_install": "jmo tools install bearer",
+    },
+    "horusec": {
+        "install": {
+            "linux": "curl -fsSL https://raw.githubusercontent.com/ZupIT/horusec/main/deployments/scripts/install.sh | bash -s latest",
+            "macos": "brew install horusec/tap/horusec",
+            "windows": "iwr -useb https://raw.githubusercontent.com/ZupIT/horusec/main/deployments/scripts/install.ps1 | iex",
+        },
+        "jmo_install": "jmo tools install horusec",
+    },
+    "gosec": {
+        "install": {
+            "linux": "go install github.com/securego/gosec/v2/cmd/gosec@latest",
+            "macos": "brew install gosec",
+            "windows": "go install github.com/securego/gosec/v2/cmd/gosec@latest",
+        },
+        "jmo_install": "jmo tools install gosec",
+    },
+    "scancode": {
+        "install": {
+            "linux": "pip install scancode-toolkit",
+            "macos": "pip install scancode-toolkit",
+            "windows": "pip install scancode-toolkit",
+        },
+        "deps": {
+            "build": {
+                "linux": "sudo apt install build-essential pkg-config libicu-dev -y",
+                "macos": "xcode-select --install",
+                "windows": None,  # Not needed on Windows
+            }
+        },
+        "jmo_install": "jmo tools install scancode",
+    },
+    "bandit": {
+        "install": {
+            "linux": "pip install bandit",
+            "macos": "pip install bandit",
+            "windows": "pip install bandit",
+        },
+        "jmo_install": "jmo tools install bandit",
+    },
+    "noseyparker": {
+        "install": {
+            "linux": "cargo install noseyparker",
+            "macos": "brew install noseyparker",
+            "windows": "cargo install noseyparker",
+        },
+        "jmo_install": "jmo tools install noseyparker",
+    },
+    "yara": {
+        "install": {
+            "linux": "pip install yara-python",
+            "macos": "pip install yara-python",
+            "windows": "pip install yara-python",
+        },
+        "jmo_install": "jmo tools install yara",
+    },
+    "lynis": {
+        "install": {
+            "linux": "sudo apt install lynis -y",
+            "macos": "brew install lynis",
+            "windows": None,  # Not available on Windows
+        },
+        "jmo_install": "jmo tools install lynis",
+    },
+}
+
+
+def get_remediation_for_tool(
+    tool_name: str,
+    platform: str = "linux",
+    issue_type: str = "install",
+) -> dict:
+    """
+    Get remediation commands for a tool issue.
+
+    Args:
+        tool_name: Name of the tool
+        platform: Target platform (linux, macos, windows)
+        issue_type: Type of issue (install, deps, version)
+
+    Returns:
+        Dict with 'commands' (list of commands to run) and 'manual' (manual instructions)
+    """
+    result = {"commands": [], "manual": None, "jmo_install": None}
+
+    remediation = REMEDIATION_COMMANDS.get(tool_name)
+    if not remediation:
+        # Fall back to jmo tools install for unknown tools
+        result["commands"] = [f"jmo tools install {tool_name}"]
+        result["jmo_install"] = f"jmo tools install {tool_name}"
+        return result
+
+    # Get jmo install command
+    result["jmo_install"] = remediation.get("jmo_install")
+
+    # Check if dependencies are needed first
+    if "deps" in remediation:
+        for dep_name, dep_commands in remediation["deps"].items():
+            if isinstance(dep_commands, dict):
+                cmd = dep_commands.get(platform)
+                if cmd:
+                    result["commands"].append(cmd)
+
+    # Get install command for platform
+    if "install" in remediation:
+        install_cmds = remediation["install"]
+        if isinstance(install_cmds, dict):
+            cmd = install_cmds.get(platform)
+            if cmd:
+                result["commands"].append(cmd)
+        elif isinstance(install_cmds, str):
+            result["commands"].append(install_cmds)
+
+    # Add manual instructions if no commands available
+    if not result["commands"]:
+        result["manual"] = remediation.get("manual", f"See JMo docs for {tool_name} installation")
+
+    return result
 
 
 @dataclass
 class ToolStatus:
-    """Status of a single tool."""
+    """Status of a single tool with execution readiness (Fix 1.4)."""
 
     name: str
     installed: bool
@@ -62,12 +384,22 @@ class ToolStatus:
     install_hint: str = ""
     binary_path: str | None = None
     is_variant: bool = False  # True if this is a variant (e.g., semgrep-secrets)
+    execution_ready: bool = True  # Tool can actually execute (not just binary exists)
+    execution_warning: str | None = None  # Warning if not execution_ready
+    missing_deps: list[str] | None = None  # Missing dependencies for execution
+
+    def __post_init__(self) -> None:
+        """Initialize mutable defaults."""
+        if self.missing_deps is None:
+            self.missing_deps = []
 
     @property
     def status_icon(self) -> str:
         """Get status icon for display."""
         if not self.installed:
             return "X"
+        if not self.execution_ready:
+            return "!"  # Installed but can't execute
         if self.is_outdated:
             return "!"
         return "OK"
@@ -77,6 +409,8 @@ class ToolStatus:
         """Get status text for display."""
         if not self.installed:
             return "MISSING"
+        if not self.execution_ready:
+            return "NOT READY"
         if self.is_outdated:
             return "OUTDATED"
         return "OK"
@@ -104,13 +438,13 @@ class ToolManager:
 
     def check_tool(self, tool_name: str) -> ToolStatus:
         """
-        Check status of a single tool.
+        Check status of a single tool including execution readiness (Fix 1.4).
 
         Args:
             tool_name: Name of the tool (e.g., 'trivy', 'semgrep')
 
         Returns:
-            ToolStatus with installation information
+            ToolStatus with installation and execution information
         """
         tool_info = self.registry.get_tool(tool_name)
 
@@ -125,7 +459,7 @@ class ToolManager:
         # Get installed version if found
         installed_version = None
         if installed:
-            installed_version = self._get_tool_version(binary_name, binary_path)
+            installed_version = self._get_tool_version(tool_name, binary_path)
 
         # Determine if outdated
         expected_version = tool_info.version if tool_info else None
@@ -140,6 +474,19 @@ class ToolManager:
         else:
             install_hint = f"See JMo documentation for {tool_name}"
 
+        # Check execution readiness (Fix 1.4 - Issue #4)
+        execution_ready = True
+        execution_warning = None
+        missing_deps: list[str] = []
+
+        if installed:
+            execution_ready, execution_warning, missing_deps = self._verify_execution(
+                tool_name
+            )
+        else:
+            execution_ready = False
+            execution_warning = "Tool binary not found"
+
         return ToolStatus(
             name=tool_name,
             installed=installed,
@@ -150,6 +497,9 @@ class ToolManager:
             install_hint=install_hint,
             binary_path=binary_path,
             is_variant=is_variant,
+            execution_ready=execution_ready,
+            execution_warning=execution_warning,
+            missing_deps=missing_deps,
         )
 
     def check_profile(self, profile: str) -> dict[str, ToolStatus]:
@@ -205,29 +555,111 @@ class ToolManager:
 
     def get_profile_summary(self, profile: str) -> dict:
         """
-        Get summary statistics for a profile.
+        Get summary statistics for a profile (Fix 1.4).
 
         Args:
             profile: Profile name
 
         Returns:
-            Dict with total, installed, missing, outdated counts
+            Dict with total, installed, execution_ready, missing, outdated counts
         """
         statuses = self.check_profile(profile)
         installed = [s for s in statuses.values() if s.installed]
+        execution_ready = [s for s in statuses.values() if s.execution_ready]
         missing = [s for s in statuses.values() if not s.installed]
+        not_ready = [
+            s for s in statuses.values() if s.installed and not s.execution_ready
+        ]
         outdated = [s for s in statuses.values() if s.is_outdated]
         critical_outdated = [s for s in outdated if s.is_critical]
+
+        # Collect execution warnings for tools that are installed but not ready
+        warnings = [
+            f"{s.name}: {s.execution_warning}"
+            for s in not_ready
+            if s.execution_warning
+        ]
 
         return {
             "profile": profile,
             "total": len(statuses),
             "installed": len(installed),
+            "execution_ready": len(execution_ready),
             "missing": len(missing),
+            "not_ready": len(not_ready),
             "outdated": len(outdated),
             "critical_outdated": len(critical_outdated),
-            "ready": len(missing) == 0,
+            "ready": len(execution_ready) == len(statuses),  # All tools execution-ready
+            "warnings": warnings,
         }
+
+    def get_version_drift(self, profile: str) -> list[dict]:
+        """
+        Check for version drift between installed and expected versions.
+
+        This is used for pre-scan validation to warn users when their installed
+        tool versions don't match the pinned versions in versions.yaml.
+
+        Args:
+            profile: Profile name ('fast', 'slim', 'balanced', 'deep')
+
+        Returns:
+            List of dicts with tool, installed, expected, critical, and direction fields
+            for each tool with version mismatch. Direction is "ahead", "behind", or "unknown".
+        """
+        drift = []
+        statuses = self.check_profile(profile)
+
+        for name, status in statuses.items():
+            if status.installed and status.installed_version != status.expected_version:
+                # Determine direction: ahead (installed > expected) or behind
+                direction = self._compare_version_direction(
+                    status.installed_version, status.expected_version
+                )
+                drift.append({
+                    "tool": name,
+                    "installed": status.installed_version,
+                    "expected": status.expected_version,
+                    "critical": status.is_critical,
+                    "direction": direction,
+                })
+
+        return drift
+
+    def _compare_version_direction(
+        self, installed: str | None, expected: str | None
+    ) -> str:
+        """
+        Compare versions to determine if installed is ahead or behind expected.
+
+        Args:
+            installed: Installed version string
+            expected: Expected version string
+
+        Returns:
+            "ahead" if installed > expected, "behind" if installed < expected,
+            "unknown" if versions can't be compared
+        """
+        if not installed or not expected:
+            return "unknown"
+
+        try:
+            installed_parts = self._parse_version_parts(installed)
+            expected_parts = self._parse_version_parts(expected)
+
+            # Compare part by part
+            for i in range(max(len(installed_parts), len(expected_parts))):
+                inst_part = installed_parts[i] if i < len(installed_parts) else 0
+                exp_part = expected_parts[i] if i < len(expected_parts) else 0
+
+                if inst_part > exp_part:
+                    return "ahead"
+                if inst_part < exp_part:
+                    return "behind"
+
+            return "unknown"  # Versions are equal (shouldn't happen if called correctly)
+        except (ValueError, TypeError):
+            return "unknown"
 
     def _find_binary(self, binary_name: str) -> str | None:
         """
@@ -239,13 +671,53 @@ class ToolManager:
         Returns:
             Full path to binary or None if not found
         """
-        # First check PATH
+        home = Path.home()
+
+        # Check for tools with special installation paths FIRST
+        # (before PATH lookup, to prefer our managed versions)
+
+        # lynis is cloned to ~/.jmo/bin/lynis/ directory
+        # The actual script is at ~/.jmo/bin/lynis/lynis
+        # Check this BEFORE shutil.which() to prefer our cloned version over apt-installed
+        if binary_name == "lynis":
+            lynis_clone_path = home / ".jmo" / "bin" / "lynis" / "lynis"
+            if lynis_clone_path.exists():
+                return str(lynis_clone_path)
+
+        # ZAP is extracted to ~/.jmo/bin/zap/ directory
+        # The actual script is at ~/.jmo/bin/zap/zap.sh
+        if binary_name == "zap.sh":
+            zap_path = home / ".jmo" / "bin" / "zap" / "zap.sh"
+            if zap_path.exists():
+                return str(zap_path)
+
+        # dependency-check is extracted to ~/.jmo/bin/dependency-check/
+        # The script is at ~/.jmo/bin/dependency-check/bin/dependency-check.sh
+        if binary_name == "dependency-check.sh":
+            dc_path = home / ".jmo" / "bin" / "dependency-check" / "bin" / "dependency-check.sh"
+            if dc_path.exists():
+                return str(dc_path)
+
+        # yara-python is a Python library, not a CLI binary
+        # Check if the module is importable instead of looking for a binary
+        if binary_name == "yara":
+            try:
+                import importlib.util
+
+                spec = importlib.util.find_spec("yara")
+                if spec is not None and spec.origin:
+                    # Return the module path so we know it's "installed"
+                    return spec.origin
+            except ImportError:
+                pass
+            return None
+
+        # Now check PATH for standard tools
         path = shutil.which(binary_name)
         if path:
             return path
 
         # Check common installation locations
-        home = Path.home()
         common_paths = [
             home / ".jmo" / "bin" / binary_name,
             home / ".local" / "bin" / binary_name,
@@ -280,42 +752,80 @@ class ToolManager:
 
         return None
 
-    def _get_tool_version(self, binary_name: str, binary_path: str) -> str | None:
+    def _get_tool_version(self, tool_name: str, binary_path: str) -> str | None:
         """
         Get installed version of a tool.
 
         Args:
-            binary_name: Tool binary name
+            tool_name: Tool name (e.g., 'zap', not 'zap.sh')
             binary_path: Full path to binary
 
         Returns:
             Version string or None if unable to determine
         """
-        # Get version command
-        if binary_name in VERSION_COMMANDS:
-            cmd = VERSION_COMMANDS[binary_name]
-            # Replace binary name with full path
-            cmd = [binary_path if c == binary_name else c for c in cmd]
+        # Get version command - use tool_name for lookup (not binary_name)
+        # VERSION_COMMANDS uses tool names as keys (e.g., "zap" not "zap.sh")
+        if tool_name in VERSION_COMMANDS:
+            cmd = list(VERSION_COMMANDS[tool_name])  # Copy to avoid mutation
+            # Replace first element (the binary) with full path
+            cmd[0] = binary_path
         else:
             cmd = [binary_path, "--version"]
+
+        # Use tool-specific timeout (Java tools need longer JVM startup time)
+        timeout = VERSION_TIMEOUTS.get(tool_name, 10)
 
         try:
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=timeout,
                 env=self._get_clean_env(),
             )
-            output = result.stdout or result.stderr
+            # Combine stdout and stderr - some tools write version to stderr
+            output = (result.stdout or "") + (result.stderr or "")
+
+            # Log detailed debug info for troubleshooting
+            logger.debug(
+                f"Version command for {tool_name}: cmd={cmd}, "
+                f"returncode={result.returncode}, "
+                f"stdout={result.stdout!r}, stderr={result.stderr!r}"
+            )
+
+            # Check for command execution errors
+            # Note: Some tools return non-zero even for --version, so we still try parsing
+            if not output.strip():
+                if result.returncode != 0:
+                    logger.debug(
+                        f"Version command failed for {tool_name} "
+                        f"(exit code {result.returncode}), no output"
+                    )
+                return None
 
             # Parse version from output
-            return self._parse_version(binary_name, output)
+            version = self._parse_version(tool_name, output)
+            if version is None:
+                # Log parse failure with sample of output for debugging
+                sample = output[:200].replace('\n', '\\n')
+                logger.debug(
+                    f"Could not parse version for {tool_name} from output: {sample!r}"
+                )
+            return version
         except subprocess.TimeoutExpired:
-            logger.debug(f"Timeout getting version for {binary_name}")
+            logger.debug(
+                f"Timeout ({timeout}s) getting version for {tool_name}. "
+                f"Try running '{' '.join(cmd)}' manually."
+            )
+            return None
+        except FileNotFoundError:
+            logger.debug(f"Binary not found at {binary_path} for {tool_name}")
+            return None
+        except PermissionError:
+            logger.debug(f"Permission denied executing {binary_path} for {tool_name}")
             return None
         except (OSError, subprocess.SubprocessError) as e:
-            logger.debug(f"Error getting version for {binary_name}: {e}")
+            logger.debug(f"Error getting version for {tool_name}: {type(e).__name__}: {e}")
             return None
 
     def _parse_version(self, tool_name: str, output: str) -> str | None:
@@ -329,19 +839,33 @@ class ToolManager:
         Returns:
             Version string or None
         """
+        if not output or not output.strip():
+            logger.debug(f"Empty version output for {tool_name}")
+            return None
+
         # Get tool-specific pattern or default
         pattern = VERSION_PATTERNS.get(tool_name, VERSION_PATTERNS["default"])
 
         match = pattern.search(output)
         if match:
-            return match.group(1)
+            version = match.group(1)
+            logger.debug(f"Parsed version for {tool_name}: {version}")
+            return version
 
         # Fallback: try default pattern
         if tool_name in VERSION_PATTERNS:
             match = VERSION_PATTERNS["default"].search(output)
             if match:
-                return match.group(1)
+                version = match.group(1)
+                logger.debug(f"Parsed version for {tool_name} (fallback): {version}")
+                return version
 
+        # Log failure for debugging
+        output_preview = output[:150].replace("\n", "\\n")
+        logger.debug(
+            f"Version parse failed for {tool_name}. "
+            f"Pattern: {pattern.pattern!r}. Output preview: {output_preview!r}"
+        )
         return None
 
     def _is_version_outdated(self, installed: str, expected: str) -> bool:
@@ -372,11 +896,25 @@ class ToolManager:
             return installed != expected
 
     def _parse_version_parts(self, version: str) -> list[int]:
-        """Parse version string into numeric parts."""
+        """Parse version string into numeric parts.
+
+        Handles versions like "4.34c" by extracting numeric prefix from each part.
+        """
         # Remove 'v' prefix and any suffix after hyphen
         version = version.lstrip("v").split("-")[0]
         parts = version.split(".")
-        return [int(p) for p in parts if p.isdigit()]
+        result = []
+        for p in parts:
+            # Extract leading digits from each part (handles "34c" -> 34)
+            digits = ""
+            for char in p:
+                if char.isdigit():
+                    digits += char
+                else:
+                    break  # Stop at first non-digit
+            if digits:
+                result.append(int(digits))
+        return result
 
     def _get_clean_env(self) -> dict:
         """Get a clean environment for subprocess calls."""
@@ -393,6 +931,69 @@ class ToolManager:
         current_path = env.get("PATH", "")
         env["PATH"] = ":".join(extra_paths) + ":" + current_path
         return env
+
+    def _verify_execution(self, tool_name: str) -> tuple[bool, str | None, list[str]]:
+        """
+        Verify tool can actually execute, not just that binary exists (Fix 1.4).
+
+        Args:
+            tool_name: Name of the tool to verify
+
+        Returns:
+            Tuple of (is_ready, warning_message, missing_deps)
+        """
+        required = TOOL_EXECUTION_COMMANDS.get(tool_name, [tool_name])
+
+        missing = []
+        for cmd in required:
+            # First try shutil.which for standard PATH lookup
+            if shutil.which(cmd):
+                continue
+            # Then try _find_binary for special paths (zap, dependency-check, etc.)
+            if self._find_binary(cmd):
+                continue
+            missing.append(cmd)
+
+        if missing:
+            return False, f"Missing: {', '.join(missing)}", missing
+
+        # Special version checks
+        if tool_name == "cdxgen":
+            node_version = self._get_node_version()
+            if node_version:
+                required_version = TOOL_VERSION_REQUIREMENTS.get("cdxgen", {}).get(
+                    "node", "20.0.0"
+                )
+                required_parts = tuple(map(int, required_version.split(".")))
+                if node_version < required_parts:
+                    ver_str = ".".join(map(str, node_version))
+                    return (
+                        False,
+                        f"Requires Node.js {required_version}+, found {ver_str}",
+                        ["node"],
+                    )
+            else:
+                return False, "Node.js not found (required for cdxgen)", ["node"]
+
+        return True, None, []
+
+    def _get_node_version(self) -> tuple[int, int, int] | None:
+        """Get Node.js version as tuple."""
+        try:
+            result = subprocess.run(
+                ["node", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                # Parse v20.10.0 -> (20, 10, 0)
+                version = result.stdout.strip().lstrip("v")
+                parts = version.split(".")[:3]
+                return tuple(int(p) for p in parts if p.isdigit())  # type: ignore
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+        return None
 
 
 def print_tool_status_table(

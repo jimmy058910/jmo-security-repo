@@ -11,6 +11,7 @@ from scripts.cli.scan_orchestrator import (
     ScanTargets,
     ScanConfig,
     ScanOrchestrator,
+    _detect_msys_path_mangling,
 )
 
 
@@ -557,6 +558,45 @@ class TestScanOrchestrator:
         assert len(targets.images) == 1
         assert len(targets.urls) == 1
         assert targets.total_count() == 4
+
+
+class TestMsysPathDetection:
+    """Test MSYS path mangling detection for Docker on Windows Git Bash."""
+
+    def test_detects_program_files_git_path(self):
+        """Should detect paths containing 'Program Files/Git' (MSYS telltale sign)."""
+        # Standard Git for Windows installation path
+        assert _detect_msys_path_mangling("C:/Program Files/Git/scan/juice-shop") is True
+        assert _detect_msys_path_mangling("C:\\Program Files\\Git\\scan\\juice-shop") is True
+        # Different drive letter
+        assert _detect_msys_path_mangling("D:/Program Files/Git/usr/bin") is True
+
+    def test_detects_windows_path_in_docker(self, monkeypatch):
+        """Should detect Windows drive paths when DOCKER_CONTAINER=1."""
+        monkeypatch.setenv("DOCKER_CONTAINER", "1")
+
+        # Any Windows path inside Docker container is likely MSYS-mangled
+        assert _detect_msys_path_mangling("C:/Users/test/project") is True
+        assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is True
+
+    def test_ignores_windows_path_outside_docker(self, monkeypatch):
+        """Should NOT flag Windows paths when NOT in Docker (native Windows use)."""
+        monkeypatch.delenv("DOCKER_CONTAINER", raising=False)
+
+        # Normal Windows paths outside Docker are valid
+        assert _detect_msys_path_mangling("C:/Users/test/project") is False
+        assert _detect_msys_path_mangling("D:\\Projects\\myrepo") is False
+
+    def test_ignores_normal_unix_paths(self):
+        """Should NOT flag normal Unix paths."""
+        assert _detect_msys_path_mangling("/scan/juice-shop") is False
+        assert _detect_msys_path_mangling("/home/user/project") is False
+        assert _detect_msys_path_mangling("./relative/path") is False
+
+    def test_handles_empty_and_none(self):
+        """Should handle empty and None paths gracefully."""
+        assert _detect_msys_path_mangling("") is False
+        assert _detect_msys_path_mangling(None) is False
 
 
 if __name__ == "__main__":

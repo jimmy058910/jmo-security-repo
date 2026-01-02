@@ -15,15 +15,29 @@ Be respectful and constructive. We expect contributors to follow a standard code
 ## Development setup
 
 - Python 3.10+ (CI validates on 3.10, 3.11, 3.12 across Ubuntu and macOS)
+- **v1.0.0:** 2,981 tests, 87% coverage (CI requires ≥85%)
 - Recommended commands:
 
 ```bash
-make dev-deps                          # Install Python dev dependencies
-make pre-commit-install                # Install git hooks
-jmo tools install --profile balanced   # Install security tools
+pip install -e ".[dev]"                # Install in editable mode with dev deps
+make pre-commit-install                # Setup pre-commit hooks
+jmo tools install --profile balanced   # Install security tools (18 tools)
 make test                              # Run unit tests and coverage
 make fmt && make lint
 ```
+
+### Unified Scan Profiles (v1.0.0)
+
+CLI profiles and Docker variants are unified - same 4 profiles, same tools:
+
+| Profile | Tools | Time | Use Case | Docker Tag |
+|---------|-------|------|----------|------------|
+| `fast` | 8 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
+| `slim` | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
+| `balanced` | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
+| `deep` | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+
+**Canonical tool reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)
 
 ## Dependency management
 
@@ -102,7 +116,32 @@ jmo tools outdated
 
 # Update a specific tool
 jmo tools update --tool trivy
+
+# Uninstall JMo and all tools
+jmo tools uninstall --all
 ```
+
+### Version Management (v1.0.0 - CRITICAL)
+
+Tool versions are centrally managed via `versions.yaml`. **NEVER manually edit tool versions in Dockerfiles!**
+
+```bash
+# Check for available updates
+python3 scripts/dev/update_versions.py --check-latest
+
+# Update specific tool in versions.yaml
+python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+
+# Sync Dockerfiles with versions.yaml
+python3 scripts/dev/update_versions.py --sync
+
+# View current version report
+python3 scripts/dev/update_versions.py --report
+```
+
+**Critical tools** (must be updated within 7 days of new release): trivy, trufflehog, semgrep, checkov, zap, syft, prowler, kubescape
+
+**Complete guide:** [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
 
 ### Pre-commit hooks
 
@@ -208,57 +247,211 @@ These checks run automatically on commit and are also enforced in CI (note: the 
 
 ## Running the tool locally
 
-- Basic workflow:
+### Basic workflow (v1.0.0)
 
 ```bash
-python3 scripts/cli/jmo.py scan --repos-dir ~/repos --human-logs
-python3 scripts/cli/jmo.py report ./results --profile --human-logs
+# Quick scan with fast profile (8 tools, 5-10 min)
+jmo scan --repo . --profile fast --human-logs
+
+# Production scan with balanced profile (18 tools, 18-25 min)
+jmo scan --repo . --profile balanced --human-logs
+
+# Generate reports from existing scan
+jmo report ./results --profile --human-logs
+
+# CI mode with severity threshold
+jmo ci --fail-on HIGH --profile balanced
+
+# Compare scans (diff feature)
+jmo diff results-baseline/ results-current/ --format md
+
+# View scan history
+jmo history list
+
+# Trend analysis
+jmo trends analyze --days 30
 ```
 
-- Demo workflow (no external scanners required):
+### Demo workflow (no external scanners required)
 
 ```bash
 make screenshots-demo
 ```
 
+### v1.0.0 Key Features
+
+- **SQLite historical storage:** Trend analysis with `jmo history` and `jmo trends`
+- **Machine-readable diffs:** CI/CD integration with `jmo diff`
+- **Cross-tool deduplication:** 30-40% noise reduction via similarity clustering
+- **6 compliance frameworks:** OWASP, CWE, CIS, NIST, PCI DSS, MITRE mappings
+
+## Sample Fixtures and Output Regeneration
+
+The repository includes sample fixtures for testing, documentation examples, and screenshot generation. These demonstrate JMo Security's v1.0.0 output format with the standardized metadata wrapper.
+
+### Fixture Structure
+
+The primary fixture is `samples/fixtures/infra-demo/`:
+
+```text
+samples/fixtures/infra-demo/
+├── main.tf           # Terraform - IaC security scanning
+├── deployment.yaml   # Kubernetes - container orchestration security
+├── Dockerfile        # Docker - container security
+├── secrets.json      # Secrets - secret detection testing
+└── sample-results/   # Generated outputs (gitignored)
+    └── summaries/
+        ├── findings.json       # Machine-readable (v1.0.0 format)
+        ├── findings.sarif      # GitHub/GitLab code scanning
+        ├── findings.csv        # Spreadsheet export
+        ├── SUMMARY.md          # PR comments
+        ├── dashboard.html      # Interactive browser viewing
+        └── simple-report.html  # Email-compatible report
+```
+
+This fixture is intentionally vulnerable, containing:
+
+- **32 exposed secrets** (API keys, tokens in secrets.json)
+- **6 IaC misconfigurations** (unrestricted security groups in main.tf)
+- **4 container issues** (missing USER, unpinned packages in Dockerfile)
+- **3 Kubernetes security issues** (runAsNonRoot, allowPrivilegeEscalation)
+
+### v1.0.0 Output Format
+
+All outputs use the standardized metadata wrapper:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "1.0.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-12-22T10:30:00Z",
+    "scan_id": "abc123",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep", "checkov", "..."],
+    "finding_count": 68
+  },
+  "findings": [...]
+}
+```
+
+### Regenerating Sample Outputs
+
+Use these Makefile targets to regenerate sample outputs:
+
+```bash
+# Full regeneration (recommended)
+make regenerate-samples
+
+# Individual steps (if needed)
+make samples-clean     # Remove old outputs
+make samples-scan      # Run balanced profile scan (5-15 min)
+make samples-report    # Generate all report formats
+make samples-verify    # Verify v1.0.0 format compliance
+```
+
+### When to Regenerate Samples
+
+Regenerate sample outputs when:
+
+1. **Updating output formats** - Changes to reporters or schema
+2. **Before releases** - Ensure SAMPLE_OUTPUTS.md examples match actual output
+3. **After major adapter changes** - New tools or parsing changes
+4. **Updating documentation screenshots** - Use `make screenshots-demo` after regeneration
+
+### Time Estimates
+
+| Target | Time | Notes |
+|--------|------|-------|
+| `samples-scan` | 5-15 min | Depends on installed tools |
+| `samples-report` | ~30 sec | Quick report generation |
+| `regenerate-samples` | 5-20 min | Full workflow |
+| `screenshots-demo` | 5-20 min | Includes scan + screenshot |
+
+### Verifying Output Format
+
+The `samples-verify` target checks:
+
+- All 6 output files exist (JSON, SARIF, CSV, MD, HTML×2)
+- `findings.json` has valid v1.0.0 metadata wrapper
+- Metadata includes required fields: `output_version`, `schema_version`, `finding_count`
+
+```bash
+make samples-verify
+# Output:
+# Checking required output files:
+#   ✅ findings.json
+#   ✅ SUMMARY.md
+#   ✅ dashboard.html
+#   ...
+# Validating v1.0.0 metadata format:
+#   ✅ output_version: 1.0.0
+#   ✅ schema_version: 1.2.0
+#   ✅ finding_count: 68
+```
+
+### Related Documentation
+
+- [samples/README.md](samples/README.md) - Complete fixture documentation
+- [SAMPLE_OUTPUTS.md](SAMPLE_OUTPUTS.md) - Example outputs reference
+- [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Output format specification
+
 ## Docker local testing
 
-Before publishing Docker images to GHCR, test them locally to validate changes:
+Before publishing Docker images to GHCR, test them locally to validate changes.
+
+### Docker Variants (v1.0.0)
+
+Docker tags now match CLI profiles:
+
+| Tag | Profile | Tools | Dockerfile |
+|-----|---------|-------|------------|
+| `fast` | fast | 8 | `Dockerfile.fast` |
+| `slim` | slim | 14 | `Dockerfile.slim` |
+| `balanced` | balanced | 18 | `Dockerfile.balanced` |
+| `deep` / `latest` | deep | 28* | `Dockerfile` |
+
+*3 deep profile tools require manual installation (AFL++, MobSF, Akto)
 
 ### Build local images
 
 ```bash
-# Build all variants (full/slim/alpine)
+# Build all variants (fast/slim/balanced/deep)
 make docker-build-local
 
 # Or build specific variant
-docker build -t jmo-security:local-full -f Dockerfile .
+docker build -t jmo-security:local-balanced -f Dockerfile.balanced .
+docker build -t jmo-security:local-fast -f Dockerfile.fast .
 ```
 
 ### Test local images
 
 ```bash
 # Test CLI works
-docker run --rm jmo-security:local-full --help
-docker run --rm jmo-security:local-full ci --help
+docker run --rm jmo-security:local-balanced --help
+docker run --rm jmo-security:local-balanced ci --help
 
-# Test scan with volume mount
+# Test scan with volume mount (CRITICAL: mount .jmo for history persistence)
 docker run --rm \
   -v $(pwd):/scan \
+  -v $(pwd)/.jmo:/scan/.jmo \
   -v $(pwd)/results:/results \
-  jmo-security:local-full ci \
+  jmo-security:local-balanced ci \
   --repo /scan \
   --results-dir /results \
-  --profile-name fast \
+  --profile balanced \
   --allow-missing-tools
 ```
+
+**Important:** Mount `.jmo/history.db` for SQLite historical storage persistence.
 
 ### Run E2E tests with local images
 
 ```bash
 # Set environment variables to use local images
 export DOCKER_IMAGE_BASE="jmo-security"
-export DOCKER_TAG="local"
+export DOCKER_TAG="local-balanced"
 
 # Run specific Docker tests
 bash tests/e2e/run_comprehensive_tests.sh --test U9
@@ -273,14 +466,15 @@ bash tests/e2e/run_comprehensive_tests.sh
 
 Before pushing Docker images:
 
-- [ ] Build all three variants locally
+- [ ] Build all four variants locally (fast/slim/balanced/deep)
 - [ ] Test CLI works (`--help`, `scan --help`, `ci --help`)
-- [ ] Test single repo scan
-- [ ] Test multi-target scan (v0.6.0+ feature)
+- [ ] Test single repo scan with each profile
+- [ ] Test multi-target scan (repo + image + IaC)
+- [ ] Verify `.jmo/history.db` persistence with volume mount
 - [ ] Run E2E tests U9, U10, U11 with local images
 - [ ] Verify image sizes are reasonable
 
-## Package Manager Testing (v0.9.0+)
+## Package Manager Testing
 
 Before submitting Homebrew/WinGet PRs, test the packages locally.
 
@@ -293,10 +487,8 @@ brew install --build-from-source packaging/homebrew/jmo-security.rb
 # Verify installation
 jmo --help
 jmo scan --help
-
-# Verify wrapper commands work
-jmotools wizard --help
-jmotools fast --help
+jmo tools --help
+jmo wizard --help
 
 # Run formula tests
 brew test jmo-security
@@ -310,6 +502,8 @@ brew upgrade jmo-security
 # Cleanup
 brew uninstall jmo-security
 ```
+
+**Note:** `jmotools` was consolidated into `jmo` in v0.9.0. All commands now use the `jmo` CLI.
 
 ### Test WinGet Package (Windows)
 
@@ -339,7 +533,7 @@ winget uninstall jmo.jmo-security
 Before submitting to Homebrew/WinGet:
 
 - [ ] Test local formula/manifest installation
-- [ ] Verify CLI works (`jmo --help`, `jmotools wizard --help`)
+- [ ] Verify CLI works (`jmo --help`, `jmo scan --help`, `jmo tools --help`)
 - [ ] Test upgrade path from previous version
 - [ ] Run `brew audit` (macOS) or `wingetcreate validate` (Windows)
 - [ ] Verify all dependencies bundled correctly
@@ -708,12 +902,418 @@ mypy scripts/
 gh run rerun <run-id> --failed
 ```
 
+## CI Troubleshooting
+
+Detailed guide for diagnosing and fixing common CI failures on PRs to this repository.
+
+### Quick Diagnosis
+
+```bash
+# Check latest CI status
+gh run list --limit 5
+
+# View failed run logs
+gh run view <run-id> --log-failed
+
+# Check specific job
+gh run view <run-id> --log --job=<job-id>
+
+# Watch PR checks in real-time
+gh pr checks <pr-number> --watch
+```
+
+### Common Failure Patterns
+
+#### 1. Markdownlint Failures
+
+**Symptoms:**
+
+```text
+markdownlint.............................................................Failed
+MD032/blanks-around-lists Lists should be surrounded by blank lines
+MD040/fenced-code-language Fenced code blocks should have a language specified
+```
+
+**Quick Fix:**
+
+1. **Blank lines around lists (MD032):** Add blank line BEFORE and AFTER lists
+2. **Code fence language (MD040):** Change `` ``` `` to `` ```bash `` or `` ```text ``
+3. **Emphasis as heading (MD036):** Change `**Bold**` to `## Heading`
+
+```bash
+# Run before committing documentation
+pre-commit run markdownlint --all-files
+
+# Or auto-fix
+npx markdownlint-cli2 --fix "**/*.md" "#node_modules"
+```
+
+#### 2. Requirements Drift (deps-compile freshness)
+
+**Symptoms:**
+
+```text
+requirements-dev.txt is out of date. Run: make deps-compile
+```
+
+**Root Cause:** Local `pip-compile` uses absolute paths, CI uses relative paths.
+
+**Quick Fix:**
+
+```bash
+# Regenerate with relative paths
+make deps-compile
+
+# Verify no absolute paths
+grep "/home/" requirements-dev.txt && echo "❌ Absolute paths detected!"
+```
+
+#### 3. Pre-commit Hook Version Drift
+
+**Symptoms:**
+
+```text
+ruff....................................Failed
+shellcheck..............................Failed
+```
+
+**Quick Fix:**
+
+```bash
+# Clean and reinstall hooks
+pre-commit clean
+pre-commit install --install-hooks
+pre-commit run --all-files
+```
+
+#### 4. Test Coverage Below Threshold
+
+**Symptoms:**
+
+```text
+FAILED: Coverage of 82% is below threshold of 85%
+```
+
+**Quick Fix:**
+
+```bash
+# Check coverage locally
+pytest --cov --cov-report=term-missing
+
+# View detailed HTML report
+pytest --cov --cov-report=html
+open htmlcov/index.html
+```
+
+#### 5. Actionlint Failures
+
+**Symptoms:**
+
+```text
+.github/workflows/ci.yml:45:7: unexpected input 'fail_on_error'
+```
+
+**Quick Fix:**
+
+```bash
+# Validate workflows before committing
+actionlint .github/workflows/*.yml
+
+# Or via pre-commit
+pre-commit run actionlint --files .github/workflows/ci.yml
+```
+
+### CI Environment Differences
+
+| Aspect | Local | CI (GitHub Actions) |
+|--------|-------|---------------------|
+| **Python paths** | `/home/user/...` | Relative paths only |
+| **pip-compile** | May use absolute paths | Always uses relative |
+| **pre-commit cache** | `~/.cache/pre-commit` | Fresh on every run |
+| **Tools** | May have extras | Minimal environment |
+
+### Emergency Fixes
+
+When CI is broken and you need to merge urgently:
+
+**Option 1: Skip pre-commit (LAST RESORT)**
+
+```bash
+git push --no-verify  # ⚠️ Only for hotfixes!
+```
+
+**Option 2: Disable failing hook temporarily**
+
+```yaml
+# .pre-commit-config.yaml
+  - id: markdownlint
+    exclude: ^docs/problematic-file\.md$  # Skip specific file
+```
+
+**Option 3: Create bypass PR**
+
+```bash
+git checkout -b hotfix/bypass-ci
+git commit --allow-empty -m "chore: bypass CI for hotfix"
+gh pr create --title "Hotfix: bypass CI" --label "hotfix"
+# Merge immediately, fix CI in follow-up PR
+```
+
 ## Coding standards
 
 - Python: Ruff for linting (`ruff check`) and `ruff format`/`black` for formatting.
 - Shell: `shellcheck` and `shfmt -i 2 -ci -bn`.
 - YAML: `yamllint` via pre-commit; GitHub Actions validated by `actionlint` (also enforced in CI).
 - Keep public CLI flags and outputs stable; update docs/tests when behavior changes.
+
+## Adding Tool Adapters (Plugin System)
+
+JMo Security uses a plugin-based architecture for all 28 security tool adapters. This enables hot-reload during development, independent updates, and community-contributed integrations.
+
+### Plugin Architecture Overview
+
+**Key Benefits:**
+
+- **Hot-Reload** - Edit adapter code without reinstalling JMo
+- **Fast Development** - 4 hours → 1 hour per adapter (75% reduction)
+- **Independent Updates** - Ship adapter improvements without core releases
+- **Low-Risk Testing** - Test new tools in `~/.jmo/adapters/` without modifying core
+- **Performance** - <100ms plugin loading overhead for all 28 adapters
+
+**Core Components:**
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Plugin API | `scripts/core/plugin_api.py` | Base classes, decorators, Finding dataclass |
+| Plugin Loader | `scripts/core/plugin_loader.py` | Auto-discovery, registry, hot-reload |
+| Integration | `scripts/core/normalize_and_report.py` | Dynamic adapter loading |
+
+### Creating a New Adapter
+
+**Plugin Search Paths (priority order):**
+
+1. `~/.jmo/adapters/` - User plugins (highest priority, for testing)
+2. `scripts/core/adapters/` - Built-in plugins (official adapters)
+
+**Step 1: Create Adapter File**
+
+```python
+# scripts/core/adapters/snyk_adapter.py
+from pathlib import Path
+from typing import List
+from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata, adapter_plugin
+import json
+
+@adapter_plugin(PluginMetadata(
+    name="snyk",  # CRITICAL: Must match tool output filename (snyk.json)
+    version="1.0.0",
+    author="Your Name",
+    description="Adapter for Snyk SCA scanner",
+    tool_name="snyk",
+    schema_version="1.2.0",
+    output_format="json",
+    exit_codes={0: "clean", 1: "findings", 2: "error"}
+))
+class SnykAdapter(AdapterPlugin):
+    @property
+    def metadata(self):
+        return self.__class__._plugin_metadata
+
+    def parse(self, output_path: Path) -> List[Finding]:
+        """Parse Snyk JSON output and return CommonFinding objects"""
+        if not output_path.exists():
+            return []
+
+        findings = []
+        with open(output_path) as f:
+            data = json.load(f)
+
+        for vuln in data.get("vulnerabilities", []):
+            finding = Finding(
+                schemaVersion="1.2.0",
+                id="",  # Will be auto-generated
+                ruleId=vuln["id"],
+                severity=vuln["severity"].upper(),
+                tool={
+                    "name": "snyk",
+                    "version": data.get("version", "unknown")
+                },
+                location={
+                    "path": vuln.get("from", ["unknown"])[0],
+                    "startLine": 1
+                },
+                message=vuln["title"],
+                description=vuln.get("description", ""),
+                remediation=vuln.get("fixedIn", "No fix available"),
+                references=[{"url": vuln.get("url", "")}],
+                raw=vuln  # Original payload for debugging
+            )
+            findings.append(finding)
+
+        return findings
+```
+
+**Step 2: Add Adapter Tests**
+
+```python
+# tests/adapters/test_snyk_adapter.py
+import pytest
+import json
+import tempfile
+from pathlib import Path
+from scripts.core.adapters.snyk_adapter import SnykAdapter
+
+class TestSnykAdapter:
+    @pytest.fixture
+    def sample_output(self):
+        """Sample Snyk JSON output"""
+        return {
+            "vulnerabilities": [
+                {
+                    "id": "SNYK-JS-LODASH-1234",
+                    "title": "Prototype Pollution",
+                    "severity": "high",
+                    "from": ["lodash@4.17.19"],
+                    "description": "Prototype pollution vulnerability",
+                    "fixedIn": ["4.17.21"],
+                    "url": "https://snyk.io/vuln/SNYK-JS-LODASH-1234"
+                }
+            ],
+            "version": "1.0.0"
+        }
+
+    def test_parse_findings(self, sample_output):
+        adapter = SnykAdapter()
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(sample_output, f)
+            temp_path = Path(f.name)
+
+        findings = adapter.parse(temp_path)
+        assert len(findings) == 1
+        assert findings[0].ruleId == "SNYK-JS-LODASH-1234"
+        assert findings[0].severity == "HIGH"
+
+        temp_path.unlink()
+
+    def test_parse_empty(self):
+        adapter = SnykAdapter()
+        findings = adapter.parse(Path("/nonexistent/path.json"))
+        assert findings == []
+
+    def test_metadata(self):
+        adapter = SnykAdapter()
+        assert adapter.metadata.name == "snyk"
+        assert adapter.metadata.schema_version == "1.2.0"
+```
+
+**Step 3: Validate and Test**
+
+```bash
+# Validate adapter structure
+jmo adapters validate scripts/core/adapters/snyk_adapter.py
+
+# Run adapter tests
+pytest tests/adapters/test_snyk_adapter.py -v
+
+# Integration test with real scan
+jmo scan --repo ./myapp --tools snyk --results-dir results
+jmo report results --human-logs
+```
+
+### CLI Commands for Adapters
+
+```bash
+# List all loaded plugins
+jmo adapters list
+
+# Validate custom adapter
+jmo adapters validate ~/.jmo/adapters/custom_tool_adapter.py
+
+# Output:
+# ✅ Valid plugin: /home/user/.jmo/adapters/custom_tool_adapter.py
+#   Plugin: custom-tool v1.0.0
+#   Metadata: OK
+#   Methods: OK (parse, get_fingerprint)
+#   Dependencies: OK
+```
+
+### Hot-Reload Development Workflow
+
+```bash
+# 1. Create adapter in user directory (no reinstall needed)
+cp scripts/core/adapters/trivy_adapter.py ~/.jmo/adapters/snyk_adapter.py
+
+# 2. Edit and test iteratively
+vim ~/.jmo/adapters/snyk_adapter.py
+pytest tests/adapters/test_snyk_adapter.py -v  # Auto-reloads
+
+# 3. Run scans with updated adapter
+jmo scan --repo ./myapp --tools snyk
+
+# 4. When ready, move to core adapters
+mv ~/.jmo/adapters/snyk_adapter.py scripts/core/adapters/
+```
+
+### CommonFinding Schema (v1.2.0)
+
+All adapters must output findings conforming to CommonFinding v1.2.0:
+
+```python
+Finding(
+    schemaVersion="1.2.0",    # Required
+    id="",                     # Auto-generated fingerprint
+    ruleId="TOOL-RULE-ID",    # Tool-specific rule ID
+    severity="HIGH",          # CRITICAL|HIGH|MEDIUM|LOW|INFO
+    tool={                    # Tool metadata
+        "name": "tool-name",
+        "version": "1.0.0"
+    },
+    location={                # Finding location
+        "path": "src/app.py",
+        "startLine": 42,
+        "endLine": 42
+    },
+    message="Short description",
+    description="Detailed explanation",
+    remediation="How to fix",
+    references=[{"url": "https://..."}],
+    raw={}                    # Original tool output for debugging
+)
+```
+
+**Schema reference:** [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
+
+### Advanced: Programmatic Plugin Management
+
+```python
+from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+
+# Discover and load all plugins
+discover_adapters()
+registry = get_plugin_registry()
+
+# List loaded plugins
+for name, plugin_class in registry.list().items():
+    meta = plugin_class._plugin_metadata
+    print(f"{meta.name} v{meta.version}: {meta.description}")
+
+# Unregister a plugin
+registry.unregister("obsolete-tool")
+```
+
+### Checklist for New Adapters
+
+- [ ] Adapter file created in `scripts/core/adapters/<tool>_adapter.py`
+- [ ] Uses `@adapter_plugin` decorator with complete `PluginMetadata`
+- [ ] Implements `parse()` method returning `List[Finding]`
+- [ ] `metadata.name` matches expected output filename (e.g., `trivy` → `trivy.json`)
+- [ ] Tests added in `tests/adapters/test_<tool>_adapter.py`
+- [ ] Validation passes: `jmo adapters validate`
+- [ ] Integration test with real tool output
+- [ ] Documentation updated if adding to official adapters
+
+**Complete user guide:** [docs/USER_GUIDE.md — Plugin System](docs/USER_GUIDE.md#plugin-system)
 
 ## Tests
 
@@ -736,7 +1336,31 @@ We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos.
 - Screenshots: see `docs/screenshots/README.md`; use `make screenshots-demo` for quick updates.
 - Keep `README.md`, `QUICKSTART.md`, and `SAMPLE_OUTPUTS.md` aligned with fixtures.
 
-## Releasing (PyPI)
+## Building and Releasing
+
+### Building Distribution Packages
+
+Before releasing, you can build and verify packages locally:
+
+```bash
+# Build sdist and wheel
+make dist
+
+# Verify packages are installable (creates temp venv, installs, tests CLI)
+make dist-verify
+
+# Clean build artifacts
+make dist-clean
+```
+
+The `dist-verify` target:
+
+1. Creates a temporary virtual environment
+2. Installs the built wheel
+3. Verifies `jmo --version` and `jmo --help` work
+4. Cleans up the temp environment
+
+### Releasing (PyPI)
 
 - Version is defined in `pyproject.toml` under `[project] version`.
 - CI publishes on tags matching `v*` (see `.github/workflows/release.yml`).
@@ -744,6 +1368,25 @@ We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos.
   1. Bump the version in `pyproject.toml`.
   2. Commit with a message like `release: vX.Y.Z` and create a tag: `git tag vX.Y.Z && git push --tags`.
   3. Ensure the project is configured as a Trusted Publisher in PyPI for this GitHub repo (no `PYPI_API_TOKEN` required). The workflow uses OIDC with `pypa/gh-action-pypi-publish@v1`.
+
+### Workspace Cleanup
+
+After development or before releases, clean up build artifacts:
+
+```bash
+# Quick clean (Python caches only)
+make clean
+
+# Full cleanup (caches + build + test + samples)
+make clean-all
+
+# Individual cleanup targets
+make clean-build   # Build artifacts only
+make clean-test    # Test artifacts only
+make clean-caches  # Python caches only
+```
+
+Note: Virtual environments (`.venv/`) are preserved by `clean-all`. To remove stale venvs, manually delete: `venv-*/`, `.venv-pypi/`, `.post-release-venv/`.
 
 ## Communication
 
@@ -754,7 +1397,15 @@ We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos.
 
 ## About the Maintainer
 
-This project was built by **James (Jimmy) Moceri** as a capstone for the **Institute of Data × Michigan Tech University Cybersecurity Bootcamp** (graduated October 2025). The project evolved from a 1-week learning exercise into a production-grade security platform with 91% test coverage, multi-target scanning, and 6-framework compliance automation.
+This project was built by **James (Jimmy) Moceri** as a capstone for the **Institute of Data × Michigan Tech University Cybersecurity Bootcamp** (graduated October 2025). The project evolved from a 1-week learning exercise into a production-grade security platform with 2,981 tests, 87% coverage, multi-target scanning, and 6-framework compliance automation.
+
+**v1.0.0 Highlights:**
+
+- 28 security scanners with plugin adapter architecture
+- SQLite historical storage for trend analysis
+- Machine-readable diffs for CI/CD integration
+- Cross-tool deduplication (30-40% noise reduction)
+- 4 unified scan profiles (fast/slim/balanced/deep)
 
 **Professional Background:**
 

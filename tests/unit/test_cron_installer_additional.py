@@ -12,8 +12,15 @@ These tests focus on missing coverage areas:
 - _generate_cron_entry() with all options (allow_missing_tools, threads, fail_on)
 """
 
+import sys
 from unittest.mock import patch, MagicMock
 import pytest
+
+# Skip all tests in this module on Windows (cron not supported)
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Cron scheduling not supported on Windows"
+)
 
 from scripts.core.cron_installer import CronInstaller
 from scripts.core.schedule_manager import (

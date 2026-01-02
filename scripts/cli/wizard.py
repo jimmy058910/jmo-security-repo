@@ -96,43 +96,64 @@ PROFILES = {
         "tools": [
             "trufflehog",
             "semgrep",
+            "syft",
             "trivy",
             "checkov",
-            "checkov-cicd",
             "hadolint",
-            "syft",
-            "osv-scanner",
+            "nuclei",
+            "shellcheck",
         ],
         "timeout": 300,
         "threads": 8,
         "est_time": "5-10 minutes",
         "use_case": "Pre-commit checks, quick validation, CI/CD gate",
     },
-    "balanced": {
-        "name": "Balanced",
-        "description": "Production CI/CD with 21 tools (cloud, API, DAST, license)",
+    "slim": {
+        "name": "Slim",
+        "description": "Cloud/IaC focused scans with 14 tools (AWS, Azure, GCP, K8s)",
         "tools": [
             "trufflehog",
             "semgrep",
             "syft",
             "trivy",
             "checkov",
-            "checkov-cicd",
+            "hadolint",
+            "nuclei",
+            "prowler",
+            "kubescape",
+            "grype",
+            "bearer",
+            "horusec",
+            "dependency-check",
+            "shellcheck",
+        ],
+        "timeout": 500,
+        "threads": 4,
+        "est_time": "12-18 minutes",
+        "use_case": "Cloud infrastructure, Kubernetes, IaC security",
+    },
+    "balanced": {
+        "name": "Balanced",
+        "description": "Production CI/CD with 18 tools (cloud, API, DAST, license)",
+        "tools": [
+            "trufflehog",
+            "semgrep",
+            "syft",
+            "trivy",
+            "checkov",
             "hadolint",
             "zap",
             "nuclei",
             "prowler",
             "kubescape",
-            "akto",
             "scancode",
             "cdxgen",
             "gosec",
-            "osv-scanner",
-            "yara",
             "grype",
             "bearer",
             "horusec",
             "dependency-check",
+            "shellcheck",
         ],
         "timeout": 600,
         "threads": 4,
@@ -162,7 +183,6 @@ PROFILES = {
             "scancode",
             "cdxgen",
             "gosec",
-            "osv-scanner",
             "yara",
             "grype",
             "bearer",
@@ -179,6 +199,90 @@ PROFILES = {
         "use_case": "Security audits, compliance scans, pre-release validation",
     },
 }
+
+# Wizard step configuration - ensures consistent "Step X/Y" display
+WIZARD_TOTAL_STEPS = 7  # Profile, Execution, Target Type, Target Config, Advanced, Review, Execute
+DIFF_WIZARD_TOTAL_STEPS = 5  # Mode, Directories, Filters, Format, Execute
+
+# Empirical per-tool timing estimates in seconds (Fix 2.2 - Issue #10)
+# Based on actual runs against medium-sized repos (~10k-50k LOC)
+TOOL_TIME_ESTIMATES: dict[str, int] = {
+    # Fast tools (< 30s)
+    "trufflehog": 15,
+    "semgrep": 25,
+    "hadolint": 5,
+    "shellcheck": 10,
+    # Medium tools (30s - 2min)
+    "trivy": 45,
+    "grype": 40,
+    "syft": 30,
+    "checkov": 60,
+    "bearer": 50,
+    "nuclei": 90,
+    "noseyparker": 45,
+    "bandit": 30,
+    "gosec": 45,
+    # Slow tools (2min+)
+    "zap": 300,  # 5 min for DAST baseline
+    "horusec": 180,
+    "dependency-check": 240,
+    "prowler": 120,
+    "kubescape": 90,
+    "scancode": 150,
+    "cdxgen": 60,
+    "akto": 180,
+    "yara": 45,
+    "falco": 90,
+    "afl++": 120,
+    "mobsf": 300,
+    "lynis": 60,
+    # Default for unknown tools
+    "_default": 60,
+}
+
+
+def calculate_time_estimate(available_tools: list[str]) -> tuple[int, int]:
+    """Calculate dynamic time estimate based on available tools.
+
+    Uses TOOL_TIME_ESTIMATES with 20% buffer for overhead.
+
+    Args:
+        available_tools: List of tool names that will actually run
+
+    Returns:
+        Tuple of (min_seconds, max_seconds) estimate
+    """
+    total = 0
+    for tool in available_tools:
+        total += TOOL_TIME_ESTIMATES.get(tool, TOOL_TIME_ESTIMATES["_default"])
+
+    # Add buffer for overhead (parallel execution reduces time, but overhead adds)
+    min_time = int(total * 0.6)  # Best case with parallelization
+    max_time = int(total * 1.2)  # Worst case with retries
+
+    return min_time, max_time
+
+
+def format_time_range(min_sec: int, max_sec: int) -> str:
+    """Format time range as human-readable string.
+
+    Args:
+        min_sec: Minimum time in seconds
+        max_sec: Maximum time in seconds
+
+    Returns:
+        Human-readable time range (e.g., "4 min - 7 min")
+    """
+
+    def fmt(s: int) -> str:
+        if s < 60:
+            return f"{s}s"
+        elif s < 3600:
+            return f"{s // 60} min"
+        else:
+            return f"{s // 3600}h {(s % 3600) // 60}m"
+
+    return f"{fmt(min_sec)} - {fmt(max_sec)}"
 
 
 # Use PromptHelper from wizard_flows for all prompting/coloring
@@ -199,10 +303,10 @@ def _prompt_choice(
     question: str, choices: list[tuple[str, str]], default: str = ""
 ) -> str:
     """
-    Prompt user for a choice from a list (legacy wrapper).
+    Prompt user for a choice from a list with numbered display.
 
-    DEPRECATED: Use _prompter.prompt_choice() directly for new code.
-    This function is kept for backward compatibility with existing wizard code.
+    Accepts both numeric input (1, 2, 3) and key input (balanced, fast)
+    for backward compatibility.
 
     Args:
         question: Question to ask
@@ -212,29 +316,45 @@ def _prompt_choice(
     Returns:
         Selected choice key
     """
-    # Convert (key, desc) tuples to list of keys for PromptHelper
     choice_keys = [c[0] for c in choices]
 
-    # Print question and choices in legacy format
+    # Print question and choices with numbered format
     print(f"\n{question}")
-    for key, desc in choices:
-        prefix = ">" if key == default else " "
-        print(f"  {prefix} [{key}] {desc}")
+    for i, (key, desc) in enumerate(choices, 1):
+        default_marker = " (default)" if key == default else ""
+        print(f"  {i}. {key:<12} - {desc}{default_marker}")
 
+    # Build prompt
+    choice_range = f"1-{len(choices)}"
     if default:
-        prompt = f"Choice [{default}]: "
+        prompt = f"Choice ({choice_range}) [{default}]: "
     else:
-        prompt = "Choice: "
+        prompt = f"Choice ({choice_range}): "
 
     while True:
-        choice = input(prompt).strip().lower()
-        if not choice and default:
+        raw = input(prompt).strip()
+
+        # Handle empty input with default
+        if not raw and default:
             return default
-        if choice in choice_keys:
-            return choice
+
+        # Handle numeric input
+        if raw.isdigit():
+            idx = int(raw)
+            if 1 <= idx <= len(choices):
+                return choice_keys[idx - 1]
+            print(_colorize(f"Invalid choice. Enter 1-{len(choices)}", "red"))
+            continue
+
+        # Handle key input (backward compatibility, case-insensitive)
+        raw_lower = raw.lower()
+        for key in choice_keys:
+            if key.lower() == raw_lower:
+                return key
+
         print(
             _colorize(
-                f"Invalid choice. Please enter one of: {', '.join(choice_keys)}",
+                f"Invalid choice. Enter 1-{len(choices)} or type option name",
                 "red",
             )
         )
@@ -248,6 +368,8 @@ def _select_mode(title: str, modes: list[tuple[str, str]], default: str = "") ->
     """
     Helper to select from modes with consistent formatting.
 
+    Uses numbered selection format with backward-compatible key input.
+
     Args:
         title: Mode category title (e.g., "Repository modes")
         modes: List of (key, description) tuples
@@ -256,11 +378,8 @@ def _select_mode(title: str, modes: list[tuple[str, str]], default: str = "") ->
     Returns:
         Selected mode key
     """
-    print(f"\n{title}:")
-    for key, desc in modes:
-        print(f"  [{key:10}] {desc}")
-
-    return _prompt_choice("\nSelect mode:", modes, default=default)
+    # _prompt_choice handles the display and input
+    return _prompt_choice(f"{title}:", modes, default=default)
 
 
 # Use Docker detection from validators module
@@ -377,17 +496,27 @@ class WizardConfig:
 
 
 def select_profile() -> str:
-    """Step 1: Select scanning profile."""
-    _print_step(1, 6, "Select Scanning Profile")
+    """Step 1: Select scanning profile.
+
+    Shows profile comparison to help users differentiate between profiles (Fix 3.1).
+    """
+    _print_step(1, WIZARD_TOTAL_STEPS, "Select Scanning Profile")
 
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
         name = cast(str, info["name"])
         tools = cast(list[str], info["tools"])
         print(f"\n  {_colorize(name, 'bold')} ({key})")
-        print(f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}")
-        print(f"    Time: {info['est_time']}")
+        print(f"    {info['description']}")
+        print(f"    Time: {info['est_time']} | Tools: {len(tools)}")
         print(f"    Use: {info['use_case']}")
+
+    # Profile comparison to help differentiate (Fix 3.1)
+    print("\n" + _colorize("Profile comparison:", "bold"))
+    print("  fast (8):      Core scanners - quick pre-commit checks")
+    print("  slim (14):     fast + Cloud/IaC (prowler, kubescape)")
+    print("  balanced (18): slim + Full SCA + DAST (zap, cdxgen)")
+    print("  deep (28):     balanced + Fuzzing, compliance, advanced")
 
     # Use _select_mode helper (simpler than full custom display)
     return _select_mode(
@@ -398,8 +527,11 @@ def select_profile() -> str:
 
 
 def select_execution_mode(force_docker: bool = False) -> bool:
-    """Step 2: Select execution mode (native vs Docker)."""
-    _print_step(2, 6, "Select Execution Mode")
+    """Step 2: Select execution mode (native vs Docker).
+
+    Uses numbered selection for consistency (Fix 3.2).
+    """
+    _print_step(2, WIZARD_TOTAL_STEPS, "Select Execution Mode")
 
     has_docker = _detect_docker()
     docker_running = _check_docker_running() if has_docker else False
@@ -414,12 +546,9 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         print("Docker mode: " + _colorize("FORCED (via --docker flag)", "green"))
         return True
 
-    print("\nExecution modes:")
-    print("  [native] Use locally installed tools")
-    print("  [docker] Use pre-built Docker image (zero installation)")
-    print()
+    # Show status
     print(
-        f"Docker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}"
+        f"\nDocker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}"
     )
     if has_docker:
         print(
@@ -434,10 +563,13 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         print(_colorize("\nDocker daemon not running. Using native mode.", "yellow"))
         return False
 
-    use_docker = _prompt_yes_no(
-        "\nUse Docker mode? (Recommended for first-time users)", default=True
-    )
-    return use_docker
+    # Numbered selection for consistency (Fix 3.2)
+    print("\nExecution mode:")
+    print("  1. Docker - Isolated container (recommended)")
+    print("  2. Native - Direct tool execution")
+
+    choice = input("\nChoice [1]: ").strip()
+    return choice != "2"  # Default to Docker (1)
 
 
 def select_target_type() -> str:
@@ -447,7 +579,7 @@ def select_target_type() -> str:
     Returns:
         Target type string
     """
-    _print_step(3, 7, "Select Scan Target Type")
+    _print_step(3, WIZARD_TOTAL_STEPS, "Select Scan Target Type")
 
     # Use _select_mode helper
     return _select_mode(
@@ -467,37 +599,37 @@ def select_target_type() -> str:
 # Target configuration functions now delegated to target_configurators module
 def configure_repo_target() -> TargetConfig:
     """Configure repository scanning (delegates to target_configurators module)."""
-    config = _configure_repo(TargetConfig, _print_step)
+    config = _configure_repo(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
 def configure_image_target() -> TargetConfig:
     """Configure container image scanning (delegates to target_configurators module)."""
-    config = _configure_image(TargetConfig, _print_step)
+    config = _configure_image(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
 def configure_iac_target() -> TargetConfig:
     """Configure IaC file scanning (delegates to target_configurators module)."""
-    config = _configure_iac(TargetConfig, _print_step)
+    config = _configure_iac(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
 def configure_url_target() -> TargetConfig:
     """Configure web URL scanning (delegates to target_configurators module)."""
-    config = _configure_url(TargetConfig, _print_step)
+    config = _configure_url(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
 def configure_gitlab_target() -> TargetConfig:
     """Configure GitLab scanning (delegates to target_configurators module)."""
-    config = _configure_gitlab(TargetConfig, _print_step)
+    config = _configure_gitlab(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
 def configure_k8s_target() -> TargetConfig:
     """Configure Kubernetes scanning (delegates to target_configurators module)."""
-    config = _configure_k8s(TargetConfig, _print_step)
+    config = _configure_k8s(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
     return config  # type: ignore[no-any-return]
 
 
@@ -508,7 +640,7 @@ def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
     Returns:
         Tuple of (threads, timeout, fail_on)
     """
-    _print_step(5, 7, "Advanced Configuration")
+    _print_step(5, WIZARD_TOTAL_STEPS, "Advanced Configuration")
 
     profile_info = PROFILES[profile]
     cpu_count = get_cpu_count()
@@ -601,17 +733,38 @@ def review_and_confirm(config: WizardConfig) -> bool:
     """
     Step 6: Review configuration and confirm.
 
+    Shows dynamic time estimate based on available tools (Fix 2.2 - Issue #10).
+
     Returns:
         True if user confirms, False otherwise
     """
-    _print_step(6, 7, "Review Configuration")
+    _print_step(6, WIZARD_TOTAL_STEPS, "Review Configuration")
 
     profile_info = PROFILES[config.profile]
     profile_name = cast(str, profile_info["name"])
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_est_time = cast(str, profile_info["est_time"])
     profile_tools = cast(list[str], profile_info["tools"])
+
+    # Get available tools for dynamic time estimate (Fix 2.2)
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        tm = ToolManager()
+        tool_statuses = tm.check_profile(config.profile)
+        available_tools = [
+            name for name, status in tool_statuses.items() if status.execution_ready
+        ]
+        available_count = len(available_tools)
+
+        # Calculate dynamic estimate based on available tools
+        min_time, max_time = calculate_time_estimate(available_tools)
+        dynamic_estimate = format_time_range(min_time, max_time)
+    except Exception:
+        # Fallback to static estimate if tool check fails
+        available_tools = profile_tools
+        available_count = len(profile_tools)
+        dynamic_estimate = cast(str, profile_info["est_time"])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
     print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
@@ -631,8 +784,18 @@ def review_and_confirm(config: WizardConfig) -> bool:
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
-    print(f"\n  Estimated time: {_colorize(profile_est_time, 'yellow')}")
-    print(f"  Tools: {len(profile_tools)} ({', '.join(profile_tools[:3])}...)")
+    # Show tools available vs total (Fix 2.2)
+    print(
+        f"\n  Tools: {_colorize(f'{available_count}/{len(profile_tools)}', 'green')} available"
+    )
+    # Show first 3 available tools
+    tools_preview = ", ".join(available_tools[:3])
+    if len(available_tools) > 3:
+        tools_preview += "..."
+    print(f"         ({tools_preview})")
+
+    # Dynamic time estimate
+    print(f"  Estimated time: {_colorize(dynamic_estimate, 'yellow')}")
 
     return _prompt_yes_no("\nProceed with scan?", default=True)
 
@@ -671,7 +834,7 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     Returns:
         Exit code from scan
     """
-    _print_step(7, 7, "Execute Scan")
+    _print_step(7, WIZARD_TOTAL_STEPS, "Execute Scan")
 
     command = generate_command(config)
 
@@ -753,13 +916,18 @@ def check_tools_for_profile(
     if use_docker:
         return True, []
 
-    _print_step(2, 7, "Tool Pre-flight Check")
+    _print_step(2, WIZARD_TOTAL_STEPS, "Tool Pre-flight Check")
 
     try:
-        from scripts.cli.tool_manager import ToolManager
-        from scripts.core.tool_registry import PROFILE_TOOLS
+        from scripts.cli.tool_manager import (
+            ToolManager,
+            get_remediation_for_tool,
+            REMEDIATION_COMMANDS,
+        )
+        from scripts.core.tool_registry import PROFILE_TOOLS, detect_platform
 
         manager = ToolManager()
+        platform = detect_platform()
         tools_in_profile = PROFILE_TOOLS.get(profile, [])
 
         print(f"\nChecking {len(tools_in_profile)} tools for '{profile}' profile...")
@@ -767,48 +935,92 @@ def check_tools_for_profile(
         statuses = manager.check_profile(profile)
         missing = [s for s in statuses.values() if not s.installed]
         outdated = [s for s in statuses.values() if s.is_outdated]
-        available = [name for name, s in statuses.items() if s.installed]
+        installed = [name for name, s in statuses.items() if s.installed]
+        # Use execution_ready for "available" (consistent with summary display)
+        available = [name for name, s in statuses.items() if s.execution_ready]
+        not_ready = [s for s in statuses.values() if s.installed and not s.execution_ready]
 
-        # All tools present
-        if not missing:
-            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools installed!", "green"))
+        # Combine all tools that need attention
+        tools_needing_attention = missing + not_ready
+
+        # All tools present and ready
+        if not tools_needing_attention:
+            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools ready!", "green"))
             if outdated:
                 print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient", "yellow"))
             return True, available
 
-        # Some tools missing
-        print(f"\n{_colorize(f'{len(missing)} tool(s) missing:', 'yellow')}")
-        for status in missing[:5]:  # Show first 5
-            print(f"  {_UNICODE_FALLBACKS.get('❌', '[X]')} {status.name}")
-        if len(missing) > 5:
-            print(f"  ... and {len(missing) - 5} more")
+        # Show consolidated status
+        print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} {len(available)} tools ready", "green"))
+        print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(tools_needing_attention)} tool(s) need attention:", "yellow"))
 
-        print(f"\n{_colorize(f'{len(available)} tool(s) available:', 'green')}")
+        # Collect fix commands for display and potential auto-execution
+        fix_info: list[dict] = []
+
+        for status in tools_needing_attention:
+            if not status.installed:
+                issue = "NOT INSTALLED"
+            else:
+                issue = status.execution_warning or "Missing dependencies"
+
+            remediation = get_remediation_for_tool(status.name, platform)
+            fix_info.append({
+                "name": status.name,
+                "issue": issue,
+                "installed": status.installed,
+                "remediation": remediation,
+            })
+
+            # Display the issue
+            icon = _UNICODE_FALLBACKS.get('❌', '[X]') if not status.installed else _UNICODE_FALLBACKS.get('⚠', '[!]')
+            print(f"\n  {icon} {_colorize(status.name, 'yellow')}: {issue}")
+
+            # Show fix command
+            if remediation["commands"]:
+                print(f"     Fix: {remediation['commands'][0]}")
+                if len(remediation["commands"]) > 1:
+                    for cmd in remediation["commands"][1:]:
+                        print(f"          {cmd}")
+            elif remediation["jmo_install"]:
+                print(f"     Fix: {remediation['jmo_install']}")
+
+        if outdated:
+            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient", "yellow"))
 
         # Non-interactive mode: continue with available tools
         if yes:
-            print(_colorize("\nNon-interactive mode: continuing with available tools", "yellow"))
+            print(_colorize(f"\nNon-interactive mode: continuing with {len(available)} available tools", "yellow"))
+            if tools_needing_attention:
+                skipped = [t["name"] for t in fix_info]
+                print(f"Skipping: {', '.join(skipped)}")
             return True, available
 
-        # Interactive: offer choices
-        print("\nOptions:")
-        print("  [1] Install missing tools now")
-        print("  [2] Continue with available tools only")
-        print("  [3] Cancel wizard")
+        # Interactive: offer choices with auto-fix option
+        print("\n" + "─" * 50)
+        print(_colorize("Options:", "blue"))
+        print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
+        print(f"  [2] Continue with {len(available)} working tools (skip: {', '.join(t['name'] for t in fix_info[:3])}{'...' if len(fix_info) > 3 else ''})")
+        print("  [3] Show all fix commands (copy/paste manually)")
+        print("  [4] Cancel wizard")
 
         while True:
             choice = input("\nChoice [1]: ").strip() or "1"
             if choice == "1":
-                # Install missing tools
-                return _install_missing_tools_interactive(missing, profile, available)
+                # Auto-fix: run remediation commands
+                return _auto_fix_tools(fix_info, platform, profile, available)
             elif choice == "2":
                 print(_colorize(f"\nContinuing with {len(available)} available tools", "yellow"))
                 print("Note: Some scan categories may be skipped")
                 return True, available
             elif choice == "3":
+                # Show all commands for manual execution
+                _show_all_fix_commands(fix_info, platform)
+                # Ask again after showing commands
+                continue
+            elif choice == "4":
                 return False, []
             else:
-                print("Please enter 1, 2, or 3")
+                print("Please enter 1, 2, 3, or 4")
 
     except ImportError as e:
         # Tool manager not available - continue anyway
@@ -819,6 +1031,141 @@ def check_tools_for_profile(
         logger.warning(f"Tool check failed: {e}")
         print(_colorize(f"\nTool check failed: {e} - continuing anyway", "yellow"))
         return True, []
+
+
+def _show_all_fix_commands(fix_info: list[dict], platform: str) -> None:
+    """Show all fix commands in a copy-paste friendly format."""
+    print("\n" + "═" * 60)
+    print(_colorize("  FIX COMMANDS (copy and run in terminal)", "blue"))
+    print("═" * 60)
+
+    for info in fix_info:
+        print(f"\n# {info['name']}: {info['issue']}")
+        remediation = info["remediation"]
+        if remediation["commands"]:
+            for cmd in remediation["commands"]:
+                print(cmd)
+        elif remediation["jmo_install"]:
+            print(remediation["jmo_install"])
+
+    print("\n" + "═" * 60)
+    print("After running these commands, restart the wizard with: jmo wizard")
+    print("═" * 60 + "\n")
+
+
+def _auto_fix_tools(
+    fix_info: list[dict],
+    platform: str,
+    profile: str,
+    available: list[str],
+) -> tuple[bool, list[str]]:
+    """
+    Automatically run fix commands for tools with issues.
+
+    Args:
+        fix_info: List of dicts with tool name, issue, and remediation info
+        platform: Current platform (linux, macos, windows)
+        profile: Profile name
+        available: Currently available tool names
+
+    Returns:
+        Tuple of (should_continue, updated_available_tools)
+    """
+    print(_colorize(f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(fix_info)} tool(s)...", "blue"))
+    print("─" * 50)
+
+    fixed = 0
+    failed = 0
+    failed_tools = []
+
+    for info in fix_info:
+        tool_name = info["name"]
+        remediation = info["remediation"]
+        commands = remediation.get("commands", [])
+
+        if not commands:
+            # Fall back to jmo tools install
+            commands = [remediation.get("jmo_install", f"jmo tools install {tool_name}")]
+
+        print(f"\n{_UNICODE_FALLBACKS.get('⏳', '[.]')} Fixing {tool_name}...")
+
+        success = True
+        for cmd in commands:
+            if not cmd:
+                continue
+
+            print(f"   Running: {cmd[:60]}{'...' if len(cmd) > 60 else ''}")
+
+            try:
+                # Run the command
+                result = subprocess.run(
+                    cmd,
+                    shell=True,  # nosec B602 - User-initiated fix commands
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout per command
+                )
+
+                if result.returncode != 0:
+                    # Some commands (like curl | sh) may return non-zero but still work
+                    # Check if it's a critical failure
+                    if "error" in result.stderr.lower() or "failed" in result.stderr.lower():
+                        print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Failed: {result.stderr[:100]}", "red"))
+                        success = False
+                        break
+                    else:
+                        # Might be OK, continue
+                        logger.debug(f"Command returned {result.returncode} but continuing")
+
+            except subprocess.TimeoutExpired:
+                print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes", "red"))
+                success = False
+                break
+            except Exception as e:
+                print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Error: {e}", "red"))
+                success = False
+                break
+
+        if success:
+            print(_colorize(f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {tool_name} fixed!", "green"))
+            fixed += 1
+            if tool_name not in available:
+                available.append(tool_name)
+        else:
+            failed += 1
+            failed_tools.append(tool_name)
+
+    # Summary
+    print("\n" + "─" * 50)
+    if failed == 0:
+        print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {fixed} tool(s) fixed successfully!", "green"))
+    else:
+        print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {fixed} fixed, {failed} failed", "yellow"))
+        print(f"Failed tools: {', '.join(failed_tools)}")
+        print("These may require manual installation. See: docs/MANUAL_INSTALLATION.md")
+
+    # Re-check tool status to update available list
+    print("\nRe-checking tool status...")
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        statuses = manager.check_profile(profile)
+        available = [name for name, s in statuses.items() if s.execution_ready]
+        ready_count = len(available)
+        total_count = len(statuses)
+
+        if ready_count == total_count:
+            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {total_count} tools now ready!", "green"))
+        else:
+            not_ready = total_count - ready_count
+            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} {ready_count}/{total_count} tools ready ({not_ready} still need attention)", "yellow"))
+
+    except Exception as e:
+        logger.warning(f"Re-check failed: {e}")
+
+    # Continue with whatever we have
+    return True, available
 
 
 def _install_missing_tools_interactive(
@@ -967,6 +1314,13 @@ def run_wizard(
             if not should_continue:
                 print(_colorize("\nWizard cancelled", "yellow"))
                 return 0
+
+            # Version drift check (only for native mode)
+            if not config.use_docker:
+                from scripts.cli.scan_utils import check_version_drift_before_scan
+                if not check_version_drift_before_scan(config.profile, interactive=True):
+                    print(_colorize("\nWizard cancelled", "yellow"))
+                    return 0
 
             # Step 3a: Select target type
             target_type = select_target_type()
@@ -1726,7 +2080,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         print("This wizard helps you compare two security scan results.\n")
 
         # Step 1: Select comparison mode
-        _print_step(1, 5, "Select Comparison Mode")
+        _print_step(1, DIFF_WIZARD_TOTAL_STEPS, "Select Comparison Mode")
         modes = [
             ("history", "Compare scans from history database"),
             ("directory", "Compare two result directories"),
@@ -1809,7 +2163,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
                 return 1
         else:
             # Directory mode
-            _print_step(2, 5, "Select Directories")
+            _print_step(2, DIFF_WIZARD_TOTAL_STEPS, "Select Directories")
 
             baseline_path = input(
                 _colorize("Baseline results directory: ", "bold")
@@ -1826,7 +2180,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
                 return 1
 
         # Step 2: Filter options
-        _print_step(3, 5, "Configure Filters (optional)")
+        _print_step(3, DIFF_WIZARD_TOTAL_STEPS, "Configure Filters (optional)")
 
         print("\nSeverity filtering:")
         print("  [1] All severities")
@@ -1867,7 +2221,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         ]
 
         # Step 3: Output format
-        _print_step(4, 5, "Select Output Format")
+        _print_step(4, DIFF_WIZARD_TOTAL_STEPS, "Select Output Format")
 
         formats = [
             ("json", "Machine-readable JSON"),
@@ -1886,7 +2240,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
             output_file = custom_output
 
         # Step 4: Review and execute
-        _print_step(5, 5, "Review and Execute")
+        _print_step(5, DIFF_WIZARD_TOTAL_STEPS, "Review and Execute")
 
         print("\n" + _colorize("Diff Configuration:", "bold"))
         if mode == "history":

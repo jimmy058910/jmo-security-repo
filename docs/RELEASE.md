@@ -561,19 +561,22 @@ time docker run --rm \
 **Goal:** Verify all Docker image variants work on macOS
 
 ```bash
-# Test full variant
+# Test deep variant (default/latest)
 docker run --rm jmogaming/jmo-security:latest --help
+
+# Test balanced variant
+docker run --rm jmogaming/jmo-security:balanced --help
 
 # Test slim variant
 docker run --rm jmogaming/jmo-security:slim --help
 
-# Test alpine variant
-docker run --rm jmogaming/jmo-security:alpine --help
+# Test fast variant
+docker run --rm jmogaming/jmo-security:fast --help
 ```
 
 **Success Criteria:**
 
-- [ ] All 3 variants work
+- [ ] All 4 variants work
 - [ ] No platform-specific errors
 - [ ] Help commands succeed for all variants
 

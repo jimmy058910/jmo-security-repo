@@ -30,9 +30,11 @@ def _prompt_text(question: str, default: str = "") -> str:
     return value if value else default
 
 
-def configure_repo_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_repo_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure repository scanning target."""
-    print_step_fn(4, 7, "Configure Repository Target")
+    print_step_fn(4, total_steps, "Configure Repository Target")
 
     config = target_config_class()
     config.type = "repo"
@@ -98,9 +100,11 @@ def configure_repo_target(target_config_class: Any, print_step_fn: Callable) -> 
         print(_prompter.colorize(f"Path not found: {path}", "red"))
 
 
-def configure_image_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_image_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure container image scanning target."""
-    print_step_fn(4, 7, "Configure Container Image Target")
+    print_step_fn(4, total_steps, "Configure Container Image Target")
 
     config = target_config_class()
     config.type = "image"
@@ -144,9 +148,11 @@ def configure_image_target(target_config_class: Any, print_step_fn: Callable) ->
     return config
 
 
-def configure_iac_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_iac_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure IaC file scanning target."""
-    print_step_fn(4, 7, "Configure Infrastructure as Code Target")
+    print_step_fn(4, total_steps, "Configure Infrastructure as Code Target")
 
     config = target_config_class()
     config.type = "iac"
@@ -182,9 +188,11 @@ def configure_iac_target(target_config_class: Any, print_step_fn: Callable) -> A
         print(_prompter.colorize(f"File not found: {path}", "red"))
 
 
-def configure_url_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_url_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure web URL scanning target."""
-    print_step_fn(4, 7, "Configure Web Application/API Target")
+    print_step_fn(4, total_steps, "Configure Web Application/API Target")
 
     config = target_config_class()
     config.type = "url"
@@ -248,9 +256,11 @@ def configure_url_target(target_config_class: Any, print_step_fn: Callable) -> A
     return config
 
 
-def configure_gitlab_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_gitlab_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure GitLab scanning target."""
-    print_step_fn(4, 7, "Configure GitLab Target")
+    print_step_fn(4, total_steps, "Configure GitLab Target")
 
     config = target_config_class()
     config.type = "gitlab"
@@ -311,9 +321,11 @@ def configure_gitlab_target(target_config_class: Any, print_step_fn: Callable) -
     return config
 
 
-def configure_k8s_target(target_config_class: Any, print_step_fn: Callable) -> Any:
+def configure_k8s_target(
+    target_config_class: Any, print_step_fn: Callable, total_steps: int = 7
+) -> Any:
     """Configure Kubernetes scanning target."""
-    print_step_fn(4, 7, "Configure Kubernetes Target")
+    print_step_fn(4, total_steps, "Configure Kubernetes Target")
 
     config = target_config_class()
     config.type = "k8s"

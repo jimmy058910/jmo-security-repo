@@ -45,6 +45,7 @@ make test                              # Run tests with coverage
 | `jmo scan --url https://api.com` | DAST scanning |
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
+| `jmo ci --strict-versions` | Reproducible CI (fail on version drift) |
 | `jmo tools check --profile balanced` | Check tool installation status |
 | `jmo tools install --profile balanced` | Install missing tools |
 | `jmo tools update` | Update outdated tools |
@@ -215,9 +216,11 @@ See [docs/RELEASE.md](docs/RELEASE.md) for details.
 | SQLite locked | `jmo history vacuum` |
 | Docker persistence | Mount `.jmo/history.db` volume |
 
-See [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) for detailed solutions.
+See [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) for detailed solutions.
 
 ## Unified Scan Profiles (v1.0.0)
+
+> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - Complete tool lists, dependencies, manual installation requirements
 
 CLI profiles and Docker variants are unified - same 4 profiles, same tools:
 
@@ -235,6 +238,22 @@ CLI profiles and Docker variants are unified - same 4 profiles, same tools:
 **Balanced (18 tools):** Slim + zap, scancode, cdxgen, gosec
 
 **Deep (28 tools):** Balanced + noseyparker, semgrep-secrets, bandit, trivy-rbac, checkov-cicd, akto, yara, falco, afl++, mobsf, lynis
+
+**Manual Installation Required (deep profile):** AFL++, MobSF, Akto - see [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md#manual-installation-tools)
+
+## Container Registries
+
+Three registries with intentionally different usernames:
+
+| Registry | Image Path | Username/ID | Purpose |
+|----------|-----------|-------------|---------|
+| **GHCR** (Primary) | `ghcr.io/jimmy058910/jmo-security` | jimmy058910 | Unlimited pulls, CI/CD recommended |
+| **Docker Hub** | `jmogaming/jmo-security` | jmogaming | Discoverability, search indexing |
+| **ECR Public** | `public.ecr.aws/m2d8u2k1/jmo-security` | m2d8u2k1 | AWS users, faster pulls |
+
+**GitHub Repository:** `github.com/jimmy058910/jmo-security-repo`
+
+See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
 
 ## Configuration Files
 
@@ -274,6 +293,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 **Feature Docs:**
 
+- [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - **Canonical tool lists, dependencies, manual installs**
 - [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) - Tool version management
 - [docs/DOCKER_README.md](docs/DOCKER_README.md) - Docker deep-dive
 - [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Results and output formats
@@ -282,7 +302,7 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 **Operations:**
 
 - [docs/RELEASE.md](docs/RELEASE.md) - Release process
-- [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) - CI/CD debugging
+- [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) - CI/CD debugging
 - [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) - Scheduled scans
 
 ## Document Management Policy

@@ -350,6 +350,9 @@ class PromptHelper:
     ) -> str:
         """Prompt user to select from choices.
 
+        Accepts both numeric input (1, 2, 3) and text input for backward
+        compatibility. Text matching is case-insensitive.
+
         Args:
             question: Question to ask
             choices: List of choice strings
@@ -360,26 +363,39 @@ class PromptHelper:
         """
         print(f"\n{question}")
         for i, choice in enumerate(choices, 1):
-            prefix = ">" if choice == default else " "
-            print(f"  {prefix} {i}. {choice}")
+            default_marker = " (default)" if choice == default else ""
+            print(f"  {i}. {choice}{default_marker}")
 
+        choice_range = f"1-{len(choices)}"
         while True:
             if default:
-                response = input(f"Choice [default: {default}]: ").strip()
+                response = input(f"Choice ({choice_range}) [{default}]: ").strip()
             else:
-                response = input("Choice: ").strip()
+                response = input(f"Choice ({choice_range}): ").strip()
 
             if not response and default:
                 return default
 
-            try:
+            # Handle numeric input
+            if response.isdigit():
                 idx = int(response) - 1
                 if 0 <= idx < len(choices):
                     return choices[idx]
-            except ValueError:
-                pass
+                print(self.colorize(f"Invalid choice. Enter 1-{len(choices)}", "red"))
+                continue
 
-            print(f"Invalid choice. Enter 1-{len(choices)}")
+            # Handle text input (case-insensitive match)
+            response_lower = response.lower()
+            for choice in choices:
+                if choice.lower() == response_lower:
+                    return choice
+
+            print(
+                self.colorize(
+                    f"Invalid choice. Enter 1-{len(choices)} or type option name",
+                    "red",
+                )
+            )
 
     def prompt_yes_no(self, question: str, default: bool = True) -> bool:
         """Prompt user for yes/no.

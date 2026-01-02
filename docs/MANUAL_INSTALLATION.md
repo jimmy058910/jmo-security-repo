@@ -223,7 +223,7 @@ go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 | Hadolint | ✅ | ✅ | ✅ | ✅ |
 | Nuclei | ✅ | ✅ | ✅ | ✅ |
 | Bandit | ✅ | ✅ | ✅ | ✅ |
-| OWASP ZAP | ⚠️ | ⚠️ | ⚠️ | ✅ |
+| OWASP ZAP | ✅ | ✅ | ✅ | ✅ |
 | Nosey Parker | ❌ | ✅ | ❌ | ✅ |
 | Falco | ❌ | ✅ | ❌ | ✅ |
 | AFL++ | ❌ | ✅ | ❌ | Manual |

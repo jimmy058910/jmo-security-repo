@@ -13,6 +13,77 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import fnmatch
+import os
+import re
+import sys
+
+
+def _detect_msys_path_mangling(path_str: str) -> bool:
+    """
+    Detect if a path has been mangled by Git Bash's MSYS layer on Windows.
+
+    When running Docker commands from Git Bash on Windows, the MSYS layer
+    automatically converts Unix-style paths (like /scan/repo) to Windows paths
+    (like C:/Program Files/Git/scan/repo). This breaks Docker volume mounts.
+
+    Args:
+        path_str: The path string to check
+
+    Returns:
+        True if the path appears to be MSYS-mangled, False otherwise
+    """
+    if not path_str:
+        return False
+
+    # Pattern: Windows drive letter followed by path containing "Program Files/Git"
+    # This is the telltale sign of MSYS path conversion
+    msys_pattern = r"^[A-Za-z]:[/\\].*Program Files[/\\]Git"
+    if re.match(msys_pattern, path_str):
+        return True
+
+    # Also detect any Windows path inside a Docker Linux container
+    # Check if we're in Docker AND the path looks like a Windows path
+    if os.environ.get("DOCKER_CONTAINER") == "1":
+        # Windows drive letter pattern: C:/ or D:\
+        if re.match(r"^[A-Za-z]:[/\\]", path_str):
+            return True
+
+    return False
+
+
+def _warn_msys_path_mangling(path_str: str) -> None:
+    """
+    Print a helpful warning about MSYS path mangling with solutions.
+
+    Args:
+        path_str: The mangled path that was detected
+    """
+    warning = f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ⚠️  MSYS PATH CONVERSION DETECTED                                             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ The path '{path_str[:50]}...'
+║ appears to have been converted by Git Bash's MSYS layer.
+║
+║ This happens when running Docker from Git Bash on Windows.
+║ The path /scan/... was converted to a Windows path.
+║
+║ SOLUTIONS:
+║
+║ 1. Set environment variable (recommended):
+║    MSYS_NO_PATHCONV=1 docker run ...
+║
+║ 2. Use PowerShell or CMD instead of Git Bash
+║
+║ 3. Use double-slash prefix:
+║    docker run ... --repo //scan/repo
+║
+║ Example:
+║    MSYS_NO_PATHCONV=1 docker run --rm -v "C:\\Projects\\myrepo:/scan" \\
+║      jmo-security:fast scan --repo /scan --profile fast
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+    sys.stderr.write(warning)
 
 
 @dataclass
@@ -182,18 +253,35 @@ class ScanOrchestrator:
         - --repo: Single repository path
         - --repos-dir: Directory containing multiple repos
         - --targets: File with list of repository paths
+
+        Also detects MSYS path mangling from Git Bash on Windows and provides
+        helpful error messages with solutions.
         """
         repos: list[Path] = []
 
         # Single repository
         if getattr(args, "repo", None):
-            p = Path(args.repo)
+            repo_path = args.repo
+
+            # Check for MSYS path mangling (Git Bash on Windows + Docker)
+            if _detect_msys_path_mangling(repo_path):
+                _warn_msys_path_mangling(repo_path)
+                return repos  # Return empty - path is invalid
+
+            p = Path(repo_path)
             if p.exists():
                 repos.append(p)
 
         # Directory of repositories
         elif getattr(args, "repos_dir", None):
-            base = Path(args.repos_dir)
+            repos_dir_path = args.repos_dir
+
+            # Check for MSYS path mangling
+            if _detect_msys_path_mangling(repos_dir_path):
+                _warn_msys_path_mangling(repos_dir_path)
+                return repos
+
+            base = Path(repos_dir_path)
             if base.exists() and base.is_dir():
                 # Find all subdirectories (assumed to be repos)
                 repos.extend([p for p in base.iterdir() if p.is_dir()])
@@ -523,7 +611,8 @@ class ScanOrchestrator:
         }
 
     def scan_all(
-        self, targets: ScanTargets, per_tool_config: dict, progress_callback=None
+        self, targets: ScanTargets, per_tool_config: dict, progress_callback=None,
+        tool_progress_callback=None,
     ) -> list[tuple[str, dict[str, bool]]]:
         """
         Execute scans on all discovered targets in parallel.
@@ -534,7 +623,9 @@ class ScanOrchestrator:
         Args:
             targets: Discovered scan targets
             per_tool_config: Per-tool configuration overrides
-            progress_callback: Optional callback for progress updates (callable)
+            progress_callback: Optional callback for target-level progress updates (callable)
+            tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
+                                   Called when each tool starts and completes
 
         Returns:
             List of (target_name, statuses_dict) tuples for all scanned targets
@@ -565,6 +656,7 @@ class ScanOrchestrator:
                     self.config.retries,
                     per_tool_config,
                     self.config.allow_missing_tools,
+                    progress_callback=tool_progress_callback,
                 )
                 futures.append(("repo", repo.name, future))
 

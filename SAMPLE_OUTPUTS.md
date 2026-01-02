@@ -1,104 +1,194 @@
 # Sample Output Examples
 
-**Note (v0.5.0 - October 15, 2025):** These examples reflect the current v0.5.0+ tool suite. The consolidated tools include trufflehog (replacing gitleaks), trivy (replacing tfsec for IaC), and new additions like ZAP/Falco/AFL++. Deprecated tools (gitleaks, tfsec, osv-scanner) were removed. Core output formats remain unchanged.
+**Version:** v1.0.0+ (December 2025)
 
-Updated October 2025 using the curated `samples/fixtures/infra-demo` target.
+These examples demonstrate JMo Security output formats using the `samples/fixtures/infra-demo` target.
 
-## Aggregated Summary (`summaries/SUMMARY.md`)
+---
 
-Running
+## Quick Start
 
 ```bash
-PYTHONPATH=. python3 scripts/cli/jmo.py scan --repo samples/fixtures/infra-demo --results /tmp/jmo-infra-demo-results
-PYTHONPATH=. python3 scripts/cli/jmo.py report /tmp/jmo-infra-demo-results
+# Scan a target
+jmo scan --repo samples/fixtures/infra-demo --results /tmp/jmo-demo
+
+# View results
+cat /tmp/jmo-demo/summaries/SUMMARY.md
+open /tmp/jmo-demo/summaries/dashboard.html
 ```
 
-generates `SUMMARY.md` under `/tmp/jmo-infra-demo-results/summaries` with enhanced, actionable insights:
+---
+
+## Output Formats (v1.0.0)
+
+All v1.0.0+ outputs use a standardized metadata wrapper:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "1.0.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-12-22T10:30:00Z",
+    "scan_id": "abc123",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep", "checkov", "..."],
+    "target_count": 1,
+    "finding_count": 68,
+    "platform": "linux"
+  },
+  "findings": [
+    { "...": "CommonFinding objects" }
+  ]
+}
+```
+
+### Available Formats
+
+| File | Format | Use Case |
+|------|--------|----------|
+| `findings.json` | JSON | Machine processing, API integration |
+| `findings.sarif` | SARIF 2.1.0 | GitHub/GitLab code scanning |
+| `findings.csv` | CSV | Excel, compliance reporting |
+| `SUMMARY.md` | Markdown | PR comments, documentation |
+| `dashboard.html` | HTML | Interactive browser viewing |
+| `simple-report.html` | HTML | Email-compatible static report |
+
+---
+
+## Aggregated Summary (`summaries/SUMMARY.md`)
 
 ```markdown
 # Security Summary
 
-Total findings: 68 | 🔴 3 CRITICAL | 🔴 38 HIGH | 🟡 9 MEDIUM | ⚪ 16 LOW
+Total findings: 68 | CRITICAL: 3 | HIGH: 38 | MEDIUM: 9 | LOW: 16
 
 ## Top Risks by File
 
 | File | Findings | Severity | Top Issue |
 |------|----------|----------|-----------|
-| gitleaks-demo-secrets.json | 32 | 🔴 HIGH | generic-api-key (32×) |
-| infra-demo/Dockerfile | 4 | 🔴 HIGH | missing-user |
-| infra-demo/main.tf | 6 | 🔴 CRITICAL | aws-vpc-no-public-egress-sgr (2×) |
-| infra-demo/deployment.yaml | 3 | 🔴 HIGH | run-as-non-root |
+| infra-demo/secrets.json | 32 | HIGH | generic-api-key (32x) |
+| infra-demo/Dockerfile | 4 | HIGH | missing-user |
+| infra-demo/main.tf | 6 | CRITICAL | aws-vpc-no-public-egress-sgr (2x) |
+| infra-demo/deployment.yaml | 3 | HIGH | run-as-non-root |
 
 ## By Severity
 
-- 🔴 CRITICAL: 3
-- 🔴 HIGH: 38
-- 🟡 MEDIUM: 9
-- ⚪ LOW: 16
-- 🔵 INFO: 2
+- CRITICAL: 3
+- HIGH: 38
+- MEDIUM: 9
+- LOW: 16
+- INFO: 2
 
 ## By Tool
 
-- **gitleaks**: 32 findings (🔴 32 HIGH)
-- **trivy**: 26 findings (🔴 3 CRITICAL, 🔴 16 HIGH, 🟡 4 MEDIUM, ⚪ 3 LOW)
-- **checkov**: 7 findings (🔴 7 HIGH)
-- **hadolint**: 4 findings (⚪ 4 LOW)
-- **semgrep**: 3 findings (🔴 2 HIGH, ⚪ 1 LOW)
+- **trufflehog**: 32 findings (32 HIGH)
+- **trivy**: 26 findings (3 CRITICAL, 16 HIGH, 4 MEDIUM, 3 LOW)
+- **checkov**: 7 findings (7 HIGH)
+- **hadolint**: 4 findings (4 LOW)
+- **semgrep**: 3 findings (2 HIGH, 1 LOW)
 
 ## Remediation Priorities
 
-1. **Rotate 32 exposed secrets** (HIGH) → See findings for rotation guide
-2. **Fix aws-vpc-no-public-egress-sgr** (2 findings) → Review container security best practices
-3. **Harden IaC configurations** (13 findings) → Apply security templates
-
-## By Category
-
-- 🔑 Secrets: 32 findings (47% of total)
-- 🐳 IaC/Container: 33 findings (49% of total)
-- 🔧 Code Quality: 3 findings (4% of total)
-
-## Top Rules
-
-- generic-api-key: 32
-- DL3007: 1
-- DL3008: 1
-- DL3015: 1
-- DL3009: 1
+1. **Rotate 32 exposed secrets** (HIGH) - See findings for rotation guide
+2. **Fix aws-vpc-no-public-egress-sgr** (2 findings) - Review security group rules
+3. **Harden IaC configurations** (13 findings) - Apply security templates
 ```
 
-**Key Enhancements (ROADMAP #5):**
+---
 
-- **Visual indicators**: Emoji badges (🔴 🟡 ⚪) for quick severity scanning
-- **File breakdown**: Top 10 files by risk with highest severity and most common issue
-- **Tool breakdown**: Per-tool severity counts for better tool performance analysis
-- **Remediation priorities**: Top 3-5 actionable next steps prioritized by impact
-- **Category grouping**: Findings grouped by type (Secrets, Vulnerabilities, IaC, Code Quality)
-- **Long rule simplification**: Verbose rule IDs simplified with full name reference
+## Individual Tool Outputs (`individual-repos/*/`)
 
-The aggregate JSON/YAML/SARIF files in the same directory mirror these counts for automated pipelines.
+| Tool | Findings | Notes |
+|------|----------|-------|
+| trivy | 26 | Dockerfile + Kubernetes + Terraform misconfigurations |
+| checkov | 7 | Terraform findings for unrestricted ingress/egress |
+| hadolint | 4 | Dockerfile linting (package pinning, non-root user) |
+| semgrep | 3 | Dockerfile USER, K8s runAsNonRoot, allowPrivilegeEscalation |
+| trufflehog | 32 | Verified secrets detection |
+| noseyparker | 0 | No additional secrets detected |
+| syft | 0 | No SBOM artifacts (minimal fixture) |
 
-## Individual Tool Outputs (`individual-repos/infra-demo/*.json`)
-
-| Tool        | Findings | Notes |
-|-------------|----------|-------|
-| trivy       | 26       | 4 Dockerfile + 19 Kubernetes + 3 Terraform misconfigurations; CRITICAL `aws-vpc-no-public-egress-sgr` plus HIGH `AVD-AWS-0107` confirm the Terraform security group is wide open. |
-| checkov     | 7        | 7 Terraform findings covering unrestricted ingress/egress; no false positives observed. |
-| hadolint    | 4        | DL3007/DL3008/DL3009/DL3015 flag lack of pinned distro, package pinning, and missing non-root user in the Dockerfile. |
-| semgrep     | 3        | 3 results (Dockerfile USER, Kubernetes `runAsNonRoot`, `allowPrivilegeEscalation`); all intentional. |
-| noseyparker | 0        | 0 matches against the fixture; confirms our sample does not carry additional plaintext secrets. |
-| syft        | 0        | 0 SBOM artifacts for this minimal fixture; expected because no build artifacts are present. |
-| trufflehog  | 0        | Produced no findings (and therefore an empty JSON file) when run separately with `--tools trufflehog`; see REVIEW.md for guidance on interpreting the output stream. |
-| bandit      | 0        | No Python files in this fixture; tool ran successfully but produced no findings. |
+---
 
 ## HTML Dashboard (`summaries/dashboard.html`)
 
-The dashboard renders the same 68 finding counts with severity cards and per-tool tables. Use `xdg-open /tmp/jmo-infra-demo-results/summaries/dashboard.html` to view interactively after running the commands above.
+Interactive React dashboard with:
 
-## Quick Reference for Report Consumers
+- Severity cards with counts
+- Filterable findings table
+- Tool breakdown charts
+- KEV-first sorting for critical vulnerabilities
+- Dual-mode loading (inline for <=1000 findings, external JSON for larger scans)
 
-- Copy `/tmp/jmo-infra-demo-results/summaries/findings.json` when you need machine-readable output for deduplicated findings.
-- Use `findings.sarif` for GitHub code scanning uploads.
-- `timings.json` is emitted when `--profile` is passed to `report` and includes worker counts plus per-stage timings.
-- `SUPPRESSIONS.md` appears whenever `jmo.suppress.yml` filters findings; not present in the default walkthrough.
+---
 
-Keeping the commands and this table synchronized with the fixtures is part of the REVIEW checklist. Re-run the scan/report pair whenever fixtures change so these samples stay accurate.
+## CSV Export (`summaries/findings.csv`)
+
+```csv
+# JMo Security Scan Results
+# Version: 1.0.0
+# Timestamp: 2025-12-22T10:30:00Z
+# Profile: balanced
+# Finding Count: 68
+
+severity,ruleId,message,path,startLine,tool,category
+HIGH,generic-api-key,API key detected,secrets.json,15,trufflehog,secrets
+CRITICAL,aws-vpc-no-public-egress-sgr,Unrestricted egress,main.tf,42,trivy,iac
+...
+```
+
+---
+
+## Simple HTML Report (`summaries/simple-report.html`)
+
+Email-compatible static HTML with inline CSS. Tested in:
+
+- Gmail, Outlook, Apple Mail
+- Thunderbird, Yahoo Mail, ProtonMail
+
+Use case: Sending scan results to stakeholders who don't have dashboard access.
+
+---
+
+## SARIF Output (`summaries/findings.sarif`)
+
+SARIF 2.1.0 compliant output for code scanning integration:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "JMo Security",
+          "version": "1.0.0"
+        }
+      },
+      "results": [...]
+    }
+  ]
+}
+```
+
+Upload to GitHub: `gh code-scanning upload -r owner/repo -s findings.sarif`
+
+---
+
+## Quick Reference
+
+| Need | File |
+|------|------|
+| Machine-readable findings | `findings.json` |
+| GitHub code scanning | `findings.sarif` |
+| Excel/spreadsheet | `findings.csv` |
+| PR comments | `SUMMARY.md` |
+| Interactive viewing | `dashboard.html` |
+| Email reports | `simple-report.html` |
+| Suppression tracking | `SUPPRESSIONS.md` |
+
+---
+
+**Documentation:** [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) for complete output format specification.

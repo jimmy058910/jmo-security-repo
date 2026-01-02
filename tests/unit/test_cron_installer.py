@@ -10,8 +10,15 @@ Tests cover:
 """
 
 import subprocess
+import sys
 from unittest.mock import patch, MagicMock
 import pytest
+
+# Skip all tests in this module on Windows (cron not supported)
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Cron scheduling not supported on Windows"
+)
 
 from scripts.core.cron_installer import (
     CronInstaller,

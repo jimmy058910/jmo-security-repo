@@ -9,7 +9,7 @@ results_dir/
     <repo>/trufflehog.json
     <repo>/semgrep.json
     <repo>/trivy.json
-    <repo>/... (11 active tools total)
+    <repo>/... (28 active tools total)
 
 Usage:
   python3 scripts/core/normalize_and_report.py <results_dir> [--out <out_dir>]

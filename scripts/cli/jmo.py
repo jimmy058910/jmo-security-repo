@@ -38,7 +38,7 @@ from scripts.core.telemetry import (
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
+__version__ = "1.0.0"
 
 
 # Windows-safe Unicode fallback mappings for cp1252 compatibility
@@ -328,6 +328,11 @@ def _add_ci_args(subparsers):
         action="store_true",
         help="Fail CI (exit code 1) if any policy violations found",
     )
+    cp.add_argument(
+        "--strict-versions",
+        action="store_true",
+        help="Fail CI if tool versions don't match versions.yaml (v1.0.0: reproducible builds)",
+    )
     _add_logging_args(cp)
     return cp
 
@@ -574,6 +579,32 @@ Examples:
     )
     uninstall_parser.add_argument(
         "--yes", "-y", action="store_true", help="Skip confirmation prompt"
+    )
+
+    # Debug command - troubleshoot version detection
+    debug_parser = tools_subparsers.add_parser(
+        "debug",
+        help="Debug version detection for specific tools",
+        description="""
+Debug version detection issues for security tools.
+
+Shows detailed information about:
+  - Binary location and path
+  - Version command executed
+  - Raw stdout/stderr output
+  - Regex pattern used
+  - Pattern match results
+
+Examples:
+  jmo tools debug shellcheck        # Debug one tool
+  jmo tools debug zap dependency-check  # Debug multiple tools
+  jmo tools debug --all             # Debug all tools
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    debug_parser.add_argument("tools", nargs="*", help="Tools to debug version detection")
+    debug_parser.add_argument(
+        "--all", "-a", action="store_true", help="Debug all tools in balanced profile"
     )
 
     return tools_parser
@@ -1551,6 +1582,11 @@ QUICK START:
 Documentation: https://docs.jmotools.com
         """,
     )
+    ap.add_argument(
+        "--version",
+        action="version",
+        version=f"JMo Security v{__version__}",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     # Beginner-friendly commands
@@ -1932,10 +1968,19 @@ def _check_first_run() -> bool:
 
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
+    import os
     import sys
 
     # Skip if not interactive (Docker, CI/CD, etc.)
     if not sys.stdin.isatty():
+        return
+
+    # Skip if running in Docker or CI environment
+    if os.environ.get("JMO_NON_INTERACTIVE") or os.environ.get("CI"):
+        return
+
+    # Skip if running in a Docker container (detected by DOCKER_CONTAINER env)
+    if os.environ.get("DOCKER_CONTAINER") == "1":
         return
 
     _safe_print("\n🎉 Welcome to JMo Security!\n")
@@ -2077,8 +2122,8 @@ def _show_kofi_reminder(args) -> None:
             + "💚 Enjoying JMo Security? Support full-time development!\n"
             + "   → https://ko-fi.com/jmogaming\n"
             + "\n"
-            + "   Your support helps maintain 11+ security tools, add new features,\n"
-            + "   and provide free security scanning for the community.\n"
+            + "   Your support funds ongoing development of this open-source\n"
+            + "   security orchestrator and helps keep it free for everyone.\n"
             + "\n"
             + f"   You've run {scan_count} scans - thank you for using JMo Security!\n"
             + "=" * 70
@@ -2152,12 +2197,13 @@ class ProgressTracker:
     Thread-safe for concurrent scan operations.
     """
 
-    def __init__(self, total: int, args):
+    def __init__(self, total: int, args, total_tools: int = 0):
         """Initialize progress tracker.
 
         Args:
             total: Total number of targets to scan
             args: CLI arguments (for logging)
+            total_tools: Total number of tools to run (for tool-level progress)
 
         """
         import threading
@@ -2167,6 +2213,10 @@ class ProgressTracker:
         self.args = args
         self._lock = threading.Lock()
         self._start_time: float | None = None
+        # Tool-level progress tracking
+        self.total_tools = total_tools
+        self.tools_completed = 0
+        self.tools_in_progress: set[str] = set()
 
     def start(self):
         """Start progress tracking timer."""
@@ -2222,6 +2272,40 @@ class ProgressTracker:
             mins = (seconds % 3600) // 60
             return f"{hours}h {mins}m"
 
+    def update_tool(self, tool_name: str, status: str, findings_count: int = 0):
+        """Update progress when a tool starts or completes.
+
+        Args:
+            tool_name: Name of the tool
+            status: "start" when tool begins, "success"/"error" when done
+            findings_count: Number of findings (unused for now)
+        """
+        import sys
+
+        with self._lock:
+            if status == "start":
+                self.tools_in_progress.add(tool_name)
+            else:
+                # Tool completed
+                self.tools_in_progress.discard(tool_name)
+                self.tools_completed += 1
+
+                if self.total_tools > 0:
+                    percentage = int((self.tools_completed / self.total_tools) * 100)
+                    status_icon = "✓" if status == "success" else "✗"
+
+                    # Show inline progress (overwrites previous line)
+                    progress_line = (
+                        f"\r[{self.tools_completed}/{self.total_tools}] "
+                        f"{status_icon} {tool_name} ({percentage}%)"
+                    )
+                    # Pad to clear leftover characters
+                    print(f"{progress_line:<60}", end="", file=sys.stderr, flush=True)
+
+                    # Print newline when all tools complete
+                    if self.tools_completed >= self.total_tools:
+                        print("", file=sys.stderr)
+
 
 def cmd_scan(args) -> int:
     """Scan security targets (repos, images, IaC, URLs, GitLab, K8s) with multiple tools.
@@ -2236,6 +2320,11 @@ def cmd_scan(args) -> int:
         should_show_telemetry_banner,
         show_telemetry_banner,
     )
+
+    # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
+    from scripts.cli.scan_utils import clear_tool_warnings
+
+    clear_tool_warnings()
 
     scan_start_time = time.time()
 
@@ -2384,18 +2473,27 @@ def cmd_scan(args) -> int:
     signal.signal(signal.SIGINT, _handle_stop)
     signal.signal(signal.SIGTERM, _handle_stop)
 
-    # Initialize progress tracker
-    progress = ProgressTracker(total_targets, args)
+    # Initialize progress tracker with tool count
+    total_tools = len(tools)
+    progress = ProgressTracker(total_targets, args, total_tools=total_tools)
     progress.start()
 
-    # Create progress callback for orchestrator
+    # Create progress callback for orchestrator (target-level)
     def progress_callback(target_type, target_id, statuses):
         """Update progress tracker when scan completes."""
         progress.update(target_type, target_id, elapsed=1.0)
 
+    # Create tool-level progress callback
+    def tool_progress_callback(tool_name: str, status: str, findings_count: int = 0):
+        """Update progress tracker when individual tool starts/completes."""
+        progress.update_tool(tool_name, status, findings_count)
+
     # Execute scans via orchestrator (replaces 158 lines of inline logic)
     try:
-        all_results = orchestrator.scan_all(targets, per_tool_config, progress_callback)
+        all_results = orchestrator.scan_all(
+            targets, per_tool_config, progress_callback,
+            tool_progress_callback=tool_progress_callback
+        )
     except KeyboardInterrupt:
         _log(args, "WARN", "Scan interrupted by user")
         return 130

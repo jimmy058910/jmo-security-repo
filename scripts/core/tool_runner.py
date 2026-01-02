@@ -132,16 +132,27 @@ class ToolRunner:
         ...     print(f"{result.tool}: {result.status}")
     """
 
-    def __init__(self, tools: list[ToolDefinition], max_workers: int = 4):
+    # Type alias for progress callback
+    ProgressCallback = Any  # Callable[[str, str, int], None]
+
+    def __init__(
+        self,
+        tools: list[ToolDefinition],
+        max_workers: int = 4,
+        progress_callback: ProgressCallback = None,
+    ):
         """
         Initialize ToolRunner.
 
         Args:
             tools: List of tool definitions to execute
             max_workers: Maximum number of parallel workers (default: 4)
+            progress_callback: Optional callback(tool_name, status, findings_count)
+                              Called when each tool starts ("start") and completes
         """
         self.tools = tools
         self.max_workers = max_workers
+        self.progress_callback = progress_callback
 
     def run_tool(self, tool: ToolDefinition) -> ToolResult:
         """
@@ -271,6 +282,14 @@ class ToolRunner:
         """
         results: list[ToolResult] = []
 
+        # Signal start of all tools if progress callback exists
+        if self.progress_callback:
+            for tool in self.tools:
+                try:
+                    self.progress_callback(tool.name, "start", 0)
+                except Exception:
+                    pass  # Don't let callback errors affect scanning
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tool executions
             future_to_tool = {
@@ -282,20 +301,34 @@ class ToolRunner:
                 try:
                     result = future.result()
                     results.append(result)
+
+                    # Call progress callback on completion
+                    if self.progress_callback:
+                        try:
+                            self.progress_callback(result.tool, result.status, 0)
+                        except Exception:
+                            pass  # Don't let callback errors affect scanning
+
                 except ToolExecutionException as e:
                     # Tool execution raised our custom exception
                     tool = future_to_tool[future]
                     logger.error(f"Tool execution exception for {tool.name}: {e}")
-                    results.append(
-                        ToolResult(
-                            tool=tool.name,
-                            status="error",
-                            returncode=e.return_code,
-                            attempts=1,
-                            duration=0.0,
-                            error_message=str(e),
-                        )
+                    error_result = ToolResult(
+                        tool=tool.name,
+                        status="error",
+                        returncode=e.return_code,
+                        attempts=1,
+                        duration=0.0,
+                        error_message=str(e),
                     )
+                    results.append(error_result)
+
+                    if self.progress_callback:
+                        try:
+                            self.progress_callback(tool.name, "error", 0)
+                        except Exception:
+                            pass
+
                 except Exception as e:
                     # Unexpected exception from future (should rarely happen)
                     tool = future_to_tool[future]
@@ -303,14 +336,19 @@ class ToolRunner:
                         f"Unexpected exception from future for {tool.name}: {e}",
                         exc_info=True,
                     )
-                    results.append(
-                        ToolResult(
-                            tool=tool.name,
-                            status="error",
-                            returncode=-1,
-                            error_message=f"Unexpected error: {e}",
-                        )
+                    error_result = ToolResult(
+                        tool=tool.name,
+                        status="error",
+                        returncode=-1,
+                        error_message=f"Unexpected error: {e}",
                     )
+                    results.append(error_result)
+
+                    if self.progress_callback:
+                        try:
+                            self.progress_callback(tool.name, "error", 0)
+                        except Exception:
+                            pass
 
         return results
 

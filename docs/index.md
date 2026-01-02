@@ -29,16 +29,18 @@
 | Use Docker | [Docker Guide](DOCKER_README.md) |
 | Install/update security tools | [User Guide: Tool Management](USER_GUIDE.md#tool-management) |
 | Configure scanning | [User Guide: Configuration](USER_GUIDE.md#configuration-jmoyml) |
+| Speed up scans | [Scan Optimization](SCAN_OPTIMIZATION.md) |
 | Set up CI/CD | [Docker Guide: CI/CD](DOCKER_README.md#cicd-integration) |
 | Suppress false positives | [User Guide: Suppressions](USER_GUIDE.md#suppressions) |
-| Compare scans (diff) | [User Guide: jmo diff](USER_GUIDE.md#jmo-diff) |
-| Track trends over time | [User Guide: jmo trends](USER_GUIDE.md#jmo-trends) |
-| View scan history | [User Guide: jmo history](USER_GUIDE.md#jmo-history) |
+| Compare scans (diff) | [Diff Guide](DIFF_GUIDE.md) |
+| Track trends over time | [Trends Guide](TRENDS_GUIDE.md) |
+| View scan history | [History Guide](HISTORY_GUIDE.md) |
+| SLSA attestation | [SLSA Guide](SLSA_GUIDE.md) |
 | Understand results | [Results Guide](RESULTS_GUIDE.md) |
 | Use policy-as-code | [Policy-as-Code Guide](POLICY_AS_CODE.md) |
 | Set up AI remediation | [MCP Setup](MCP_SETUP.md) |
 | Schedule automated scans | [Schedule Guide](SCHEDULE_GUIDE.md) |
-| Troubleshoot CI failures | [CI Troubleshooting](CI_TROUBLESHOOTING.md) |
+| Troubleshoot CI failures | [CI Troubleshooting](../CONTRIBUTING.md#ci-troubleshooting) |
 
 ---
 
@@ -58,6 +60,8 @@
 | Document | Purpose |
 |----------|---------|
 | [User Guide](USER_GUIDE.md) | Comprehensive reference (CLI, configuration, features) |
+| [Profiles and Tools](PROFILES_AND_TOOLS.md) | Canonical tool lists by profile, dependencies |
+| [Scan Optimization](SCAN_OPTIMIZATION.md) | Speed optimization strategies (threads, caching, tool config) |
 | [Command Reference](QUICK_REFERENCE.md) | Quick command cheat sheet |
 | [API Reference](API_REFERENCE.md) | Python API documentation |
 
@@ -75,6 +79,15 @@
 | [Policy-as-Code](POLICY_AS_CODE.md) | OPA-based security policies |
 | [Schedule Guide](SCHEDULE_GUIDE.md) | Automated scan scheduling |
 | [Telemetry](TELEMETRY.md) | Privacy-first usage analytics |
+
+### Advanced Features
+
+| Document | Purpose |
+|----------|---------|
+| [History Guide](HISTORY_GUIDE.md) | SQLite storage for scan persistence and querying |
+| [Trends Guide](TRENDS_GUIDE.md) | Statistical trend analysis (Mann-Kendall, scoring) |
+| [Diff Guide](DIFF_GUIDE.md) | Machine-readable diffs for CI/CD, PR comments |
+| [SLSA Guide](SLSA_GUIDE.md) | SLSA attestation, Sigstore signing, tamper detection |
 
 ### AI Integration
 
@@ -100,7 +113,7 @@
 
 | Document | Purpose |
 |----------|---------|
-| [CI Troubleshooting](CI_TROUBLESHOOTING.md) | Debugging CI failures |
+| [CI Troubleshooting](../CONTRIBUTING.md#ci-troubleshooting) | Debugging CI failures |
 | [Release Process](RELEASE.md) | Release workflow, WSL/macOS validation |
 | [Version Management](VERSION_MANAGEMENT.md) | Tool version system |
 
@@ -140,7 +153,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 | System | Lynis |
 | Runtime | Trivy-RBAC, Falco, AFL++ |
 
-**Tool details:** [User Guide: Tool Overview](USER_GUIDE.md#tool-overview)
+**Tool details:** [Profiles and Tools Reference](PROFILES_AND_TOOLS.md) | [User Guide: Tool Overview](USER_GUIDE.md#tool-overview)
 
 ---
 
@@ -150,7 +163,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 
 - **Installation issues:** [Quick Start](../QUICKSTART.md) or [Installation Guide](MANUAL_INSTALLATION.md)
 - **Docker problems:** [Docker Guide: Troubleshooting](DOCKER_README.md#troubleshooting)
-- **CI failures:** [CI Troubleshooting](CI_TROUBLESHOOTING.md)
+- **CI failures:** [CI Troubleshooting](../CONTRIBUTING.md#ci-troubleshooting)
 - **General questions:** [User Guide](USER_GUIDE.md)
 
 ### Support Channels

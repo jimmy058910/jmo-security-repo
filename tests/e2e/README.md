@@ -1,6 +1,6 @@
 # E2E Comprehensive Test Suite
 
-End-to-end test suite for validating JMo Security v0.6.0 across all target types, operating systems, and execution methods.
+End-to-end test suite for validating JMo Security across all target types, operating systems, and execution methods.
 
 ## Quick Start
 

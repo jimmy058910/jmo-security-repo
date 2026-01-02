@@ -282,7 +282,7 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 
 ### More help
 
-- [docs/CI_TROUBLESHOOTING.md](docs/CI_TROUBLESHOOTING.md) - CI/CD issues
+- [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) - CI/CD issues
 - [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) - Platform-specific issues
 - [GitHub Issues](https://github.com/jimmy058910/jmo-security-repo/issues)
 

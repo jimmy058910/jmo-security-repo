@@ -138,7 +138,8 @@ class TestToolResult:
         assert data["returncode"] == 0
         assert data["attempts"] == 1
         assert data["duration"] == 3.5
-        assert data["output_file"] == "/tmp/trivy.json"
+        # Path separator is platform-dependent; compare using Path for consistency
+        assert Path(data["output_file"]) == Path("/tmp/trivy.json")
 
 
 class TestToolRunner:
