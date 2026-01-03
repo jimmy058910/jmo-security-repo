@@ -427,15 +427,15 @@ def test_nuclei_compliance_no_cwe(tmp_path: Path):
 
 
 def test_nuclei_severity_normalization(tmp_path: Path):
-    """Test severity normalization from Nuclei values."""
+    """Test severity normalization from Nuclei values using centralized mapping."""
     severities = [
         ("info", "INFO"),
         ("low", "LOW"),
         ("medium", "MEDIUM"),
         ("high", "HIGH"),
         ("critical", "CRITICAL"),
-        ("unknown", "UNKNOWN"),
-        ("INVALID", "UNKNOWN"),  # Fallback for invalid values
+        ("unknown", "INFO"),  # Via centralized TOOL_SEVERITY_MAPPINGS
+        ("INVALID", "INFO"),  # Fallback to normalize_severity for invalid values
     ]
 
     for nuclei_sev, expected_sev in severities:

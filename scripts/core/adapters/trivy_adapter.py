@@ -7,9 +7,10 @@ REFACTORED: v0.9.0 - Now uses plugin architecture
 """
 
 from __future__ import annotations
-import json
+
 from pathlib import Path
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import (
     extract_code_snippet,
     normalize_severity,
@@ -52,16 +53,8 @@ class TrivyAdapter(AdapterPlugin):
         Returns:
             List of Finding objects following CommonFinding schema v1.2.0
         """
-        if not output_path.exists():
-            return []
-
-        raw = output_path.read_text(encoding="utf-8", errors="ignore").strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = safe_load_json_file(output_path, default=None)
+        if data is None:
             return []
 
         results = data.get("Results") if isinstance(data, dict) else None

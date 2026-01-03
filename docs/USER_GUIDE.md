@@ -991,9 +991,23 @@ When multiple tools detect the same underlying issue, JMo clusters them into a s
 ```yaml
 # jmo.yml
 deduplication:
-  cross_tool_clustering: true  # Enable/disable
-  similarity_threshold: 0.75   # Strictness (0.70-0.85)
+  similarity_threshold: 0.65   # Strictness (0.5-1.0, default: 0.65)
+                               # Lower = more aggressive clustering (fewer duplicates shown)
+                               # Higher = stricter matching (more findings shown)
 ```
+
+**Environment Variable Override:**
+
+```bash
+# Override threshold for specific scans (useful in CI/CD)
+export JMO_DEDUP_THRESHOLD=0.55  # More aggressive
+jmo report results/
+
+export JMO_DEDUP_THRESHOLD=0.80  # Stricter matching
+jmo report results/
+```
+
+**Precedence:** Environment variable > jmo.yml > Default (0.65)
 
 ### Best Practices
 
@@ -1010,7 +1024,7 @@ Cross-tool deduplication uses a multi-dimensional similarity algorithm combining
 - **Message (40%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
 - **Metadata (25%):** CWE/CVE/Rule ID matching
 
-Findings with ≥75% similarity are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
+Findings with similarity above the configured threshold (default: 65%) are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
 
 **Example Consensus Finding:**
 
@@ -1891,25 +1905,50 @@ Export findings to spreadsheet-friendly CSV format for Excel, Google Sheets, or 
 - **Metadata Header**: Scan information in comment rows (lines starting with `#`)
 - **Standard CSV Format**: RFC 4180 compliant
 - **UTF-8 Encoding**: Full Unicode support for international characters
-- **Column Headers**: Severity, RuleID, Message, Location, Line, Tool, Version, ID
+- **Column Headers**: Priority, KEV, EPSS, Severity, RuleID, Path, Line, Message, Tool, Detected By, Triaged
+- **Triage Status**: Integrates with `jmo.suppress.yml` to show which findings have been reviewed
+
+**Columns Explained:**
+
+| Column | Description |
+|--------|-------------|
+| `priority` | Composite priority score (0-10) |
+| `kev` | YES/NO - Is this a Known Exploited Vulnerability? |
+| `epss` | EPSS exploitation probability percentage |
+| `severity` | CRITICAL, HIGH, MEDIUM, LOW, INFO |
+| `ruleId` | Rule or CVE identifier |
+| `path` | File path |
+| `line` | Line number |
+| `message` | Finding description |
+| `tool` | Primary detecting tool |
+| `detected_by` | All tools that detected this finding (for consensus findings) |
+| `triaged` | YES/NO - Has an active suppression rule in `jmo.suppress.yml` |
 
 **Example Output:**
 
 ```csv
-# JMo Security Findings Report - v1.0.0
-# Generated: 2025-11-04T12:34:56Z
-# Scan ID: scan-abc123
-# Profile: balanced
-# Tools: trivy, semgrep, trufflehog
-# Targets: 5
-# Findings: 42
-# Platform: Linux
-
-Severity,RuleID,Message,Location,Line,Tool,Version,ID
-CRITICAL,github,GitHub Personal Access Token detected,config.py,15,trufflehog,3.63.0,trufflehog|github|config.py|15|def456
-HIGH,CVE-2024-1234,Vulnerability in lodash,package.json,0,trivy,0.68.0,trivy|CVE-2024-1234|package.json|0|abc123
-MEDIUM,python.lang.security.audit.dangerous-code-exec,Use of exec() detected,app.py,42,semgrep,1.45.0,semgrep|exec|app.py|42|ghi789
+priority,kev,epss,severity,ruleId,path,line,message,tool,detected_by,triaged
+8.5,NO,,CRITICAL,github,config.py,15,GitHub Personal Access Token detected,trufflehog,trufflehog,NO
+7.2,YES,45.32%,HIGH,CVE-2024-1234,package.json,0,Vulnerability in lodash,trivy,trivy,YES
+3.5,NO,0.12%,MEDIUM,python.lang.security.audit.dangerous-code-exec,app.py,42,Use of exec() detected,semgrep,"semgrep, bandit",NO
 ```
+
+**Triage Status Integration:**
+
+The `triaged` column shows "YES" when a finding has an active suppression rule in `jmo.suppress.yml`:
+
+```yaml
+# jmo.suppress.yml
+suppressions:
+  - id: "trivy|CVE-2024-1234|package.json|0|abc123"
+    reason: "Accepted risk - not exploitable in our context"
+    expires: 2025-12-31
+```
+
+This enables filtering triaged vs. untriaged findings in Excel/Google Sheets for:
+- Progress tracking on security remediation
+- Compliance documentation
+- Team handoffs
 
 **Enable CSV in jmo.yml:**
 

@@ -18,6 +18,24 @@ yaml: AnyType | None = YamlModule
 
 
 @dataclass
+class DeduplicationConfig:
+    """Deduplication configuration for cross-tool finding clustering.
+
+    Controls the similarity threshold used by FindingClusterer to identify
+    and merge duplicate findings from different security tools.
+    """
+
+    similarity_threshold: float = 0.65  # Default threshold (0.5-1.0)
+
+    def __post_init__(self) -> None:
+        """Validate deduplication configuration."""
+        if not isinstance(self.similarity_threshold, (int, float)):
+            raise ValueError("similarity_threshold must be a number")
+        if not 0.5 <= self.similarity_threshold <= 1.0:
+            raise ValueError("similarity_threshold must be between 0.5 and 1.0")
+
+
+@dataclass
 class PolicyConfig:
     """Policy-as-Code configuration (Feature #5, v1.0.0)."""
 
@@ -81,6 +99,8 @@ class Config:
     profiling_min_threads: int = 2
     profiling_max_threads: int = 8
     profiling_default_threads: int = 4
+    # Deduplication configuration (configurable threshold)
+    deduplication: DeduplicationConfig = field(default_factory=DeduplicationConfig)
     # Policy-as-Code configuration (Feature #5, v1.0.0)
     policy: PolicyConfig = field(default_factory=PolicyConfig)
 
@@ -178,6 +198,17 @@ def load_config(path: str | None) -> Config:
         if isinstance(prof.get("default_threads"), int) and prof["default_threads"] > 0:
             cfg.profiling_default_threads = prof["default_threads"]
 
+    # Deduplication configuration
+    dedup_section = data.get("deduplication", {})
+    if isinstance(dedup_section, dict):
+        try:
+            threshold = dedup_section.get("similarity_threshold", 0.65)
+            if isinstance(threshold, (int, float)) and 0.5 <= threshold <= 1.0:
+                cfg.deduplication = DeduplicationConfig(similarity_threshold=float(threshold))
+        except (ValueError, TypeError):
+            # If dedup config is invalid, use defaults
+            cfg.deduplication = DeduplicationConfig()
+
     # Policy configuration (Feature #5, v1.0.0)
     policy_section = data.get("policy", {})
     if isinstance(policy_section, dict):
@@ -269,5 +300,14 @@ def load_config_with_env_overrides(path: str | None) -> Config:
                 config.policy.opa["timeout"] = timeout
         except ValueError:
             pass  # Keep existing timeout if invalid
+
+    # Override deduplication settings from environment
+    if os.getenv("JMO_DEDUP_THRESHOLD"):
+        try:
+            threshold = float(os.getenv("JMO_DEDUP_THRESHOLD", "0.65"))
+            if 0.5 <= threshold <= 1.0:
+                config.deduplication.similarity_threshold = threshold
+        except ValueError:
+            pass  # Keep existing threshold if invalid
 
     return config

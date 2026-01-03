@@ -11,11 +11,11 @@ Supports:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.adapters.common import safe_load_json_file
+from scripts.core.common_finding import fingerprint, map_tool_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -23,19 +23,6 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
-
-
-def _zap_risk_to_severity(risk: str) -> str:
-    """Map ZAP risk levels to CommonFinding severity."""
-    risk_lower = str(risk).lower().strip()
-    mapping = {
-        "informational": "INFO",
-        "low": "LOW",
-        "medium": "MEDIUM",
-        "high": "HIGH",
-        "critical": "CRITICAL",
-    }
-    return mapping.get(risk_lower, "MEDIUM")
 
 
 @adapter_plugin(
@@ -128,15 +115,7 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
       ]
     }
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
-    try:
-        data = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
-    except (json.JSONDecodeError, OSError):
-        return []
-
+    data = safe_load_json_file(path, default=None)
     if not isinstance(data, dict):
         return []
 
@@ -168,8 +147,7 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
             cweid = str(alert.get("cweid") or "")
             wascid = str(alert.get("wascid") or "")
 
-            severity = _zap_risk_to_severity(risk)
-            severity_normalized = normalize_severity(severity)
+            severity_normalized = map_tool_severity("zap", risk)
 
             # Process instances (individual occurrences of the alert)
             instances = alert.get("instances", [])

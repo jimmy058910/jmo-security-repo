@@ -1097,12 +1097,17 @@ JMo Security uses a plugin-based architecture for all 28 security tool adapters.
 
 **Step 1: Create Adapter File**
 
+> **Important:** Use the utilities in `scripts/core/adapters/common.py` for consistent JSON loading and error handling. This ensures proper UTF-8 handling, empty file detection, and standardized logging.
+>
+> **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Semgrep, Nuclei, Falco, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
+
 ```python
 # scripts/core/adapters/snyk_adapter.py
 from pathlib import Path
 from typing import List
 from scripts.core.plugin_api import AdapterPlugin, Finding, PluginMetadata, adapter_plugin
-import json
+from scripts.core.adapters.common import safe_load_json_file
+from scripts.core.common_finding import map_tool_severity  # For tool-specific severity mapping
 
 @adapter_plugin(PluginMetadata(
     name="snyk",  # CRITICAL: Must match tool output filename (snyk.json)
@@ -1121,12 +1126,12 @@ class SnykAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path) -> List[Finding]:
         """Parse Snyk JSON output and return CommonFinding objects"""
-        if not output_path.exists():
+        # Use safe_load_json_file for consistent error handling
+        data = safe_load_json_file(output_path, default={})
+        if not data:
             return []
 
         findings = []
-        with open(output_path) as f:
-            data = json.load(f)
 
         for vuln in data.get("vulnerabilities", []):
             finding = Finding(
@@ -1284,6 +1289,52 @@ Finding(
 
 **Schema reference:** [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
 
+### Severity Mapping
+
+JMo Security provides centralized severity mapping via `map_tool_severity()` in `scripts/core/common_finding.py`. This eliminates duplicated severity mapping logic across adapters and ensures consistent normalization.
+
+**Available Mappings:**
+
+| Tool | Tool Severity Values | CommonFinding Mapping |
+|------|---------------------|----------------------|
+| ZAP | informational, low, medium, high, critical | INFO, LOW, MEDIUM, HIGH, CRITICAL |
+| Semgrep | error, warning, info | HIGH, MEDIUM, LOW |
+| Nuclei | info, low, medium, high, critical, unknown | INFO, LOW, MEDIUM, HIGH, CRITICAL, INFO |
+| Falco | emergency, alert, critical, error, warning, notice, informational, debug | CRITICAL, CRITICAL, CRITICAL, HIGH, MEDIUM, LOW, INFO, INFO |
+
+**Usage in Adapters:**
+
+```python
+from scripts.core.common_finding import map_tool_severity
+
+# Tool-specific mapping (uses TOOL_SEVERITY_MAPPINGS)
+severity = map_tool_severity("zap", "informational")  # Returns "INFO"
+severity = map_tool_severity("semgrep", "ERROR")      # Returns "HIGH"
+severity = map_tool_severity("nuclei", "critical")    # Returns "CRITICAL"
+severity = map_tool_severity("falco", "warning")      # Returns "MEDIUM"
+
+# Unknown tools fall back to generic normalize_severity()
+severity = map_tool_severity("unknown_tool", "HIGH")  # Returns "HIGH"
+severity = map_tool_severity("unknown_tool", "ERROR") # Returns "HIGH" (common alias)
+```
+
+**Adding New Tool Mappings:**
+
+To add severity mappings for a new tool, update `TOOL_SEVERITY_MAPPINGS` in `scripts/core/common_finding.py`:
+
+```python
+TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
+    # ... existing mappings ...
+    "newtool": {
+        "critical": "CRITICAL",
+        "high": "HIGH",
+        "moderate": "MEDIUM",  # Tool-specific terminology
+        "low": "LOW",
+        "informational": "INFO",
+    },
+}
+```
+
 ### Advanced: Programmatic Plugin Management
 
 ```python
@@ -1307,6 +1358,7 @@ registry.unregister("obsolete-tool")
 - [ ] Adapter file created in `scripts/core/adapters/<tool>_adapter.py`
 - [ ] Uses `@adapter_plugin` decorator with complete `PluginMetadata`
 - [ ] Implements `parse()` method returning `List[Finding]`
+- [ ] Uses `map_tool_severity()` for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if needed)
 - [ ] `metadata.name` matches expected output filename (e.g., `trivy` → `trivy.json`)
 - [ ] Tests added in `tests/adapters/test_<tool>_adapter.py`
 - [ ] Validation passes: `jmo adapters validate`

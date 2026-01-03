@@ -13,10 +13,10 @@ Note: This provides cross-linkable context for other adapters (e.g., Trivy) by e
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -87,15 +87,8 @@ class SyftAdapter(AdapterPlugin):
 
 
 def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
+    data = safe_load_json_file(path, default=None)
+    if data is None:
         return []
 
     out: list[dict[str, Any]] = []

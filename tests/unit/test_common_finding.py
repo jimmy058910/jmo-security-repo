@@ -21,9 +21,11 @@ from scripts.core.common_finding import (
     FINGERPRINT_LENGTH,
     MESSAGE_SNIPPET_LENGTH,
     SEVERITY_ORDER,
+    TOOL_SEVERITY_MAPPINGS,
     Severity,
     extract_code_snippet,
     fingerprint,
+    map_tool_severity,
     normalize_severity,
 )
 
@@ -732,3 +734,206 @@ class TestConstants:
     def test_message_snippet_length_constant(self):
         """Test MESSAGE_SNIPPET_LENGTH is set correctly."""
         assert MESSAGE_SNIPPET_LENGTH == 120
+
+    def test_tool_severity_mappings_structure(self):
+        """Test TOOL_SEVERITY_MAPPINGS has expected structure."""
+        assert isinstance(TOOL_SEVERITY_MAPPINGS, dict)
+        # Should have mappings for known tools
+        assert "zap" in TOOL_SEVERITY_MAPPINGS
+        assert "semgrep" in TOOL_SEVERITY_MAPPINGS
+        assert "nuclei" in TOOL_SEVERITY_MAPPINGS
+        assert "falco" in TOOL_SEVERITY_MAPPINGS
+
+    def test_tool_severity_mappings_values_are_valid(self):
+        """Test all mapped severity values are valid CommonFinding severities."""
+        valid_severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+        for tool_name, mapping in TOOL_SEVERITY_MAPPINGS.items():
+            for tool_sev, common_sev in mapping.items():
+                assert common_sev in valid_severities, (
+                    f"Invalid severity '{common_sev}' in {tool_name} mapping"
+                )
+
+
+# ============================================================================
+# 6. map_tool_severity() Tests
+# ============================================================================
+
+
+class TestMapToolSeverity:
+    """Tests for map_tool_severity() function."""
+
+    # ------------------------------------
+    # ZAP severity mapping tests
+    # ------------------------------------
+    def test_zap_informational(self):
+        """Test ZAP informational maps to INFO."""
+        assert map_tool_severity("zap", "informational") == "INFO"
+        assert map_tool_severity("ZAP", "Informational") == "INFO"
+
+    def test_zap_low(self):
+        """Test ZAP low maps to LOW."""
+        assert map_tool_severity("zap", "low") == "LOW"
+        assert map_tool_severity("zap", "Low") == "LOW"
+
+    def test_zap_medium(self):
+        """Test ZAP medium maps to MEDIUM."""
+        assert map_tool_severity("zap", "medium") == "MEDIUM"
+        assert map_tool_severity("zap", "Medium") == "MEDIUM"
+
+    def test_zap_high(self):
+        """Test ZAP high maps to HIGH."""
+        assert map_tool_severity("zap", "high") == "HIGH"
+        assert map_tool_severity("zap", "High") == "HIGH"
+
+    def test_zap_critical(self):
+        """Test ZAP critical maps to CRITICAL."""
+        assert map_tool_severity("zap", "critical") == "CRITICAL"
+        assert map_tool_severity("zap", "CRITICAL") == "CRITICAL"
+
+    # ------------------------------------
+    # Semgrep severity mapping tests
+    # ------------------------------------
+    def test_semgrep_error(self):
+        """Test Semgrep ERROR maps to HIGH."""
+        assert map_tool_severity("semgrep", "error") == "HIGH"
+        assert map_tool_severity("semgrep", "ERROR") == "HIGH"
+
+    def test_semgrep_warning(self):
+        """Test Semgrep WARNING maps to MEDIUM."""
+        assert map_tool_severity("semgrep", "warning") == "MEDIUM"
+        assert map_tool_severity("semgrep", "WARNING") == "MEDIUM"
+
+    def test_semgrep_info(self):
+        """Test Semgrep INFO maps to LOW."""
+        assert map_tool_severity("semgrep", "info") == "LOW"
+        assert map_tool_severity("semgrep", "INFO") == "LOW"
+
+    # ------------------------------------
+    # Nuclei severity mapping tests
+    # ------------------------------------
+    def test_nuclei_info(self):
+        """Test Nuclei info maps to INFO."""
+        assert map_tool_severity("nuclei", "info") == "INFO"
+
+    def test_nuclei_low(self):
+        """Test Nuclei low maps to LOW."""
+        assert map_tool_severity("nuclei", "low") == "LOW"
+
+    def test_nuclei_medium(self):
+        """Test Nuclei medium maps to MEDIUM."""
+        assert map_tool_severity("nuclei", "medium") == "MEDIUM"
+
+    def test_nuclei_high(self):
+        """Test Nuclei high maps to HIGH."""
+        assert map_tool_severity("nuclei", "high") == "HIGH"
+
+    def test_nuclei_critical(self):
+        """Test Nuclei critical maps to CRITICAL."""
+        assert map_tool_severity("nuclei", "critical") == "CRITICAL"
+
+    def test_nuclei_unknown(self):
+        """Test Nuclei unknown maps to INFO."""
+        assert map_tool_severity("nuclei", "unknown") == "INFO"
+
+    # ------------------------------------
+    # Falco priority mapping tests
+    # ------------------------------------
+    def test_falco_emergency(self):
+        """Test Falco emergency maps to CRITICAL."""
+        assert map_tool_severity("falco", "emergency") == "CRITICAL"
+
+    def test_falco_alert(self):
+        """Test Falco alert maps to CRITICAL."""
+        assert map_tool_severity("falco", "alert") == "CRITICAL"
+
+    def test_falco_critical(self):
+        """Test Falco critical maps to CRITICAL."""
+        assert map_tool_severity("falco", "critical") == "CRITICAL"
+
+    def test_falco_error(self):
+        """Test Falco error maps to HIGH."""
+        assert map_tool_severity("falco", "error") == "HIGH"
+
+    def test_falco_warning(self):
+        """Test Falco warning maps to MEDIUM."""
+        assert map_tool_severity("falco", "warning") == "MEDIUM"
+
+    def test_falco_notice(self):
+        """Test Falco notice maps to LOW."""
+        assert map_tool_severity("falco", "notice") == "LOW"
+
+    def test_falco_informational(self):
+        """Test Falco informational maps to INFO."""
+        assert map_tool_severity("falco", "informational") == "INFO"
+
+    def test_falco_debug(self):
+        """Test Falco debug maps to INFO."""
+        assert map_tool_severity("falco", "debug") == "INFO"
+
+    # ------------------------------------
+    # Fallback behavior tests
+    # ------------------------------------
+    def test_unknown_tool_uses_generic_normalization(self):
+        """Test unknown tools fall back to generic normalize_severity."""
+        # Generic normalize_severity should handle standard severities
+        assert map_tool_severity("unknown_tool", "HIGH") == "HIGH"
+        assert map_tool_severity("unknown_tool", "MEDIUM") == "MEDIUM"
+        assert map_tool_severity("unknown_tool", "CRITICAL") == "CRITICAL"
+        assert map_tool_severity("unknown_tool", "LOW") == "LOW"
+        assert map_tool_severity("unknown_tool", "INFO") == "INFO"
+
+    def test_unknown_tool_common_variants(self):
+        """Test unknown tools handle common severity variants."""
+        # ERROR -> HIGH via normalize_severity fallback
+        assert map_tool_severity("unknown_tool", "ERROR") == "HIGH"
+        # WARNING -> MEDIUM via normalize_severity fallback
+        assert map_tool_severity("unknown_tool", "WARNING") == "MEDIUM"
+
+    def test_empty_severity_returns_info(self):
+        """Test empty severity returns INFO."""
+        assert map_tool_severity("zap", "") == "INFO"
+        assert map_tool_severity("unknown", "") == "INFO"
+
+    def test_none_like_severity_handling(self):
+        """Test None-like values return INFO."""
+        # The function handles empty strings, actual None would need type guard
+        assert map_tool_severity("zap", "   ") == "INFO"
+
+    def test_case_insensitive_tool_name(self):
+        """Test tool name matching is case insensitive."""
+        assert map_tool_severity("ZAP", "high") == "HIGH"
+        assert map_tool_severity("Zap", "low") == "LOW"
+        assert map_tool_severity("SEMGREP", "error") == "HIGH"
+        assert map_tool_severity("Semgrep", "warning") == "MEDIUM"
+
+    def test_case_insensitive_severity(self):
+        """Test severity matching is case insensitive."""
+        assert map_tool_severity("zap", "HIGH") == "HIGH"
+        assert map_tool_severity("zap", "High") == "HIGH"
+        assert map_tool_severity("zap", "high") == "HIGH"
+        assert map_tool_severity("nuclei", "CRITICAL") == "CRITICAL"
+
+    def test_whitespace_handling(self):
+        """Test whitespace is stripped from severity values."""
+        assert map_tool_severity("zap", "  high  ") == "HIGH"
+        assert map_tool_severity("semgrep", "\terror\n") == "HIGH"
+
+    def test_unmapped_value_for_known_tool(self):
+        """Test unmapped severity values fall back to normalize_severity."""
+        # ZAP doesn't have a mapping for "ultra_critical"
+        # Should fall back to generic normalization (returns INFO for unknown)
+        result = map_tool_severity("zap", "ultra_critical")
+        assert result == "INFO"  # Unknown value defaults to INFO
+
+    def test_consistency_with_original_implementations(self):
+        """Test that mapping matches original adapter implementations."""
+        # Original _zap_risk_to_severity returned "MEDIUM" for unknown
+        # Our centralized version falls back to normalize_severity which returns INFO
+        # This is an intentional change for consistency
+
+        # Test known mappings match exactly
+        assert map_tool_severity("zap", "informational") == "INFO"
+        assert map_tool_severity("zap", "low") == "LOW"
+        assert map_tool_severity("zap", "medium") == "MEDIUM"
+        assert map_tool_severity("zap", "high") == "HIGH"
+        assert map_tool_severity("zap", "critical") == "CRITICAL"

@@ -605,8 +605,8 @@ def test_write_csv_fallback_column():
     assert row == ["custom_value"]
 
 
-def test_write_csv_triaged_placeholder():
-    """Test that triaged column shows placeholder value."""
+def test_write_csv_triaged_default():
+    """Test that triaged column shows NO without suppressions."""
     finding = {
         "severity": "LOW",
         "ruleId": "test",
@@ -614,8 +614,30 @@ def test_write_csv_triaged_placeholder():
         "location": {"path": "test.txt"},
     }
 
+    # Without suppressions, triaged should be NO
     row = _extract_row(finding, ["triaged"])
 
-    # TODO: Hook into history DB for triage state (Feature #3)
-    # For now, placeholder
     assert row == ["NO"]
+
+
+def test_write_csv_triaged_with_suppression():
+    """Test that triaged column shows YES when finding is suppressed."""
+    from scripts.core.suppress import Suppression
+
+    finding = {
+        "id": "suppressed-finding-123",
+        "severity": "LOW",
+        "ruleId": "test",
+        "tool": {"name": "test"},
+        "location": {"path": "test.txt"},
+    }
+
+    suppressions = {
+        "suppressed-finding-123": Suppression(
+            id="suppressed-finding-123", reason="False positive"
+        )
+    }
+
+    row = _extract_row(finding, ["triaged"], suppressions=suppressions)
+
+    assert row == ["YES"]

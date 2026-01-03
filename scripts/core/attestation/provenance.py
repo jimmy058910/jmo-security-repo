@@ -15,6 +15,7 @@ Usage:
 """
 
 import hashlib
+import logging
 import os
 import sys
 import uuid
@@ -34,6 +35,8 @@ from .models import (
     InTotoStatement,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class ProvenanceGenerator:
     """Generate SLSA provenance documents for JMo Security scans."""
@@ -42,6 +45,7 @@ class ProvenanceGenerator:
         """Initialize provenance generator."""
         self.jmo_version = self._get_jmo_version()
         self.python_version = self._get_python_version()
+        self._tool_registry = None  # Lazy-loaded tool registry
 
     def _get_jmo_version(self) -> str:
         """Read JMo version from pyproject.toml.
@@ -142,6 +146,76 @@ class ProvenanceGenerator:
 
         return [subject]
 
+    def _get_tool_versions(self, tools: List[str]) -> List[Dict[str, Any]]:
+        """Get version information for specified tools.
+
+        Loads tool version data from the ToolRegistry and formats it as
+        SLSA ResourceDescriptor objects for the resolvedDependencies field.
+
+        Args:
+            tools: List of tool names used in the scan
+
+        Returns:
+            List of ResourceDescriptor-compatible dicts with name, uri, and annotations
+        """
+        resolved_deps = []
+
+        try:
+            # Lazy load the tool registry
+            if self._tool_registry is None:
+                from scripts.core.tool_registry import ToolRegistry
+
+                self._tool_registry = ToolRegistry()
+
+            for tool_name in tools:
+                tool_info = self._tool_registry.get_tool(tool_name)
+                if tool_info:
+                    # Create SLSA ResourceDescriptor for each tool
+                    # See: https://slsa.dev/spec/v1.0/resource-descriptor
+                    dep = {
+                        "name": tool_name,
+                        "uri": self._get_tool_uri(tool_info),
+                        "annotations": {
+                            "version": tool_info.version,
+                            "category": tool_info.category,
+                            "critical": tool_info.critical,
+                        },
+                    }
+                    resolved_deps.append(dep)
+                else:
+                    # Tool not in registry - include with minimal info
+                    logger.debug(f"Tool not found in registry: {tool_name}")
+                    resolved_deps.append(
+                        {
+                            "name": tool_name,
+                            "annotations": {"version": "unknown"},
+                        }
+                    )
+        except Exception as e:
+            # Best-effort version resolution - log but continue
+            logger.debug(f"Failed to load tool versions: {e}")
+
+        return resolved_deps
+
+    def _get_tool_uri(self, tool_info: Any) -> str:
+        """Generate URI for a tool based on its installation source.
+
+        Args:
+            tool_info: ToolInfo object from the registry
+
+        Returns:
+            URI string pointing to the tool's canonical location
+        """
+        if tool_info.github_repo:
+            return f"https://github.com/{tool_info.github_repo}"
+        elif tool_info.pypi_package:
+            return f"https://pypi.org/project/{tool_info.pypi_package}/"
+        elif tool_info.npm_package:
+            return f"https://www.npmjs.com/package/{tool_info.npm_package}"
+        else:
+            # Fallback to tool name
+            return f"urn:jmo:tool:{tool_info.name}"
+
     def _create_build_definition(
         self,
         profile: str,
@@ -166,6 +240,9 @@ class ProvenanceGenerator:
         # Format: https://jmotools.com/jmo-scan/v1@slsa/v1
         build_type_with_slsa = f"{JMO_BUILD_TYPE}@slsa/v1"
 
+        # Get tool version information for resolvedDependencies
+        resolved_deps = self._get_tool_versions(tools)
+
         return BuildDefinition(
             buildType=build_type_with_slsa,
             externalParameters={
@@ -178,7 +255,7 @@ class ProvenanceGenerator:
                 "threads": threads,
                 "timeout": timeout,
             },
-            resolvedDependencies=[],  # TODO: Add tool versions in future phase
+            resolvedDependencies=resolved_deps,
         )
 
     def _create_run_details(

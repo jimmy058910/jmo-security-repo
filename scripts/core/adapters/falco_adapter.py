@@ -10,12 +10,12 @@ Supports:
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.common_finding import fingerprint, map_tool_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -25,22 +25,6 @@ from scripts.core.plugin_api import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _falco_priority_to_severity(priority: str) -> str:
-    """Map Falco priority levels to CommonFinding severity."""
-    priority_lower = str(priority).lower().strip()
-    mapping = {
-        "emergency": "CRITICAL",
-        "alert": "CRITICAL",
-        "critical": "CRITICAL",
-        "error": "HIGH",
-        "warning": "MEDIUM",
-        "notice": "LOW",
-        "informational": "INFO",
-        "debug": "INFO",
-    }
-    return mapping.get(priority_lower, "MEDIUM")
 
 
 @adapter_plugin(
@@ -123,37 +107,10 @@ def _load_falco_internal(path: str | Path) -> list[dict[str, Any]]:
       "hostname": "host1"
     }
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
     findings: list[dict[str, Any]] = []
 
-    try:
-        content = p.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return []
-
-    if not content.strip():
-        return []
-
     # Falco outputs NDJSON (one JSON object per line)
-    for line_num, line in enumerate(content.splitlines(), start=1):
-        line = line.strip()
-        if not line:
-            continue
-
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError as e:
-            logger.debug(
-                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
-            )
-            continue
-
-        if not isinstance(event, dict):
-            continue
-
+    for line_num, event in enumerate(safe_load_ndjson_file(path), start=1):
         rule = str(event.get("rule") or "Unknown Rule")
         output = str(event.get("output") or "")
         priority = str(event.get("priority") or "Warning")
@@ -181,9 +138,8 @@ def _load_falco_internal(path: str | Path) -> list[dict[str, Any]]:
         if isinstance(tags_raw, list):
             tags.extend([str(t) for t in tags_raw if t])
 
-        # Map priority to severity
-        severity = _falco_priority_to_severity(priority)
-        severity_normalized = normalize_severity(severity)
+        # Map priority to severity using centralized mapping
+        severity_normalized = map_tool_severity("falco", priority)
 
         # Build message
         message = output if output else rule

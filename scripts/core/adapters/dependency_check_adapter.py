@@ -28,11 +28,11 @@ Supported Package Managers:
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -123,17 +123,7 @@ def _load_dependency_check_internal(path: str | Path) -> list[dict[str, Any]]:
     Returns:
         List of dicts (converted to Finding objects by parse() method)
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning(f"Failed to parse Dependency-Check JSON: {path}")
-        return []
+    data = safe_load_json_file(path, default=None)
 
     out: list[dict[str, Any]] = []
 

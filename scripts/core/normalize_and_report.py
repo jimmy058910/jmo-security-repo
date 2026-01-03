@@ -172,8 +172,23 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         logger.debug(f"Unexpected error during priority enrichment: {e}")
 
     # Cross-tool deduplication clustering (v1.0.0 Feature #4 - Phase 2)
+    # Threshold configurable via JMO_DEDUP_THRESHOLD env var or jmo.yml deduplication section
     try:
-        deduped = _cluster_cross_tool_duplicates(deduped)
+        dedup_threshold = 0.65  # Default threshold
+        env_threshold = os.getenv("JMO_DEDUP_THRESHOLD")
+        if env_threshold:
+            try:
+                threshold_val = float(env_threshold)
+                if 0.5 <= threshold_val <= 1.0:
+                    dedup_threshold = threshold_val
+                else:
+                    logger.debug(
+                        f"JMO_DEDUP_THRESHOLD {threshold_val} out of range [0.5-1.0], using default"
+                    )
+            except ValueError:
+                logger.debug(f"Invalid JMO_DEDUP_THRESHOLD value: {env_threshold}")
+
+        deduped = _cluster_cross_tool_duplicates(deduped, similarity_threshold=dedup_threshold)
     except Exception as e:
         # Best-effort clustering - log but continue with unfiltered results
         logger.warning(
@@ -458,6 +473,7 @@ def _enrich_with_priority(findings: list[dict[str, Any]]) -> None:
 
 def _cluster_cross_tool_duplicates(
     findings: list[dict[str, Any]],
+    similarity_threshold: float = 0.65,
 ) -> list[dict[str, Any]]:
     """Apply cross-tool deduplication clustering (Phase 2).
 
@@ -469,6 +485,9 @@ def _cluster_cross_tool_duplicates(
 
     Args:
         findings: List of deduplicated findings from Phase 1 (fingerprint-based)
+        similarity_threshold: Minimum similarity score (0.5-1.0) for clustering.
+            Configurable via jmo.yml deduplication.similarity_threshold or
+            JMO_DEDUP_THRESHOLD environment variable. Default: 0.65
 
     Returns:
         List of consensus findings with cross-tool duplicates clustered
@@ -487,13 +506,14 @@ def _cluster_cross_tool_duplicates(
         if current % 50 == 0 or current == total:
             logger.info(message)
 
-    # Create clusterer with improved threshold (0.65) and location-first weights
+    # Create clusterer with configurable threshold and location-first weights
     # Updated weights: location=0.50, message=0.25, metadata=0.25
     # Lower threshold (0.65 vs 0.75) enables better cross-tool clustering
     # Rule equivalence mapping in metadata_similarity prevents false positives
     # Example: Trivy ":latest tag used" + Hadolint "DL3006" on same line → clustered
-    # TODO: Make threshold configurable via jmo.yml deduplication section
-    clusterer = FindingClusterer(similarity_threshold=0.65)
+    # Threshold is configurable via jmo.yml deduplication section or JMO_DEDUP_THRESHOLD env
+    logger.debug(f"Using similarity threshold: {similarity_threshold}")
+    clusterer = FindingClusterer(similarity_threshold=similarity_threshold)
 
     # Run clustering algorithm
     clusters = clusterer.cluster(findings, progress_callback=progress)

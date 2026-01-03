@@ -27,11 +27,11 @@ Supported Clouds:
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import safe_load_ndjson_file
 from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -122,30 +122,11 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
     Returns:
         List of dicts (converted to Finding objects by parse() method)
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-
     # Prowler v4+ uses NDJSON (newline-delimited JSON)
     # Each line is a separate JSON finding object
     out: list[dict[str, Any]] = []
 
-    for line_num, line in enumerate(raw.splitlines(), 1):
-        line = line.strip()
-        if not line:
-            continue
-
-        try:
-            finding_data = json.loads(line)
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse Prowler JSON line {line_num}: {path}")
-            continue
-
-        if not isinstance(finding_data, dict):
-            continue
+    for finding_data in safe_load_ndjson_file(path):
 
         # Extract core finding fields
         check_id = str(finding_data.get("CheckID", ""))

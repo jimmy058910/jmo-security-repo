@@ -177,7 +177,10 @@ def cmd_report(args, _log_fn) -> int:
         csv_columns = None
         if csv_config and isinstance(csv_config, dict):
             csv_columns = csv_config.get("columns")
-        write_csv(findings, out_dir / "findings.csv", columns=csv_columns)
+        # Pass suppressions for triage status column (Feature #3)
+        write_csv(
+            findings, out_dir / "findings.csv", columns=csv_columns, suppressions=suppressions
+        )
     if suppressions:
         write_suppression_report(
             [str(x) for x in suppressed_ids], suppressions, out_dir / "SUPPRESSIONS.md"

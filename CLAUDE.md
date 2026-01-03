@@ -147,9 +147,11 @@ tests/               # 2,981 tests across unit/adapters/reporters/integration
 ### Adding New Tool Adapter
 
 1. Create `scripts/core/adapters/<tool>_adapter.py` with `@adapter_plugin` decorator
-2. Map tool output to CommonFinding schema
-3. Add test in `tests/adapters/test_<tool>_adapter.py`
-4. Update documentation
+2. **Use `safe_load_json_file()` from `scripts/core/adapters/common.py`** for consistent JSON loading
+3. **Use `map_tool_severity()` from `scripts/core/common_finding.py`** for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if tool has custom severity levels)
+4. Map tool output to CommonFinding schema
+5. Add test in `tests/adapters/test_<tool>_adapter.py`
+6. Update documentation
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow.
 
@@ -198,6 +200,7 @@ See [TEST.md](TEST.md) for complete testing guide.
 | `fail_on` | string | Severity threshold for CI failures |
 | `retries` | int | Retries for failed tool invocations |
 | `per_tool` | object | Per-tool configuration overrides |
+| `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
 
@@ -282,7 +285,7 @@ See [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) for
 - Agent threads reset cwd between bash calls - use absolute paths
 - Avoid emojis unless explicitly requested
 - CommonFinding v1.2.0 includes compliance mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
-- Cross-tool dedup uses similarity clustering (0.65 threshold)
+- Cross-tool dedup uses similarity clustering (configurable via `deduplication.similarity_threshold`, default: 0.65)
 - Only create documentation with long-term value; use `.claude/` for temporary work
 
 For detailed information on any topic, refer to the documentation links above.

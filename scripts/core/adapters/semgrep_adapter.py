@@ -8,13 +8,13 @@ REFACTORED: v0.9.0 - Now uses plugin architecture
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import (
     extract_code_snippet,
-    normalize_severity,
+    map_tool_severity,
 )
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -23,13 +23,6 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
-
-
-SEMGREP_TO_SEV = {
-    "ERROR": "HIGH",
-    "WARNING": "MEDIUM",
-    "INFO": "LOW",
-}
 
 
 @adapter_plugin(
@@ -61,16 +54,8 @@ class SemgrepAdapter(AdapterPlugin):
         Returns:
             List of Finding objects following CommonFinding schema v1.2.0
         """
-        if not output_path.exists():
-            return []
-
-        raw = output_path.read_text(encoding="utf-8", errors="ignore").strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = safe_load_json_file(output_path, default=None)
+        if data is None:
             return []
 
         results = data.get("results") if isinstance(data, dict) else None
@@ -98,10 +83,9 @@ class SemgrepAdapter(AdapterPlugin):
                 or "Semgrep finding"
             )
 
-            # Extract and normalize severity
+            # Extract and normalize severity using centralized mapping
             sev_raw = (r.get("extra") or {}).get("severity") or r.get("severity")
-            sev_norm = SEMGREP_TO_SEV.get(str(sev_raw).upper(), None)
-            severity = normalize_severity(sev_norm or str(sev_raw))
+            severity = map_tool_severity("semgrep", str(sev_raw) if sev_raw else "")
 
             # Extract path
             path_str = r.get("path") or (r.get("location") or {}).get("path") or ""

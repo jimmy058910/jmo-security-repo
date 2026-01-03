@@ -19,12 +19,12 @@ Output format: NDJSON (newline-delimited JSON)
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from scripts.core.common_finding import fingerprint
+from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.common_finding import fingerprint, map_tool_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
@@ -34,23 +34,6 @@ from scripts.core.plugin_api import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _nuclei_severity_to_severity(severity: str) -> str:
-    """Map Nuclei severity to CommonFinding severity.
-
-    Nuclei uses: info, low, medium, high, critical, unknown
-    CommonFinding uses: INFO, LOW, MEDIUM, HIGH, CRITICAL, UNKNOWN
-    """
-    severity_map = {
-        "info": "INFO",
-        "low": "LOW",
-        "medium": "MEDIUM",
-        "high": "HIGH",
-        "critical": "CRITICAL",
-        "unknown": "UNKNOWN",
-    }
-    return severity_map.get(severity.lower(), "UNKNOWN")
 
 
 @adapter_plugin(
@@ -126,33 +109,10 @@ def _load_nuclei_internal(path: str | Path) -> list[dict[str, Any]]:
         - Returns [] if file is empty
         - Skips malformed JSON lines (NDJSON format)
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-
     out: list[dict[str, Any]] = []
 
     # Nuclei outputs NDJSON (one JSON object per line)
-    for line_num, line in enumerate(raw.splitlines(), start=1):
-        line = line.strip()
-        if not line:
-            logger.debug(f"Skipping empty line {line_num} in {path}")
-            continue  # Skip empty lines
-
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as e:
-            logger.debug(
-                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
-            )
-            continue  # Skip malformed lines
-
-        if not isinstance(item, dict):
-            continue
+    for item in safe_load_ndjson_file(path):
 
         # Extract required fields
         # Nuclei structure:
@@ -184,7 +144,7 @@ def _load_nuclei_internal(path: str | Path) -> list[dict[str, Any]]:
         name = info.get("name") or template_id
         description = info.get("description") or name
         severity_raw = info.get("severity") or "MEDIUM"
-        severity = _nuclei_severity_to_severity(severity_raw)
+        severity = map_tool_severity("nuclei", severity_raw)
 
         # Location: matched URL
         matched_at = item.get("matched-at") or item.get("matched") or ""

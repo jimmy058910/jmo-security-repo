@@ -26,11 +26,11 @@ Supported Platforms:
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -126,17 +126,7 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
         This adapter expects JSON format with warnings/suggestions arrays.
         Use a converter tool or custom parser to convert lynis-report.dat to JSON.
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        logger.warning(f"Failed to parse Lynis JSON: {path}")
-        return []
+    data = safe_load_json_file(path, default=None)
 
     out: list[dict[str, Any]] = []
 

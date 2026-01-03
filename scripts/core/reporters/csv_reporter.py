@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+
+from scripts.core.suppress import Suppression
 
 DEFAULT_COLUMNS = [
     "priority",
@@ -44,6 +46,7 @@ def write_csv(
     out_path: str | Path,
     columns: list[str] | None = None,
     include_header: bool = True,
+    suppressions: Optional[dict[str, Suppression]] = None,
 ) -> None:
     """Write findings to CSV file.
 
@@ -52,12 +55,16 @@ def write_csv(
         out_path: Output file path
         columns: Column list (defaults to DEFAULT_COLUMNS)
         include_header: Include CSV header row
+        suppressions: Suppression rules for triage status (optional)
 
     Example:
         >>> findings = load_findings("results/findings.json")
         >>> write_csv(findings, "results/findings.csv")
         >>> # Custom columns
         >>> write_csv(findings, "results/brief.csv", columns=["severity", "ruleId", "path"])
+        >>> # With suppressions for triage status
+        >>> suppressions = load_suppressions("jmo.suppress.yml")
+        >>> write_csv(findings, "results/findings.csv", suppressions=suppressions)
     """
     cols = columns or DEFAULT_COLUMNS
     p = Path(out_path)
@@ -70,16 +77,21 @@ def write_csv(
             writer.writerow(cols)
 
         for finding in findings:
-            row = _extract_row(finding, cols)
+            row = _extract_row(finding, cols, suppressions=suppressions)
             writer.writerow(row)
 
 
-def _extract_row(finding: dict[str, Any], columns: list[str]) -> list[str]:
+def _extract_row(
+    finding: dict[str, Any],
+    columns: list[str],
+    suppressions: Optional[dict[str, Suppression]] = None,
+) -> list[str]:
     """Extract CSV row from finding based on column spec.
 
     Args:
         finding: CommonFinding dictionary
         columns: List of column names to extract
+        suppressions: Suppression rules for triage status lookup
 
     Returns:
         List of string values for the CSV row
@@ -150,9 +162,18 @@ def _extract_row(finding: dict[str, Any], columns: list[str]) -> list[str]:
                 else:
                     row.append("")
         elif col == "triaged":
-            # TODO: Hook into history DB for triage state (Feature #3)
-            # For now, placeholder
-            row.append("NO")
+            # Check triage status via suppression rules (Feature #3)
+            # A finding is considered "triaged" if it has an active suppression rule
+            # This indicates the finding was reviewed and marked as false positive,
+            # accepted risk, or otherwise triaged by the security team
+            triaged = "NO"
+            if suppressions:
+                finding_id = finding.get("id")
+                if finding_id and isinstance(finding_id, str):
+                    suppression = suppressions.get(finding_id)
+                    if suppression and suppression.is_active():
+                        triaged = "YES"
+            row.append(triaged)
         elif col == "compliance_owasp":
             compliance = finding.get("compliance", {})
             if isinstance(compliance, dict):

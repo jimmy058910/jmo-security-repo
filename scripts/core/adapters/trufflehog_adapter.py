@@ -12,12 +12,9 @@ REFACTORED: v0.9.0 - Now uses plugin architecture
 
 from __future__ import annotations
 
-import json
-import logging
 from pathlib import Path
-from typing import Any
-from collections.abc import Iterable
 
+from scripts.core.adapters.common import safe_load_ndjson_file
 from scripts.core.common_finding import normalize_severity
 from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
@@ -26,53 +23,6 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
-
-logger = logging.getLogger(__name__)
-
-
-def _flatten(obj: Any) -> Iterable[dict[str, Any]]:
-    if obj is None:
-        return
-    if isinstance(obj, dict):
-        yield obj
-    elif isinstance(obj, list):
-        for item in obj:
-            yield from _flatten(item)
-
-
-def _iter_trufflehog(path: Path) -> Iterable[dict[str, Any]]:
-    raw = path.read_text(encoding="utf-8", errors="ignore")
-    if not raw.strip():
-        return
-    # Try JSON parse of entire file first
-    try:
-        data = json.loads(raw)
-        for item in _flatten(data):
-            if isinstance(item, dict):
-                yield item
-        return
-    except json.JSONDecodeError as e:
-        logger.debug(
-            f"Falling back to NDJSON parsing for {path}: {e.msg} at position {e.pos}"
-        )
-    # Fall back to NDJSON
-    for line_num, line in enumerate(raw.splitlines(), start=1):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError as e:
-            logger.debug(
-                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
-            )
-            continue
-        if isinstance(obj, dict):
-            yield obj
-        elif isinstance(obj, list):
-            for item in _flatten(obj):
-                if isinstance(item, dict):
-                    yield item
 
 
 @adapter_plugin(
@@ -104,12 +54,9 @@ class TruffleHogAdapter(AdapterPlugin):
         Returns:
             List of Finding objects following CommonFinding schema v1.2.0
         """
-        if not output_path.exists():
-            return []
-
         findings: list[Finding] = []
 
-        for f in _iter_trufflehog(output_path):
+        for f in safe_load_ndjson_file(output_path):
             detector = str(f.get("DetectorName") or f.get("Detector") or "Unknown")
             verified = bool(f.get("Verified") or f.get("verified") or False)
 
