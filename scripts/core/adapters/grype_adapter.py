@@ -45,6 +45,88 @@ from scripts.core.plugin_api import (
 logger = logging.getLogger(__name__)
 
 
+def _select_best_cvss(cvss_scores: dict[str, Any]) -> dict[str, Any] | None:
+    """Select best CVSS score (v3 preferred over v2).
+
+    Args:
+        cvss_scores: Dictionary of CVSS scores keyed by version (e.g., "cvss_v3.1", "cvss_v2")
+
+    Returns:
+        CVSS field dict with version, score, vector or None if no scores
+    """
+    if not cvss_scores:
+        return None
+
+    # Prefer CVSS v3 over v2
+    for prefix, version_label in [("cvss_v3", "3.x"), ("cvss_v2", "2.0")]:
+        key = next((k for k in cvss_scores if k.startswith(prefix)), None)
+        if key:
+            return {
+                "version": version_label,
+                "score": cvss_scores[key]["score"],
+                "vector": cvss_scores[key]["vector"],
+            }
+    return None
+
+
+def _build_grype_context(
+    vuln_id: str,
+    artifact_name: str,
+    artifact_version: str,
+    artifact_type: str,
+    artifact_purl: str,
+    fixed_versions: list[str],
+    data_source: str,
+    match_info: list[str],
+    cvss_scores: dict[str, Any],
+) -> dict[str, Any]:
+    """Build context dictionary for Grype finding.
+
+    Args:
+        vuln_id: Vulnerability ID (e.g., CVE-2021-44228)
+        artifact_name: Package/artifact name
+        artifact_version: Package version
+        artifact_type: Type of artifact (e.g., npm, pip)
+        artifact_purl: Package URL
+        fixed_versions: List of versions that fix the vulnerability
+        data_source: Data source for the vulnerability
+        match_info: List of matchers used
+        cvss_scores: CVSS score dictionary
+
+    Returns:
+        Context dictionary with non-None values
+    """
+    return {
+        "vulnerability_id": vuln_id,
+        "artifact_name": artifact_name,
+        "artifact_version": artifact_version,
+        "artifact_type": artifact_type if artifact_type else None,
+        "artifact_purl": artifact_purl if artifact_purl else None,
+        "fixed_versions": fixed_versions if fixed_versions else None,
+        "data_source": data_source if data_source else None,
+        "matchers": match_info if match_info else None,
+        "cvss_scores": cvss_scores if cvss_scores else None,
+    }
+
+
+def _build_grype_tags(artifact_type: str, data_source: str) -> list[str]:
+    """Build tags list for Grype finding.
+
+    Args:
+        artifact_type: Type of artifact (e.g., npm, pip)
+        data_source: Data source for the vulnerability
+
+    Returns:
+        List of tags including base tags and artifact-specific tags
+    """
+    tags = ["vulnerability", "sca", "cve"]
+    if artifact_type:
+        tags.append(artifact_type.lower().replace(" ", "-"))
+    if data_source:
+        tags.append(f"source:{data_source.lower().replace(' ', '-')}")
+    return tags
+
+
 @adapter_plugin(
     PluginMetadata(
         name="grype",
@@ -239,40 +321,24 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
         else:
             remediation = f"No fix available for {vuln_id} in {artifact_name}"
 
-        # Build tags
-        tags = ["vulnerability", "sca", "cve"]
-        if artifact_type:
-            tags.append(artifact_type.lower().replace(" ", "-"))
-        if data_source:
-            tags.append(f"source:{data_source.lower().replace(' ', '-')}")
+        # Build tags using helper
+        tags = _build_grype_tags(artifact_type, data_source)
 
-        # Build CVSS field
-        cvss_field = None
-        if cvss_scores:
-            # Prefer CVSS v3 over v2 (check for keys starting with "cvss_v3" or "cvss_v2")
-            cvss_v3_key = None
-            cvss_v2_key = None
-            for key in cvss_scores.keys():
-                if key.startswith("cvss_v3"):
-                    cvss_v3_key = key
-                    break
-            for key in cvss_scores.keys():
-                if key.startswith("cvss_v2"):
-                    cvss_v2_key = key
-                    break
+        # Build CVSS field using helper
+        cvss_field = _select_best_cvss(cvss_scores)
 
-            if cvss_v3_key:
-                cvss_field = {
-                    "version": "3.x",
-                    "score": cvss_scores[cvss_v3_key]["score"],
-                    "vector": cvss_scores[cvss_v3_key]["vector"],
-                }
-            elif cvss_v2_key:
-                cvss_field = {
-                    "version": "2.0",
-                    "score": cvss_scores[cvss_v2_key]["score"],
-                    "vector": cvss_scores[cvss_v2_key]["vector"],
-                }
+        # Build context using helper
+        context = _build_grype_context(
+            vuln_id=vuln_id,
+            artifact_name=artifact_name,
+            artifact_version=artifact_version,
+            artifact_type=artifact_type,
+            artifact_purl=artifact_purl,
+            fixed_versions=fixed_versions,
+            data_source=data_source,
+            match_info=match_info,
+            cvss_scores=cvss_scores,
+        )
 
         # Build finding dict
         finding = {
@@ -297,17 +363,7 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
             "references": references,
             "tags": tags,
             "cvss": cvss_field,
-            "context": {
-                "vulnerability_id": vuln_id,
-                "artifact_name": artifact_name,
-                "artifact_version": artifact_version,
-                "artifact_type": artifact_type if artifact_type else None,
-                "artifact_purl": artifact_purl if artifact_purl else None,
-                "fixed_versions": fixed_versions if fixed_versions else None,
-                "data_source": data_source if data_source else None,
-                "matchers": match_info if match_info else None,
-                "cvss_scores": cvss_scores if cvss_scores else None,
-            },
+            "context": context,
             "raw": match,
         }
 

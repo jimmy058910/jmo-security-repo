@@ -25,6 +25,145 @@ from scripts.core.plugin_api import (
 )
 
 
+def _process_zap_instance(
+    alert: dict[str, Any],
+    instance: dict[str, Any],
+    idx: int,
+    zap_version: str,
+) -> dict[str, Any] | None:
+    """Process single ZAP alert instance into finding dict.
+
+    Args:
+        alert: ZAP alert dictionary containing alert details
+        instance: Instance dictionary with URI, method, param, evidence
+        idx: Instance index for unique fingerprinting
+        zap_version: ZAP tool version string
+
+    Returns:
+        Finding dict or None if instance is invalid
+    """
+    if not isinstance(instance, dict):
+        return None
+
+    # Extract alert fields
+    alert_name = str(alert.get("alert") or alert.get("name") or "Unknown")
+    risk = str(alert.get("risk") or "Medium")
+    confidence = str(alert.get("confidence") or "Medium")
+    description = str(alert.get("desc") or "")
+    solution = str(alert.get("solution") or "")
+    reference = str(alert.get("reference") or "")
+    cweid = str(alert.get("cweid") or "")
+    wascid = str(alert.get("wascid") or "")
+
+    severity_normalized = map_tool_severity("zap", risk)
+
+    # Extract instance fields
+    uri = str(instance.get("uri") or instance.get("url") or "")
+    method = str(instance.get("method") or "")
+    param = str(instance.get("param") or instance.get("parameter") or "")
+    evidence = str(instance.get("evidence") or "")
+
+    # Extract path from URI for location
+    file_path = uri.split("?")[0] if uri else ""
+
+    # Build message
+    msg_parts = [alert_name]
+    if param:
+        msg_parts.append(f"(param: {param})")
+    if method:
+        msg_parts.append(f"[{method}]")
+    message = " ".join(msg_parts)
+
+    # Create unique fingerprint per instance
+    rule_id = f"ZAP-{cweid}" if cweid else f"ZAP-{alert_name}"
+    location_key = f"{uri}:{method}:{param}:{idx}"
+    fid = fingerprint("zap", rule_id, location_key, 0, message)
+
+    # Build tags
+    tags = _build_zap_tags(cweid, wascid, confidence)
+
+    # Build references list
+    refs = _parse_zap_references(reference)
+
+    return {
+        "schemaVersion": "1.2.0",
+        "id": fid,
+        "ruleId": rule_id,
+        "title": alert_name,
+        "message": message,
+        "description": description.strip() if description else alert_name,
+        "severity": severity_normalized,
+        "tool": {
+            "name": "zap",
+            "version": zap_version,
+        },
+        "location": {
+            "path": file_path,
+            "startLine": 0,
+        },
+        "remediation": solution.strip() if solution else "",
+        "references": refs if refs else None,
+        "tags": tags,
+        "context": {
+            "uri": uri,
+            "method": method,
+            "param": param,
+            "evidence": evidence[:200] if evidence else "",  # Truncate long evidence
+            "confidence": confidence,
+            "risk": risk,
+        },
+        "raw": {
+            "alert": alert_name,
+            "risk": risk,
+            "confidence": confidence,
+            "cweid": cweid,
+            "wascid": wascid,
+            "uri": uri,
+            "method": method,
+            "param": param,
+            "evidence": evidence,
+        },
+    }
+
+
+def _build_zap_tags(cweid: str, wascid: str, confidence: str) -> list[str]:
+    """Build tags list for ZAP finding.
+
+    Args:
+        cweid: CWE ID string
+        wascid: WASC ID string
+        confidence: Confidence level string
+
+    Returns:
+        List of tags including base tags and security-specific tags
+    """
+    tags = ["dast", "web-security"]
+    if cweid:
+        tags.append(f"CWE-{cweid}")
+    if wascid:
+        tags.append(f"WASC-{wascid}")
+    tags.append(f"confidence:{confidence.lower()}")
+    return tags
+
+
+def _parse_zap_references(reference: str) -> list[str]:
+    """Parse ZAP reference string into list of URLs.
+
+    Args:
+        reference: Newline-separated reference URLs
+
+    Returns:
+        List of reference URL strings
+    """
+    refs = []
+    if reference:
+        for ref_url in reference.split("\n"):
+            ref_url = ref_url.strip()
+            if ref_url:
+                refs.append(ref_url)
+    return refs
+
+
 @adapter_plugin(
     PluginMetadata(
         name="zap",
@@ -134,20 +273,12 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
         if not isinstance(alerts, list):
             continue
 
+        # Get ZAP version once for all findings
+        zap_version = str(data.get("@version") or "unknown")
+
         for alert in alerts:
             if not isinstance(alert, dict):
                 continue
-
-            alert_name = str(alert.get("alert") or alert.get("name") or "Unknown")
-            risk = str(alert.get("risk") or "Medium")
-            confidence = str(alert.get("confidence") or "Medium")
-            description = str(alert.get("desc") or "")
-            solution = str(alert.get("solution") or "")
-            reference = str(alert.get("reference") or "")
-            cweid = str(alert.get("cweid") or "")
-            wascid = str(alert.get("wascid") or "")
-
-            severity_normalized = map_tool_severity("zap", risk)
 
             # Process instances (individual occurrences of the alert)
             instances = alert.get("instances", [])
@@ -156,87 +287,10 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
                 instances = [{}]
 
             for idx, instance in enumerate(instances):
-                if not isinstance(instance, dict):
+                # Use helper function to process each instance
+                finding = _process_zap_instance(alert, instance, idx, zap_version)
+                if finding is None:
                     continue
-
-                uri = str(instance.get("uri") or instance.get("url") or "")
-                method = str(instance.get("method") or "")
-                param = str(instance.get("param") or instance.get("parameter") or "")
-                evidence = str(instance.get("evidence") or "")
-
-                # Extract path from URI for location
-                file_path = uri.split("?")[0] if uri else ""
-
-                # Build message
-                msg_parts = [alert_name]
-                if param:
-                    msg_parts.append(f"(param: {param})")
-                if method:
-                    msg_parts.append(f"[{method}]")
-                message = " ".join(msg_parts)
-
-                # Create unique fingerprint per instance
-                rule_id = f"ZAP-{cweid}" if cweid else f"ZAP-{alert_name}"
-                location_key = f"{uri}:{method}:{param}:{idx}"
-                fid = fingerprint("zap", rule_id, location_key, 0, message)
-
-                # Build tags
-                tags = ["dast", "web-security"]
-                if cweid:
-                    tags.append(f"CWE-{cweid}")
-                if wascid:
-                    tags.append(f"WASC-{wascid}")
-                tags.append(f"confidence:{confidence.lower()}")
-
-                # Build references
-                refs = []
-                if reference:
-                    for ref_url in reference.split("\n"):
-                        ref_url = ref_url.strip()
-                        if ref_url:
-                            refs.append(ref_url)
-
-                finding = {
-                    "schemaVersion": "1.2.0",
-                    "id": fid,
-                    "ruleId": rule_id,
-                    "title": alert_name,
-                    "message": message,
-                    "description": description.strip() if description else alert_name,
-                    "severity": severity_normalized,
-                    "tool": {
-                        "name": "zap",
-                        "version": str(data.get("@version") or "unknown"),
-                    },
-                    "location": {
-                        "path": file_path,
-                        "startLine": 0,
-                    },
-                    "remediation": solution.strip() if solution else "",
-                    "references": refs if refs else None,
-                    "tags": tags,
-                    "context": {
-                        "uri": uri,
-                        "method": method,
-                        "param": param,
-                        "evidence": (
-                            evidence[:200] if evidence else ""
-                        ),  # Truncate long evidence
-                        "confidence": confidence,
-                        "risk": risk,
-                    },
-                    "raw": {
-                        "alert": alert_name,
-                        "risk": risk,
-                        "confidence": confidence,
-                        "cweid": cweid,
-                        "wascid": wascid,
-                        "uri": uri,
-                        "method": method,
-                        "param": param,
-                        "evidence": evidence,
-                    },
-                }
 
                 # Enrich with compliance framework mappings
                 finding = enrich_finding_with_compliance(finding)
