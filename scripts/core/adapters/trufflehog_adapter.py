@@ -16,7 +16,6 @@ from pathlib import Path
 
 from scripts.core.adapters.common import safe_load_ndjson_file
 from scripts.core.common_finding import normalize_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -110,10 +109,6 @@ class TruffleHogAdapter(AdapterPlugin):
             # Generate fingerprint
             finding.id = self.get_fingerprint(finding)
 
-            # Enrich with compliance
-            finding_dict = vars(finding)
-            finding_dict = enrich_finding_with_compliance(finding_dict)
-            finding.compliance = finding_dict.get("compliance")
 
             findings.append(finding)
 

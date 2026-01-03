@@ -15,7 +15,6 @@ from scripts.core.common_finding import (
     extract_code_snippet,
     normalize_severity,
 )
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -128,10 +127,6 @@ class TrivyAdapter(AdapterPlugin):
                     # Generate fingerprint
                     finding.id = self.get_fingerprint(finding)
 
-                    # Enrich with compliance (converts to dict, enriches, then back)
-                    finding_dict = vars(finding)
-                    finding_dict = enrich_finding_with_compliance(finding_dict)
-                    finding.compliance = finding_dict.get("compliance")
 
                     findings.append(finding)
 

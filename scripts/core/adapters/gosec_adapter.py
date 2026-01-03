@@ -31,7 +31,6 @@ from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -190,8 +189,6 @@ def _load_gosec_internal(path: str | Path) -> list[dict[str, Any]]:
             "raw": issue,
         }
 
-        # Enrich with compliance framework mappings
-        finding = enrich_finding_with_compliance(finding)
         out.append(finding)
 
     return out

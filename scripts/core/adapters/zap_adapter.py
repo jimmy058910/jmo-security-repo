@@ -16,7 +16,6 @@ from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, map_tool_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -292,8 +291,6 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
                 if finding is None:
                     continue
 
-                # Enrich with compliance framework mappings
-                finding = enrich_finding_with_compliance(finding)
                 findings.append(finding)
 
     return findings

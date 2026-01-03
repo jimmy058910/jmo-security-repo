@@ -33,7 +33,6 @@ from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -208,8 +207,6 @@ def _load_bearer_internal(path: str | Path) -> list[dict[str, Any]]:
                                 "raw": loc,
                             }
 
-                            # Enrich with compliance framework mappings
-                            finding = enrich_finding_with_compliance(finding)
                             out.append(finding)
 
     # Process security findings (if present)
@@ -261,8 +258,6 @@ def _load_bearer_internal(path: str | Path) -> list[dict[str, Any]]:
                 "raw": finding_entry,
             }
 
-            # Enrich with compliance framework mappings
-            finding_dict = enrich_finding_with_compliance(finding_dict)
             out.append(finding_dict)
 
     return out

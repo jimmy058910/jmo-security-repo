@@ -2684,8 +2684,19 @@ class TestAttestationFunctions:
         yield db_path
 
         # Cleanup: remove database file after test
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_store_attestation_success(self, tmp_path, isolate_database, monkeypatch):
         """Test successful attestation storage."""
@@ -3102,8 +3113,19 @@ class TestSearchFindings:
         yield db_path
 
         # Cleanup: remove database file after test
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_search_findings_text_query(self, tmp_path, isolate_database):
         """Test basic text search across message, path, and rule_id."""
@@ -4017,8 +4039,19 @@ class TestRecurringFindings:
 
         yield db_path
 
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_recurring_findings_basic(
         self, tmp_path, isolate_database, monkeypatch
@@ -4524,8 +4557,19 @@ class TestScanDiffForAI:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_scan_diff_for_ai_basic(self, tmp_path, isolate_database, monkeypatch):
         """Test basic AI-friendly diff computation."""
@@ -5111,8 +5155,19 @@ class TestComplianceSummary:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_compliance_summary_all_frameworks(
         self, tmp_path, isolate_database, monkeypatch
@@ -5456,8 +5511,19 @@ class TestFindingContext:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_finding_context_basic(self, tmp_path, isolate_database, monkeypatch):
         """Test basic finding context retrieval."""
@@ -5705,8 +5771,19 @@ class TestTimelineData:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_timeline_data_basic(self, tmp_path, isolate_database, monkeypatch):
         """Test basic timeline data retrieval."""
@@ -6167,8 +6244,19 @@ class TestFindingDetailsBatch:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_finding_details_batch_basic(
         self, tmp_path, isolate_database, monkeypatch
@@ -6418,8 +6506,19 @@ class TestComplianceTrend:
 
         monkeypatch.setattr(sqlite3, "connect", patched_connect)
         yield db_path
+        # On Windows, SQLite connections hold file locks. Force garbage collection
+        # to release any unreferenced connections before attempting to delete.
+        import gc
+
+        gc.collect()
+
         if db_path.exists():
-            db_path.unlink()
+            try:
+                db_path.unlink()
+            except PermissionError:
+                # On Windows, if a connection is still held, we can't delete the file.
+                # This is acceptable since tmp_path cleanup will handle it eventually.
+                pass
 
     def test_get_compliance_trend_improving(
         self, tmp_path, isolate_database, monkeypatch

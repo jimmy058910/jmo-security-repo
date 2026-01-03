@@ -1946,6 +1946,7 @@ suppressions:
 ```
 
 This enables filtering triaged vs. untriaged findings in Excel/Google Sheets for:
+
 - Progress tracking on security remediation
 - Compliance documentation
 - Team handoffs

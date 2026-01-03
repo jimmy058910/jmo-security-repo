@@ -275,7 +275,8 @@ def test_extract_code_snippet_unicode_content(tmp_path):
     """Test snippet extraction with unicode content."""
     test_file = tmp_path / "test.py"
     test_file.write_text(
-        "# -*- coding: utf-8 -*-\nprint('Hello 世界')\n# Comment 日本語"
+        "# -*- coding: utf-8 -*-\nprint('Hello 世界')\n# Comment 日本語",
+        encoding="utf-8",
     )
 
     result = extract_code_snippet(str(test_file), start_line=2, context_lines=1)

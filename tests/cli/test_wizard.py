@@ -591,16 +591,16 @@ def test_select_execution_mode_force_docker_success(mock_running, mock_detect):
 
 @patch("scripts.cli.wizard._detect_docker", return_value=True)
 @patch("scripts.cli.wizard._check_docker_running", return_value=True)
-@patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
+@patch("builtins.input", return_value="1")  # Select Docker mode (choice "1")
 def test_select_execution_mode_interactive_docker(
-    mock_prompt, mock_running, mock_detect
+    mock_input, mock_running, mock_detect
 ):
     """Test interactive Docker mode selection."""
     from scripts.cli.wizard import select_execution_mode
 
     result = select_execution_mode(force_docker=False)
     assert result is True
-    mock_prompt.assert_called_once()
+    mock_input.assert_called_once()
 
 
 @patch("scripts.cli.wizard._prompt_choice", return_value="balanced")
@@ -878,12 +878,14 @@ def test_run_wizard_exception():
 @patch("scripts.cli.wizard._detect_docker", return_value=True)
 @patch("scripts.cli.wizard._check_docker_running", return_value=True)
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
-def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect):
+def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect, tmp_path):
     """Test non-interactive mode with Docker available."""
     from scripts.cli.wizard import run_wizard
 
     # Non-interactive mode with force_docker and emit artifact to avoid execution
-    exit_code = run_wizard(yes=True, force_docker=True, emit_make="/tmp/test-make.txt")
+    # Use tmp_path for cross-platform compatibility (Windows/Linux/macOS)
+    make_file = tmp_path / "test-make.txt"
+    exit_code = run_wizard(yes=True, force_docker=True, emit_make=str(make_file))
 
     # Should complete successfully without errors
     assert exit_code == 0

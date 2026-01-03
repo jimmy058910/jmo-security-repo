@@ -1,4 +1,5 @@
 import os
+import platform
 import types
 from pathlib import Path
 import sys
@@ -16,6 +17,10 @@ def skip_react_build_check():
     os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Unix signal handling not fully supported on Windows",
+)
 def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     # Create two repos under repos_dir
     base = tmp_path / "repos"
