@@ -29,7 +29,7 @@ open results/summaries/dashboard.html
 ## Features
 
 - 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
-- 🔐 **28 Security Tools** (25 Docker-ready + 3 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco), Fuzzing (AFL++*), License (Bearer) | *Manual install required
+- 🔐 **28 Security Tools** (25 Docker-ready + 3 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco), Fuzzing (AFL++*), License (Bearer) |*Manual install required
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
 - 🎨 **4 Docker Variants**: Fast (8 tools, 5-10 min), Balanced (18 tools, 18-25 min), Slim (14 tools, cloud-focused), Deep (25 Docker-ready tools, 40-70 min)

@@ -487,12 +487,13 @@ def _cluster_cross_tool_duplicates(
         if current % 50 == 0 or current == total:
             logger.info(message)
 
-    # Create clusterer with default threshold (0.75)
-    # Threshold of 0.75 ensures location similarity matters (35% weight)
-    # Prevents clustering findings from different file paths
-    # With 0% location + 100% message/metadata = max 0.65 (below threshold)
+    # Create clusterer with improved threshold (0.65) and location-first weights
+    # Updated weights: location=0.50, message=0.25, metadata=0.25
+    # Lower threshold (0.65 vs 0.75) enables better cross-tool clustering
+    # Rule equivalence mapping in metadata_similarity prevents false positives
+    # Example: Trivy ":latest tag used" + Hadolint "DL3006" on same line → clustered
     # TODO: Make threshold configurable via jmo.yml deduplication section
-    clusterer = FindingClusterer(similarity_threshold=0.75)
+    clusterer = FindingClusterer(similarity_threshold=0.65)
 
     # Run clustering algorithm
     clusters = clusterer.cluster(findings, progress_callback=progress)

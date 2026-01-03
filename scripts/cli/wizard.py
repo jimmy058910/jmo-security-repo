@@ -85,6 +85,7 @@ def _safe_print(text: str) -> None:
             text = text.replace(unicode_char, ascii_fallback)
         print(text)
 
+
 # Version (from pyproject.toml)
 __version__ = "0.7.1"
 
@@ -201,7 +202,9 @@ PROFILES = {
 }
 
 # Wizard step configuration - ensures consistent "Step X/Y" display
-WIZARD_TOTAL_STEPS = 7  # Profile, Execution, Target Type, Target Config, Advanced, Review, Execute
+WIZARD_TOTAL_STEPS = (
+    7  # Profile, Execution, Target Type, Target Config, Advanced, Review, Execute
+)
 DIFF_WIZARD_TOTAL_STEPS = 5  # Mode, Directories, Filters, Format, Execute
 
 # Empirical per-tool timing estimates in seconds (Fix 2.2 - Issue #10)
@@ -922,7 +925,6 @@ def check_tools_for_profile(
         from scripts.cli.tool_manager import (
             ToolManager,
             get_remediation_for_tool,
-            REMEDIATION_COMMANDS,
         )
         from scripts.core.tool_registry import PROFILE_TOOLS, detect_platform
 
@@ -935,24 +937,45 @@ def check_tools_for_profile(
         statuses = manager.check_profile(profile)
         missing = [s for s in statuses.values() if not s.installed]
         outdated = [s for s in statuses.values() if s.is_outdated]
-        installed = [name for name, s in statuses.items() if s.installed]
         # Use execution_ready for "available" (consistent with summary display)
         available = [name for name, s in statuses.items() if s.execution_ready]
-        not_ready = [s for s in statuses.values() if s.installed and not s.execution_ready]
+        not_ready = [
+            s for s in statuses.values() if s.installed and not s.execution_ready
+        ]
 
         # Combine all tools that need attention
         tools_needing_attention = missing + not_ready
 
         # All tools present and ready
         if not tools_needing_attention:
-            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools ready!", "green"))
+            print(
+                _colorize(
+                    f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools ready!",
+                    "green",
+                )
+            )
             if outdated:
-                print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient", "yellow"))
+                print(
+                    _colorize(
+                        f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient",
+                        "yellow",
+                    )
+                )
             return True, available
 
         # Show consolidated status
-        print(_colorize(f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} {len(available)} tools ready", "green"))
-        print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(tools_needing_attention)} tool(s) need attention:", "yellow"))
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('✅', '[OK]')} {len(available)} tools ready",
+                "green",
+            )
+        )
+        print(
+            _colorize(
+                f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(tools_needing_attention)} tool(s) need attention:",
+                "yellow",
+            )
+        )
 
         # Collect fix commands for display and potential auto-execution
         fix_info: list[dict] = []
@@ -964,15 +987,21 @@ def check_tools_for_profile(
                 issue = status.execution_warning or "Missing dependencies"
 
             remediation = get_remediation_for_tool(status.name, platform)
-            fix_info.append({
-                "name": status.name,
-                "issue": issue,
-                "installed": status.installed,
-                "remediation": remediation,
-            })
+            fix_info.append(
+                {
+                    "name": status.name,
+                    "issue": issue,
+                    "installed": status.installed,
+                    "remediation": remediation,
+                }
+            )
 
             # Display the issue
-            icon = _UNICODE_FALLBACKS.get('❌', '[X]') if not status.installed else _UNICODE_FALLBACKS.get('⚠', '[!]')
+            icon = (
+                _UNICODE_FALLBACKS.get("❌", "[X]")
+                if not status.installed
+                else _UNICODE_FALLBACKS.get("⚠", "[!]")
+            )
             print(f"\n  {icon} {_colorize(status.name, 'yellow')}: {issue}")
 
             # Show fix command
@@ -985,11 +1014,21 @@ def check_tools_for_profile(
                 print(f"     Fix: {remediation['jmo_install']}")
 
         if outdated:
-            print(_colorize(f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient", "yellow"))
+            print(
+                _colorize(
+                    f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} {len(outdated)} tool(s) outdated - run 'jmo tools update' when convenient",
+                    "yellow",
+                )
+            )
 
         # Non-interactive mode: continue with available tools
         if yes:
-            print(_colorize(f"\nNon-interactive mode: continuing with {len(available)} available tools", "yellow"))
+            print(
+                _colorize(
+                    f"\nNon-interactive mode: continuing with {len(available)} available tools",
+                    "yellow",
+                )
+            )
             if tools_needing_attention:
                 skipped = [t["name"] for t in fix_info]
                 print(f"Skipping: {', '.join(skipped)}")
@@ -999,7 +1038,9 @@ def check_tools_for_profile(
         print("\n" + "─" * 50)
         print(_colorize("Options:", "blue"))
         print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
-        print(f"  [2] Continue with {len(available)} working tools (skip: {', '.join(t['name'] for t in fix_info[:3])}{'...' if len(fix_info) > 3 else ''})")
+        print(
+            f"  [2] Continue with {len(available)} working tools (skip: {', '.join(t['name'] for t in fix_info[:3])}{'...' if len(fix_info) > 3 else ''})"
+        )
         print("  [3] Show all fix commands (copy/paste manually)")
         print("  [4] Cancel wizard")
 
@@ -1009,7 +1050,11 @@ def check_tools_for_profile(
                 # Auto-fix: run remediation commands
                 return _auto_fix_tools(fix_info, platform, profile, available)
             elif choice == "2":
-                print(_colorize(f"\nContinuing with {len(available)} available tools", "yellow"))
+                print(
+                    _colorize(
+                        f"\nContinuing with {len(available)} available tools", "yellow"
+                    )
+                )
                 print("Note: Some scan categories may be skipped")
                 return True, available
             elif choice == "3":
@@ -1071,7 +1116,12 @@ def _auto_fix_tools(
     Returns:
         Tuple of (should_continue, updated_available_tools)
     """
-    print(_colorize(f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(fix_info)} tool(s)...", "blue"))
+    print(
+        _colorize(
+            f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(fix_info)} tool(s)...",
+            "blue",
+        )
+    )
     print("─" * 50)
 
     fixed = 0
@@ -1085,7 +1135,9 @@ def _auto_fix_tools(
 
         if not commands:
             # Fall back to jmo tools install
-            commands = [remediation.get("jmo_install", f"jmo tools install {tool_name}")]
+            commands = [
+                remediation.get("jmo_install", f"jmo tools install {tool_name}")
+            ]
 
         print(f"\n{_UNICODE_FALLBACKS.get('⏳', '[.]')} Fixing {tool_name}...")
 
@@ -1109,25 +1161,49 @@ def _auto_fix_tools(
                 if result.returncode != 0:
                     # Some commands (like curl | sh) may return non-zero but still work
                     # Check if it's a critical failure
-                    if "error" in result.stderr.lower() or "failed" in result.stderr.lower():
-                        print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Failed: {result.stderr[:100]}", "red"))
+                    if (
+                        "error" in result.stderr.lower()
+                        or "failed" in result.stderr.lower()
+                    ):
+                        print(
+                            _colorize(
+                                f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Failed: {result.stderr[:100]}",
+                                "red",
+                            )
+                        )
                         success = False
                         break
                     else:
                         # Might be OK, continue
-                        logger.debug(f"Command returned {result.returncode} but continuing")
+                        logger.debug(
+                            f"Command returned {result.returncode} but continuing"
+                        )
 
             except subprocess.TimeoutExpired:
-                print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes", "red"))
+                print(
+                    _colorize(
+                        f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes",
+                        "red",
+                    )
+                )
                 success = False
                 break
             except Exception as e:
-                print(_colorize(f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Error: {e}", "red"))
+                print(
+                    _colorize(
+                        f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Error: {e}", "red"
+                    )
+                )
                 success = False
                 break
 
         if success:
-            print(_colorize(f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {tool_name} fixed!", "green"))
+            print(
+                _colorize(
+                    f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {tool_name} fixed!",
+                    "green",
+                )
+            )
             fixed += 1
             if tool_name not in available:
                 available.append(tool_name)
@@ -1138,9 +1214,19 @@ def _auto_fix_tools(
     # Summary
     print("\n" + "─" * 50)
     if failed == 0:
-        print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {fixed} tool(s) fixed successfully!", "green"))
+        print(
+            _colorize(
+                f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {fixed} tool(s) fixed successfully!",
+                "green",
+            )
+        )
     else:
-        print(_colorize(f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {fixed} fixed, {failed} failed", "yellow"))
+        print(
+            _colorize(
+                f"{_UNICODE_FALLBACKS.get('⚠', '[!]')} {fixed} fixed, {failed} failed",
+                "yellow",
+            )
+        )
         print(f"Failed tools: {', '.join(failed_tools)}")
         print("These may require manual installation. See: docs/MANUAL_INSTALLATION.md")
 
@@ -1156,10 +1242,20 @@ def _auto_fix_tools(
         total_count = len(statuses)
 
         if ready_count == total_count:
-            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {total_count} tools now ready!", "green"))
+            print(
+                _colorize(
+                    f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {total_count} tools now ready!",
+                    "green",
+                )
+            )
         else:
             not_ready = total_count - ready_count
-            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} {ready_count}/{total_count} tools ready ({not_ready} still need attention)", "yellow"))
+            print(
+                _colorize(
+                    f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} {ready_count}/{total_count} tools ready ({not_ready} still need attention)",
+                    "yellow",
+                )
+            )
 
     except Exception as e:
         logger.warning(f"Re-check failed: {e}")
@@ -1185,7 +1281,7 @@ def _install_missing_tools_interactive(
         Tuple of (should_continue, updated_available_tools)
     """
     try:
-        from scripts.cli.tool_installer import ToolInstaller, print_install_progress
+        from scripts.cli.tool_installer import ToolInstaller
 
         print(_colorize(f"\nInstalling {len(missing)} missing tool(s)...", "blue"))
 
@@ -1209,11 +1305,23 @@ def _install_missing_tools_interactive(
         # Summary
         print()
         if progress.failed == 0:
-            print(_colorize(f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {progress.successful} tool(s) installed!", "green"))
+            print(
+                _colorize(
+                    f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} All {progress.successful} tool(s) installed!",
+                    "green",
+                )
+            )
         else:
-            print(_colorize(f"{progress.successful} installed, {progress.failed} failed", "yellow"))
+            print(
+                _colorize(
+                    f"{progress.successful} installed, {progress.failed} failed",
+                    "yellow",
+                )
+            )
             if progress.failed > 0:
-                print("Some tools require manual installation. See: docs/MANUAL_INSTALLATION.md")
+                print(
+                    "Some tools require manual installation. See: docs/MANUAL_INSTALLATION.md"
+                )
 
         # Continue with whatever we have
         return True, available
@@ -1318,7 +1426,10 @@ def run_wizard(
             # Version drift check (only for native mode)
             if not config.use_docker:
                 from scripts.cli.scan_utils import check_version_drift_before_scan
-                if not check_version_drift_before_scan(config.profile, interactive=True):
+
+                if not check_version_drift_before_scan(
+                    config.profile, interactive=True
+                ):
                     print(_colorize("\nWizard cancelled", "yellow"))
                     return 0
 
@@ -1469,7 +1580,9 @@ def run_wizard(
                                     )
 
                     except Exception as e:
-                        _safe_print(_colorize(f"\n⚠ Trend analysis failed: {e}", "yellow"))
+                        _safe_print(
+                            _colorize(f"\n⚠ Trend analysis failed: {e}", "yellow")
+                        )
                         logger.debug(f"Trend analysis error: {e}")
             else:
                 # Interactive offers (only if no non-interactive flags)
@@ -1773,7 +1886,9 @@ def _run_trend_command_interactive(
         result = cmd_func(args)
 
         if result != 0:
-            _safe_print(_colorize(f"\n⚠ Command failed with exit code {result}", "yellow"))
+            _safe_print(
+                _colorize(f"\n⚠ Command failed with exit code {result}", "yellow")
+            )
 
         # Pause for user to read output
         input(_colorize("\nPress Enter to continue...", "blue"))
@@ -1908,7 +2023,9 @@ def _compare_scans_interactive(db_path: Path) -> None:
         result = cmd_trends_compare(args)
 
         if result != 0:
-            _safe_print(_colorize(f"\n⚠ Comparison failed with exit code {result}", "yellow"))
+            _safe_print(
+                _colorize(f"\n⚠ Comparison failed with exit code {result}", "yellow")
+            )
 
         input(_colorize("\nPress Enter to continue...", "blue"))
 
@@ -2366,11 +2483,28 @@ def main() -> int:
         "--docker", action="store_true", help="Force Docker execution mode"
     )
     parser.add_argument(
-        "--emit-make-target", metavar="FILE", help="Generate Makefile target"
+        "--emit-make-target",
+        metavar="FILE",
+        nargs="?",
+        const="Makefile.jmo",
+        type=str,
+        help="Generate Makefile target (default: Makefile.jmo)",
     )
-    parser.add_argument("--emit-script", metavar="FILE", help="Generate shell script")
     parser.add_argument(
-        "--emit-gha", metavar="FILE", help="Generate GitHub Actions workflow"
+        "--emit-script",
+        metavar="FILE",
+        nargs="?",
+        const="jmo-scan.sh",
+        type=str,
+        help="Generate shell script (default: jmo-scan.sh)",
+    )
+    parser.add_argument(
+        "--emit-gha",
+        metavar="FILE",
+        nargs="?",
+        const=".github/workflows/jmo-security.yml",
+        type=str,
+        help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
     )
 
     # Trend analysis flags (v1.0.0+)

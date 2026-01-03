@@ -889,5 +889,91 @@ def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect):
     assert exit_code == 0
 
 
+# ===== Issue #1 Fix: --emit-script default filename tests =====
+
+
+def test_emit_script_argparse_default():
+    """Test that --emit-script uses default filename when no value provided.
+
+    This verifies the fix for Issue #1 where --emit-script without a filename
+    caused a TypeError because Path() received a non-string value.
+    """
+    import argparse
+
+    # Replicate the argparse configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-script",
+        metavar="FILE",
+        nargs="?",
+        const="jmo-scan.sh",
+        type=str,
+    )
+
+    # Test with no value (uses const default)
+    args = parser.parse_args(["--emit-script"])
+    assert args.emit_script == "jmo-scan.sh"
+
+    # Test with explicit value
+    args = parser.parse_args(["--emit-script", "custom.sh"])
+    assert args.emit_script == "custom.sh"
+
+    # Test without flag (None)
+    args = parser.parse_args([])
+    assert args.emit_script is None
+
+
+def test_emit_make_target_argparse_default():
+    """Test that --emit-make-target uses default filename when no value provided."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-make-target",
+        metavar="FILE",
+        nargs="?",
+        const="Makefile.jmo",
+        type=str,
+    )
+
+    args = parser.parse_args(["--emit-make-target"])
+    assert args.emit_make_target == "Makefile.jmo"
+
+
+def test_emit_gha_argparse_default():
+    """Test that --emit-gha uses default filename when no value provided."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-gha",
+        metavar="FILE",
+        nargs="?",
+        const=".github/workflows/jmo-security.yml",
+        type=str,
+    )
+
+    args = parser.parse_args(["--emit-gha"])
+    assert args.emit_gha == ".github/workflows/jmo-security.yml"
+
+
+@patch("scripts.cli.wizard.Path.write_text")
+@patch("scripts.cli.wizard.Path.chmod")
+def test_run_wizard_emit_script_default_filename(mock_chmod, mock_write):
+    """Test wizard with --emit-script using default filename.
+
+    This is an integration test verifying the full flow works with default filename.
+    """
+    # Note: We pass the default filename directly to simulate argparse behavior
+    # The actual argparse integration is tested in test_emit_script_argparse_default
+    rc = run_wizard(yes=True, emit_script="jmo-scan.sh")
+
+    mock_write.assert_called_once()
+    content = mock_write.call_args[0][0]
+    assert "#!/usr/bin/env bash" in content
+    mock_chmod.assert_called_once_with(0o755)
+    assert rc == 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

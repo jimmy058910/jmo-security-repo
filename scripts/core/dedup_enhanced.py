@@ -6,8 +6,20 @@ This module implements Phase 2 of the deduplication strategy:
 
 Algorithm:
     1. Calculate multi-dimensional similarity (location, message, metadata)
-    2. Cluster findings using greedy single-pass algorithm
-    3. Generate consensus findings with detected_by arrays
+    2. Use rule equivalence mapping for known cross-tool patterns
+    3. Cluster findings using greedy single-pass algorithm
+    4. Generate consensus findings with detected_by arrays
+
+Weights (location-first approach):
+    - Location: 0.50 (same file + line strongly indicates same issue)
+    - Message: 0.25 (different tools use very different terminology)
+    - Metadata: 0.25 (CWE/CVE matching + rule equivalence mapping)
+
+Threshold: 0.65 (lowered from 0.75 for better cross-tool clustering)
+
+Rule Equivalence:
+    Known equivalent rules across tools are mapped in rule_equivalence.py.
+    Example: Trivy ":latest tag used" = Hadolint "DL3006" = Checkov "CKV_DOCKER_1"
 
 Performance:
     - Time: O(n×k) where k = avg cluster size (~3-5)
@@ -221,18 +233,23 @@ class SimilarityCalculator:
 
     def __init__(
         self,
-        location_weight: float = 0.35,
-        message_weight: float = 0.40,
+        location_weight: float = 0.50,
+        message_weight: float = 0.25,
         metadata_weight: float = 0.25,
-        similarity_threshold: float = 0.75,
+        similarity_threshold: float = 0.65,
     ):
         """Initialize with configurable weights.
 
         Args:
-            location_weight: Weight for location similarity (default 0.35)
-            message_weight: Weight for message similarity (default 0.40)
+            location_weight: Weight for location similarity (default 0.50)
+                Higher weight because same file + line strongly indicates same issue.
+            message_weight: Weight for message similarity (default 0.25)
+                Lower weight because different tools use very different terminology.
             metadata_weight: Weight for metadata similarity (default 0.25)
-            similarity_threshold: Threshold for clustering (default 0.75)
+                Includes CWE/CVE matching AND rule equivalence mapping.
+            similarity_threshold: Threshold for clustering (default 0.65)
+                Lowered from 0.75 to enable better cross-tool clustering.
+                With rule equivalence mapping, false positives are still prevented.
 
         """
         assert (
@@ -259,11 +276,19 @@ class SimilarityCalculator:
             finding1.get("message", ""), finding2.get("message", "")
         )
 
+        # Extract tool names for rule equivalence checking
+        tool1 = finding1.get("tool", {})
+        tool2 = finding2.get("tool", {})
+        tool1_name = tool1.get("name", "") if isinstance(tool1, dict) else ""
+        tool2_name = tool2.get("name", "") if isinstance(tool2, dict) else ""
+
         meta_sim = self.metadata_similarity(
             finding1.get("raw", {}),
             finding2.get("raw", {}),
             finding1.get("ruleId"),
             finding2.get("ruleId"),
+            tool1_name,
+            tool2_name,
         )
 
         # Weighted composite
@@ -453,15 +478,39 @@ class SimilarityCalculator:
         raw2: dict,
         rule_id1: str | None,
         rule_id2: str | None,
+        tool1: str = "",
+        tool2: str = "",
     ) -> float:
         """Calculate metadata similarity based on CWE, CVE, Rule IDs.
 
+        Also checks rule equivalence mapping for known equivalent rules
+        across different security tools (e.g., Hadolint DL3006 = Trivy :latest tag).
+
+        Args:
+            raw1: Raw finding data from first tool
+            raw2: Raw finding data from second tool
+            rule_id1: Rule ID from first tool
+            rule_id2: Rule ID from second tool
+            tool1: Name of first tool (for rule equivalence lookup)
+            tool2: Name of second tool (for rule equivalence lookup)
+
         Returns:
-            1.0 if exact CWE or CVE match
+            1.0 if exact CWE, CVE, or rule equivalence match
             0.7-0.9 if rule ID family match
             0.0 otherwise
 
         """
+        # Check rule equivalence mapping first (highest priority for cross-tool dedup)
+        if tool1 and tool2 and rule_id1 and rule_id2:
+            try:
+                from scripts.core.rule_equivalence import are_rules_equivalent
+
+                is_equiv, _ = are_rules_equivalent(tool1, rule_id1, tool2, rule_id2)
+                if is_equiv:
+                    return 1.0
+            except ImportError:
+                pass  # Fallback if module not available
+
         # Extract CWEs from raw data (handle various formats)
         cwes1 = self._extract_cwes_from_raw(raw1)
         cwes2 = self._extract_cwes_from_raw(raw2)
@@ -602,13 +651,19 @@ class SimilarityCalculator:
 
 
 class FindingClusterer:
-    """Main clustering engine using greedy similarity matching."""
+    """Main clustering engine using greedy similarity matching.
 
-    def __init__(self, similarity_threshold: float = 0.75):
+    Uses improved weights (location-first) and rule equivalence mapping
+    to better cluster findings from different security tools.
+    """
+
+    def __init__(self, similarity_threshold: float = 0.65):
         """Initialize clusterer with similarity threshold.
 
         Args:
-            similarity_threshold: Minimum similarity score for clustering (default 0.75)
+            similarity_threshold: Minimum similarity score for clustering (default 0.65)
+                Lowered from 0.75 to enable better cross-tool deduplication.
+                Rule equivalence mapping prevents false positives.
 
         """
         self.threshold = similarity_threshold

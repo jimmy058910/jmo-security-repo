@@ -723,3 +723,207 @@ def test_cluster_performance_100_findings():
     assert elapsed < 1.0  # Should complete in <1 second
     # With better duplicates, should cluster significantly (expect ~5 clusters)
     assert len(clusters) < 50  # At least 50% reduction
+
+
+# ===== Issue #2 Fix: Cross-Tool Deduplication Tests =====
+
+
+def test_trivy_hadolint_latest_tag_clustering():
+    """Test that Trivy and Hadolint :latest tag findings are clustered.
+
+    This is the specific scenario from Issue #2 where Trivy and Hadolint
+    both flag the :latest tag on the same Dockerfile line but weren't
+    being clustered due to different rule IDs and message text.
+
+    With the rule equivalence mapping and improved weights, these should
+    now be clustered together.
+    """
+    clusterer = FindingClusterer()
+
+    findings = [
+        {
+            "id": "trivy-latest-1",
+            "tool": {"name": "trivy", "version": "0.50.0"},
+            "severity": "MEDIUM",
+            "message": "':latest' tag used",
+            "ruleId": ":latest tag used",
+            "location": {"path": "Dockerfile", "startLine": 22, "endLine": 22},
+            "raw": {},
+        },
+        {
+            "id": "hadolint-dl3006-1",
+            "tool": {"name": "hadolint", "version": "2.12.0"},
+            "severity": "LOW",
+            "message": "Always tag the version of an image explicitly",
+            "ruleId": "DL3006",
+            "location": {"path": "Dockerfile", "startLine": 22, "endLine": 22},
+            "raw": {},
+        },
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    # With rule equivalence mapping, these should be clustered into 1
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 2
+
+    # Check detected_by has both tools
+    consensus = clusters[0].to_consensus_finding()
+    tool_names = {t["name"] for t in consensus["detected_by"]}
+    assert tool_names == {"trivy", "hadolint"}
+
+
+def test_trivy_hadolint_checkov_latest_tag_clustering():
+    """Test three tools flagging :latest tag are clustered."""
+    clusterer = FindingClusterer()
+
+    findings = [
+        {
+            "id": "trivy-1",
+            "tool": {"name": "trivy"},
+            "severity": "MEDIUM",
+            "message": "Using :latest tag",
+            "ruleId": "DS001",
+            "location": {"path": "Dockerfile", "startLine": 1},
+            "raw": {},
+        },
+        {
+            "id": "hadolint-1",
+            "tool": {"name": "hadolint"},
+            "severity": "LOW",
+            "message": "Always tag the version",
+            "ruleId": "DL3006",
+            "location": {"path": "Dockerfile", "startLine": 1},
+            "raw": {},
+        },
+        {
+            "id": "checkov-1",
+            "tool": {"name": "checkov"},
+            "severity": "LOW",
+            "message": "Ensure the base image uses a non latest version tag",
+            "ruleId": "CKV_DOCKER_1",
+            "location": {"path": "Dockerfile", "startLine": 1},
+            "raw": {},
+        },
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    # All three should be clustered into 1
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 3
+
+
+def test_different_dockerfile_issues_not_clustered():
+    """Test that different Dockerfile issues on same line are NOT clustered.
+
+    Even if two findings are on the same line, they should not be clustered
+    if they represent different issues (e.g., :latest tag vs missing USER).
+    """
+    clusterer = FindingClusterer()
+
+    findings = [
+        {
+            "id": "hadolint-latest-1",
+            "tool": {"name": "hadolint"},
+            "severity": "LOW",
+            "message": "Always tag the version",
+            "ruleId": "DL3006",  # :latest tag
+            "location": {"path": "Dockerfile", "startLine": 1},
+            "raw": {},
+        },
+        {
+            "id": "hadolint-user-1",
+            "tool": {"name": "hadolint"},
+            "severity": "MEDIUM",
+            "message": "Specify a USER",
+            "ruleId": "DL3002",  # Missing USER
+            "location": {"path": "Dockerfile", "startLine": 1},
+            "raw": {},
+        },
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    # Different issues should NOT be clustered
+    assert len(clusters) == 2
+
+
+def test_location_first_weight_helps_clustering():
+    """Test that location-first weights enable better clustering.
+
+    With location weight of 0.50, same file + line should contribute
+    significantly to similarity even if messages differ.
+    """
+    calc = SimilarityCalculator()
+
+    finding1 = {
+        "location": {"path": "app.py", "startLine": 42, "endLine": 42},
+        "message": "Potential SQL injection vulnerability detected",
+        "raw": {"CWE": "CWE-89"},
+        "tool": {"name": "semgrep"},
+        "ruleId": "python.sql.injection",
+    }
+
+    finding2 = {
+        "location": {"path": "app.py", "startLine": 42, "endLine": 42},
+        "message": "SQL injection: unsanitized user input in query",
+        "raw": {"CWE": "CWE-89"},
+        "tool": {"name": "bandit"},
+        "ruleId": "B608",
+    }
+
+    similarity = calc.calculate_similarity(finding1, finding2)
+
+    # With matching CWE and location, should exceed threshold
+    # Location: 1.0, Metadata (CWE match): 1.0
+    # Even with low message similarity, composite should be high
+    assert similarity >= 0.65  # Should exceed default threshold
+
+
+def test_metadata_similarity_with_rule_equivalence(calc):
+    """Test metadata_similarity uses rule equivalence mapping."""
+    # Hadolint DL3006 and Trivy :latest tag should match via rule equivalence
+    meta_sim = calc.metadata_similarity(
+        raw1={},
+        raw2={},
+        rule_id1="DL3006",
+        rule_id2=":latest tag used",
+        tool1="hadolint",
+        tool2="trivy",
+    )
+
+    # Should return 1.0 due to rule equivalence
+    assert meta_sim == 1.0
+
+
+def test_metadata_similarity_no_equivalence(calc):
+    """Test metadata_similarity returns 0 for non-equivalent rules."""
+    meta_sim = calc.metadata_similarity(
+        raw1={},
+        raw2={},
+        rule_id1="DL3006",  # :latest tag
+        rule_id2="DL3055",  # no healthcheck
+        tool1="hadolint",
+        tool2="hadolint",
+    )
+
+    # Different issues, should return 0
+    assert meta_sim == 0.0
+
+
+def test_new_default_weights():
+    """Test that new default weights are correct."""
+    calc = SimilarityCalculator()
+
+    # New defaults: location=0.50, message=0.25, metadata=0.25
+    assert calc.location_weight == 0.50
+    assert calc.message_weight == 0.25
+    assert calc.metadata_weight == 0.25
+    assert calc.threshold == 0.65
+
+
+def test_new_default_threshold():
+    """Test that new default threshold is 0.65."""
+    clusterer = FindingClusterer()
+    assert clusterer.threshold == 0.65

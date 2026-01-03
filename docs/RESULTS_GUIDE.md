@@ -1433,12 +1433,14 @@ The HTML dashboard automatically selects the optimal mode:
 - **External Mode (>1000 findings):** JSON loaded via fetch(), prevents browser freeze
 
 **Inline Mode Features:**
+
 - Self-contained single file
 - No external dependencies
 - Instant loading (<500ms)
 - Easy to share (drag-and-drop)
 
 **External Mode Features:**
+
 - React app + separate findings.json
 - Prevents 50-100 MB files
 - Loading spinner with error handling
