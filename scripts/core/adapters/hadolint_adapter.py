@@ -105,7 +105,7 @@ def _load_hadolint_internal(path: str | Path) -> list[dict[str, Any]]:
         sev = normalize_severity(it.get("level") or "MEDIUM")
         fid = fingerprint("hadolint", code, file_path, line, msg)
         finding = {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": code,
             "title": code,

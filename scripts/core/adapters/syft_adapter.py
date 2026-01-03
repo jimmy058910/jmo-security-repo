@@ -114,7 +114,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
             msg = f"Package discovered: {title}"
             fid = fingerprint("syft", name, location, 0, msg)
             finding = {
-                "schemaVersion": "1.0.0",
+                "schemaVersion": "1.2.0",
                 "id": fid,
                 "ruleId": "SBOM.PACKAGE",
                 "title": title,
@@ -156,7 +156,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
             msg = str(v.get("description") or v.get("summary") or vid)
             fid = fingerprint("syft", vid, location, 0, msg)
             finding = {
-                "schemaVersion": "1.0.0",
+                "schemaVersion": "1.2.0",
                 "id": fid,
                 "ruleId": vid,
                 "title": vid,

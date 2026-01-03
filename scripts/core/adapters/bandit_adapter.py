@@ -142,7 +142,7 @@ def _load_bandit_internal(path: str | Path) -> list[dict[str, Any]]:
         severity = normalize_severity(sev_src)
         fid = fingerprint("bandit", rule_id, file_path, start_line, msg)
         finding = {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": rule_id,
             "title": r.get("test_name") or rule_id,

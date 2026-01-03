@@ -194,7 +194,7 @@ def _load_checkov_internal(path: str | Path) -> list[dict[str, Any]]:
                 tags = ["iac", "policy"]
 
             finding = {
-                "schemaVersion": "1.0.0",
+                "schemaVersion": "1.2.0",
                 "id": fid,
                 "ruleId": rid,
                 "title": rid,

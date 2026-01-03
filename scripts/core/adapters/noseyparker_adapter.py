@@ -115,7 +115,7 @@ def _load_noseyparker_internal(path: str | Path) -> list[dict[str, Any]]:
         sev = normalize_severity("MEDIUM")
         fid = fingerprint("noseyparker", signature, path_str, line_no, msg)
         finding = {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": signature,
             "title": signature,

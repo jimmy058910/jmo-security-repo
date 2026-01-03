@@ -219,7 +219,7 @@ def _load_zap_internal(path: str | Path) -> list[dict[str, Any]]:
                             refs.append(ref_url)
 
                 finding = {
-                    "schemaVersion": "1.0.0",
+                    "schemaVersion": "1.2.0",
                     "id": fid,
                     "ruleId": rule_id,
                     "title": alert_name,
