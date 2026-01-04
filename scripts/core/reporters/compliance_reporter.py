@@ -1,11 +1,53 @@
 #!/usr/bin/env python3
-"""
-Compliance-specific reporters for JMo Security Audit Tool Suite.
+"""Compliance-specific reporters for JMo Security Audit Tool Suite.
 
-Generates compliance framework-specific reports:
-- PCI DSS 4.0 Compliance Report
-- MITRE ATT&CK Navigator JSON
-- Compliance Summary Report (all frameworks)
+Generates compliance framework-specific reports mapping security findings to
+industry-standard compliance frameworks and security standards.
+
+Output Formats:
+    - **PCI_DSS_COMPLIANCE.md**: PCI DSS 4.0 Markdown report with requirements mapping,
+      severity breakdown, and remediation recommendations
+    - **attack-navigator.json**: MITRE ATT&CK Navigator v17 JSON layer for interactive
+      visualization of detected techniques and tactics
+    - **COMPLIANCE_SUMMARY.md**: Cross-framework summary covering OWASP Top 10 2021,
+      CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, and MITRE ATT&CK
+
+v1.0.0 Metadata Wrapper:
+    All reports include JMo Security metadata:
+    - schema_version: "1.2.0" (CommonFinding schema version)
+    - Scan summary statistics (total findings, framework coverage)
+    - Generated timestamp and tool attribution
+
+Supported Compliance Frameworks:
+    - OWASP Top 10 2021 (web application security)
+    - CWE Top 25 2024 (software weakness enumeration)
+    - CIS Controls v8.1 (cybersecurity best practices)
+    - NIST CSF 2.0 (cybersecurity framework functions)
+    - PCI DSS 4.0 (payment card industry data security)
+    - MITRE ATT&CK Enterprise v17 (adversary tactics and techniques)
+
+Usage:
+    >>> from scripts.core.reporters.compliance_reporter import (
+    ...     write_pci_dss_report,
+    ...     write_attack_navigator_json,
+    ...     write_compliance_summary,
+    ... )
+    >>> # Generate PCI DSS report
+    >>> write_pci_dss_report(findings, Path("results/summaries/PCI_DSS_COMPLIANCE.md"))
+    >>> # Generate ATT&CK Navigator JSON
+    >>> write_attack_navigator_json(findings, Path("results/summaries/attack-navigator.json"))
+    >>> # Generate cross-framework summary
+    >>> write_compliance_summary(findings, Path("results/summaries/COMPLIANCE_SUMMARY.md"))
+
+Functions:
+    write_pci_dss_report: Generate PCI DSS 4.0 compliance report (Markdown)
+    write_attack_navigator_json: Generate MITRE ATT&CK Navigator layer (JSON)
+    write_compliance_summary: Generate cross-framework compliance summary (Markdown)
+
+See Also:
+    - docs/POLICY_AS_CODE.md for compliance mapping configuration
+    - scripts/core/compliance_mapper.py for mapping logic
+    - CommonFinding v1.2.0 schema for compliance field structure
 """
 
 from __future__ import annotations

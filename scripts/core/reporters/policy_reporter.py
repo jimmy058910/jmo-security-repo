@@ -1,8 +1,71 @@
 #!/usr/bin/env python3
-"""
-Policy-as-Code Reporter for JMo Security.
+"""Policy-as-Code Reporter for JMo Security.
 
-Evaluates findings against Rego policies and generates policy reports.
+Evaluates security findings against Open Policy Agent (OPA) Rego policies
+and generates policy compliance reports in multiple formats.
+
+Output Formats:
+    - **POLICY_REPORT.md**: Detailed Markdown report with policy evaluation results,
+      violations grouped by policy, and warnings summary
+    - **policy-results.json**: Machine-readable JSON with schema version, policy
+      results, violations, warnings, and metadata
+    - **POLICY_SUMMARY.md**: Concise summary for inclusion in main SUMMARY.md
+
+v1.0.0 Metadata Wrapper:
+    JSON output includes standardized metadata wrapper:
+    {
+        "schemaVersion": "1.0.0",
+        "policies": [
+            {
+                "name": "no-critical-in-prod",
+                "passed": false,
+                "violations": [...],
+                "warnings": [...],
+                "message": "3 CRITICAL findings in production code",
+                "metadata": {...}
+            }
+        ]
+    }
+
+Policy Discovery:
+    Policies are loaded from two directories (user policies override builtin):
+    1. Builtin: policies/ (shipped with JMo Security)
+    2. User: ~/.jmo/policies/ (custom user policies)
+
+Rego Policy Interface:
+    Policies must define:
+    - `violations[msg]`: Findings that violate the policy
+    - `warnings[msg]`: Non-blocking warnings
+    - `metadata`: Policy metadata (name, description, severity)
+
+Usage:
+    >>> from scripts.core.reporters.policy_reporter import (
+    ...     evaluate_policies,
+    ...     write_policy_report,
+    ...     write_policy_json,
+    ...     write_policy_summary_md,
+    ... )
+    >>> # Evaluate findings against policies
+    >>> results = evaluate_policies(
+    ...     findings,
+    ...     policy_names=["no-critical-in-prod", "sla-compliance"],
+    ...     builtin_dir=Path("policies"),
+    ...     user_dir=Path.home() / ".jmo" / "policies",
+    ... )
+    >>> # Generate reports
+    >>> write_policy_report(results, Path("results/summaries/POLICY_REPORT.md"))
+    >>> write_policy_json(results, Path("results/summaries/policy-results.json"))
+
+Functions:
+    evaluate_policies: Evaluate findings against Rego policies
+    write_policy_report: Generate detailed Markdown report
+    write_policy_json: Generate machine-readable JSON output
+    write_policy_summary_md: Generate concise summary for SUMMARY.md
+
+See Also:
+    - docs/POLICY_AS_CODE.md for policy authoring guide
+    - scripts/core/policy_engine.py for OPA integration
+    - policies/*.rego for example policy definitions
 
 Author: JMo Security
 License: MIT

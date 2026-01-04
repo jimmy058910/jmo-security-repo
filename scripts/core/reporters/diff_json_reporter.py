@@ -1,4 +1,72 @@
-"""JSON reporter for diff results with v1.0.0 metadata wrapper schema."""
+"""JSON Reporter for Security Scan Diff Results.
+
+Generates machine-readable JSON output comparing two security scans,
+identifying new, resolved, and modified findings between baseline and current.
+
+Output Format:
+    - **DIFF.json**: Structured JSON with comprehensive diff metadata,
+      statistics, and categorized findings (new/resolved/modified)
+
+v1.0.0 Metadata Wrapper Schema:
+    {
+        "meta": {
+            "diff_version": "1.0.0",
+            "jmo_version": "1.0.0",
+            "timestamp": "2025-11-05T10:30:00Z",
+            "baseline": {
+                "source_type": "directory",
+                "path": "results-baseline/",
+                "timestamp": "2025-11-01T10:00:00Z",
+                "profile": "balanced",
+                "total_findings": 42
+            },
+            "current": {
+                "source_type": "directory",
+                "path": "results-current/",
+                "timestamp": "2025-11-05T10:00:00Z",
+                "profile": "balanced",
+                "total_findings": 38
+            }
+        },
+        "statistics": {
+            "total_new": 5,
+            "total_resolved": 9,
+            "total_modified": 3,
+            "net_change": -4,
+            "trend": "improving"
+        },
+        "new_findings": [...],
+        "resolved_findings": [...],
+        "modified_findings": [
+            {
+                "fingerprint": "abc123",
+                "changes": {"severity": ["HIGH", "MEDIUM"]},
+                "risk_delta": -1,
+                "baseline": {...},
+                "current": {...}
+            }
+        ]
+    }
+
+Usage:
+    >>> from scripts.core.reporters.diff_json_reporter import write_json_diff
+    >>> from scripts.core.diff_engine import DiffEngine
+    >>>
+    >>> # Run diff engine
+    >>> engine = DiffEngine()
+    >>> diff = engine.compare(baseline_findings, current_findings)
+    >>>
+    >>> # Generate JSON report
+    >>> write_json_diff(diff, Path("results/summaries/DIFF.json"))
+
+Functions:
+    write_json_diff: Generate JSON diff report with v1.0.0 metadata wrapper
+
+See Also:
+    - scripts/core/diff_engine.py for DiffResult dataclass
+    - diff_html_reporter.py for HTML visualization
+    - diff_sarif_reporter.py for SARIF format (GitHub/GitLab integration)
+"""
 
 import json
 from datetime import datetime, timezone

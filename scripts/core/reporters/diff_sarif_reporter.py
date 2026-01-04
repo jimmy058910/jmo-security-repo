@@ -1,7 +1,84 @@
-"""SARIF 2.1.0 reporter for diff results.
+"""SARIF 2.1.0 Reporter for Security Scan Diff Results.
 
-Generates SARIF format for code scanning integration with GitHub/GitLab.
-Uses baselineState and suppressions to represent diff categories.
+Generates SARIF (Static Analysis Results Interchange Format) output for
+integration with GitHub Code Scanning, GitLab SAST, and other platforms.
+
+Output Format:
+    - **DIFF.sarif**: SARIF 2.1.0 compliant JSON with baseline comparison states
+
+SARIF Diff Representation:
+    SARIF uses baselineState to represent diff categories:
+    - **New findings**: baselineState = "new"
+    - **Resolved findings**: baselineState = "absent" + suppressions
+    - **Modified findings**: baselineState = "updated" + change details
+
+v1.0.0 Metadata:
+    Run properties include diff context:
+    - baseline/current source info (path, timestamp, profile)
+    - statistics (totals, net change, trend)
+    - JMo Security tool information
+
+SARIF Schema:
+    {
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "JMo Security Diff",
+                    "version": "1.0.0",
+                    "semanticVersion": "1.0.0"
+                }
+            },
+            "properties": {
+                "baseline": {...},
+                "current": {...},
+                "statistics": {...}
+            },
+            "results": [
+                {
+                    "ruleId": "CWE-79",
+                    "level": "error",
+                    "baselineState": "new",
+                    "message": {"text": "XSS vulnerability (NEW in current scan)"},
+                    "locations": [...]
+                }
+            ]
+        }]
+    }
+
+Severity Mapping:
+    CommonFinding severity -> SARIF level:
+    - CRITICAL, HIGH -> "error"
+    - MEDIUM -> "warning"
+    - LOW, INFO -> "note"
+
+Platform Integration:
+    - GitHub Code Scanning: Upload via `gh code-scanning upload-sarif`
+    - GitLab SAST: Add to artifacts in .gitlab-ci.yml
+    - Azure DevOps: Use SARIF SAST Scans extension
+
+Usage:
+    >>> from scripts.core.reporters.diff_sarif_reporter import write_sarif_diff
+    >>> from scripts.core.diff_engine import DiffEngine
+    >>>
+    >>> # Run diff engine
+    >>> engine = DiffEngine()
+    >>> diff = engine.compare(baseline_findings, current_findings)
+    >>>
+    >>> # Generate SARIF report
+    >>> write_sarif_diff(diff, Path("results/summaries/DIFF.sarif"))
+    >>>
+    >>> # Upload to GitHub
+    >>> # gh code-scanning upload-sarif -r owner/repo -f DIFF.sarif
+
+Functions:
+    write_sarif_diff: Generate SARIF 2.1.0 diff report
+
+See Also:
+    - https://sarifweb.azurewebsites.net/ for SARIF specification
+    - diff_json_reporter.py for native JMo JSON format
+    - diff_html_reporter.py for interactive HTML visualization
 """
 
 import json

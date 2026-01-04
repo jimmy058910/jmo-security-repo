@@ -46,7 +46,7 @@ python3 .mcp-skills/adapter-pattern-analyzer.py trivy
   ],
   "imports": [
     "from scripts.core.common_finding import (",
-    "from scripts.core.compliance_mapper import enrich_finding_with_compliance"
+    "# Note: Adapters no longer import compliance_mapper - enrichment is centralized"
   ]
 }
 

@@ -102,7 +102,9 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 ### Two-Phase Workflow
 
 1. **Scan Phase:** Invokes tools in parallel, writes raw JSON to `results/individual-{type}/`
-2. **Report Phase:** Normalizes to CommonFinding schema, deduplicates, enriches, outputs
+2. **Report Phase:** Normalizes to CommonFinding schema, deduplicates, then enriches all findings with compliance frameworks via single-pass `enrich_findings_with_compliance()`, and outputs
+
+**Enrichment Architecture:** Compliance enrichment (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK) is handled centrally in `normalize_and_report.py` after all findings are collected. Adapters return raw findings without enrichment.
 
 ### Directory Structure
 
@@ -152,6 +154,8 @@ tests/               # 2,981 tests across unit/adapters/reporters/integration
 4. Map tool output to CommonFinding schema
 5. Add test in `tests/adapters/test_<tool>_adapter.py`
 6. Update documentation
+
+**Important:** Adapters should NOT handle compliance enrichment. Return raw findings and let `normalize_and_report.py` handle enrichment centrally via `enrich_findings_with_compliance()`. This single-pass batch operation is more efficient than per-adapter enrichment.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow.
 

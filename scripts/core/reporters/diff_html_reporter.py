@@ -1,4 +1,61 @@
-"""HTML reporter for diff results with React + vanilla fallback."""
+"""HTML Reporter for Security Scan Diff Results.
+
+Generates interactive HTML dashboard visualizing security scan differences,
+with support for React-based dashboard or self-contained vanilla JS fallback.
+
+Output Format:
+    - **DIFF.html**: Interactive HTML dashboard with:
+      - Summary cards (new/resolved/modified counts)
+      - Severity distribution badges
+      - Searchable/filterable findings tables
+      - Side-by-side comparison for modified findings
+      - Dark mode toggle
+      - Responsive design
+
+Rendering Modes:
+    1. **React Dashboard** (Primary): Uses pre-built React dashboard from
+       scripts/dashboard/dist/index.html with diff data injection via
+       window.__DIFF_DATA__ global.
+    2. **Vanilla JS** (Fallback): Self-contained HTML with embedded CSS/JS,
+       no external dependencies. Used when React build is not available.
+
+v1.0.0 Metadata:
+    Both modes include standardized diff metadata:
+    - diff_version: "1.0.0"
+    - baseline/current source info (path, timestamp, profile, findings count)
+    - statistics (totals, net change, trend)
+
+Data Modes (Vanilla JS):
+    - **Inline** (<=1000 findings): JSON embedded in <script> tag
+    - **External** (>1000 findings): Separate diff-data.json file loaded via fetch()
+
+Features:
+    - Dark mode with localStorage persistence
+    - Real-time search/filter by text and severity
+    - Color-coded severity badges (CRITICAL/HIGH/MEDIUM/LOW/INFO)
+    - Risk delta visualization for modified findings
+    - Change type badges (severity/priority/compliance/cwe/message)
+    - CSP-compliant (no CDN dependencies)
+
+Usage:
+    >>> from scripts.core.reporters.diff_html_reporter import write_html_diff
+    >>> from scripts.core.diff_engine import DiffEngine
+    >>>
+    >>> # Run diff engine
+    >>> engine = DiffEngine()
+    >>> diff = engine.compare(baseline_findings, current_findings)
+    >>>
+    >>> # Generate HTML report
+    >>> write_html_diff(diff, Path("results/summaries/DIFF.html"))
+
+Functions:
+    write_html_diff: Generate HTML diff dashboard (auto-selects React or vanilla)
+
+See Also:
+    - scripts/dashboard/ for React dashboard source
+    - diff_json_reporter.py for machine-readable JSON format
+    - diff_sarif_reporter.py for SARIF format (GitHub/GitLab integration)
+"""
 
 import json
 import logging

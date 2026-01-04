@@ -1,4 +1,53 @@
 #!/usr/bin/env python3
+"""Suppression Report Generator for JMo Security.
+
+Generates reports documenting which security findings were suppressed during
+the report phase based on rules defined in jmo.suppress.yml.
+
+Output Format:
+    - **SUPPRESSIONS.md**: Markdown table showing all suppressed findings with:
+      - Fingerprint ID (unique finding identifier)
+      - Suppression reason (from jmo.suppress.yml)
+      - Expiration date (if set)
+      - Active status (yes/no based on expiration)
+
+v1.0.0 Metadata:
+    Report includes summary metadata:
+    - Total suppressions applied
+    - Active vs expired suppression counts
+    - Link back to jmo.suppress.yml for configuration
+
+Suppression Rules (jmo.suppress.yml):
+    Suppressions are defined in jmo.suppress.yml with:
+    - `id`: Finding fingerprint to suppress
+    - `reason`: Human-readable justification
+    - `expires`: Optional expiration date (YYYY-MM-DD)
+    - `author`: Who approved the suppression
+
+Usage:
+    >>> from scripts.core.reporters.suppression_reporter import write_suppression_report
+    >>> from scripts.core.suppress import Suppression, load_suppressions
+    >>>
+    >>> # Load suppressions from config
+    >>> suppressions = load_suppressions(Path("jmo.suppress.yml"))
+    >>> suppressed_ids = ["fp-123", "fp-456"]
+    >>>
+    >>> # Generate report
+    >>> write_suppression_report(
+    ...     suppressed_ids,
+    ...     suppressions,
+    ...     Path("results/summaries/SUPPRESSIONS.md"),
+    ... )
+
+Functions:
+    write_suppression_report: Generate Markdown report of suppressed findings
+
+See Also:
+    - jmo.suppress.yml for suppression configuration
+    - scripts/core/suppress.py for Suppression dataclass and loading logic
+    - docs/USER_GUIDE.md for suppression workflow documentation
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

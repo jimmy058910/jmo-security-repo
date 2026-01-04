@@ -1100,6 +1100,8 @@ JMo Security uses a plugin-based architecture for all 28 security tool adapters.
 > **Important:** Use the utilities in `scripts/core/adapters/common.py` for consistent JSON loading and error handling. This ensures proper UTF-8 handling, empty file detection, and standardized logging.
 >
 > **Severity Mapping:** Use `map_tool_severity()` from `scripts/core/common_finding.py` for tool-specific severity normalization. This centralized function handles mappings for ZAP, Semgrep, Nuclei, Falco, and falls back to generic normalization for other tools. See [Severity Mapping](#severity-mapping) for details.
+>
+> **Compliance Enrichment:** Adapters should NOT handle compliance enrichment. Return raw findings and let the report phase handle enrichment. All findings are enriched centrally in `normalize_and_report.py` via `enrich_findings_with_compliance()` after collection and deduplication. This single-pass batch operation is more efficient than per-adapter enrichment.
 
 ```python
 # scripts/core/adapters/snyk_adapter.py
