@@ -5,17 +5,25 @@ This module provides the ScanOrchestrator class for discovering scan targets,
 filtering repositories, and coordinating multi-target scans.
 
 Created as part of PHASE 1 refactoring to extract orchestration logic from cmd_scan().
+
+Security: Uses centralized validation from scripts.core.validation for
+URL and container image validation to prevent injection attacks.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
 import fnmatch
+import logging
 import os
 import re
 import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from scripts.core.validation import validate_url, validate_container_image
+
+logger = logging.getLogger(__name__)
 
 
 def _detect_msys_path_mangling(path_str: str) -> bool:
@@ -307,12 +315,18 @@ class ScanOrchestrator:
         Supports two input modes:
         - --image: Single container image
         - --images-file: File with list of image names
+
+        Security: Validates container image references to prevent injection.
         """
         images: list[str] = []
 
         # Single image
         if getattr(args, "image", None):
-            images.append(args.image)
+            image = args.image
+            if validate_container_image(image):
+                images.append(image)
+            else:
+                logger.warning(f"Skipping invalid container image: '{image}'")
 
         # Images file
         if getattr(args, "images_file", None):
@@ -322,7 +336,10 @@ class ScanOrchestrator:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
-                    images.append(line)
+                    if validate_container_image(line):
+                        images.append(line)
+                    else:
+                        logger.warning(f"Skipping invalid container image: '{line}'")
 
         return images
 
@@ -364,12 +381,19 @@ class ScanOrchestrator:
         Supports two input modes:
         - --url: Single URL
         - --urls-file: File with list of URLs
+
+        Security: Validates URLs to ensure only http/https protocols
+        and prevent injection attacks.
         """
         urls: list[str] = []
 
         # Single URL
         if getattr(args, "url", None):
-            urls.append(args.url)
+            url = args.url
+            if validate_url(url):
+                urls.append(url)
+            else:
+                logger.warning(f"Skipping invalid URL: '{url}'")
 
         # URLs file
         if getattr(args, "urls_file", None):
@@ -379,7 +403,10 @@ class ScanOrchestrator:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
-                    urls.append(line)
+                    if validate_url(line):
+                        urls.append(line)
+                    else:
+                        logger.warning(f"Skipping invalid URL: '{line}'")
 
         return urls
 

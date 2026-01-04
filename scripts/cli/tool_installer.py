@@ -3,13 +3,15 @@ Tool Installer for JMo Security.
 
 Handles cross-platform installation of security tools with progress
 tracking, error handling, and retry logic.
+
+Security: Uses centralized validation from scripts.core.validation for
+version string and tool name validation to prevent URL/path injection.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -25,56 +27,10 @@ from scripts.core.tool_registry import (
     TOOL_VARIANTS,
     detect_platform,
 )
-from scripts.cli.tool_manager import ToolManager, ToolStatus
+from scripts.cli.tool_manager import ToolManager
+from scripts.core.validation import validate_version, validate_tool_name
 
 logger = logging.getLogger(__name__)
-
-# Regex for validating version strings (security: prevent URL injection)
-# Accepts: 1.0.0, v1.0.0, 1.0.0-rc1, 1.0.0+build123, 1.0.0-alpha.1
-# Rejects: ../etc/passwd, 1.0.0?malicious, 1.0.0#anchor
-VERSION_PATTERN = re.compile(
-    r"^v?[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?(\+[a-zA-Z0-9]+)?$"
-)
-
-
-def validate_version(version: str, tool_name: str) -> bool:
-    """
-    Validate version string format to prevent URL injection.
-
-    Security: Version strings are interpolated into download URLs.
-    Malicious versions like "../" could cause path traversal or URL injection.
-
-    Args:
-        version: Version string to validate
-        tool_name: Tool name for error logging
-
-    Returns:
-        True if version is valid, False otherwise
-
-    Raises:
-        ValueError: If version contains dangerous characters
-    """
-    if not version:
-        logger.error(f"Empty version string for tool {tool_name}")
-        return False
-
-    if not VERSION_PATTERN.match(version):
-        logger.error(
-            f"Invalid version format for {tool_name}: '{version}'. "
-            f"Version must be semver-like (e.g., '1.0.0', 'v1.2.3-rc1')"
-        )
-        return False
-
-    # Additional security checks
-    dangerous_chars = ["../", "..\\", "?", "#", "&", ";", "|", "$", "`", "\n", "\r"]
-    for char in dangerous_chars:
-        if char in version:
-            logger.error(
-                f"Dangerous character '{char}' in version for {tool_name}: '{version}'"
-            )
-            return False
-
-    return True
 
 
 # Installation method priorities per platform
@@ -286,6 +242,15 @@ class ToolInstaller:
         import time
 
         start_time = time.time()
+
+        # Security: Validate tool name format
+        if not validate_tool_name(tool_name):
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                message=f"Invalid tool name format: '{tool_name}'",
+                duration_seconds=time.time() - start_time,
+            )
 
         # Check if already installed
         if not force:

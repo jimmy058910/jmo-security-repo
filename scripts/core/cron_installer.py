@@ -2,6 +2,9 @@
 
 Installs ScanSchedule objects to system crontab on Linux/macOS.
 Windows is not supported (use GitHub Actions or GitLab CI instead).
+
+Security: All user inputs (schedule names, profiles, paths) are validated
+before inclusion in crontab entries to prevent command injection.
 """
 
 from __future__ import annotations
@@ -10,6 +13,15 @@ import platform
 import subprocess
 
 from scripts.core.schedule_manager import ScanSchedule
+from scripts.core.validation import (
+    validate_schedule_name,
+    validate_profile,
+    validate_cron_expression,
+    validate_path_safe,
+    validate_url,
+    validate_container_image,
+    validate_positive_int,
+)
 
 
 class UnsupportedPlatformError(Exception):
@@ -26,6 +38,16 @@ class CronNotAvailableError(Exception):
 
 class CronInstallError(Exception):
     """Failed to install cron entry."""
+
+    pass
+
+
+class CronValidationError(Exception):
+    """Invalid input detected during cron entry generation.
+
+    Security: This exception is raised when user inputs fail validation,
+    preventing potential command injection attacks.
+    """
 
     pass
 
@@ -61,19 +83,28 @@ class CronInstaller:
         Raises:
             CronNotAvailableError: If crontab command not found
             CronInstallError: If crontab installation fails
+            CronValidationError: If schedule contains invalid input
 
         Example:
             >>> installer = CronInstaller()
             >>> installer.install(schedule)
             True
         """
+        # Security: Validate schedule name before use in crontab
+        schedule_name = schedule.metadata.name
+        if not validate_schedule_name(schedule_name):
+            raise CronValidationError(
+                f"Invalid schedule name: '{schedule_name}'. "
+                f"Schedule names must be alphanumeric with hyphens/underscores."
+            )
+
         # Get current crontab
         current = self._get_crontab()
 
         # Remove any existing entries for this schedule
-        current = self._remove_schedule_entries(current, schedule.metadata.name)
+        current = self._remove_schedule_entries(current, schedule_name)
 
-        # Generate and append new entry
+        # Generate and append new entry (includes additional validation)
         entry = self._generate_cron_entry(schedule)
         current.append(entry)
 
@@ -92,12 +123,20 @@ class CronInstaller:
         Raises:
             CronNotAvailableError: If crontab command not found
             CronInstallError: If crontab update fails
+            CronValidationError: If schedule name is invalid
 
         Example:
             >>> installer = CronInstaller()
             >>> installer.uninstall("nightly-deep")
             True
         """
+        # Security: Validate schedule name before use in crontab matching
+        if not validate_schedule_name(schedule_name):
+            raise CronValidationError(
+                f"Invalid schedule name: '{schedule_name}'. "
+                f"Schedule names must be alphanumeric with hyphens/underscores."
+            )
+
         current = self._get_crontab()
         filtered = self._remove_schedule_entries(current, schedule_name)
 
@@ -220,81 +259,147 @@ class CronInstaller:
 
         Returns:
             str: Multi-line cron entry with markers
+
+        Raises:
+            CronValidationError: If any input fails validation
+
+        Security:
+            All user inputs are validated before inclusion in the cron command
+            to prevent command injection attacks.
         """
         spec = schedule.spec.jobTemplate
 
-        # Build jmo command
+        # Security: Validate cron schedule expression
+        cron_schedule = schedule.spec.schedule
+        if not validate_cron_expression(cron_schedule):
+            raise CronValidationError(
+                f"Invalid cron expression: '{cron_schedule}'. "
+                f"Expected 5-field cron format (e.g., '0 2 * * *')."
+            )
+
+        # Security: Validate profile name
+        if not validate_profile(spec.profile):
+            raise CronValidationError(
+                f"Invalid profile: '{spec.profile}'. "
+                f"Valid profiles: fast, slim, balanced, deep."
+            )
+
+        # Build jmo command with validated inputs
         jmo_cmd = f"jmo scan --profile {spec.profile}"
 
-        # Add targets
+        # Add targets with validation
         targets = spec.targets
 
         # 1. Repositories
         if "repositories" in targets:
             repos = targets["repositories"]
             if "repo" in repos:
-                jmo_cmd += f" --repo {repos['repo']}"
+                repo_path = repos["repo"]
+                if not validate_path_safe(repo_path, "repo"):
+                    raise CronValidationError(f"Invalid repo path: '{repo_path}'")
+                jmo_cmd += f" --repo {repo_path}"
             if "repos_dir" in repos:
-                jmo_cmd += f" --repos-dir {repos['repos_dir']}"
+                repos_dir = repos["repos_dir"]
+                if not validate_path_safe(repos_dir, "repos_dir"):
+                    raise CronValidationError(f"Invalid repos_dir path: '{repos_dir}'")
+                jmo_cmd += f" --repos-dir {repos_dir}"
 
         # 2. Container Images
         if "images" in targets:
             for image in targets["images"]:
+                if not validate_container_image(image):
+                    raise CronValidationError(f"Invalid container image: '{image}'")
                 jmo_cmd += f" --image {image}"
 
         # 3. IaC Files
         if "iac" in targets:
             iac = targets["iac"]
             if "terraform_state" in iac:
-                jmo_cmd += f" --terraform-state {iac['terraform_state']}"
+                tf_path = iac["terraform_state"]
+                if not validate_path_safe(tf_path, "terraform_state"):
+                    raise CronValidationError(f"Invalid terraform_state path: '{tf_path}'")
+                jmo_cmd += f" --terraform-state {tf_path}"
             if "cloudformation" in iac:
-                jmo_cmd += f" --cloudformation {iac['cloudformation']}"
+                cf_path = iac["cloudformation"]
+                if not validate_path_safe(cf_path, "cloudformation"):
+                    raise CronValidationError(f"Invalid cloudformation path: '{cf_path}'")
+                jmo_cmd += f" --cloudformation {cf_path}"
             if "k8s_manifest" in iac:
-                jmo_cmd += f" --k8s-manifest {iac['k8s_manifest']}"
+                k8s_path = iac["k8s_manifest"]
+                if not validate_path_safe(k8s_path, "k8s_manifest"):
+                    raise CronValidationError(f"Invalid k8s_manifest path: '{k8s_path}'")
+                jmo_cmd += f" --k8s-manifest {k8s_path}"
 
         # 4. Web URLs
         if "web" in targets:
             web = targets["web"]
             if "urls" in web:
                 for url in web["urls"]:
+                    if not validate_url(url):
+                        raise CronValidationError(f"Invalid URL: '{url}'")
                     jmo_cmd += f" --url {url}"
             if "api_spec" in web:
-                jmo_cmd += f" --api-spec {web['api_spec']}"
+                api_path = web["api_spec"]
+                if not validate_path_safe(api_path, "api_spec"):
+                    raise CronValidationError(f"Invalid api_spec path: '{api_path}'")
+                jmo_cmd += f" --api-spec {api_path}"
 
         # 5. GitLab Repos (requires token from environment)
         if "gitlab" in targets:
             gitlab = targets["gitlab"]
             if "repo" in gitlab:
-                jmo_cmd += f" --gitlab-repo {gitlab['repo']}"
+                gitlab_repo = gitlab["repo"]
+                # GitLab repo format: group/project - validate no injection
+                if not validate_path_safe(gitlab_repo, "gitlab_repo"):
+                    raise CronValidationError(f"Invalid GitLab repo: '{gitlab_repo}'")
+                jmo_cmd += f" --gitlab-repo {gitlab_repo}"
             if "group" in gitlab:
-                jmo_cmd += f" --gitlab-group {gitlab['group']}"
+                gitlab_group = gitlab["group"]
+                if not validate_schedule_name(gitlab_group):
+                    raise CronValidationError(f"Invalid GitLab group: '{gitlab_group}'")
+                jmo_cmd += f" --gitlab-group {gitlab_group}"
             # Token expected in environment variable GITLAB_TOKEN
 
         # 6. Kubernetes Clusters (requires kubectl config)
         if "kubernetes" in targets:
             k8s = targets["kubernetes"]
             if "context" in k8s:
-                jmo_cmd += f" --k8s-context {k8s['context']}"
+                k8s_context = k8s["context"]
+                if not validate_schedule_name(k8s_context):
+                    raise CronValidationError(f"Invalid K8s context: '{k8s_context}'")
+                jmo_cmd += f" --k8s-context {k8s_context}"
             if "namespace" in k8s:
-                jmo_cmd += f" --k8s-namespace {k8s['namespace']}"
+                k8s_ns = k8s["namespace"]
+                if not validate_schedule_name(k8s_ns):
+                    raise CronValidationError(f"Invalid K8s namespace: '{k8s_ns}'")
+                jmo_cmd += f" --k8s-namespace {k8s_ns}"
             elif k8s.get("all_namespaces"):
                 jmo_cmd += " --k8s-all-namespaces"
 
         # Add results dir with date expansion
         results_base = spec.results.get("base_dir", "~/jmo-results")
+        if not validate_path_safe(results_base, "results_base"):
+            raise CronValidationError(f"Invalid results base path: '{results_base}'")
         jmo_cmd += f" --results-dir {results_base}/$(date +%Y-%m-%d)"
 
-        # Add options
+        # Add options with validation
         opts = spec.options
         if opts.get("allow_missing_tools"):
             jmo_cmd += " --allow-missing-tools"
         if "threads" in opts:
-            jmo_cmd += f" --threads {opts['threads']}"
+            threads = opts["threads"]
+            if not validate_positive_int(threads, "threads", max_value=64):
+                raise CronValidationError(f"Invalid threads value: '{threads}'")
+            jmo_cmd += f" --threads {threads}"
         if "fail_on" in opts:
-            jmo_cmd += f" --fail-on {opts['fail_on']}"
-
-        # Build cron line
-        cron_schedule = schedule.spec.schedule
+            fail_on = opts["fail_on"]
+            valid_severities = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+            if fail_on.upper() not in valid_severities:
+                raise CronValidationError(
+                    f"Invalid fail_on value: '{fail_on}'. "
+                    f"Valid: {', '.join(valid_severities)}"
+                )
+            jmo_cmd += f" --fail-on {fail_on}"
 
         # Multi-line entry with markers
         entry = f"""
