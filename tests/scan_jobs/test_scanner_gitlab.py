@@ -394,12 +394,18 @@ def test_scan_gitlab_repo_authenticated_url_https(tmp_path):
                         allow_missing_tools=False,
                     )
 
-                    # Verify git clone was called with authenticated URL
+                    # Verify git clone was called with CLEAN URL (no embedded token)
+                    # Security: Token is passed via GIT_ASKPASS environment, not in URL
                     clone_call = mock_run.call_args
                     clone_cmd = clone_call[0][0]
-                    # The authenticated URL should be in the command (typically index -2 before path)
                     repo_url = clone_cmd[-2]  # Second to last arg is the repo URL
-                    assert "oauth2:test-token@" in repo_url
+                    # Token should NOT be in URL (security fix)
+                    assert "test-token" not in repo_url
+                    assert "oauth2:" not in repo_url
+                    # Verify token is passed securely via environment
+                    call_kwargs = clone_call[1] if len(clone_call) > 1 else {}
+                    assert "env" in call_kwargs
+                    assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "test-token"
 
 
 def test_scan_gitlab_repo_temporary_cleanup(tmp_path, gitlab_info):
@@ -582,11 +588,20 @@ def test_scan_gitlab_repo_http_url(tmp_path):
                         allow_missing_tools=False,
                     )
 
-                    # Verify git clone was called with HTTP authenticated URL
+                    # Verify git clone was called with CLEAN HTTP URL (no embedded token)
+                    # Security: Token is passed via GIT_ASKPASS environment, not in URL
                     clone_call = mock_run.call_args
                     clone_cmd = clone_call[0][0]
                     repo_url = clone_cmd[-2]
-                    assert "http://oauth2:test-token@" in repo_url
+                    # Token should NOT be in URL (security fix)
+                    assert "test-token" not in repo_url
+                    assert "oauth2:" not in repo_url
+                    # URL should preserve original scheme
+                    assert repo_url.startswith("http://")
+                    # Verify token is passed securely via environment
+                    call_kwargs = clone_call[1] if len(clone_call) > 1 else {}
+                    assert "env" in call_kwargs
+                    assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "test-token"
 
 
 def test_scan_gitlab_repo_non_http_url(tmp_path):
@@ -626,11 +641,20 @@ def test_scan_gitlab_repo_non_http_url(tmp_path):
                         allow_missing_tools=False,
                     )
 
-                    # Verify git clone was called with default HTTPS authenticated URL
+                    # Verify git clone was called with CLEAN HTTPS URL (no embedded token)
+                    # Security: Token is passed via GIT_ASKPASS environment, not in URL
                     clone_call = mock_run.call_args
                     clone_cmd = clone_call[0][0]
                     repo_url = clone_cmd[-2]
-                    assert "https://oauth2:test-token@gitlab.com" in repo_url
+                    # Token should NOT be in URL (security fix)
+                    assert "test-token" not in repo_url
+                    assert "oauth2:" not in repo_url
+                    # Non-HTTP URLs default to HTTPS gitlab.com
+                    assert "https://gitlab.com" in repo_url
+                    # Verify token is passed securely via environment
+                    call_kwargs = clone_call[1] if len(clone_call) > 1 else {}
+                    assert "env" in call_kwargs
+                    assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "test-token"
 
 
 def test_scan_gitlab_repo_image_scan_exception(tmp_path, gitlab_info):

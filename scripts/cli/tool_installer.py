@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,54 @@ from scripts.core.tool_registry import (
 from scripts.cli.tool_manager import ToolManager, ToolStatus
 
 logger = logging.getLogger(__name__)
+
+# Regex for validating version strings (security: prevent URL injection)
+# Accepts: 1.0.0, v1.0.0, 1.0.0-rc1, 1.0.0+build123, 1.0.0-alpha.1
+# Rejects: ../etc/passwd, 1.0.0?malicious, 1.0.0#anchor
+VERSION_PATTERN = re.compile(
+    r"^v?[0-9]+(\.[0-9]+)*(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?(\+[a-zA-Z0-9]+)?$"
+)
+
+
+def validate_version(version: str, tool_name: str) -> bool:
+    """
+    Validate version string format to prevent URL injection.
+
+    Security: Version strings are interpolated into download URLs.
+    Malicious versions like "../" could cause path traversal or URL injection.
+
+    Args:
+        version: Version string to validate
+        tool_name: Tool name for error logging
+
+    Returns:
+        True if version is valid, False otherwise
+
+    Raises:
+        ValueError: If version contains dangerous characters
+    """
+    if not version:
+        logger.error(f"Empty version string for tool {tool_name}")
+        return False
+
+    if not VERSION_PATTERN.match(version):
+        logger.error(
+            f"Invalid version format for {tool_name}: '{version}'. "
+            f"Version must be semver-like (e.g., '1.0.0', 'v1.2.3-rc1')"
+        )
+        return False
+
+    # Additional security checks
+    dangerous_chars = ["../", "..\\", "?", "#", "&", ";", "|", "$", "`", "\n", "\r"]
+    for char in dangerous_chars:
+        if char in version:
+            logger.error(
+                f"Dangerous character '{char}' in version for {tool_name}: '{version}'"
+            )
+            return False
+
+    return True
+
 
 # Installation method priorities per platform
 # "install_script" uses official install scripts from tool maintainers (most reliable)
@@ -417,6 +466,16 @@ class ToolInstaller:
                 message="No PyPI package defined",
             )
 
+        # Security: Validate version string before command construction
+        if not validate_version(tool_info.version, tool_name):
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="pip",
+                message=f"Invalid version format: '{tool_info.version}'",
+                duration_seconds=time.time() - start_time,
+            )
+
         try:
             # Pin to specific version from versions.yaml for reproducibility
             pinned_package = f"{package}=={tool_info.version}"
@@ -712,6 +771,16 @@ class ToolInstaller:
     ) -> InstallResult:
         """Install by downloading binary release."""
         import time
+
+        # Security: Validate version string before URL construction
+        if not validate_version(tool_info.version, tool_name):
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="binary",
+                message=f"Invalid version format: '{tool_info.version}'",
+                duration_seconds=time.time() - start_time,
+            )
 
         if tool_name not in BINARY_URLS:
             return InstallResult(
@@ -1141,6 +1210,16 @@ class ToolInstaller:
         """
         import tarfile
         import time
+
+        # Security: Validate version string before URL construction
+        if not validate_version(tool_info.version, tool_name):
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="extract_app",
+                message=f"Invalid version format: '{tool_info.version}'",
+                duration_seconds=time.time() - start_time,
+            )
 
         if tool_name not in EXTRACT_APP_URLS:
             return InstallResult(

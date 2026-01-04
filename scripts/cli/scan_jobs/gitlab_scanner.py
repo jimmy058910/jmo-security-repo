@@ -191,21 +191,12 @@ def scan_gitlab_repo(
     temp_dir = Path(tempfile.mkdtemp(prefix="jmo-gitlab-"))
 
     try:
-        # Construct clone URL with embedded token for authentication
-        # Format: https://oauth2:TOKEN@gitlab.com/group/repo.git
+        # Construct clone URL WITHOUT embedded token (security: avoid token in process list)
         clone_url = gitlab_url.rstrip("/")
         if not clone_url.startswith("http"):
             clone_url = "https://gitlab.com"
 
-        # Build authenticated URL
-        if clone_url.startswith("https://"):
-            auth_url = clone_url.replace("https://", f"https://oauth2:{gitlab_token}@")
-        elif clone_url.startswith("http://"):
-            auth_url = clone_url.replace("http://", f"http://oauth2:{gitlab_token}@")
-        else:
-            auth_url = f"https://oauth2:{gitlab_token}@gitlab.com"
-
-        repo_url = f"{auth_url}/{full_path}.git"
+        repo_url = f"{clone_url}/{full_path}.git"
         clone_path = temp_dir / full_path.split("/")[-1]
 
         # Clone the repository (shallow clone for speed)
@@ -220,12 +211,35 @@ def scan_gitlab_repo(
             str(clone_path),
         ]
 
-        # Run clone with timeout
+        # Create askpass script for secure credential passing
+        # This avoids exposing token in process list or command line
+        askpass_script = temp_dir / "git-askpass.py"
+        askpass_script.write_text(
+            '#!/usr/bin/env python3\nimport sys\nif "password" in sys.argv[1].lower():\n    print(sys.argv[2])\nelse:\n    print("oauth2")\n',
+            encoding="utf-8",
+        )
+        askpass_script.chmod(0o700)
+
+        # Set up environment for secure git authentication
+        clone_env = os.environ.copy()
+        clone_env["GIT_ASKPASS"] = str(askpass_script)
+        clone_env["GIT_TERMINAL_PROMPT"] = "0"
+        # Pass token as argument to askpass script (not visible in process list)
+        clone_env["GIT_ASKPASS_TOKEN"] = gitlab_token
+
+        # Update askpass script to read token from environment
+        askpass_script.write_text(
+            '#!/usr/bin/env python3\nimport os, sys\nif "password" in sys.argv[1].lower():\n    print(os.environ.get("GIT_ASKPASS_TOKEN", ""))\nelse:\n    print("oauth2")\n',
+            encoding="utf-8",
+        )
+
+        # Run clone with timeout using secure credential passing
         result = subprocess.run(
             clone_cmd,
             capture_output=True,
             timeout=timeout,
             check=False,
+            env=clone_env,
         )
 
         if result.returncode != 0:

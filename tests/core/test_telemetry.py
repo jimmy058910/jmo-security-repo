@@ -199,7 +199,7 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT", ""
     )  # Not configured
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -220,7 +220,7 @@ def test_send_event_spawns_background_thread(mock_thread, clear_ci_env, monkeypa
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_test_token")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -252,7 +252,7 @@ def test_send_event_async_builds_correct_payload(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_test_token")
 
     # Call _send_event_async directly
     _send_event_async("scan.started", {"profile": "fast", "tools": ["trivy"]}, "0.7.0")
@@ -307,7 +307,7 @@ def test_send_event_async_appends_to_existing_content(
             "scripts.core.telemetry.TELEMETRY_ENDPOINT",
             "https://api.github.com/gists/test123",
         )
-        monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+        monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
         _send_event_async("scan.completed", {"duration": 120}, "0.7.0")
 
@@ -340,7 +340,7 @@ def test_send_event_async_handles_network_errors_silently(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     # Should NOT raise exception
     _send_event_async("test.event", {"key": "value"}, "0.7.0")
@@ -362,7 +362,7 @@ def test_send_event_async_handles_timeout_silently(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     # Should NOT raise exception
     _send_event_async("test.event", {"key": "value"}, "0.7.0")
@@ -387,7 +387,7 @@ def test_get_gist_content_returns_existing_content(mock_urlopen, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     content = _get_gist_content()
 
@@ -405,7 +405,7 @@ def test_get_gist_content_returns_empty_on_error(mock_urlopen, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     content = _get_gist_content()
 
@@ -732,7 +732,7 @@ def test_send_event_with_empty_metadata(clear_ci_env, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -754,7 +754,7 @@ def test_send_event_with_unicode_metadata(tmp_path: Path, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     metadata = {
         "message": "Test with emoji 🔒 and Chinese: 安全漏洞",

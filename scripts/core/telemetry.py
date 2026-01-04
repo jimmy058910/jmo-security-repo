@@ -50,8 +50,30 @@ def _safe_print(text: str) -> None:
 
 # Telemetry endpoint (GitHub Gist API for MVP)
 GIST_ID = os.environ.get("JMO_TELEMETRY_GIST_ID", "")
-GITHUB_TOKEN = os.environ.get("JMO_TELEMETRY_GITHUB_TOKEN", "")
 TELEMETRY_ENDPOINT = f"https://api.github.com/gists/{GIST_ID}" if GIST_ID else ""
+
+# Token lazy-loading: Avoid loading credentials at module import time
+# This prevents token exposure when telemetry is disabled and reduces memory footprint
+_github_token_cache: str | None = None
+
+
+def _get_github_token() -> str:
+    """
+    Lazy-load GitHub token only when needed.
+
+    Security improvement: Token is not loaded at module import time.
+    This means:
+    - Token not loaded if telemetry is disabled
+    - Token not sitting in memory for entire program lifetime
+    - Reduced attack surface for credential exposure
+
+    Returns:
+        GitHub token string, or empty string if not configured
+    """
+    global _github_token_cache
+    if _github_token_cache is None:
+        _github_token_cache = os.environ.get("JMO_TELEMETRY_GITHUB_TOKEN", "")
+    return _github_token_cache
 
 # Telemetry file (JSONL format)
 TELEMETRY_FILE = "jmo-telemetry-events.jsonl"
@@ -142,7 +164,7 @@ def send_event(
         return
 
     # Validate Gist endpoint is configured
-    if not TELEMETRY_ENDPOINT or not GITHUB_TOKEN:
+    if not TELEMETRY_ENDPOINT or not _get_github_token():
         # Silently skip if endpoint not configured (don't break user workflow)
         return
 
@@ -191,7 +213,7 @@ def _send_event_async(event_type: str, metadata: dict[str, Any], version: str) -
             TELEMETRY_ENDPOINT,
             data=data,
             headers={
-                "Authorization": f"token {GITHUB_TOKEN}",
+                "Authorization": f"token {_get_github_token()}",
                 "Content-Type": "application/json",
                 "User-Agent": f"JMo-Security/{version}",
             },
@@ -223,7 +245,7 @@ def _get_gist_content() -> str:
         req = request.Request(
             TELEMETRY_ENDPOINT,
             headers={
-                "Authorization": f"token {GITHUB_TOKEN}",
+                "Authorization": f"token {_get_github_token()}",
                 "User-Agent": "JMo-Security",
             },
         )
@@ -553,9 +575,10 @@ if __name__ == "__main__":
 
     elif command == "check":
         # Check telemetry configuration
+        token = _get_github_token()
         print(f"GIST_ID: {GIST_ID or '(not set)'}")
         print(
-            f"GITHUB_TOKEN: {'***' + GITHUB_TOKEN[-4:] if GITHUB_TOKEN else '(not set)'}"
+            f"GITHUB_TOKEN: {'***' + token[-4:] if token else '(not set)'}"
         )
         print(f"TELEMETRY_ENDPOINT: {TELEMETRY_ENDPOINT or '(not configured)'}")
         print(f"Anonymous ID: {get_anonymous_id()}")
