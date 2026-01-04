@@ -553,7 +553,7 @@ spec:
                         assert mock_scan_image.call_count == 2  # Two images discovered
 
     def test_scan_gitlab_url_formats(self, tmp_path):
-        """Test handling of different GitLab URL formats"""
+        """Test handling of different GitLab URL formats with secure credential passing"""
         with patch(
             "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
         ) as mock_subprocess:
@@ -585,9 +585,17 @@ spec:
                 assert full_path == "test/repo"
                 assert statuses["trufflehog"] is True
 
-                # Verify clone URL was constructed correctly (check call args)
+                # Verify clone URL was constructed correctly without embedded token
+                # (secure: uses GIT_ASKPASS for credentials instead)
                 clone_call = mock_subprocess.call_args[0][0]
-                assert any("http://oauth2:glpat-test@" in arg for arg in clone_call)
+                # URL should NOT contain token (that's the old insecure pattern)
+                assert not any("glpat-test" in str(arg) for arg in clone_call)
+                # URL should use the base http URL format
+                assert any("http://gitlab.internal/test/repo.git" in arg for arg in clone_call)
+                # GIT_ASKPASS_TOKEN should be passed via environment, not URL
+                call_kwargs = mock_subprocess.call_args[1]
+                assert "env" in call_kwargs
+                assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "glpat-test"
 
 
 if __name__ == "__main__":

@@ -16,9 +16,10 @@ import json
 import logging
 import re
 import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from scripts.core.secure_temp import secure_temp_file
 from typing import Any, Dict, List, Optional, cast
 
 # Import packaging for version comparison
@@ -149,12 +150,10 @@ class PolicyEngine:
             "metadata": input_data or {},
         }
 
-        # Write input to temporary file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump(input_doc, f)
-            input_file = Path(f.name)
+        # Write input to secure temporary file (0o600 permissions, auto-cleanup)
+        with secure_temp_file(prefix="jmo_policy_", suffix=".json") as input_file:
+            input_file.write_text(json.dumps(input_doc), encoding="utf-8")
 
-        try:
             # Extract package name from policy file
             package_name = self._extract_package_name(policy_path)
             if not package_name:
@@ -187,10 +186,7 @@ class PolicyEngine:
             policy_result = self._parse_opa_output(output, policy_path.stem)
 
             return policy_result
-
-        finally:
-            # Cleanup temp file
-            input_file.unlink(missing_ok=True)
+        # Note: Temp file is automatically cleaned up by secure_temp_file context manager
 
     def _parse_opa_output(
         self, output: Dict[str, Any], policy_name: str

@@ -452,16 +452,12 @@ def cmd_diff(args) -> int:
                 diff_md_reporter.write_markdown_diff(diff_result, Path(output_path))
                 safe_print(f"✅ Markdown diff report: {output_path}")
             else:
-                # Write to stdout
-                import tempfile
+                # Write to stdout using secure temp file (0o600 permissions, auto-cleanup)
+                from scripts.core.secure_temp import secure_temp_file
 
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".md", delete=False
-                ) as tmp:
-                    tmp_path = Path(tmp.name)
-                diff_md_reporter.write_markdown_diff(diff_result, tmp_path)
-                print(tmp_path.read_text())
-                tmp_path.unlink()
+                with secure_temp_file(prefix="jmo_diff_", suffix=".md") as tmp_path:
+                    diff_md_reporter.write_markdown_diff(diff_result, tmp_path)
+                    print(tmp_path.read_text())
 
         elif format_type == "html":
             if not output_path:
