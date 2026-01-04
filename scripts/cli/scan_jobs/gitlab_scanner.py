@@ -45,6 +45,7 @@ from pathlib import Path
 
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image
+from scripts.core.validation import sanitize_subprocess_output, sanitize_url_for_logging
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +245,9 @@ def scan_gitlab_repo(
 
         if result.returncode != 0:
             # Clone failed - return failure for all tools
-            stderr_msg = result.stderr.decode("utf-8", errors="ignore").strip()
+            # Sanitize stderr to prevent leaking tokens/credentials in logs
+            stderr_raw = result.stderr.decode("utf-8", errors="ignore").strip()
+            stderr_msg = sanitize_subprocess_output(stderr_raw, max_length=200)
             logger.error(
                 f"GitLab clone failed for {full_path}: git returned {result.returncode} - {stderr_msg}"
             )

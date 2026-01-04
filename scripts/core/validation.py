@@ -654,3 +654,164 @@ def validate_non_negative_int(value: int | str, name: str, max_value: int = 2**3
         return False
 
     return True
+
+
+# =============================================================================
+# Output Sanitization (Subprocess Output Security)
+# =============================================================================
+
+# Patterns to redact from subprocess output to prevent information leakage
+# Each tuple is (regex_pattern, replacement, flags)
+# ORDER MATTERS: More specific patterns should come before generic ones
+OUTPUT_SANITIZATION_PATTERNS: list[tuple[str, str, int]] = [
+    # SSH private key content indicators (RSA, DSA, EC, OPENSSH, etc.)
+    # MUST come first - before generic "key:" pattern can break the header
+    (r"-----BEGIN\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----.*?-----END\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----",
+     "***PRIVATE KEY REDACTED***", re.DOTALL),
+    # GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_) - specific patterns first
+    (r"gh[pousr]_[a-zA-Z0-9]{36,}", "***GITHUB_TOKEN_REDACTED***", 0),
+    # GitLab tokens (glpat-)
+    (r"glpat-[a-zA-Z0-9\-_]{20,}", "***GITLAB_TOKEN_REDACTED***", 0),
+    # AWS access key IDs
+    (r"AKIA[0-9A-Z]{16}", "***AWS_KEY_REDACTED***", 0),
+    # Bearer tokens in headers
+    (r"Bearer\s+\S+", "Bearer ***REDACTED***", re.IGNORECASE),
+    # Basic auth in URLs (user:pass@host)
+    (r"(https?://)[^:]+:[^@]+@", r"\1***:***@", re.IGNORECASE),
+    # API keys and tokens (common patterns: hex strings of specific lengths)
+    (r"(['\"]?(?:api[_-]?key|access[_-]?token|secret[_-]?key)['\"]?\s*[:=]\s*['\"]?)[a-zA-Z0-9_\-]{20,}",
+     r"\1***REDACTED***", re.IGNORECASE),
+    # Tokens, keys, passwords, secrets with assignment (generic - comes after specific)
+    # Only match when followed by value characters (not just whitespace/newline)
+    (r"(token|password|secret|credential|auth)[=:]\s*\S+", r"\1=***REDACTED***", re.IGNORECASE),
+    # Home directory paths on Unix (Linux/macOS)
+    (r"/home/[^/\s:]+", "/home/***USER***", 0),
+    (r"/Users/[^/\s:]+", "/Users/***USER***", 0),
+    # Home directory paths on Windows
+    (r"C:\\Users\\[^\\]+", r"C:\\Users\\***USER***", re.IGNORECASE),
+    (r"C:/Users/[^/]+", "C:/Users/***USER***", re.IGNORECASE),
+    # Windows user profile via environment variable patterns
+    (r"%USERPROFILE%", "***USERPROFILE***", re.IGNORECASE),
+    # Generic long hex strings that might be secrets (40+ chars)
+    (r"(['\"]?(?:secret|token|key|password)['\"]?\s*[:=]\s*['\"]?)[a-fA-F0-9]{40,}",
+     r"\1***REDACTED***", re.IGNORECASE),
+]
+
+
+def sanitize_subprocess_output(output: str, max_length: int = 500) -> str:
+    """
+    Sanitize subprocess output to remove sensitive information.
+
+    This function redacts sensitive data from subprocess output before it's
+    logged or included in error messages. It prevents information leakage of:
+    - User home directory paths
+    - Tokens, passwords, API keys
+    - Authentication credentials
+    - Private key content
+
+    Security Note:
+        This is a defense-in-depth measure. It should not be relied upon as
+        the sole protection against credential exposure. Prefer not capturing
+        sensitive data in the first place.
+
+    Args:
+        output: Raw subprocess output string (stdout or stderr)
+        max_length: Maximum length of returned string (default: 500)
+
+    Returns:
+        Sanitized output with sensitive information redacted and truncated
+
+    Examples:
+        >>> sanitize_subprocess_output("Error: /home/jimmy/project/file.py not found")
+        'Error: /home/***USER***/project/file.py not found'
+
+        >>> sanitize_subprocess_output("token=ghp_abc123xyz")
+        'token=***REDACTED***'
+
+        >>> sanitize_subprocess_output("Failed to connect to https://user:pass@api.example.com")
+        'Failed to connect to https://***:***@api.example.com'
+    """
+    if not output:
+        return ""
+
+    result = output
+
+    # Apply all sanitization patterns
+    for pattern, replacement, flags in OUTPUT_SANITIZATION_PATTERNS:
+        try:
+            result = re.sub(pattern, replacement, result, flags=flags)
+        except re.error as e:
+            # Log regex errors but continue with other patterns
+            logger.debug(f"Regex error in sanitization pattern: {e}")
+            continue
+
+    # Truncate to max length
+    if len(result) > max_length:
+        result = result[:max_length] + "... [truncated]"
+
+    return result
+
+
+def sanitize_error_message(error_msg: str) -> str:
+    """
+    Sanitize an error message for safe logging or user display.
+
+    Similar to sanitize_subprocess_output but specifically for error messages.
+    Uses a shorter max length (200 chars) suitable for log messages.
+
+    Args:
+        error_msg: Error message to sanitize
+
+    Returns:
+        Sanitized error message
+
+    Examples:
+        >>> sanitize_error_message("pip install failed: /home/jimmy/.cache/pip error")
+        'pip install failed: /home/***USER***/.cache/pip error'
+    """
+    return sanitize_subprocess_output(error_msg, max_length=200)
+
+
+def sanitize_url_for_logging(url: str) -> str:
+    """
+    Sanitize a URL for safe logging, removing credentials.
+
+    Specifically handles URL credential patterns more carefully than
+    the general sanitization function.
+
+    Args:
+        url: URL that may contain credentials
+
+    Returns:
+        URL with credentials redacted
+
+    Examples:
+        >>> sanitize_url_for_logging("https://oauth2:glpat-xxx@gitlab.com/repo.git")
+        'https://***:***@gitlab.com/repo.git'
+
+        >>> sanitize_url_for_logging("https://user:password@github.com/repo.git")
+        'https://***:***@github.com/repo.git'
+
+        >>> sanitize_url_for_logging("https://github.com/repo.git")
+        'https://github.com/repo.git'
+    """
+    if not url:
+        return ""
+
+    # Pattern for credentials in URL: protocol://user:pass@host
+    result = re.sub(
+        r"(https?://)[^:/@]+:[^@]+@",
+        r"\1***:***@",
+        url,
+        flags=re.IGNORECASE
+    )
+
+    # Also catch token patterns in query strings
+    result = re.sub(
+        r"([?&](?:token|key|secret|password|auth)[=])[^&]+",
+        r"\1***REDACTED***",
+        result,
+        flags=re.IGNORECASE
+    )
+
+    return result

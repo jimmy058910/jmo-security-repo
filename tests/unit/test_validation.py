@@ -53,6 +53,11 @@ from scripts.core.validation import (
     validate_non_negative_int,
     # Schedule name validation
     validate_schedule_name,
+    # Output sanitization
+    sanitize_subprocess_output,
+    sanitize_error_message,
+    sanitize_url_for_logging,
+    OUTPUT_SANITIZATION_PATTERNS,
 )
 
 
@@ -542,6 +547,246 @@ class TestFuzzingValidation:
     def test_fuzz_container_image_rejects_injection(self, malicious_input):
         """Container image validation should reject injection patterns."""
         assert validate_container_image(malicious_input) is False
+
+
+class TestSubprocessOutputSanitization:
+    """Test subprocess output sanitization for information leakage prevention (Scenario S3)."""
+
+    # =========================================================================
+    # Home Directory Path Sanitization
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "input_val,expected",
+        [
+            # Unix home paths
+            ("Error: /home/jimmy/project/file.py not found", "Error: /home/***USER***/project/file.py not found"),
+            ("Failed at /home/alice/.config/tool", "Failed at /home/***USER***/.config/tool"),
+            # macOS home paths
+            ("/Users/developer/workspace/repo", "/Users/***USER***/workspace/repo"),
+            ("/Users/john/Documents/secret.txt", "/Users/***USER***/Documents/secret.txt"),
+            # Windows paths (backslash)
+            (r"C:\Users\Jimmy\Projects\repo", r"C:\Users\***USER***\Projects\repo"),
+            (r"Error in C:\Users\Developer\config", r"Error in C:\Users\***USER***\config"),
+            # Windows paths (forward slash)
+            ("C:/Users/Jimmy/Documents/file.txt", "C:/Users/***USER***/Documents/file.txt"),
+        ],
+    )
+    def test_sanitize_home_paths(self, input_val, expected):
+        """Home directory paths should be sanitized to hide usernames."""
+        result = sanitize_subprocess_output(input_val, max_length=500)
+        assert expected in result
+
+    # =========================================================================
+    # Token and Credential Sanitization
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "input_val,should_not_contain",
+        [
+            # GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+            ("Error: token ghp_abc123def456ghi789jkl012mno345pqr678st", "ghp_abc123"),
+            ("Authorization: Bearer ghp_xyzabcdefghijklmnopqrstuvwx123456", "ghp_xyz"),
+            # GitLab tokens
+            ("clone with glpat-abcd1234efgh5678ijkl9012", "glpat-abcd1234"),
+            # AWS keys
+            ("Found key: AKIAIOSFODNN7EXAMPLE", "AKIAIOSFODNN7EXAMPLE"),
+            # Generic tokens
+            ("token=secretvalue12345", "secretvalue12345"),
+            ("password: mysecretpassword", "mysecretpassword"),
+            ("api_key: abcdefghijklmnopqrstuvwxyz123456789012", "abcdefghijklmnopqrstuvwxyz"),
+        ],
+    )
+    def test_sanitize_tokens(self, input_val, should_not_contain):
+        """Tokens and credentials should be redacted from output."""
+        result = sanitize_subprocess_output(input_val)
+        assert should_not_contain not in result
+        assert "***" in result  # Should contain redaction marker
+
+    @pytest.mark.parametrize(
+        "input_val",
+        [
+            "token=abc123secret",
+            "password: mysecret",
+            "secret: confidential",
+            "credential: hidden",
+            "auth: bearertoken",
+        ],
+    )
+    def test_sanitize_assignment_patterns(self, input_val):
+        """Token/password assignment patterns should be sanitized."""
+        result = sanitize_subprocess_output(input_val)
+        assert "***REDACTED***" in result
+
+    # =========================================================================
+    # URL Credential Sanitization
+    # =========================================================================
+
+    @pytest.mark.parametrize(
+        "input_val,expected",
+        [
+            # URL with credentials
+            ("Failed to connect to https://user:password@api.example.com", "https://***:***@api.example.com"),
+            ("git clone https://oauth2:glpat-secret@gitlab.com/repo.git failed", "https://***:***@gitlab.com/repo.git"),
+            ("Error: http://admin:pass123@internal.service:8080", "http://***:***@internal.service:8080"),
+        ],
+    )
+    def test_sanitize_url_credentials(self, input_val, expected):
+        """URLs with credentials should have them redacted."""
+        result = sanitize_subprocess_output(input_val, max_length=500)
+        assert expected in result
+
+    # =========================================================================
+    # Bearer Token Sanitization
+    # =========================================================================
+
+    def test_sanitize_bearer_tokens(self):
+        """Bearer authorization headers should be sanitized."""
+        input_val = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        result = sanitize_subprocess_output(input_val)
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in result
+        assert "Bearer ***REDACTED***" in result
+
+    # =========================================================================
+    # Private Key Sanitization
+    # =========================================================================
+
+    def test_sanitize_private_key_content(self):
+        """SSH/PGP private key content should be fully redacted."""
+        input_val = """Error reading key:
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA1234567890abcdefghijklmnop
+-----END RSA PRIVATE KEY-----
+"""
+        result = sanitize_subprocess_output(input_val)
+        assert "MIIEpAIBAAK" not in result
+        assert "***PRIVATE KEY REDACTED***" in result
+
+    # =========================================================================
+    # Output Truncation
+    # =========================================================================
+
+    def test_truncation(self):
+        """Long output should be truncated to max_length."""
+        long_output = "x" * 1000
+        result = sanitize_subprocess_output(long_output, max_length=100)
+        assert len(result) < 150  # Allow for truncation message
+        assert "[truncated]" in result
+
+    def test_custom_max_length(self):
+        """Custom max_length should be respected."""
+        output = "x" * 500
+        result = sanitize_subprocess_output(output, max_length=200)
+        assert "[truncated]" in result
+        result_long = sanitize_subprocess_output(output, max_length=1000)
+        assert "[truncated]" not in result_long
+
+    # =========================================================================
+    # Empty and Edge Case Handling
+    # =========================================================================
+
+    def test_empty_input(self):
+        """Empty input should return empty string."""
+        assert sanitize_subprocess_output("") == ""
+        assert sanitize_subprocess_output(None) == ""  # type: ignore
+
+    def test_safe_content_unchanged(self):
+        """Safe content should pass through without modification."""
+        safe_inputs = [
+            "Command completed successfully",
+            "Processing 100 files...",
+            "Build finished in 5.2 seconds",
+            "Downloaded 50 MB",
+        ]
+        for input_val in safe_inputs:
+            result = sanitize_subprocess_output(input_val)
+            assert result == input_val
+
+    # =========================================================================
+    # Multiple Patterns in Same Output
+    # =========================================================================
+
+    def test_multiple_patterns(self):
+        """Multiple sensitive patterns in same output should all be sanitized."""
+        input_val = (
+            "Error: /home/jimmy/project failed with token=secret123 "
+            "connecting to https://user:pass@api.com"
+        )
+        result = sanitize_subprocess_output(input_val, max_length=500)
+        # All patterns should be sanitized
+        assert "jimmy" not in result
+        assert "secret123" not in result
+        assert "user:pass" not in result
+
+
+class TestSanitizeErrorMessage:
+    """Test error message sanitization (shorter max_length)."""
+
+    def test_error_message_shorter_length(self):
+        """Error messages should have 200 char limit."""
+        long_error = "x" * 300
+        result = sanitize_error_message(long_error)
+        assert len(result) < 250  # Allow for truncation message
+        assert "[truncated]" in result
+
+    def test_error_message_sanitizes_paths(self):
+        """Error messages should sanitize home paths."""
+        result = sanitize_error_message("pip failed: /home/user/.cache/pip error")
+        assert "***USER***" in result
+
+
+class TestSanitizeUrlForLogging:
+    """Test URL sanitization for logging."""
+
+    @pytest.mark.parametrize(
+        "input_url,expected",
+        [
+            # Basic URL with credentials
+            ("https://user:password@github.com/repo.git", "https://***:***@github.com/repo.git"),
+            ("https://oauth2:glpat-xxx@gitlab.com/repo.git", "https://***:***@gitlab.com/repo.git"),
+            ("http://admin:secret@localhost:8080/api", "http://***:***@localhost:8080/api"),
+            # URL without credentials (unchanged)
+            ("https://github.com/repo.git", "https://github.com/repo.git"),
+            ("http://localhost:8080", "http://localhost:8080"),
+        ],
+    )
+    def test_url_credential_sanitization(self, input_url, expected):
+        """URLs should have credentials redacted."""
+        result = sanitize_url_for_logging(input_url)
+        assert result == expected
+
+    def test_url_query_string_tokens(self):
+        """Tokens in query strings should be redacted."""
+        url = "https://api.example.com/data?token=secret123&other=value"
+        result = sanitize_url_for_logging(url)
+        assert "secret123" not in result
+        assert "***REDACTED***" in result
+
+    def test_empty_url(self):
+        """Empty URL should return empty string."""
+        assert sanitize_url_for_logging("") == ""
+
+
+class TestOutputSanitizationPatterns:
+    """Test the sanitization pattern definitions."""
+
+    def test_patterns_list_not_empty(self):
+        """Patterns list should contain sanitization rules."""
+        assert len(OUTPUT_SANITIZATION_PATTERNS) > 0
+
+    def test_patterns_have_correct_structure(self):
+        """Each pattern should be a 3-tuple: (regex, replacement, flags)."""
+        for pattern, replacement, flags in OUTPUT_SANITIZATION_PATTERNS:
+            assert isinstance(pattern, str)
+            assert isinstance(replacement, str)
+            assert isinstance(flags, int)
+
+    def test_all_patterns_compile(self):
+        """All regex patterns should compile without error."""
+        import re
+        for pattern, replacement, flags in OUTPUT_SANITIZATION_PATTERNS:
+            # This will raise if pattern is invalid
+            re.compile(pattern, flags)
 
 
 if __name__ == "__main__":

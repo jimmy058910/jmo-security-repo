@@ -28,7 +28,11 @@ from scripts.core.tool_registry import (
     detect_platform,
 )
 from scripts.cli.tool_manager import ToolManager
-from scripts.core.validation import validate_version, validate_tool_name
+from scripts.core.validation import (
+    validate_version,
+    validate_tool_name,
+    sanitize_subprocess_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +472,7 @@ class ToolInstaller:
                     tool_name=tool_name,
                     success=False,
                     method="pip",
-                    message=f"pip install failed: {result.stderr[:200]}",
+                    message=f"pip install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                     duration_seconds=time.time() - start_time,
                 )
         except subprocess.TimeoutExpired:
@@ -535,7 +539,7 @@ class ToolInstaller:
                     tool_name=tool_name,
                     success=False,
                     method="brew",
-                    message=f"brew install failed: {result.stderr[:200]}",
+                    message=f"brew install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                     duration_seconds=time.time() - start_time,
                 )
         except subprocess.TimeoutExpired:
@@ -616,7 +620,7 @@ class ToolInstaller:
                     tool_name=tool_name,
                     success=False,
                     method="apt",
-                    message=f"apt install failed: {result.stderr[:200]}",
+                    message=f"apt install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                     duration_seconds=time.time() - start_time,
                 )
         except subprocess.TimeoutExpired:
@@ -711,7 +715,7 @@ class ToolInstaller:
                     tool_name=tool_name,
                     success=False,
                     method="npm",
-                    message=f"npm install failed: {result.stderr[:200]}",
+                    message=f"npm install failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                     duration_seconds=time.time() - start_time,
                 )
         except subprocess.TimeoutExpired:
@@ -835,7 +839,9 @@ class ToolInstaller:
 
                 if result.returncode != 0:
                     # Provide actionable error message
-                    stderr = result.stderr.strip()[:200] if result.stderr else "Unknown error"
+                    # Sanitize stderr to prevent leaking paths/credentials in logs
+                    stderr_raw = result.stderr.strip() if result.stderr else "Unknown error"
+                    stderr = sanitize_subprocess_output(stderr_raw, max_length=200)
                     if "404" in stderr or "Not Found" in stderr.lower():
                         error_msg = (
                             f"Asset not found at {url}. "
@@ -961,7 +967,7 @@ class ToolInstaller:
                         tool_name=tool_name,
                         success=False,
                         method="install_script",
-                        message=f"Failed to download install script: {dl_result.stderr[:200]}",
+                        message=f"Failed to download install script: {sanitize_subprocess_output(dl_result.stderr, max_length=200)}",
                         duration_seconds=time.time() - start_time,
                     )
 
@@ -994,7 +1000,7 @@ class ToolInstaller:
                         tool_name=tool_name,
                         success=False,
                         method="install_script",
-                        message=f"Install script failed: {result.stderr[:200]}",
+                        message=f"Install script failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                         duration_seconds=time.time() - start_time,
                     )
 
@@ -1154,7 +1160,7 @@ class ToolInstaller:
                     tool_name=tool_name,
                     success=False,
                     method="clone",
-                    message=f"Git clone failed: {result.stderr[:200]}",
+                    message=f"Git clone failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                     duration_seconds=time.time() - start_time,
                 )
         except Exception as e:
@@ -1230,7 +1236,7 @@ class ToolInstaller:
                         tool_name=tool_name,
                         success=False,
                         method="extract_app",
-                        message=f"Download failed: {result.stderr[:200]}",
+                        message=f"Download failed: {sanitize_subprocess_output(result.stderr, max_length=200)}",
                         duration_seconds=time.time() - start_time,
                     )
 
