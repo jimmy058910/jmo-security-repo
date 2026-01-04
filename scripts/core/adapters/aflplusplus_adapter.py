@@ -1,11 +1,40 @@
 #!/usr/bin/env python3
 """
+AFL++ adapter - Maps AFL++ fuzzing crash reports to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-AFL++ adapter: normalize AFL++ fuzzing outputs to CommonFinding
-Supports:
-- AFL++ crash reports and findings
-- JSON exports from afl-collect or custom scripts
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Fuzzing-based crash detection and analysis
+- Memory corruption and exploitability classification
+- Crash deduplication and root cause identification
+- Support for AFL++ crash collector output
+
+Tool Version: 4.0+
+Output Format: JSON with crashes array (afl-collect or custom scripts)
+Exit Codes: N/A (post-processing of fuzzing output)
+
+Supported Crash Types:
+- SEGV/Segfault: Memory access violations (CRITICAL)
+- SIGABRT/Abort: Program aborts (CRITICAL)
+- SIGILL: Illegal instruction (CRITICAL)
+- Heap/Stack Overflow: Buffer overflows (CRITICAL)
+- Use-After-Free (UAF): Memory corruption (CRITICAL)
+- Hang/Timeout: Program hangs (MEDIUM)
+
+Severity Classification:
+- CRITICAL: Exploitable crashes (SEGV, overflow, UAF)
+- HIGH: Other crashes (generic faults)
+- MEDIUM: Hangs and timeouts
+
+Example:
+    >>> adapter = AFLPlusPlusAdapter()
+    >>> findings = adapter.parse(Path('aflplusplus.json'))
+    >>> # Returns findings for each unique crash discovered
 """
 
 from __future__ import annotations

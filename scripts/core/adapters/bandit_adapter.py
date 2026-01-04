@@ -1,24 +1,53 @@
 #!/usr/bin/env python3
 """
+Bandit adapter - Maps Bandit Python SAST JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Bandit adapter: normalize Bandit JSON to CommonFinding
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
 
-Expected Bandit JSON shape (bandit -q -r <path> -f json):
-{
-  "results": [
-    {
-      "filename": "app.py",
-      "line_number": 10,
-      "issue_text": "Possible ...",
-      "test_id": "B101",
-      "test_name": "assert_used",
-      "issue_severity": "LOW|MEDIUM|HIGH",
-      "issue_confidence": "LOW|MEDIUM|HIGH"
-    }, ...
-  ],
-  ...
-}
+v1.0.0 Feature #1:
+- Python-specific SAST security analysis
+- OpenStack Security Advisory (OSSA) backed
+- Hardcoded credentials, SQL injection, command injection detection
+- Confidence-based filtering support
+
+Tool Version: 1.7.0+
+Output Format: JSON with results array
+Exit Codes: 0 (clean), 1 (findings)
+
+Test Categories (B1xx - B7xx):
+- B1xx: Shell injection (B101-B113)
+- B2xx: Assert and exec (B201-B203)
+- B3xx: Cryptographic issues (B301-B313)
+- B4xx: SQL injection (B401-B413)
+- B5xx: Flask security (B501-B510)
+- B6xx: Unsafe YAML/pickle (B601-B611)
+- B7xx: SSH issues (B701-B703)
+
+Severity/Confidence Classification:
+- issue_severity: HIGH, MEDIUM, LOW
+- issue_confidence: HIGH, MEDIUM, LOW
+- Higher confidence = more reliable finding
+
+Common Detections:
+- B101: assert_used (use in production code)
+- B102: exec_used (code execution risk)
+- B105: hardcoded_password_string
+- B110: try_except_pass (error suppression)
+- B301-303: Pickle deserialization risks
+- B501: request_with_no_cert_validation
+
+Example:
+    >>> adapter = BanditAdapter()
+    >>> findings = adapter.parse(Path('bandit.json'))
+    >>> # Returns Python security findings
+
+See Also:
+    - https://bandit.readthedocs.io/
+    - OpenStack Security Advisory (OSSA)
 """
 
 from __future__ import annotations

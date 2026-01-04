@@ -1,11 +1,46 @@
 #!/usr/bin/env python3
 """
+Falco adapter - Maps Falco runtime security alerts to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Falco adapter: normalize Falco JSON outputs to CommonFinding
-Supports:
-- Falco alert JSON output (NDJSON format)
-- Falco event logs from runtime monitoring
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- CNCF runtime security monitoring
+- Container and Kubernetes threat detection
+- Syscall-based behavioral analysis
+- MITRE ATT&CK mapping support
+
+Tool Version: 0.35.0+
+Output Format: NDJSON (newline-delimited JSON alerts)
+Exit Codes: 0 (success), 1+ (errors)
+
+Supported Detection Sources:
+- syscall: Kernel-level syscall monitoring
+- k8s_audit: Kubernetes audit log events
+- plugin: Falco plugins (AWS CloudTrail, GitHub, etc.)
+
+Priority Levels (Falco -> CommonFinding):
+- Emergency: CRITICAL (system-wide impact)
+- Alert: CRITICAL (immediate action required)
+- Critical: CRITICAL (critical conditions)
+- Error: HIGH (error conditions)
+- Warning: MEDIUM (warning conditions)
+- Notice: LOW (normal but significant)
+- Informational: INFO (informational messages)
+- Debug: INFO (debug-level messages)
+
+Example:
+    >>> adapter = FalcoAdapter()
+    >>> findings = adapter.parse(Path('falco.json'))
+    >>> # Returns runtime security alerts as findings
+
+See Also:
+    - https://falco.org/docs/
+    - MITRE ATT&CK for Containers
 """
 
 from __future__ import annotations

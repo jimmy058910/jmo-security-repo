@@ -1,9 +1,61 @@
 #!/usr/bin/env python3
 """
-Trivy adapter: normalize Trivy JSON to CommonFinding
-Supports filesystem scan output (trivy fs -f json .) and generic Results array.
+Trivy adapter - Maps Aqua Trivy vulnerability scanner JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Comprehensive vulnerability scanner
+- Container images, filesystems, git repos, IaC
+- Multi-source vulnerability data (NVD, GHSA, etc.)
+- OS and language package detection
+
+Tool Version: 0.50.0+
+Output Format: JSON with Results array
+Exit Codes: 0 (clean), 1 (findings), 2 (error)
+
+Scan Modes:
+- trivy image: Container image scanning
+- trivy fs: Filesystem scanning
+- trivy repo: Git repository scanning
+- trivy config: IaC misconfiguration scanning
+- trivy sbom: SBOM scanning
+
+Finding Types:
+- Vulnerabilities: CVEs in packages (OS + language)
+- Secrets: Hardcoded credentials and API keys
+- Misconfigurations: IaC and config issues (Dockerfile, K8s, Terraform)
+- Licenses: License compliance (optional)
+
+Supported Package Ecosystems:
+- OS: Alpine, Debian, Ubuntu, RHEL, CentOS, Amazon Linux
+- Languages: npm, pip, Go, Ruby, Rust, NuGet, Java (JAR/WAR)
+
+Severity Mapping (Trivy -> CommonFinding):
+- CRITICAL: CRITICAL
+- HIGH: HIGH
+- MEDIUM: MEDIUM
+- LOW: LOW
+- UNKNOWN: INFO
+
+Integration Notes:
+- Syft SBOM can feed into Trivy for vulnerability scanning
+- Grype is an alternative with similar capabilities
+- trivy_rbac_adapter.py handles RBAC-specific findings
+
+Example:
+    >>> adapter = TrivyAdapter()
+    >>> findings = adapter.parse(Path('trivy.json'))
+    >>> # Returns vulnerabilities, secrets, and misconfigs
+
+See Also:
+    - https://trivy.dev/
+    - https://github.com/aquasecurity/trivy
+    - trivy_rbac_adapter.py for Kubernetes RBAC
 """
 
 from __future__ import annotations

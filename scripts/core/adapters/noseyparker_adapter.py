@@ -1,10 +1,46 @@
 #!/usr/bin/env python3
 """
+Nosey Parker adapter - Maps Nosey Parker secrets scan JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Nosey Parker adapter: normalize Nosey Parker JSON to CommonFinding
-Expected input: {"matches": [ {"signature": ..., "path": ..., "line_number": ...}, ... ]}
-This is tolerant to minor format variation.
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- High-performance secret scanning (Rust-based)
+- Git history and file system scanning
+- 200+ detector patterns for secrets
+- Entropy-based detection support
+
+Tool Version: 0.16.0+
+Output Format: JSON with matches array
+Exit Codes: 0 (clean), 1 (findings)
+
+Supported Secret Types:
+- API keys: AWS, GCP, Azure, GitHub, GitLab, Slack, etc.
+- Credentials: Database passwords, OAuth tokens
+- Private keys: SSH, PGP, TLS/SSL certificates
+- Cloud provider: AWS access keys, GCP service accounts
+- Service tokens: Stripe, Twilio, SendGrid, etc.
+
+Severity Classification:
+- All secrets default to MEDIUM severity
+- CWE-798: Use of Hard-coded Credentials
+
+Complementary to TruffleHog:
+- Nosey Parker: Pattern-based, very fast, no verification
+- TruffleHog: Verification of secrets against APIs
+
+Example:
+    >>> adapter = NoseyParkerAdapter()
+    >>> findings = adapter.parse(Path('noseyparker.json'))
+    >>> # Returns secret detection findings
+
+See Also:
+    - https://github.com/praetorian-inc/noseyparker
+    - OWASP Secrets Management Cheat Sheet
 """
 
 from __future__ import annotations

@@ -1,9 +1,52 @@
 #!/usr/bin/env python3
 """
+Hadolint adapter - Maps Hadolint Dockerfile linter JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Hadolint adapter: normalize hadolint JSON output to CommonFinding
-Expected input: array of issues with fields like: {"code":"DL3008","file":"Dockerfile","line":12,"level":"error","message":"..."}
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Dockerfile best practices linting
+- ShellCheck integration for RUN instructions
+- Docker image security hardening checks
+- CIS Docker Benchmark compliance
+
+Tool Version: 2.12.0+
+Output Format: JSON array of issues
+Exit Codes: 0 (clean), 1 (findings)
+
+Rule Categories:
+- DL1xxx: General Dockerfile issues
+- DL3xxx: Shell best practices (via ShellCheck integration)
+- DL4xxx: Performance and caching issues
+- SC1xxx-SC2xxx: ShellCheck rules for RUN commands
+
+Level Mapping (Hadolint -> CommonFinding):
+- error: HIGH
+- warning: MEDIUM
+- info: LOW
+- style: INFO
+
+Common Rules:
+- DL3008: Pin versions in apt-get install
+- DL3009: Delete apt-get cache after installing
+- DL3013: Pin versions in pip install
+- DL3015: Avoid additional packages with apt-get
+- DL3018: Pin versions in apk add
+- DL3020: Use COPY instead of ADD for files
+- DL4006: Set SHELL to fail pipelines
+
+Example:
+    >>> adapter = HadolintAdapter()
+    >>> findings = adapter.parse(Path('hadolint.json'))
+    >>> # Returns Dockerfile linting issues as findings
+
+See Also:
+    - https://github.com/hadolint/hadolint
+    - CIS Docker Benchmark
 """
 
 from __future__ import annotations

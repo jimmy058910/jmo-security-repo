@@ -1,14 +1,49 @@
 #!/usr/bin/env python3
 """
+Syft adapter - Maps Syft SBOM JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Syft adapter: normalize a minimal subset of Syft SBOM JSON into CommonFinding-like entries.
-Focus: represent packages as INFO-level entries and vulnerabilities (if present in document) as proper severities.
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
 
-Supported inputs:
-- Syft JSON with top-level "artifacts" (packages) and optional "vulnerabilities" arrays.
+v1.0.0 Feature #1:
+- Software Bill of Materials (SBOM) generation
+- Container image and filesystem analysis
+- Package dependency enumeration
+- Cross-linkable context for vulnerability scanners (Grype, Trivy)
 
-Note: This provides cross-linkable context for other adapters (e.g., Trivy) by exposing package->location mapping in tags/raw.
+Tool Version: 1.5.0+
+Output Format: JSON (native Syft format, CycloneDX, SPDX supported)
+Exit Codes: 0 (success), 1+ (errors)
+
+Supported Package Ecosystems:
+- Alpine (apk), Debian/Ubuntu (dpkg)
+- Red Hat/CentOS (rpm), ArchLinux (pacman)
+- Node.js (npm, yarn), Python (pip, poetry, pipenv)
+- Java (Maven, Gradle), Go (modules), Rust (cargo)
+- Ruby (gem), .NET (NuGet), PHP (Composer)
+- Container images (Docker, OCI)
+
+Finding Types Generated:
+- SBOM.PACKAGE: Package inventory entries (INFO severity)
+- Vulnerability IDs: If vulnerabilities section present (varies severity)
+
+Cross-Tool Integration:
+- Syft SBOM feeds into Grype for vulnerability scanning
+- Package locations cross-linked with Trivy findings
+- CWE-1104: Use of Unmaintained Third Party Components
+
+Example:
+    >>> adapter = SyftAdapter()
+    >>> findings = adapter.parse(Path('syft.json'))
+    >>> # Returns package inventory and optional vulnerability findings
+
+See Also:
+    - https://github.com/anchore/syft
+    - Grype (vulnerability scanner companion)
+    - CycloneDX and SPDX SBOM standards
 """
 
 from __future__ import annotations

@@ -1,9 +1,54 @@
 #!/usr/bin/env python3
 """
-Semgrep adapter: normalize Semgrep JSON to CommonFinding
-Expected input shape often contains {"results": [ ... ]}
+Semgrep adapter - Maps Semgrep multi-language SAST JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Multi-language SAST with 2500+ rules
+- Lightweight and fast pattern-matching engine
+- Semantic code analysis (dataflow, taint tracking)
+- Autofix support for automated remediation
+
+Tool Version: 1.90.0+
+Output Format: JSON with results array
+Exit Codes: 0 (clean), 1 (findings), 2 (error)
+
+Supported Languages (30+):
+- Python, JavaScript/TypeScript, Java, C/C++, Go
+- Ruby, PHP, Kotlin, Swift, Rust, Scala
+- C#, Lua, OCaml, R, Elixir, Terraform
+- Dockerfile, YAML, JSON, XML, HTML
+
+Registry Rule Categories:
+- security: OWASP Top 10, CWE coverage
+- best-practices: Code quality and patterns
+- correctness: Bug detection
+- performance: Performance anti-patterns
+- secrets: Hardcoded credentials (see semgrep_secrets_adapter)
+
+Severity Mapping (Semgrep -> CommonFinding):
+- ERROR: HIGH
+- WARNING: MEDIUM
+- INFO: LOW
+
+Autofix Support:
+- When available, findings include fix suggestions
+- Returned as remediation.fix with remediation.steps
+
+Example:
+    >>> adapter = SemgrepAdapter()
+    >>> findings = adapter.parse(Path('semgrep.json'))
+    >>> # Returns SAST findings with CWE/OWASP enrichment
+
+See Also:
+    - https://semgrep.dev/
+    - Semgrep Registry (semgrep.dev/explore)
+    - semgrep_secrets_adapter.py for secrets-focused scanning
 """
 
 from __future__ import annotations

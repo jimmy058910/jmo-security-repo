@@ -1,20 +1,55 @@
 #!/usr/bin/env python3
 """
+Nuclei adapter - Maps Nuclei vulnerability scanner JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-Nuclei adapter: normalize Nuclei JSON to CommonFinding schema.
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
 
-Expected input: JSON output from 'nuclei -json' command.
-Output schema: CommonFinding v1.2.0 with compliance enrichment.
+v1.0.0 Feature #1:
+- Template-based vulnerability scanning
+- CVE/CWE detection with CVSS enrichment
+- Web application and API security testing
+- Cloud and network misconfiguration detection
 
-Tool version tested: v3.3.7+
-Last updated: 2025-01-19
+Tool Version: 3.3.7+
+Output Format: NDJSON (newline-delimited JSON)
+Exit Codes: 0 (clean), varies by template match
 
-Nuclei is a fast vulnerability scanner based on simple YAML templates.
-It excels at detecting CVEs, misconfigurations, and security issues across
-web applications, APIs, and cloud configurations.
+Template Categories:
+- cves: Known vulnerability (CVE) templates
+- exposures: Sensitive file/config exposure
+- misconfigurations: Security misconfigurations
+- takeovers: Subdomain takeover vulnerabilities
+- technologies: Technology fingerprinting
+- fuzzing: Active fuzzing templates
+- workflows: Multi-step scan workflows
 
-Output format: NDJSON (newline-delimited JSON)
+Severity Mapping (Nuclei -> CommonFinding):
+- critical: CRITICAL
+- high: HIGH
+- medium: MEDIUM
+- low: LOW
+- info: INFO
+
+Scan Types:
+- http: HTTP-based vulnerability scanning
+- dns: DNS record analysis
+- tcp: TCP service scanning
+- ssl: TLS/SSL certificate issues
+- headless: Browser-based checks
+- code: Source code analysis
+
+Example:
+    >>> adapter = NucleiAdapter()
+    >>> findings = adapter.parse(Path('nuclei.json'))
+    >>> # Returns vulnerability findings with CVE/CWE enrichment
+
+See Also:
+    - https://nuclei.projectdiscovery.io/
+    - https://github.com/projectdiscovery/nuclei-templates
 """
 
 from __future__ import annotations

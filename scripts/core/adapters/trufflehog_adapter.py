@@ -1,13 +1,58 @@
 #!/usr/bin/env python3
 """
-TruffleHog adapter: normalize various TruffleHog outputs to CommonFinding
-Inputs supported:
-- JSON array of findings
-- NDJSON (one JSON object per line)
-- Single JSON object
-- Nested arrays [[{...}]]
+TruffleHog adapter - Maps TruffleHog secrets scan JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Secret scanning with live API verification
+- Git history, filesystem, and cloud scanning
+- 700+ detector patterns
+- Verification against live APIs (reduces false positives)
+
+Tool Version: 3.63.0+
+Output Format: NDJSON (newline-delimited JSON), also supports JSON array
+Exit Codes: 0 (clean), 1 (findings), 2 (error)
+
+Supported Scan Sources:
+- git: Git repository history scanning
+- github: GitHub organization/repo scanning
+- gitlab: GitLab organization/repo scanning
+- filesystem: Local directory scanning
+- s3: AWS S3 bucket scanning
+- gcs: Google Cloud Storage scanning
+- circleci: CircleCI builds scanning
+- docker: Docker image layer scanning
+
+Detector Categories (700+ patterns):
+- Cloud providers: AWS, GCP, Azure, DigitalOcean
+- Code hosting: GitHub, GitLab, Bitbucket tokens
+- Communication: Slack, Discord, Telegram tokens
+- Payment: Stripe, Square, Plaid API keys
+- SaaS: Sendgrid, Twilio, Datadog, etc.
+- Databases: MongoDB, Redis, PostgreSQL URIs
+
+Severity Classification:
+- HIGH: Verified secrets (confirmed active via API)
+- MEDIUM: Unverified secrets (pattern match only)
+- CWE-798: Use of Hard-coded Credentials
+
+Complementary to Nosey Parker:
+- TruffleHog: API verification, reduces false positives
+- Nosey Parker: Faster, broader patterns, no verification
+
+Example:
+    >>> adapter = TruffleHogAdapter()
+    >>> findings = adapter.parse(Path('trufflehog.json'))
+    >>> # Returns verified and unverified secrets as findings
+
+See Also:
+    - https://github.com/trufflesecurity/trufflehog
+    - OWASP Secrets Management Cheat Sheet
 """
 
 from __future__ import annotations

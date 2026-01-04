@@ -1,12 +1,56 @@
 #!/usr/bin/env python3
 """
+OWASP ZAP adapter - Maps ZAP DAST scanner JSON to CommonFinding schema.
 
-REFACTORED: v0.9.0 - Now uses plugin architecture
-OWASP ZAP adapter: normalize ZAP JSON outputs to CommonFinding
-Supports:
-- ZAP Baseline Scan JSON output
-- ZAP Full Scan JSON output
-- ZAP API Scan JSON output
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Dynamic Application Security Testing (DAST)
+- Web application vulnerability scanning
+- API security testing (OpenAPI, GraphQL, SOAP)
+- Active and passive scanning modes
+
+Tool Version: 2.15.0+ (weekly Docker releases)
+Output Format: JSON with site[].alerts[] structure
+Exit Codes: 0 (clean), varies by scan mode
+
+Scan Types:
+- Baseline: Passive scanning, fast, safe for production
+- Full Scan: Active + passive, comprehensive, may modify data
+- API Scan: OpenAPI/GraphQL/SOAP API security testing
+- Ajax Spider: JavaScript-heavy application crawling
+
+Risk Levels (ZAP -> CommonFinding):
+- High: HIGH (confirmed exploitable vulnerabilities)
+- Medium: MEDIUM (likely exploitable)
+- Low: LOW (low impact issues)
+- Informational: INFO (security observations)
+
+Common Vulnerability Categories:
+- Injection: SQL, XSS, Command, LDAP injection
+- Authentication: Session fixation, weak auth
+- CSRF: Cross-Site Request Forgery
+- Security Headers: Missing security headers
+- Information Disclosure: Debug info, stack traces
+- SSL/TLS: Certificate issues, weak ciphers
+
+CWE/WASC Classification:
+- Each finding includes CWE ID (Common Weakness Enumeration)
+- WASC ID (Web Application Security Consortium)
+
+Example:
+    >>> adapter = ZapAdapter()
+    >>> findings = adapter.parse(Path('zap.json'))
+    >>> # Returns web security findings with CWE/WASC enrichment
+
+See Also:
+    - https://www.zaproxy.org/
+    - OWASP Testing Guide
+    - OWASP Top 10
 """
 
 from __future__ import annotations
