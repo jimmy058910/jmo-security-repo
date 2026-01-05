@@ -119,11 +119,13 @@ def _load_gosec_internal(path: str | Path) -> list[dict[str, Any]]:
         List of dicts (converted to Finding objects by parse() method)
     """
     data = safe_load_json_file(path, default=None)
+    if not isinstance(data, dict):
+        return []
 
     out: list[dict[str, Any]] = []
 
     # Gosec JSON structure: {"Issues": [...], "Stats": {...}}
-    issues = data.get("Issues") if isinstance(data, dict) else None
+    issues = data.get("Issues")
     if not isinstance(issues, list):
         return []
 

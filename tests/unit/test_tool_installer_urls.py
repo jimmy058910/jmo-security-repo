@@ -32,9 +32,9 @@ class TestBinaryURLPatterns:
     def test_all_urls_have_version_placeholder(self):
         """Every URL template must include {version} placeholder."""
         for tool, url_template in BINARY_URLS.items():
-            assert "{version}" in url_template, (
-                f"{tool} URL template missing {{version}} placeholder"
-            )
+            assert (
+                "{version}" in url_template
+            ), f"{tool} URL template missing {{version}} placeholder"
 
     def test_trivy_url_x86_64(self):
         """Test trivy URL generation for x86_64 Linux."""
@@ -265,16 +265,16 @@ class TestInstallScripts:
     def test_install_scripts_are_https(self):
         """All install scripts must use HTTPS."""
         for tool, url in INSTALL_SCRIPTS.items():
-            assert url.startswith("https://"), (
-                f"{tool} install script uses insecure URL: {url}"
-            )
+            assert url.startswith(
+                "https://"
+            ), f"{tool} install script uses insecure URL: {url}"
 
     def test_install_scripts_are_raw_github(self):
         """Install scripts should be from raw.githubusercontent.com."""
         for tool, url in INSTALL_SCRIPTS.items():
-            assert "raw.githubusercontent.com" in url or "github.io" in url, (
-                f"{tool} install script URL may not be reliable: {url}"
-            )
+            assert (
+                "raw.githubusercontent.com" in url or "github.io" in url
+            ), f"{tool} install script URL may not be reliable: {url}"
 
 
 class TestInstallPriorities:
@@ -293,9 +293,9 @@ class TestInstallPriorities:
         linux_methods = INSTALL_PRIORITIES["linux"]
         script_idx = linux_methods.index("install_script")
         binary_idx = linux_methods.index("binary")
-        assert script_idx < binary_idx, (
-            "install_script should be tried before binary download"
-        )
+        assert (
+            script_idx < binary_idx
+        ), "install_script should be tried before binary download"
 
     def test_windows_has_no_install_script(self):
         """Windows doesn't support bash install scripts."""
@@ -337,7 +337,9 @@ class TestArchPlaceholders:
         )
 
         # Trivy's unique format
-        trivy_arch = "64bit" if arch == "x86_64" else "ARM64" if arch == "arm64" else arch
+        trivy_arch = (
+            "64bit" if arch == "x86_64" else "ARM64" if arch == "arm64" else arch
+        )
 
         assert arch_amd == expected_arch_amd
         assert arch_aarch == expected_arch_aarch
@@ -382,13 +384,13 @@ class TestSpecialToolHandling:
 
         yara_cmd = VERSION_COMMANDS.get("yara", [])
         # Should use Python to check import, not 'yara --version'
-        assert yara_cmd[0] == sys.executable, (
-            "yara version check should use Python interpreter"
-        )
+        assert (
+            yara_cmd[0] == sys.executable
+        ), "yara version check should use Python interpreter"
         assert "-c" in yara_cmd, "yara version check should use -c flag"
-        assert "import yara" in yara_cmd[-1], (
-            "yara version check should import yara module"
-        )
+        assert (
+            "import yara" in yara_cmd[-1]
+        ), "yara version check should import yara module"
 
     def test_yara_version_pattern_matches_simple_version(self):
         """Verify yara version pattern can parse simple version string."""
@@ -407,15 +409,17 @@ class TestSpecialToolHandling:
         from scripts.cli.tool_installer import SPECIAL_INSTALL
 
         assert "lynis" in SPECIAL_INSTALL, "lynis should be in SPECIAL_INSTALL"
-        assert SPECIAL_INSTALL["lynis"] == "clone", (
-            "lynis should use clone installation method"
-        )
+        assert (
+            SPECIAL_INSTALL["lynis"] == "clone"
+        ), "lynis should use clone installation method"
 
     def test_lynis_version_command(self):
         """Verify lynis version command is correct."""
         from scripts.cli.tool_manager import VERSION_COMMANDS
 
         lynis_cmd = VERSION_COMMANDS.get("lynis", [])
-        assert lynis_cmd == ["lynis", "show", "version"], (
-            "lynis version check should use 'lynis show version'"
-        )
+        assert lynis_cmd == [
+            "lynis",
+            "show",
+            "version",
+        ], "lynis version check should use 'lynis show version'"

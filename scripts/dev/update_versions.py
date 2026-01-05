@@ -205,6 +205,20 @@ def check_pypi_version_exists(package: str, version: str) -> bool:
         return False
 
 
+def check_npm_version_exists(package: str, version: str) -> bool:
+    """Check if a specific npm package version exists."""
+    try:
+        result = subprocess.run(
+            ["npm", "view", f"{package}@{version}", "version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 def validate_all_versions() -> tuple[list[str], list[str]]:
     """
     Validate that all versions in versions.yaml exist upstream.
@@ -276,7 +290,10 @@ def validate_all_versions() -> tuple[list[str], list[str]]:
     # Check npm tools specifically (cdxgen is in special_tools but uses npm)
     log("Validating npm tool versions...")
     npm_tools = {
-        "cdxgen": ("@cyclonedx/cdxgen", versions.get("python_tools", {}).get("cdxgen", {}).get("version")),
+        "cdxgen": (
+            "@cyclonedx/cdxgen",
+            versions.get("python_tools", {}).get("cdxgen", {}).get("version"),
+        ),
     }
     # Also check from special_tools if cdxgen is there
     if "cdxgen" in versions.get("special_tools", {}):

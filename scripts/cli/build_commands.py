@@ -8,7 +8,6 @@ Supports all 4 variants: fast, slim, balanced, deep (full).
 from __future__ import annotations
 
 import argparse
-import os
 import platform
 import shutil
 import subprocess
@@ -213,7 +212,9 @@ def cmd_build(args: argparse.Namespace) -> int:
             "Error: Cannot find repository root (looking for Dockerfile and versions.yaml)",
             file=sys.stderr,
         )
-        print("Run this command from within the jmo-security repository", file=sys.stderr)
+        print(
+            "Run this command from within the jmo-security repository", file=sys.stderr
+        )
         return 1
 
     print(f"Repository root: {repo_root}")
@@ -272,7 +273,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         print(f"Building variant: {variant}")
         print(f"{'='*60}\n")
 
-        result = _build_image(
+        build_result = _build_image(
             variant=variant,
             tag=args.tag,
             repo_root=repo_root,
@@ -285,7 +286,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             platform_target=args.platform,
         )
 
-        if result != 0:
+        if build_result != 0:
             failed.append(variant)
 
     # Summary
@@ -304,14 +305,18 @@ def cmd_build(args: argparse.Namespace) -> int:
         print("\nLocal images created:")
         for v in variants:
             print(f"  - {DEFAULT_IMAGE}:local-{v}")
-        print(f"\nTest with: docker run --rm {DEFAULT_IMAGE}:local-{variants[0]} --help")
+        print(
+            f"\nTest with: docker run --rm {DEFAULT_IMAGE}:local-{variants[0]} --help"
+        )
 
     return 0
 
 
-def add_build_args(subparsers) -> argparse.ArgumentParser:
+def add_build_args(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse.ArgumentParser:
     """Add 'build' subcommand arguments."""
-    build_parser = subparsers.add_parser(
+    build_parser: argparse.ArgumentParser = subparsers.add_parser(
         "build",
         help="Build Docker images for JMo Security",
         description="""

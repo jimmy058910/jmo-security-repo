@@ -119,10 +119,10 @@ class NoseyParkerAdapter(AdapterPlugin):
 
 def _load_noseyparker_internal(path: str | Path) -> list[dict[str, Any]]:
     data = safe_load_json_file(path, default=None)
-    if data is None:
+    if not isinstance(data, dict):
         return []
 
-    matches = data.get("matches") if isinstance(data, dict) else None
+    matches = data.get("matches")
     if not isinstance(matches, list):
         return []
 

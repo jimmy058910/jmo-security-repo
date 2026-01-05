@@ -45,11 +45,7 @@ def _normalize_policy_name(name: str) -> str:
     - "PCI-DSS 4.0 Compliance" vs "pci-dss"
     """
     return (
-        name.lower()
-        .replace("-", "")
-        .replace("_", "")
-        .replace(" ", "")
-        .replace(".", "")
+        name.lower().replace("-", "").replace("_", "").replace(" ", "").replace(".", "")
     )
 
 
@@ -416,7 +412,6 @@ def display_policy_violations_interactive(results: Dict[str, PolicyResult]) -> N
             print(f"Invalid choice: {choice}")
 
 
-
 def _truncate_sensitive(text: str, max_visible: int = 20) -> str:
     """Truncate sensitive data in text for display (Fix 3.3 - Issue #12).
 
@@ -431,8 +426,8 @@ def _truncate_sensitive(text: str, max_visible: int = 20) -> str:
     """
     for pattern, label in SENSITIVE_PATTERNS:
 
-        def replacer(match: re.Match) -> str:
-            content = match.group(0)
+        def replacer(match: re.Match[str]) -> str:
+            content: str = match.group(0)
             if len(content) <= max_visible * 2:
                 return content
             return f"{content[:max_visible]}...[{label} REDACTED]...{content[-max_visible:]}"

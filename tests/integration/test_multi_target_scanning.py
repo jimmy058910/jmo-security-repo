@@ -343,7 +343,8 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     (test_repo / "requirements.txt").write_text("requests==2.25.0")  # Known CVE
 
     # Scan repo + image (both will find same CVE in requests package)
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -361,7 +362,8 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
 
     # Generate report
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -399,7 +401,8 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     (test_repo / "app.py").write_text("import os; os.system('ls')")  # Basic code
 
     # Scan repo + image (multi-target)
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -418,7 +421,8 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     assert result.returncode in [0, 1]
 
     # Generate report
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -461,7 +465,8 @@ resource "aws_s3_bucket" "test" {
     )
 
     # Scan all 3 target types
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -501,7 +506,8 @@ def test_multi_target_partial_failure(tmp_path: Path):
     (test_repo / "app.py").write_text("print('hello')")
 
     # Scan valid repo + invalid image (should fail gracefully)
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

@@ -25,7 +25,7 @@ try:
     console = Console()
 except ImportError:
     RICH_AVAILABLE = False
-    console = None  # type: ignore[assignment]
+    console = None  # type: ignore[assignment]  # Intentional fallback when rich not installed
 
 
 # Windows-safe Unicode fallback mappings

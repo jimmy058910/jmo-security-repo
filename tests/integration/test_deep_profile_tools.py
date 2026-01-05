@@ -29,7 +29,8 @@ def test_deep_profile_includes_all_tools(tmp_path):
     (test_repo / "app.py").write_text("print('hello')")
 
     # Run deep profile scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -74,7 +75,8 @@ def test_deep_profile_falco_output(tmp_path):
     test_repo.mkdir()
     (test_repo / "test.py").write_text("x = 1")
 
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -108,7 +110,8 @@ def test_deep_profile_aflplusplus_output(tmp_path):
     test_repo.mkdir()
     (test_repo / "test.c").write_text("int main() { return 0; }")
 
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -138,7 +141,8 @@ def test_deep_profile_graceful_degradation(tmp_path):
     (test_repo / "app.py").write_text("import os")
 
     # Run deep profile with --allow-missing-tools
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -167,7 +171,8 @@ def test_deep_profile_report_aggregation(tmp_path):
     (test_repo / "app.py").write_text("password = 'hardcoded123'")  # Trigger findings
 
     # Run deep profile scan
-    cmd_scan = [sys.executable,
+    cmd_scan = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -182,7 +187,8 @@ def test_deep_profile_report_aggregation(tmp_path):
     subprocess.run(cmd_scan, capture_output=True, timeout=240)
 
     # Generate report
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",

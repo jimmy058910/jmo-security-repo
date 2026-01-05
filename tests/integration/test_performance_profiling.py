@@ -25,7 +25,8 @@ def test_profile_flag_generates_timings(tmp_path):
     (test_repo / "app.py").write_text("print('test')")
 
     # Run scan with --profile flag (via report command)
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -40,7 +41,8 @@ def test_profile_flag_generates_timings(tmp_path):
     subprocess.run(cmd, check=True, timeout=120)
 
     # Generate report with profiling
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -68,7 +70,8 @@ def test_timings_data_structure(tmp_path):
     test_repo.mkdir()
     (test_repo / "README.md").write_text("# Test")
 
-    cmd_scan = [sys.executable,
+    cmd_scan = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -82,7 +85,8 @@ def test_timings_data_structure(tmp_path):
     ]
     subprocess.run(cmd_scan, timeout=120)
 
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -122,7 +126,8 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
     (test_repo / "app.py").write_text("import os")
 
     # Run CI command with --profile flag
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "ci",
@@ -159,7 +164,8 @@ def test_profile_without_flag_no_timings(tmp_path):
     (test_repo / "README.md").write_text("# Test")
 
     # Run scan
-    cmd_scan = [sys.executable,
+    cmd_scan = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -174,7 +180,8 @@ def test_profile_without_flag_no_timings(tmp_path):
     subprocess.run(cmd_scan, timeout=120)
 
     # Generate report WITHOUT --profile flag
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -200,7 +207,8 @@ def test_timings_thread_recommendation(tmp_path):
     test_repo.mkdir()
     (test_repo / "app.py").write_text("x = 1")
 
-    cmd_scan = [sys.executable,
+    cmd_scan = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -214,7 +222,8 @@ def test_timings_thread_recommendation(tmp_path):
     ]
     subprocess.run(cmd_scan, timeout=180)
 
-    cmd_report = [sys.executable,
+    cmd_report = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -242,7 +251,8 @@ def test_timings_json_is_valid_json(tmp_path):
     test_repo.mkdir()
     (test_repo / "test.py").write_text("print('hello')")
 
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "ci",

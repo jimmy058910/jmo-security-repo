@@ -45,7 +45,7 @@ from pathlib import Path
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image
 from scripts.core.secure_temp import secure_temp_dir
-from scripts.core.validation import sanitize_subprocess_output, sanitize_url_for_logging
+from scripts.core.validation import sanitize_subprocess_output
 
 logger = logging.getLogger(__name__)
 

@@ -111,7 +111,6 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
         return FakeCP(0, "", "")
 
     import subprocess
-    import sys
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -188,7 +187,6 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
         return FakeCP(0, '{"artifacts": []}', "ok")
 
     import subprocess
-    import sys
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -244,7 +242,8 @@ profiles:
     )
 
     # Run scan with custom profile
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -304,7 +303,8 @@ profiles:
     )
 
     # Run scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -352,7 +352,8 @@ profiles:
     )
 
     # Run scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -382,7 +383,8 @@ def test_profile_tool_selection_fast(tmp_path: Path):
     results_dir = tmp_path / "results"
 
     # Run fast profile scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -428,7 +430,8 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
     results_dir = tmp_path / "results"
 
     # Run balanced profile scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -488,7 +491,8 @@ def test_profile_tool_selection_deep(tmp_path: Path):
     results_dir = tmp_path / "results"
 
     # Run deep profile scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -567,7 +571,8 @@ profiles:
     )
 
     # Run scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -621,7 +626,8 @@ profiles:
     )
 
     # Run scan with profile
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

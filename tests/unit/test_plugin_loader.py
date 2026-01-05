@@ -10,7 +10,6 @@ Tests cover:
 from pathlib import Path
 import time
 
-import pytest
 
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 from scripts.core.plugin_loader import (
@@ -19,7 +18,6 @@ from scripts.core.plugin_loader import (
     LazyPluginRegistry,
     get_plugin_registry,
     get_plugin_loader,
-    preload_profile,
     get_available_adapters,
 )
 

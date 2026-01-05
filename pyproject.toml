@@ -76,6 +76,9 @@ show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
+# Performance optimizations
+incremental = true
+cache_dir = ".mypy_cache"
 
 # Gradually increase strictness for core modules
 [[tool.mypy.overrides]]
@@ -85,6 +88,16 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = "scripts.core.config"
 disallow_untyped_defs = true
+
+# Disable unused-ignore warnings for modules with optional dependency fallbacks
+# These have type: ignore comments needed locally but not in all environments
+[[tool.mypy.overrides]]
+module = "scripts.core.dedup_enhanced"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "scripts.cli.diff_commands"
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 markers = [

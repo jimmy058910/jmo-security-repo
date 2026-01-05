@@ -191,9 +191,7 @@ class ToolInstaller:
             self._manager = ToolManager(self.registry)
         return self._manager
 
-    def set_progress_callback(
-        self, callback: Callable[[str, int, int], None]
-    ) -> None:
+    def set_progress_callback(self, callback: Callable[[str, int, int], None]) -> None:
         """Set callback for progress updates: (tool_name, current, total)."""
         self._progress_callback = callback
 
@@ -317,14 +315,20 @@ class ToolInstaller:
                 # Method was attempted but failed
                 attempted_methods.append(install_method)
                 last_error = result.message
-                logger.debug(f"{install_method} failed for {tool_name}: {result.message}")
+                logger.debug(
+                    f"{install_method} failed for {tool_name}: {result.message}"
+                )
 
         # All methods failed - provide helpful error message
         duration = time.time() - start_time
         if attempted_methods:
-            error_msg = f"Tried {', '.join(attempted_methods)}. Last error: {last_error}"
+            error_msg = (
+                f"Tried {', '.join(attempted_methods)}. Last error: {last_error}"
+            )
         else:
-            error_msg = f"No installation methods available (tried: {', '.join(methods)})"
+            error_msg = (
+                f"No installation methods available (tried: {', '.join(methods)})"
+            )
 
         return InstallResult(
             tool_name=tool_name,
@@ -783,10 +787,14 @@ class ToolInstaller:
         arch_amd = "amd64" if arch == "x86_64" else "arm64" if arch == "arm64" else arch
 
         # GNU/Linux style: arm64 -> aarch64
-        arch_aarch = "x86_64" if arch == "x86_64" else "aarch64" if arch == "arm64" else arch
+        arch_aarch = (
+            "x86_64" if arch == "x86_64" else "aarch64" if arch == "arm64" else arch
+        )
 
         # Trivy's unique format: x86_64 -> "64bit", arm64 -> "ARM64"
-        trivy_arch = "64bit" if arch == "x86_64" else "ARM64" if arch == "arm64" else arch
+        trivy_arch = (
+            "64bit" if arch == "x86_64" else "ARM64" if arch == "arm64" else arch
+        )
 
         # Rust target triple (for noseyparker)
         if os_name.lower() == "linux":
@@ -840,7 +848,9 @@ class ToolInstaller:
                 if result.returncode != 0:
                     # Provide actionable error message
                     # Sanitize stderr to prevent leaking paths/credentials in logs
-                    stderr_raw = result.stderr.strip() if result.stderr else "Unknown error"
+                    stderr_raw = (
+                        result.stderr.strip() if result.stderr else "Unknown error"
+                    )
                     stderr = sanitize_subprocess_output(stderr_raw, max_length=200)
                     if "404" in stderr or "Not Found" in stderr.lower():
                         error_msg = (
@@ -1107,12 +1117,23 @@ class ToolInstaller:
             if clone_dir.exists():
                 # Check current version - if it matches, no action needed
                 current_tag_result = subprocess.run(
-                    ["git", "-C", str(clone_dir), "describe", "--tags", "--exact-match"],
+                    [
+                        "git",
+                        "-C",
+                        str(clone_dir),
+                        "describe",
+                        "--tags",
+                        "--exact-match",
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=30,
                 )
-                current_tag = current_tag_result.stdout.strip() if current_tag_result.returncode == 0 else ""
+                current_tag = (
+                    current_tag_result.stdout.strip()
+                    if current_tag_result.returncode == 0
+                    else ""
+                )
 
                 if current_tag == version_tag:
                     # Already at correct version
@@ -1128,15 +1149,20 @@ class ToolInstaller:
 
                 # Different version - remove and re-clone at correct tag
                 # (Shallow clones can't easily switch tags)
-                logger.info(f"Updating {tool_name} from {current_tag or 'unknown'} to {version_tag}")
+                logger.info(
+                    f"Updating {tool_name} from {current_tag or 'unknown'} to {version_tag}"
+                )
                 shutil.rmtree(clone_dir)
 
             # Fresh clone at specific tag
             result = subprocess.run(
                 [
-                    "git", "clone",
-                    "--depth", "1",
-                    "--branch", version_tag,
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--branch",
+                    version_tag,
                     repo_url,
                     str(clone_dir),
                 ],
@@ -1341,9 +1367,7 @@ class ToolInstaller:
             return "arm"
         return machine
 
-    def _get_download_command(
-        self, url: str, output_path: Path
-    ) -> list[str] | None:
+    def _get_download_command(self, url: str, output_path: Path) -> list[str] | None:
         """Get download command (curl or wget).
 
         Uses -f flag for curl to fail on HTTP errors (404, 500, etc.)
@@ -1369,7 +1393,15 @@ class ToolInstaller:
         archive_str = str(archive_path)
 
         # Define archive extensions to skip when searching for binaries
-        archive_extensions = (".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".zip", ".gz", ".xz")
+        archive_extensions = (
+            ".tar.gz",
+            ".tgz",
+            ".tar.xz",
+            ".tar.bz2",
+            ".zip",
+            ".gz",
+            ".xz",
+        )
 
         try:
             # Determine archive type and extract
@@ -1431,7 +1463,9 @@ def print_install_progress(
                 icon = colorize("[SKIP]", "cyan")
             else:
                 icon = colorize("[OK]", "green")
-            version = f" (v{result.version_installed})" if result.version_installed else ""
+            version = (
+                f" (v{result.version_installed})" if result.version_installed else ""
+            )
             print(f"  {icon} {result.tool_name}{version} - {result.method}")
         else:
             icon = colorize("[FAIL]", "red")

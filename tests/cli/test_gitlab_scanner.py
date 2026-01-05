@@ -591,7 +591,9 @@ spec:
                 # URL should NOT contain token (that's the old insecure pattern)
                 assert not any("glpat-test" in str(arg) for arg in clone_call)
                 # URL should use the base http URL format
-                assert any("http://gitlab.internal/test/repo.git" in arg for arg in clone_call)
+                assert any(
+                    "http://gitlab.internal/test/repo.git" in arg for arg in clone_call
+                )
                 # GIT_ASKPASS_TOKEN should be passed via environment, not URL
                 call_kwargs = mock_subprocess.call_args[1]
                 assert "env" in call_kwargs

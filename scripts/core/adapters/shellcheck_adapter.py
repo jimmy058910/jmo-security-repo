@@ -193,7 +193,9 @@ def _load_shellcheck_internal(path: str | Path) -> list[dict[str, Any]]:
         column = item.get("column")
         start_column = int(column) if isinstance(column, int) else 0
         end_column = item.get("endColumn")
-        end_column_int = int(end_column) if isinstance(end_column, int) else start_column
+        end_column_int = (
+            int(end_column) if isinstance(end_column, int) else start_column
+        )
 
         level = str(item.get("level") or "warning")
         code = item.get("code")

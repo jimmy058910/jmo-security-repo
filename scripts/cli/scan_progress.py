@@ -9,9 +9,8 @@ ETA tracking, and parallel tool visualization planned for v1.1.0.
 
 from __future__ import annotations
 
-import sys
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 
 class ScanProgressReporter:
@@ -146,7 +145,7 @@ class ScanProgressReporter:
 
 def create_progress_callback(
     reporter: ScanProgressReporter,
-) -> callable:
+) -> Callable[[str, str, int], None]:
     """Create a progress callback function for use with tool runners.
 
     Args:

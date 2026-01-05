@@ -75,6 +75,7 @@ def _get_github_token() -> str:
         _github_token_cache = os.environ.get("JMO_TELEMETRY_GITHUB_TOKEN", "")
     return _github_token_cache
 
+
 # Telemetry file (JSONL format)
 TELEMETRY_FILE = "jmo-telemetry-events.jsonl"
 
@@ -577,9 +578,7 @@ if __name__ == "__main__":
         # Check telemetry configuration
         token = _get_github_token()
         print(f"GIST_ID: {GIST_ID or '(not set)'}")
-        print(
-            f"GITHUB_TOKEN: {'***' + token[-4:] if token else '(not set)'}"
-        )
+        print(f"GITHUB_TOKEN: {'***' + token[-4:] if token else '(not set)'}")
         print(f"TELEMETRY_ENDPOINT: {TELEMETRY_ENDPOINT or '(not configured)'}")
         print(f"Anonymous ID: {get_anonymous_id()}")
         print(f"CI Detected: {detect_ci_environment()}")

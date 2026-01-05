@@ -154,7 +154,6 @@ class TruffleHogAdapter(AdapterPlugin):
             # Generate fingerprint
             finding.id = self.get_fingerprint(finding)
 
-
             findings.append(finding)
 
         return findings

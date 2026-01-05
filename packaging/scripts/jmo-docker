@@ -21,9 +21,9 @@ JMO_DOCKER_IMAGE="${JMO_DOCKER_IMAGE:-ghcr.io/jimmy058910/jmo-security:latest}"
 
 # Check if Docker is running
 if ! docker info >/dev/null 2>&1; then
-    echo "ERROR: Docker is not running or not installed."
-    echo "Please start Docker and try again."
-    exit 1
+  echo "ERROR: Docker is not running or not installed."
+  echo "Please start Docker and try again."
+  exit 1
 fi
 
 # Create .jmo directory if it doesn't exist (for history persistence)
@@ -32,14 +32,14 @@ mkdir -p "$(pwd)/.jmo"
 # Determine TTY flags based on terminal availability
 # Use -it for interactive terminals, -t only for non-interactive (CI, mintty)
 if [ -t 0 ] && [ -t 1 ]; then
-    TTY_FLAGS="-it"
+  TTY_FLAGS="-it"
 else
-    TTY_FLAGS="-t"
+  TTY_FLAGS="-t"
 fi
 
 # Run JMo in Docker with current directory mounted
 docker run --rm $TTY_FLAGS \
-    -v "$(pwd):/scan" \
-    -v "$(pwd)/.jmo:/scan/.jmo" \
-    -w /scan \
-    "$JMO_DOCKER_IMAGE" "$@"
+  -v "$(pwd):/scan" \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
+  -w /scan \
+  "$JMO_DOCKER_IMAGE" "$@"

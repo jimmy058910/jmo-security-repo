@@ -7,6 +7,7 @@ monkeypatching internal functions.
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -38,7 +39,8 @@ exclude: ["test-*"]
     )
 
     # Run scan with config
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -94,7 +96,8 @@ retries: 2
     )
 
     # Run scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -148,7 +151,8 @@ tools: [semgrep, trivy]
     )
 
     # Run scan
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -197,7 +201,8 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
     )
 
     # Run scan with --allow-missing-tools
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -271,7 +276,8 @@ tools: [trufflehog]
     )
 
     # Run scan with invalid JMO_THREADS value
-    cmd = [sys.executable,
+    cmd = [
+        sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

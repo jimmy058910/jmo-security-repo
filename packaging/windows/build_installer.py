@@ -304,9 +304,6 @@ def create_pyinstaller_spec(version: str) -> Path:
     """
     print("📝 Creating PyInstaller spec file...")
 
-    # Convert PROJECT_ROOT to string with forward slashes for cross-platform compatibility
-    project_root_str = str(PROJECT_ROOT).replace("\\", "/")
-
     spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec for JMo Security {version}
 

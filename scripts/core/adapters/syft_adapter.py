@@ -122,11 +122,11 @@ class SyftAdapter(AdapterPlugin):
 
 def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
     data = safe_load_json_file(path, default=None)
-    if data is None:
+    if not isinstance(data, dict):
         return []
 
     out: list[dict[str, Any]] = []
-    artifacts = data.get("artifacts") if isinstance(data, dict) else None
+    artifacts = data.get("artifacts")
     if isinstance(artifacts, list):
         for a in artifacts:
             name = str(a.get("name") or a.get("id") or "package")
@@ -159,7 +159,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
             }
             out.append(finding)
 
-    vulns = data.get("vulnerabilities") if isinstance(data, dict) else None
+    vulns = data.get("vulnerabilities")
     if isinstance(vulns, list):
         for v in vulns:
             vid = str(v.get("id") or v.get("vulnerability") or "VULN")

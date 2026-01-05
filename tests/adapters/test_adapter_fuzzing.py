@@ -19,13 +19,13 @@ hypothesis = pytest.importorskip(
     "hypothesis",
     reason="Hypothesis library required for property-based tests. Install with: pip install hypothesis",
 )
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st  # noqa: E402
 
-from scripts.core.adapters.bandit_adapter import BanditAdapter
-from scripts.core.adapters.checkov_adapter import CheckovAdapter
-from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
-from scripts.core.adapters.semgrep_adapter import SemgrepAdapter
-from scripts.core.adapters.trivy_adapter import TrivyAdapter
+from scripts.core.adapters.bandit_adapter import BanditAdapter  # noqa: E402
+from scripts.core.adapters.checkov_adapter import CheckovAdapter  # noqa: E402
+from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter  # noqa: E402
+from scripts.core.adapters.semgrep_adapter import SemgrepAdapter  # noqa: E402
+from scripts.core.adapters.trivy_adapter import TrivyAdapter  # noqa: E402
 
 
 # Strategy: Generate malformed JSON

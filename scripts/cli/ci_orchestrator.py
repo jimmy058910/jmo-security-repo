@@ -46,7 +46,9 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
                             f"  {d['tool']}: {d['installed']} < {d['expected']}{marker}\n"
                         )
                 if unknown:
-                    sys.stderr.write(f"\n{len(unknown)} tool(s) with unknown version:\n")
+                    sys.stderr.write(
+                        f"\n{len(unknown)} tool(s) with unknown version:\n"
+                    )
                     for d in unknown:
                         marker = " [CRITICAL]" if d["critical"] else ""
                         sys.stderr.write(

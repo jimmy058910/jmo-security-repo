@@ -317,17 +317,23 @@ class CronInstaller:
             if "terraform_state" in iac:
                 tf_path = iac["terraform_state"]
                 if not validate_path_safe(tf_path, "terraform_state"):
-                    raise CronValidationError(f"Invalid terraform_state path: '{tf_path}'")
+                    raise CronValidationError(
+                        f"Invalid terraform_state path: '{tf_path}'"
+                    )
                 jmo_cmd += f" --terraform-state {tf_path}"
             if "cloudformation" in iac:
                 cf_path = iac["cloudformation"]
                 if not validate_path_safe(cf_path, "cloudformation"):
-                    raise CronValidationError(f"Invalid cloudformation path: '{cf_path}'")
+                    raise CronValidationError(
+                        f"Invalid cloudformation path: '{cf_path}'"
+                    )
                 jmo_cmd += f" --cloudformation {cf_path}"
             if "k8s_manifest" in iac:
                 k8s_path = iac["k8s_manifest"]
                 if not validate_path_safe(k8s_path, "k8s_manifest"):
-                    raise CronValidationError(f"Invalid k8s_manifest path: '{k8s_path}'")
+                    raise CronValidationError(
+                        f"Invalid k8s_manifest path: '{k8s_path}'"
+                    )
                 jmo_cmd += f" --k8s-manifest {k8s_path}"
 
         # 4. Web URLs

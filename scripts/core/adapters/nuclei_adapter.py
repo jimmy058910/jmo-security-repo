@@ -266,7 +266,6 @@ def _load_nuclei_internal(path: str | Path) -> list[dict[str, Any]]:
         if risk:
             finding["risk"] = risk
 
-
         out.append(finding)
 
     return out

@@ -638,7 +638,10 @@ class ScanOrchestrator:
         }
 
     def scan_all(
-        self, targets: ScanTargets, per_tool_config: dict, progress_callback=None,
+        self,
+        targets: ScanTargets,
+        per_tool_config: dict,
+        progress_callback=None,
         tool_progress_callback=None,
     ) -> list[tuple[str, dict[str, bool]]]:
         """

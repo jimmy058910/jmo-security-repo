@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
@@ -54,31 +54,33 @@ def safe_load_json_file(
     """
     p = Path(path)
 
+    result_type = dict[str, Any] | list[Any] | None
+
     if not p.exists():
         if log_errors:
             logger.debug("JSON file does not exist: %s", p)
-        return default
+        return cast(result_type, default)
 
     try:
         raw = p.read_text(encoding="utf-8-sig", errors="ignore").strip()
     except OSError as e:
         if log_errors:
             logger.debug("Failed to read JSON file %s: %s", p, e)
-        return default
+        return cast(result_type, default)
 
     if not raw:
         if log_errors:
             logger.debug("JSON file is empty: %s", p)
-        return default
+        return cast(result_type, default)
 
     try:
-        return json.loads(raw)
+        return cast(result_type, json.loads(raw))
     except json.JSONDecodeError as e:
         if log_errors:
             logger.debug(
                 "Failed to parse JSON file %s: %s at position %d", p, e.msg, e.pos
             )
-        return default
+        return cast(result_type, default)
 
 
 def safe_load_ndjson_file(

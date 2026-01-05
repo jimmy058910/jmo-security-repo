@@ -90,7 +90,8 @@ class TestDirectoryDiffWorkflows:
         # Run diff
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -156,7 +157,8 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff.md"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -214,7 +216,8 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff-report.html"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -270,7 +273,8 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff.sarif"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -331,7 +335,8 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -390,7 +395,8 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -450,7 +456,8 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -516,7 +523,8 @@ class TestCICDIntegrationPatterns:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -582,7 +590,8 @@ class TestCICDIntegrationPatterns:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",

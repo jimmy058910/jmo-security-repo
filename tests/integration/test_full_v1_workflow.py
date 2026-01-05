@@ -13,7 +13,6 @@ Phase 1.2.1 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
-import sys
 import time
 
 import pytest

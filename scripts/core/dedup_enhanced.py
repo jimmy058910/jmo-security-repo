@@ -56,7 +56,7 @@ try:
     from rapidfuzz import fuzz
 except ImportError:
     # Fallback to simple ratio calculation if rapidfuzz not available
-    fuzz = None  # type: ignore
+    fuzz = None  # type: ignore[assignment]  # Intentional fallback when rapidfuzz not installed
 
 from scripts.core.common_finding import Severity
 
@@ -1154,7 +1154,7 @@ class LSHSignatureGenerator:
 
     def _extract_cves(self, raw: dict, message: str) -> set[str]:
         """Extract CVE IDs from raw data and message."""
-        cves = set()
+        cves: set[str] = set()
 
         for key in ["CVE", "VulnerabilityID", "cve_id", "cve"]:
             if key in raw:

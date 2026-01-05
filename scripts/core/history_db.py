@@ -635,7 +635,7 @@ def encrypt_raw_finding(raw_json: str) -> str:
 
     # Encrypt the raw JSON string
     encrypted_bytes = fernet.encrypt(raw_json.encode("utf-8"))
-    encrypted_str = encrypted_bytes.decode("utf-8")
+    encrypted_str: str = encrypted_bytes.decode("utf-8")
 
     return encrypted_str
 
@@ -687,7 +687,7 @@ def decrypt_raw_finding(encrypted_str: str) -> str:
 
     # Decrypt the encrypted string
     decrypted_bytes = fernet.decrypt(encrypted_str.encode("utf-8"))
-    decrypted_str = decrypted_bytes.decode("utf-8")
+    decrypted_str: str = decrypted_bytes.decode("utf-8")
 
     return decrypted_str
 
@@ -1859,9 +1859,11 @@ def batch_insert_findings_optimized(
                     if isinstance(tool_info, dict)
                     else str(tool_info)
                 ),
-                tool_info.get("version", "unknown")
-                if isinstance(tool_info, dict)
-                else "",
+                (
+                    tool_info.get("version", "unknown")
+                    if isinstance(tool_info, dict)
+                    else ""
+                ),
                 location.get("path", "") if isinstance(location, dict) else "",
                 location.get("startLine", 0) if isinstance(location, dict) else 0,
                 location.get("endLine", 0) if isinstance(location, dict) else 0,

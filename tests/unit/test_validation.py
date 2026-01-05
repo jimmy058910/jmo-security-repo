@@ -28,7 +28,6 @@ import pytest
 from scripts.core.validation import (
     # Version validation
     validate_version,
-    VERSION_PATTERN,
     DANGEROUS_VERSION_CHARS,
     # Path validation
     validate_path_safe,
@@ -40,11 +39,7 @@ from scripts.core.validation import (
     VALID_PROFILES,
     # Tool name validation
     validate_tool_name,
-    TOOL_NAME_PATTERN,
-    # Cron validation
     validate_cron_expression,
-    CRON_SCHEDULE_PATTERN,
-    # URL validation
     validate_url,
     # Container image validation
     validate_container_image,
@@ -560,16 +555,31 @@ class TestSubprocessOutputSanitization:
         "input_val,expected",
         [
             # Unix home paths
-            ("Error: /home/jimmy/project/file.py not found", "Error: /home/***USER***/project/file.py not found"),
-            ("Failed at /home/alice/.config/tool", "Failed at /home/***USER***/.config/tool"),
+            (
+                "Error: /home/jimmy/project/file.py not found",
+                "Error: /home/***USER***/project/file.py not found",
+            ),
+            (
+                "Failed at /home/alice/.config/tool",
+                "Failed at /home/***USER***/.config/tool",
+            ),
             # macOS home paths
             ("/Users/developer/workspace/repo", "/Users/***USER***/workspace/repo"),
-            ("/Users/john/Documents/secret.txt", "/Users/***USER***/Documents/secret.txt"),
+            (
+                "/Users/john/Documents/secret.txt",
+                "/Users/***USER***/Documents/secret.txt",
+            ),
             # Windows paths (backslash)
             (r"C:\Users\Jimmy\Projects\repo", r"C:\Users\***USER***\Projects\repo"),
-            (r"Error in C:\Users\Developer\config", r"Error in C:\Users\***USER***\config"),
+            (
+                r"Error in C:\Users\Developer\config",
+                r"Error in C:\Users\***USER***\config",
+            ),
             # Windows paths (forward slash)
-            ("C:/Users/Jimmy/Documents/file.txt", "C:/Users/***USER***/Documents/file.txt"),
+            (
+                "C:/Users/Jimmy/Documents/file.txt",
+                "C:/Users/***USER***/Documents/file.txt",
+            ),
         ],
     )
     def test_sanitize_home_paths(self, input_val, expected):
@@ -594,7 +604,10 @@ class TestSubprocessOutputSanitization:
             # Generic tokens
             ("token=secretvalue12345", "secretvalue12345"),
             ("password: mysecretpassword", "mysecretpassword"),
-            ("api_key: abcdefghijklmnopqrstuvwxyz123456789012", "abcdefghijklmnopqrstuvwxyz"),
+            (
+                "api_key: abcdefghijklmnopqrstuvwxyz123456789012",
+                "abcdefghijklmnopqrstuvwxyz",
+            ),
         ],
     )
     def test_sanitize_tokens(self, input_val, should_not_contain):
@@ -626,9 +639,18 @@ class TestSubprocessOutputSanitization:
         "input_val,expected",
         [
             # URL with credentials
-            ("Failed to connect to https://user:password@api.example.com", "https://***:***@api.example.com"),
-            ("git clone https://oauth2:glpat-secret@gitlab.com/repo.git failed", "https://***:***@gitlab.com/repo.git"),
-            ("Error: http://admin:pass123@internal.service:8080", "http://***:***@internal.service:8080"),
+            (
+                "Failed to connect to https://user:password@api.example.com",
+                "https://***:***@api.example.com",
+            ),
+            (
+                "git clone https://oauth2:glpat-secret@gitlab.com/repo.git failed",
+                "https://***:***@gitlab.com/repo.git",
+            ),
+            (
+                "Error: http://admin:pass123@internal.service:8080",
+                "http://***:***@internal.service:8080",
+            ),
         ],
     )
     def test_sanitize_url_credentials(self, input_val, expected):
@@ -742,9 +764,18 @@ class TestSanitizeUrlForLogging:
         "input_url,expected",
         [
             # Basic URL with credentials
-            ("https://user:password@github.com/repo.git", "https://***:***@github.com/repo.git"),
-            ("https://oauth2:glpat-xxx@gitlab.com/repo.git", "https://***:***@gitlab.com/repo.git"),
-            ("http://admin:secret@localhost:8080/api", "http://***:***@localhost:8080/api"),
+            (
+                "https://user:password@github.com/repo.git",
+                "https://***:***@github.com/repo.git",
+            ),
+            (
+                "https://oauth2:glpat-xxx@gitlab.com/repo.git",
+                "https://***:***@gitlab.com/repo.git",
+            ),
+            (
+                "http://admin:secret@localhost:8080/api",
+                "http://***:***@localhost:8080/api",
+            ),
             # URL without credentials (unchanged)
             ("https://github.com/repo.git", "https://github.com/repo.git"),
             ("http://localhost:8080", "http://localhost:8080"),
@@ -784,6 +815,7 @@ class TestOutputSanitizationPatterns:
     def test_all_patterns_compile(self):
         """All regex patterns should compile without error."""
         import re
+
         for pattern, replacement, flags in OUTPUT_SANITIZATION_PATTERNS:
             # This will raise if pattern is invalid
             re.compile(pattern, flags)

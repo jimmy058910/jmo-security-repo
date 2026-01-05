@@ -110,10 +110,24 @@ def validate_version(version: str, tool_name: str = "unknown") -> bool:
 # Characters that should never appear in path components
 # Includes shell metacharacters to prevent command injection
 DANGEROUS_PATH_CHARS = [
-    "<", ">", "|", "?", "*", '"',  # Windows dangerous chars
-    "\x00", "\n", "\r",  # Control characters
-    ";", "&", "$", "`", "'",  # Shell metacharacters
-    "(", ")", "{", "}",  # Shell grouping
+    "<",
+    ">",
+    "|",
+    "?",
+    "*",
+    '"',  # Windows dangerous chars
+    "\x00",
+    "\n",
+    "\r",  # Control characters
+    ";",
+    "&",
+    "$",
+    "`",
+    "'",  # Shell metacharacters
+    "(",
+    ")",
+    "{",
+    "}",  # Shell grouping
 ]
 
 
@@ -230,11 +244,11 @@ def sanitize_path_component(component: str) -> str:
     result = result.replace("\\", "_")
 
     # Replace Windows dangerous characters
-    for char in ['<', '>', ':', '"', '|', '?', '*']:
+    for char in ["<", ">", ":", '"', "|", "?", "*"]:
         result = result.replace(char, "_")
 
     # Replace control characters
-    result = re.sub(r'[\x00-\x1f\x7f]', "_", result)
+    result = re.sub(r"[\x00-\x1f\x7f]", "_", result)
 
     # Handle traversal sequences
     while ".." in result:
@@ -403,7 +417,9 @@ def validate_cron_expression(cron_expr: str) -> bool:
     # Check for dangerous characters
     for char in DANGEROUS_CRON_CHARS:
         if char in cron_expr:
-            logger.error(f"Dangerous character '{char}' in cron expression: '{cron_expr}'")
+            logger.error(
+                f"Dangerous character '{char}' in cron expression: '{cron_expr}'"
+            )
             return False
 
     # Check for command injection patterns
@@ -566,7 +582,22 @@ def validate_container_image(image: str) -> bool:
         return False
 
     # Check for dangerous characters
-    dangerous_chars = [";", "|", "&", "$", "`", "(", ")", "{", "}", "<", ">", "'", '"', " "]
+    dangerous_chars = [
+        ";",
+        "|",
+        "&",
+        "$",
+        "`",
+        "(",
+        ")",
+        "{",
+        "}",
+        "<",
+        ">",
+        "'",
+        '"',
+        " ",
+    ]
     for char in dangerous_chars:
         if char in image:
             logger.error(f"Dangerous character '{char}' in image reference: '{image}'")
@@ -590,7 +621,9 @@ def validate_container_image(image: str) -> bool:
 # =============================================================================
 
 
-def validate_positive_int(value: int | str, name: str, max_value: int = 2**31 - 1) -> bool:
+def validate_positive_int(
+    value: int | str, name: str, max_value: int = 2**31 - 1
+) -> bool:
     """
     Validate positive integer value within bounds.
 
@@ -627,7 +660,9 @@ def validate_positive_int(value: int | str, name: str, max_value: int = 2**31 - 
     return True
 
 
-def validate_non_negative_int(value: int | str, name: str, max_value: int = 2**31 - 1) -> bool:
+def validate_non_negative_int(
+    value: int | str, name: str, max_value: int = 2**31 - 1
+) -> bool:
     """
     Validate non-negative integer value within bounds.
 
@@ -666,8 +701,11 @@ def validate_non_negative_int(value: int | str, name: str, max_value: int = 2**3
 OUTPUT_SANITIZATION_PATTERNS: list[tuple[str, str, int]] = [
     # SSH private key content indicators (RSA, DSA, EC, OPENSSH, etc.)
     # MUST come first - before generic "key:" pattern can break the header
-    (r"-----BEGIN\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----.*?-----END\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----",
-     "***PRIVATE KEY REDACTED***", re.DOTALL),
+    (
+        r"-----BEGIN\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----.*?-----END\s+(?:[A-Z]+\s+)*PRIVATE\s+KEY-----",
+        "***PRIVATE KEY REDACTED***",
+        re.DOTALL,
+    ),
     # GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_) - specific patterns first
     (r"gh[pousr]_[a-zA-Z0-9]{36,}", "***GITHUB_TOKEN_REDACTED***", 0),
     # GitLab tokens (glpat-)
@@ -679,11 +717,18 @@ OUTPUT_SANITIZATION_PATTERNS: list[tuple[str, str, int]] = [
     # Basic auth in URLs (user:pass@host)
     (r"(https?://)[^:]+:[^@]+@", r"\1***:***@", re.IGNORECASE),
     # API keys and tokens (common patterns: hex strings of specific lengths)
-    (r"(['\"]?(?:api[_-]?key|access[_-]?token|secret[_-]?key)['\"]?\s*[:=]\s*['\"]?)[a-zA-Z0-9_\-]{20,}",
-     r"\1***REDACTED***", re.IGNORECASE),
+    (
+        r"(['\"]?(?:api[_-]?key|access[_-]?token|secret[_-]?key)['\"]?\s*[:=]\s*['\"]?)[a-zA-Z0-9_\-]{20,}",
+        r"\1***REDACTED***",
+        re.IGNORECASE,
+    ),
     # Tokens, keys, passwords, secrets with assignment (generic - comes after specific)
     # Only match when followed by value characters (not just whitespace/newline)
-    (r"(token|password|secret|credential|auth)[=:]\s*\S+", r"\1=***REDACTED***", re.IGNORECASE),
+    (
+        r"(token|password|secret|credential|auth)[=:]\s*\S+",
+        r"\1=***REDACTED***",
+        re.IGNORECASE,
+    ),
     # Home directory paths on Unix (Linux/macOS)
     (r"/home/[^/\s:]+", "/home/***USER***", 0),
     (r"/Users/[^/\s:]+", "/Users/***USER***", 0),
@@ -693,8 +738,11 @@ OUTPUT_SANITIZATION_PATTERNS: list[tuple[str, str, int]] = [
     # Windows user profile via environment variable patterns
     (r"%USERPROFILE%", "***USERPROFILE***", re.IGNORECASE),
     # Generic long hex strings that might be secrets (40+ chars)
-    (r"(['\"]?(?:secret|token|key|password)['\"]?\s*[:=]\s*['\"]?)[a-fA-F0-9]{40,}",
-     r"\1***REDACTED***", re.IGNORECASE),
+    (
+        r"(['\"]?(?:secret|token|key|password)['\"]?\s*[:=]\s*['\"]?)[a-fA-F0-9]{40,}",
+        r"\1***REDACTED***",
+        re.IGNORECASE,
+    ),
 ]
 
 
@@ -800,10 +848,7 @@ def sanitize_url_for_logging(url: str) -> str:
 
     # Pattern for credentials in URL: protocol://user:pass@host
     result = re.sub(
-        r"(https?://)[^:/@]+:[^@]+@",
-        r"\1***:***@",
-        url,
-        flags=re.IGNORECASE
+        r"(https?://)[^:/@]+:[^@]+@", r"\1***:***@", url, flags=re.IGNORECASE
     )
 
     # Also catch token patterns in query strings
@@ -811,7 +856,7 @@ def sanitize_url_for_logging(url: str) -> str:
         r"([?&](?:token|key|secret|password|auth)[=])[^&]+",
         r"\1***REDACTED***",
         result,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     return result

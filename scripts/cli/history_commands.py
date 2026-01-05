@@ -879,9 +879,7 @@ def cmd_history_migrate(args) -> int:
             if len(result["applied"]) == 0:
                 safe_write("\n✅ No pending migrations (already up-to-date)\n")
             else:
-                safe_write(
-                    f"\n✅ Applied {len(result['applied'])} migration(s):\n"
-                )
+                safe_write(f"\n✅ Applied {len(result['applied'])} migration(s):\n")
                 for version in result["applied"]:
                     sys.stdout.write(f"  - {version}\n")
                 sys.stdout.write(f"\nFinal version: {result['final_version']}\n")

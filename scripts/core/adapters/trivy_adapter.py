@@ -105,10 +105,10 @@ class TrivyAdapter(AdapterPlugin):
             List of Finding objects following CommonFinding schema v1.2.0
         """
         data = safe_load_json_file(output_path, default=None)
-        if data is None:
+        if not isinstance(data, dict):
             return []
 
-        results = data.get("Results") if isinstance(data, dict) else None
+        results = data.get("Results")
         if not isinstance(results, list):
             return []
 
@@ -178,7 +178,6 @@ class TrivyAdapter(AdapterPlugin):
 
                     # Generate fingerprint
                     finding.id = self.get_fingerprint(finding)
-
 
                     findings.append(finding)
 

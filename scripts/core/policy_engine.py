@@ -393,7 +393,7 @@ class PolicyEngine:
                                 metadata[key] = value
                         else:
                             metadata[key] = value
-                return metadata
+                return cast(Dict[str, Any], metadata)
 
             return {}
 

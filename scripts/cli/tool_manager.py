@@ -22,7 +22,6 @@ from scripts.core.tool_registry import (
     TOOL_EXECUTION_COMMANDS,
     TOOL_VARIANTS,
     TOOL_VERSION_REQUIREMENTS,
-    ToolInfo,
     ToolRegistry,
     detect_platform,
     get_install_hint,
@@ -55,12 +54,15 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     # - (?<!version ) - not preceded by "version " (excludes "Java version 17.0.17")
     # - (?<!\d) - not preceded by digit (prevents matching "7.0.17" substring of "17.0.17")
     # Also matches "OWASP ZAP 2.16.1" or standalone "2.16.1" on its own line
-    "zap": re.compile(r"(?<!version )(?<!\d)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)", re.IGNORECASE),
+    "zap": re.compile(
+        r"(?<!version )(?<!\d)(?:(?:OWASP\s+)?(?:ZAP|Zed Attack Proxy)\s+)?v?(\d+\.\d+\.\d+)",
+        re.IGNORECASE,
+    ),
     # dependency-check outputs: "Dependency-Check Core version X.Y.Z"
     # or "dependency-check version: X.Y.Z" or just "version X.Y.Z"
     "dependency-check": re.compile(
         r"(?:dependency.?check\s+)?(?:core\s+)?version:?\s*(\d+\.\d+\.\d+)",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "noseyparker": re.compile(r"noseyparker\s+(\d+\.\d+\.\d+)"),
     "cdxgen": re.compile(r"(\d+\.\d+\.\d+)"),
@@ -334,17 +336,19 @@ def get_remediation_for_tool(
     Returns:
         Dict with 'commands' (list of commands to run) and 'manual' (manual instructions)
     """
-    result = {"commands": [], "manual": None, "jmo_install": None}
+    commands: list[str] = []
+    manual: str | None = None
+    jmo_install: str | None = None
 
     remediation = REMEDIATION_COMMANDS.get(tool_name)
     if not remediation:
         # Fall back to jmo tools install for unknown tools
-        result["commands"] = [f"jmo tools install {tool_name}"]
-        result["jmo_install"] = f"jmo tools install {tool_name}"
-        return result
+        commands = [f"jmo tools install {tool_name}"]
+        jmo_install = f"jmo tools install {tool_name}"
+        return {"commands": commands, "manual": manual, "jmo_install": jmo_install}
 
     # Get jmo install command
-    result["jmo_install"] = remediation.get("jmo_install")
+    jmo_install = remediation.get("jmo_install")
 
     # Check if dependencies are needed first
     if "deps" in remediation:
@@ -352,7 +356,7 @@ def get_remediation_for_tool(
             if isinstance(dep_commands, dict):
                 cmd = dep_commands.get(platform)
                 if cmd:
-                    result["commands"].append(cmd)
+                    commands.append(cmd)
 
     # Get install command for platform
     if "install" in remediation:
@@ -360,15 +364,15 @@ def get_remediation_for_tool(
         if isinstance(install_cmds, dict):
             cmd = install_cmds.get(platform)
             if cmd:
-                result["commands"].append(cmd)
+                commands.append(cmd)
         elif isinstance(install_cmds, str):
-            result["commands"].append(install_cmds)
+            commands.append(install_cmds)
 
     # Add manual instructions if no commands available
-    if not result["commands"]:
-        result["manual"] = remediation.get("manual", f"See JMo docs for {tool_name} installation")
+    if not commands:
+        manual = remediation.get("manual", f"See JMo docs for {tool_name} installation")
 
-    return result
+    return {"commands": commands, "manual": manual, "jmo_install": jmo_install}
 
 
 @dataclass
@@ -458,7 +462,7 @@ class ToolManager:
 
         # Get installed version if found
         installed_version = None
-        if installed:
+        if binary_path:
             installed_version = self._get_tool_version(tool_name, binary_path)
 
         # Determine if outdated
@@ -517,7 +521,10 @@ class ToolManager:
 
     def check_all_tools(self) -> dict[str, ToolStatus]:
         """Check status of all registered tools."""
-        return {tool.name: self.check_tool(tool.name) for tool in self.registry.get_all_tools()}
+        return {
+            tool.name: self.check_tool(tool.name)
+            for tool in self.registry.get_all_tools()
+        }
 
     def get_missing_tools(self, profile: str) -> list[ToolStatus]:
         """
@@ -575,9 +582,7 @@ class ToolManager:
 
         # Collect execution warnings for tools that are installed but not ready
         warnings = [
-            f"{s.name}: {s.execution_warning}"
-            for s in not_ready
-            if s.execution_warning
+            f"{s.name}: {s.execution_warning}" for s in not_ready if s.execution_warning
         ]
 
         return {
@@ -616,13 +621,15 @@ class ToolManager:
                 direction = self._compare_version_direction(
                     status.installed_version, status.expected_version
                 )
-                drift.append({
-                    "tool": name,
-                    "installed": status.installed_version,
-                    "expected": status.expected_version,
-                    "critical": status.is_critical,
-                    "direction": direction,
-                })
+                drift.append(
+                    {
+                        "tool": name,
+                        "installed": status.installed_version,
+                        "expected": status.expected_version,
+                        "critical": status.is_critical,
+                        "direction": direction,
+                    }
+                )
 
         return drift
 
@@ -657,7 +664,9 @@ class ToolManager:
                 if inst_part < exp_part:
                     return "behind"
 
-            return "unknown"  # Versions are equal (shouldn't happen if called correctly)
+            return (
+                "unknown"  # Versions are equal (shouldn't happen if called correctly)
+            )
         except (ValueError, TypeError):
             return "unknown"
 
@@ -694,7 +703,14 @@ class ToolManager:
         # dependency-check is extracted to ~/.jmo/bin/dependency-check/
         # The script is at ~/.jmo/bin/dependency-check/bin/dependency-check.sh
         if binary_name == "dependency-check.sh":
-            dc_path = home / ".jmo" / "bin" / "dependency-check" / "bin" / "dependency-check.sh"
+            dc_path = (
+                home
+                / ".jmo"
+                / "bin"
+                / "dependency-check"
+                / "bin"
+                / "dependency-check.sh"
+            )
             if dc_path.exists():
                 return str(dc_path)
 
@@ -807,7 +823,7 @@ class ToolManager:
             version = self._parse_version(tool_name, output)
             if version is None:
                 # Log parse failure with sample of output for debugging
-                sample = output[:200].replace('\n', '\\n')
+                sample = output[:200].replace("\n", "\\n")
                 logger.debug(
                     f"Could not parse version for {tool_name} from output: {sample!r}"
                 )
@@ -825,7 +841,9 @@ class ToolManager:
             logger.debug(f"Permission denied executing {binary_path} for {tool_name}")
             return None
         except (OSError, subprocess.SubprocessError) as e:
-            logger.debug(f"Error getting version for {tool_name}: {type(e).__name__}: {e}")
+            logger.debug(
+                f"Error getting version for {tool_name}: {type(e).__name__}: {e}"
+            )
             return None
 
     def _parse_version(self, tool_name: str, output: str) -> str | None:
@@ -1017,7 +1035,9 @@ def print_tool_status_table(
     name_width = max(name_width, 15)
 
     # Header
-    header = f"{'Tool':<{name_width}}  {'Status':<10}  {'Installed':<12}  {'Expected':<12}"
+    header = (
+        f"{'Tool':<{name_width}}  {'Status':<10}  {'Installed':<12}  {'Expected':<12}"
+    )
     print(header)
     print("-" * len(header))
 
@@ -1043,7 +1063,9 @@ def print_tool_status_table(
         installed_ver = status.installed_version or "-"
         expected_ver = status.expected_version or "-"
 
-        print(f"{name:<{name_width}}  {status_str:<10}  {installed_ver:<12}  {expected_ver:<12}")
+        print(
+            f"{name:<{name_width}}  {status_str:<10}  {installed_ver:<12}  {expected_ver:<12}"
+        )
 
         if show_hints and not status.installed:
             print(f"  -> {status.install_hint}")

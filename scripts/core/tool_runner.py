@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import subprocess
@@ -132,14 +132,11 @@ class ToolRunner:
         ...     print(f"{result.tool}: {result.status}")
     """
 
-    # Type alias for progress callback
-    ProgressCallback = Any  # Callable[[str, str, int], None]
-
     def __init__(
         self,
         tools: list[ToolDefinition],
         max_workers: int = 4,
-        progress_callback: ProgressCallback = None,
+        progress_callback: Callable[[str, str, int], None] | None = None,
     ):
         """
         Initialize ToolRunner.

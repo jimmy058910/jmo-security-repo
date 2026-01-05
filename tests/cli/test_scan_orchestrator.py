@@ -566,8 +566,13 @@ class TestMsysPathDetection:
     def test_detects_program_files_git_path(self):
         """Should detect paths containing 'Program Files/Git' (MSYS telltale sign)."""
         # Standard Git for Windows installation path
-        assert _detect_msys_path_mangling("C:/Program Files/Git/scan/juice-shop") is True
-        assert _detect_msys_path_mangling("C:\\Program Files\\Git\\scan\\juice-shop") is True
+        assert (
+            _detect_msys_path_mangling("C:/Program Files/Git/scan/juice-shop") is True
+        )
+        assert (
+            _detect_msys_path_mangling("C:\\Program Files\\Git\\scan\\juice-shop")
+            is True
+        )
         # Different drive letter
         assert _detect_msys_path_mangling("D:/Program Files/Git/usr/bin") is True
 

@@ -65,7 +65,8 @@ def test_empty_baseline(temp_workspace, sample_finding):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -113,7 +114,8 @@ def test_empty_current(temp_workspace, sample_finding):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -165,7 +167,8 @@ def test_identical_scans(temp_workspace, sample_finding):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -224,7 +227,8 @@ def test_large_diff_10k_findings(temp_workspace, sample_finding):
     output_path = temp_workspace["workspace"] / "diff.json"
     start = time.time()
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -290,7 +294,8 @@ def test_unicode_in_messages(temp_workspace, sample_finding):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -333,7 +338,8 @@ def test_malformed_findings_json(temp_workspace):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -385,7 +391,8 @@ def test_mixed_schema_versions(temp_workspace, sample_finding):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -436,7 +443,8 @@ def test_modification_detection_disabled(temp_workspace, sample_finding):
     # Run diff WITHOUT modifications
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -486,7 +494,8 @@ def test_filter_combinations(temp_workspace, sample_finding):
     # Run diff with: --severity HIGH --tool semgrep --only new
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -530,7 +539,8 @@ def test_missing_findings_json(temp_workspace):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -575,7 +585,8 @@ def test_only_new_filter(temp_workspace, sample_finding):
     # Run diff with --only new
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -632,7 +643,8 @@ def test_only_resolved_filter(temp_workspace, sample_finding):
     # Run diff with --only resolved
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [sys.executable,
+        [
+            sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",

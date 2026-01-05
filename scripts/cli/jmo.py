@@ -2623,8 +2623,8 @@ def cmd_adapters(args) -> int:
             # Try to load plugin
             from scripts.core.plugin_loader import PluginLoader, PluginRegistry
 
-            registry = PluginRegistry()
-            loader = PluginLoader(registry)
+            plugin_registry = PluginRegistry()
+            loader = PluginLoader(plugin_registry)
             loader._load_plugin(plugin_file)
 
             _safe_print(f"✅ Valid plugin: {plugin_file}")
@@ -2798,7 +2798,7 @@ def cmd_mcp_server(args):
 
     # Check MCP dependencies before attempting import
     is_ok, dep_issue = _check_mcp_dependencies()
-    if not is_ok:
+    if not is_ok and dep_issue:
         if _prompt_install_dependency(dep_issue):
             # Re-check after installation
             is_ok, dep_issue = _check_mcp_dependencies()
@@ -2899,7 +2899,7 @@ def _open_results(args):
         for p in paths:
             try:
                 if opener == "start":
-                    os.startfile(str(p))  # type: ignore[attr-defined]  # nosec B606
+                    os.startfile(str(p))  # nosec B606
                 else:
                     subprocess.Popen(  # nosec B603
                         [opener, str(p)],

@@ -17,7 +17,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 import yaml
 
@@ -225,7 +225,8 @@ class ToolRegistry:
                 return path
 
         raise FileNotFoundError(
-            "versions.yaml not found. Searched: " + ", ".join(str(p) for p in candidates)
+            "versions.yaml not found. Searched: "
+            + ", ".join(str(p) for p in candidates)
         )
 
     def _load_registry(self) -> None:
@@ -237,8 +238,8 @@ class ToolRegistry:
             logger.error(f"Failed to load versions.yaml: {e}")
             raise
 
-        # Parse each category
-        for category in ["python_tools", "binary_tools", "special_tools"]:
+        # Parse each category (use get_args to maintain type safety)
+        for category in get_args(ToolCategory):
             tools_data = data.get(category, {})
             if not isinstance(tools_data, dict):
                 continue
@@ -257,7 +258,7 @@ class ToolRegistry:
         logger.debug(f"Loaded {len(self._tools)} tools from {self._versions_path}")
 
     def _parse_tool(
-        self, name: str, info: dict, category: str
+        self, name: str, info: dict, category: ToolCategory
     ) -> ToolInfo | None:
         """Parse a single tool entry from versions.yaml."""
         try:
@@ -353,7 +354,9 @@ class ToolRegistry:
                 tools.append(tool)
             else:
                 # Create a placeholder for unknown tools
-                logger.warning(f"Tool {name} in profile {profile} not found in registry")
+                logger.warning(
+                    f"Tool {name} in profile {profile} not found in registry"
+                )
                 tools.append(
                     ToolInfo(
                         name=name,

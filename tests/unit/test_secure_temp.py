@@ -212,7 +212,9 @@ class TestPermissionHelpers:
         assert perms == 0o644
 
     @pytest.mark.skipif(IS_WINDOWS, reason="Unix permission model not applicable")
-    def test_is_secure_permissions_false_for_world_readable(self, tmp_path: Path) -> None:
+    def test_is_secure_permissions_false_for_world_readable(
+        self, tmp_path: Path
+    ) -> None:
         """Test that world-readable permissions are not considered secure."""
         test_file = tmp_path / "world_readable.txt"
         test_file.write_text("test")

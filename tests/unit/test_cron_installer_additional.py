@@ -18,12 +18,11 @@ import pytest
 
 # Skip all tests in this module on Windows (cron not supported)
 pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Cron scheduling not supported on Windows"
+    sys.platform == "win32", reason="Cron scheduling not supported on Windows"
 )
 
-from scripts.core.cron_installer import CronInstaller
-from scripts.core.schedule_manager import (
+from scripts.core.cron_installer import CronInstaller  # noqa: E402
+from scripts.core.schedule_manager import (  # noqa: E402
     ScanSchedule,
     ScheduleMetadata,
     ScheduleSpec,

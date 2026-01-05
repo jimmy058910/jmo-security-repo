@@ -131,13 +131,13 @@ def _load_checkov_internal(path: str | Path) -> list[dict[str, Any]]:
         List of dicts (converted to Finding objects by parse() method)
     """
     data = safe_load_json_file(path, default=None)
-    if data is None:
+    if not isinstance(data, dict):
         return []
 
     out: list[dict[str, Any]] = []
 
     # Extract check_type for CI/CD detection (v2.0.0)
-    check_type = data.get("check_type", "").lower() if isinstance(data, dict) else ""
+    check_type = data.get("check_type", "").lower()
 
     # CI/CD framework check_types
     CICD_FRAMEWORKS = {

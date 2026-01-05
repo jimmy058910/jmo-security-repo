@@ -749,9 +749,9 @@ class TestConstants:
         valid_severities = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
         for tool_name, mapping in TOOL_SEVERITY_MAPPINGS.items():
             for tool_sev, common_sev in mapping.items():
-                assert common_sev in valid_severities, (
-                    f"Invalid severity '{common_sev}' in {tool_name} mapping"
-                )
+                assert (
+                    common_sev in valid_severities
+                ), f"Invalid severity '{common_sev}' in {tool_name} mapping"
 
 
 # ============================================================================

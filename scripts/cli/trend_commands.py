@@ -393,7 +393,9 @@ def cmd_trends_regressions(args) -> int:
 
         # Fail if requested
         if fail_on_any and len(regressions) > 0:
-            safe_write(f"❌ FAIL: {len(regressions)} regression(s) detected\n", sys.stderr)
+            safe_write(
+                f"❌ FAIL: {len(regressions)} regression(s) detected\n", sys.stderr
+            )
             return 1
 
         return 0
@@ -842,18 +844,23 @@ def cmd_trends_developers(args) -> int:
         # Analyze trends to get resolved findings
         sys.stdout.write(f"Analyzing last {last_n} scans for resolved findings...\n")
 
-        analyzer = TrendAnalyzer(db_path)  # type: ignore[arg-type]
-        report = analyzer.analyze(last_n=last_n)  # type: ignore[attr-defined]
+        # Use default db_path if not specified
+        analyzer_kwargs = {"db_path": db_path} if db_path else {}
+        with TrendAnalyzer(**analyzer_kwargs) as analyzer:
+            report = analyzer.analyze_trends(last_n=last_n)
+            # Get connection while we have the db_path from analyzer
+            effective_db_path = analyzer.db_path
 
-        if report.scan_count < 2:
+        scan_count = report["metadata"]["scan_count"]
+        if scan_count < 2:
             sys.stdout.write("⚠️  Need at least 2 scans to detect resolved findings.\n")
-            sys.stdout.write(f"   Found {report.scan_count} scan(s) in history.\n")
+            sys.stdout.write(f"   Found {scan_count} scan(s) in history.\n")
             sys.stdout.write("   Run more scans to enable developer attribution.\n")
             return 0
 
         # Get resolved fingerprints (first scan - last scan)
-        conn = get_connection(db_path)  # type: ignore[arg-type]
-        scan_ids = report.scan_ids
+        conn = get_connection(effective_db_path)
+        scan_ids = [s["id"] for s in report["scans"]]
 
         first_scan = get_scan_by_id(conn, scan_ids[0])
         last_scan = get_scan_by_id(conn, scan_ids[-1])
@@ -873,7 +880,7 @@ def cmd_trends_developers(args) -> int:
 
         if not resolved_fps:
             sys.stdout.write(
-                f"No resolved findings between first and last scan ({report.scan_count} scans).\n"
+                f"No resolved findings between first and last scan ({scan_count} scans).\n"
             )
             sys.stdout.write(
                 "Developer attribution requires findings to be resolved over time.\n"
@@ -951,9 +958,7 @@ def cmd_trends_developers(args) -> int:
             return 0
 
         # Display results
-        safe_write(
-            f"📊 Top {min(top, len(dev_stats))} Developers by Remediation:\n"
-        )
+        safe_write(f"📊 Top {min(top, len(dev_stats))} Developers by Remediation:\n")
         sys.stdout.write("=" * 70 + "\n\n")
 
         for i, dev in enumerate(dev_stats[:top], 1):

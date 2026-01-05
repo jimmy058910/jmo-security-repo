@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -40,7 +41,13 @@ class TestInputValidation:
         for malicious_input in malicious_inputs:
             # Attempt to use malicious input as tool name
             result = subprocess.run(
-                [sys.executable, "scripts/cli/jmo.py", "scan", "--tools", malicious_input],
+                [
+                    sys.executable,
+                    "scripts/cli/jmo.py",
+                    "scan",
+                    "--tools",
+                    malicious_input,
+                ],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -121,7 +128,8 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         """
         # Test with absurdly large timeout value
         result = subprocess.run(
-            [sys.executable,
+            [
+                sys.executable,
                 "scripts/cli/jmo.py",
                 "scan",
                 "--repo",
@@ -185,7 +193,6 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         Security best practice: Avoid catastrophic backtracking in regex.
         """
         import re
-        import sys
 
         # Pattern that could cause catastrophic backtracking
         # Example: (a+)+ on input "aaaaaaaaaaaaaaaaaaaaaaaaaX"

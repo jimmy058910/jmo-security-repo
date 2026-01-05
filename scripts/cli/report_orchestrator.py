@@ -179,7 +179,10 @@ def cmd_report(args, _log_fn) -> int:
             csv_columns = csv_config.get("columns")
         # Pass suppressions for triage status column (Feature #3)
         write_csv(
-            findings, out_dir / "findings.csv", columns=csv_columns, suppressions=suppressions
+            findings,
+            out_dir / "findings.csv",
+            columns=csv_columns,
+            suppressions=suppressions,
         )
     if suppressions:
         write_suppression_report(

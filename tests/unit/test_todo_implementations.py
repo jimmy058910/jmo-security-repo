@@ -8,7 +8,6 @@ This test suite covers:
 """
 
 from pathlib import Path
-import os
 import pytest
 
 
@@ -282,7 +281,6 @@ class TestProvenanceToolVersions:
     def test_provenance_includes_resolved_dependencies(self, tmp_path):
         """Test provenance includes tool versions in resolvedDependencies."""
         from scripts.core.attestation.provenance import ProvenanceGenerator
-        import json
 
         # Create test findings file
         findings_file = tmp_path / "findings.json"

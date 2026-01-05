@@ -204,7 +204,9 @@ def load_config(path: str | None) -> Config:
         try:
             threshold = dedup_section.get("similarity_threshold", 0.65)
             if isinstance(threshold, (int, float)) and 0.5 <= threshold <= 1.0:
-                cfg.deduplication = DeduplicationConfig(similarity_threshold=float(threshold))
+                cfg.deduplication = DeduplicationConfig(
+                    similarity_threshold=float(threshold)
+                )
         except (ValueError, TypeError):
             # If dedup config is invalid, use defaults
             cfg.deduplication = DeduplicationConfig()

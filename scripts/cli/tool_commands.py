@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from scripts.cli.tool_manager import (
@@ -44,7 +45,7 @@ class Colors:
             # Windows console may not support ANSI
             import os
 
-            return os.environ.get("TERM") or os.environ.get("WT_SESSION")
+            return bool(os.environ.get("TERM") or os.environ.get("WT_SESSION"))
         return True
 
 
@@ -85,7 +86,7 @@ def cmd_tools(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    subcommand = getattr(args, "tools_command", None)
+    subcommand: str | None = getattr(args, "tools_command", None)
 
     handlers = {
         "check": cmd_tools_check,
@@ -97,7 +98,7 @@ def cmd_tools(args: argparse.Namespace) -> int:
         "debug": cmd_tools_debug,
     }
 
-    handler = handlers.get(subcommand)
+    handler = handlers.get(subcommand) if subcommand else None
     if handler:
         return handler(args)
 
@@ -141,7 +142,9 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         # Also check critical outdated
         critical = manager.get_critical_outdated()
         if critical:
-            print(colorize(f"\n{len(critical)} critical tool(s) need updates:", "yellow"))
+            print(
+                colorize(f"\n{len(critical)} critical tool(s) need updates:", "yellow")
+            )
             for s in critical:
                 print(f"  - {s.name}: {s.installed_version} -> {s.expected_version}")
             print("\nRun `jmo tools update --critical-only` to update")
@@ -176,7 +179,11 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     print()
     if missing:
         print(colorize(f"{len(missing)} tool(s) missing", "red"))
-        print("Run `jmo tools install" + (f" --profile {profile}" if profile else "") + "` to install")
+        print(
+            "Run `jmo tools install"
+            + (f" --profile {profile}" if profile else "")
+            + "` to install"
+        )
         return 1
 
     if outdated:
@@ -290,7 +297,7 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
         print(f"Pattern: {pattern.pattern}")
 
         # Run version command
-        print(f"\n--- Running version command ---")
+        print("\n--- Running version command ---")
         try:
             result = subprocess.run(
                 cmd,
@@ -315,7 +322,7 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
             output = (result.stdout or "") + (result.stderr or "")
             if output.strip():
                 match = pattern.search(output)
-                print(f"\n--- Pattern matching ---")
+                print("\n--- Pattern matching ---")
                 if match:
                     print(f"Matched version: {colorize(match.group(1), 'green')}")
                 else:
@@ -444,7 +451,9 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     if progress.failed == 0:
         return 0
     else:
-        print("\nSome tools require manual installation. Run with --print-script for hints.")
+        print(
+            "\nSome tools require manual installation. Run with --print-script for hints."
+        )
         return 1
 
 
@@ -503,7 +512,11 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
             return 0
 
     # Actually update (reinstall with force)
-    from scripts.cli.tool_installer import ToolInstaller, InstallProgress, print_install_progress
+    from scripts.cli.tool_installer import (
+        ToolInstaller,
+        InstallProgress,
+        print_install_progress,
+    )
 
     installer = ToolInstaller()
 
@@ -524,10 +537,18 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
     # Summary
     if progress.failed == 0:
-        print(colorize(f"\nAll {progress.successful} tool(s) updated successfully!", "green"))
+        print(
+            colorize(
+                f"\nAll {progress.successful} tool(s) updated successfully!", "green"
+            )
+        )
         return 0
     else:
-        print(colorize(f"\n{progress.successful} updated, {progress.failed} failed", "yellow"))
+        print(
+            colorize(
+                f"\n{progress.successful} updated, {progress.failed} failed", "yellow"
+            )
+        )
         return 1
 
 
@@ -549,7 +570,10 @@ def cmd_tools_list(args: argparse.Namespace) -> int:
     if show_profiles:
         # List profiles
         if output_json:
-            data = {p: {"tools": PROFILE_TOOLS[p], "count": len(PROFILE_TOOLS[p])} for p in PROFILE_TOOLS}
+            data = {
+                p: {"tools": PROFILE_TOOLS[p], "count": len(PROFILE_TOOLS[p])}
+                for p in PROFILE_TOOLS
+            }
             print(json.dumps(data, indent=2))
             return 0
 
@@ -580,7 +604,7 @@ def cmd_tools_list(args: argparse.Namespace) -> int:
         title = f"All registered tools ({len(tools)} tools)"
 
     if output_json:
-        data = [
+        tools_data = [
             {
                 "name": t.name,
                 "version": t.version,
@@ -590,7 +614,7 @@ def cmd_tools_list(args: argparse.Namespace) -> int:
             }
             for t in tools
         ]
-        print(json.dumps(data, indent=2))
+        print(json.dumps(tools_data, indent=2))
         return 0
 
     print(f"\n{title}\n")
@@ -747,7 +771,11 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
         for item in jmo_dir.iterdir():
             size = _get_dir_size(item) if item.is_dir() else item.stat().st_size
             jmo_items.append((item, size))
-            print(f"  - {item.name}/ ({_format_size(size)})" if item.is_dir() else f"  - {item.name} ({_format_size(size)})")
+            print(
+                f"  - {item.name}/ ({_format_size(size)})"
+                if item.is_dir()
+                else f"  - {item.name} ({_format_size(size)})"
+            )
 
         if not jmo_items:
             print("  (empty)")
@@ -758,7 +786,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
     jmo_pip_installed = _check_pip_package("jmo-security")
 
     if jmo_pip_installed:
-        print(f"  - jmo-security (pip package)")
+        print("  - jmo-security (pip package)")
 
     # === Part 2: Tools removal (only if --all) ===
     tools_to_remove = []
@@ -784,7 +812,9 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
 
             # Kubescape special dir
             if kubescape_dir.exists():
-                print(f"  - ~/.kubescape/ ({_format_size(_get_dir_size(kubescape_dir))})")
+                print(
+                    f"  - ~/.kubescape/ ({_format_size(_get_dir_size(kubescape_dir))})"
+                )
         else:
             print("  No JMo-managed tools found")
 
@@ -829,6 +859,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
         try:
             print("Uninstalling jmo-security pip package...", end=" ", flush=True)
             import subprocess
+
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "uninstall", "-y", "jmo-security"],
                 capture_output=True,
@@ -877,6 +908,7 @@ def cmd_tools_uninstall(args: argparse.Namespace) -> int:
 def _check_pip_package(package: str) -> bool:
     """Check if a pip package is installed."""
     import subprocess
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "show", package],
@@ -945,7 +977,9 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
     # Uninstall pip tools in batch
     if pip_tools:
         try:
-            print(f"  Uninstalling pip packages: {', '.join(pip_tools[:5])}{'...' if len(pip_tools) > 5 else ''}")
+            print(
+                f"  Uninstalling pip packages: {', '.join(pip_tools[:5])}{'...' if len(pip_tools) > 5 else ''}"
+            )
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "uninstall", "-y"] + pip_tools,
                 capture_output=True,
@@ -980,8 +1014,9 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
     jmo_bin = Path.home() / ".jmo" / "bin"
     if jmo_bin.exists():
         try:
-            print(f"  Removing ~/.jmo/bin/...")
+            print("  Removing ~/.jmo/bin/...")
             import shutil
+
             shutil.rmtree(jmo_bin)
             print(colorize("    done", "green"))
         except Exception as e:
@@ -991,7 +1026,7 @@ def _uninstall_tools(tools: list[tuple[str, str]], errors: list[str]) -> None:
     # Brew tools need manual removal
     brew_tools = [name for name, method in tools if method == "brew"]
     if brew_tools:
-        print(colorize(f"\n  NOTE: Homebrew tools must be removed manually:", "yellow"))
+        print(colorize("\n  NOTE: Homebrew tools must be removed manually:", "yellow"))
         print(f"    brew uninstall {' '.join(brew_tools)}")
 
 

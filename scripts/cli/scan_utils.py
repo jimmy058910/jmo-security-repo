@@ -12,7 +12,6 @@ import shutil
 import subprocess  # nosec B404: imported for controlled, vetted CLI invocations
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 # Module-level warning tracker for deduplication (Fix 1.3 - Issue #3)
 _warned_tools: set[str] = set()
@@ -205,7 +204,9 @@ def check_version_drift_before_scan(
 
     # Log categorized drift
     if ahead:
-        logger.info(f"{len(ahead)} tool(s) AHEAD of expected (newer versions installed):")
+        logger.info(
+            f"{len(ahead)} tool(s) AHEAD of expected (newer versions installed):"
+        )
         for d in ahead:
             logger.info(f"  {d['tool']}: {d['installed']} > {d['expected']}")
 
@@ -214,23 +215,25 @@ def check_version_drift_before_scan(
         critical_behind = [d for d in behind if d["critical"]]
         if critical_behind:
             level = logging.ERROR
-        logger.log(level, f"{len(behind)} tool(s) BEHIND expected (update recommended):")
+        logger.log(
+            level, f"{len(behind)} tool(s) BEHIND expected (update recommended):"
+        )
         for d in behind:
             marker = " [CRITICAL]" if d["critical"] else ""
-            logger.log(level, f"  {d['tool']}: {d['installed']} < {d['expected']}{marker}")
+            logger.log(
+                level, f"  {d['tool']}: {d['installed']} < {d['expected']}{marker}"
+            )
 
     if unknown:
         logger.warning(f"{len(unknown)} tool(s) with unknown version status:")
         for d in unknown:
             marker = " [CRITICAL]" if d["critical"] else ""
             # Clarify what "unknown" means
-            if d['installed'] is None:
+            if d["installed"] is None:
                 status = "version detection failed"
             else:
                 status = f"installed={d['installed']}"
-            logger.warning(
-                f"  {d['tool']}: {status} expected={d['expected']}{marker}"
-            )
+            logger.warning(f"  {d['tool']}: {status} expected={d['expected']}{marker}")
 
     if interactive:
         # Wizard mode - improved display with consolidated info
@@ -254,7 +257,11 @@ def check_version_drift_before_scan(
             print(f"\n  ? {len(unknown)} unknown (version detection failed):")
             for d in unknown:
                 # Explain what unknown means
-                explanation = "binary found, but --version parsing failed" if d['installed'] is None else f"got {d['installed']}"
+                explanation = (
+                    "binary found, but --version parsing failed"
+                    if d["installed"] is None
+                    else f"got {d['installed']}"
+                )
                 print(f"    {d['tool']}: {explanation}")
 
         print(f"\n{'─' * 50}")
@@ -285,7 +292,9 @@ def check_version_drift_before_scan(
                     print("\nTools updated. Continuing with scan...\n")
                     return True
                 else:
-                    print("\nUpdate failed or cancelled. Continuing with current versions...")
+                    print(
+                        "\nUpdate failed or cancelled. Continuing with current versions..."
+                    )
                     return True
             # Default: continue
             print("Continuing with current tool versions...")

@@ -160,7 +160,7 @@ class SigstoreSigner:
             # Use sigstore-python's built-in OAuth flow
             from sigstore.oidc import Issuer
 
-            issuer = Issuer.production()  # type: ignore[attr-defined]
+            issuer = Issuer.production()
             token = issuer.identity_token()
             return str(token.value)
         except Exception as e:

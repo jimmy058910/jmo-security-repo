@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata
 
 if TYPE_CHECKING:
-    from typing import Any
+    pass
 
 
 logger = logging.getLogger(__name__)
@@ -278,7 +278,9 @@ class PluginLoader:
             if self.get_adapter(adapter_name) is not None:
                 loaded_count += 1
 
-        logger.info(f"Preloaded {loaded_count}/{len(tools)} adapters for {profile} profile")
+        logger.info(
+            f"Preloaded {loaded_count}/{len(tools)} adapters for {profile} profile"
+        )
         return loaded_count
 
     def _tool_to_adapter_name(self, tool_name: str) -> str:
