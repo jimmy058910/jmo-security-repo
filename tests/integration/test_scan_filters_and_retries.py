@@ -38,8 +38,7 @@ exclude: ["test-*"]
     )
 
     # Run scan with config
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -95,8 +94,7 @@ retries: 2
     )
 
     # Run scan
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -150,8 +148,7 @@ tools: [semgrep, trivy]
     )
 
     # Run scan
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -200,8 +197,7 @@ tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, bandit]
     )
 
     # Run scan with --allow-missing-tools
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -275,8 +271,7 @@ tools: [trufflehog]
     )
 
     # Run scan with invalid JMO_THREADS value
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

@@ -225,6 +225,7 @@ def test_cli_history_repair(tmp_path: Path):
         ),
     )
     conn.commit()
+    conn.close()  # Close connection before repair to avoid Windows file locking
 
     # Test interactive mode (cancel)
     returncode, stdout, stderr = run_jmo(
@@ -289,6 +290,7 @@ def test_cli_history_repair(tmp_path: Path):
         ),
     )
     conn3.commit()
+    conn3.close()  # Close connection before repair to avoid Windows file locking
 
     returncode, stdout, stderr = run_jmo(
         "history", "repair", "--db", str(db_path2), "--force", "--json"

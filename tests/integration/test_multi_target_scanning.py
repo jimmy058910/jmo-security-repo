@@ -336,14 +336,14 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     """Verify findings from repo and image are deduplicated by fingerprint."""
     import json
     import subprocess
+import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "requirements.txt").write_text("requests==2.25.0")  # Known CVE
 
     # Scan repo + image (both will find same CVE in requests package)
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -361,8 +361,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     assert result.returncode in [0, 1], f"Scan failed: {result.stderr}"
 
     # Generate report
-    cmd_report = [
-        "python3",
+    cmd_report = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -393,14 +392,14 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
 def test_multi_target_compliance_aggregation(tmp_path: Path):
     """Verify compliance reports aggregate findings from all target types."""
     import subprocess
+import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "app.py").write_text("import os; os.system('ls')")  # Basic code
 
     # Scan repo + image (multi-target)
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -419,8 +418,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
     assert result.returncode in [0, 1]
 
     # Generate report
-    cmd_report = [
-        "python3",
+    cmd_report = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "report",
@@ -433,7 +431,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
 
     # Compliance file may not exist if no CWE mappings found
     if compliance_md.exists():
-        content = compliance_md.read_text()
+        content = compliance_md.read_text(encoding="utf-8")
 
         # Check for framework headers
         assert (
@@ -446,6 +444,7 @@ def test_multi_target_compliance_aggregation(tmp_path: Path):
 def test_triple_target_scan(tmp_path: Path):
     """Test scanning repo + image + IaC simultaneously."""
     import subprocess
+import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -462,8 +461,7 @@ resource "aws_s3_bucket" "test" {
     )
 
     # Scan all 3 target types
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",
@@ -496,14 +494,14 @@ resource "aws_s3_bucket" "test" {
 def test_multi_target_partial_failure(tmp_path: Path):
     """Test multi-target scan continues when one target fails."""
     import subprocess
+import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
     (test_repo / "app.py").write_text("print('hello')")
 
     # Scan valid repo + invalid image (should fail gracefully)
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

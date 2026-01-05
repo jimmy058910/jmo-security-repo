@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 
 import pytest
 
@@ -86,8 +87,7 @@ def test_e2e_directory_diff_json(temp_workspace, sample_findings):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -179,8 +179,7 @@ def test_e2e_modification_detection(temp_workspace, sample_findings):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -247,8 +246,7 @@ def test_e2e_ci_workflow(temp_workspace, sample_findings):
     # Run diff
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -308,8 +306,7 @@ def test_e2e_filtering_combinations(temp_workspace, sample_findings):
     # Run diff with: --severity HIGH --tool semgrep --only new
     output_path = temp_workspace["workspace"] / "diff.json"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -367,8 +364,7 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
     # Run diff WITH modifications (default)
     output_with = temp_workspace["workspace"] / "diff-with.json"
     result_with = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -386,8 +382,7 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
     # Run diff WITHOUT modifications
     output_without = temp_workspace["workspace"] / "diff-without.json"
     result_without = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -443,8 +438,7 @@ def test_e2e_html_output(temp_workspace, sample_findings):
     # Run diff with HTML output
     output_path = temp_workspace["workspace"] / "diff-report.html"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -463,7 +457,7 @@ def test_e2e_html_output(temp_workspace, sample_findings):
     assert output_path.exists()
 
     # Validate HTML structure
-    html_content = output_path.read_text()
+    html_content = output_path.read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in html_content
     assert "Security Diff Report" in html_content
     assert "window.DIFF_DATA" in html_content or "diff-data.json" in html_content
@@ -489,8 +483,7 @@ def test_e2e_markdown_output(temp_workspace, sample_findings):
     # Run diff with Markdown output
     output_path = temp_workspace["workspace"] / "diff.md"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",
@@ -509,7 +502,7 @@ def test_e2e_markdown_output(temp_workspace, sample_findings):
     assert output_path.exists()
 
     # Validate Markdown structure
-    md_content = output_path.read_text()
+    md_content = output_path.read_text(encoding="utf-8")
     assert "# 🔍 Security Diff Report" in md_content
     assert "## 📊 Summary" in md_content
     assert "## ⚠️ New Findings" in md_content
@@ -535,8 +528,7 @@ def test_e2e_sarif_output(temp_workspace, sample_findings):
     # Run diff with SARIF output
     output_path = temp_workspace["workspace"] / "diff.sarif"
     result = subprocess.run(
-        [
-            "python3",
+        [sys.executable,
             "-m",
             "scripts.cli.jmo",
             "diff",

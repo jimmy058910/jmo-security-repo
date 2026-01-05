@@ -277,7 +277,7 @@ class TestPrioritizationWorkflow:
         output_path = tmp_path / "dashboard.html"
         write_html(findings, output_path)
 
-        html_content = output_path.read_text()
+        html_content = output_path.read_text(encoding="utf-8")
 
         # Check if React build OR test fixture exists (determines which assertions to run)
         from pathlib import Path as RealPath

@@ -153,4 +153,6 @@ def write_json_diff(diff: DiffResult, out_path: Path) -> None:
     }
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+    out_path.write_text(
+        json.dumps(output, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )

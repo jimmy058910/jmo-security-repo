@@ -40,7 +40,7 @@ class TestInputValidation:
         for malicious_input in malicious_inputs:
             # Attempt to use malicious input as tool name
             result = subprocess.run(
-                ["python3", "scripts/cli/jmo.py", "scan", "--tools", malicious_input],
+                [sys.executable, "scripts/cli/jmo.py", "scan", "--tools", malicious_input],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -121,8 +121,7 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         """
         # Test with absurdly large timeout value
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "scripts/cli/jmo.py",
                 "scan",
                 "--repo",

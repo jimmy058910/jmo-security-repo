@@ -29,6 +29,11 @@ from scripts.core.history_db import (
     store_scan,
     list_scans,
     get_scan_by_id,
+    get_connection,
+    batch_insert_findings,
+    batch_insert_findings_optimized,
+    upsert_findings_batch,
+    recalculate_scan_counts,
 )
 
 
@@ -598,5 +603,318 @@ def test_sql_injection_resistance(perf_db, tmp_path):
     normal_scan = get_scan_by_id(conn, normal_scan_id)
     assert normal_scan is not None
     assert normal_scan["commit_hash"] == "abc123"
+
+    conn.close()
+
+
+# ============================================================================
+# Batch Insert Performance (New optimized functions)
+# ============================================================================
+
+
+def test_batch_insert_findings_optimized_performance(perf_db):
+    """
+    Test optimized batch insert with deferred count calculation.
+
+    Performance comparison:
+    - batch_insert_findings: ~2-5 seconds for 10k findings
+    - batch_insert_findings_optimized: <1 second for 10k findings
+
+    The optimized version bypasses per-row trigger updates by
+    recalculating counts once at the end.
+    """
+    conn = get_connection(perf_db)
+
+    # Create a scan first
+    scan_id = "test-optimized-batch"
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count, info_count,
+            jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id, int(time.time()), "2025-01-01T00:00:00Z", "balanced", "[]", "[]", "repo", "1.0.0"),
+    )
+    conn.commit()
+
+    # Generate 10,000 test findings
+    findings = []
+    for i in range(10000):
+        findings.append(
+            {
+                "id": f"fp_opt_{i}",
+                "fingerprint": f"fp_opt_{i}",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                "ruleId": f"TEST-{i % 100}",
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": f"file_{i % 1000}.py", "startLine": i % 500},
+                "message": f"Test finding {i}",
+            }
+        )
+
+    # Measure optimized insert time
+    start = time.time()
+    count = batch_insert_findings_optimized(conn, scan_id, findings)
+    elapsed = time.time() - start
+
+    # Verify insert count
+    assert count == 10000
+
+    # Verify performance target: <1 second for 10k findings
+    assert elapsed < 1.0, f"Optimized batch insert took {elapsed:.2f}s, expected <1s"
+
+    # Verify counts are correct
+    cursor = conn.execute(
+        "SELECT total_findings, critical_count, high_count, medium_count, low_count, info_count FROM scans WHERE id = ?",
+        (scan_id,),
+    )
+    row = cursor.fetchone()
+
+    # Each severity appears 2000 times (10000 / 5 severities)
+    assert row[0] == 10000  # total_findings
+    assert row[1] == 2000  # critical_count
+    assert row[2] == 2000  # high_count
+    assert row[3] == 2000  # medium_count
+    assert row[4] == 2000  # low_count
+    assert row[5] == 2000  # info_count
+
+    conn.close()
+
+
+def test_upsert_findings_batch_performance(perf_db):
+    """
+    Test batch upsert performance with conflict handling.
+
+    The upsert function handles duplicate fingerprints gracefully,
+    making it safe for retry operations.
+    """
+    conn = get_connection(perf_db)
+
+    # Create a scan first
+    scan_id = "test-upsert-batch"
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count, info_count,
+            jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id, int(time.time()), "2025-01-01T00:00:00Z", "fast", "[]", "[]", "repo", "1.0.0"),
+    )
+    conn.commit()
+
+    # Generate 5,000 test findings
+    findings = []
+    for i in range(5000):
+        findings.append(
+            {
+                "fingerprint": f"fp_upsert_{i}",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                "ruleId": f"TEST-{i % 50}",
+                "tool": {"name": "test-upsert", "version": "2.0.0"},
+                "location": {"path": f"file_{i % 500}.py", "startLine": i % 100},
+                "message": f"Upsert finding {i}",
+            }
+        )
+
+    # First upsert
+    start = time.time()
+    count1 = upsert_findings_batch(conn, scan_id, findings)
+    elapsed1 = time.time() - start
+
+    assert count1 == 5000
+    assert elapsed1 < 0.5, f"First upsert took {elapsed1:.2f}s, expected <0.5s"
+
+    # Second upsert (should update existing rows)
+    # Modify some findings
+    for f in findings[:1000]:
+        f["severity"] = "CRITICAL"
+
+    start = time.time()
+    count2 = upsert_findings_batch(conn, scan_id, findings)
+    elapsed2 = time.time() - start
+
+    assert count2 == 5000
+    assert elapsed2 < 0.5, f"Second upsert took {elapsed2:.2f}s, expected <0.5s"
+
+    # Verify counts are correct after updates
+    cursor = conn.execute(
+        "SELECT total_findings, critical_count FROM scans WHERE id = ?",
+        (scan_id,),
+    )
+    row = cursor.fetchone()
+    assert row[0] == 5000  # Still 5000 findings (upserted, not duplicated)
+    # After modification: 1000 findings (indices 0-999) changed to CRITICAL
+    # Original CRITICAL: 5000/5 = 1000 (indices 0, 5, 10, ..., 4995)
+    # Indices 0-999 now CRITICAL: 1000 findings
+    # Of those, 200 were already CRITICAL (indices 0, 5, 10, ..., 995)
+    # Net new CRITICAL: 1000 - 200 = 800, plus original 1000 = 1800
+    assert row[1] == 1800  # critical_count updated correctly
+
+    conn.close()
+
+
+def test_recalculate_scan_counts_performance(perf_db):
+    """
+    Test count recalculation performance.
+
+    This function should recalculate counts in O(1) passes over the findings,
+    much faster than N trigger updates.
+    """
+    conn = get_connection(perf_db)
+
+    # Create a scan first
+    scan_id = "test-recalc"
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count, info_count,
+            jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id, int(time.time()), "2025-01-01T00:00:00Z", "deep", "[]", "[]", "repo", "1.0.0"),
+    )
+    conn.commit()
+
+    # Insert findings directly (bypassing triggers to simulate manual insertion)
+    rows = []
+    for i in range(10000):
+        severity = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5]
+        rows.append((scan_id, f"fp_recalc_{i}", severity, f"TEST-{i}", "test", "1.0.0", "file.py", i, i, "msg", "{}"))
+
+    conn.executemany(
+        """
+        INSERT INTO findings (
+            scan_id, fingerprint, severity, rule_id, tool, tool_version,
+            path, start_line, end_line, message, raw_finding
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        rows,
+    )
+    conn.commit()
+
+    # Verify counts are wrong (triggers updated them incrementally)
+    # Actually triggers fire on executemany too, so counts may be "correct" but
+    # this test verifies recalculate works regardless
+
+    # Manually mess up counts to test recalculation
+    conn.execute(
+        "UPDATE scans SET total_findings = 0, critical_count = 0, high_count = 0, medium_count = 0, low_count = 0, info_count = 0 WHERE id = ?",
+        (scan_id,),
+    )
+    conn.commit()
+
+    # Recalculate counts
+    start = time.time()
+    counts = recalculate_scan_counts(conn, scan_id)
+    elapsed = time.time() - start
+
+    # Verify performance: <50ms for 10k findings
+    assert elapsed < 0.05, f"Recalculate took {elapsed:.3f}s, expected <0.05s"
+
+    # Verify counts are correct
+    assert counts["total_findings"] == 10000
+    assert counts["critical_count"] == 2000
+    assert counts["high_count"] == 2000
+    assert counts["medium_count"] == 2000
+    assert counts["low_count"] == 2000
+    assert counts["info_count"] == 2000
+
+    # Verify database was updated
+    cursor = conn.execute(
+        "SELECT total_findings FROM scans WHERE id = ?",
+        (scan_id,),
+    )
+    assert cursor.fetchone()[0] == 10000
+
+    conn.close()
+
+
+def test_batch_vs_optimized_performance_comparison(perf_db):
+    """
+    Compare standard batch insert vs optimized batch insert.
+
+    This test documents the performance improvement of the optimized
+    approach over the standard approach.
+    """
+    conn = get_connection(perf_db)
+
+    # Generate test findings
+    findings = []
+    for i in range(5000):
+        findings.append(
+            {
+                "fingerprint": f"fp_compare_{i}",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                "ruleId": f"TEST-{i % 100}",
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": f"file_{i}.py", "startLine": i},
+                "message": f"Comparison finding {i}",
+            }
+        )
+
+    # Test 1: Standard batch_insert_findings
+    scan_id_std = "test-std-batch"
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count, info_count,
+            jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id_std, int(time.time()), "2025-01-01T00:00:00Z", "balanced", "[]", "[]", "repo", "1.0.0"),
+    )
+    conn.commit()
+
+    start_std = time.time()
+    batch_insert_findings(conn, scan_id_std, findings)
+    elapsed_std = time.time() - start_std
+
+    # Test 2: Optimized batch_insert_findings_optimized
+    scan_id_opt = "test-opt-batch"
+    conn.execute(
+        """
+        INSERT INTO scans (
+            id, timestamp, timestamp_iso, profile, tools, targets, target_type,
+            total_findings, critical_count, high_count, medium_count, low_count, info_count,
+            jmo_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?)
+        """,
+        (scan_id_opt, int(time.time()), "2025-01-01T00:00:00Z", "balanced", "[]", "[]", "repo", "1.0.0"),
+    )
+    conn.commit()
+
+    # Use new findings to avoid fingerprint conflicts
+    findings_opt = []
+    for i in range(5000):
+        findings_opt.append(
+            {
+                "fingerprint": f"fp_opt_compare_{i}",
+                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                "ruleId": f"TEST-{i % 100}",
+                "tool": {"name": "test", "version": "1.0.0"},
+                "location": {"path": f"file_{i}.py", "startLine": i},
+                "message": f"Optimized comparison finding {i}",
+            }
+        )
+
+    start_opt = time.time()
+    batch_insert_findings_optimized(conn, scan_id_opt, findings_opt)
+    elapsed_opt = time.time() - start_opt
+
+    # Both should complete within reasonable time
+    assert elapsed_std < 2.0, f"Standard batch took {elapsed_std:.2f}s"
+    assert elapsed_opt < 1.0, f"Optimized batch took {elapsed_opt:.2f}s"
+
+    # Log performance comparison (visible in pytest -v output)
+    print(f"\nPerformance comparison (5000 findings):")
+    print(f"  Standard batch_insert_findings: {elapsed_std:.3f}s")
+    print(f"  Optimized batch_insert_findings_optimized: {elapsed_opt:.3f}s")
+    print(f"  Speedup: {elapsed_std / elapsed_opt:.1f}x")
 
     conn.close()

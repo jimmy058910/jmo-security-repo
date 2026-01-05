@@ -13,6 +13,7 @@ Phase 1.2.1 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
+import sys
 import time
 
 import pytest
@@ -121,7 +122,7 @@ class TestV1WorkflowIntegration:
         # Step 5: Verify dashboard HTML
         dashboard = results_dir / "summaries" / "dashboard.html"
         assert dashboard.exists(), "Dashboard should exist"
-        html_content = dashboard.read_text()
+        html_content = dashboard.read_text(encoding="utf-8")
         assert "<!DOCTYPE html>" in html_content
 
         # Step 6: Verify findings.json has v1.0.0 metadata wrapper
@@ -218,7 +219,7 @@ class TestV1WorkflowIntegration:
         output_path = tmp_path / "diff-report.md"
         result = subprocess.run(
             [
-                "python3",
+                "sys.executable",
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -238,7 +239,7 @@ class TestV1WorkflowIntegration:
         assert output_path.exists(), "Markdown output should exist"
 
         # Validate Markdown structure
-        md_content = output_path.read_text()
+        md_content = output_path.read_text(encoding="utf-8")
 
         # Check PR comment-friendly format
         assert (
@@ -302,7 +303,7 @@ class TestV1WorkflowIntegration:
         # Run trend analysis
         result = subprocess.run(
             [
-                "python3",
+                "sys.executable",
                 "-m",
                 "scripts.cli.jmo",
                 "trends",
@@ -327,7 +328,7 @@ class TestV1WorkflowIntegration:
         json_export = tmp_path / "trends.json"
         result_export = subprocess.run(
             [
-                "python3",
+                "sys.executable",
                 "-m",
                 "scripts.cli.jmo",
                 "trends",
@@ -435,7 +436,7 @@ class TestV1WorkflowIntegration:
         """
         # Verify wizard command exists
         result_wizard = subprocess.run(
-            ["python3", "-m", "scripts.cli.jmo", "wizard", "--help"],
+            ["sys.executable", "-m", "scripts.cli.jmo", "wizard", "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -445,7 +446,7 @@ class TestV1WorkflowIntegration:
 
         # Verify schedule commands exist
         result_schedule = subprocess.run(
-            ["python3", "-m", "scripts.cli.jmo", "schedule", "--help"],
+            ["sys.executable", "-m", "scripts.cli.jmo", "schedule", "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -489,7 +490,7 @@ class TestV1WorkflowIntegration:
         # Run trend analysis
         result_trends = subprocess.run(
             [
-                "python3",
+                "sys.executable",
                 "-m",
                 "scripts.cli.jmo",
                 "trends",

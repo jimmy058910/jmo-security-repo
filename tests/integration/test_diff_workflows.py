@@ -14,6 +14,7 @@ Phase 1.2.3 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
+import sys
 
 import pytest
 
@@ -89,8 +90,7 @@ class TestDirectoryDiffWorkflows:
         # Run diff
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -156,8 +156,7 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff.md"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -176,7 +175,7 @@ class TestDirectoryDiffWorkflows:
         assert result.returncode == 0, f"Diff failed: {result.stderr}"
         assert output_path.exists()
 
-        md_content = output_path.read_text()
+        md_content = output_path.read_text(encoding="utf-8")
         assert (
             "# 🔍 Security Diff Report" in md_content or "Security Diff" in md_content
         )
@@ -215,8 +214,7 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff-report.html"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -235,7 +233,7 @@ class TestDirectoryDiffWorkflows:
         assert result.returncode == 0, f"Diff failed: {result.stderr}"
         assert output_path.exists()
 
-        html_content = output_path.read_text()
+        html_content = output_path.read_text(encoding="utf-8")
         assert "<!DOCTYPE html>" in html_content
         # Diff HTML uses vanilla JS template (not React)
         assert "Security Diff Report" in html_content
@@ -272,8 +270,7 @@ class TestDirectoryDiffWorkflows:
 
         output_path = tmp_path / "diff.sarif"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -334,8 +331,7 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -394,8 +390,7 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -455,8 +450,7 @@ class TestFilteringCombinations:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -522,8 +516,7 @@ class TestCICDIntegrationPatterns:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -589,8 +582,7 @@ class TestCICDIntegrationPatterns:
 
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
-            [
-                "python3",
+            [sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",

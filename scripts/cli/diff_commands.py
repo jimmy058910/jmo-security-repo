@@ -457,7 +457,8 @@ def cmd_diff(args) -> int:
 
                 with secure_temp_file(prefix="jmo_diff_", suffix=".md") as tmp_path:
                     diff_md_reporter.write_markdown_diff(diff_result, tmp_path)
-                    print(tmp_path.read_text())
+                    # Use safe_print for Windows Unicode compatibility
+                    safe_print(tmp_path.read_text(encoding="utf-8"))
 
         elif format_type == "html":
             if not output_path:

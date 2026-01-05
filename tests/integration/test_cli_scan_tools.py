@@ -135,8 +135,7 @@ def test_noseyparker_docker_fallback(tmp_path: Path):
 
     # Run scan with noseyparker (should create stub)
     out_base = tmp_path / "results"
-    cmd = [
-        "python3",
+    cmd = [sys.executable,
         "-m",
         "scripts.cli.jmo",
         "scan",

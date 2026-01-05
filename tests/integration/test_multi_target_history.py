@@ -15,6 +15,7 @@ Phase 1.2.2 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
+import sys
 
 import pytest
 
@@ -187,7 +188,7 @@ class TestMultiTargetHistoryIntegration:
         output_path = tmp_path / "diff.json"
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",

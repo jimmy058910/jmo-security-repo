@@ -1555,7 +1555,9 @@ def run_wizard(
                                         parents=True, exist_ok=True
                                     )
                                     html_content = format_html_report(report)
-                                    output_file.write_text(html_content)
+                                    output_file.write_text(
+                                        html_content, encoding="utf-8"
+                                    )
                                     print(
                                         _colorize(
                                             f"✓ HTML report: {output_file}", "green"
@@ -1572,7 +1574,9 @@ def run_wizard(
                                         parents=True, exist_ok=True
                                     )
                                     json_content = format_json_report(report)
-                                    output_file.write_text(json_content)
+                                    output_file.write_text(
+                                        json_content, encoding="utf-8"
+                                    )
                                     print(
                                         _colorize(
                                             f"✓ JSON report: {output_file}", "green"
@@ -2092,7 +2096,7 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             html_content = format_html_report(report)
-            output_file.write_text(html_content)
+            output_file.write_text(html_content, encoding="utf-8")
 
             _safe_print(_colorize(f"✓ HTML report exported: {output_file}", "green"))
 
@@ -2105,7 +2109,7 @@ def _export_trends_interactive(db_path: Path, results_dir: str) -> None:
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             json_content = format_json_report(report)
-            output_file.write_text(json_content)
+            output_file.write_text(json_content, encoding="utf-8")
 
             _safe_print(_colorize(f"✓ JSON report exported: {output_file}", "green"))
 

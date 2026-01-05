@@ -59,9 +59,9 @@ def write_markdown_diff(diff: DiffResult, out_path: Path) -> None:
     # Footer
     _write_footer(md)
 
-    # Write to file
+    # Write to file (always UTF-8 for cross-platform emoji support)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(md.getvalue())
+    out_path.write_text(md.getvalue(), encoding="utf-8")
 
 
 def _write_header(md: StringIO, diff: DiffResult) -> None:

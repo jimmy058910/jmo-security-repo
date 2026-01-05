@@ -11,6 +11,7 @@ Usage:
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -27,7 +28,7 @@ class TestPyPIPackage:
             # Create virtual environment
             venv_path = Path(tmpdir) / "venv"
             result = subprocess.run(
-                ["python3", "-m", "venv", str(venv_path)],
+                [sys.executable, "-m", "venv", str(venv_path)],
                 capture_output=True,
                 text=True,
             )

@@ -11,6 +11,7 @@ Tests end-to-end workflows:
 
 import json
 import subprocess
+import sys
 import time
 
 import pytest
@@ -197,7 +198,7 @@ class TestHistoryCLI:
         # Run history store command
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "history",
@@ -237,7 +238,7 @@ class TestHistoryCLI:
         # Run history list command
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "history",
@@ -288,7 +289,7 @@ class TestHistoryCLI:
         # Run history stats command
         result = subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "history",
@@ -318,7 +319,7 @@ class TestAutoStorage:
 
         # Verify the flag is recognized
         result = subprocess.run(
-            ["python3", "-m", "scripts.cli.jmo", "scan", "--help"],
+            [sys.executable, "-m", "scripts.cli.jmo", "scan", "--help"],
             capture_output=True,
             text=True,
             timeout=5,
