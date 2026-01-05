@@ -256,43 +256,31 @@ gh release view v0.9.0
 
 ## 🚧 Phase 4: Test Automation Workflows (PENDING)
 
-### 4.1 Test Homebrew Automation (Manual Trigger)
+### 4.1 Test Homebrew Automation (Runs Automatically)
+
+Homebrew and WinGet automation are now **inlined into `release.yml`** and run automatically
+when you push a version tag. The `homebrew-bump` job runs after PyPI publish, and
+`winget-bump` runs after Docker builds.
+
+To verify the release workflow works:
 
 ```bash
-gh workflow run homebrew-bump-formula.yml -f version=0.9.0
+# Trigger release workflow manually (most jobs will skip without a version tag)
+gh workflow run release.yml
 gh run watch
 ```
 
-**Expected:**
+**Expected (on actual release):**
 
-- Workflow completes successfully
-- PR created in `Homebrew/homebrew-core`
-- PR contains correct formula version and SHA256
-
-**Success Criteria:**
-
-- [  ] Workflow run successful
-- [  ] Homebrew PR created
-- [  ] Formula version updated to 0.9.0
-
-### 4.2 Test WinGet Automation (Manual Trigger)
-
-```bash
-gh workflow run winget-releaser.yml
-gh run watch
-```
-
-**Expected:**
-
-- Workflow completes successfully
-- PR created in `microsoft/winget-pkgs`
-- Manifests updated with correct SHA256
+- `homebrew-bump` job creates PR in `Homebrew/homebrew-core`
+- `winget-bump` job creates PR in `microsoft/winget-pkgs`
+- PRs contain correct versions and SHA256 hashes
 
 **Success Criteria:**
 
-- [  ] Workflow run successful
-- [  ] WinGet PR created
-- [  ] Manifest SHA256 matches installer
+- [  ] Release workflow completes successfully
+- [  ] Homebrew PR created (after PyPI publish)
+- [  ] WinGet PR created (after Docker build)
 
 ---
 

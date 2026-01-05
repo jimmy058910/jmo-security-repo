@@ -196,13 +196,14 @@ Each test validates:
 
 ### GitHub Actions
 
-See [.github/workflows/e2e-comprehensive-tests.yml](../../.github/workflows/e2e-comprehensive-tests.yml)
+See [.github/workflows/scheduled-tests.yml](../../.github/workflows/scheduled-tests.yml)
+
+E2E tests run as part of the consolidated `scheduled-tests.yml` workflow.
 
 **Triggers:**
 
-- Pull requests (fast profile only)
-- Nightly schedule (full suite)
-- Manual workflow dispatch
+- Schedule: 4AM UTC weekdays (e2e-ubuntu, e2e-macos jobs)
+- Manual workflow dispatch with `task: e2e` or `task: all`
 
 **Jobs:**
 
@@ -361,7 +362,7 @@ run_test "TEST_ID" "Test Description" \
 - [Comprehensive Test Plan](../../docs/COMPREHENSIVE_TEST_PLAN.md) - Full test design
 - [Testing Guide](../../TEST.md) - General testing instructions
 - [User Guide](../../docs/USER_GUIDE.md) - Multi-target scanning documentation
-- [CI Workflow](../../.github/workflows/e2e-comprehensive-tests.yml) - GitHub Actions config
+- [CI Workflow](../../.github/workflows/scheduled-tests.yml) - GitHub Actions config (E2E jobs)
 
 ---
 

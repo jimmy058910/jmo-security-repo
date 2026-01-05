@@ -58,11 +58,14 @@ The Homebrew bump action requires a PAT with repository access to fork and creat
 
 ### Step 3: Test Homebrew Automation
 
-Trigger the workflow manually to verify it works:
+The Homebrew formula update is now **automatically triggered** as part of `release.yml` when
+you push a version tag. The `homebrew-bump` job runs after PyPI publish succeeds.
+
+To manually test (without pushing a tag), you can trigger the release workflow:
 
 ```bash
-# From repository root
-gh workflow run homebrew-bump-formula.yml -f version=0.9.0
+# Trigger release workflow (will skip most jobs without a version tag)
+gh workflow run release.yml
 
 # Monitor workflow
 gh run watch
@@ -70,9 +73,8 @@ gh run watch
 
 **Expected outcome:**
 
-- Workflow verifies PyPI release exists
-- Creates fork of `Homebrew/homebrew-core` (if not already forked)
-- Updates `jmo-security.rb` formula with new version and SHA256
+- Job verifies PyPI release exists
+- Uses `dawidd6/action-homebrew-bump-formula` to submit PR
 - Submits PR to `Homebrew/homebrew-core`
 
 **PR Review Timeline:** 1-2 weeks (Homebrew maintainers review)
@@ -164,11 +166,14 @@ After the initial manifest is merged, all future updates are automated.
 
 ### Step 5: Test WinGet Automation
 
-Trigger the workflow manually to verify it works:
+The WinGet manifest update is now **automatically triggered** as part of `release.yml` when
+you push a version tag. The `winget-bump` job runs after Docker builds succeed.
+
+To manually test (without pushing a tag), you can trigger the release workflow:
 
 ```bash
-# From repository root
-gh workflow run winget-releaser.yml
+# Trigger release workflow (will skip most jobs without a version tag)
+gh workflow run release.yml
 
 # Monitor workflow
 gh run watch
@@ -176,9 +181,8 @@ gh run watch
 
 **Expected outcome:**
 
-- Workflow verifies GitHub Release with Windows installer exists
-- Uses your fork of `microsoft/winget-pkgs` to submit PR
-- Updates manifest with new version and installer SHA256
+- Job verifies GitHub Release with Windows installer exists
+- Uses `vedantmgoyal9/winget-releaser` to submit PR
 - Submits PR to `microsoft/winget-pkgs`
 
 **PR Review Timeline:** 1-2 weeks (Microsoft maintainers review)
@@ -203,9 +207,8 @@ Regularly review token usage:
 # List all repository secrets (names only, not values)
 gh secret list
 
-# Check workflow runs for token issues
-gh run list --workflow=homebrew-bump-formula.yml --limit=5
-gh run list --workflow=winget-releaser.yml --limit=5
+# Check workflow runs for token issues (homebrew/winget are now in release.yml)
+gh run list --workflow=release.yml --limit=5
 ```
 
 ### Revoke Tokens Immediately if Compromised
@@ -295,9 +298,8 @@ curl -fsSL "https://github.com/jimmy058910/jmo-security-repo/releases/download/v
 ### Check Workflow Status
 
 ```bash
-# View recent workflow runs
-gh run list --workflow=homebrew-bump-formula.yml --limit=10
-gh run list --workflow=winget-releaser.yml --limit=10
+# View recent release workflow runs (includes homebrew-bump and winget-bump jobs)
+gh run list --workflow=release.yml --limit=10
 
 # View specific run details
 gh run view <run-id>
