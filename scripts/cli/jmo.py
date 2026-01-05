@@ -2693,10 +2693,91 @@ def cmd_profile(args, profile_name: str):
     return exit_code
 
 
+def _check_mcp_dependencies() -> tuple[bool, str | None]:
+    """Check if MCP dependencies are properly installed.
+
+    Returns:
+        Tuple of (is_ok, error_message). If is_ok is True, error_message is None.
+    """
+    # Check 1: Is pydantic v2+ installed? (MCP requires TypeAdapter from pydantic v2)
+    try:
+        from pydantic import TypeAdapter  # noqa: F401
+    except ImportError:
+        return False, "pydantic_v1"
+
+    # Check 2: Is MCP SDK installed?
+    try:
+        from mcp.server.fastmcp import FastMCP  # noqa: F401
+    except ImportError:
+        return False, "mcp_missing"
+
+    return True, None
+
+
+def _prompt_install_dependency(dep_type: str) -> bool:
+    """Prompt user to install missing dependency and run pip install if confirmed.
+
+    Args:
+        dep_type: Either 'pydantic_v1' or 'mcp_missing'
+
+    Returns:
+        True if installation was attempted, False if user declined.
+    """
+    if dep_type == "pydantic_v1":
+        sys.stderr.write("\n⚠️  MCP requires pydantic v2+, but you have pydantic v1 installed.\n")
+        sys.stderr.write("   This is a common issue when other packages pin pydantic to v1.\n\n")
+        package = "pydantic>=2.11.0"
+    else:
+        sys.stderr.write("\n⚠️  MCP SDK is not installed.\n\n")
+        package = "mcp[cli]>=1.0.0"
+
+    try:
+        response = input(f"Install {package}? [Y/n]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+    if response in ("", "y", "yes"):
+        sys.stderr.write(f"\nInstalling {package}...\n")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", package],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                sys.stderr.write(f"✓ {package} installed successfully!\n\n")
+                return True
+            else:
+                sys.stderr.write(f"✗ Installation failed: {result.stderr[:200]}\n")
+                sys.stderr.write(f"  Try manually: pip install '{package}'\n")
+                return False
+        except subprocess.TimeoutExpired:
+            sys.stderr.write("✗ Installation timed out. Try manually.\n")
+            return False
+    else:
+        sys.stderr.write(f"\nSkipped. To install manually: pip install '{package}'\n")
+        return False
+
+
 def cmd_mcp_server(args):
     """Start MCP server for AI-powered remediation."""
     import os
     from pathlib import Path
+
+    # Check MCP dependencies before attempting import
+    is_ok, dep_issue = _check_mcp_dependencies()
+    if not is_ok:
+        if _prompt_install_dependency(dep_issue):
+            # Re-check after installation
+            is_ok, dep_issue = _check_mcp_dependencies()
+            if not is_ok:
+                sys.stderr.write(f"\n✗ Dependencies still not satisfied: {dep_issue}\n")
+                sys.stderr.write("  You may need to restart your terminal or check for conflicts.\n")
+                sys.stderr.write("  Run: pip check | grep pydantic\n")
+                return 1
+        else:
+            return 1
 
     # Set environment variables for MCP server configuration
     os.environ["MCP_RESULTS_DIR"] = str(Path(args.results_dir).resolve())
