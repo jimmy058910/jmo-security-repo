@@ -277,6 +277,25 @@ pip install 'mcp[cli]>=1.0.0'
 uv add 'mcp[cli]>=1.0.0'
 ```
 
+**Error:** `cannot import name 'TypeAdapter' from 'pydantic'`
+
+**Cause:** MCP SDK requires pydantic v2+ (specifically >=2.11.0), but you have pydantic v1 installed.
+
+**Solution:**
+
+```bash
+# Check current version
+pip show pydantic
+
+# Upgrade to v2+
+pip install 'pydantic>=2.11.0'
+
+# Verify no conflicts
+pip check | grep pydantic
+```
+
+**Note:** Some older packages may pin pydantic to v1. If you encounter conflicts, consider using a virtual environment specifically for MCP features.
+
 **Error:** `No scan results found`
 
 **Solution:** Run a scan first to generate `results/summaries/findings.json`:

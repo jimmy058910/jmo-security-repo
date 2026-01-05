@@ -2,6 +2,9 @@
 
 This module uses Hypothesis to generate edge cases and test adapter resilience
 against malformed, deeply nested, and extremely large inputs.
+
+Requires: hypothesis (optional dev dependency)
+Install with: pip install hypothesis
 """
 
 from __future__ import annotations
@@ -10,6 +13,12 @@ import json
 from pathlib import Path
 
 import pytest
+
+# Skip entire module if hypothesis is not installed
+hypothesis = pytest.importorskip(
+    "hypothesis",
+    reason="Hypothesis library required for property-based tests. Install with: pip install hypothesis",
+)
 from hypothesis import HealthCheck, given, settings, strategies as st
 
 from scripts.core.adapters.bandit_adapter import BanditAdapter

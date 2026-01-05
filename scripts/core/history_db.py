@@ -338,6 +338,13 @@ def get_git_context(repo_path: Path) -> Dict[str, Any]:
     """
     Extract Git metadata for scan.
 
+    Optimized to use minimal subprocess calls:
+    - Single rev-parse call for commit hash + branch (2 calls → 1)
+    - Short commit hash derived from full hash (no subprocess needed)
+    - Tag and dirty status still require separate calls
+
+    Performance: Reduced from 5 subprocess calls to 3 (40% reduction).
+
     Args:
         repo_path: Path to Git repository
 
@@ -346,40 +353,24 @@ def get_git_context(repo_path: Path) -> Dict[str, Any]:
         Returns empty values if not a Git repo or on error
     """
     try:
-        # Commit hash
+        # Batched call: Get commit hash and branch name in one subprocess
+        # Using rev-parse with multiple arguments returns multiple lines
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD", "--abbrev-ref", "HEAD"],
             cwd=repo_path,
             capture_output=True,
             text=True,
             check=True,
             timeout=5,
         )
-        commit_hash = result.stdout.strip()
+        lines = result.stdout.strip().split("\n")
+        commit_hash = lines[0] if len(lines) > 0 else ""
+        branch = lines[1] if len(lines) > 1 else ""
 
-        # Short commit hash
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=5,
-        )
-        commit_short = result.stdout.strip()
+        # Derive short hash from full hash (no subprocess needed)
+        commit_short = commit_hash[:7] if commit_hash else ""
 
-        # Branch name
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=5,
-        )
-        branch = result.stdout.strip()
-
-        # Tag (if on tagged commit)
+        # Tag (if on tagged commit) - still needs separate call
         result = subprocess.run(
             ["git", "describe", "--tags", "--exact-match"],
             cwd=repo_path,
@@ -389,7 +380,7 @@ def get_git_context(repo_path: Path) -> Dict[str, Any]:
         )
         tag = result.stdout.strip() if result.returncode == 0 else None
 
-        # Check for uncommitted changes
+        # Check for uncommitted changes - still needs separate call
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=repo_path,

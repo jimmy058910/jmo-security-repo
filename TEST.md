@@ -39,6 +39,17 @@ Notes:
 
 - If ruff/bandit/shellcheck are missing, install via `pip install ruff bandit` or `jmo tools install`.
 
+## Optional Test Dependencies
+
+Some test modules require optional dependencies and will be **automatically skipped** if not installed:
+
+| Test Module | Required Package | Install Command |
+|-------------|------------------|-----------------|
+| `tests/jmo_mcp/` | MCP SDK + pydantic v2 | `pip install "jmo-security[mcp]"` or `pip install "mcp[cli]>=1.0.0" "pydantic>=2.11.0"` |
+| `tests/adapters/test_adapter_fuzzing.py` | Hypothesis | `pip install hypothesis` |
+
+**Note:** If you see collection errors like `cannot import name 'TypeAdapter' from 'pydantic'`, upgrade pydantic: `pip install "pydantic>=2.11.0"`
+
 ## End-to-End Smoke (optional)
 
 To run a small smoke test using the CLI:

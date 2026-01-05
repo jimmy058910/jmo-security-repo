@@ -783,12 +783,18 @@ class TestHelperFunctions:
 
     @patch("scripts.core.history_db.subprocess.run")
     def test_get_git_context_success(self, mock_run, tmp_path):
-        """Test extracting Git context successfully."""
-        # Mock successful Git commands
+        """Test extracting Git context successfully.
+
+        Note: Optimized implementation uses batched git calls:
+        - Single rev-parse for commit hash + branch (returns 2 lines)
+        - Short hash derived from full hash (no subprocess call)
+        - Tag and status still need separate calls
+        Total: 3 subprocess calls instead of 5 (40% reduction)
+        """
+        # Mock successful Git commands (optimized: 3 calls instead of 5)
         mock_run.side_effect = [
-            MagicMock(stdout="abc123def456\n", returncode=0),  # git rev-parse HEAD
-            MagicMock(stdout="abc123d\n", returncode=0),  # git rev-parse --short HEAD
-            MagicMock(stdout="main\n", returncode=0),  # git rev-parse --abbrev-ref HEAD
+            # Batched: git rev-parse HEAD --abbrev-ref HEAD (returns 2 lines)
+            MagicMock(stdout="abc123def456\nmain\n", returncode=0),
             MagicMock(stdout="v1.0.0\n", returncode=0),  # git describe --tags
             MagicMock(stdout="", returncode=0),  # git status --porcelain
         ]
@@ -796,6 +802,7 @@ class TestHelperFunctions:
         git_ctx = get_git_context(tmp_path)
 
         assert git_ctx["commit_hash"] == "abc123def456"
+        # Short hash is now derived from full hash (first 7 chars)
         assert git_ctx["commit_short"] == "abc123d"
         assert git_ctx["branch"] == "main"
         assert git_ctx["tag"] == "v1.0.0"
