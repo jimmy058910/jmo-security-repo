@@ -17,10 +17,7 @@ Target: 25+ test functions across 5 categories
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -150,7 +147,9 @@ class TestFingerprintEdgeCases:
         to prevent false deduplication.
         """
         fp1 = fingerprint("semgrep", "rule-123", "app.py", 42, "SQL injection")
-        fp2 = fingerprint("semgrep", "rule-123", "app.py", 43, "SQL injection")  # line+1
+        fp2 = fingerprint(
+            "semgrep", "rule-123", "app.py", 43, "SQL injection"
+        )  # line+1
         fp3 = fingerprint("semgrep", "rule-123", "app.py", 42, "SQL Injection")  # case
         fp4 = fingerprint("bandit", "rule-123", "app.py", 42, "SQL injection")  # tool
 
@@ -163,7 +162,13 @@ class TestFingerprintEdgeCases:
 
         Fingerprints must be deterministic for reliable deduplication.
         """
-        inputs = ("semgrep", "rule-xss-001", "components/Form.tsx", 100, "XSS vulnerability")
+        inputs = (
+            "semgrep",
+            "rule-xss-001",
+            "components/Form.tsx",
+            100,
+            "XSS vulnerability",
+        )
 
         fp1 = fingerprint(*inputs)
         fp2 = fingerprint(*inputs)
@@ -197,7 +202,7 @@ class TestFingerprintEdgeCases:
             "CWE-79",  # Standard
             "CWE_79",  # Underscore variant
             "rule/with/slashes",
-            "rule\"with\"quotes",
+            'rule"with"quotes',
             "rule'with'apostrophes",
             "rule:with:colons",
             "日本語ルール",  # Japanese
@@ -227,6 +232,8 @@ class TestFingerprintEdgeCases:
 
         # Note: Current implementation does NOT normalize paths - they're treated literally
         # This test documents the current behavior
+        assert fp1 != fp2  # Unix vs Windows path separators should differ
+        assert fp1 != fp3  # With vs without ./ prefix should differ
         assert fp1 != fp4  # Relative vs absolute should differ
 
     def test_fingerprint_line_number_zero_vs_none(self) -> None:
@@ -259,8 +266,7 @@ class TestScaleEdgeCases:
         This is a common production workload that must complete quickly.
         """
         findings = [
-            {"id": i, "severity": "MEDIUM", "rule": f"rule-{i}"}
-            for i in range(1000)
+            {"id": i, "severity": "MEDIUM", "rule": f"rule-{i}"} for i in range(1000)
         ]
         json_file = tmp_path / "1000_findings.json"
         json_file.write_text(json.dumps(findings), encoding="utf-8")
@@ -740,7 +746,19 @@ class TestMissingRequiredEdgeCases:
         except OSError as e:
             # On Windows without long path support, this may fail
             # That's okay - we're testing the behavior either way
-            if "path too long" in str(e).lower() or "filename" in str(e).lower():
+            # Common Windows errors for long paths:
+            # - "path too long" / "filename too long" (generic)
+            # - WinError 3: "cannot find the path specified" (path limit exceeded)
+            # - WinError 206: "filename or extension is too long"
+            err_msg = str(e).lower()
+            is_path_limit_error = (
+                "path too long" in err_msg
+                or "filename" in err_msg
+                or "cannot find the path" in err_msg
+                or "winerror 3" in err_msg
+                or "winerror 206" in err_msg
+            )
+            if is_path_limit_error:
                 pytest.skip(f"Platform doesn't support long paths: {e}")
             raise
 
@@ -804,15 +822,17 @@ class TestMissingRequiredEdgeCases:
         # Generate 500 findings (faster than 1000 for unit test, still tests scale)
         findings = []
         for i in range(500):
-            findings.append({
-                "id": f"finding-{i}",
-                "fingerprint": f"fp-{i}",
-                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
-                "message": f"Security finding number {i} with some description",
-                "location": {"path": f"src/file_{i % 50}.py", "startLine": i % 100},
-                "tool": {"name": ["semgrep", "bandit", "trivy"][i % 3]},
-                "ruleId": f"RULE-{i % 20}",
-            })
+            findings.append(
+                {
+                    "id": f"finding-{i}",
+                    "fingerprint": f"fp-{i}",
+                    "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"][i % 5],
+                    "message": f"Security finding number {i} with some description",
+                    "location": {"path": f"src/file_{i % 50}.py", "startLine": i % 100},
+                    "tool": {"name": ["semgrep", "bandit", "trivy"][i % 3]},
+                    "ruleId": f"RULE-{i % 20}",
+                }
+            )
 
         clusterer = FindingClusterer(similarity_threshold=0.65)
         clusters = clusterer.cluster(findings)
@@ -843,7 +863,9 @@ class TestMissingRequiredEdgeCases:
             fingerprints.add(fp)
 
         # All 1000 should be unique (no collisions)
-        assert len(fingerprints) == 1000, f"Found {1000 - len(fingerprints)} collisions!"
+        assert (
+            len(fingerprints) == 1000
+        ), f"Found {1000 - len(fingerprints)} collisions!"
 
     def test_similarity_calculator_edge_cases(self) -> None:
         """Test SimilarityCalculator with edge case inputs.

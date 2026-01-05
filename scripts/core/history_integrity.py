@@ -217,9 +217,20 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         findings = conn_old.execute("SELECT * FROM findings").fetchall()
         schema_versions = conn_old.execute("SELECT * FROM schema_version").fetchall()
 
+        # Get column names before closing (needed for reimport)
+        scans_columns = [
+            row[1] for row in conn_old.execute("PRAGMA table_info(scans)").fetchall()
+        ]
+        findings_columns = [
+            row[1] for row in conn_old.execute("PRAGMA table_info(findings)").fetchall()
+        ]
+
         logger.info(
             f"Dumped {len(scans)} scans, {len(findings)} findings, {len(schema_versions)} schema versions"
         )
+
+        # Close connection before file operations (required on Windows)
+        conn_old.close()
     except Exception as e:
         errors.append(f"Data dump failed: {e}")
         logger.error(f"Data dump failed: {e}")
@@ -256,11 +267,7 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
 
         # Import scans
         if scans:
-            # Get column names from PRAGMA table_info
-            scans_columns = [
-                row[1]
-                for row in conn_old.execute("PRAGMA table_info(scans)").fetchall()
-            ]
+            # Use column names captured before closing old connection
             placeholders = ", ".join(["?"] * len(scans_columns))
             conn_new.executemany(
                 f"INSERT INTO scans ({', '.join(scans_columns)}) VALUES ({placeholders})",
@@ -270,10 +277,7 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
 
         # Import findings
         if findings:
-            findings_columns = [
-                row[1]
-                for row in conn_old.execute("PRAGMA table_info(findings)").fetchall()
-            ]
+            # Use column names captured before closing old connection
             placeholders = ", ".join(["?"] * len(findings_columns))
             conn_new.executemany(
                 f"INSERT INTO findings ({', '.join(findings_columns)}) VALUES ({placeholders})",

@@ -54,7 +54,8 @@ def test_configure_repo_target_single_repo():
 
         assert result.type == "repo"
         assert result.repo_mode == "repo"
-        assert result.repo_path == "/path/to/repo"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/path/to/repo"))
         mock_validate.assert_called_once_with("/path/to/repo", must_exist=True)
 
 
@@ -87,7 +88,8 @@ def test_configure_repo_target_repos_dir_with_detected_repos():
 
         assert result.type == "repo"
         assert result.repo_mode == "repos-dir"
-        assert result.repo_path == "/path/to/repos-dir"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/path/to/repos-dir"))
         mock_detector.detect_repos.assert_called_once()
 
 
@@ -117,7 +119,8 @@ def test_configure_repo_target_repos_dir_no_repos_continue():
 
         assert result.type == "repo"
         assert result.repo_mode == "repos-dir"
-        assert result.repo_path == "/path/to/repos-dir"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/path/to/repos-dir"))
         mock_prompter.prompt_yes_no.assert_called_once()
 
 
@@ -149,7 +152,8 @@ def test_configure_repo_target_repos_dir_no_repos_retry():
         result = configure_repo_target(mock_config, mock_print_step)
 
         assert result.type == "repo"
-        assert result.repo_path == "/good/path"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/good/path"))
         assert mock_validate.call_count == 2
 
 
@@ -217,7 +221,8 @@ def test_configure_repo_target_empty_path_retry():
 
         result = configure_repo_target(mock_config, mock_print_step)
 
-        assert result.repo_path == "/valid/path"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/valid/path"))
 
 
 def test_configure_repo_target_invalid_path_retry():
@@ -239,7 +244,8 @@ def test_configure_repo_target_invalid_path_retry():
 
         result = configure_repo_target(mock_config, mock_print_step)
 
-        assert result.repo_path == "/good/path"
+        # Use str(Path(...)) for cross-platform path comparison
+        assert result.repo_path == str(Path("/good/path"))
         assert mock_validate.call_count == 2
 
 

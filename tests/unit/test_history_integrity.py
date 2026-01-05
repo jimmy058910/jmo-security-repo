@@ -186,6 +186,10 @@ def test_recover_database_creates_backup(tmp_path: Path):
     )
     conn.commit()
 
+    # Close connection before recovery (required on Windows due to file locking)
+    conn.close()
+    del conn
+
     # Recover database
     result = recover_database(db_path)
 
@@ -281,6 +285,10 @@ def test_recover_database_preserves_data(tmp_path: Path):
     # Get counts before recovery
     scans_before = conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
     findings_before = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+
+    # Close connection before recovery (required on Windows due to file locking)
+    conn.close()
+    del conn
 
     # Recover database
     result = recover_database(db_path)

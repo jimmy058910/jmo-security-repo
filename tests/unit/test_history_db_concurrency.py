@@ -374,18 +374,29 @@ def test_database_corruption_recovery(concurrency_db, sample_findings, tmp_path)
     assert db_size_after == 1024, "Corruption failed"
 
     # Attempt to read corrupted database (should fail gracefully)
+    conn = None
     try:
         conn = sqlite3.connect(concurrency_db)
         conn.row_factory = sqlite3.Row
         scans = list(list_scans(conn, limit=10))
-        conn.close()
         # If we get here, database somehow still works (unexpected but acceptable)
         pass
     except sqlite3.DatabaseError:
         # Expected - database corrupted
         pass
+    finally:
+        # Ensure connection is closed before file operations (important on Windows)
+        if conn:
+            conn.close()
+            del conn
 
     # Recreate database and verify recovery
+    # On Windows, give SQLite time to release file lock
+    import gc
+    import time
+
+    gc.collect()
+    time.sleep(0.1)  # Brief delay for Windows file lock release
     os.remove(concurrency_db)
     init_database(concurrency_db)
 

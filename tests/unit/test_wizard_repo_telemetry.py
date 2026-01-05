@@ -151,7 +151,8 @@ def test_repo_flow_build_command_with_repo():
     assert "--profile" in cmd
     assert "balanced" in cmd
     assert "--repo" in cmd
-    assert "/path/to/repo1" in cmd  # Should use first repo
+    # Use str(Path(...)) for cross-platform path comparison
+    assert str(Path("/path/to/repo1")) in cmd  # Should use first repo
 
 
 def test_repo_flow_build_command_fast_profile():

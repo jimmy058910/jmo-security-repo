@@ -4,15 +4,28 @@ Unit tests for history database file permissions (Phase 6 Step 6.2).
 
 Tests that the database file is created with restrictive permissions (0o600)
 to prevent unauthorized access to sensitive security findings.
+
+Note: These tests are skipped on Windows because:
+- Windows uses ACLs (Access Control Lists) instead of Unix mode bits
+- os.chmod() on Windows only affects the read-only flag
+- Windows security model is fundamentally different
 """
 
 from __future__ import annotations
 
 import os
 import stat
+import sys
 
+import pytest
 
 from scripts.core.history_db import get_connection, store_scan
+
+# Skip all tests in this module on Windows
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Unix file permissions not supported on Windows (uses ACLs instead)",
+)
 
 
 class TestDatabaseFilePermissions:

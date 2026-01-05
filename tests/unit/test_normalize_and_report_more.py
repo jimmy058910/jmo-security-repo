@@ -7,6 +7,140 @@ import types
 import scripts.core.normalize_and_report as nr
 
 
+# ===== Memory-Efficient Deduplication Tests =====
+
+
+class TestDedupMemoryEfficient:
+    """Tests for memory-efficient deduplication (F2 optimization)."""
+
+    def test_basic_deduplication(self):
+        """Test basic deduplication preserves unique findings."""
+        findings = [
+            {"id": "fp1", "message": "Issue A"},
+            {"id": "fp2", "message": "Issue B"},
+            {"id": "fp3", "message": "Issue C"},
+        ]
+        result = nr.deduplicate_findings_memory_efficient(findings)
+        assert len(result) == 3
+        assert [f["id"] for f in result] == ["fp1", "fp2", "fp3"]
+
+    def test_removes_duplicates(self):
+        """Test that duplicates are removed."""
+        findings = [
+            {"id": "fp1", "message": "Issue A"},
+            {"id": "fp2", "message": "Issue B"},
+            {"id": "fp1", "message": "Issue A (dup)"},  # Duplicate
+            {"id": "fp3", "message": "Issue C"},
+            {"id": "fp2", "message": "Issue B (dup)"},  # Duplicate
+        ]
+        result = nr.deduplicate_findings_memory_efficient(findings)
+        assert len(result) == 3
+        assert [f["id"] for f in result] == ["fp1", "fp2", "fp3"]
+
+    def test_preserves_first_occurrence(self):
+        """Test that first occurrence is preserved."""
+        findings = [
+            {"id": "fp1", "message": "First", "extra": "data1"},
+            {"id": "fp1", "message": "Second", "extra": "data2"},  # Duplicate
+        ]
+        result = nr.deduplicate_findings_memory_efficient(findings)
+        assert len(result) == 1
+        assert result[0]["message"] == "First"
+        assert result[0]["extra"] == "data1"
+
+    def test_empty_findings(self):
+        """Test with empty input."""
+        result = nr.deduplicate_findings_memory_efficient([])
+        assert result == []
+
+    def test_none_fingerprint_excluded(self):
+        """Test that findings without id are excluded."""
+        findings = [
+            {"id": "fp1", "message": "Issue A"},
+            {"message": "No ID"},  # Missing id
+            {"id": None, "message": "None ID"},  # None id
+            {"id": "fp2", "message": "Issue B"},
+        ]
+        result = nr.deduplicate_findings_memory_efficient(findings)
+        assert len(result) == 2
+        assert [f["id"] for f in result] == ["fp1", "fp2"]
+
+    def test_large_dataset_performance(self):
+        """Test deduplication of 10k+ findings performs well."""
+        import time
+
+        # Create 10k findings with 50% duplicates
+        findings = []
+        for i in range(10000):
+            findings.append(
+                {"id": f"fp{i % 5000}", "message": f"Issue {i}", "severity": "HIGH"}
+            )
+
+        start = time.perf_counter()
+        result = nr.deduplicate_findings_memory_efficient(findings)
+        elapsed = time.perf_counter() - start
+
+        assert len(result) == 5000  # 50% unique
+        assert elapsed < 1.0  # Should complete in <1 second
+
+    def test_same_results_as_dict_approach(self):
+        """Verify same results as original dict approach."""
+        findings = [
+            {"id": "fp1", "message": "A", "tool": "trivy"},
+            {"id": "fp2", "message": "B", "tool": "semgrep"},
+            {"id": "fp1", "message": "A dup", "tool": "bandit"},
+            {"id": "fp3", "message": "C", "tool": "trivy"},
+            {"id": "fp2", "message": "B dup", "tool": "trivy"},
+        ]
+
+        # Original dict approach
+        seen = {}
+        for f in findings:
+            seen[f.get("id")] = f
+        dict_result = list(seen.values())
+
+        # Memory-efficient approach
+        efficient_result = nr.deduplicate_findings_memory_efficient(findings)
+
+        # New approach keeps first occurrence (better for traceability)
+        # Dict approach keeps last occurrence (Python dict behavior)
+        # Verify same unique IDs returned
+        assert set(f["id"] for f in efficient_result) == set(
+            f["id"] for f in dict_result
+        )
+        assert len(efficient_result) == len(dict_result)
+
+
+class TestDedupStreaming:
+    """Tests for streaming deduplication variant."""
+
+    def test_basic_deduplication(self):
+        """Test streaming approach produces same results."""
+        findings = [
+            {"id": "fp1", "message": "Issue A"},
+            {"id": "fp2", "message": "Issue B"},
+            {"id": "fp1", "message": "Issue A (dup)"},
+        ]
+        result = nr.deduplicate_findings_streaming(findings)
+        assert len(result) == 2
+        assert [f["id"] for f in result] == ["fp1", "fp2"]
+
+    def test_empty_input(self):
+        """Test with empty input."""
+        result = nr.deduplicate_findings_streaming([])
+        assert result == []
+
+    def test_matches_memory_efficient(self):
+        """Test streaming matches memory-efficient approach."""
+        findings = [{"id": f"fp{i % 100}", "message": f"Issue {i}"} for i in range(500)]
+
+        efficient = nr.deduplicate_findings_memory_efficient(findings)
+        streaming = nr.deduplicate_findings_streaming(findings)
+
+        assert len(efficient) == len(streaming)
+        assert [f["id"] for f in efficient] == [f["id"] for f in streaming]
+
+
 def _write(p: Path, s: str):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(s, encoding="utf-8")
