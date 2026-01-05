@@ -1,0 +1,33 @@
+name: 'Setup Python for JMo'
+description: 'Setup Python with caching for JMo Security CI'
+
+inputs:
+  python-version:
+    description: 'Python version to install'
+    required: false
+    default: '3.11'
+  cache-dependency-path:
+    description: 'Path for pip cache dependency file'
+    required: false
+    default: 'requirements-dev.txt'
+  install-dev-deps:
+    description: 'Whether to install development dependencies'
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install dependencies
+      if: inputs.install-dev-deps == 'true'
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt

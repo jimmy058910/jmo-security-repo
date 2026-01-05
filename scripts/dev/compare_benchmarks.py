@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -293,13 +294,19 @@ def main():
                 f"(+{r.change_pct:.1f}%)"
             )
 
-        # Set output for GitHub Actions
-        print("::set-output name=regression_detected::true")
+        # Set output for GitHub Actions (using GITHUB_OUTPUT env file)
+        github_output = os.environ.get("GITHUB_OUTPUT")
+        if github_output:
+            with open(github_output, "a") as f:
+                f.write("regression_detected=true\n")
         sys.exit(1)
     else:
         print("\n✅ No performance regressions detected")
-        print("::set-output name=regression_detected::false")
-        sys.exit(0)
+        # Set output for GitHub Actions (using GITHUB_OUTPUT env file)
+        github_output = os.environ.get("GITHUB_OUTPUT")
+        if github_output:
+            with open(github_output, "a") as f:
+                f.write("regression_detected=false\n")
 
 
 if __name__ == "__main__":

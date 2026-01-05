@@ -1,0 +1,45 @@
+name: 'Aggregate Coverage'
+description: 'Merge coverage reports and check threshold'
+
+inputs:
+  threshold:
+    description: 'Minimum coverage percentage required'
+    required: false
+    default: '85'
+  codecov-token:
+    description: 'Codecov upload token (optional - for upload)'
+    required: false
+    default: ''
+  artifact-pattern:
+    description: 'Pattern for coverage artifacts to download'
+    required: false
+    default: 'coverage-*'
+
+runs:
+  using: composite
+  steps:
+    - name: Download coverage artifacts
+      uses: actions/download-artifact@v5
+      with:
+        pattern: ${{ inputs.artifact-pattern }}
+        merge-multiple: true
+
+    - name: Merge coverage reports
+      shell: bash
+      run: |
+        # Combine coverage data files
+        coverage combine || true
+        # Generate report and check threshold
+        coverage report --fail-under=${{ inputs.threshold }}
+
+    - name: Generate XML for Codecov
+      shell: bash
+      run: coverage xml -o coverage.xml
+
+    - name: Upload to Codecov
+      if: inputs.codecov-token != ''
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ inputs.codecov-token }}
+        files: coverage.xml
+        fail_ci_if_error: false

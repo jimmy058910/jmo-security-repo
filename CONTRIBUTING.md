@@ -228,7 +228,7 @@ The repository includes a `.pre-commit-config.yaml` file that configures the fol
 - **markdownlint**: Markdown style checks
 - **Bandit**: Python security scanning (scoped to `scripts/`; this hook is skipped in CI but covered by `make lint` locally)
 
-These checks run automatically on commit and are also enforced in CI (note: the Bandit hook is skipped in CI’s pre-commit stage; see `.github/workflows/tests.yml`).
+These checks run automatically on commit and are also enforced in CI (note: the Bandit hook is skipped in CI's pre-commit stage; see `.github/workflows/ci.yml`).
 
 #### Tips
 
@@ -1379,7 +1379,7 @@ for name in registry.list_plugins():
 
 - Tests live in `tests/`.
 - Use temporary paths and fabricated JSON for adapters per existing patterns.
-- CI enforces coverage (see `.github/workflows/tests.yml`).
+- CI enforces coverage (see `.github/workflows/ci.yml`).
 
 ### Coverage reporting (Codecov)
 

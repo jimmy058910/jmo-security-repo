@@ -7,8 +7,8 @@ name: Version Consistency Check
 
 on:
   schedule:
-    # Weekly on Sunday at 00:00 UTC
-    - cron: '0 0 * * 0'
+    # Weekly on Sunday at 02:00 UTC (after weekly-tool-update.yml at 00:00 UTC)
+    - cron: '0 2 * * 0'
   workflow_dispatch:
     # checkov:skip=CKV_GHA_7: Manual version checks require create_issues input for controlling issue creation
     inputs:

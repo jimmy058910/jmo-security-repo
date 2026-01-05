@@ -476,12 +476,13 @@ jobs:
           echo ""
           echo "✅ Badge verification successful!"
 
-  # Submit Homebrew formula PR (automated)
+  # Submit Homebrew formula PR (automated) - inlined from homebrew-bump-formula.yml
   homebrew-bump:
     name: Submit Homebrew Formula PR
     runs-on: ubuntu-latest
     needs: pypi-publish
     if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 10
     steps:
       - name: Extract version
         id: version
@@ -509,36 +510,59 @@ jobs:
           echo "❌ PyPI release not available after 5 minutes"
           exit 1
 
-      - name: Trigger homebrew-bump-formula workflow
-        uses: actions/github-script@v7
+      - name: Bump Homebrew formula
+        uses: dawidd6/action-homebrew-bump-formula@v4
         with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'homebrew-bump-formula.yml',
-              ref: 'main',
-              inputs: {
-                version: '${{ steps.version.outputs.version }}'
-              }
-            });
-            console.log('✅ Triggered homebrew-bump-formula workflow');
+          # Required: Personal Access Token with repo + workflow scopes
+          # Store as repository secret: HOMEBREW_BUMP_TOKEN
+          token: ${{ secrets.HOMEBREW_BUMP_TOKEN }}
+          formula: jmo-security
+          tag: v${{ steps.version.outputs.version }}
+          force: false
 
-  # Submit WinGet manifest PR (automated)
+      - name: Success notification
+        if: success()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "✅ Successfully submitted PR to homebrew-core for version $VERSION"
+          echo ""
+          echo "📋 Next steps:"
+          echo "  1. Monitor PR at: https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security"
+          echo "  2. Homebrew maintainers will review (typically 1-2 weeks)"
+          echo "  3. After merge, users can install with: brew install jmo-security"
+
+  # Submit WinGet manifest PR (automated) - inlined from winget-releaser.yml
   winget-bump:
     name: Submit WinGet Manifest PR
-    runs-on: ubuntu-latest
-    needs: docker-build  # Wait for Windows installer to be built
+    runs-on: windows-latest  # Required for WinGet releaser
+    needs: docker-build  # Wait for release assets to be available
     if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 15
     steps:
-      - name: Trigger winget-releaser workflow
-        uses: actions/github-script@v7
+      - name: Extract version
+        id: version
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Output "📦 Creating WinGet manifest for version: $version"
+
+      - name: Submit manifest to microsoft/winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
         with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'winget-releaser.yml',
-              ref: 'main'
-            });
-            console.log('✅ Triggered winget-releaser workflow');
+          # Required: Personal Access Token with public_repo scope
+          # Store as repository secret: WINGET_RELEASER_TOKEN
+          token: ${{ secrets.WINGET_RELEASER_TOKEN }}
+          identifier: jmo.jmo-security
+
+      - name: Success notification
+        if: success()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Output "✅ Successfully submitted PR to microsoft/winget-pkgs for version $version"
+          Write-Output ""
+          Write-Output "📋 Next steps:"
+          Write-Output "  1. Monitor PR at: https://github.com/microsoft/winget-pkgs/pulls?q=is%3Apr+jmo-security"
+          Write-Output "  2. Microsoft maintainers will review (typically 1-2 weeks)"
+          Write-Output "  3. After merge, users can install with: winget install jmo.jmo-security"
