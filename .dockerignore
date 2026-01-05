@@ -1,13 +1,18 @@
-# JMo Security Docker Build Exclusions (Phase 1 Optimization: 5 MB savings)
+# JMo Security Docker Build Exclusions (Phase 2 Optimization: Layer Caching + 8 MB savings)
 # Prevents copying unnecessary files to Docker build context
+# This reduces context size AND improves layer cache hit rates
 
-# Version control
+# =============================================================================
+# VERSION CONTROL (large directory, not needed in image)
+# =============================================================================
 .git/
 .github/
 .gitignore
 .gitattributes
 
-# Development and testing
+# =============================================================================
+# DEVELOPMENT AND TESTING (not needed in runtime)
+# =============================================================================
 dev-only/
 tests/
 test-data/
@@ -19,34 +24,65 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .coverage
+.coveragerc
 .tox/
 htmlcov/
+.hypothesis/
 
-# Documentation (not needed in runtime image)
+# =============================================================================
+# AI/LLM TOOLING (development only)
+# =============================================================================
+.claude/
+.mcp.json
+.mcp.json.example
+.mcp-skills/
+.serena/
+
+# =============================================================================
+# DOCUMENTATION (not needed in runtime image)
+# =============================================================================
 *.md
 !README.md
-docs/screenshots/
-docs/examples/*.png
-docs/examples/*.jpg
+docs/
+CHANGELOG.md
+CONTRIBUTING.md
+CONTRIBUTORS.md
+CODE_OF_CONDUCT.md
 
-# IDE and editor files
+# =============================================================================
+# IDE AND EDITOR FILES
+# =============================================================================
 .vscode/
 .idea/
-.claude/
+.devcontainer/
+.vercel/
 *.swp
 *.swo
 *~
-.DS_Store
+.editorconfig
 
-# CI/CD (not needed in image)
-.github/workflows/
+# =============================================================================
+# CI/CD AND LINTING CONFIG (not needed in image)
+# =============================================================================
 .pre-commit-config.yaml
 .pre-commit-hooks.yaml
-.yamllint
+.yamllint.yaml
 .ruff.toml
+.ruff_cache/
+.mypy_cache/
 .bandit
+bandit.yaml
+codecov.yml
+.readthedocs.yaml
+.markdownlint.json
+.markdownlint-cli2.jsonc
+.markdownlintignore
+.guardrails-allowlist
+.trufflehog-exclude.txt
 
-# Build artifacts
+# =============================================================================
+# BUILD ARTIFACTS
+# =============================================================================
 *.egg-info/
 dist/
 build/
@@ -55,24 +91,43 @@ build/
 node_modules/
 package-lock.json
 
-# Results and logs (not needed in base image)
+# =============================================================================
+# RESULTS AND RUNTIME DATA (not needed in base image)
+# =============================================================================
 results/
+.jmo/
 *.log
 *.out
 *.err
 
-# Temporary files
+# =============================================================================
+# TEMPORARY AND OS FILES
+# =============================================================================
 tmp/
 temp/
 *.tmp
 *.bak
 *.orig
-
-# OS files
 Thumbs.db
 .DS_Store
 
-# Keep critical files (override exclusions)
+# =============================================================================
+# PACKAGING (Docker variants handled by specific Dockerfiles)
+# =============================================================================
+packaging/
+samples/
+assets/
+
+# =============================================================================
+# VIRTUAL ENVIRONMENTS (never include in image)
+# =============================================================================
+.venv/
+venv/
+.env
+
+# =============================================================================
+# KEEP CRITICAL FILES (override exclusions)
+# =============================================================================
 !.dockerignore
 !Dockerfile*
 !pyproject.toml

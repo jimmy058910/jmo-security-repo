@@ -329,7 +329,11 @@ VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
 # Create working directory
 WORKDIR /scan
 
-# Copy JMo Security Suite source code
+# =============================================================================
+# CACHE OPTIMIZATION: Use .dockerignore to minimize context (Phase 2)
+# This reduces context transfer time and improves cache efficiency
+# Combined with GitHub Actions cache-from/cache-to for layer caching
+# =============================================================================
 COPY . /opt/jmo-security/
 
 # Copy default config to WORKDIR for profile loading
