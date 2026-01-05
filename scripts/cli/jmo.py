@@ -2569,21 +2569,26 @@ def cmd_ci(args) -> int:
 
 def cmd_adapters(args) -> int:
     """Handle 'jmo adapters' subcommand for plugin management."""
-    from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+    from scripts.core.plugin_loader import get_plugin_registry, get_available_adapters
 
     if args.adapters_command == "list":
-        # Discover and list all plugins
-        count = discover_adapters()
+        # List all available adapters (lazy-loads each to get metadata)
         registry = get_plugin_registry()
+        available = get_available_adapters()
 
-        print(f"Loaded {count} adapter plugins:\n")
+        print(f"Found {len(available)} adapter plugins:\n")
 
-        for name in sorted(registry.list_plugins()):
-            metadata = registry.get_metadata(name)
-            if metadata:
-                print(f"  {name:<15} v{metadata.version:<8} {metadata.description}")
+        for name in sorted(available):
+            # Trigger lazy load to get metadata
+            adapter = registry.get(name)
+            if adapter:
+                metadata = registry.get_metadata(name)
+                if metadata:
+                    print(f"  {name:<15} v{metadata.version:<8} {metadata.description}")
+                else:
+                    print(f"  {name:<15} (loaded, no metadata)")
             else:
-                print(f"  {name:<15} (no metadata)")
+                print(f"  {name:<15} (failed to load)")
 
         return 0
 

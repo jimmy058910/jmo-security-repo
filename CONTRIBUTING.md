@@ -1340,19 +1340,25 @@ TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
 ### Advanced: Programmatic Plugin Management
 
 ```python
-from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+from scripts.core.plugin_loader import get_plugin_registry, get_available_adapters
 
-# Discover and load all plugins
-discover_adapters()
+# Get lazy-loading registry
 registry = get_plugin_registry()
 
-# List loaded plugins
-for name, plugin_class in registry.list().items():
-    meta = plugin_class._plugin_metadata
+# List available adapters (without loading them)
+available = get_available_adapters()
+print(f"Available adapters: {available}")
+
+# Get a specific adapter (lazy-loads on first access)
+trivy_adapter = registry.get("trivy")
+if trivy_adapter:
+    meta = registry.get_metadata("trivy")
     print(f"{meta.name} v{meta.version}: {meta.description}")
 
-# Unregister a plugin
-registry.unregister("obsolete-tool")
+# List currently loaded plugins
+for name in registry.list_plugins():
+    meta = registry.get_metadata(name)
+    print(f"{meta.name} v{meta.version}")
 ```
 
 ### Checklist for New Adapters

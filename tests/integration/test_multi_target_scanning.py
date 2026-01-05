@@ -336,7 +336,7 @@ def test_repo_plus_image_deduplication(tmp_path: Path):
     """Verify findings from repo and image are deduplicated by fingerprint."""
     import json
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -392,7 +392,7 @@ import sys
 def test_multi_target_compliance_aggregation(tmp_path: Path):
     """Verify compliance reports aggregate findings from all target types."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -444,7 +444,7 @@ import sys
 def test_triple_target_scan(tmp_path: Path):
     """Test scanning repo + image + IaC simultaneously."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -494,7 +494,7 @@ resource "aws_s3_bucket" "test" {
 def test_multi_target_partial_failure(tmp_path: Path):
     """Test multi-target scan continues when one target fails."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()

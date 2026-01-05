@@ -111,7 +111,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
         return FakeCP(0, "", "")
 
     import subprocess
-import sys
+    import sys
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -188,7 +188,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
         return FakeCP(0, '{"artifacts": []}', "ok")
 
     import subprocess
-import sys
+    import sys
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -219,7 +219,7 @@ import sys
 def test_per_tool_timeout_override(tmp_path: Path):
     """Test per-tool timeout override in profile."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -278,7 +278,7 @@ profiles:
 def test_per_tool_flags_override(tmp_path: Path):
     """Test per-tool flags override in profile."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -328,7 +328,7 @@ profiles:
 def test_per_tool_retries_override(tmp_path: Path):
     """Test per-tool retry override in profile."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -373,7 +373,7 @@ profiles:
 def test_profile_tool_selection_fast(tmp_path: Path):
     """Test fast profile invokes correct tool subset."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -415,7 +415,7 @@ import sys
 def test_profile_tool_selection_balanced(tmp_path: Path):
     """Test balanced profile invokes correct tool subset."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -475,7 +475,7 @@ import sys
 def test_profile_tool_selection_deep(tmp_path: Path):
     """Test deep profile invokes correct tool subset."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -536,7 +536,7 @@ import sys
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
     """Test profile inherits global per_tool config and merges correctly."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -599,7 +599,7 @@ profiles:
 def test_profile_thread_override(tmp_path: Path):
     """Test profile-specific thread count override."""
     import subprocess
-import sys
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()

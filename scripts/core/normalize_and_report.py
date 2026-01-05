@@ -27,7 +27,7 @@ from typing import Any
 from scripts.core.exceptions import AdapterParseException
 
 # Plugin system (v0.9.0)
-from scripts.core.plugin_loader import discover_adapters, get_plugin_registry
+from scripts.core.plugin_loader import get_plugin_registry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
@@ -126,9 +126,7 @@ def deduplicate_findings_streaming(
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
 
-    # Discover and load all adapter plugins
-    plugin_count = discover_adapters()
-    logger.info(f"Loaded {plugin_count} adapter plugins")
+    # Get lazy-loading registry (adapters load on-demand)
     registry = get_plugin_registry()
 
     jobs = []

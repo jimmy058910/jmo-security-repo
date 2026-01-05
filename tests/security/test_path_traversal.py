@@ -14,7 +14,6 @@ import pytest
 
 from scripts.core.config import load_config
 from scripts.core.normalize_and_report import gather_results
-from scripts.core.plugin_loader import discover_adapters
 
 
 class TestPathTraversalResistance:
@@ -26,8 +25,7 @@ class TestPathTraversalResistance:
         Validates that malicious results_dir paths cannot escape
         intended directory boundaries.
         """
-        # Discover adapters first
-        discover_adapters()
+        # Adapters now load on-demand via lazy loading
 
         # Create test structure
         results_dir = tmp_path / "results"
@@ -180,8 +178,7 @@ outputs:
         Validates that loading tool outputs (trivy.json, semgrep.json)
         prevents path traversal when discovering files.
         """
-        # Discover adapters first
-        discover_adapters()
+        # Adapters now load on-demand via lazy loading
 
         # Create legitimate tool outputs
         results_dir = tmp_path / "results"
