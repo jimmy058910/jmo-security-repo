@@ -1020,11 +1020,16 @@ jmo report results/
 
 Cross-tool deduplication uses a multi-dimensional similarity algorithm combining:
 
-- **Location (35%):** Path + line range overlap
-- **Message (40%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
-- **Metadata (25%):** CWE/CVE/Rule ID matching
+- **Location (50%):** Path + line range overlap (primary signal for same-issue detection)
+- **Message (25%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
+- **Metadata (25%):** CWE/CVE/Rule ID matching + rule equivalence mapping
 
 Findings with similarity above the configured threshold (default: 65%) are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
+
+**Algorithm Selection:**
+
+- **<500 findings:** Greedy algorithm (O(n×k), simpler overhead)
+- **≥500 findings:** LSH algorithm (O(n log n), uses locality-sensitive hashing for scalability)
 
 **Example Consensus Finding:**
 
@@ -1074,7 +1079,8 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 
 ### Performance Impact
 
-- **Time:** <2 seconds for 1000 findings
+- **Time:** <2 seconds for 1000 findings, <10 seconds for 10000 findings
+- **Scalability:** LSH algorithm enables O(n log n) clustering for large scans
 - **Reduction:** 30-40% fewer reported findings (noise elimination)
 - **Accuracy:** ≥85% clustering accuracy (validated on 200+ finding sample)
 

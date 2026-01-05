@@ -343,7 +343,7 @@ class GitLabCIGenerator:
             YAML string with proper formatting for GitLab CI
         """
         import yaml
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         # Use safe_dump with custom options for clean YAML
         yaml_str = yaml.dump(
@@ -368,7 +368,7 @@ class GitLabCIGenerator:
                 f"# Cron: {schedule.spec.schedule}",
                 f"# Timezone: {schedule.spec.timezone}",
                 f"# Profile: {schedule.spec.jobTemplate.profile}",
-                f"# Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+                f"# Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
                 "#",
                 "# IMPORTANT: Configure schedule via GitLab UI:",
                 "#   Settings > CI/CD > Schedules > New schedule",

@@ -34,6 +34,66 @@ make fmt && make lint && make test
 - No files >10MB (`check-added-large-files` hook)
 - No secrets (TruffleHog + detect-private-key hooks)
 
+### Proactive Issue Resolution
+
+**CRITICAL:** When encountering issues (test failures, deprecation warnings, linting errors), address them immediately rather than deferring. Technical debt compounds quickly.
+
+**Decision Framework:**
+
+| Issue Type | Scale | Action |
+|------------|-------|--------|
+| Small & Simple | Single clear solution | **Fix immediately** - deprecation warnings, threshold adjustments, typos |
+| Complex OR Multiple Solutions | Architectural impact or trade-offs | **Stop & discuss first** - get alignment before implementing |
+| Blocking | CI broken, security vulnerability | **Fix immediately** - but document reasoning |
+
+**Issue Handling Protocol:**
+
+1. **Fix Now (Small & Simple):** If the fix is straightforward with one clear solution
+   - Deprecation warnings: Update to recommended API
+   - Performance test thresholds: Adjust with documented reasoning
+   - Linting errors: Apply the fix
+   - Single failing test: Fix the root cause
+
+2. **Stop & Discuss (Complex/Multiple Solutions):** If any of these apply:
+   - Multiple valid approaches exist
+   - Fix affects architecture or public API
+   - Uncertainty about the right solution
+   - Change scope is larger than expected
+   - **Action:** Present the issue, options, and recommendation before proceeding
+
+3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
+   - Create GitHub issue with `tech-debt` or `enhancement` label
+   - Add `# TODO(issue-#):` comment in code at the relevant location
+   - Document in `.claude/known-issues.md` with:
+     - Description of the issue
+     - Root cause analysis (if known)
+     - Proposed fix approach
+     - Priority (P0-P3)
+
+4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
+
+**Example - Performance Test Thresholds (Simple Fix):**
+
+```python
+# BAD: Arbitrary threshold without context
+assert elapsed < 0.05  # <50ms target
+
+# GOOD: Documented threshold with platform considerations
+assert elapsed < 0.2, f"Insert took {elapsed:.3f}s (target: <200ms)"
+# Note: Windows ~100-150ms, Linux ~30-50ms, threshold allows 4x variance
+```
+
+**Example - Complex Fix (Stop & Discuss):**
+
+```text
+Issue: Database queries are slow with 10k+ findings
+Options:
+  A) Add indexes (simple, may not scale)
+  B) Implement pagination (API change, better long-term)
+  C) Add caching layer (complex, best performance)
+Recommendation: B - discuss with user before proceeding
+```
+
 ## Quick Reference
 
 ### Development Setup

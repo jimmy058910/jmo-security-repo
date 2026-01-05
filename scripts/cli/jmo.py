@@ -488,7 +488,9 @@ Examples:
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command")
 
     # CHECK
-    check_parser = tools_subparsers.add_parser("check", help="Check tool installation status")
+    check_parser = tools_subparsers.add_parser(
+        "check", help="Check tool installation status"
+    )
     check_parser.add_argument("tools", nargs="*", help="Specific tools to check")
     check_parser.add_argument(
         "--profile",
@@ -498,7 +500,9 @@ Examples:
     check_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # INSTALL
-    install_parser = tools_subparsers.add_parser("install", help="Install missing tools")
+    install_parser = tools_subparsers.add_parser(
+        "install", help="Install missing tools"
+    )
     install_parser.add_argument("tools", nargs="*", help="Specific tools to install")
     install_parser.add_argument(
         "--profile",
@@ -539,7 +543,9 @@ Examples:
     list_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # OUTDATED
-    outdated_parser = tools_subparsers.add_parser("outdated", help="Show outdated tools")
+    outdated_parser = tools_subparsers.add_parser(
+        "outdated", help="Show outdated tools"
+    )
     outdated_parser.add_argument(
         "--critical-only", action="store_true", help="Only show critical tools"
     )
@@ -575,7 +581,9 @@ Examples:
         "--all", "-a", action="store_true", help="Also uninstall all security tools"
     )
     uninstall_parser.add_argument(
-        "--dry-run", action="store_true", help="Show what would be removed without removing"
+        "--dry-run",
+        action="store_true",
+        help="Show what would be removed without removing",
     )
     uninstall_parser.add_argument(
         "--yes", "-y", action="store_true", help="Skip confirmation prompt"
@@ -602,7 +610,9 @@ Examples:
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    debug_parser.add_argument("tools", nargs="*", help="Tools to debug version detection")
+    debug_parser.add_argument(
+        "tools", nargs="*", help="Tools to debug version detection"
+    )
     debug_parser.add_argument(
         "--all", "-a", action="store_true", help="Debug all tools in balanced profile"
     )
@@ -1786,7 +1796,7 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
     import sys
 
     try:
-        from scripts.cli.tool_manager import ToolManager, get_missing_tools_for_scan
+        from scripts.cli.tool_manager import get_missing_tools_for_scan
 
         available, missing_statuses = get_missing_tools_for_scan(requested_tools)
 
@@ -1816,7 +1826,9 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
             return available, missing_names
 
         # Show what's missing
-        print(f"\n{len(missing_statuses)} of {len(requested_tools)} tool(s) not installed:")
+        print(
+            f"\n{len(missing_statuses)} of {len(requested_tools)} tool(s) not installed:"
+        )
         for status in missing_statuses[:5]:
             print(f"  - {status.name}")
         if len(missing_statuses) > 5:
@@ -2016,7 +2028,9 @@ def _collect_email_opt_in(args) -> None:
                     yaml.dump(config, f)
 
                 if success:
-                    _safe_print("\n✅ Thanks! Check your inbox for a welcome message.\n")
+                    _safe_print(
+                        "\n✅ Thanks! Check your inbox for a welcome message.\n"
+                    )
                 else:
                     _safe_print("\n✅ Thanks! You're all set.\n")
                     _log(
@@ -2367,7 +2381,11 @@ def cmd_scan(args) -> int:
             # All tools missing and user cancelled
             return 1
         if missing_tools:
-            _log(args, "WARN", f"Skipping {len(missing_tools)} missing tool(s): {', '.join(missing_tools)}")
+            _log(
+                args,
+                "WARN",
+                f"Skipping {len(missing_tools)} missing tool(s): {', '.join(missing_tools)}",
+            )
 
     # Create ScanConfig from effective settings
     scan_config = ScanConfig(
@@ -2491,8 +2509,10 @@ def cmd_scan(args) -> int:
     # Execute scans via orchestrator (replaces 158 lines of inline logic)
     try:
         all_results = orchestrator.scan_all(
-            targets, per_tool_config, progress_callback,
-            tool_progress_callback=tool_progress_callback
+            targets,
+            per_tool_config,
+            progress_callback,
+            tool_progress_callback=tool_progress_callback,
         )
     except KeyboardInterrupt:
         _log(args, "WARN", "Scan interrupted by user")
@@ -2728,9 +2748,15 @@ def _prompt_install_dependency(dep_type: str) -> bool:
     Returns:
         True if installation was attempted, False if user declined.
     """
+    import subprocess
+
     if dep_type == "pydantic_v1":
-        sys.stderr.write("\n⚠️  MCP requires pydantic v2+, but you have pydantic v1 installed.\n")
-        sys.stderr.write("   This is a common issue when other packages pin pydantic to v1.\n\n")
+        sys.stderr.write(
+            "\n⚠️  MCP requires pydantic v2+, but you have pydantic v1 installed.\n"
+        )
+        sys.stderr.write(
+            "   This is a common issue when other packages pin pydantic to v1.\n\n"
+        )
         package = "pydantic>=2.11.0"
     else:
         sys.stderr.write("\n⚠️  MCP SDK is not installed.\n\n")
@@ -2778,7 +2804,9 @@ def cmd_mcp_server(args):
             is_ok, dep_issue = _check_mcp_dependencies()
             if not is_ok:
                 sys.stderr.write(f"\n✗ Dependencies still not satisfied: {dep_issue}\n")
-                sys.stderr.write("  You may need to restart your terminal or check for conflicts.\n")
+                sys.stderr.write(
+                    "  You may need to restart your terminal or check for conflicts.\n"
+                )
                 sys.stderr.write("  Run: pip check | grep pydantic\n")
                 return 1
         else:
@@ -3077,7 +3105,7 @@ def main():
 
 def _log(args, level: str, message: str) -> None:
     import json
-    import datetime
+    from datetime import datetime, timezone
 
     level = level.upper()
     cfg_level = None
@@ -3100,7 +3128,7 @@ def _log(args, level: str, message: str) -> None:
             "ERROR": "\x1b[31m",
         }.get(level, "")
         reset = "\x1b[0m"
-        ts = datetime.datetime.utcnow().strftime("%H:%M:%S")
+        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
         # Windows-safe Unicode handling for stderr
         safe_message = message
         try:
@@ -3113,7 +3141,7 @@ def _log(args, level: str, message: str) -> None:
         sys.stderr.write(f"{color}{level:5}{reset} {ts} {safe_message}\n")
         return
     rec = {
-        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "level": level,
         "msg": message,
     }

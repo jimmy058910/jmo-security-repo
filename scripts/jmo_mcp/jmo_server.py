@@ -33,7 +33,7 @@ import os
 import hashlib
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
 # NOTE: This import will fail until mcp[cli] is installed
@@ -416,7 +416,7 @@ def mark_resolved(
         # 3. Update dashboard to show resolution status
         # 4. Filter resolved findings from future scans
 
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         logger.info(
             f"mark_resolved: {finding_id} → {resolution} "

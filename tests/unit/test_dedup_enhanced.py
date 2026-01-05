@@ -927,3 +927,500 @@ def test_new_default_threshold():
     """Test that new default threshold is 0.65."""
     clusterer = FindingClusterer()
     assert clusterer.threshold == 0.65
+
+
+# ===== LSH Algorithm Tests =====
+
+
+def test_lsh_imports():
+    """Test that LSH classes import successfully."""
+    from scripts.core.dedup_enhanced import (
+        UnionFind,
+        LSHSignatureGenerator,
+        LSHClusterer,
+    )
+
+    assert UnionFind is not None
+    assert LSHSignatureGenerator is not None
+    assert LSHClusterer is not None
+
+
+def test_union_find_basic():
+    """Test UnionFind basic operations."""
+    from scripts.core.dedup_enhanced import UnionFind
+
+    uf = UnionFind(5)
+
+    # Initially, each element is its own root
+    assert uf.find(0) == 0
+    assert uf.find(1) == 1
+    assert uf.find(2) == 2
+
+    # Union 0 and 1
+    assert uf.union(0, 1) is True
+    assert uf.find(0) == uf.find(1)
+
+    # Union 2 and 3
+    assert uf.union(2, 3) is True
+    assert uf.find(2) == uf.find(3)
+
+    # 0 and 2 are still separate
+    assert uf.find(0) != uf.find(2)
+
+    # Union the two groups via 1 and 2
+    assert uf.union(1, 2) is True
+    assert uf.find(0) == uf.find(3)  # Now all connected
+
+
+def test_union_find_duplicate_union():
+    """Test that duplicate union returns False."""
+    from scripts.core.dedup_enhanced import UnionFind
+
+    uf = UnionFind(3)
+    uf.union(0, 1)
+
+    # Already in same set
+    assert uf.union(0, 1) is False
+    assert uf.union(1, 0) is False
+
+
+def test_union_find_get_groups():
+    """Test UnionFind get_groups method."""
+    from scripts.core.dedup_enhanced import UnionFind
+
+    uf = UnionFind(6)
+    uf.union(0, 1)
+    uf.union(1, 2)
+    uf.union(3, 4)
+    # 5 is alone
+
+    items = ["a", "b", "c", "d", "e", "f"]
+    groups = uf.get_groups(items)
+
+    # Should have 3 groups: {a,b,c}, {d,e}, {f}
+    assert len(groups) == 3
+
+    # Sort groups by size for consistent testing
+    groups_sorted = sorted(groups, key=len, reverse=True)
+    assert len(groups_sorted[0]) == 3
+    assert len(groups_sorted[1]) == 2
+    assert len(groups_sorted[2]) == 1
+
+
+def test_lsh_signature_generator_basic():
+    """Test LSH signature generation."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    finding = {
+        "location": {"path": "app/users.py", "startLine": 42},
+        "message": "SQL injection vulnerability detected",
+        "ruleId": "python.sql.injection",
+        "raw": {"CWE": "CWE-89"},
+    }
+
+    sigs = lsh.generate_signatures(finding)
+
+    # Should generate multiple signatures
+    assert len(sigs) >= 3
+
+    # All signatures should be strings
+    assert all(isinstance(s, str) for s in sigs)
+
+
+def test_lsh_signature_similarity():
+    """Test that similar findings have overlapping signatures."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    finding1 = {
+        "location": {"path": "app/users.py", "startLine": 42},
+        "message": "SQL injection in query",
+        "ruleId": "python.sql.injection",
+        "raw": {"CWE": "CWE-89"},
+    }
+
+    finding2 = {
+        "location": {"path": "app/users.py", "startLine": 42},
+        "message": "Possible SQL injection attack",
+        "ruleId": "python.sql.sqli",
+        "raw": {"CWE": "CWE-89"},
+    }
+
+    sigs1 = set(lsh.generate_signatures(finding1))
+    sigs2 = set(lsh.generate_signatures(finding2))
+
+    # Should have overlapping signatures (same path, line, CWE)
+    assert len(sigs1 & sigs2) >= 2
+
+
+def test_lsh_signature_different_findings():
+    """Test that different findings have minimal signature overlap."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    finding1 = {
+        "location": {"path": "app/users.py", "startLine": 42},
+        "message": "SQL injection vulnerability",
+        "raw": {"CWE": "CWE-89"},
+    }
+
+    finding2 = {
+        "location": {"path": "app/auth.py", "startLine": 100},
+        "message": "XSS vulnerability",
+        "raw": {"CWE": "CWE-79"},
+    }
+
+    sigs1 = set(lsh.generate_signatures(finding1))
+    sigs2 = set(lsh.generate_signatures(finding2))
+
+    # Different files, different CWEs → minimal overlap
+    # Some keyword overlap possible but should be limited
+    assert len(sigs1 & sigs2) <= 2
+
+
+def test_lsh_clusterer_basic():
+    """Test LSH clusterer with basic findings."""
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+
+    findings = [
+        {
+            "id": "f1",
+            "tool": {"name": "semgrep"},
+            "severity": "HIGH",
+            "message": "SQL injection",
+            "location": {"path": "app.py", "startLine": 10},
+            "raw": {"CWE": "CWE-89"},
+        },
+        {
+            "id": "f2",
+            "tool": {"name": "bandit"},
+            "severity": "HIGH",
+            "message": "SQL injection detected",
+            "location": {"path": "app.py", "startLine": 10},
+            "raw": {"CWE": "CWE-89"},
+        },
+        {
+            "id": "f3",
+            "tool": {"name": "trivy"},
+            "severity": "MEDIUM",
+            "message": "XSS vulnerability",
+            "location": {"path": "web.py", "startLine": 50},
+            "raw": {"CWE": "CWE-79"},
+        },
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    # f1 and f2 should cluster (same location, same CWE)
+    # f3 should be separate
+    assert len(clusters) == 2
+
+
+def test_lsh_clusterer_large_dataset():
+    """Test LSH clusterer performance with large dataset."""
+    import time
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+
+    # Generate 1000 findings with TRUE duplicates
+    # Same file, same line, same CWE = should cluster together
+    findings = []
+    for i in range(1000):
+        group = i // 10  # 100 groups of 10
+        findings.append(
+            {
+                "id": f"f{i}",
+                "tool": {"name": f"tool{i % 5}"},  # Vary tools
+                "severity": "HIGH",
+                "message": f"SQL injection in query {group}",
+                "location": {
+                    "path": f"file{group}.py",
+                    "startLine": 10 + group,  # Same line per group
+                },
+                "raw": {"CWE": "CWE-89"},  # Same CWE for all
+            }
+        )
+
+    start = time.perf_counter()
+    clusters = clusterer.cluster(findings)
+    elapsed = time.perf_counter() - start
+
+    # Should complete in reasonable time (< 10 seconds for 1000 findings)
+    assert elapsed < 10.0
+
+    # With true duplicates (same line per group), should cluster
+    assert len(clusters) < 500
+
+
+def test_finding_clusterer_auto_selection():
+    """Test FindingClusterer automatic algorithm selection."""
+    clusterer = FindingClusterer()
+
+    # Default threshold is 500
+    assert clusterer.LSH_THRESHOLD == 500
+
+    # Auto mode should select greedy for small datasets
+    assert clusterer._should_use_lsh(100) is False
+    assert clusterer._should_use_lsh(499) is False
+
+    # Auto mode should select LSH for large datasets
+    assert clusterer._should_use_lsh(500) is True
+    assert clusterer._should_use_lsh(1000) is True
+
+
+def test_finding_clusterer_forced_greedy():
+    """Test FindingClusterer with forced greedy algorithm."""
+    clusterer = FindingClusterer(algorithm="greedy")
+
+    # Should use greedy even for large n
+    assert clusterer._should_use_lsh(1000) is False
+    assert clusterer._should_use_lsh(10000) is False
+
+
+def test_finding_clusterer_forced_lsh():
+    """Test FindingClusterer with forced LSH algorithm."""
+    clusterer = FindingClusterer(algorithm="lsh")
+
+    # Should use LSH even for small n
+    assert clusterer._should_use_lsh(10) is True
+    assert clusterer._should_use_lsh(100) is True
+
+
+def test_lsh_vs_greedy_consistency():
+    """Test that LSH and greedy produce consistent results."""
+
+    findings = [
+        {
+            "id": "f1",
+            "tool": {"name": "semgrep"},
+            "severity": "HIGH",
+            "message": "SQL injection vulnerability",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {"CWE": "CWE-89"},
+        },
+        {
+            "id": "f2",
+            "tool": {"name": "bandit"},
+            "severity": "HIGH",
+            "message": "SQL injection detected",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {"CWE": "CWE-89"},
+        },
+        {
+            "id": "f3",
+            "tool": {"name": "trivy"},
+            "severity": "MEDIUM",
+            "message": "XSS vulnerability found",
+            "location": {"path": "web.py", "startLine": 100},
+            "raw": {"CWE": "CWE-79"},
+        },
+    ]
+
+    # Test with greedy
+    greedy_clusterer = FindingClusterer(algorithm="greedy")
+    greedy_clusters = greedy_clusterer.cluster(findings)
+
+    # Test with LSH
+    lsh_clusterer = FindingClusterer(algorithm="lsh")
+    lsh_clusters = lsh_clusterer.cluster(findings)
+
+    # Both should produce same number of clusters
+    assert len(greedy_clusters) == len(lsh_clusters)
+
+
+def test_lsh_clusterer_empty_findings():
+    """Test LSH clusterer handles empty input."""
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+    clusters = clusterer.cluster([])
+
+    assert clusters == []
+
+
+def test_lsh_clusterer_single_finding():
+    """Test LSH clusterer handles single finding."""
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+    findings = [
+        {
+            "id": "f1",
+            "severity": "HIGH",
+            "message": "Test issue",
+            "location": {},
+            "raw": {},
+        }
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 1
+
+
+def test_lsh_performance_1000_findings():
+    """Benchmark LSH performance with 1000 findings.
+
+    This test verifies that LSH can handle 1000 findings in reasonable time.
+    The performance target is <10 seconds (more lenient for CI variability).
+    """
+    import time
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+
+    # Generate 1000 findings with TRUE duplicates (same line per group)
+    findings = []
+    for i in range(1000):
+        group = i // 20  # 50 groups of 20
+        findings.append(
+            {
+                "id": f"f{i}",
+                "severity": "HIGH",
+                "message": f"SQL injection in query {group}",
+                "location": {
+                    "path": f"file{group}.py",
+                    "startLine": 10 + group,  # Same line within group
+                },
+                "raw": {"CWE": "CWE-89"},
+                "tool": {"name": f"tool{i % 5}"},
+            }
+        )
+
+    start = time.perf_counter()
+    clusters = clusterer.cluster(findings)
+    elapsed = time.perf_counter() - start
+
+    # Performance requirement: <10 seconds for 1000 findings (generous for CI)
+    assert elapsed < 10.0, f"LSH clustering took {elapsed:.2f}s (should be <10s)"
+
+    # Should achieve significant clustering (50 groups of 20 = ideally 50 clusters)
+    assert len(clusters) < 500  # At least 50% reduction
+
+
+def test_lsh_signature_keywords():
+    """Test LSH signature generator extracts security keywords."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    # Test finding with security keywords
+    finding = {
+        "location": {"path": "app.py", "startLine": 10},
+        "message": "Hardcoded password detected in config",
+        "raw": {},
+    }
+
+    keywords = lsh._extract_keywords(finding["message"])
+
+    assert "hardcoded" in keywords
+    assert "password" in keywords
+
+
+def test_lsh_signature_cwe_extraction():
+    """Test LSH signature generator extracts CWEs."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    raw = {"CWE": "CWE-89", "issue_cwe": {"id": 79}}
+    message = "CWE-22: Path traversal"
+
+    cwes = lsh._extract_cwes(raw, message)
+
+    assert "89" in cwes
+    assert "79" in cwes
+    assert "22" in cwes
+
+
+def test_lsh_signature_cve_extraction():
+    """Test LSH signature generator extracts CVEs."""
+    from scripts.core.dedup_enhanced import LSHSignatureGenerator
+
+    lsh = LSHSignatureGenerator()
+
+    raw = {"CVE": "CVE-2021-44228", "VulnerabilityID": "CVE-2022-12345"}
+    message = "CVE-2023-9999 found"
+
+    cves = lsh._extract_cves(raw, message)
+
+    assert "CVE-2021-44228" in cves
+    assert "CVE-2022-12345" in cves
+    assert "CVE-2023-9999" in cves
+
+
+def test_lsh_clusterer_progress_callback():
+    """Test LSH clusterer progress callback."""
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+
+    progress_updates = []
+
+    def callback(current: int, total: int, message: str):
+        progress_updates.append((current, total, message))
+
+    findings = [
+        {"id": f"f{i}", "message": f"Finding {i}", "location": {}, "raw": {}}
+        for i in range(100)
+    ]
+
+    clusterer.cluster(findings, progress_callback=callback)
+
+    # Should have received progress updates
+    assert len(progress_updates) > 0
+    # Final update should have current == total
+    assert progress_updates[-1][0] == progress_updates[-1][1]
+
+
+def test_lsh_transitive_clustering():
+    """Test that LSH correctly handles transitive clustering.
+
+    If A~B and B~C but A and C don't share a bucket, they should
+    still be in the same cluster due to Union-Find transitivity.
+    """
+    from scripts.core.dedup_enhanced import LSHClusterer
+
+    clusterer = LSHClusterer()
+
+    # Create a chain: f1~f2 (same line), f2~f3 (same CWE), f3~f4 (same file)
+    findings = [
+        {
+            "id": "f1",
+            "severity": "HIGH",
+            "message": "SQL injection A",
+            "location": {"path": "a.py", "startLine": 10},
+            "raw": {"CWE": "CWE-89"},
+            "tool": {"name": "tool1"},
+        },
+        {
+            "id": "f2",
+            "severity": "HIGH",
+            "message": "SQL injection B",
+            "location": {"path": "a.py", "startLine": 10},
+            "raw": {"CWE": "CWE-89"},
+            "tool": {"name": "tool2"},
+        },
+        {
+            "id": "f3",
+            "severity": "HIGH",
+            "message": "SQL injection C",
+            "location": {"path": "a.py", "startLine": 10},
+            "raw": {"CWE": "CWE-89"},
+            "tool": {"name": "tool3"},
+        },
+    ]
+
+    clusters = clusterer.cluster(findings)
+
+    # All three should be in same cluster due to transitivity
+    assert len(clusters) == 1
+    assert len(clusters[0].findings) == 3

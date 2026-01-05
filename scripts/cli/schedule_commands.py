@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -150,7 +150,9 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
             name=args.name,
             labels=labels,
             annotations=annotations,
-            creationTimestamp=datetime.utcnow().isoformat() + "Z",
+            creationTimestamp=datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
         ),
         spec=ScheduleSpec(
             schedule=args.cron,

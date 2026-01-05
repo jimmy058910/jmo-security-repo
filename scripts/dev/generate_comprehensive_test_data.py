@@ -16,7 +16,7 @@ import json
 import random
 import hashlib
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 import argparse
 
@@ -393,7 +393,7 @@ def main():
             "output_version": "1.0.0",
             "jmo_version": "1.0.0",
             "schema_version": "1.2.0",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "scan_id": "test-comprehensive-"
             + hashlib.sha256(str(args.seed).encode()).hexdigest()[:16],
             "profile": "comprehensive-test",

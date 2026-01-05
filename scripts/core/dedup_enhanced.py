@@ -4,13 +4,19 @@ This module implements Phase 2 of the deduplication strategy:
 - Phase 1 (existing): Fingerprint-based exact deduplication (same tool, same location)
 - Phase 2 (this module): Similarity-based clustering across tools
 
-Algorithm:
-    1. Calculate multi-dimensional similarity (location, message, metadata)
-    2. Use rule equivalence mapping for known cross-tool patterns
-    3. Cluster findings using greedy single-pass algorithm
-    4. Generate consensus findings with detected_by arrays
+Algorithms:
+    1. Greedy (default for <500 findings): O(n×k) where k = avg cluster size
+    2. LSH (default for ≥500 findings): O(n log n) average case using
+       Locality-Sensitive Hashing with Union-Find
 
-Weights (location-first approach):
+    The LSH algorithm:
+        a. Generate hash signatures for each finding based on key features
+        b. Build buckets of findings with shared signatures
+        c. Only compare candidate pairs from same buckets
+        d. Use Union-Find for efficient cluster membership tracking
+
+Similarity Calculation:
+    Multi-dimensional weighted similarity:
     - Location: 0.50 (same file + line strongly indicates same issue)
     - Message: 0.25 (different tools use very different terminology)
     - Metadata: 0.25 (CWE/CVE matching + rule equivalence mapping)
@@ -22,12 +28,21 @@ Rule Equivalence:
     Example: Trivy ":latest tag used" = Hadolint "DL3006" = Checkov "CKV_DOCKER_1"
 
 Performance:
-    - Time: O(n×k) where k = avg cluster size (~3-5)
+    - Greedy: O(n×k), best for small datasets (<500 findings)
+    - LSH: O(n log n) average, O(n²) worst case, best for large datasets
     - Space: O(n)
-    - Target: <2 seconds for 1000 findings
+    - Target: <2 seconds for 1000 findings, <10 seconds for 10000 findings
+
+Classes:
+    - FindingCluster: Represents a cluster of similar findings
+    - SimilarityCalculator: Multi-dimensional similarity calculation
+    - FindingClusterer: Main clustering engine (auto-selects algorithm)
+    - UnionFind: Efficient disjoint set union data structure
+    - LSHSignatureGenerator: Locality-sensitive hashing for finding signatures
+    - LSHClusterer: LSH-accelerated clustering algorithm
 
 Author: JMo Security
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
@@ -651,22 +666,40 @@ class SimilarityCalculator:
 
 
 class FindingClusterer:
-    """Main clustering engine using greedy similarity matching.
+    """Main clustering engine with automatic algorithm selection.
 
     Uses improved weights (location-first) and rule equivalence mapping
     to better cluster findings from different security tools.
+
+    Algorithm Selection:
+        - <500 findings: Greedy algorithm (simpler, lower overhead)
+        - ≥500 findings: LSH algorithm (O(n log n) average case)
+        - Override with `algorithm` parameter
+
     """
 
-    def __init__(self, similarity_threshold: float = 0.65):
+    # Threshold for switching to LSH algorithm
+    LSH_THRESHOLD = 500
+
+    def __init__(
+        self,
+        similarity_threshold: float = 0.65,
+        algorithm: str = "auto",
+    ):
         """Initialize clusterer with similarity threshold.
 
         Args:
             similarity_threshold: Minimum similarity score for clustering (default 0.65)
                 Lowered from 0.75 to enable better cross-tool deduplication.
                 Rule equivalence mapping prevents false positives.
+            algorithm: Algorithm to use: "auto" (default), "greedy", or "lsh"
+                - "auto": Select based on finding count (greedy <500, lsh ≥500)
+                - "greedy": Force O(n×k) greedy algorithm
+                - "lsh": Force O(n log n) LSH algorithm
 
         """
         self.threshold = similarity_threshold
+        self.algorithm = algorithm.lower()
         self.calculator = SimilarityCalculator(
             similarity_threshold=similarity_threshold
         )
@@ -676,7 +709,10 @@ class FindingClusterer:
         findings: list[dict[str, Any]],
         progress_callback: Callable[[int, int, str], None] | None = None,
     ) -> list[FindingCluster]:
-        """Cluster findings using greedy algorithm.
+        """Cluster findings using selected algorithm.
+
+        Automatically selects between greedy and LSH algorithms based on
+        finding count, unless overridden via constructor.
 
         Args:
             findings: List of findings to cluster
@@ -689,6 +725,49 @@ class FindingClusterer:
         if not findings:
             return []
 
+        # Select algorithm
+        use_lsh = self._should_use_lsh(len(findings))
+
+        if use_lsh:
+            return self._cluster_lsh(findings, progress_callback)
+        else:
+            return self._cluster_greedy(findings, progress_callback)
+
+    def _should_use_lsh(self, n: int) -> bool:
+        """Determine if LSH algorithm should be used.
+
+        Args:
+            n: Number of findings
+
+        Returns:
+            True if LSH should be used, False for greedy
+
+        """
+        if self.algorithm == "lsh":
+            return True
+        elif self.algorithm == "greedy":
+            return False
+        else:  # "auto"
+            return n >= self.LSH_THRESHOLD
+
+    def _cluster_greedy(
+        self,
+        findings: list[dict[str, Any]],
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> list[FindingCluster]:
+        """Cluster findings using O(n×k) greedy algorithm.
+
+        Best for smaller datasets (<500 findings) where overhead of LSH
+        doesn't pay off.
+
+        Args:
+            findings: List of findings to cluster
+            progress_callback: Optional callback(current, total, message)
+
+        Returns:
+            List of FindingCluster objects
+
+        """
         # Sort by severity (CRITICAL first) for optimal representative selection
         sorted_findings = self._sort_by_severity(findings)
 
@@ -724,6 +803,29 @@ class FindingClusterer:
 
         return clusters
 
+    def _cluster_lsh(
+        self,
+        findings: list[dict[str, Any]],
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> list[FindingCluster]:
+        """Cluster findings using O(n log n) LSH algorithm.
+
+        Uses Locality-Sensitive Hashing to reduce comparisons from O(n²)
+        to O(n × candidates) where candidates << n for typical datasets.
+
+        Best for larger datasets (≥500 findings) where LSH overhead pays off.
+
+        Args:
+            findings: List of findings to cluster
+            progress_callback: Optional callback(current, total, message)
+
+        Returns:
+            List of FindingCluster objects
+
+        """
+        lsh_clusterer = LSHClusterer(similarity_threshold=self.threshold)
+        return lsh_clusterer.cluster(findings, progress_callback)
+
     def _sort_by_severity(self, findings: list[dict]) -> list[dict]:
         """Sort findings by severity (CRITICAL → INFO)."""
 
@@ -755,6 +857,491 @@ class FindingClusterer:
             """
             sev = Severity.from_string(f.get("severity", "INFO"))
             # Reverse order: CRITICAL=4, HIGH=3, ..., INFO=0
+            order = {
+                Severity.CRITICAL: 4,
+                Severity.HIGH: 3,
+                Severity.MEDIUM: 2,
+                Severity.LOW: 1,
+                Severity.INFO: 0,
+            }
+            return order.get(sev, 0)
+
+        return sorted(findings, key=severity_key, reverse=True)
+
+
+class UnionFind:
+    """Union-Find (Disjoint Set Union) data structure for efficient cluster tracking.
+
+    Supports near-constant time union and find operations using path compression
+    and union by rank optimizations.
+
+    Time Complexity:
+        - find(): O(α(n)) ≈ O(1) amortized (inverse Ackermann function)
+        - union(): O(α(n)) ≈ O(1) amortized
+        - get_groups(): O(n)
+
+    Space Complexity: O(n)
+
+    Example:
+        >>> uf = UnionFind(5)
+        >>> uf.union(0, 1)
+        >>> uf.union(2, 3)
+        >>> uf.union(1, 2)
+        >>> uf.find(0) == uf.find(3)  # All in same component
+        True
+
+    """
+
+    def __init__(self, n: int):
+        """Initialize Union-Find with n elements.
+
+        Args:
+            n: Number of elements (0 to n-1)
+
+        """
+        self.parent = list(range(n))
+        self.rank = [0] * n
+
+    def find(self, x: int) -> int:
+        """Find root of element x with path compression.
+
+        Args:
+            x: Element to find root for
+
+        Returns:
+            Root element of the set containing x
+
+        """
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])  # Path compression
+        return self.parent[x]
+
+    def union(self, x: int, y: int) -> bool:
+        """Union sets containing x and y using union by rank.
+
+        Args:
+            x: First element
+            y: Second element
+
+        Returns:
+            True if union occurred, False if already in same set
+
+        """
+        px, py = self.find(x), self.find(y)
+        if px == py:
+            return False
+
+        # Union by rank: attach smaller tree under larger tree
+        if self.rank[px] < self.rank[py]:
+            px, py = py, px
+        self.parent[py] = px
+        if self.rank[px] == self.rank[py]:
+            self.rank[px] += 1
+
+        return True
+
+    def get_groups(self, items: list[Any]) -> list[list[Any]]:
+        """Get all groups/clusters as lists of items.
+
+        Args:
+            items: List of items corresponding to indices 0..n-1
+
+        Returns:
+            List of groups, where each group is a list of items
+
+        """
+        from collections import defaultdict
+
+        groups: dict[int, list[Any]] = defaultdict(list)
+        for idx, item in enumerate(items):
+            root = self.find(idx)
+            groups[root].append(item)
+        return list(groups.values())
+
+
+class LSHSignatureGenerator:
+    """Locality-Sensitive Hashing signature generator for fast similarity lookup.
+
+    Creates hash signatures based on key finding features:
+        - File path (normalized)
+        - Line number bucket
+        - Message tokens (security keywords)
+        - CWE/CVE IDs
+
+    Findings with similar signatures are likely to be similar, allowing us to
+    reduce O(n²) comparisons to O(n × candidates) where candidates << n.
+
+    The signature uses multiple "bands" to increase the probability that
+    similar items hash to at least one common bucket.
+
+    """
+
+    # Security keywords for token-based hashing
+    KEYWORDS = frozenset(
+        {
+            "injection",
+            "sql",
+            "xss",
+            "csrf",
+            "ssrf",
+            "xxe",
+            "hardcoded",
+            "secret",
+            "key",
+            "password",
+            "token",
+            "vulnerability",
+            "insecure",
+            "unsafe",
+            "weakness",
+            "deserialization",
+            "traversal",
+            "rce",
+            "lfi",
+            "rfi",
+            "latest",
+            "tag",
+            "label",
+            "user",
+            "root",
+            "healthcheck",
+        }
+    )
+
+    def __init__(self, num_bands: int = 8):
+        """Initialize LSH generator.
+
+        Args:
+            num_bands: Number of hash bands to generate (more bands = more candidates,
+                      fewer false negatives but more false positives to filter)
+
+        """
+        self.num_bands = num_bands
+
+    def generate_signatures(self, finding: dict[str, Any]) -> list[str]:
+        """Generate LSH signatures for a finding.
+
+        Creates multiple signatures based on different feature combinations.
+        Findings with any matching signature are candidates for similarity check.
+
+        Args:
+            finding: Finding dictionary
+
+        Returns:
+            List of signature strings for bucketing
+
+        """
+
+        signatures = []
+
+        # Extract features
+        location = finding.get("location", {})
+        path = self._normalize_path(location.get("path", ""))
+        line = location.get("startLine", 0)
+        message = finding.get("message", "").lower()
+        rule_id = finding.get("ruleId", "").lower()
+        raw = finding.get("raw", {})
+
+        # Extract metadata
+        cwes = self._extract_cwes(raw, message)
+        cves = self._extract_cves(raw, message)
+        keywords = self._extract_keywords(message)
+
+        # Band 1: Path + line bucket (coarse location)
+        if path and line:
+            line_bucket = line // 5  # Group nearby lines
+            sig = f"loc:{path}:{line_bucket}"
+            signatures.append(self._hash(sig, 0))
+
+        # Band 2: Exact path + line (fine location)
+        if path and line:
+            sig = f"exact:{path}:{line}"
+            signatures.append(self._hash(sig, 1))
+
+        # Band 3: CWE-based
+        for cwe in cwes:
+            sig = f"cwe:{cwe}"
+            signatures.append(self._hash(sig, 2))
+
+        # Band 4: CVE-based
+        for cve in cves:
+            sig = f"cve:{cve}"
+            signatures.append(self._hash(sig, 3))
+
+        # Band 5: Path + keywords
+        if path and keywords:
+            # Use sorted keywords for consistency
+            kw_str = ",".join(sorted(keywords)[:3])  # Top 3 keywords
+            sig = f"pathkw:{path}:{kw_str}"
+            signatures.append(self._hash(sig, 4))
+
+        # Band 6: Rule ID family (first 2 components)
+        if rule_id:
+            parts = re.split(r"[.\-_]", rule_id)
+            if len(parts) >= 2:
+                family = f"{parts[0]}.{parts[1]}"
+                sig = f"rule:{family}"
+                signatures.append(self._hash(sig, 5))
+
+        # Band 7: Keyword pairs
+        if len(keywords) >= 2:
+            kw_list = sorted(keywords)[:4]
+            for i in range(len(kw_list) - 1):
+                sig = f"kwpair:{kw_list[i]}:{kw_list[i+1]}"
+                signatures.append(self._hash(sig, 6))
+
+        # Band 8: Path alone (for same-file findings)
+        if path:
+            sig = f"path:{path}"
+            signatures.append(self._hash(sig, 7))
+
+        return signatures
+
+    def _hash(self, content: str, band: int) -> str:
+        """Generate hash for a signature band.
+
+        Args:
+            content: Content to hash
+            band: Band number (added to prevent cross-band collisions)
+
+        Returns:
+            8-character hex hash
+
+        """
+        import hashlib
+
+        to_hash = f"{band}:{content}".encode("utf-8")
+        return hashlib.md5(to_hash).hexdigest()[:8]
+
+    def _normalize_path(self, path: str) -> str:
+        """Normalize file path for comparison."""
+        if not path:
+            return ""
+        path = path.lstrip("./")
+        path = path.replace("\\", "/")
+        return path.lower()
+
+    def _extract_cwes(self, raw: dict, message: str) -> set[str]:
+        """Extract CWE IDs from raw data and message."""
+        cwes = set()
+
+        # From raw data
+        if "CWE" in raw:
+            cwes.add(str(raw["CWE"]).upper())
+        if "cwe" in raw:
+            cwe_val = raw["cwe"]
+            if isinstance(cwe_val, list):
+                cwes.update(str(c).upper() for c in cwe_val)
+            else:
+                cwes.add(str(cwe_val).upper())
+        if "issue_cwe" in raw and isinstance(raw["issue_cwe"], dict):
+            cwe_id = raw["issue_cwe"].get("id")
+            if cwe_id:
+                cwes.add(f"CWE-{cwe_id}")
+
+        # From message
+        matches = re.findall(r"CWE-(\d+)", message, re.IGNORECASE)
+        cwes.update(f"CWE-{m}" for m in matches)
+
+        # Normalize
+        normalized = set()
+        for cwe in cwes:
+            if cwe.startswith("CWE-"):
+                normalized.add(cwe[4:])
+            else:
+                normalized.add(cwe)
+        return normalized
+
+    def _extract_cves(self, raw: dict, message: str) -> set[str]:
+        """Extract CVE IDs from raw data and message."""
+        cves = set()
+
+        for key in ["CVE", "VulnerabilityID", "cve_id", "cve"]:
+            if key in raw:
+                val = raw[key]
+                if isinstance(val, list):
+                    cves.update(str(v).upper() for v in val)
+                else:
+                    cves.add(str(val).upper())
+
+        # From message
+        matches = re.findall(r"CVE-\d{4}-\d+", message, re.IGNORECASE)
+        cves.update(m.upper() for m in matches)
+
+        return cves
+
+    def _extract_keywords(self, message: str) -> set[str]:
+        """Extract security keywords from message."""
+        words = set(re.findall(r"\b\w+\b", message.lower()))
+        return words & self.KEYWORDS
+
+
+class LSHClusterer:
+    """LSH-accelerated clustering for O(n log n) average case performance.
+
+    Uses Locality-Sensitive Hashing to identify candidate pairs, then
+    applies full similarity calculation only to candidates.
+
+    Performance:
+        - Average: O(n × avg_candidates) where avg_candidates << n
+        - Worst case: O(n²) when all findings hash to same buckets
+        - Typical: O(n log n) due to limited bucket collisions
+
+    The algorithm:
+        1. Generate LSH signatures for all findings
+        2. Build hash buckets (findings with shared signatures)
+        3. Identify candidate pairs from same buckets (with size limit)
+        4. Calculate full similarity only for candidates
+        5. Use Union-Find to build clusters from similar pairs
+        6. Convert clusters to FindingCluster objects
+
+    Bucket Size Limit:
+        Large buckets (>100 items) are skipped to prevent O(n²) worst case.
+        This is acceptable because findings in large buckets share only weak
+        signatures (e.g., common CWE), and more specific signatures (path, line)
+        will still catch true duplicates.
+
+    """
+
+    # Maximum bucket size before skipping (prevents O(n²) worst case)
+    MAX_BUCKET_SIZE = 100
+
+    def __init__(
+        self,
+        similarity_threshold: float = 0.65,
+        num_bands: int = 8,
+    ):
+        """Initialize LSH clusterer.
+
+        Args:
+            similarity_threshold: Minimum similarity for clustering (default 0.65)
+            num_bands: Number of LSH bands (default 8)
+
+        """
+        self.threshold = similarity_threshold
+        self.lsh = LSHSignatureGenerator(num_bands=num_bands)
+        self.calculator = SimilarityCalculator(
+            similarity_threshold=similarity_threshold
+        )
+
+    def cluster(
+        self,
+        findings: list[dict[str, Any]],
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> list[FindingCluster]:
+        """Cluster findings using LSH-accelerated algorithm.
+
+        Args:
+            findings: List of findings to cluster
+            progress_callback: Optional callback(current, total, message)
+
+        Returns:
+            List of FindingCluster objects
+
+        """
+        if not findings:
+            return []
+
+        n = len(findings)
+
+        # Phase 1: Generate signatures and build buckets
+        if progress_callback:
+            progress_callback(0, n, "Building LSH signatures...")
+
+        buckets: dict[str, list[int]] = {}
+        for idx, finding in enumerate(findings):
+            signatures = self.lsh.generate_signatures(finding)
+            for sig in signatures:
+                if sig not in buckets:
+                    buckets[sig] = []
+                buckets[sig].append(idx)
+
+        # Phase 2: Identify candidate pairs from buckets
+        if progress_callback:
+            progress_callback(n // 4, n, "Identifying candidates...")
+
+        candidates: set[tuple[int, int]] = set()
+        for bucket_indices in buckets.values():
+            # Skip buckets that are too large (would cause O(n²) behavior)
+            # True duplicates will be caught by more specific signatures
+            if len(bucket_indices) > 1 and len(bucket_indices) <= self.MAX_BUCKET_SIZE:
+                # Add all pairs in bucket as candidates
+                for i in range(len(bucket_indices)):
+                    for j in range(i + 1, len(bucket_indices)):
+                        # Store as ordered pair (smaller, larger)
+                        pair = (
+                            min(bucket_indices[i], bucket_indices[j]),
+                            max(bucket_indices[i], bucket_indices[j]),
+                        )
+                        candidates.add(pair)
+
+        # Phase 3: Calculate similarity for candidates and union similar pairs
+        if progress_callback:
+            progress_callback(n // 2, n, f"Checking {len(candidates)} candidates...")
+
+        uf = UnionFind(n)
+        similarity_cache: dict[tuple[int, int], float] = {}
+
+        for idx, (i, j) in enumerate(candidates):
+            if progress_callback and idx % 100 == 0:
+                progress = n // 2 + (idx * n // 4 // max(len(candidates), 1))
+                progress_callback(
+                    progress, n, f"Comparing pair {idx+1}/{len(candidates)}"
+                )
+
+            similarity = self.calculator.calculate_similarity(findings[i], findings[j])
+            if similarity >= self.threshold:
+                uf.union(i, j)
+                similarity_cache[(i, j)] = similarity
+
+        # Phase 4: Build FindingCluster objects
+        if progress_callback:
+            progress_callback(3 * n // 4, n, "Building clusters...")
+
+        # Get groups from Union-Find
+        groups = uf.get_groups(list(range(n)))
+
+        # Convert to FindingCluster objects
+        clusters = []
+        for group_indices in groups:
+            if not group_indices:
+                continue
+
+            # Sort by severity to select best representative
+            group_findings = [findings[idx] for idx in group_indices]
+            sorted_group = self._sort_by_severity(group_findings)
+
+            # Create cluster with highest severity as representative
+            cluster = FindingCluster(representative=sorted_group[0])
+
+            # Add remaining findings with their similarity scores
+            rep_idx = group_indices[
+                sorted_group.index(sorted_group[0]) if len(sorted_group) > 0 else 0
+            ]
+            for finding in sorted_group[1:]:
+                orig_idx = group_indices[group_findings.index(finding)]
+                # Look up cached similarity
+                pair = (min(rep_idx, orig_idx), max(rep_idx, orig_idx))
+                similarity = similarity_cache.get(pair, 0.0)
+                if similarity == 0.0:
+                    # Calculate if not in cache (transitive closure case)
+                    similarity = self.calculator.calculate_similarity(
+                        cluster.representative, finding
+                    )
+                cluster.add(finding, similarity)
+
+            clusters.append(cluster)
+
+        if progress_callback:
+            progress_callback(n, n, f"Clustered into {len(clusters)} groups")
+
+        return clusters
+
+    def _sort_by_severity(self, findings: list[dict]) -> list[dict]:
+        """Sort findings by severity (CRITICAL → INFO)."""
+
+        def severity_key(f: dict) -> int:
+            sev = Severity.from_string(f.get("severity", "INFO"))
             order = {
                 Severity.CRITICAL: 4,
                 Severity.HIGH: 3,

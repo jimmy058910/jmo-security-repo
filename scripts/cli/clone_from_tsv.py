@@ -38,10 +38,10 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
         sys.stderr.write(f"{color}{level:5}{reset} {msg}\n")
     else:
         import json
-        import datetime
+        from datetime import datetime, timezone
 
         rec = {
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": level,
             "msg": msg,
         }
