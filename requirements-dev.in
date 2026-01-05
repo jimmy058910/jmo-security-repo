@@ -1,5 +1,6 @@
 pytest
 pytest-cov
+pytest-split>=0.9.0  # Test sharding for CI parallelization
 hypothesis
 pytest-rerunfailures
 ruff

@@ -257,8 +257,26 @@ For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST
 
 ## CI
 
-- GitHub Actions workflow `.github/workflows/tests.yml` enforces coverage ≥85%.
+- GitHub Actions workflow `.github/workflows/ci.yml` enforces coverage ≥85%.
 - The workflow installs dev dependencies and runs `pytest` with coverage.
+
+### Test Sharding
+
+CI uses **pytest-split** to distribute 5,000+ tests across 4 parallel shards for ~60% faster execution:
+
+- **Sharded tests**: Ubuntu/Python 3.11 (primary CI target) runs tests in 4 parallel jobs
+- **Matrix tests**: Other OS/Python combinations run full test suite sequentially
+- **Coverage aggregation**: Coverage from all shards is merged before upload to Codecov
+
+To run tests locally with sharding (for debugging CI issues):
+
+```bash
+# Run specific shard (1-4)
+pytest tests/ --splits 4 --group 1 -m "not smoke and not requires_tools"
+
+# Generate test durations for optimal splitting
+pytest tests/ --store-durations --durations-path=.test_durations
+```
 
 ## General Troubleshooting
 

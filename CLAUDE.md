@@ -8,7 +8,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 
 **Version:** v1.0.0 (Production Release)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 2,981 tests, 87% coverage, CI requires ≥85%
+**Test Coverage:** 5,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
 
 ## AI Assistant Quality Standards
 
@@ -176,7 +176,7 @@ scripts/
 │   └── reporters/   # Output formatters (JSON/MD/HTML/SARIF/CSV)
 └── dev/             # Helper scripts (update_versions.py)
 
-tests/               # 2,981 tests across unit/adapters/reporters/integration
+tests/               # 5,000+ tests across unit/adapters/reporters/integration
 ```
 
 ### Key Files

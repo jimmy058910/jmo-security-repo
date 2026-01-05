@@ -104,7 +104,11 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
     "smoke: marks tests as smoke tests for released packages (deselect with '-m \"not smoke\"')",
+    "requires_tools: marks tests that require external security tools installed",
 ]
+# Test durations file for pytest-split sharding
+# Generate with: pytest --store-durations --durations-path=.test_durations
+# This enables duration-based splitting for more even shard distribution
 
 [tool.coverage.run]
 omit = [
