@@ -267,27 +267,31 @@ To use the JMo Security MCP server in Claude Code, add to `.claude/mcp.json`:
 
 ### Troubleshooting
 
-**Error:** `MCP SDK not installed`
+**Error:** `MCP SDK not installed` or `cannot import name 'TypeAdapter' from 'pydantic'`
 
-**Solution:**
+**Automatic Detection:** When you run `jmo mcp-server`, it automatically detects missing dependencies and offers to install them:
 
-```bash
-pip install 'mcp[cli]>=1.0.0'
-# or
-uv add 'mcp[cli]>=1.0.0'
+```text
+$ jmo mcp-server
+
+⚠️  MCP requires pydantic v2+, but you have pydantic v1 installed.
+   This is a common issue when other packages pin pydantic to v1.
+
+Install pydantic>=2.11.0? [Y/n]: y
+
+Installing pydantic>=2.11.0...
+✓ pydantic>=2.11.0 installed successfully!
+
+Starting JMo Security MCP Server...
 ```
 
-**Error:** `cannot import name 'TypeAdapter' from 'pydantic'`
-
-**Cause:** MCP SDK requires pydantic v2+ (specifically >=2.11.0), but you have pydantic v1 installed.
-
-**Solution:**
+**Manual Installation (if auto-install fails):**
 
 ```bash
-# Check current version
-pip show pydantic
+# Install MCP SDK
+pip install 'mcp[cli]>=1.0.0'
 
-# Upgrade to v2+
+# Upgrade pydantic to v2+ (required by MCP)
 pip install 'pydantic>=2.11.0'
 
 # Verify no conflicts
