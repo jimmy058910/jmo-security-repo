@@ -1,6 +1,6 @@
 # Quick Start - JMo Security
 
-**Get scanning in 5 minutes.**
+**v1.0.0** | Get scanning in 5 minutes.
 
 ---
 
@@ -167,7 +167,7 @@ start results\summaries\dashboard.html    # Windows
 |------|---------|
 | `dashboard.html` | Interactive visual dashboard |
 | `SUMMARY.md` | Human-readable overview |
-| `findings.json` | Machine-readable findings |
+| `findings.json` | Machine-readable findings (CommonFinding schema v1.2.0) |
 | `findings.sarif` | GitHub/GitLab Code Scanning |
 
 ---

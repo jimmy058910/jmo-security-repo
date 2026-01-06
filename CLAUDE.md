@@ -10,6 +10,14 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 5,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
 
+**Key v1.0 Features:**
+
+- SQLite historical storage for scan persistence and trend analysis
+- Machine-readable diffs for comparing scans and detecting regressions
+- Trend analysis with Mann-Kendall statistical significance testing
+- CSV export and dual-mode HTML dashboard for reporting
+- Cross-tool deduplication with 30-40% noise reduction
+
 ## AI Assistant Quality Standards
 
 **CRITICAL:** Quality and correctness take precedence over speed. Always verify changes before proposing them.
@@ -264,6 +272,9 @@ See [TEST.md](TEST.md) for complete testing guide.
 | `fail_on` | string | Severity threshold for CI failures |
 | `retries` | int | Retries for failed tool invocations |
 | `per_tool` | object | Per-tool configuration overrides |
+| `profiles` | object | Custom profile definitions with tool lists |
+| `email` | object | Email notification settings (SMTP, recipients) |
+| `schedule` | object | Scheduled scan configuration (cron expressions) |
 | `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.

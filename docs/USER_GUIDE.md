@@ -2071,8 +2071,11 @@ jmo history query --severity CRITICAL
 |---------|---------|
 | `jmo history store` | Store scan results in database |
 | `jmo history list` | List all stored scans |
+| `jmo history show` | Show details for a specific scan |
 | `jmo history query` | Query findings from history |
+| `jmo history compare` | Compare two scans side-by-side |
 | `jmo history export` | Export to JSON/CSV |
+| `jmo history verify` | Verify database integrity |
 | `jmo history vacuum` | Optimize database |
 | `jmo history prune` | Delete old scans |
 
@@ -2107,9 +2110,13 @@ jmo trends analyze --format json --output trends.json
 | Command | Purpose |
 |---------|---------|
 | `jmo trends analyze` | Run trend analysis |
-| `jmo trends export` | Export trend data |
+| `jmo trends show` | Show scan context window |
+| `jmo trends regressions` | Detect security regressions |
 | `jmo trends score` | Get security score |
-| `jmo trends regression` | Check for regressions |
+| `jmo trends compare` | Compare two specific scans |
+| `jmo trends insights` | Get automated insights |
+| `jmo trends explain` | Explain terminology (Mann-Kendall, etc.) |
+| `jmo trends developers` | Developer attribution analysis |
 
 **Complete Guide:** [TRENDS_GUIDE.md](TRENDS_GUIDE.md)
 
