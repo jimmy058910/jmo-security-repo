@@ -12,6 +12,7 @@ outputs:
 - md
 - yaml
 - html
+- simple-html
 - sarif
 - csv
 fail_on: ''

@@ -1091,7 +1091,7 @@ This reverts to Phase 1 deduplication only (same tool, same location).
 - tools: [trufflehog, noseyparker, semgrep, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++, bandit]
   - Note: Added Nuclei for API security scanning (CVEs, misconfigurations, 4000+ templates)
   - Note: Removed deprecated tools (gitleaks, tfsec, osv-scanner). Added DAST (zap), runtime security (falco), and fuzzing (afl++)
-- outputs: [json, md, yaml, html, sarif]
+- outputs: [json, md, yaml, html, simple-html, sarif, csv]
 - fail_on: "CRITICAL|HIGH|MEDIUM|LOW|INFO" (empty means do not gate)
 - threads: integer worker hint (auto if unset)
 - include / exclude: repo name glob filters (applied when using --repos-dir or --targets)
@@ -1106,7 +1106,7 @@ Example:
 
 ```yaml
 tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei]
-outputs: [json, md, yaml, html, sarif]
+outputs: [json, md, yaml, html, simple-html, sarif, csv]
 fail_on: ""
 default_profile: balanced
 threads: 4
@@ -1696,7 +1696,7 @@ Search order for the suppression file is: `<results_dir>/jmo.suppress.yml` first
 
 ### SARIF 2.1.0 Output (Enriched)
 
-- SARIF emission is enabled by default in this repo (`outputs: [json, md, yaml, html, sarif]`). If you remove `sarif` from outputs, SARIF won't be written.
+- SARIF emission is enabled by default in this repo (`outputs: [json, md, yaml, html, simple-html, sarif, csv]`). If you remove `sarif` from outputs, SARIF won't be written.
 - **Enhanced in Phase 1:** SARIF output now includes:
   - **Code snippets** in region context for better IDE integration
   - **CWE/OWASP/CVE taxonomy references** for security categorization

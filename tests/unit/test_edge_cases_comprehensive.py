@@ -10,8 +10,9 @@ causing silent failures in production:
 3. Scale Edge Cases - Large inputs, deep nesting, memory limits
 4. Format Edge Cases - CWE/CVE variations, severity casing, field presence
 5. Path Edge Cases - Absolute/relative, symlinks, special characters
+6. Tool Failure Edge Cases - Empty vs failure, missing files, invalid JSON
 
-Target: 25+ test functions across 5 categories
+Target: 30+ test functions across 6+ categories
 """
 
 from __future__ import annotations
@@ -903,3 +904,187 @@ class TestMissingRequiredEdgeCases:
         }
         sim = calc.calculate_similarity(populated, different)
         assert 0.0 <= sim < 0.65  # Should be below threshold
+
+
+# ============================================================================
+# 6. Tool Failure Edge Cases (Category 6)
+# ============================================================================
+
+
+class TestToolFailureEdgeCases:
+    """Tests for tool failure vs. empty results distinction.
+
+    Security tools can fail in various ways - these tests ensure we handle:
+    1. Empty results (success with no findings) vs. tool failures
+    2. Missing/truncated/invalid JSON files
+    3. Various edge cases in JSON loading that represent different outcomes
+    """
+
+    def test_empty_results_array_is_success(self, tmp_path: Path) -> None:
+        """Test that an empty array [] is a valid success (no findings).
+
+        An empty array means the tool ran successfully but found no issues.
+        This is DIFFERENT from a tool failure.
+        """
+        empty_array_file = tmp_path / "empty_array.json"
+        empty_array_file.write_text("[]", encoding="utf-8")
+
+        result = safe_load_json_file(empty_array_file)
+
+        # Empty array should load successfully
+        assert result is not None
+        assert result == []
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_missing_file_returns_empty_not_crashes(self, tmp_path: Path) -> None:
+        """Test that a missing file returns None/default gracefully.
+
+        Missing files should not crash - they indicate the tool didn't run
+        or output wasn't captured.
+        """
+        missing_file = tmp_path / "does_not_exist.json"
+
+        # Without default, should return None
+        result = safe_load_json_file(missing_file)
+        assert result is None
+
+        # With default, should return the default
+        result_with_default = safe_load_json_file(missing_file, default=[])
+        assert result_with_default == []
+
+        result_with_dict_default = safe_load_json_file(missing_file, default={})
+        assert result_with_dict_default == {}
+
+    def test_truncated_json_handled_gracefully(self, tmp_path: Path) -> None:
+        """Test that truncated/partial JSON does not crash.
+
+        Truncated files occur when tools are killed mid-write or disk is full.
+        """
+        truncated_file = tmp_path / "truncated.json"
+        # Valid JSON start, but truncated mid-way
+        truncated_file.write_text('{"findings": [{"id": 1}, {"id":', encoding="utf-8")
+
+        # Should not crash, should return None (invalid JSON)
+        result = safe_load_json_file(truncated_file)
+        assert result is None
+
+        # With default, should return the default
+        result_with_default = safe_load_json_file(truncated_file, default=[])
+        assert result_with_default == []
+
+    def test_invalid_json_not_treated_as_empty(self, tmp_path: Path) -> None:
+        """Test that invalid JSON returns None, not an empty result.
+
+        Invalid JSON indicates a problem (tool failure, encoding issue),
+        not a successful scan with no findings.
+        """
+        invalid_files = [
+            ("not_json.json", "This is not JSON at all"),
+            ("malformed.json", "{key: value}"),  # Missing quotes
+            ("trailing_comma.json", '{"a": 1,}'),  # Invalid trailing comma
+            ("single_quote.json", "{'key': 'value'}"),  # Python dict, not JSON
+        ]
+
+        for filename, content in invalid_files:
+            json_file = tmp_path / filename
+            json_file.write_text(content, encoding="utf-8")
+
+            result = safe_load_json_file(json_file)
+            # Invalid JSON should return None (indicating failure),
+            # NOT an empty list/dict (which would indicate success with no findings)
+            assert result is None, f"Expected None for invalid JSON: {filename}"
+
+    def test_empty_object_vs_empty_array(self, tmp_path: Path) -> None:
+        """Test that {} and [] are handled distinctly.
+
+        {} means "object with no properties" - often used for metadata
+        [] means "array with no items" - often used for findings list
+        Both are valid JSON and should be distinguished.
+        """
+        empty_object_file = tmp_path / "empty_object.json"
+        empty_object_file.write_text("{}", encoding="utf-8")
+
+        empty_array_file = tmp_path / "empty_array.json"
+        empty_array_file.write_text("[]", encoding="utf-8")
+
+        obj_result = safe_load_json_file(empty_object_file)
+        arr_result = safe_load_json_file(empty_array_file)
+
+        # Both should load successfully
+        assert obj_result is not None
+        assert arr_result is not None
+
+        # They should be different types
+        assert isinstance(obj_result, dict)
+        assert isinstance(arr_result, list)
+
+        # They should not be equal
+        assert obj_result != arr_result
+
+        # Both should be "empty"
+        assert len(obj_result) == 0
+        assert len(arr_result) == 0
+
+    def test_null_json_value(self, tmp_path: Path) -> None:
+        """Test that JSON null is handled gracefully.
+
+        A file containing just "null" is valid JSON but represents no data.
+        Some tools output null when there are no findings.
+        """
+        null_file = tmp_path / "null_value.json"
+        null_file.write_text("null", encoding="utf-8")
+
+        result = safe_load_json_file(null_file)
+
+        # JSON null should parse to Python None
+        assert result is None
+
+        # With a default, should still return None (since null is a valid JSON value)
+        # The behavior here depends on implementation - null IS valid JSON
+        result_with_default = safe_load_json_file(null_file, default=[])
+        # safe_load_json_file returns parsed value (None) for valid JSON
+        # The default is only used when JSON is invalid or file missing
+        assert result_with_default is None
+
+    def test_empty_file_vs_empty_json(self, tmp_path: Path) -> None:
+        """Test distinction between truly empty file and empty JSON.
+
+        A 0-byte file is NOT valid JSON and should fail.
+        An empty array/object IS valid JSON and should succeed.
+        """
+        # Truly empty file (0 bytes)
+        empty_file = tmp_path / "empty.json"
+        empty_file.write_text("", encoding="utf-8")
+
+        result_empty = safe_load_json_file(empty_file)
+        assert result_empty is None, "Empty file is not valid JSON"
+
+        # Whitespace-only file
+        whitespace_file = tmp_path / "whitespace.json"
+        whitespace_file.write_text("   \n\t\n   ", encoding="utf-8")
+
+        result_whitespace = safe_load_json_file(whitespace_file)
+        assert result_whitespace is None, "Whitespace-only is not valid JSON"
+
+    def test_ndjson_with_tool_errors(self, tmp_path: Path) -> None:
+        """Test NDJSON where some lines are errors mixed with valid findings.
+
+        Tools sometimes output error messages as non-JSON lines in NDJSON streams.
+        """
+        ndjson_file = tmp_path / "mixed_errors.ndjson"
+        content = """{"id": 1, "severity": "HIGH"}
+ERROR: Failed to scan file xyz.py
+{"id": 2, "severity": "MEDIUM"}
+Warning: Timeout exceeded
+{"id": 3, "severity": "LOW"}"""
+        ndjson_file.write_text(content, encoding="utf-8")
+
+        results = list(safe_load_ndjson_file(ndjson_file))
+
+        # Should extract valid JSON lines, skip error lines
+        valid_results = [r for r in results if isinstance(r, dict) and "id" in r]
+        assert len(valid_results) == 3
+        assert valid_results[0]["id"] == 1
+        assert valid_results[1]["id"] == 2
+        assert valid_results[2]["id"] == 3
