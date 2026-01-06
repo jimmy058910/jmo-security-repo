@@ -874,7 +874,7 @@ def cmd_trends_developers(args) -> int:
 
         # Type ignore: findings is list of tuples, not dict
         first_fps = {f[1] for f in first_findings}  # type: ignore[index]  # (scan_id, fingerprint, ...)
-        last_fps = {f[1] for f in last_findings}  # type: ignore[index]
+        last_fps = {f[1] for f in last_findings}  # type: ignore[index]  # Tuple index access for (scan_id, fingerprint, ...)
 
         resolved_fps = first_fps - last_fps
 

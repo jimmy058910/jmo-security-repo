@@ -51,6 +51,32 @@ reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
 attestation = ["sigstore>=2.0.0", "cryptography>=41.0.0"]  # SLSA attestation (Feature #6, v1.0.0)
+dev = [
+    # Testing
+    "pytest",
+    "pytest-cov",
+    "pytest-split>=0.9.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-rerunfailures",
+    "hypothesis",
+    # Linting & formatting
+    "ruff",
+    "black",
+    "bandit",
+    "mypy",
+    "pre-commit",
+    # Type stubs
+    "types-PyYAML",
+    "types-tabulate",
+    "types-requests",
+    "types-croniter",
+    # Required for tests
+    "jsonschema",
+    "packaging",
+    # Trend analysis (scipy/numpy constrained for Python 3.10)
+    "scipy>=1.11.0,<1.15.0",
+    "numpy>=1.24.0,<2.3.0",
+]
 
 [project.scripts]
 jmo = "scripts.cli.jmo:main"
@@ -87,6 +113,14 @@ disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = "scripts.core.config"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "scripts.core.plugin_api"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "scripts.core.schema_validator"
 disallow_untyped_defs = true
 
 # Disable unused-ignore warnings for modules with optional dependency fallbacks

@@ -1008,7 +1008,7 @@ class ToolManager:
                 # Parse v20.10.0 -> (20, 10, 0)
                 version = result.stdout.strip().lstrip("v")
                 parts = version.split(".")[:3]
-                return tuple(int(p) for p in parts if p.isdigit())  # type: ignore
+                return tuple(int(p) for p in parts if p.isdigit())  # type: ignore[return-value]  # Generator returns variable-length tuple, safe for version comparison
         except (subprocess.TimeoutExpired, OSError, ValueError):
             pass
         return None

@@ -70,7 +70,7 @@ class LynisAdapter(AdapterPlugin):
     @property
     def metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
-        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
 
     def parse(self, output_path: Path) -> list[Finding]:
         """Parse tool output and return normalized findings.

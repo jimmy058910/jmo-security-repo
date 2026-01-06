@@ -414,7 +414,7 @@ def load_team_mapping(team_file_path: Path) -> Dict[str, str]:
     import json
 
     with open(team_file_path, "r") as f:
-        return json.load(f)  # type: ignore[no-any-return]
+        return json.load(f)  # type: ignore[no-any-return]  # JSON parse returns Any, caller validates structure
 
 
 def format_developer_stats(dev: DeveloperStats, rank: int = 0) -> str:

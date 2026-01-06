@@ -182,7 +182,7 @@ class TrendAnalyzer:
             # Get specific scans by ID
             scans = []
             for scan_id in scan_ids:
-                scan = get_scan_by_id(self.conn, scan_id)  # type: ignore[arg-type]
+                scan = get_scan_by_id(self.conn, scan_id)  # type: ignore[arg-type]  # Connection validated in __enter__
                 if scan:
                     scans.append(dict(scan))
             # Sort by timestamp
@@ -192,7 +192,7 @@ class TrendAnalyzer:
         # Use list_scans with appropriate filters
         if last_n:
             scans = list(
-                map(dict, list_scans(self.conn, branch=branch, limit=last_n))  # type: ignore[arg-type]
+                map(dict, list_scans(self.conn, branch=branch, limit=last_n))  # type: ignore[arg-type]  # Connection validated in __enter__
             )
             # Sort by timestamp (oldest first) for regression detection
             scans.sort(key=lambda s: s["timestamp"])
@@ -203,7 +203,7 @@ class TrendAnalyzer:
 
             since = int(time.time()) - (days * 86400)
             scans = list(
-                map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
+                map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]  # Connection validated in __enter__
             )
             # Sort by timestamp (oldest first) for regression detection
             scans.sort(key=lambda s: s["timestamp"])
@@ -214,7 +214,7 @@ class TrendAnalyzer:
 
         since = int(time.time()) - (30 * 86400)
         scans = list(
-            map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]
+            map(dict, list_scans(self.conn, branch=branch, since=since, limit=1000))  # type: ignore[arg-type]  # Connection validated in __enter__
         )
         # Sort by timestamp (oldest first) for regression detection
         scans.sort(key=lambda s: s["timestamp"])
@@ -350,7 +350,7 @@ class TrendAnalyzer:
 
         placeholders = ",".join("?" * len(scan_ids))
         # Security: placeholders are "?" characters, scan_ids from internal DB query
-        cursor = self.conn.execute(  # type: ignore[union-attr]
+        cursor = self.conn.execute(  # type: ignore[union-attr]  # Connection validated in __enter__
             f"""
             SELECT rule_id, severity, tool, COUNT(*) as count
             FROM findings
@@ -712,7 +712,7 @@ def validate_trend_significance(
         if severity == "timestamps":
             continue
 
-        trend, tau, p_value = mann_kendall_test(counts)  # type: ignore[arg-type]
+        trend, tau, p_value = mann_kendall_test(counts)  # type: ignore[arg-type]  # Counts list validated by dict iteration
 
         # Determine confidence level
         if p_value < 0.01:

@@ -13,7 +13,7 @@ try:
     import yaml
 except ImportError as e:
     logger.debug(f"Suppression support unavailable: {e}")
-    yaml = None  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment]  # Fallback when yaml not installed
 
 
 @dataclass

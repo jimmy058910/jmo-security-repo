@@ -603,37 +603,37 @@ def select_target_type() -> str:
 def configure_repo_target() -> TargetConfig:
     """Configure repository scanning (delegates to target_configurators module)."""
     config = _configure_repo(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_image_target() -> TargetConfig:
     """Configure container image scanning (delegates to target_configurators module)."""
     config = _configure_image(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_iac_target() -> TargetConfig:
     """Configure IaC file scanning (delegates to target_configurators module)."""
     config = _configure_iac(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_url_target() -> TargetConfig:
     """Configure web URL scanning (delegates to target_configurators module)."""
     config = _configure_url(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_gitlab_target() -> TargetConfig:
     """Configure GitLab scanning (delegates to target_configurators module)."""
     config = _configure_gitlab(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_k8s_target() -> TargetConfig:
     """Configure Kubernetes scanning (delegates to target_configurators module)."""
     config = _configure_k8s(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
-    return config  # type: ignore[no-any-return]
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
@@ -1818,7 +1818,7 @@ def _run_trend_command_interactive(
         last_n: Number of days to analyze
     """
     try:
-        from scripts.cli.trend_commands import (  # type: ignore[attr-defined]
+        from scripts.cli.trend_commands import (  # type: ignore[attr-defined]  # Dynamic import for optional trend analysis
             cmd_trends_analyze,
             cmd_trends_regressions,
             cmd_trends_velocity,
@@ -2366,8 +2366,8 @@ def run_diff_wizard(use_docker: bool = False) -> int:
         print("\n" + _colorize("Diff Configuration:", "bold"))
         if mode == "history":
             print(f"  Mode: {_colorize('History Database', 'green')}")
-            print(f"  Baseline: {_colorize(baseline_id[:12], 'yellow')}")  # type: ignore[index]
-            print(f"  Current: {_colorize(current_id[:12], 'yellow')}")  # type: ignore[index]
+            print(f"  Baseline: {_colorize(baseline_id[:12], 'yellow')}")  # type: ignore[index]  # ID validated before slice
+            print(f"  Current: {_colorize(current_id[:12], 'yellow')}")  # type: ignore[index]  # ID validated before slice
         else:
             print(f"  Mode: {_colorize('Directory Comparison', 'green')}")
             print(f"  Baseline: {baseline_path}")

@@ -75,7 +75,7 @@ class GitLabCIGenerator:
 
         # Add allow_failure if allow_missing_tools is set
         if schedule.spec.jobTemplate.options.get("allow_missing_tools"):
-            job["allow_failure"] = True  # type: ignore[assignment]
+            job["allow_failure"] = True  # type: ignore[assignment]  # GitLab CI YAML expects bool for allow_failure
 
         return job
 

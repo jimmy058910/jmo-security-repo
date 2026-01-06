@@ -1167,7 +1167,7 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> list[str]:
     if tool not in TOOL_RULE_TO_OWASP_TOP10_2021:
         return []
 
-    tool_mappings: dict[str, Any] = TOOL_RULE_TO_OWASP_TOP10_2021[tool]  # type: ignore[assignment]
+    tool_mappings: dict[str, Any] = TOOL_RULE_TO_OWASP_TOP10_2021[tool]  # type: ignore[assignment]  # Nested dict structure requires Any
 
     # Check for exact match
     if rule_id in tool_mappings:

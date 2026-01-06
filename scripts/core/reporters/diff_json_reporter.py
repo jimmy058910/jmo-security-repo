@@ -89,7 +89,7 @@ def _get_jmo_version() -> str:
     if pyproject_path.exists():
         with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
-            return pyproject.get("project", {}).get("version", "1.0.0")  # type: ignore[no-any-return]
+            return pyproject.get("project", {}).get("version", "1.0.0")  # type: ignore[no-any-return]  # TOML parse returns nested Any dicts
 
     return "1.0.0"
 

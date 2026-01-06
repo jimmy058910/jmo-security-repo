@@ -13,7 +13,7 @@ try:
     import yaml
 except ImportError as e:  # optional dependency
     logger.debug(f"YAML reporter unavailable: {e}")
-    yaml = None  # type: ignore[assignment]
+    yaml = None  # type: ignore[assignment]  # Fallback when yaml not installed
 
 try:
     import jsonschema

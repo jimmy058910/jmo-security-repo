@@ -144,14 +144,14 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
 
     # Add new findings (baselineState: "new")
     for finding in diff.new:
-        sarif["runs"][0]["results"].append(  # type: ignore[index]
+        sarif["runs"][0]["results"].append(  # type: ignore[index]  # SARIF schema structure is guaranteed
             {
                 "ruleId": finding.get("ruleId", "unknown"),
-                "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]
+                "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]  # Dict.get returns Optional but _map handles None
                 "message": {
                     "text": f"{finding.get('message', '')} (NEW in current scan)"
                 },
-                "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]
+                "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]  # Dict.get returns Optional but _convert handles None
                 "baselineState": "new",
                 "properties": {
                     "diff_category": "new",
@@ -164,14 +164,14 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
 
     # Add resolved findings (baselineState: "absent", suppressed)
     for finding in diff.resolved:
-        sarif["runs"][0]["results"].append(  # type: ignore[index]
+        sarif["runs"][0]["results"].append(  # type: ignore[index]  # SARIF schema structure is guaranteed
             {
                 "ruleId": finding.get("ruleId", "unknown"),
-                "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]
+                "level": _map_severity_to_sarif(finding.get("severity")),  # type: ignore[arg-type]  # Dict.get returns Optional but _map handles None
                 "message": {
                     "text": f"{finding.get('message', '')} (RESOLVED since baseline)"
                 },
-                "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]
+                "locations": [_convert_location_to_sarif(finding.get("location"))],  # type: ignore[arg-type]  # Dict.get returns Optional but _convert handles None
                 "baselineState": "absent",
                 "suppressions": [
                     {
@@ -199,14 +199,14 @@ def write_sarif_diff(diff: DiffResult, out_path: Path) -> None:
             for k, v in mod.changes.items()
         )
 
-        sarif["runs"][0]["results"].append(  # type: ignore[index]
+        sarif["runs"][0]["results"].append(  # type: ignore[index]  # SARIF schema structure is guaranteed
             {
                 "ruleId": mod.current.get("ruleId", "unknown"),
-                "level": _map_severity_to_sarif(mod.current.get("severity")),  # type: ignore[arg-type]
+                "level": _map_severity_to_sarif(mod.current.get("severity")),  # type: ignore[arg-type]  # Dict.get returns Optional but _map handles None
                 "message": {
                     "text": f"{mod.current.get('message', '')} (MODIFIED: {change_desc})"
                 },
-                "locations": [_convert_location_to_sarif(mod.current.get("location"))],  # type: ignore[arg-type]
+                "locations": [_convert_location_to_sarif(mod.current.get("location"))],  # type: ignore[arg-type]  # Dict.get returns Optional but _convert handles None
                 "baselineState": "updated",
                 "properties": {
                     "diff_category": "modified",

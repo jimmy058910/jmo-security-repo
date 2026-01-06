@@ -10,9 +10,9 @@ if TYPE_CHECKING:
     import yaml as YamlModule
 else:
     try:
-        import yaml as YamlModule  # type: ignore[assignment]
+        import yaml as YamlModule  # type: ignore[assignment]  # PyYAML vs ruamel.yaml type mismatch
     except ImportError:
-        YamlModule = None  # type: ignore[assignment]
+        YamlModule = None  # type: ignore[assignment]  # Fallback when yaml not installed
 
 yaml: AnyType | None = YamlModule
 

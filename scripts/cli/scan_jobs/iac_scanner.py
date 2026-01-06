@@ -169,6 +169,6 @@ def scan_iac_file(
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        statuses["__attempts__"] = attempts_map  # type: ignore[assignment]  # Store retry metadata alongside bool statuses
 
     return f"{iac_type}:{iac_path.name}", statuses

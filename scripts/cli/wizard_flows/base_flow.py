@@ -460,7 +460,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_makefile_target
 
-        generate_makefile_target(command, output_path)  # type: ignore[arg-type]
+        generate_makefile_target(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
 
     def generate_github_actions(self, command: list[str], output_path: Path) -> None:
         """Generate GitHub Actions workflow.
@@ -471,7 +471,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_github_actions
 
-        generate_github_actions(command, output_path)  # type: ignore[arg-type]
+        generate_github_actions(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
 
     def generate_shell_script(self, command: list[str], output_path: Path) -> None:
         """Generate shell script.
@@ -482,7 +482,7 @@ class ArtifactGenerator:
         """
         from scripts.cli.wizard_generators import generate_shell_script
 
-        generate_shell_script(command, output_path)  # type: ignore[arg-type]
+        generate_shell_script(command, output_path)  # type: ignore[arg-type]  # Path coerces to str for generator
 
 
 class BaseWizardFlow(ABC):

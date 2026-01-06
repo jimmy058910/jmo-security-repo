@@ -4,9 +4,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Any, Set, Optional, Tuple
+from typing import Dict, Any, List, Set, Optional, Tuple
 
-from scripts.core.diff_engine import DiffEngine, DiffResult
+from scripts.core.diff_engine import DiffEngine, DiffResult, ModifiedFinding
 from scripts.core.reporters import (
     diff_json_reporter,
     diff_md_reporter,
@@ -25,7 +25,7 @@ try:
     console = Console()
 except ImportError:
     RICH_AVAILABLE = False
-    console = None  # type: ignore[assignment]  # Intentional fallback when rich not installed
+    console = None  # type: ignore[assignment]  # Graceful fallback when rich optional dep not installed
 
 
 # Windows-safe Unicode fallback mappings
@@ -557,7 +557,7 @@ def _filter_by_severity(diff: DiffResult, severities: Set[str]) -> DiffResult:
         "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
     )
 
-    mod_types = []  # type: ignore[var-annotated]
+    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)
@@ -607,7 +607,7 @@ def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
         "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
     )
 
-    mod_types = []  # type: ignore[var-annotated]
+    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)
@@ -637,20 +637,17 @@ def _filter_by_tool(diff: DiffResult, tools: Set[str]) -> DiffResult:
 
 def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
     """Filter to show only specific category (new, resolved, or modified)."""
+    # Initialize with proper types to satisfy mypy across all branches
+    new: List[Dict[str, Any]] = []
+    resolved: List[Dict[str, Any]] = []
+    unchanged: List[Dict[str, Any]] = []
+    modified: List[ModifiedFinding] = []
+
     if category == "new":
         new = diff.new
-        resolved = []
-        unchanged = []  # type: ignore[var-annotated]
-        modified = []  # type: ignore[var-annotated]
     elif category == "resolved":
-        new = []
         resolved = diff.resolved
-        unchanged = []
-        modified = []
     elif category == "modified":
-        new = []
-        resolved = []
-        unchanged = []
         modified = diff.modified
     else:
         # Invalid category, return unchanged
@@ -666,7 +663,7 @@ def _filter_by_category(diff: DiffResult, category: str) -> DiffResult:
         "improving" if net_change < 0 else "worsening" if net_change > 0 else "stable"
     )
 
-    mod_types = []  # type: ignore[var-annotated]
+    mod_types = []  # type: ignore[var-annotated]  # List populated dynamically
     for m in modified:
         mod_types.extend(m.changes.keys())
     mod_by_type = Counter(mod_types)

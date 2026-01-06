@@ -153,7 +153,7 @@ def scan_k8s_resource(
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        statuses["__attempts__"] = attempts_map  # type: ignore[assignment]  # Store retry metadata alongside bool statuses
 
     # Return identifier in format "context:namespace"
     context = k8s_info.get("context", "unknown")

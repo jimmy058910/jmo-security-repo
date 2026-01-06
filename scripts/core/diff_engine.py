@@ -99,8 +99,8 @@ class DiffResult:
     resolved: List[Dict[str, Any]] = field(default_factory=list)
     unchanged: List[Dict[str, Any]] = field(default_factory=list)
     modified: List[ModifiedFinding] = field(default_factory=list)
-    baseline_source: DiffSource = None  # type: ignore[assignment]
-    current_source: DiffSource = None  # type: ignore[assignment]
+    baseline_source: DiffSource = None  # type: ignore[assignment]  # Dataclass default for optional field
+    current_source: DiffSource = None  # type: ignore[assignment]  # Dataclass default for optional field
     statistics: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -726,7 +726,7 @@ class DiffEngine:
         Returns:
             Dict of modification_type → count
         """
-        types = []  # type: ignore[var-annotated]
+        types = []  # type: ignore[var-annotated]  # Types inferred from append operations
         for m in modified:
             types.extend(m.changes.keys())
         return dict(Counter(types))
@@ -764,7 +764,7 @@ class DiffEngine:
 
         # Add trend context
         try:
-            with TrendAnalyzer(db_path=db_path) as analyzer:  # type: ignore[arg-type]
+            with TrendAnalyzer(db_path=db_path) as analyzer:  # type: ignore[arg-type]  # Path validated before call
                 trend = analyzer.analyze_trends(scan_ids=[baseline_id, current_id])
 
                 # Extract key trend metrics

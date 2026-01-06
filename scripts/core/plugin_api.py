@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 import hashlib
 
 
@@ -163,7 +163,7 @@ class AdapterPlugin(ABC):
         return hashlib.sha256(fingerprint_input.encode()).hexdigest()[:16]
 
 
-def adapter_plugin(metadata: PluginMetadata):
+def adapter_plugin(metadata: PluginMetadata) -> Callable[[type], type]:
     """Decorator to register an adapter plugin.
 
     Usage:
@@ -183,7 +183,7 @@ def adapter_plugin(metadata: PluginMetadata):
     """
 
     def decorator(cls: type) -> type:
-        cls._plugin_metadata = metadata  # type: ignore[attr-defined]
+        cls._plugin_metadata = metadata  # type: ignore[attr-defined]  # Dynamically attached by decorator to avoid base class attr
         return cls
 
     return decorator

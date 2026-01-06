@@ -56,7 +56,7 @@ try:
     from rapidfuzz import fuzz
 except ImportError:
     # Fallback to simple ratio calculation if rapidfuzz not available
-    fuzz = None  # type: ignore[assignment]  # Intentional fallback when rapidfuzz not installed
+    fuzz = None  # type: ignore[assignment]  # Graceful fallback when rapidfuzz optional dep not installed
 
 from scripts.core.common_finding import Severity
 
