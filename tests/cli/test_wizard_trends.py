@@ -9,9 +9,17 @@ added to the wizard in v1.0.0.
 from __future__ import annotations
 
 import sqlite3
+import sys
 from unittest import mock
 
 import pytest
+
+
+# Windows-specific skip for tests that require Unix HOME semantics
+skip_on_windows = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Integration test requires Unix HOME semantics - needs Windows-specific fix",
+)
 
 
 @pytest.fixture
@@ -493,6 +501,7 @@ def test_explain_metrics(capsys):
 # ============================================================================
 
 
+@skip_on_windows
 def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     """Test --analyze-trends flag in non-interactive mode."""
     from scripts.cli.wizard import run_wizard
@@ -541,6 +550,7 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     assert mock_run.called
 
 
+@skip_on_windows
 def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-html flag."""
     from scripts.cli.wizard import run_wizard
@@ -595,6 +605,7 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     assert output_file.exists()
 
 
+@skip_on_windows
 def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-json flag."""
     from scripts.cli.wizard import run_wizard

@@ -251,6 +251,8 @@ pytest tests/adapters/ -v                          # Adapter tests
 pytest --cov=scripts --cov-report=term-missing     # With coverage
 ```
 
+**Cross-Platform Testing (CRITICAL):** Tests MUST pass on Windows, Linux, and macOS. See below for platform-specific patterns.
+
 See [TEST.md](TEST.md) for complete testing guide.
 
 ## Configuration
@@ -346,6 +348,68 @@ See [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) for
 
 - Install via pip, not system package manager
 - May need `git config core.autocrlf false` for line ending issues
+
+### Cross-Platform Testing Guidelines
+
+**Test Infrastructure (tests/conftest.py):**
+
+```python
+# Platform detection
+from tests.conftest import IS_WINDOWS, IS_LINUX, IS_MACOS
+
+# Skip decorators - use when tests require platform-specific features
+from tests.conftest import skip_on_windows, unix_only
+
+@skip_on_windows  # Skips on Windows with clear reason
+def test_unix_permissions():
+    pass
+
+# Error pattern matching
+from tests.conftest import is_command_not_found_error
+assert is_command_not_found_error(stderr)  # Works on all platforms
+
+# Subprocess mocking helpers
+from tests.conftest import mock_subprocess_success
+mock_run.return_value = mock_subprocess_success(returncode=0)
+```
+
+**Common Cross-Platform Issues:**
+
+| Issue | Windows Behavior | Solution |
+|-------|-----------------|----------|
+| `chmod` permissions | No effect (no Unix execute bits) | Skip test with `@skip_on_windows` |
+| Command not found errors | "cannot find the file specified" | Use `is_command_not_found_error()` |
+| Path separators | Uses backslashes `\` | Use `pathlib.Path` or forward slashes |
+| File locking | More aggressive locking | Close files before deletion |
+| Process spawning | Different error codes | Test for `!= 0` not specific codes |
+
+**Subprocess Testing Rules:**
+
+1. **ALWAYS mock `subprocess.run`** for tests calling external commands
+2. **Never assume tools exist** - mock `tool_exists()` and `find_tool()` together
+3. **Use `shell=False`** in production code (security requirement)
+4. **Verify mock signatures** - test `shell=False` explicitly
+
+```python
+# CORRECT: Mock both tool existence checks
+with (
+    patch("module.tool_exists", return_value=True),
+    patch("module.find_tool", return_value="/usr/bin/tool"),
+    patch("subprocess.run") as mock_run,
+):
+    mock_run.return_value = mock_subprocess_success()
+    # ... test code ...
+
+# WRONG: Missing find_tool mock causes None command
+with patch("module.tool_exists", return_value=True):
+    # find_tool returns None → command is None → hangs or crashes
+```
+
+**pytest-timeout Safety Net:**
+
+- All tests have 120s timeout (configurable in pyproject.toml)
+- Use `@pytest.mark.timeout(300)` for legitimately slow tests
+- Set `PYTEST_TIMEOUT=0` to disable during local debugging
 
 ## Documentation References
 

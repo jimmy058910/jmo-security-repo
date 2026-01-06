@@ -144,6 +144,10 @@ class TestUrlScanner:
         with (
             patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
             patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
+            patch(
+                "scripts.cli.scan_jobs.url_scanner.find_tool",
+                return_value="/usr/bin/zap.sh",
+            ),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -279,6 +283,10 @@ class TestUrlScanner:
         with (
             patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
             patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
+            patch(
+                "scripts.cli.scan_jobs.url_scanner.find_tool",
+                return_value="/usr/bin/zap.sh",
+            ),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner

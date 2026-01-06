@@ -752,8 +752,9 @@ def test_display_policy_violations_interactive_navigation(capsys):
         ),
     }
 
-    # Mock input to navigate: view next policy (3), then exit (5)
-    with patch("builtins.input", side_effect=["3", "5"]):
+    # Mock input to navigate: view next policy (4), then exit (6)
+    # Note: Menu options - 1=JSON, 2=MD, 3=Show all, 4=Next, 5=Prev, 6=Exit
+    with patch("builtins.input", side_effect=["4", "6"]):
         display_policy_violations_interactive(results)
 
     captured = capsys.readouterr()
@@ -905,8 +906,8 @@ def test_display_policy_violations_interactive_export_json(tmp_path, capsys):
     original_dir = os.getcwd()
     try:
         os.chdir(tmp_path)
-        # Mock input: export as JSON (1), then exit (5)
-        with patch("builtins.input", side_effect=["1", "5"]):
+        # Mock input: export as JSON (1), then exit (6)
+        with patch("builtins.input", side_effect=["1", "6"]):
             display_policy_violations_interactive(results)
 
         # Check JSON file was created
@@ -944,8 +945,8 @@ def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys)
     original_dir = os.getcwd()
     try:
         os.chdir(tmp_path)
-        # Mock input: export as Markdown (2), then exit (5)
-        with patch("builtins.input", side_effect=["2", "5"]):
+        # Mock input: export as Markdown (2), then exit (6)
+        with patch("builtins.input", side_effect=["2", "6"]):
             display_policy_violations_interactive(results)
 
         # Check Markdown file was created
@@ -981,8 +982,8 @@ def test_display_policy_violations_interactive_more_than_10_violations(capsys):
         ),
     }
 
-    # Mock input: exit immediately (5)
-    with patch("builtins.input", return_value="5"):
+    # Mock input: exit immediately (6)
+    with patch("builtins.input", return_value="6"):
         display_policy_violations_interactive(results)
 
     captured = capsys.readouterr()
@@ -1006,8 +1007,8 @@ def test_display_policy_violations_interactive_invalid_choice(capsys):
         ),
     }
 
-    # Mock input: invalid choice (99), then exit (5)
-    with patch("builtins.input", side_effect=["99", "5"]):
+    # Mock input: invalid choice (99), then exit (6)
+    with patch("builtins.input", side_effect=["99", "6"]):
         display_policy_violations_interactive(results)
 
     captured = capsys.readouterr()
@@ -1035,8 +1036,8 @@ def test_display_policy_violations_interactive_previous_navigation(capsys):
         ),
     }
 
-    # Mock input: next (3), previous (4), exit (5)
-    with patch("builtins.input", side_effect=["3", "4", "5"]):
+    # Mock input: next (4), previous (5), exit (6)
+    with patch("builtins.input", side_effect=["4", "5", "6"]):
         display_policy_violations_interactive(results)
 
     captured = capsys.readouterr()

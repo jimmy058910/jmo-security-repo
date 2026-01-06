@@ -1433,3 +1433,415 @@ class TestCmdHistory:
         assert result == 1
         captured = capsys.readouterr()
         assert "Unknown history subcommand" in captured.err
+
+
+class TestListExceptionHandling:
+    """Tests for cmd_history_list exception handling."""
+
+    def test_list_database_error(self, tmp_path, capsys):
+        """Test list handles database errors gracefully."""
+        from scripts.cli.history_commands import cmd_history_list
+
+        # Create an invalid database file
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("not a valid sqlite database")
+
+        class Args:
+            db = str(bad_db)
+            limit = 10
+            profile = None
+            branch = None
+            json = False
+
+        result = cmd_history_list(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Error" in captured.err
+
+
+class TestRepairCommand:
+    """Tests for cmd_history_repair command."""
+
+    def test_repair_database_not_found(self, tmp_path, capsys):
+        """Test repair handles missing database."""
+        from scripts.cli.history_commands import cmd_history_repair
+
+        class Args:
+            db = str(tmp_path / "nonexistent.db")
+            force = True
+            json = False
+
+        result = cmd_history_repair(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower()
+
+    def test_repair_with_force_flag(self, sample_database, capsys, monkeypatch):
+        """Test repair with --force flag skips confirmation."""
+        from scripts.cli.history_commands import cmd_history_repair
+
+        class Args:
+            db = str(sample_database)
+            force = True
+            json = False
+
+        # Mock recover_database to avoid actual database operations
+        from unittest.mock import patch
+
+        with patch("scripts.cli.history_commands.recover_database") as mock_recover:
+            mock_recover.return_value = {
+                "success": True,
+                "backup_path": str(sample_database) + ".backup",
+                "recovery_time_sec": 0.5,
+                "rows_recovered": {"scans": 1, "findings": 0, "tool_runs": 1},
+            }
+
+            result = cmd_history_repair(Args())
+
+        assert result == 0
+
+
+class TestShowCommand:
+    """Tests for cmd_history_show command edge cases."""
+
+    def test_show_nonexistent_scan(self, sample_database, capsys):
+        """Test show handles nonexistent scan ID."""
+        from scripts.cli.history_commands import cmd_history_show
+
+        class Args:
+            db = str(sample_database)
+            scan_id = "nonexistent-scan-id"
+            json = False
+            format = "table"
+
+        result = cmd_history_show(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err.lower() or "No scan" in captured.err
+
+
+class TestStatsCommandEdgeCases:
+    """Tests for cmd_history_stats edge cases."""
+
+    def test_stats_with_database_error(self, tmp_path, capsys):
+        """Test stats handles database errors gracefully."""
+        from scripts.cli.history_commands import cmd_history_stats
+
+        # Create an invalid database
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("not a sqlite db")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+
+        result = cmd_history_stats(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Error" in captured.err
+
+
+class TestExportCommandEdgeCases:
+    """Tests for cmd_history_export edge cases."""
+
+    def test_export_with_invalid_db(self, tmp_path, capsys):
+        """Test export handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_export
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            output = str(tmp_path / "export.csv")
+            format = "csv"
+            scan_id = None
+            limit = None
+
+        result = cmd_history_export(Args())
+
+        assert result == 1
+
+
+class TestTrendsCommandEdgeCases:
+    """Tests for cmd_history_trends edge cases."""
+
+    def test_trends_with_invalid_db(self, tmp_path, capsys):
+        """Test trends handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_trends
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+            days = 30
+
+        result = cmd_history_trends(Args())
+
+        assert result == 1
+
+
+class TestDiffCommandEdgeCases:
+    """Tests for cmd_history_diff edge cases."""
+
+    def test_diff_with_nonexistent_scans(self, sample_database, capsys):
+        """Test diff handles nonexistent scan IDs."""
+        from scripts.cli.history_commands import cmd_history_diff
+
+        class Args:
+            db = str(sample_database)
+            scan_id_1 = "nonexistent-1"
+            scan_id_2 = "nonexistent-2"
+            json = False
+
+        result = cmd_history_diff(Args())
+
+        # Should handle gracefully
+        assert result == 1
+        captured = capsys.readouterr()
+        # Should have some error message
+        assert captured.err or captured.out
+
+
+class TestPruneCommandEdgeCases:
+    """Tests for cmd_history_prune edge cases."""
+
+    def test_prune_with_invalid_db(self, tmp_path, capsys):
+        """Test prune handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_prune
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            force = True
+            older_than = 30
+            keep_latest = 5
+
+        result = cmd_history_prune(Args())
+
+        assert result == 1
+
+
+class TestOptimizeCommandEdgeCases:
+    """Tests for cmd_history_optimize edge cases."""
+
+    def test_optimize_with_invalid_db(self, tmp_path, capsys):
+        """Test optimize handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_optimize
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+
+        result = cmd_history_optimize(Args())
+
+        assert result == 1
+
+
+class TestVerifyCommandEdgeCases:
+    """Tests for cmd_history_verify edge cases."""
+
+    def test_verify_with_invalid_db(self, tmp_path, capsys):
+        """Test verify handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_verify
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+
+        result = cmd_history_verify(Args())
+
+        assert result == 1
+
+
+class TestMigrateCommandEdgeCases:
+    """Tests for cmd_history_migrate edge cases."""
+
+    def test_migrate_with_invalid_db(self, tmp_path, capsys):
+        """Test migrate handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_migrate
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+
+        result = cmd_history_migrate(Args())
+
+        assert result == 1
+
+
+class TestQueryCommandEdgeCases:
+    """Tests for cmd_history_query edge cases."""
+
+    def test_query_with_invalid_db(self, tmp_path, capsys):
+        """Test query handles invalid database."""
+        from scripts.cli.history_commands import cmd_history_query
+
+        bad_db = tmp_path / "bad.db"
+        bad_db.write_text("invalid")
+
+        class Args:
+            db = str(bad_db)
+            json = False
+            severity = None
+            tool = None
+            rule_id = None
+            path = None
+            limit = 100
+
+        result = cmd_history_query(Args())
+
+        assert result == 1
+
+
+class TestRepairInteractive:
+    """Tests for cmd_history_repair interactive flow."""
+
+    def test_repair_cancelled_by_user(self, sample_database, capsys, monkeypatch):
+        """Test repair cancelled when user says no."""
+        from scripts.cli.history_commands import cmd_history_repair
+        from io import StringIO
+
+        # Mock stdin to return "n"
+        monkeypatch.setattr("sys.stdin", StringIO("n\n"))
+
+        class Args:
+            db = str(sample_database)
+            force = False  # Don't skip confirmation
+            json = False
+
+        result = cmd_history_repair(Args())
+
+        assert result == 0  # Cancelled returns 0
+        captured = capsys.readouterr()
+        assert "cancelled" in captured.out.lower()
+
+    def test_repair_json_output_success(self, sample_database, capsys, monkeypatch):
+        """Test repair with JSON output on success."""
+        from scripts.cli.history_commands import cmd_history_repair
+        from unittest.mock import patch
+
+        class Args:
+            db = str(sample_database)
+            force = True
+            json = True
+
+        with patch("scripts.cli.history_commands.recover_database") as mock_recover:
+            mock_recover.return_value = {
+                "success": True,
+                "backup_path": str(sample_database) + ".backup",
+                "recovery_time_sec": 0.25,
+                "rows_recovered": {"scans": 1, "findings": 0, "tool_runs": 1},
+            }
+
+            result = cmd_history_repair(Args())
+
+        assert result == 0
+        captured = capsys.readouterr()
+        # Should have JSON output
+        assert "success" in captured.out.lower() or "backup" in captured.out.lower()
+
+    def test_repair_failure_output(self, sample_database, capsys, monkeypatch):
+        """Test repair with failure output."""
+        from scripts.cli.history_commands import cmd_history_repair
+        from unittest.mock import patch
+
+        class Args:
+            db = str(sample_database)
+            force = True
+            json = False
+
+        with patch("scripts.cli.history_commands.recover_database") as mock_recover:
+            mock_recover.return_value = {
+                "success": False,
+                "backup_path": str(sample_database) + ".backup",
+                "errors": ["Corruption too severe", "Cannot read table"],
+            }
+
+            result = cmd_history_repair(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "FAILED" in captured.out or "Error" in captured.err
+
+
+class TestStoreCommand:
+    """Tests for cmd_history_store command."""
+
+    def test_store_with_invalid_results_dir(self, sample_database, capsys):
+        """Test store handles invalid results directory."""
+        from scripts.cli.history_commands import cmd_history_store
+
+        class Args:
+            db = str(sample_database)
+            results_dir = "/nonexistent/path/to/results"
+            profile = "fast"
+            tools = ["trivy"]
+            commit_hash = None
+            branch = None
+
+        result = cmd_history_store(Args())
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Error" in captured.err or "not found" in captured.err.lower()
+
+
+class TestVerifyAndMigrate:
+    """Tests for verify and migrate commands with valid database."""
+
+    def test_verify_valid_database(self, sample_database, capsys):
+        """Test verify on a valid database."""
+        from scripts.cli.history_commands import cmd_history_verify
+
+        class Args:
+            db = str(sample_database)
+            json = False
+
+        result = cmd_history_verify(Args())
+
+        # Should succeed on valid database
+        assert result == 0
+
+    def test_migrate_valid_database(self, sample_database, capsys):
+        """Test migrate on a valid database with mocked migrations."""
+        from unittest.mock import patch
+        from scripts.cli.history_commands import cmd_history_migrate
+
+        class Args:
+            db = str(sample_database)
+            json = False
+            target_version = None  # No specific version, use latest
+
+        # Mock run_migrations to return successful result
+        mock_result = {
+            "applied": ["1.0.0", "1.1.0"],
+            "final_version": "1.1.0",
+            "errors": [],
+        }
+        with patch(
+            "scripts.cli.history_commands.run_migrations", return_value=mock_result
+        ):
+            result = cmd_history_migrate(Args())
+
+        # Should succeed with applied migrations
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Applied 2 migration(s)" in captured.out

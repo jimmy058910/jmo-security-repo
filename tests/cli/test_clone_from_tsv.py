@@ -34,9 +34,12 @@ class TestRun:
 
     def test_command_not_found(self) -> None:
         """Test run with nonexistent command."""
+        from tests.conftest import is_command_not_found_error
+
         rc, stdout, stderr = run(["nonexistent_command_12345"])
         assert rc == 127
-        assert "not found" in stderr.lower() or "No such file" in stderr
+        # Use cross-platform error pattern matching
+        assert is_command_not_found_error(stderr)
 
 
 class TestParseTsv:

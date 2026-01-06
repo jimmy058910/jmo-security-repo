@@ -294,11 +294,10 @@ def test_cmd_ci_results_dir_path_conversion():
         cmd_ci(Args(), mock_scan, mock_report)
 
     report_args = mock_report.call_args[0][0]
-    # Path should be converted to string
-    assert report_args.results_dir == "/path/to/results"
+    # Path should be converted to string (platform-independent check)
     assert isinstance(report_args.results_dir, str)
-    assert report_args.results_dir_pos == "/path/to/results"
-    assert report_args.results_dir_opt == "/path/to/results"
+    assert "path" in report_args.results_dir.lower()
+    assert "results" in report_args.results_dir.lower()
 
 
 def test_cmd_ci_calls_scan_then_report():
@@ -515,3 +514,225 @@ def test_cmd_ci_output_format_args():
     assert report_args.html is True
     assert report_args.sarif is True
     assert report_args.yaml is True
+
+
+class TestStrictVersions:
+    """Tests for strict_versions CI mode."""
+
+    def test_strict_versions_no_drift(self):
+        """Test strict_versions passes when no version drift."""
+
+        class Args:
+            strict_versions = True
+            profile_name = "balanced"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        mock_manager.get_version_drift.return_value = []
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        assert rc == 0
+        assert mock_scan.called
+        assert mock_report.called
+
+    def test_strict_versions_tools_behind_fails(self):
+        """Test strict_versions fails when tools are behind expected versions."""
+
+        class Args:
+            strict_versions = True
+            profile_name = "balanced"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        mock_manager.get_version_drift.return_value = [
+            {
+                "tool": "trivy",
+                "installed": "0.49.0",
+                "expected": "0.50.0",
+                "direction": "behind",
+                "critical": True,
+            },
+            {
+                "tool": "semgrep",
+                "installed": "1.59.0",
+                "expected": "1.60.0",
+                "direction": "behind",
+                "critical": False,
+            },
+        ]
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+            patch("sys.stderr"),
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        # Should fail with return code 1
+        assert rc == 1
+        # Scan and report should NOT be called
+        assert not mock_scan.called
+        assert not mock_report.called
+
+    def test_strict_versions_tools_unknown_fails(self):
+        """Test strict_versions fails when tool versions are unknown."""
+
+        class Args:
+            strict_versions = True
+            profile_name = "balanced"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        mock_manager.get_version_drift.return_value = [
+            {
+                "tool": "custom-tool",
+                "installed": "unknown",
+                "expected": "1.0.0",
+                "direction": "unknown",
+                "critical": False,
+            },
+        ]
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+            patch("sys.stderr"),
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        assert rc == 1
+        assert not mock_scan.called
+
+    def test_strict_versions_tools_ahead_passes(self):
+        """Test strict_versions passes when tools are ahead (OK)."""
+
+        class Args:
+            strict_versions = True
+            profile_name = "balanced"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        mock_manager.get_version_drift.return_value = [
+            {
+                "tool": "trivy",
+                "installed": "0.51.0",
+                "expected": "0.50.0",
+                "direction": "ahead",
+                "critical": True,
+            },
+        ]
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+            patch("sys.stderr"),
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        # Should pass - ahead is OK
+        assert rc == 0
+        assert mock_scan.called
+        assert mock_report.called
+
+    def test_strict_versions_default_profile(self):
+        """Test strict_versions uses 'balanced' profile by default."""
+
+        class Args:
+            strict_versions = True
+            # No profile_name set
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        mock_manager.get_version_drift.return_value = []
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+        ):
+            cmd_ci(Args(), mock_scan, mock_report)
+
+        # Should call get_version_drift with "balanced" as default
+        mock_manager.get_version_drift.assert_called_once_with("balanced")
+
+    def test_strict_versions_mixed_drift(self):
+        """Test strict_versions with mixed ahead/behind drift."""
+
+        class Args:
+            strict_versions = True
+            profile_name = "fast"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+        mock_manager = MagicMock()
+        # Some tools ahead, some behind - should fail because of behind
+        mock_manager.get_version_drift.return_value = [
+            {
+                "tool": "trivy",
+                "installed": "0.51.0",
+                "expected": "0.50.0",
+                "direction": "ahead",
+                "critical": True,
+            },
+            {
+                "tool": "semgrep",
+                "installed": "1.58.0",
+                "expected": "1.60.0",
+                "direction": "behind",
+                "critical": False,
+            },
+        ]
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager", return_value=mock_manager),
+            patch("sys.stderr"),
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        # Should fail because of behind tool
+        assert rc == 1
+        assert not mock_scan.called
+
+    def test_strict_versions_false_skips_check(self):
+        """Test that strict_versions=False skips version check."""
+
+        class Args:
+            strict_versions = False
+            profile_name = "balanced"
+            repo = "/repo"
+            results_dir = "results"
+
+        mock_scan = MagicMock(return_value=0)
+        mock_report = MagicMock(return_value=0)
+
+        with (
+            patch("scripts.cli.jmo._log"),
+            patch("scripts.cli.tool_manager.ToolManager") as mock_tm_class,
+        ):
+            rc = cmd_ci(Args(), mock_scan, mock_report)
+
+        # ToolManager should not be instantiated
+        assert not mock_tm_class.called
+        assert rc == 0

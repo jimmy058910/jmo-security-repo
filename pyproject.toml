@@ -110,6 +110,13 @@ markers = [
 # Generate with: pytest --store-durations --durations-path=.test_durations
 # This enables duration-based splitting for more even shard distribution
 
+# pytest-timeout: Safety net to prevent infinite test hangs
+# - Default 120s per test (most tests complete in <1s)
+# - Use @pytest.mark.timeout(300) for legitimately slow tests
+# - Set PYTEST_TIMEOUT=0 to disable in local debugging
+timeout = 120
+timeout_method = "thread"  # Works on Windows (unlike signal)
+
 [tool.coverage.run]
 omit = [
     # Data-only files with no executable logic

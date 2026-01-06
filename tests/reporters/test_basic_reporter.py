@@ -518,3 +518,308 @@ def test_get_category_summary_with_bandit():
 
     # Bandit should be categorized as Code Quality
     assert categories.get("🔧 Code Quality", 0) == 1
+
+
+# Tests for Priority Analysis (EPSS/KEV) and Cross-Tool Consensus
+
+
+def test_markdown_summary_with_kev_findings():
+    """Test Priority Analysis section with KEV (actively exploited) findings."""
+    findings = [
+        {
+            "severity": "CRITICAL",
+            "ruleId": "CVE-2021-44228",
+            "tool": {"name": "trivy", "version": "1.0"},
+            "location": {"path": "pom.xml", "startLine": 10},
+            "tags": ["vulnerability", "cve"],
+            "priority": {
+                "priority": 95,
+                "is_kev": True,
+                "kev_due_date": "2022-01-15",
+                "epss": 0.97,
+                "epss_percentile": 0.99,
+            },
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "CVE-2022-22965",
+            "tool": {"name": "trivy", "version": "1.0"},
+            "location": {"path": "pom.xml", "startLine": 20},
+            "tags": ["vulnerability", "cve"],
+            "priority": {
+                "priority": 90,
+                "is_kev": True,
+                "kev_due_date": "2022-04-01",
+                "epss": 0.85,
+                "epss_percentile": 0.95,
+            },
+        },
+    ]
+    md = to_markdown_summary(findings)
+    assert "## Priority Analysis (EPSS/KEV)" in md
+    assert "CISA KEV" in md
+    assert "Actively Exploited" in md
+    assert "CVE-2021-44228" in md
+    assert "Due:" in md
+
+
+def test_markdown_summary_with_high_epss_findings():
+    """Test Priority Analysis section with high EPSS (likely exploited) findings."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "CVE-2023-12345",
+            "tool": {"name": "trivy", "version": "1.0"},
+            "location": {"path": "requirements.txt", "startLine": 5},
+            "tags": ["vulnerability", "cve"],
+            "priority": {
+                "priority": 75,
+                "is_kev": False,
+                "epss": 0.65,  # >50% - high exploit probability
+                "epss_percentile": 0.90,
+            },
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "CVE-2023-67890",
+            "tool": {"name": "grype", "version": "1.0"},
+            "location": {"path": "package.json", "startLine": 10},
+            "tags": ["vulnerability"],
+            "priority": {
+                "priority": 70,
+                "is_kev": False,
+                "epss": 0.55,
+                "epss_percentile": 0.85,
+            },
+        },
+    ]
+    md = to_markdown_summary(findings)
+    assert "## Priority Analysis (EPSS/KEV)" in md
+    assert "High Exploit Probability" in md
+    assert "EPSS:" in md
+    assert "percentile" in md
+
+
+def test_markdown_summary_priority_distribution():
+    """Test Priority Analysis priority distribution breakdown."""
+    findings = [
+        {
+            "severity": "CRITICAL",
+            "ruleId": "CVE-2021-44228",
+            "tool": {"name": "trivy"},
+            "location": {"path": "pom.xml"},
+            "priority": {"priority": 95, "is_kev": True, "kev_due_date": "2022-01-15"},
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "CVE-2023-1111",
+            "tool": {"name": "trivy"},
+            "location": {"path": "pom.xml"},
+            "priority": {"priority": 65, "is_kev": False},
+        },
+        {
+            "severity": "MEDIUM",
+            "ruleId": "CVE-2023-2222",
+            "tool": {"name": "trivy"},
+            "location": {"path": "pom.xml"},
+            "priority": {"priority": 45, "is_kev": False},
+        },
+        {
+            "severity": "LOW",
+            "ruleId": "CVE-2023-3333",
+            "tool": {"name": "trivy"},
+            "location": {"path": "pom.xml"},
+            "priority": {"priority": 25, "is_kev": False},
+        },
+    ]
+    md = to_markdown_summary(findings)
+    assert "Priority Distribution" in md
+    assert "Critical Priority (≥80)" in md
+    assert "High Priority (60-79)" in md
+    assert "Medium Priority (40-59)" in md
+    assert "Low Priority (<40)" in md
+
+
+def test_markdown_summary_cross_tool_consensus():
+    """Test Cross-Tool Consensus section with multi-tool findings."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "hardcoded-secret",
+            "tool": {"name": "gitleaks", "version": "1.0"},
+            "location": {"path": "config.py", "startLine": 42},
+            "tags": ["secrets"],
+            "detected_by": [
+                {"name": "gitleaks", "version": "8.18.0"},
+                {"name": "trufflehog", "version": "3.63.0"},
+            ],
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "sql-injection",
+            "tool": {"name": "semgrep", "version": "1.0"},
+            "location": {"path": "app.py", "startLine": 100},
+            "tags": ["sast"],
+            "detected_by": [
+                {"name": "semgrep", "version": "1.50.0"},
+                {"name": "bandit", "version": "1.7.5"},
+                {"name": "snyk", "version": "1.0.0"},
+            ],
+        },
+    ]
+    md = to_markdown_summary(findings)
+    assert "## Cross-Tool Consensus" in md
+    assert "confirmed by multiple tools" in md
+    assert "detected by" in md.lower()
+    # Should show tool count and names
+    assert "gitleaks" in md
+    assert "trufflehog" in md
+
+
+def test_markdown_summary_detected_by_in_tool_breakdown():
+    """Test By Tool section counts findings by detected_by tools."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "aws-key",
+            "tool": {"name": "gitleaks", "version": "1.0"},
+            "location": {"path": "secrets.txt"},
+            "tags": ["secrets"],
+            "detected_by": [
+                {"name": "gitleaks", "version": "8.18.0"},
+                {"name": "trufflehog", "version": "3.63.0"},
+            ],
+        },
+        {
+            "severity": "MEDIUM",
+            "ruleId": "misc-issue",
+            "tool": {"name": "semgrep", "version": "1.0"},
+            "location": {"path": "app.py"},
+            "tags": ["sast"],
+            # No detected_by - single tool finding
+        },
+    ]
+    md = to_markdown_summary(findings)
+    assert "## By Tool" in md
+    # Both gitleaks and trufflehog should be listed since detected_by has both
+    assert "gitleaks" in md
+    assert "trufflehog" in md
+    assert "semgrep" in md
+
+
+def test_write_markdown(tmp_path):
+    """Test write_markdown writes file correctly."""
+    from scripts.core.reporters.basic_reporter import write_markdown
+
+    sample = [
+        {
+            "severity": "HIGH",
+            "ruleId": "aws-key",
+            "tool": {"name": "gitleaks", "version": "1.0"},
+            "location": {"path": "secrets.txt"},
+            "tags": ["secrets"],
+        }
+    ]
+    out = tmp_path / "SUMMARY.md"
+    write_markdown(sample, out)
+
+    assert out.exists()
+    content = out.read_text()
+    assert "# Security Summary" in content
+    assert "Total findings: 1" in content
+    assert "HIGH" in content
+
+
+def test_write_json_with_custom_metadata(tmp_path):
+    """Test write_json with custom metadata."""
+    sample = [{"severity": "HIGH", "ruleId": "test", "location": {"path": "a.py"}}]
+    custom_metadata = {
+        "output_version": "1.0.0",
+        "jmo_version": "1.0.0",
+        "schema_version": "1.2.0",
+        "timestamp": "2024-01-15T12:00:00Z",
+        "scan_id": "test-scan-123",
+        "profile": "balanced",
+        "tools": ["trivy", "semgrep"],
+        "target_count": 5,
+        "finding_count": 1,
+        "platform": "Linux",
+    }
+    out = tmp_path / "custom.json"
+    write_json(sample, out, metadata=custom_metadata)
+
+    import json
+
+    data = json.loads(out.read_text())
+    assert data["meta"]["scan_id"] == "test-scan-123"
+    assert data["meta"]["profile"] == "balanced"
+    assert data["meta"]["tools"] == ["trivy", "semgrep"]
+
+
+def test_get_remediation_priorities_iac():
+    """Test IaC findings appear in remediation priorities."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "tf-security-group",
+            "tags": ["iac", "terraform"],
+            "tool": {"name": "tfsec"},
+            "location": {"path": "main.tf"},
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "tf-s3-public",
+            "tags": ["iac", "terraform"],
+            "tool": {"name": "checkov"},
+            "location": {"path": "storage.tf"},
+        },
+    ]
+    priorities = _get_remediation_priorities(findings)
+    assert len(priorities) > 0
+    assert any("IaC" in p or "Harden" in p for p in priorities)
+
+
+def test_get_remediation_priorities_sast():
+    """Test SAST/code quality findings in remediation priorities."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "sql-injection",
+            "tags": ["sast", "security"],
+            "tool": {"name": "semgrep"},
+            "location": {"path": "app.py"},
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "xss",
+            "tags": ["sast", "security"],
+            "tool": {"name": "bandit"},
+            "location": {"path": "views.py"},
+        },
+    ]
+    priorities = _get_remediation_priorities(findings)
+    assert len(priorities) > 0
+    assert any("code" in p.lower() or "security" in p.lower() for p in priorities)
+
+
+def test_get_remediation_priorities_dependencies():
+    """Test dependency vulnerability findings in remediation priorities."""
+    findings = [
+        {
+            "severity": "CRITICAL",
+            "ruleId": "CVE-2021-44228",
+            "tags": ["vulnerability", "cve", "dependency"],
+            "tool": {"name": "trivy"},
+            "location": {"path": "pom.xml"},
+        },
+        {
+            "severity": "HIGH",
+            "ruleId": "CVE-2022-12345",
+            "tags": ["vulnerability", "dependency"],
+            "tool": {"name": "osv-scanner"},
+            "location": {"path": "requirements.txt"},
+        },
+    ]
+    priorities = _get_remediation_priorities(findings)
+    assert len(priorities) > 0
+    assert any("depend" in p.lower() or "CVE" in p or "Update" in p for p in priorities)

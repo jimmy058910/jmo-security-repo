@@ -20,6 +20,7 @@ Related:
 """
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -670,6 +671,10 @@ def test_infer_scan_frequency_creates_parent_directory(tmp_path: Path, monkeypat
     assert test_count_file.parent.exists()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows has different permission semantics - chmod doesn't prevent file creation",
+)
 def test_infer_scan_frequency_returns_none_on_error(tmp_path: Path, monkeypatch):
     """Test infer_scan_frequency() returns None on file operation errors."""
     # Use a path that will cause permission error (read-only directory)

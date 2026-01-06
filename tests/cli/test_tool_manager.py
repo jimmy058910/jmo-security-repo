@@ -854,3 +854,249 @@ def test_get_missing_tools_for_scan():
 
     # All fast profile tools should be reported missing
     assert len(missing) > 0
+
+
+class TestGetRemediationForTool:
+    """Tests for get_remediation_for_tool function."""
+
+    def test_get_remediation_with_deps(self):
+        """Test remediation commands include dependencies."""
+        from scripts.cli.tool_manager import get_remediation_for_tool
+
+        result = get_remediation_for_tool("dependency-check", "linux")
+        # Should return commands dict
+        assert "commands" in result
+        assert "manual" in result
+        assert "jmo_install" in result
+
+    def test_get_remediation_windows(self):
+        """Test remediation commands for Windows platform."""
+        from scripts.cli.tool_manager import get_remediation_for_tool
+
+        result = get_remediation_for_tool("trivy", "windows")
+        assert "commands" in result
+
+    def test_get_remediation_darwin(self):
+        """Test remediation commands for macOS platform."""
+        from scripts.cli.tool_manager import get_remediation_for_tool
+
+        result = get_remediation_for_tool("semgrep", "darwin")
+        assert "commands" in result
+
+    def test_get_remediation_unknown_tool(self):
+        """Test remediation for unknown tool returns fallback."""
+        from scripts.cli.tool_manager import get_remediation_for_tool
+
+        result = get_remediation_for_tool("unknown-tool-xyz", "linux")
+        assert "manual" in result
+
+
+class TestFindBinary:
+    """Tests for _find_binary method."""
+
+    def test_find_yara_python_module(self, monkeypatch):
+        """Test finding yara as a Python module."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        # Mock importlib to find yara module
+        mock_spec = MagicMock()
+        mock_spec.origin = "/path/to/yara.py"
+
+        with patch("importlib.util.find_spec", return_value=mock_spec):
+            result = manager._find_binary("yara")
+
+        assert result == "/path/to/yara.py"
+
+    def test_find_yara_not_installed(self, monkeypatch):
+        """Test yara not found when module not installed."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("importlib.util.find_spec", return_value=None):
+            result = manager._find_binary("yara")
+
+        assert result is None
+
+    def test_find_tool_in_path(self, monkeypatch):
+        """Test finding tool in system PATH."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("shutil.which", return_value="/usr/bin/trivy"):
+            result = manager._find_binary("trivy")
+
+        assert result == "/usr/bin/trivy"
+
+    def test_find_zap_special_locations(self, tmp_path, monkeypatch):
+        """Test ZAP found in special locations."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        # Create fake ZAP location
+        zap_dir = tmp_path / "zap"
+        zap_dir.mkdir()
+        zap_sh = zap_dir / "zap.sh"
+        zap_sh.touch()
+
+        # Mock Path.home() to return tmp_path
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        with patch("shutil.which", return_value=None):
+            result = manager._find_binary("zap.sh")
+
+        assert result == str(zap_sh)
+
+    def test_find_dependency_check_special_locations(self, tmp_path, monkeypatch):
+        """Test dependency-check found in special locations."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        # Create fake dependency-check location
+        dc_dir = tmp_path / "dependency-check" / "bin"
+        dc_dir.mkdir(parents=True)
+        dc_sh = dc_dir / "dependency-check.sh"
+        dc_sh.touch()
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        with patch("shutil.which", return_value=None):
+            result = manager._find_binary("dependency-check.sh")
+
+        assert result == str(dc_sh)
+
+
+class TestGetToolVersion:
+    """Tests for _get_tool_version method."""
+
+    def test_get_version_success(self):
+        """Test successful version detection."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_result = MagicMock()
+        mock_result.stdout = "trivy version 0.50.0"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result):
+            version = manager._get_tool_version("trivy", "/usr/bin/trivy")
+
+        assert version == "0.50.0"
+
+    def test_get_version_from_stderr(self):
+        """Test version detection from stderr."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.stderr = "semgrep 1.50.0"
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result):
+            version = manager._get_tool_version("semgrep", "/usr/bin/semgrep")
+
+        assert version == "1.50.0"
+
+    def test_get_version_timeout(self):
+        """Test version detection handles timeout."""
+        import subprocess
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 10)):
+            version = manager._get_tool_version("slow-tool", "/usr/bin/slow-tool")
+
+        assert version is None
+
+    def test_get_version_file_not_found(self):
+        """Test version detection handles FileNotFoundError."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("Binary not found")):
+            version = manager._get_tool_version("missing-tool", "/nonexistent/path")
+
+        assert version is None
+
+    def test_get_version_permission_denied(self):
+        """Test version detection handles PermissionError."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("subprocess.run", side_effect=PermissionError("Access denied")):
+            version = manager._get_tool_version("protected-tool", "/usr/bin/protected")
+
+        assert version is None
+
+    def test_get_version_os_error(self):
+        """Test version detection handles generic OSError."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch("subprocess.run", side_effect=OSError("Generic error")):
+            version = manager._get_tool_version("error-tool", "/usr/bin/error")
+
+        assert version is None
+
+    def test_get_version_no_output(self):
+        """Test version detection handles empty output."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        mock_result.returncode = 1
+
+        with patch("subprocess.run", return_value=mock_result):
+            version = manager._get_tool_version("silent-tool", "/usr/bin/silent")
+
+        assert version is None
+
+    def test_get_version_parse_failure(self):
+        """Test version detection handles unparseable output."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_result = MagicMock()
+        mock_result.stdout = "Some random output without version"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result):
+            version = manager._get_tool_version("weird-tool", "/usr/bin/weird")
+
+        # Should return None if version can't be parsed
+        assert version is None
+
+    def test_get_version_custom_command(self):
+        """Test version detection with tool-specific command."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_result = MagicMock()
+        mock_result.stdout = "Trivy Version: 0.50.0"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result):
+            # Trivy uses custom version command from VERSION_COMMANDS
+            version = manager._get_tool_version("trivy", "/usr/bin/trivy")
+
+        assert version is not None

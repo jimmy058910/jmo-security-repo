@@ -4,14 +4,41 @@ Shared pytest fixtures and utilities for JMo Security tests.
 
 This module provides:
 - Cross-platform Python executable detection
+- Platform-specific skip conditions
+- Subprocess mocking helpers
 - Common test utilities
 """
 
 import subprocess
 import sys
+from pathlib import Path
 from typing import List
+from unittest.mock import MagicMock
 
 import pytest
+
+
+# ============================================================================
+# Platform Detection Constants
+# ============================================================================
+
+IS_WINDOWS = sys.platform == "win32"
+IS_LINUX = sys.platform == "linux"
+IS_MACOS = sys.platform == "darwin"
+
+
+# ============================================================================
+# Platform Skip Decorators
+# ============================================================================
+# Usage: @skip_on_windows("chmod doesn't work like Unix")
+
+skip_on_windows = pytest.mark.skipif(
+    IS_WINDOWS, reason="Test requires Unix-specific features"
+)
+skip_on_linux = pytest.mark.skipif(IS_LINUX, reason="Test not applicable on Linux")
+skip_on_macos = pytest.mark.skipif(IS_MACOS, reason="Test not applicable on macOS")
+windows_only = pytest.mark.skipif(not IS_WINDOWS, reason="Windows-only test")
+unix_only = pytest.mark.skipif(IS_WINDOWS, reason="Unix-only test (Linux/macOS)")
 
 
 # ============================================================================
@@ -100,3 +127,91 @@ def jmo_runner():
         return run_jmo_command(args, **defaults)
 
     return _run
+
+
+# ============================================================================
+# Subprocess Mocking Helpers
+# ============================================================================
+
+
+def mock_subprocess_success(returncode: int = 0, stdout: str = "", stderr: str = ""):
+    """
+    Create a MagicMock configured as a successful subprocess.run result.
+
+    Usage:
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = mock_subprocess_success()
+            # ... test code ...
+
+    Args:
+        returncode: Exit code (0 = success)
+        stdout: Standard output
+        stderr: Standard error
+
+    Returns:
+        MagicMock configured as CompletedProcess
+    """
+    mock = MagicMock()
+    mock.returncode = returncode
+    mock.stdout = stdout
+    mock.stderr = stderr
+    return mock
+
+
+def mock_subprocess_failure(
+    returncode: int = 1, stdout: str = "", stderr: str = "Error"
+):
+    """Create a MagicMock configured as a failed subprocess.run result."""
+    return mock_subprocess_success(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+# ============================================================================
+# Cross-Platform Error Message Patterns
+# ============================================================================
+
+# Pattern matching for "command not found" errors across platforms
+# Windows: "cannot find the file specified", "is not recognized"
+# Unix: "not found", "No such file or directory"
+COMMAND_NOT_FOUND_PATTERNS = [
+    "not found",
+    "no such file",
+    "cannot find",
+    "is not recognized",
+]
+
+
+def is_command_not_found_error(stderr: str) -> bool:
+    """
+    Check if stderr indicates a command-not-found error (cross-platform).
+
+    Args:
+        stderr: The stderr output from subprocess
+
+    Returns:
+        True if stderr indicates the command was not found
+    """
+    stderr_lower = stderr.lower()
+    return any(pattern in stderr_lower for pattern in COMMAND_NOT_FOUND_PATTERNS)
+
+
+# ============================================================================
+# Path Normalization Utilities
+# ============================================================================
+
+
+def normalize_path(path: str | Path) -> str:
+    """
+    Normalize a path for cross-platform comparison.
+
+    Converts backslashes to forward slashes and normalizes case on Windows.
+
+    Args:
+        path: Path string or Path object
+
+    Returns:
+        Normalized path string
+    """
+    normalized = str(path).replace("\\", "/")
+    if IS_WINDOWS:
+        normalized = normalized.lower()
+    return normalized

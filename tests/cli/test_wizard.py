@@ -235,6 +235,7 @@ def test_generate_github_actions_docker():
     assert "actions/setup-python" not in workflow
 
 
+@patch("scripts.cli.wizard.subprocess.run")
 @patch("scripts.cli.wizard._detect_docker")
 @patch("scripts.cli.wizard._check_docker_running")
 @patch("scripts.cli.wizard._prompt_yes_no")
@@ -244,6 +245,7 @@ def test_run_wizard_non_interactive(
     mock_yes_no,
     mock_docker_running,
     mock_detect,
+    mock_subprocess_run,
 ):
     """Test wizard in non-interactive (--yes) mode."""
     mock_detect.return_value = False
@@ -252,14 +254,11 @@ def test_run_wizard_non_interactive(
     # Mock yes/no for "Execute now?" prompt
     mock_yes_no.return_value = True
 
-    # Mock the dynamic import of jmotools.main
-    mock_jmotools_main = MagicMock(return_value=0)
+    # Mock subprocess.run to prevent actual scan execution
+    mock_subprocess_run.return_value = MagicMock(returncode=0)
 
     with patch("scripts.cli.wizard.Path.cwd", return_value=Path("/home/user/repos")):
-        with patch.dict(
-            "sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}
-        ):
-            rc = run_wizard(yes=True)
+        rc = run_wizard(yes=True)
 
     # Should not have prompted for profile/target selection
     mock_choice.assert_not_called()
@@ -801,10 +800,14 @@ def test_execute_scan_docker_mode(mock_run, mock_yes_no):
     assert command[0] == "docker"
 
 
+@patch("subprocess.run")
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_native_mode(mock_yes_no):
+def test_execute_scan_native_mode(mock_yes_no, mock_run):
     """Test execute_scan in native mode."""
     from scripts.cli.wizard import execute_scan
+
+    # Mock subprocess.run to prevent actual command execution
+    mock_run.return_value = MagicMock(returncode=0)
 
     config = WizardConfig()
     config.profile = "balanced"
@@ -813,12 +816,17 @@ def test_execute_scan_native_mode(mock_yes_no):
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "."
 
-    # Mock jmotools.main
-    mock_jmotools_main = MagicMock(return_value=0)
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    exit_code = execute_scan(config)
 
     assert exit_code == 0
+    mock_run.assert_called_once()
+    # Verify shell=False for security (prevents command injection)
+    assert mock_run.call_args[1]["shell"] is False
+    # Verify command is passed as list (secure)
+    command = mock_run.call_args[0][0]
+    assert isinstance(command, list)
+    # Native mode should use python directly, not docker
+    assert command[0] != "docker"
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)

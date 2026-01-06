@@ -161,11 +161,14 @@ pytest==8.4.2
     #   pytest-cov
     #   pytest-rerunfailures
     #   pytest-split
+    #   pytest-timeout
 pytest-cov==7.0.0
     # via -r requirements-dev.in
 pytest-rerunfailures==16.1
     # via -r requirements-dev.in
 pytest-split==0.10.0
+    # via -r requirements-dev.in
+pytest-timeout==2.4.0
     # via -r requirements-dev.in
 python-dateutil==2.9.0.post0
     # via croniter

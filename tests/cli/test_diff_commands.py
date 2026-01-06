@@ -1681,3 +1681,157 @@ class TestCmdDiffExceptionHandling:
         captured = capsys.readouterr()
         assert "Error generating output:" in captured.err
         assert "Failed to write file" in captured.err
+
+
+class TestRichOutput:
+    """Tests for Rich console output functions."""
+
+    def test_print_rich_summary_with_rich_available(self, monkeypatch):
+        """Test print_diff_summary_rich when Rich is available."""
+        from unittest.mock import MagicMock
+
+        # Create mock Rich components
+        mock_console = MagicMock()
+        mock_panel_class = MagicMock()
+        mock_table_class = MagicMock()
+        mock_tree_class = MagicMock()
+
+        # Import after setting up mocks
+        import scripts.cli.diff_commands as diff_module
+
+        # Create mock table instance
+        mock_table = MagicMock()
+        mock_table_class.return_value = mock_table
+
+        # Create mock tree instance
+        mock_tree = MagicMock()
+        mock_tree_class.return_value = mock_tree
+
+        # Temporarily replace module values
+        original_rich_available = diff_module.RICH_AVAILABLE
+        original_console = diff_module.console
+
+        try:
+            diff_module.RICH_AVAILABLE = True
+            diff_module.console = mock_console
+
+            # Patch Rich classes
+            monkeypatch.setattr("scripts.cli.diff_commands.Panel", mock_panel_class)
+            monkeypatch.setattr("scripts.cli.diff_commands.Table", mock_table_class)
+            monkeypatch.setattr("scripts.cli.diff_commands.Tree", mock_tree_class)
+
+            # Create a mock DiffResult with statistics property
+            mock_diff_result = MagicMock()
+            mock_diff_result.statistics = {
+                "total_new": 5,
+                "total_resolved": 3,
+                "total_modified": 2,
+                "trend": "improving",
+                "new": {"HIGH": 3, "MEDIUM": 2},
+                "resolved": {"HIGH": 1, "LOW": 2},
+                "by_tool": {"semgrep": 3, "trivy": 2},
+            }
+
+            from scripts.cli.diff_commands import print_diff_summary_rich
+
+            print_diff_summary_rich(mock_diff_result)
+
+            # Verify console.print was called
+            assert mock_console.print.called
+
+        finally:
+            # Restore original values
+            diff_module.RICH_AVAILABLE = original_rich_available
+            diff_module.console = original_console
+
+    def test_print_rich_summary_without_rich(self, monkeypatch):
+        """Test print_diff_summary_rich when Rich is not available."""
+        import scripts.cli.diff_commands as diff_module
+
+        original_rich_available = diff_module.RICH_AVAILABLE
+        original_console = diff_module.console
+
+        try:
+            diff_module.RICH_AVAILABLE = False
+            diff_module.console = None
+
+            diff_result = DiffResult(
+                baseline_source=DiffSource("directory", "/baseline", "", "", 5),
+                current_source=DiffSource("directory", "/current", "", "", 10),
+            )
+
+            from scripts.cli.diff_commands import print_diff_summary_rich
+
+            # Should return early without error
+            print_diff_summary_rich(diff_result)
+
+        finally:
+            diff_module.RICH_AVAILABLE = original_rich_available
+            diff_module.console = original_console
+
+
+class TestUnicodeFallback:
+    """Tests for Unicode fallback handling."""
+
+    def test_can_encode_unicode_with_utf8(self, monkeypatch):
+        """Test Unicode detection with UTF-8 encoding."""
+        from scripts.cli.diff_commands import _can_encode_unicode
+        from unittest.mock import MagicMock
+
+        mock_stdout = MagicMock()
+        mock_stdout.encoding = "utf-8"
+        monkeypatch.setattr("sys.stdout", mock_stdout)
+
+        result = _can_encode_unicode()
+        assert result is True
+
+    def test_can_encode_unicode_with_cp1252(self, monkeypatch):
+        """Test Unicode detection with cp1252 encoding (Windows)."""
+        from scripts.cli.diff_commands import _can_encode_unicode
+        from unittest.mock import MagicMock
+
+        mock_stdout = MagicMock()
+        mock_stdout.encoding = "cp1252"
+        monkeypatch.setattr("sys.stdout", mock_stdout)
+
+        result = _can_encode_unicode()
+        assert result is False
+
+    def test_safe_print_with_unicode(self, monkeypatch, capsys):
+        """Test safe_print with Unicode characters."""
+        from scripts.cli.diff_commands import safe_print
+        from unittest.mock import MagicMock
+
+        mock_stdout = MagicMock()
+        mock_stdout.encoding = "utf-8"
+        monkeypatch.setattr("sys.stdout", mock_stdout)
+
+        safe_print("Test ─ line")
+        # With UTF-8, should print normally
+
+    def test_safe_print_with_ascii_fallback(self, monkeypatch):
+        """Test safe_print falls back to ASCII characters."""
+        from scripts.cli.diff_commands import safe_print
+
+        # Create mock stdout with ASCII encoding
+        written = []
+
+        class MockStdout:
+            encoding = "ascii"
+
+            def write(self, text):
+                # Store what was written
+                written.append(text)
+
+            def flush(self):
+                pass
+
+        mock_stdout = MockStdout()
+        monkeypatch.setattr("sys.stdout", mock_stdout)
+
+        safe_print("Test ─ line with ✅ emoji")
+
+        # Verify fallback characters were used
+        output = "".join(written)
+        assert "-" in output  # ─ → -
+        assert "[OK]" in output  # ✅ → [OK]

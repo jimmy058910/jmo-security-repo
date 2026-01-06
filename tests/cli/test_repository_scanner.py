@@ -279,7 +279,14 @@ class TestRepositoryScanner:
         (repo / "app.js").write_text("console.log('test');")
 
         def mock_tool_exists(tool_name):
-            return tool_name == "zap-baseline.py"
+            # ZAP requires either zap-baseline.py OR docker to be available
+            return tool_name in ("zap-baseline.py", "docker")
+
+        def mock_find_tool(tool_name):
+            # Return a fake path for zap-baseline.py
+            if tool_name == "zap-baseline.py":
+                return "/usr/bin/zap-baseline.py"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -300,6 +307,7 @@ class TestRepositoryScanner:
                 per_tool_config={},
                 allow_missing_tools=False,
                 tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert statuses["zap"] is True
@@ -309,7 +317,8 @@ class TestRepositoryScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             zap_def = next((t for t in tool_defs if t.name == "zap"), None)
             assert zap_def is not None
-            assert "zap-baseline.py" in zap_def.command
+            # command is a list, check if zap-baseline.py is in any element
+            assert any("zap-baseline.py" in str(c) for c in zap_def.command)
 
     def test_zap_stub_when_no_web_files(self, tmp_path):
         """Test ZAP writes stub when no web files found"""
@@ -427,6 +436,10 @@ class TestRepositoryScanner:
 
             assert statuses["falco"] is True
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows doesn't have Unix-style execute bits for binary detection",
+    )
     def test_aflplusplus_fuzzes_binaries(self, tmp_path):
         """Test AFL++ fuzzes binaries when found"""
         repo = tmp_path / "afl-repo"
@@ -468,7 +481,8 @@ class TestRepositoryScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             afl_def = next((t for t in tool_defs if t.name == "afl++"), None)
             assert afl_def is not None
-            assert "afl-fuzz" in afl_def.command
+            # command is a list, check if afl-fuzz is in any element
+            assert any("afl-fuzz" in str(c) for c in afl_def.command)
 
     def test_aflplusplus_stub_when_no_binaries(self, tmp_path):
         """Test AFL++ writes stub when no binaries found"""

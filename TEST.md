@@ -28,6 +28,12 @@ make test
 - Outputs show a coverage summary (threshold in CI is 85%).
 - Coverage config is defined in `.coveragerc`.
 
+### Test Configuration
+
+- **pytest-timeout**: All tests have a 120-second timeout (configurable in `pyproject.toml`). Use `@pytest.mark.timeout(300)` for legitimately slow tests.
+- **Slow tests**: Tests marked with `@pytest.mark.slow` can be excluded with `-m "not slow"`.
+- **Cross-platform**: Tests must pass on Windows, Linux, and macOS. See `CLAUDE.md` for cross-platform testing guidelines.
+
 ## Linting & Security Checks
 
 ```bash

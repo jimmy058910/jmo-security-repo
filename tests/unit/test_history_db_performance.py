@@ -201,6 +201,8 @@ def test_single_scan_insert_performance(perf_db, tmp_path):
 # ============================================================================
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(600)  # 10 minutes - creates 10k dirs, slow on Windows
 def test_history_list_performance_10k_scans(perf_db, tmp_path):
     """
     Test list_scans() performance with 10k scans (target: <500ms).
@@ -323,6 +325,8 @@ def test_trend_analysis_query_performance(perf_db, tmp_path):
 # ============================================================================
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(300)  # 5 minutes - creates 1000 dirs, slow on Windows
 def test_vacuum_on_large_database(perf_db, tmp_path):
     """
     Test VACUUM operation on database with 1000+ scans.
@@ -396,6 +400,8 @@ def test_vacuum_on_large_database(perf_db, tmp_path):
 # ============================================================================
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(300)  # 5 minutes - creates 1000 dirs, slow on Windows
 def test_export_pagination_for_large_datasets(perf_db, tmp_path):
     """
     Test exporting 1,000 scans without memory issues.
