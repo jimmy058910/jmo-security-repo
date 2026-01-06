@@ -1,4 +1,8 @@
+import sys
 from pathlib import Path
+
+import pytest
+
 from scripts.core.reporters.sarif_reporter import to_sarif, write_sarif
 
 SAMPLE = [
@@ -28,10 +32,12 @@ def test_write_sarif(tmp_path: Path):
     assert '"version": "2.1.0"' in s
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="chmod(0o444) does not prevent writes on Windows (NTFS uses ACLs)",
+)
 def test_write_sarif_with_file_error(tmp_path: Path):
     """Test SARIF writer handles file write errors gracefully."""
-    import pytest
-
     findings = [
         {
             "tool": {"name": "test"},

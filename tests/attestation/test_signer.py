@@ -7,16 +7,30 @@ Tests the SigstoreSigner class which handles:
 - Rekor transparency log verification
 """
 
-import pytest
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 import requests
-from scripts.core.attestation.signer import SigstoreSigner
+
 from scripts.core.attestation.constants import (
     FULCIO_URL_PRODUCTION,
-    REKOR_URL_PRODUCTION,
     FULCIO_URL_STAGING,
+    REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
+)
+from scripts.core.attestation.signer import SigstoreSigner
+
+# Check if sigstore is available (optional dependency)
+try:
+    import sigstore.oidc  # noqa: F401
+
+    HAS_SIGSTORE = True
+except ImportError:
+    HAS_SIGSTORE = False
+
+requires_sigstore = pytest.mark.skipif(
+    not HAS_SIGSTORE, reason="sigstore package not installed"
 )
 
 
@@ -157,6 +171,7 @@ class TestOIDCTokenAcquisition:
 
         assert token == "gitlab_jwt_token_abc"
 
+    @requires_sigstore
     @patch("sigstore.oidc.Issuer")
     def test_get_local_oidc_token_success(self, mock_issuer_class):
         """Test local OIDC token acquisition via OAuth flow."""
@@ -173,6 +188,7 @@ class TestOIDCTokenAcquisition:
 
         assert token == "local_oauth_token_xyz"
 
+    @requires_sigstore
     @patch("sigstore.oidc.Issuer")
     def test_get_local_oidc_token_failure(self, mock_issuer_class):
         """Test local OIDC token acquisition failure."""

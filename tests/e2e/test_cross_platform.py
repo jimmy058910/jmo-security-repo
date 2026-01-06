@@ -321,6 +321,7 @@ class TestCrossPlatformCompatibility:
         assert "Hello Windows" in content
         assert "Testing CRLF" in content
 
+    @pytest.mark.requires_tools
     def test_path_normalization_cross_platform(self, tmp_path):
         """
         Test path normalization works across all platforms.
@@ -330,6 +331,8 @@ class TestCrossPlatformCompatibility:
         - Absolute paths work
         - Path separators normalized (/ vs \\)
         - Symlinks handled correctly
+
+        Note: Requires at least one tool (bandit) installed.
         """
         # Create test structure
         repo = tmp_path / "path-test-repo"
