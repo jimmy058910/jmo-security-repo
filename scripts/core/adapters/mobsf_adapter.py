@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
-from scripts.core.common_finding import fingerprint
+from scripts.core.common_finding import fingerprint, normalize_severity
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
@@ -151,14 +151,10 @@ def _load_mobsf_internal(path: str | Path) -> list[dict[str, Any]]:
             masvs = str(metadata.get("masvs", ""))
 
             # Normalize severity (MobSF uses: high, warning, info, secure)
-            if severity_raw == "HIGH":
-                severity = "HIGH"
-            elif severity_raw == "WARNING":
-                severity = "MEDIUM"
-            elif severity_raw == "INFO":
-                severity = "LOW"
-            else:
-                severity = "INFO"
+            # Map MobSF-specific "WARNING" to standard before normalization
+            if severity_raw == "WARNING":
+                severity_raw = "MEDIUM"
+            severity = normalize_severity(severity_raw)
 
             # Extract file paths where issue was found
             files = finding_data.get("files", [])
@@ -261,15 +257,11 @@ def _load_mobsf_internal(path: str | Path) -> list[dict[str, Any]]:
             title = str(finding_data.get("title", finding_key))
             description = str(finding_data.get("description", title))
 
-            # Normalize severity
-            if severity_raw == "HIGH":
-                severity = "HIGH"
-            elif severity_raw == "WARNING":
-                severity = "MEDIUM"
-            elif severity_raw == "INFO":
-                severity = "LOW"
-            else:
-                severity = "INFO"
+            # Normalize severity (MobSF uses: high, warning, info, secure)
+            # Map MobSF-specific "WARNING" to standard before normalization
+            if severity_raw == "WARNING":
+                severity_raw = "MEDIUM"
+            severity = normalize_severity(severity_raw)
 
             # Build message
             message = description

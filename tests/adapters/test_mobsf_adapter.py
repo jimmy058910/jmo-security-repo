@@ -106,7 +106,7 @@ def test_mobsf_adapter_code_analysis_info(tmp_path: Path):
     items = adapter.parse(f)
 
     assert len(items) == 1
-    assert items[0].severity == "LOW"  # INFO normalized to LOW
+    assert items[0].severity == "INFO"  # INFO stays INFO with normalize_severity()
 
 
 def test_mobsf_adapter_manifest_analysis(tmp_path: Path):
