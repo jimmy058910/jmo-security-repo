@@ -194,6 +194,8 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 | `scripts/cli/jmo.py` | Main CLI entry point |
 | `scripts/core/normalize_and_report.py` | Aggregation engine |
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
+| `scripts/core/schema_validator.py` | JSON schema validation for findings |
+| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `scripts/core/adapters/*.py` | Tool output parsers (28 adapters) |
 | `jmo.yml` | Main configuration |
 | `versions.yaml` | Tool version registry |
