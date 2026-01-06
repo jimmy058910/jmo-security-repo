@@ -4,6 +4,17 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **Archive Extraction Hardening** - Defense-in-depth protection against path traversal attacks (CWE-22)
+  - Added `safe_tar_extract()` and `safe_zip_extract()` functions with path validation
+  - Validates all archive member paths stay within extraction directory
+  - Uses Python 3.12+ data filter when available for tarfiles
+  - Protects tool installer from malicious archive attacks (Zip Slip)
+  - Files: `scripts/cli/tool_installer.py`
+
+- **Dependency Vulnerability Fix** - Updated pip to 25.3 (CVE-2025-8869)
+
 ### Added
 
 - **Dashboard Improvements (Sprint 2)** - React dashboard UX enhancements and email-compatible reporter

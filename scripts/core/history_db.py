@@ -1179,13 +1179,15 @@ def list_scans(
 
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
+    # Security: where_sql is built from internal string literals only (e.g., "profile = ?"),
+    # NOT from user input. All values use parameterized queries via params list.
     cursor.execute(
         f"""
         SELECT * FROM scans
         WHERE {where_sql}
         ORDER BY timestamp DESC
         LIMIT ?
-        """,
+        """,  # nosec B608 - where_sql contains only internal literals, values are parameterized
         params + [limit],
     )
 
@@ -1375,6 +1377,8 @@ def get_trend_summary(
     # 4. Get top rules (most frequent across all scans)
     scan_ids = [s["id"] for s in scans]
     placeholders = ",".join("?" * len(scan_ids))
+    # Security: placeholders are "?" repeated, scan_ids are internal DB integers from
+    # the scans table above. All values use parameterized queries.
     cursor = conn.execute(
         f"""
         SELECT rule_id, severity, COUNT(*) as count
@@ -1383,7 +1387,7 @@ def get_trend_summary(
         GROUP BY rule_id, severity
         ORDER BY count DESC
         LIMIT 10
-        """,
+        """,  # nosec B608 - placeholders are "?" characters, values are parameterized
         scan_ids,
     )
     top_rules = [dict(row) for row in cursor.fetchall()]
@@ -2344,12 +2348,13 @@ def get_finding_details_batch(
     # Build IN clause with placeholders
     placeholders = ",".join("?" * len(fingerprints))
 
+    # Security: placeholders are "?" characters, fingerprints are passed as parameters
     cursor = conn.execute(
         f"""
         SELECT * FROM findings
         WHERE fingerprint IN ({placeholders})
         ORDER BY severity DESC, path
-        """,
+        """,  # nosec B608 - placeholders are "?" characters, values are parameterized
         fingerprints,
     )
 
@@ -2444,7 +2449,8 @@ def search_findings(
         where_clauses.append("s.timestamp BETWEEN ? AND ?")
         params.extend([start_ts, end_ts])
 
-    # Build query
+    # Build query - Security: where_sql built from internal string literals only
+    # (e.g., "f.severity = ?"), NOT from user input. All values are parameterized.
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
     # Need JOIN if filtering by branch or date_range
@@ -2463,7 +2469,7 @@ def search_findings(
                 END,
                 f.path, f.start_line
             LIMIT ?
-        """
+        """  # nosec B608 - where_sql contains only internal literals, values are parameterized
     else:
         sql = f"""
             SELECT * FROM findings f
@@ -2478,7 +2484,7 @@ def search_findings(
                 END,
                 f.path, f.start_line
             LIMIT ?
-        """
+        """  # nosec B608 - where_sql contains only internal literals, values are parameterized
 
     params.append(limit)
 
@@ -3233,6 +3239,7 @@ def get_compliance_trend(
         }
 
     # For each scan, count findings with this framework
+    # Security: column_name comes from framework_columns dict (validated allowlist above)
     data_points = []
     for scan in scans:
         cursor = conn.execute(
@@ -3243,7 +3250,7 @@ def get_compliance_trend(
                 SUM(CASE WHEN severity = 'HIGH' THEN 1 ELSE 0 END) as high_count
             FROM findings
             WHERE scan_id = ? AND {column_name} IS NOT NULL
-            """,
+            """,  # nosec B608 - column_name from validated allowlist (framework_columns)
             (scan["id"],),
         )
         stats = dict(cursor.fetchone())

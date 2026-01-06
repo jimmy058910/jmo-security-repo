@@ -20,6 +20,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+import tarfile
+import zipfile
+
 from scripts.core.tool_registry import (
     Platform,
     ToolInfo,
@@ -35,6 +38,97 @@ from scripts.core.validation import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_path(base_dir: Path, member_path: str) -> bool:
+    """Check if extracted path stays within base directory.
+
+    Prevents path traversal attacks (CWE-22, Zip Slip) by ensuring
+    the resolved path doesn't escape the extraction directory.
+
+    Args:
+        base_dir: The target extraction directory
+        member_path: Path from the archive member
+
+    Returns:
+        True if path is safe, False if it would escape base_dir
+    """
+    # Resolve the full path (handles .., symlinks, etc.)
+    target_path = (base_dir / member_path).resolve()
+
+    # Ensure it's still under base_dir
+    try:
+        target_path.relative_to(base_dir.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def safe_tar_extract(tar: tarfile.TarFile, extract_dir: Path) -> None:
+    """Safely extract tarfile, filtering dangerous members.
+
+    Security: Validates each member path to prevent:
+    - Path traversal via ../ sequences (CWE-22)
+    - Absolute paths escaping extraction directory
+    - Symlink attacks
+
+    Args:
+        tar: Open tarfile object
+        extract_dir: Directory to extract to
+
+    Raises:
+        ValueError: If archive contains malicious paths
+    """
+    for member in tar.getmembers():
+        # Skip dangerous member types
+        if member.islnk() or member.issym():
+            # Check symlink target is safe
+            if member.linkname and not _is_safe_path(extract_dir, member.linkname):
+                logger.warning(
+                    f"Skipping potentially unsafe symlink: {member.name} -> {member.linkname}"
+                )
+                continue
+
+        # Check the member path itself
+        if not _is_safe_path(extract_dir, member.name):
+            raise ValueError(f"Archive contains path traversal attempt: {member.name}")
+
+    # All members validated above, extract using filter (Python 3.12+) or manual extraction
+    # Security: All member paths validated above via _is_safe_path()
+    try:
+        # Python 3.12+ supports data filter which is the safest option
+        tar.extractall(extract_dir, filter="data")  # nosec B202 - paths validated above
+    except TypeError:
+        # Python < 3.12 doesn't support filter parameter
+        # Extract members one by one after validation (already done above)
+        for member in tar.getmembers():
+            if member.islnk() or member.issym():
+                if member.linkname and not _is_safe_path(extract_dir, member.linkname):
+                    continue
+            tar.extract(member, extract_dir)  # nosec B202 - paths validated above
+
+
+def safe_zip_extract(zip_ref: zipfile.ZipFile, extract_dir: Path) -> None:
+    """Safely extract zipfile, filtering dangerous members.
+
+    Security: Validates each member path to prevent:
+    - Path traversal via ../ sequences (CWE-22, Zip Slip)
+    - Absolute paths escaping extraction directory
+
+    Args:
+        zip_ref: Open ZipFile object
+        extract_dir: Directory to extract to
+
+    Raises:
+        ValueError: If archive contains malicious paths
+    """
+    for member in zip_ref.namelist():
+        if not _is_safe_path(extract_dir, member):
+            raise ValueError(f"Archive contains path traversal attempt: {member}")
+
+    # All members validated, safe to extract
+    # Security: All member paths validated above via _is_safe_path()
+    zip_ref.extractall(extract_dir)  # nosec B202 - paths validated above
 
 
 # Installation method priorities per platform
@@ -1204,8 +1298,8 @@ class ToolInstaller:
         """Install app that extracts to a directory (e.g., ZAP).
 
         Downloads archive, extracts to ~/.jmo/{tool_name}/, and verifies.
+        Security: Uses safe_tar_extract/safe_zip_extract to prevent path traversal.
         """
-        import tarfile
         import time
 
         # Security: Validate version string before URL construction
@@ -1276,12 +1370,10 @@ class ToolInstaller:
 
                 if str(download_file).endswith(".tar.gz"):
                     with tarfile.open(download_file, "r:gz") as tar:
-                        tar.extractall(extract_dir)
+                        safe_tar_extract(tar, extract_dir)
                 elif str(download_file).endswith(".zip"):
-                    import zipfile
-
                     with zipfile.ZipFile(download_file, "r") as zip_ref:
-                        zip_ref.extractall(extract_dir)
+                        safe_zip_extract(zip_ref, extract_dir)
                 else:
                     return InstallResult(
                         tool_name=tool_name,
@@ -1386,10 +1478,11 @@ class ToolInstaller:
     def _extract_and_find_binary(
         self, archive_path: Path, tool_name: str, extract_dir: Path
     ) -> Path | None:
-        """Extract archive and find binary."""
-        import tarfile
-        import zipfile
+        """Extract archive and find binary.
 
+        Security: Uses safe_tar_extract/safe_zip_extract to prevent
+        path traversal attacks (CWE-22, Zip Slip vulnerability).
+        """
         archive_str = str(archive_path)
 
         # Define archive extensions to skip when searching for binaries
@@ -1404,16 +1497,16 @@ class ToolInstaller:
         )
 
         try:
-            # Determine archive type and extract
+            # Determine archive type and extract using safe extraction
             if archive_str.endswith(".tar.gz") or archive_str.endswith(".tgz"):
                 with tarfile.open(archive_path, "r:gz") as tar:
-                    tar.extractall(extract_dir)
+                    safe_tar_extract(tar, extract_dir)
             elif archive_str.endswith(".tar.xz"):
                 with tarfile.open(archive_path, "r:xz") as tar:
-                    tar.extractall(extract_dir)
+                    safe_tar_extract(tar, extract_dir)
             elif archive_str.endswith(".zip"):
                 with zipfile.ZipFile(archive_path, "r") as zip_ref:
-                    zip_ref.extractall(extract_dir)
+                    safe_zip_extract(zip_ref, extract_dir)
             else:
                 # Assume it's a standalone binary
                 return archive_path

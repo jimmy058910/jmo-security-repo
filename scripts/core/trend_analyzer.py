@@ -349,6 +349,7 @@ class TrendAnalyzer:
             return []
 
         placeholders = ",".join("?" * len(scan_ids))
+        # Security: placeholders are "?" characters, scan_ids from internal DB query
         cursor = self.conn.execute(  # type: ignore[union-attr]
             f"""
             SELECT rule_id, severity, tool, COUNT(*) as count
@@ -357,7 +358,7 @@ class TrendAnalyzer:
             GROUP BY rule_id, severity, tool
             ORDER BY count DESC
             LIMIT ?
-            """,
+            """,  # nosec B608 - placeholders are "?" characters, values are parameterized
             scan_ids + [limit],
         )
 

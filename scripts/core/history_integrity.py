@@ -266,21 +266,24 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         conn_new.execute("PRAGMA foreign_keys = OFF")
 
         # Import scans
+        # Security: scans_columns from PRAGMA table_info (internal schema metadata),
+        # placeholders are "?" characters. No user input in SQL structure.
         if scans:
             # Use column names captured before closing old connection
             placeholders = ", ".join(["?"] * len(scans_columns))
             conn_new.executemany(
-                f"INSERT INTO scans ({', '.join(scans_columns)}) VALUES ({placeholders})",
+                f"INSERT INTO scans ({', '.join(scans_columns)}) VALUES ({placeholders})",  # nosec B608
                 scans,
             )
             logger.info(f"Imported {len(scans)} scans")
 
         # Import findings
+        # Security: findings_columns from PRAGMA table_info (internal schema metadata)
         if findings:
             # Use column names captured before closing old connection
             placeholders = ", ".join(["?"] * len(findings_columns))
             conn_new.executemany(
-                f"INSERT INTO findings ({', '.join(findings_columns)}) VALUES ({placeholders})",
+                f"INSERT INTO findings ({', '.join(findings_columns)}) VALUES ({placeholders})",  # nosec B608
                 findings,
             )
             logger.info(f"Imported {len(findings)} findings")

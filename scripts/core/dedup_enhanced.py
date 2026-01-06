@@ -1107,11 +1107,16 @@ class LSHSignatureGenerator:
         Returns:
             8-character hex hash
 
+        Note:
+            MD5 is used here for hash bucketing in LSH (Locality-Sensitive Hashing),
+            not for cryptographic security. The usedforsecurity=False flag indicates
+            this is not a security-sensitive operation.
         """
         import hashlib
 
         to_hash = f"{band}:{content}".encode("utf-8")
-        return hashlib.md5(to_hash).hexdigest()[:8]
+        # MD5 used for hash bucketing, not security (LSH similarity detection)
+        return hashlib.md5(to_hash, usedforsecurity=False).hexdigest()[:8]
 
     def _normalize_path(self, path: str) -> str:
         """Normalize file path for comparison."""
