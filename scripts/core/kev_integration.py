@@ -10,11 +10,14 @@ KEV Catalog: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -82,14 +85,14 @@ class KEVClient:
                     self.catalog = self._parse_catalog(data)
                     return
             except (OSError, json.JSONDecodeError) as e:
-                print(f"Warning: Failed to load KEV cache: {e}")
+                logger.warning("Failed to load KEV cache: %s", e)
                 # Fall through to download fresh catalog
 
         # Download fresh catalog
         try:
             self._download_catalog()
         except Exception as e:
-            print(f"Warning: Failed to download KEV catalog: {e}")
+            logger.warning("Failed to download KEV catalog: %s", e)
 
     def _download_catalog(self):
         """Download KEV catalog from CISA."""
@@ -190,7 +193,7 @@ class KEVClient:
         try:
             self._download_catalog()
         except Exception as e:
-            print(f"Warning: Failed to refresh KEV catalog: {e}")
+            logger.warning("Failed to refresh KEV catalog: %s", e)
 
     def _is_cache_valid(self) -> bool:
         """Check if cached catalog is still valid (within TTL).

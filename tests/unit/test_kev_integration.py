@@ -295,7 +295,7 @@ class TestKEVClient:
         with pytest.raises(requests.exceptions.RequestException):
             kev_client._download_catalog()
 
-    def test_load_catalog_invalid_json(self, temp_cache_dir, capsys):
+    def test_load_catalog_invalid_json(self, temp_cache_dir, caplog):
         """Test handling of invalid JSON in cache file."""
         # Create cache file with invalid JSON
         cache_path = temp_cache_dir / "kev_catalog.json"
@@ -311,9 +311,8 @@ class TestKEVClient:
             # Should fall back to downloading
             _ = KEVClient(cache_dir=temp_cache_dir)
 
-            # Warning should be printed
-            captured = capsys.readouterr()
-            assert "Warning: Failed to load KEV cache" in captured.out
+            # Warning should be logged
+            assert "Failed to load KEV cache" in caplog.text
 
             # Should have attempted download
             mock_get.assert_called_once()

@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import json
 import html
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def parse_json_safe(filepath):
@@ -19,7 +22,7 @@ def parse_json_safe(filepath):
             data = json.load(f)
             return data
     except (json.JSONDecodeError, FileNotFoundError) as e:
-        print(f"Warning: Could not parse {filepath}: {e}")
+        logger.warning("Could not parse %s: %s", filepath, e)
         return None
 
 
@@ -83,7 +86,7 @@ def parse_trufflehog(filepath):
     except FileNotFoundError:
         return findings
     except OSError as exc:
-        print(f"Warning: Could not read {filepath}: {exc}")
+        logger.warning("Could not read %s: %s", filepath, exc)
         return findings
 
     if not raw_content:

@@ -9,12 +9,15 @@ API Documentation: https://www.first.org/epss/api
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -104,7 +107,7 @@ class EPSSClient:
                 self._cache_score(score)
                 return score
         except Exception as e:
-            print(f"Warning: Failed to fetch EPSS score for {cve}: {e}")
+            logger.warning("Failed to fetch EPSS score for %s: %s", cve, e)
 
         return None
 
@@ -139,7 +142,7 @@ class EPSSClient:
                     self._cache_score(score)
                     scores[cve] = score
             except Exception as e:
-                print(f"Warning: Failed to fetch bulk EPSS scores: {e}")
+                logger.warning("Failed to fetch bulk EPSS scores: %s", e)
 
         return scores
 

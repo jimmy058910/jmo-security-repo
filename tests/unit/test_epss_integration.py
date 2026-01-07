@@ -186,7 +186,7 @@ class TestEPSSClient:
         assert score is None
 
     @patch("requests.get")
-    def test_get_score_api_error(self, mock_get, epss_client, capsys):
+    def test_get_score_api_error(self, mock_get, epss_client, caplog):
         """Test handling of API errors."""
         mock_get.side_effect = requests.exceptions.RequestException("API Error")
 
@@ -194,9 +194,8 @@ class TestEPSSClient:
 
         assert score is None
 
-        # Verify warning printed
-        captured = capsys.readouterr()
-        assert "Warning: Failed to fetch EPSS score" in captured.out
+        # Verify warning logged
+        assert "Failed to fetch EPSS score" in caplog.text
 
     @patch("requests.get")
     def test_get_scores_bulk(self, mock_get, epss_client, mock_epss_bulk_response):
@@ -346,7 +345,7 @@ class TestEPSSClient:
         assert score1 == score2
 
     @patch("requests.get")
-    def test_get_scores_bulk_api_error(self, mock_get, epss_client, capsys):
+    def test_get_scores_bulk_api_error(self, mock_get, epss_client, caplog):
         """Test handling of bulk API errors."""
         mock_get.side_effect = requests.exceptions.RequestException("Bulk API Error")
 
@@ -355,9 +354,8 @@ class TestEPSSClient:
 
         assert len(scores) == 0
 
-        # Verify warning printed
-        captured = capsys.readouterr()
-        assert "Warning: Failed to fetch bulk EPSS scores" in captured.out
+        # Verify warning logged
+        assert "Failed to fetch bulk EPSS scores" in caplog.text
 
     def test_default_cache_dir(self):
         """Test that default cache directory is ~/.jmo/cache."""

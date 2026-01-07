@@ -31,9 +31,12 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 # Check if resend is available
 try:
@@ -329,12 +332,8 @@ def send_welcome_email(
 
     except Exception as e:
         # Fail silently - don't block CLI workflow
-        # In production, you might want to log this to a file
-        # Always print error in test mode for debugging
-        print(f"[ERROR] Email send failed: {e}", file=sys.stderr)
-        import traceback
-
-        traceback.print_exc()
+        # Log error for debugging
+        logger.error("Email send failed: %s", e, exc_info=True)
         return False
 
 
