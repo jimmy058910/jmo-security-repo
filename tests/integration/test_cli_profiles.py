@@ -37,8 +37,10 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Force which to say no tools installed so stubs are written
-    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+    # Mock tool availability check to pretend trufflehog is installed
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    # Set CI=true to skip interactive prompts
+    monkeypatch.setenv("CI", "true")
 
     # Prepare args and run scan
     args = types.SimpleNamespace(

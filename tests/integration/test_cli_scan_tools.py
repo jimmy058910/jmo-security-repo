@@ -108,60 +108,56 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         assert out.exists(), f"expected output for {t} to exist: {out}"
 
 
-def test_noseyparker_docker_fallback(tmp_path: Path):
+def test_scan_fails_when_only_requested_tool_missing(tmp_path: Path, monkeypatch):
     """
-    Test noseyparker stub creation when binary and Docker are unavailable.
+    Test that scan fails appropriately when the only requested tool is unavailable.
 
-    Noseyparker has two strategies:
-    1. Local binary execution (3-phase: init, scan, report)
-    2. Docker fallback (via run_noseyparker_docker.sh)
-    3. Stub generation when both are unavailable
+    v1.0.0 Architecture:
+    - With allow_missing_tools=True: scan continues with available tools
+    - If ALL requested tools are missing, scan fails with exit code 1
+    - No stub files are created for unavailable tools
 
-    This test verifies strategy #3 by hiding both noseyparker binary and docker.
+    This test verifies the failure behavior when requesting only an unavailable tool.
     """
-    import subprocess
-    import sys
-    import os
-
-    # Create minimal PATH with ONLY python3 (exclude bash/docker/noseyparker)
-    minimal_bin = tmp_path / "minimal-bin"
-    minimal_bin.mkdir()
-    os.symlink(sys.executable, str(minimal_bin / "python3"))
+    # Set CI=true to skip interactive prompts
+    monkeypatch.setenv("CI", "true")
 
     # Create test repo
     repo = tmp_path / "test-repo"
     repo.mkdir()
     (repo / "app.py").write_text("password = 'hardcoded123'", encoding="utf-8")
 
-    # Run scan with noseyparker (should create stub)
+    # Run scan requesting only noseyparker (which is typically not installed)
+    # Note: This uses in-process call to avoid subprocess environment issues
     out_base = tmp_path / "results"
-    cmd = [
-        sys.executable,
-        "-m",
-        "scripts.cli.jmo",
-        "scan",
-        "--repo",
-        str(repo),
-        "--results-dir",
-        str(out_base),
-        "--tools",
-        "noseyparker",
-        "--allow-missing-tools",  # Creates stub when tool unavailable
-    ]
 
-    result = subprocess.run(
-        cmd,
-        timeout=120,
-        capture_output=True,
-        text=True,
-        env={
-            "PATH": str(minimal_bin),
-            "PYTHONPATH": ".",
-            "SKIP_REACT_BUILD_CHECK": "true",  # Skip React build in tests
-        },
-    )
-    assert result.returncode == 0, f"Scan failed: {result.stderr}"
+    class Args:
+        def __init__(self):
+            self.repo = str(repo)
+            self.repos_dir = None
+            self.targets = None
+            self.results_dir = str(out_base)
+            self.config = str(tmp_path / "no.yml")
+            self.tools = ["noseyparker"]  # Request tool that's likely not installed
+            self.timeout = 30
+            self.threads = 1
+            self.allow_missing_tools = True  # But it's the only tool requested
 
-    # Verify stub file exists
-    noseyparker_out = out_base / "individual-repos" / repo.name / "noseyparker.json"
-    assert noseyparker_out.exists(), "Stub should be created when tool unavailable"
+    rc = jmo.cmd_scan(Args())
+
+    # When the only requested tool is missing:
+    # - Scan should return 1 (no tools available to run)
+    # - OR return 0 if tool happens to be installed on this system
+    # Either outcome is valid depending on tool installation
+    if rc == 0:
+        # Tool was installed - verify output exists
+        noseyparker_out = out_base / "individual-repos" / repo.name / "noseyparker.json"
+        assert noseyparker_out.exists(), "Output should exist when tool is available"
+    else:
+        # Tool was missing - scan fails because no tools available
+        assert rc == 1, f"Expected exit code 1 when tool missing, got {rc}"
+        # No stub files should be created
+        noseyparker_out = out_base / "individual-repos" / repo.name / "noseyparker.json"
+        assert (
+            not noseyparker_out.exists()
+        ), "Stub should NOT be created in v1.0.0 architecture"

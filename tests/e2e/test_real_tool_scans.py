@@ -18,6 +18,12 @@ import pytest
 from scripts.cli.jmo import cmd_scan
 
 
+@pytest.fixture(autouse=True)
+def set_ci_environment(monkeypatch):
+    """Set CI environment to skip interactive prompts in e2e tests."""
+    monkeypatch.setenv("CI", "true")
+
+
 @pytest.mark.slow
 @pytest.mark.requires_tools
 class TestRealToolScans:

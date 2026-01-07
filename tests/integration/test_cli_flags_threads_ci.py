@@ -104,7 +104,10 @@ def test_threads_env_then_config(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", eff)
     monkeypatch.setattr(jmo, "load_config", lambda p: Cfg())
-    # Note: _tool_exists removed in v0.9.0 - tool discovery handled by scanners
+    # Mock tool availability check to pretend gitleaks is installed
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    # Set CI=true to skip interactive prompts
+    monkeypatch.setenv("CI", "true")
 
     # Case 1: env set
     monkeypatch.setenv("JMO_THREADS", "2")
