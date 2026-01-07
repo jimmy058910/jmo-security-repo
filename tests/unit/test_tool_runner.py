@@ -4,6 +4,8 @@ Unit tests for scripts/core/tool_runner.py
 Tests the ToolRunner class extracted from cmd_scan() as part of PHASE 1 refactoring.
 """
 
+import sys
+
 import pytest
 from pathlib import Path
 import time
@@ -518,6 +520,9 @@ class TestErrorHandling:
             duration < 2.0
         ), f"FileNotFoundError should return quickly, got {duration}s"
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Unix permissions not supported on Windows"
+    )
     def test_run_tool_permission_error_with_retry(self):
         """Test PermissionError handling with retry attempts"""
         # Create a file with no execute permissions
@@ -557,6 +562,9 @@ class TestErrorHandling:
             except Exception:  # noqa: S110
                 pass
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="sh command not available on Windows"
+    )
     def test_run_tool_unexpected_exception_handling(self):
         """Test handling of unexpected exceptions during execution"""
         # Create a tool that will cause an exception in subprocess handling
@@ -579,6 +587,9 @@ class TestErrorHandling:
         assert result.returncode == -1
         assert "127" in result.error_message  # Original code should be in message
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="sh command not available on Windows"
+    )
     def test_run_tool_with_acceptable_findings_code(self):
         """Test tool that returns 1 (findings) which is acceptable"""
         tool = ToolDefinition(

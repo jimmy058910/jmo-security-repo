@@ -116,7 +116,9 @@ typecheck:
 		mypy scripts/ --config-file=pyproject.toml || true ; \
 	else echo 'mypy not found. Run: make dev-deps'; fi
 
-TEST_FLAGS ?= -q --maxfail=1 --disable-warnings
+# Exclude slow e2e tests by default (matches CI behavior)
+# Run all tests explicitly with: pytest tests/
+TEST_FLAGS ?= -q --maxfail=1 --disable-warnings -m "not smoke and not requires_tools"
 
 test:
 	@if [ -d tests ]; then \

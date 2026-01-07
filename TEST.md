@@ -19,14 +19,17 @@ jmo tools install --profile balanced  # Install security scanners
 
 ## Unit & Integration Tests
 
-Run the full test suite with coverage:
+Run the test suite with coverage:
 
 ```bash
-make test
+make test                    # Fast tests (excludes smoke/e2e, matches CI)
+pytest tests/                # ALL tests including slow e2e
+pytest tests/ -m "slow"      # Only slow tests
 ```
 
-- Outputs show a coverage summary (threshold in CI is 85%).
-- Coverage config is defined in `.coveragerc`.
+- `make test` excludes `smoke` and `requires_tools` markers by default (matches CI behavior)
+- Outputs show a coverage summary (threshold in CI is 85%)
+- Coverage config is defined in `.coveragerc`
 
 ### Test Configuration
 

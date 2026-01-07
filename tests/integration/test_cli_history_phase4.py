@@ -33,7 +33,8 @@ def run_jmo(*args: str, input_text: str = None):
     Returns:
         Tuple of (returncode, stdout, stderr)
     """
-    cmd = [sys.executable, "scripts/cli/jmo.py"] + list(args)
+    # Use -m scripts.cli.jmo for proper module imports (cross-platform)
+    cmd = [sys.executable, "-m", "scripts.cli.jmo"] + list(args)
     result = subprocess.run(
         cmd,
         capture_output=True,

@@ -110,8 +110,10 @@ Recommendation: B - discuss with user before proceeding
 pip install -e ".[dev]"                # Install in editable mode with dev deps
 make pre-commit-install                # Setup pre-commit hooks
 jmo tools install --profile balanced   # Install security tools
-make test                              # Run tests with coverage
+make test                              # Run tests (excludes slow e2e, matches CI)
 ```
+
+> **Note:** `make test` excludes `smoke` and `requires_tools` tests by default (matches CI). To run ALL tests including slow e2e tests: `pytest tests/`
 
 ### Essential Commands
 

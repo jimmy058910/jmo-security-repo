@@ -9,13 +9,36 @@ Tests real tool integration with actual vulnerabilities:
 - Checkov: IaC misconfigurations
 
 Phase 1.3.1 of TESTING_RELEASE_READINESS_PLAN.md
+
+Note: These tests require actual security tools to be installed.
+They will be skipped automatically if the required tool is not available.
 """
 
 import json
+import shutil
 
 import pytest
 
 from scripts.cli.jmo import cmd_scan
+
+
+# Tool availability checks - skip tests if tools not installed
+requires_trivy = pytest.mark.skipif(
+    shutil.which("trivy") is None,
+    reason="trivy not installed",
+)
+requires_semgrep = pytest.mark.skipif(
+    shutil.which("semgrep") is None,
+    reason="semgrep not installed",
+)
+requires_trufflehog = pytest.mark.skipif(
+    shutil.which("trufflehog") is None,
+    reason="trufflehog not installed",
+)
+requires_checkov = pytest.mark.skipif(
+    shutil.which("checkov") is None,
+    reason="checkov not installed",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +52,7 @@ def set_ci_environment(monkeypatch):
 class TestRealToolScans:
     """E2E tests with actual security tools installed."""
 
+    @requires_trivy
     def test_trivy_scan_real_vulnerability(self, tmp_path):
         """
         Test Trivy detects real CVE in vulnerable image.
@@ -114,6 +138,7 @@ class TestRealToolScans:
 
         assert found_high_cve, "Should detect at least one HIGH/CRITICAL CVE"
 
+    @requires_semgrep
     def test_semgrep_scan_real_code_issue(self, tmp_path):
         """
         Test Semgrep detects real SQL injection vulnerability.
@@ -231,6 +256,7 @@ def get_user_safe(user_id):
 
         assert found_sqli, "Should detect SQL injection vulnerability"
 
+    @requires_trufflehog
     def test_trufflehog_verified_secret_detection(self, tmp_path):
         """
         Test TruffleHog detects and verifies secrets.
@@ -349,6 +375,7 @@ def main():
             # Test passes as long as TruffleHog ran successfully
             pass
 
+    @requires_checkov
     def test_checkov_iac_misconfiguration(self, tmp_path):
         """
         Test Checkov detects Terraform misconfigurations.
