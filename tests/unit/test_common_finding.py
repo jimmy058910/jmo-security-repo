@@ -99,6 +99,19 @@ class TestSeverityFromString:
         assert Severity.from_string("MED") == Severity.MEDIUM
         assert Severity.from_string("med") == Severity.MEDIUM
 
+        # INFORMATIONAL/INFORMATION → INFO
+        assert Severity.from_string("INFORMATIONAL") == Severity.INFO
+        assert Severity.from_string("INFORMATION") == Severity.INFO
+        assert Severity.from_string("informational") == Severity.INFO
+
+        # NOTE → LOW
+        assert Severity.from_string("NOTE") == Severity.LOW
+        assert Severity.from_string("note") == Severity.LOW
+
+        # STYLE → INFO
+        assert Severity.from_string("STYLE") == Severity.INFO
+        assert Severity.from_string("style") == Severity.INFO
+
     def test_from_string_none(self):
         """Test that None returns INFO."""
         assert Severity.from_string(None) == Severity.INFO
@@ -869,6 +882,33 @@ class TestMapToolSeverity:
     def test_falco_debug(self):
         """Test Falco debug maps to INFO."""
         assert map_tool_severity("falco", "debug") == "INFO"
+
+    # ------------------------------------
+    # ShellCheck tests
+    # ------------------------------------
+    def test_shellcheck_error(self):
+        """Test ShellCheck error maps to HIGH."""
+        assert map_tool_severity("shellcheck", "error") == "HIGH"
+
+    def test_shellcheck_warning(self):
+        """Test ShellCheck warning maps to MEDIUM."""
+        assert map_tool_severity("shellcheck", "warning") == "MEDIUM"
+
+    def test_shellcheck_info(self):
+        """Test ShellCheck info maps to LOW."""
+        assert map_tool_severity("shellcheck", "info") == "LOW"
+
+    def test_shellcheck_style(self):
+        """Test ShellCheck style maps to INFO."""
+        assert map_tool_severity("shellcheck", "style") == "INFO"
+
+    def test_shellcheck_case_insensitive(self):
+        """Test ShellCheck mappings are case insensitive."""
+        assert map_tool_severity("shellcheck", "ERROR") == "HIGH"
+        assert map_tool_severity("shellcheck", "WARNING") == "MEDIUM"
+        assert map_tool_severity("shellcheck", "INFO") == "LOW"
+        assert map_tool_severity("shellcheck", "STYLE") == "INFO"
+        assert map_tool_severity("SHELLCHECK", "error") == "HIGH"
 
     # ------------------------------------
     # Fallback behavior tests

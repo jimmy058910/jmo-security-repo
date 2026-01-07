@@ -3,10 +3,8 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.shellcheck_adapter import (
-    ShellCheckAdapter,
-    _map_shellcheck_level,
-)
+from scripts.core.adapters.shellcheck_adapter import ShellCheckAdapter
+from scripts.core.common_finding import map_tool_severity
 
 
 def write(tmp_path: Path, name: str, content: str) -> Path:
@@ -131,16 +129,18 @@ def test_shellcheck_severity_mapping(tmp_path: Path):
 
 
 def test_shellcheck_level_mapping_function():
-    """Test the level mapping function directly."""
-    assert _map_shellcheck_level("error") == "HIGH"
-    assert _map_shellcheck_level("ERROR") == "HIGH"
-    assert _map_shellcheck_level("warning") == "MEDIUM"
-    assert _map_shellcheck_level("WARNING") == "MEDIUM"
-    assert _map_shellcheck_level("info") == "LOW"
-    assert _map_shellcheck_level("INFO") == "LOW"
-    assert _map_shellcheck_level("style") == "INFO"
-    assert _map_shellcheck_level("STYLE") == "INFO"
-    assert _map_shellcheck_level("unknown") == "MEDIUM"  # fallback
+    """Test the centralized level mapping for shellcheck."""
+    # Uses centralized map_tool_severity from common_finding.py
+    assert map_tool_severity("shellcheck", "error") == "HIGH"
+    assert map_tool_severity("shellcheck", "ERROR") == "HIGH"
+    assert map_tool_severity("shellcheck", "warning") == "MEDIUM"
+    assert map_tool_severity("shellcheck", "WARNING") == "MEDIUM"
+    assert map_tool_severity("shellcheck", "info") == "LOW"
+    assert map_tool_severity("shellcheck", "INFO") == "LOW"
+    assert map_tool_severity("shellcheck", "style") == "INFO"
+    assert map_tool_severity("shellcheck", "STYLE") == "INFO"
+    # Unknown values fall back to normalize_severity which defaults to INFO
+    assert map_tool_severity("shellcheck", "unknown") == "INFO"
 
 
 def test_shellcheck_empty_results(tmp_path: Path):

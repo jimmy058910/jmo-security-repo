@@ -57,34 +57,13 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.adapters.common import safe_load_json_file
-from scripts.core.common_finding import fingerprint, normalize_severity
+from scripts.core.common_finding import fingerprint, map_tool_severity
 from scripts.core.plugin_api import (
     AdapterPlugin,
     Finding,
     PluginMetadata,
     adapter_plugin,
 )
-
-
-# ShellCheck level to CommonFinding severity mapping
-SHELLCHECK_LEVEL_MAP: dict[str, str] = {
-    "error": "HIGH",
-    "warning": "MEDIUM",
-    "info": "LOW",
-    "style": "INFO",
-}
-
-
-def _map_shellcheck_level(level: str) -> str:
-    """Map ShellCheck level to CommonFinding severity.
-
-    Args:
-        level: ShellCheck level (error, warning, info, style)
-
-    Returns:
-        CommonFinding severity (HIGH, MEDIUM, LOW, INFO)
-    """
-    return SHELLCHECK_LEVEL_MAP.get(level.lower(), "MEDIUM")
 
 
 @adapter_plugin(
@@ -202,9 +181,8 @@ def _load_shellcheck_internal(path: str | Path) -> list[dict[str, Any]]:
         code_str = f"SC{code}" if isinstance(code, int) else str(code or "SC0000")
         message = str(item.get("message") or code_str)
 
-        # Map level to severity
-        severity = _map_shellcheck_level(level)
-        severity_normalized = normalize_severity(severity)
+        # Map level to severity using centralized mapping
+        severity = map_tool_severity("shellcheck", level)
 
         # Create fingerprint
         fid = fingerprint("shellcheck", code_str, file_path, start_line, message)
@@ -228,7 +206,7 @@ def _load_shellcheck_internal(path: str | Path) -> list[dict[str, Any]]:
             "title": code_str,
             "message": message,
             "description": message,
-            "severity": severity_normalized,
+            "severity": severity,
             "tool": {"name": "shellcheck", "version": "unknown"},
             "location": {
                 "path": file_path,

@@ -58,6 +58,11 @@ class Severity(str, Enum):
             "WARNING": cls.MEDIUM,
             "CRIT": cls.CRITICAL,
             "MED": cls.MEDIUM,
+            # Common aliases used by various tools
+            "INFORMATIONAL": cls.INFO,
+            "INFORMATION": cls.INFO,
+            "NOTE": cls.LOW,
+            "STYLE": cls.INFO,
         }
         return mapping.get(v, cls.INFO)
 
@@ -122,6 +127,12 @@ TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
         "notice": "LOW",
         "informational": "INFO",
         "debug": "INFO",
+    },
+    "shellcheck": {
+        "error": "HIGH",
+        "warning": "MEDIUM",
+        "info": "LOW",
+        "style": "INFO",
     },
 }
 
