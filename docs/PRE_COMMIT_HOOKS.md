@@ -149,11 +149,23 @@ The hook automatically uses the correct Python version, preventing these issues.
 - **Config:** `pyproject.toml`
 - **Additional deps:** `types-PyYAML`
 
+**Strict mode:** Core modules have `disallow_untyped_defs = true`:
+
+- `scripts.core.common_finding`
+- `scripts.core.config`
+- `scripts.core.plugin_api`
+- `scripts.core.schema_validator`
+
 **Common fixes:**
 
 - Add type hints: `def foo(x: int) -> str:`
 - Use `Optional[T]` for nullable values
 - Use `Any` sparingly
+
+**Type ignore requirements:**
+
+- All `# type: ignore` must include error codes: `# type: ignore[attr-defined]`
+- Add explanation comment: `# type: ignore[assignment]  # Reason here`
 
 ### actionlint (GitHub Actions)
 
