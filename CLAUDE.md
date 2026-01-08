@@ -125,10 +125,13 @@ make test                              # Run tests (excludes slow e2e, matches C
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
 | `jmo tools check` | Check tool installation status |
+| `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster) |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
 | `make fmt` | Format code (Black + Ruff) |
 | `make lint` | Lint checks |
+
+> **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
 
 ### Version Management (CRITICAL)
 

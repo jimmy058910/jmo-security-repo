@@ -186,8 +186,10 @@ jmo tools check --profile balanced --json
 
 ### Installing Tools
 
+Tool installation is **parallel by default** (3-4x faster than sequential). Pip packages are batched, npm packages are batched, and binary downloads run concurrently.
+
 ```bash
-# Interactive installation for profile (prompts for confirmation)
+# Interactive installation for profile (parallel, prompts for confirmation)
 jmo tools install --profile balanced
 
 # Non-interactive (CI/CD)
@@ -196,12 +198,26 @@ jmo tools install --profile balanced --yes
 # Install specific tools
 jmo tools install trivy semgrep checkov
 
+# Increase parallel workers (default: 4, max: 8)
+jmo tools install --profile balanced --jobs 8
+
+# Sequential mode (for debugging)
+jmo tools install --profile balanced --sequential
+
 # Dry-run (show what would be installed)
 jmo tools install --profile balanced --dry-run
 
 # Generate install script for review
 jmo tools install --profile balanced --print-script > install-tools.sh
 ```
+
+**Expected installation times (parallel mode):**
+
+| Profile | Sequential | Parallel | Speedup |
+|---------|------------|----------|---------|
+| fast (8 tools) | ~5-8 min | ~2-3 min | ~2.5x |
+| balanced (18 tools) | ~12-18 min | ~4-6 min | ~3x |
+| deep (28 tools) | ~20-30 min | ~6-10 min | ~3x |
 
 **Installation methods (platform-specific):**
 

@@ -1,6 +1,6 @@
 # Build Time Optimization Guide
 
-**Status:** Planned Enhancement (post-v1.0.0)
+**Status:** Part 2 (Parallel Installation) ✅ **IMPLEMENTED** | Part 1 (Docker Build) Planned
 **Priority:** Medium - Performance improvement for development workflow
 **Estimated Effort:** 8-12 hours implementation + testing
 
@@ -378,7 +378,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ---
 
-## Part 2: CLI Parallel Installation
+## Part 2: Unified Parallel Installation (CLI + Wizard)
 
 ### 2.1 Current Implementation Analysis
 
@@ -617,15 +617,17 @@ def _batch_pip_install(
 
 ### 2.3 CLI Flag Integration
 
+**Design Decision:** Parallel installation is the DEFAULT behavior. Use `--sequential` to opt-out.
+
 **File:** `scripts/cli/jmo.py`
 
 Add to install subparser (around line 510):
 
 ```python
 install_parser.add_argument(
-    "--parallel",
+    "--sequential", "-S",
     action="store_true",
-    help="Install tools in parallel (faster, uses more system resources)",
+    help="Install tools sequentially (slower, for debugging or resource-constrained systems)",
 )
 install_parser.add_argument(
     "--jobs", "-j",
@@ -645,24 +647,190 @@ def cmd_tools_install(args) -> int:
     """Handle 'jmo tools install' command."""
     installer = ToolInstaller()
 
-    # Determine parallelism
-    parallel = getattr(args, 'parallel', False)
+    # Parallel is now DEFAULT - use --sequential to opt-out
+    sequential = getattr(args, 'sequential', False)
     max_workers = min(getattr(args, 'jobs', 4), 8)  # Cap at 8
 
-    if parallel:
+    if sequential:
+        # Legacy sequential mode for debugging
+        results = installer.install_profile(
+            profile=args.profile,
+            skip_installed=not args.force,
+        )
+    else:
+        # Default: parallel installation
         console.print(f"[cyan]Installing tools in parallel (max {max_workers} workers)...[/]")
         results = installer.install_profile_parallel(
             profile=args.profile,
             skip_installed=not args.force,
             max_workers=max_workers,
         )
-    else:
-        results = installer.install_profile(
-            profile=args.profile,
-            skip_installed=not args.force,
-        )
 
     return _report_install_results(results)
+```
+
+### 2.4 Wizard Integration
+
+The wizard's auto-fix feature (`_auto_fix_tools()`) uses parallel installation by default.
+
+**File:** `scripts/cli/wizard.py`
+
+```python
+def _auto_fix_tools(
+    fix_info: list[dict],
+    platform: str,
+    profile: str,
+    available: list[str],
+) -> tuple[bool, list[str]]:
+    """
+    Auto-fix tools using parallel installation.
+
+    Strategy:
+    1. Group tools by install method (pip, npm, binary, platform-specific)
+    2. Delegate to ToolInstaller.install_profile_parallel() for jmo-installable tools
+    3. Run platform-specific commands (choco, brew) in parallel via ThreadPoolExecutor
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from scripts.cli.tool_installer import ToolInstaller
+
+    installer = ToolInstaller()
+
+    # Separate jmo-installable vs platform-specific commands
+    jmo_tools = []
+    platform_commands = []
+
+    for info in fix_info:
+        tool_name = info["name"]
+        remediation = info["remediation"]
+
+        # Check if can use ToolInstaller
+        if remediation.get("jmo_install"):
+            jmo_tools.append(tool_name)
+        else:
+            platform_commands.append((tool_name, remediation.get("commands", [])))
+
+    # Phase 1: Install jmo-manageable tools in parallel
+    if jmo_tools:
+        # Use installer's parallel method
+        progress = installer.install_tools_parallel(jmo_tools, max_workers=4)
+
+    # Phase 2: Run platform commands in parallel
+    if platform_commands:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            for tool_name, commands in platform_commands:
+                future = executor.submit(_run_platform_commands, tool_name, commands)
+                futures[future] = tool_name
+
+            for future in as_completed(futures):
+                # Handle results...
+                pass
+
+    return True, updated_available
+```
+
+### 2.5 Batch npm Install (NEW)
+
+Similar to pip batching, npm packages can be installed in a single command:
+
+**File:** `scripts/cli/tool_installer.py`
+
+```python
+def _batch_npm_install(
+    self,
+    npm_tools: list[str],
+    callback: Callable[[str, str], None] | None = None,
+) -> list[InstallResult]:
+    """
+    Install multiple npm packages in a single subprocess call.
+
+    Args:
+        npm_tools: List of tool names that have npm_package defined
+        callback: Optional progress callback
+
+    Returns:
+        List of InstallResults for each tool
+    """
+    results = []
+
+    # Get package names from tool registry
+    packages = []
+    for tool_name in npm_tools:
+        tool_info = self.registry.get_tool(tool_name)
+        if tool_info and tool_info.npm_package:
+            packages.append(tool_info.npm_package)
+
+    if not packages:
+        return results
+
+    # Notify start for all npm tools
+    for tool_name in npm_tools:
+        if callback:
+            callback(tool_name, "start")
+
+    # Single npm install command for all packages
+    cmd = ["npm", "install", "-g"] + packages
+
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+
+        # All succeeded
+        for tool_name in npm_tools:
+            results.append(InstallResult(
+                tool_name=tool_name,
+                success=True,
+                method="npm_batch",
+            ))
+            if callback:
+                callback(tool_name, "success")
+
+    except subprocess.CalledProcessError as e:
+        # Batch failed - fall back to individual installs
+        logger.warning(f"Batch npm install failed: {e.stderr}")
+        for tool_name in npm_tools:
+            result = self._install_npm(tool_name)
+            results.append(result)
+            if callback:
+                status = "success" if result.success else "failed"
+                callback(tool_name, status)
+
+    return results
+```
+
+Updated `install_profile_parallel()` three-stage strategy:
+
+```python
+def install_profile_parallel(...) -> InstallProgress:
+    """
+    Install tools with three-stage strategy:
+    1. Batch pip installs (single subprocess)
+    2. Batch npm installs (single subprocess)
+    3. Parallel binary downloads (ThreadPoolExecutor)
+    """
+    # Group tools by install method
+    pip_tools, npm_tools, other_tools = [], [], []
+
+    for tool_name in tools:
+        tool_info = self.registry.get_tool(tool_name)
+        if tool_info and tool_info.pypi_package:
+            pip_tools.append(tool_name)
+        elif tool_info and tool_info.npm_package:
+            npm_tools.append(tool_name)
+        else:
+            other_tools.append(tool_name)
+
+    # Stage 1: Batch pip
+    if pip_tools:
+        results.extend(self._batch_pip_install(pip_tools, callback))
+
+    # Stage 2: Batch npm
+    if npm_tools:
+        results.extend(self._batch_npm_install(npm_tools, callback))
+
+    # Stage 3: Parallel binary downloads
+    if other_tools:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # ... parallel execution ...
 ```
 
 ---
@@ -674,24 +842,95 @@ def cmd_tools_install(args) -> int:
 | Resource | Strategy |
 |----------|----------|
 | Progress counters | Use `threading.Lock` |
-| Console output | Lock around print or use queue |
+| Console output | **Use `rich.progress` (native multi-thread support)** |
 | File downloads | Use unique temp files per thread |
 | pip installs | Batch or serialize with lock |
 | Tool registry | Read-only (thread-safe) |
+| Extract destinations | **Pre-flight deduplication** |
 
-### File Download Safety
+### Console Output Management (CRITICAL)
 
-Each download must use a unique temp file path:
+**Problem:** Current `ToolInstaller` methods contain direct `print()` calls that will garble output when multiple threads run simultaneously.
+
+**Solution:** Use Rich's native multi-threaded progress bars:
 
 ```python
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
+
+def install_profile_parallel_with_progress(
+    self,
+    profile: str,
+    max_workers: int = 4,
+) -> InstallProgress:
+    """Parallel install with Rich progress display."""
+    tools = self._get_tools_to_install(profile)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        transient=True,
+    ) as progress:
+        # Main progress bar
+        main_task = progress.add_task(
+            f"[cyan]Installing {len(tools)} tools...", total=len(tools)
+        )
+
+        # Per-tool tasks (shows currently installing)
+        tool_tasks: dict[str, TaskID] = {}
+
+        def on_start(tool_name: str):
+            tool_tasks[tool_name] = progress.add_task(
+                f"  [dim]{tool_name}[/]", total=None
+            )
+
+        def on_complete(tool_name: str, success: bool):
+            if tool_name in tool_tasks:
+                progress.remove_task(tool_tasks[tool_name])
+            progress.advance(main_task)
+            status = "[green]✓[/]" if success else "[red]✗[/]"
+            progress.console.print(f"  {status} {tool_name}")
+
+        # Execute with callbacks...
+```
+
+### Extraction Race Condition Prevention
+
+**Problem:** If `install_profile_parallel` receives duplicate tool entries, two threads could modify the same directory simultaneously.
+
+**Solution:** Pre-flight deduplication:
+
+```python
+def install_profile_parallel(self, profile: str, ...) -> InstallProgress:
+    tools = PROFILE_TOOLS.get(profile, [])
+
+    # CRITICAL: Deduplicate to prevent race conditions
+    tools = list(dict.fromkeys(tools))  # Preserves order, removes duplicates
+
+    # Continue with parallel installation...
+```
+
+### File Download Safety (Use `requests`, not curl/wget)
+
+**Problem:** `shutil.which("curl")` on Windows might find PowerShell's `Invoke-WebRequest` alias, which has different syntax.
+
+**Solution:** Use `requests` library (already a project dependency) for all downloads:
+
+```python
+import requests
+
 def _download_binary(self, url: str, tool_name: str) -> Path:
-    """Download binary with thread-safe temp file naming."""
+    """Download binary using requests (cross-platform)."""
     thread_id = threading.current_thread().ident
     timestamp = int(time.time() * 1000)
     temp_name = f".{tool_name}_{thread_id}_{timestamp}.download"
     temp_path = self.bin_dir / temp_name
 
-    response = requests.get(url, stream=True)
+    # Use requests instead of subprocess curl/wget
+    response = requests.get(url, stream=True, timeout=300)
+    response.raise_for_status()
+
     with open(temp_path, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
@@ -701,6 +940,86 @@ def _download_binary(self, url: str, tool_name: str) -> Path:
     temp_path.rename(final_path)
     return final_path
 ```
+
+### Signal Handling (Graceful Ctrl+C)
+
+**Problem:** Default `ThreadPoolExecutor` behavior may leave threads running after Ctrl+C.
+
+**Solution:** Wrap executor with signal handling:
+
+```python
+import signal
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def install_profile_parallel(self, ...) -> InstallProgress:
+    results = []
+    cancelled = threading.Event()
+
+    def signal_handler(signum, frame):
+        cancelled.set()
+        raise KeyboardInterrupt
+
+    original_handler = signal.signal(signal.SIGINT, signal_handler)
+
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._install_tool_threadsafe, tool, cancelled): tool
+                for tool in tools
+            }
+
+            for future in as_completed(futures):
+                if cancelled.is_set():
+                    # Cancel remaining futures
+                    for f in futures:
+                        f.cancel()
+                    break
+                # Process result...
+
+    finally:
+        signal.signal(signal.SIGINT, original_handler)
+
+    return InstallProgress(results=results)
+
+
+def _install_tool_threadsafe(self, tool_name: str, cancelled: threading.Event) -> InstallResult:
+    """Thread-safe install with cancellation support."""
+    if cancelled.is_set():
+        return InstallResult(tool_name=tool_name, success=False, message="Cancelled")
+
+    # Proceed with installation...
+```
+
+---
+
+## Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **CLI parallel mode** | Default ON | Speed benefits outweigh edge cases; 3-4x faster installs |
+| **Sequential fallback** | `--sequential` flag | For debugging or resource-constrained systems |
+| **Wizard parallel mode** | Auto-enabled | Best UX - no extra prompts, just faster |
+| **Max workers** | 4 default, 8 max | Balance speed vs resource usage |
+| **Batch failures** | Fallback to individual | Resilience over speed - one bad package shouldn't fail all |
+| **npm batching** | Added (not in v1) | Same benefits as pip batching - single subprocess |
+| **Progress display** | Rich library | Native multi-thread support, elegant progress bars |
+| **File downloads** | `requests` library | Cross-platform (avoids Windows curl alias issues) |
+| **Signal handling** | Graceful Ctrl+C | Clean shutdown, no orphaned threads |
+| **Deduplication** | Pre-flight check | Prevents extraction race conditions |
+
+### Performance Expectations
+
+| Profile | Tools | Sequential | Parallel (est.) | Speedup |
+|---------|-------|------------|-----------------|---------|
+| fast | 8 | ~5-8 min | ~2-3 min | ~2.5x |
+| balanced | 18 | ~12-18 min | ~4-6 min | ~3x |
+| deep | 28 | ~20-30 min | ~6-10 min | ~3x |
+
+**Key optimizations:**
+
+- **Batch pip**: ~10 tools in 1 subprocess vs 10 subprocesses
+- **Batch npm**: Similar benefit for Node.js tools
+- **Parallel binary downloads**: 4 concurrent vs sequential
 
 ---
 
@@ -830,15 +1149,29 @@ class TestParallelInstallProgress:
 - [ ] Test on arm64 architecture
 - [ ] Verify all 4 variants build successfully
 
-### Phase 3: CLI Parallel Installation (3-4 hours)
+### Phase 3: CLI Parallel Installation (5-6 hours)
 
-- [ ] Add `ParallelInstallProgress` dataclass
-- [ ] Implement `install_profile_parallel()` method
+- [ ] Add `ParallelInstallProgress` dataclass with thread-safe locking
+- [ ] Implement `install_profile_parallel()` method with three-stage strategy
 - [ ] Implement `_install_tool_threadsafe()` wrapper
 - [ ] Implement `_batch_pip_install()` method
-- [ ] Add `--parallel` and `--jobs` CLI flags
+- [ ] Implement `_batch_npm_install()` method (NEW)
+- [ ] Add `--sequential` and `--jobs` CLI flags (parallel is DEFAULT)
 - [ ] Update `cmd_tools_install()` handler
+- [ ] **Refactor `_download_binary()` to use `requests` instead of curl/wget**
+- [ ] **Add pre-flight deduplication to prevent race conditions**
+- [ ] **Add Rich progress bar display for parallel installs**
+- [ ] **Add signal handler for graceful Ctrl+C shutdown**
+- [ ] **Remove/suppress direct `print()` calls in parallel mode**
 - [ ] Add thread safety tests
+
+### Phase 3b: Wizard Integration (2-3 hours)
+
+- [ ] Update `_auto_fix_tools()` to use parallel installation
+- [ ] Delegate to `ToolInstaller.install_profile_parallel()` where possible
+- [ ] Add parallel execution for platform-specific commands
+- [ ] Test wizard auto-fix with multiple tools
+- [ ] Verify Rich progress display during parallel install
 
 ### Phase 4: Testing & Documentation (2-3 hours)
 
@@ -857,12 +1190,14 @@ class TestParallelInstallProgress:
 | `Dockerfile.fast` | Same optimizations (fewer tools) |
 | `Dockerfile.slim` | Same optimizations |
 | `Dockerfile.balanced` | Same optimizations |
-| `scripts/cli/tool_installer.py` | Parallel install methods, progress tracking |
-| `scripts/cli/tool_commands.py` | Handle --parallel flag |
-| `scripts/cli/jmo.py` | Add --parallel, --jobs arguments |
-| `tests/unit/test_tool_installer_parallel.py` | New test file |
+| `scripts/cli/tool_installer.py` | `ParallelInstallProgress`, `install_profile_parallel()`, batch methods |
+| `scripts/cli/tool_commands.py` | Handle `--sequential` flag (parallel is default) |
+| `scripts/cli/jmo.py` | Add `--sequential`, `--jobs` arguments |
+| `scripts/cli/wizard.py` | Update `_auto_fix_tools()` to use parallel installation |
+| `tests/unit/test_tool_installer_parallel.py` | New test file for thread safety |
+| `tests/cli/test_wizard.py` | Add parallel auto-fix tests |
 | `CLAUDE.md` | Document new CLI flags |
-| `docs/USER_GUIDE.md` | Document parallel installation |
+| `docs/USER_GUIDE.md` | Document parallel installation behavior |
 
 ---
 

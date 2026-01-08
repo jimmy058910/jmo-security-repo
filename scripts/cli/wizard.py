@@ -1105,7 +1105,11 @@ def _auto_fix_tools(
     available: list[str],
 ) -> tuple[bool, list[str]]:
     """
-    Automatically run fix commands for tools with issues.
+    Automatically fix tools with issues using parallel installation.
+
+    Uses two-phase strategy:
+    1. Parallel installation for JMo-manageable tools (pip, npm, binary downloads)
+    2. Sequential execution for platform-specific commands (brew, apt, choco)
 
     Args:
         fix_info: List of dicts with tool name, issue, and remediation info
@@ -1124,92 +1128,168 @@ def _auto_fix_tools(
     )
     print("─" * 50)
 
-    fixed = 0
-    failed = 0
-    failed_tools = []
+    # Separate tools into JMo-installable vs platform-specific commands
+    jmo_tools: list[str] = []
+    platform_commands: list[tuple[str, list[str]]] = []  # (tool_name, commands)
 
     for info in fix_info:
         tool_name = info["name"]
         remediation = info["remediation"]
+
+        # Check if this tool can be installed via JMo's ToolInstaller
+        jmo_install = remediation.get("jmo_install")
         commands = remediation.get("commands", [])
 
-        if not commands:
-            # Fall back to jmo tools install
-            commands = [
-                remediation.get("jmo_install", f"jmo tools install {tool_name}")
-            ]
+        if jmo_install and "jmo tools install" in jmo_install:
+            # Tool can be installed via JMo - use parallel installer
+            jmo_tools.append(tool_name)
+        elif commands:
+            # Has platform-specific commands - run separately
+            platform_commands.append((tool_name, commands))
+        else:
+            # Default to JMo install
+            jmo_tools.append(tool_name)
 
-        print(f"\n{_UNICODE_FALLBACKS.get('⏳', '[.]')} Fixing {tool_name}...")
+    fixed = 0
+    failed = 0
+    failed_tools: list[str] = []
 
-        success = True
-        for cmd in commands:
-            if not cmd:
-                continue
+    # Phase 1: Parallel installation for JMo-manageable tools
+    if jmo_tools:
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('⚡', '[*]')} Installing {len(jmo_tools)} tools in parallel...",
+                "cyan",
+            )
+        )
 
-            print(f"   Running: {cmd[:60]}{'...' if len(cmd) > 60 else ''}")
+        try:
+            from scripts.cli.tool_installer import ToolInstaller
 
-            try:
-                # Run the command
-                result = subprocess.run(
-                    cmd,
-                    shell=True,  # nosec B602 - User-initiated fix commands
-                    capture_output=True,
-                    text=True,
-                    timeout=300,  # 5 minute timeout per command
-                )
+            installer = ToolInstaller()
 
-                if result.returncode != 0:
-                    # Some commands (like curl | sh) may return non-zero but still work
-                    # Check if it's a critical failure
-                    if (
-                        "error" in result.stderr.lower()
-                        or "failed" in result.stderr.lower()
-                    ):
+            # Use parallel installation
+            progress = installer.install_profile_parallel(
+                profile=profile,
+                skip_installed=False,  # We want to install these specific tools
+                max_workers=4,
+                show_progress=True,
+            )
+
+            # Count results
+            for result in progress.results:
+                if result.tool_name in jmo_tools:
+                    if result.success:
+                        if result.method != "skipped":
+                            fixed += 1
+                            print(
+                                _colorize(
+                                    f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {result.tool_name} installed!",
+                                    "green",
+                                )
+                            )
+                            if result.tool_name not in available:
+                                available.append(result.tool_name)
+                    else:
+                        failed += 1
+                        failed_tools.append(result.tool_name)
                         print(
                             _colorize(
-                                f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Failed: {result.stderr[:100]}",
+                                f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} {result.tool_name}: {result.message[:60]}",
                                 "red",
                             )
                         )
-                        success = False
-                        break
-                    else:
-                        # Might be OK, continue
-                        logger.debug(
-                            f"Command returned {result.returncode} but continuing"
-                        )
 
-            except subprocess.TimeoutExpired:
-                print(
-                    _colorize(
-                        f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes",
-                        "red",
-                    )
+        except ImportError as e:
+            logger.warning(f"Could not import ToolInstaller: {e}")
+            # Fall back to sequential installation
+            for tool_name in jmo_tools:
+                platform_commands.append(
+                    (tool_name, [f"jmo tools install {tool_name} --yes"])
                 )
-                success = False
-                break
-            except Exception as e:
-                print(
-                    _colorize(
-                        f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Error: {e}", "red"
-                    )
-                )
-                success = False
-                break
 
-        if success:
-            print(
-                _colorize(
-                    f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {tool_name} fixed!",
-                    "green",
-                )
+    # Phase 2: Platform-specific commands (sequential, can't parallelize safely)
+    if platform_commands:
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Running {len(platform_commands)} platform-specific commands...",
+                "blue",
             )
-            fixed += 1
-            if tool_name not in available:
-                available.append(tool_name)
-        else:
-            failed += 1
-            failed_tools.append(tool_name)
+        )
+
+        for tool_name, commands in platform_commands:
+            print(f"\n{_UNICODE_FALLBACKS.get('⏳', '[.]')} Fixing {tool_name}...")
+
+            success = True
+            for cmd in commands:
+                if not cmd:
+                    continue
+
+                # Add --yes flag to jmo tools install commands to avoid interactive prompt
+                if cmd.startswith("jmo tools install") and "--yes" not in cmd:
+                    cmd = cmd + " --yes"
+
+                print(f"   Running: {cmd[:60]}{'...' if len(cmd) > 60 else ''}")
+
+                try:
+                    proc_result = subprocess.run(
+                        cmd,
+                        shell=True,  # nosec B602 - User-initiated fix commands
+                        capture_output=True,
+                        text=True,
+                        timeout=300,  # 5 minute timeout per command
+                    )
+
+                    if proc_result.returncode != 0:
+                        if (
+                            "error" in proc_result.stderr.lower()
+                            or "failed" in proc_result.stderr.lower()
+                        ):
+                            print(
+                                _colorize(
+                                    f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Failed: {proc_result.stderr[:100]}",
+                                    "red",
+                                )
+                            )
+                            success = False
+                            break
+                        else:
+                            logger.debug(
+                                f"Command returned {proc_result.returncode} but continuing"
+                            )
+
+                except subprocess.TimeoutExpired:
+                    print(
+                        _colorize(
+                            f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes",
+                            "red",
+                        )
+                    )
+                    success = False
+                    break
+                except Exception as e:
+                    print(
+                        _colorize(
+                            f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} Error: {e}",
+                            "red",
+                        )
+                    )
+                    success = False
+                    break
+
+            if success:
+                print(
+                    _colorize(
+                        f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {tool_name} fixed!",
+                        "green",
+                    )
+                )
+                fixed += 1
+                if tool_name not in available:
+                    available.append(tool_name)
+            else:
+                failed += 1
+                failed_tools.append(tool_name)
 
     # Summary
     print("\n" + "─" * 50)

@@ -356,11 +356,13 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     Install missing tools.
 
     Usage:
-        jmo tools install                     # Install all missing
+        jmo tools install                     # Install all missing (parallel)
         jmo tools install --profile balanced  # Install for profile
         jmo tools install trivy semgrep       # Install specific tools
         jmo tools install --dry-run           # Show what would be installed
         jmo tools install --print-script      # Print install script
+        jmo tools install --sequential        # Install sequentially (slower)
+        jmo tools install --jobs 8            # Use 8 parallel workers
 
     Returns:
         0 on success, 1 on failure
@@ -371,6 +373,12 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
     dry_run = getattr(args, "dry_run", False)
     print_script = getattr(args, "print_script", False)
     yes = getattr(args, "yes", False)
+    sequential = getattr(args, "sequential", False)
+    jobs = getattr(args, "jobs", 4)
+    # Ensure jobs is an integer (handles MagicMock in tests)
+    if not isinstance(jobs, int):
+        jobs = 4
+    max_workers = min(jobs, 8)  # Cap at 8
 
     # Determine which tools to install
     if tools_arg:
@@ -403,6 +411,10 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         print(f"  - {status.name}{critical}")
 
     print(f"\nPlatform: {manager.platform}")
+    if not sequential:
+        print(f"Mode: Parallel (max {max_workers} workers)")
+    else:
+        print("Mode: Sequential")
     print()
 
     # Interactive confirmation
@@ -425,24 +437,33 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
 
     installer = ToolInstaller()
 
-    # Set up progress callback for real-time feedback
-    def progress_callback(tool_name: str, current: int, total: int) -> None:
-        print(f"[{current}/{total}] Installing {tool_name}...")
-
-    installer.set_progress_callback(progress_callback)
-
     # Install the tools
     if tools_arg:
-        # Install specific tools
+        # Install specific tools - use sequential mode for specific tools
         from scripts.cli.tool_installer import InstallProgress
 
         progress = InstallProgress(total=len(missing))
         for status in missing:
             result = installer.install_tool(status.name, force=True)
             progress.add_result(result)
-    else:
-        # Install for profile
+    elif sequential:
+        # Sequential installation mode (--sequential flag)
+        def progress_callback(tool_name: str, current: int, total: int) -> None:
+            print(f"[{current}/{total}] Installing {tool_name}...")
+
+        installer.set_progress_callback(progress_callback)
         progress = installer.install_missing(profile)
+    else:
+        # Default: Parallel installation mode
+        print(
+            colorize(f"\n[Parallel] Installing with {max_workers} workers...\n", "cyan")
+        )
+        progress = installer.install_profile_parallel(
+            profile=profile,
+            skip_installed=True,
+            max_workers=max_workers,
+            show_progress=sys.stdout.isatty(),
+        )
 
     # Print results
     print_install_progress(progress, colorize)

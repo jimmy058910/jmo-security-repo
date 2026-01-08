@@ -519,6 +519,20 @@ Examples:
     install_parser.add_argument(
         "--print-script", action="store_true", help="Print install script"
     )
+    install_parser.add_argument(
+        "--sequential",
+        "-S",
+        action="store_true",
+        help="Install tools sequentially (slower, for debugging)",
+    )
+    install_parser.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=4,
+        metavar="N",
+        help="Number of parallel installation jobs (default: 4, max: 8)",
+    )
 
     # UPDATE
     update_parser = tools_subparsers.add_parser("update", help="Update outdated tools")
@@ -2725,9 +2739,9 @@ def _check_mcp_dependencies() -> tuple[bool, str | None]:
         Tuple of (is_ok, error_message). If is_ok is True, error_message is None.
     """
     # Check 1: Is pydantic v2+ installed? (MCP requires TypeAdapter from pydantic v2)
-    try:
-        from pydantic import TypeAdapter  # noqa: F401
-    except ImportError:
+    import pydantic
+
+    if not hasattr(pydantic, "TypeAdapter"):
         return False, "pydantic_v1"
 
     # Check 2: Is MCP SDK installed?

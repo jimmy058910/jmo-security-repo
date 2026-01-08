@@ -13,15 +13,31 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+import requests
 import tarfile
 import zipfile
+
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeElapsedColumn,
+    TaskID,
+)
 
 from scripts.core.tool_registry import (
     Platform,
@@ -248,6 +264,81 @@ class InstallProgress:
             self.successful += 1
         else:
             self.failed += 1
+
+
+@dataclass
+class ParallelInstallProgress:
+    """Thread-safe progress tracking for parallel installations.
+
+    Uses threading.Lock to protect shared state from race conditions
+    when multiple threads update progress concurrently.
+
+    Attributes:
+        total: Total number of tools to install
+        completed: Number of successfully installed tools
+        failed: Number of failed installations
+        skipped: Number of skipped (already installed) tools
+        current_tools: List of tools currently being installed
+        results: List of InstallResult objects
+    """
+
+    total: int
+    completed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    current_tools: list[str] = field(default_factory=list)
+    results: list[InstallResult] = field(default_factory=list)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
+
+    def on_start(self, tool_name: str) -> None:
+        """Called when a tool installation begins (thread-safe)."""
+        with self._lock:
+            self.current_tools.append(tool_name)
+
+    def on_complete(self, tool_name: str, result: InstallResult) -> None:
+        """Called when a tool installation completes (thread-safe)."""
+        with self._lock:
+            if tool_name in self.current_tools:
+                self.current_tools.remove(tool_name)
+            self.results.append(result)
+            if result.success:
+                if result.method == "skipped":
+                    self.skipped += 1
+                else:
+                    self.completed += 1
+            else:
+                self.failed += 1
+
+    def get_status_line(self) -> str:
+        """Get current progress status for display (thread-safe)."""
+        with self._lock:
+            done = self.completed + self.failed + self.skipped
+            running = ", ".join(self.current_tools[:3])
+            if len(self.current_tools) > 3:
+                running += f" +{len(self.current_tools) - 3}"
+            return f"[{done}/{self.total}] Installing: {running}"
+
+    def is_cancelled(self) -> bool:
+        """Check if installation has been cancelled."""
+        return self._cancelled.is_set()
+
+    def cancel(self) -> None:
+        """Signal cancellation to all worker threads."""
+        self._cancelled.set()
+
+    def to_install_progress(self) -> InstallProgress:
+        """Convert to legacy InstallProgress for compatibility."""
+        with self._lock:
+            progress = InstallProgress(
+                total=self.total,
+                completed=self.completed + self.skipped,
+                successful=self.completed,
+                failed=self.failed,
+                skipped=self.skipped,
+                results=list(self.results),
+            )
+            return progress
 
 
 class ToolInstaller:
@@ -483,6 +574,583 @@ class ToolInstaller:
     def install_missing(self, profile: str) -> InstallProgress:
         """Install only missing tools for a profile."""
         return self.install_profile(profile, skip_installed=True)
+
+    def install_profile_parallel(
+        self,
+        profile: str,
+        skip_installed: bool = True,
+        max_workers: int = 4,
+        show_progress: bool = True,
+    ) -> InstallProgress:
+        """
+        Install tools for a profile in parallel with Rich progress display.
+
+        Uses a three-stage strategy for optimal performance:
+        1. Batch pip installs (single subprocess for all Python packages)
+        2. Batch npm installs (single subprocess for all Node packages)
+        3. Parallel binary downloads (ThreadPoolExecutor)
+
+        Args:
+            profile: Profile name ('fast', 'slim', 'balanced', 'deep')
+            skip_installed: Skip already-installed tools (default: True)
+            max_workers: Maximum concurrent installations (default: 4, max: 8)
+            show_progress: Show Rich progress bars (default: True)
+
+        Returns:
+            InstallProgress with results for all tools
+        """
+        from scripts.core.tool_registry import PROFILE_TOOLS
+
+        # Cap max_workers at 8 to avoid resource exhaustion
+        max_workers = min(max_workers, 8)
+
+        tools = PROFILE_TOOLS.get(profile, [])
+        if not tools:
+            logger.warning(f"Unknown profile '{profile}' or no tools defined")
+            return InstallProgress(total=0)
+
+        # Pre-flight deduplication to prevent race conditions
+        tools = list(dict.fromkeys(tools))
+
+        # Categorize tools by installation method
+        pip_tools: list[str] = []
+        npm_tools: list[str] = []
+        other_tools: list[str] = []
+        skipped_results: list[InstallResult] = []
+
+        for tool_name in tools:
+            # Check if should skip
+            if skip_installed:
+                status = self.manager.check_tool(tool_name)
+                if status.installed:
+                    skipped_results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=True,
+                            method="skipped",
+                            message=f"Already installed (v{status.installed_version})",
+                            version_installed=status.installed_version,
+                        )
+                    )
+                    continue
+
+            # Categorize by install method
+            tool_info = self.registry.get_tool(tool_name)
+            if tool_info:
+                if tool_info.pypi_package:
+                    pip_tools.append(tool_name)
+                elif tool_info.npm_package:
+                    npm_tools.append(tool_name)
+                else:
+                    other_tools.append(tool_name)
+            else:
+                other_tools.append(tool_name)
+
+        # Create progress tracker
+        total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)
+        progress = ParallelInstallProgress(total=len(tools))
+
+        # Add skipped results
+        for result in skipped_results:
+            progress.on_complete(result.tool_name, result)
+
+        if total_to_install == 0:
+            return progress.to_install_progress()
+
+        # Set up signal handler for graceful Ctrl+C
+        original_handler = signal.getsignal(signal.SIGINT)
+
+        def signal_handler(signum, frame):
+            logger.info("Installation cancelled by user")
+            progress.cancel()
+            raise KeyboardInterrupt
+
+        try:
+            signal.signal(signal.SIGINT, signal_handler)
+        except ValueError:
+            # Can't set signal handler in non-main thread
+            pass
+
+        try:
+            if show_progress:
+                self._install_with_rich_progress(
+                    pip_tools, npm_tools, other_tools, progress, max_workers
+                )
+            else:
+                self._install_without_progress(
+                    pip_tools, npm_tools, other_tools, progress, max_workers
+                )
+        except KeyboardInterrupt:
+            logger.info("Installation cancelled")
+        finally:
+            try:
+                signal.signal(signal.SIGINT, original_handler)
+            except ValueError:
+                pass
+
+        return progress.to_install_progress()
+
+    def _install_with_rich_progress(
+        self,
+        pip_tools: list[str],
+        npm_tools: list[str],
+        other_tools: list[str],
+        progress: ParallelInstallProgress,
+        max_workers: int,
+    ) -> None:
+        """Run parallel installation with Rich progress display."""
+        console = Console()
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+            transient=False,
+        ) as rich_progress:
+            total_tools = len(pip_tools) + len(npm_tools) + len(other_tools)
+            main_task = rich_progress.add_task(
+                f"[cyan]Installing {total_tools} tools...", total=total_tools
+            )
+
+            # Stage 1: Batch pip installs
+            if pip_tools and not progress.is_cancelled():
+                pip_task = rich_progress.add_task(
+                    f"[dim]pip batch ({len(pip_tools)} packages)...", total=None
+                )
+                pip_results = self._batch_pip_install(pip_tools, progress)
+                for result in pip_results:
+                    progress.on_complete(result.tool_name, result)
+                    rich_progress.advance(main_task)
+                    status = "[green]✓[/]" if result.success else "[red]✗[/]"
+                    console.print(f"  {status} {result.tool_name} (pip)")
+                rich_progress.remove_task(pip_task)
+
+            # Stage 2: Batch npm installs
+            if npm_tools and not progress.is_cancelled():
+                npm_task = rich_progress.add_task(
+                    f"[dim]npm batch ({len(npm_tools)} packages)...", total=None
+                )
+                npm_results = self._batch_npm_install(npm_tools, progress)
+                for result in npm_results:
+                    progress.on_complete(result.tool_name, result)
+                    rich_progress.advance(main_task)
+                    status = "[green]✓[/]" if result.success else "[red]✗[/]"
+                    console.print(f"  {status} {result.tool_name} (npm)")
+                rich_progress.remove_task(npm_task)
+
+            # Stage 3: Parallel binary downloads
+            if other_tools and not progress.is_cancelled():
+                # Track active downloads
+                active_tasks: dict[str, TaskID] = {}
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {}
+                    for tool_name in other_tools:
+                        if progress.is_cancelled():
+                            break
+                        future = executor.submit(
+                            self._install_tool_threadsafe, tool_name, progress
+                        )
+                        futures[future] = tool_name
+                        # Add task for this tool
+                        task_id = rich_progress.add_task(
+                            f"[dim]  {tool_name}...", total=None
+                        )
+                        active_tasks[tool_name] = task_id
+
+                    for future in as_completed(futures):
+                        if progress.is_cancelled():
+                            for f in futures:
+                                f.cancel()
+                            break
+
+                        tool_name = futures[future]
+                        try:
+                            result = future.result(timeout=600)
+                        except TimeoutError:
+                            result = InstallResult(
+                                tool_name=tool_name,
+                                success=False,
+                                message="Installation timed out after 10 minutes",
+                            )
+                        except Exception as e:
+                            logger.error(f"Installation failed for {tool_name}: {e}")
+                            result = InstallResult(
+                                tool_name=tool_name,
+                                success=False,
+                                message=str(e),
+                            )
+
+                        progress.on_complete(tool_name, result)
+                        rich_progress.advance(main_task)
+
+                        # Remove task and print status
+                        if tool_name in active_tasks:
+                            rich_progress.remove_task(active_tasks[tool_name])
+                        status = "[green]✓[/]" if result.success else "[red]✗[/]"
+                        method = result.method or "binary"
+                        console.print(f"  {status} {tool_name} ({method})")
+
+    def _install_without_progress(
+        self,
+        pip_tools: list[str],
+        npm_tools: list[str],
+        other_tools: list[str],
+        progress: ParallelInstallProgress,
+        max_workers: int,
+    ) -> None:
+        """Run parallel installation without Rich progress (for non-TTY)."""
+        # Stage 1: Batch pip installs
+        if pip_tools and not progress.is_cancelled():
+            logger.info(f"Installing {len(pip_tools)} pip packages in batch...")
+            pip_results = self._batch_pip_install(pip_tools, progress)
+            for result in pip_results:
+                progress.on_complete(result.tool_name, result)
+
+        # Stage 2: Batch npm installs
+        if npm_tools and not progress.is_cancelled():
+            logger.info(f"Installing {len(npm_tools)} npm packages in batch...")
+            npm_results = self._batch_npm_install(npm_tools, progress)
+            for result in npm_results:
+                progress.on_complete(result.tool_name, result)
+
+        # Stage 3: Parallel binary downloads
+        if other_tools and not progress.is_cancelled():
+            logger.info(
+                f"Installing {len(other_tools)} tools in parallel "
+                f"(max {max_workers} workers)..."
+            )
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(self._install_tool_threadsafe, tool, progress): tool
+                    for tool in other_tools
+                }
+
+                for future in as_completed(futures):
+                    if progress.is_cancelled():
+                        for f in futures:
+                            f.cancel()
+                        break
+
+                    tool_name = futures[future]
+                    try:
+                        result = future.result(timeout=600)
+                    except Exception as e:
+                        result = InstallResult(
+                            tool_name=tool_name,
+                            success=False,
+                            message=str(e),
+                        )
+                    progress.on_complete(tool_name, result)
+
+    def _batch_pip_install(
+        self,
+        pip_tools: list[str],
+        progress: ParallelInstallProgress,
+    ) -> list[InstallResult]:
+        """
+        Install multiple pip packages in a single subprocess call.
+
+        More efficient than individual pip install commands because:
+        1. Single dependency resolution pass
+        2. Shared network connections
+        3. Reduced subprocess overhead
+
+        Falls back to individual installs if batch fails.
+        """
+        results: list[InstallResult] = []
+        start_time = time.time()
+
+        # Get package specs from tool registry
+        packages: list[str] = []
+        tool_to_package: dict[str, str] = {}
+
+        for tool_name in pip_tools:
+            tool_info = self.registry.get_tool(tool_name)
+            if tool_info and tool_info.pypi_package:
+                package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
+                packages.append(package_spec)
+                tool_to_package[tool_name] = package_spec
+
+        if not packages:
+            return results
+
+        # Signal start for all pip tools
+        for tool_name in pip_tools:
+            progress.on_start(tool_name)
+
+        # Try batch install
+        cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + packages
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+
+            if result.returncode == 0:
+                # All succeeded - verify each tool
+                duration = time.time() - start_time
+                for tool_name in pip_tools:
+                    status = self.manager.check_tool(tool_name)
+                    results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=True,
+                            method="pip_batch",
+                            message=f"Installed via pip batch: {tool_to_package.get(tool_name, '')}",
+                            version_installed=status.installed_version,
+                            duration_seconds=duration / len(pip_tools),
+                        )
+                    )
+            else:
+                # Batch failed - fall back to individual installs
+                logger.warning(
+                    f"Batch pip install failed, falling back to individual: "
+                    f"{result.stderr[:200] if result.stderr else 'unknown error'}"
+                )
+                for tool_name in pip_tools:
+                    if progress.is_cancelled():
+                        results.append(
+                            InstallResult(
+                                tool_name=tool_name,
+                                success=False,
+                                method="pip",
+                                message="Installation cancelled",
+                            )
+                        )
+                    else:
+                        individual_result = self.install_tool(tool_name)
+                        results.append(individual_result)
+
+        except subprocess.TimeoutExpired:
+            logger.error("Batch pip install timed out after 10 minutes")
+            # Fall back to individual installs
+            for tool_name in pip_tools:
+                if progress.is_cancelled():
+                    results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=False,
+                            method="pip",
+                            message="Installation cancelled",
+                        )
+                    )
+                else:
+                    individual_result = self.install_tool(tool_name)
+                    results.append(individual_result)
+
+        except Exception as e:
+            logger.error(f"Batch pip install error: {e}")
+            for tool_name in pip_tools:
+                results.append(
+                    InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="pip",
+                        message=str(e),
+                    )
+                )
+
+        return results
+
+    def _batch_npm_install(
+        self,
+        npm_tools: list[str],
+        progress: ParallelInstallProgress,
+    ) -> list[InstallResult]:
+        """
+        Install multiple npm packages in a single subprocess call.
+
+        Similar benefits to batch pip install.
+        Falls back to individual installs if batch fails.
+        """
+        results: list[InstallResult] = []
+        start_time = time.time()
+
+        # Check if npm is available
+        npm_cmd = shutil.which("npm")
+        if not npm_cmd:
+            for tool_name in npm_tools:
+                results.append(
+                    InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="npm",
+                        message="npm not installed",
+                    )
+                )
+            return results
+
+        # Get package names from tool registry
+        packages: list[str] = []
+        tool_to_package: dict[str, str] = {}
+
+        for tool_name in npm_tools:
+            tool_info = self.registry.get_tool(tool_name)
+            if tool_info and tool_info.npm_package:
+                packages.append(tool_info.npm_package)
+                tool_to_package[tool_name] = tool_info.npm_package
+
+        if not packages:
+            return results
+
+        # Signal start for all npm tools
+        for tool_name in npm_tools:
+            progress.on_start(tool_name)
+
+        # Try batch install
+        cmd = [npm_cmd, "install", "-g"] + packages
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+
+            if result.returncode == 0:
+                # All succeeded - verify each tool
+                duration = time.time() - start_time
+                for tool_name in npm_tools:
+                    status = self.manager.check_tool(tool_name)
+                    results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=True,
+                            method="npm_batch",
+                            message=f"Installed via npm batch: {tool_to_package.get(tool_name, '')}",
+                            version_installed=status.installed_version,
+                            duration_seconds=duration / len(npm_tools),
+                        )
+                    )
+            else:
+                # Batch failed - fall back to individual installs
+                logger.warning(
+                    f"Batch npm install failed, falling back to individual: "
+                    f"{result.stderr[:200] if result.stderr else 'unknown error'}"
+                )
+                for tool_name in npm_tools:
+                    if progress.is_cancelled():
+                        results.append(
+                            InstallResult(
+                                tool_name=tool_name,
+                                success=False,
+                                method="npm",
+                                message="Installation cancelled",
+                            )
+                        )
+                    else:
+                        individual_result = self.install_tool(tool_name)
+                        results.append(individual_result)
+
+        except subprocess.TimeoutExpired:
+            logger.error("Batch npm install timed out after 10 minutes")
+            for tool_name in npm_tools:
+                if progress.is_cancelled():
+                    results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=False,
+                            method="npm",
+                            message="Installation cancelled",
+                        )
+                    )
+                else:
+                    individual_result = self.install_tool(tool_name)
+                    results.append(individual_result)
+
+        except Exception as e:
+            logger.error(f"Batch npm install error: {e}")
+            for tool_name in npm_tools:
+                results.append(
+                    InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="npm",
+                        message=str(e),
+                    )
+                )
+
+        return results
+
+    def _install_tool_threadsafe(
+        self,
+        tool_name: str,
+        progress: ParallelInstallProgress,
+    ) -> InstallResult:
+        """
+        Thread-safe wrapper around install_tool().
+
+        Handles progress tracking and cancellation checking.
+        """
+        if progress.is_cancelled():
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                message="Installation cancelled",
+            )
+
+        progress.on_start(tool_name)
+
+        try:
+            result = self.install_tool(tool_name)
+            return result
+        except Exception as e:
+            logger.error(f"Thread-safe install failed for {tool_name}: {e}")
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                message=str(e),
+            )
+
+    def _download_with_requests(
+        self,
+        url: str,
+        output_path: Path,
+        timeout: int = 300,
+    ) -> bool:
+        """
+        Download a file using the requests library (cross-platform).
+
+        Avoids Windows curl alias issues by using pure Python.
+
+        Args:
+            url: URL to download from
+            output_path: Path to save the downloaded file
+            timeout: Request timeout in seconds
+
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        try:
+            response = requests.get(url, stream=True, timeout=timeout)
+            response.raise_for_status()
+
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            return True
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Download timed out after {timeout}s: {url}")
+            return False
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTP error downloading {url}: {e}")
+            return False
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error downloading {url}: {e}")
+            return False
+        except OSError as e:
+            logger.error(f"File error saving download: {e}")
+            return False
 
     def _try_install_method(
         self,
