@@ -781,6 +781,24 @@ class ToolManager:
                 if dc_path.exists():
                     return str(dc_path)
 
+        # scancode is extracted to ~/.jmo/bin/scancode/
+        # Pre-built releases have scancode executable in the root directory
+        if binary_name == "scancode":
+            scancode_dir = home / ".jmo" / "bin" / "scancode"
+            if scancode_dir.exists():
+                # Check common locations for scancode binary
+                for name in ("scancode", "scancode.exe"):
+                    scancode_path = scancode_dir / name
+                    if scancode_path.exists() and scancode_path.is_file():
+                        return str(scancode_path)
+                # Also check in bin/ subdirectory (some release formats)
+                bin_dir = scancode_dir / "bin"
+                if bin_dir.exists():
+                    for name in ("scancode", "scancode.exe"):
+                        scancode_path = bin_dir / name
+                        if scancode_path.exists():
+                            return str(scancode_path)
+
         # yara-python is a Python library, not a CLI binary
         # Check if the module is importable instead of looking for a binary
         if binary_name == "yara":

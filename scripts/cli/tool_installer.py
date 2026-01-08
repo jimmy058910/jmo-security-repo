@@ -197,13 +197,14 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 # Binary download URLs (GitHub releases)
 # v1.0.0: Changed from /latest/download/ to /download/v{version}/ for reproducible installs
 # v1.0.1: Fixed asset naming to match actual GitHub release filenames
+# v1.0.2: Added platform-specific URL support (dict format) for Windows compatibility
 #
-# IMPORTANT: Asset naming varies significantly by tool:
-# - trivy: Uses "Linux-64bit" / "Linux-ARM64" (unique format)
-# - Most Go tools: Use "linux_amd64" / "linux_arm64" (lowercase)
-# - noseyparker: Uses Rust target triple "x86_64-unknown-linux-gnu"
-# - hadolint: Uses "Linux-x86_64" (capital L, underscore)
-# - shellcheck: Uses "linux.x86_64" (lowercase, dots)
+# Type can be str (universal) or dict (platform-specific)
+# For platform-specific URLs, use keys: "windows", "linux", "macos", "default"
+#
+# IMPORTANT: Asset naming varies significantly by tool AND platform:
+# - Windows typically uses .zip extension, Linux uses .tar.gz
+# - Windows uses "windows" (lowercase), Linux uses "Linux" or "linux"
 #
 # Available placeholders:
 #   {version}    - Tool version from versions.yaml
@@ -212,14 +213,24 @@ EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
 #   {arch}       - "x86_64", "arm64"
 #   {arch_amd}   - "amd64", "arm64" (for Go tools)
 #   {arch_aarch} - "x86_64", "aarch64" (for shellcheck)
-#   {rust_arch}  - "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu" (for Rust tools)
+#   {rust_arch}  - "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", etc.
 #   {trivy_arch} - "64bit", "ARM64" (trivy's unique format)
-BINARY_URLS: dict[str, str] = {
-    # trivy: unique format "Linux-64bit" / "Linux-ARM64"
-    "trivy": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_{os}-{trivy_arch}.tar.gz",
-    # Anchore tools: lowercase "linux_amd64"
-    "grype": "https://github.com/anchore/grype/releases/download/v{version}/grype_{version}_{os_lower}_{arch_amd}.tar.gz",
-    "syft": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_{os_lower}_{arch_amd}.tar.gz",
+BINARY_URLS: dict[str, str | dict[str, str]] = {
+    # trivy: Windows uses lowercase "windows-64bit.zip", Linux uses "Linux-64bit.tar.gz"
+    "trivy": {
+        "windows": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_windows-{trivy_arch}.zip",
+        "default": "https://github.com/aquasecurity/trivy/releases/download/v{version}/trivy_{version}_{os}-{trivy_arch}.tar.gz",
+    },
+    # Anchore grype: Windows uses .zip, Linux uses .tar.gz
+    "grype": {
+        "windows": "https://github.com/anchore/grype/releases/download/v{version}/grype_{version}_windows_{arch_amd}.zip",
+        "default": "https://github.com/anchore/grype/releases/download/v{version}/grype_{version}_{os_lower}_{arch_amd}.tar.gz",
+    },
+    # Anchore syft: Windows uses .zip, Linux uses .tar.gz
+    "syft": {
+        "windows": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_windows_{arch_amd}.zip",
+        "default": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_{os_lower}_{arch_amd}.tar.gz",
+    },
     # hadolint: "Linux-x86_64" (capital L, hyphen, lowercase arch)
     "hadolint": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
     # shellcheck: lowercase "linux.x86_64" with dots
@@ -1551,7 +1562,23 @@ class ToolInstaller:
         os_name = self._get_os_name()
         arch = self._get_arch()
 
-        url_template = BINARY_URLS[tool_name]
+        url_config = BINARY_URLS[tool_name]
+
+        # Handle platform-specific URLs (dict) vs universal URLs (str)
+        if isinstance(url_config, dict):
+            url_template = url_config.get(self.platform)
+            if not url_template:
+                url_template = url_config.get("default")
+            if not url_template:
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=False,
+                    method="binary",
+                    message=f"No {self.platform} binary URL defined for {tool_name}",
+                    duration_seconds=time.time() - start_time,
+                )
+        else:
+            url_template = url_config
 
         # Compute all architecture variants for URL formatting
         # Different tools use different naming conventions:
