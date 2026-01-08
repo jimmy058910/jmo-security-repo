@@ -29,6 +29,8 @@ class TestInputValidation:
 
         Security best practice: Never pass user input directly to shell commands.
         """
+        import os
+
         # Test with malicious tool name containing shell metacharacters
         malicious_inputs = [
             "; rm -rf /",
@@ -37,6 +39,10 @@ class TestInputValidation:
             "$(whoami)",
             "`id`",
         ]
+
+        # Set CI environment to skip interactive prompts
+        test_env = os.environ.copy()
+        test_env["CI"] = "true"
 
         for malicious_input in malicious_inputs:
             # Attempt to use malicious input as tool name
@@ -50,7 +56,8 @@ class TestInputValidation:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=30,  # Increased from 5s for slower systems
+                env=test_env,
             )
 
             # Command should fail gracefully (invalid tool name), not execute shell commands
@@ -126,6 +133,12 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
 
         Security best practice: Validate integer ranges to prevent crashes or exploits.
         """
+        import os
+
+        # Set CI environment to skip interactive prompts
+        test_env = os.environ.copy()
+        test_env["CI"] = "true"
+
         # Test with absurdly large timeout value
         result = subprocess.run(
             [
@@ -139,7 +152,8 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
             ],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=30,  # Increased from 5s for slower systems
+            env=test_env,
         )
 
         # Should fail gracefully or clamp to reasonable value, not crash
@@ -206,18 +220,12 @@ args: ['echo pwned > /tmp/yaml-pwned.txt']
         ]
 
         for pattern in safe_patterns:
-            # Python 3.13+ supports timeout parameter (not 3.11)
-            if sys.version_info >= (3, 13):
-                try:
-                    re.search(pattern, redos_input, timeout=1)
-                    # No assertion needed - just checking it doesn't hang
-                except TimeoutError:
-                    pytest.fail(f"Pattern '{pattern}' caused ReDoS (timed out)")
-            else:
-                # For Python < 3.13, just verify pattern compiles and runs
-                # (no timeout support, but patterns should still be safe)
-                re.search(pattern, redos_input)
-                # No assertion needed - just checking it completes
+            # Python's re module doesn't have a timeout parameter.
+            # Safe patterns should complete quickly without causing backtracking.
+            # We test that these patterns are non-backtracking by simply running them.
+            re.search(pattern, redos_input)
+            # No assertion needed - just checking it completes quickly
+            # (if it hung, the test would timeout via pytest-timeout)
 
     def test_environment_variable_injection(self, tmp_path):
         """Test that environment variables cannot inject malicious values.

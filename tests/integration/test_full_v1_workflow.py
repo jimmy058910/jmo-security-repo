@@ -13,6 +13,7 @@ Phase 1.2.1 of TESTING_RELEASE_READINESS_PLAN.md
 
 import json
 import subprocess
+import sys
 import time
 
 import pytest
@@ -24,6 +25,7 @@ from scripts.core.history_db import get_connection, list_scans, store_scan
 class TestV1WorkflowIntegration:
     """Test complete v1.0.0 user workflows."""
 
+    @pytest.mark.requires_tools
     def test_scan_to_dashboard_with_history(self, tmp_path):
         """
         Test: Scan → Store in SQLite → Generate dashboard.
@@ -218,7 +220,7 @@ class TestV1WorkflowIntegration:
         output_path = tmp_path / "diff-report.md"
         result = subprocess.run(
             [
-                "sys.executable",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "diff",
@@ -302,7 +304,7 @@ class TestV1WorkflowIntegration:
         # Run trend analysis
         result = subprocess.run(
             [
-                "sys.executable",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "trends",
@@ -327,7 +329,7 @@ class TestV1WorkflowIntegration:
         json_export = tmp_path / "trends.json"
         result_export = subprocess.run(
             [
-                "sys.executable",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "trends",
@@ -357,6 +359,7 @@ class TestV1WorkflowIntegration:
         assert "scans" in export_data
         assert "severity_trends" in export_data
 
+    @pytest.mark.requires_tools
     def test_ci_mode_with_history_and_diff(self, tmp_path):
         """
         Test: CI mode with automatic history storage and diff.
@@ -435,7 +438,7 @@ class TestV1WorkflowIntegration:
         """
         # Verify wizard command exists
         result_wizard = subprocess.run(
-            ["sys.executable", "-m", "scripts.cli.jmo", "wizard", "--help"],
+            [sys.executable, "-m", "scripts.cli.jmo", "wizard", "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -445,7 +448,7 @@ class TestV1WorkflowIntegration:
 
         # Verify schedule commands exist
         result_schedule = subprocess.run(
-            ["sys.executable", "-m", "scripts.cli.jmo", "schedule", "--help"],
+            [sys.executable, "-m", "scripts.cli.jmo", "schedule", "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -489,7 +492,7 @@ class TestV1WorkflowIntegration:
         # Run trend analysis
         result_trends = subprocess.run(
             [
-                "sys.executable",
+                sys.executable,
                 "-m",
                 "scripts.cli.jmo",
                 "trends",

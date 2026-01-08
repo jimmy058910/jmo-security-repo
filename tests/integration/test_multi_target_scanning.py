@@ -7,11 +7,19 @@ Tests for:
 - GitLab scanning
 - Kubernetes cluster scanning
 - Combined multi-target scanning
+
+Note: These tests require external security tools (trivy, syft, checkov, etc.).
+They are marked with requires_tools and excluded from default CI test runs.
 """
 
 from pathlib import Path
 
-from scripts.cli.jmo import cmd_scan, cmd_ci
+import pytest
+
+from scripts.cli.jmo import cmd_ci, cmd_scan
+
+# Mark all tests in this module as requiring external tools
+pytestmark = pytest.mark.requires_tools
 
 
 def test_container_image_scan_creates_output(tmp_path: Path):
@@ -205,8 +213,13 @@ resource "aws_s3_bucket" "test" {
     assert (results_dir / "individual-repos").exists()
     repo_dir = results_dir / "individual-repos" / "repo"
     if repo_dir.exists():
-        # At least stub files should exist
-        assert (repo_dir / "trufflehog.json").exists()
+        # At least one repo tool output should exist (if tools were available)
+        repo_tool_outputs = [
+            repo_dir / "trufflehog.json",
+            repo_dir / "semgrep.json",
+        ]
+        has_any_output = any(f.exists() for f in repo_tool_outputs)
+        assert has_any_output, "Expected at least one repo scanner output"
 
     # Images directory should exist if trivy/syft worked
     if (results_dir / "individual-images").exists():

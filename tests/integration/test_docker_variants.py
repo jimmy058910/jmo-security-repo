@@ -25,9 +25,11 @@ import pytest
 # ========== Docker Availability Check ==========
 
 # Skip all tests in this module if Docker is not available
-pytestmark = pytest.mark.skipif(
-    not shutil.which("docker"), reason="Docker not installed"
-)
+# Also mark as requires_tools since they test Docker images containing security tools
+pytestmark = [
+    pytest.mark.skipif(not shutil.which("docker"), reason="Docker not installed"),
+    pytest.mark.requires_tools,
+]
 
 
 def _docker_image_exists(image: str) -> bool:

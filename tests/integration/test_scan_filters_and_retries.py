@@ -3,12 +3,20 @@
 Rewritten for ScanOrchestrator architecture (v0.7.0).
 Tests use subprocess to invoke jmo CLI with jmo.yml configs instead of
 monkeypatching internal functions.
+
+Note: These tests require external security tools (trufflehog, etc.).
+They are marked with requires_tools and excluded from default CI test runs.
 """
 
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+# Mark all tests in this module as requiring external tools
+pytestmark = pytest.mark.requires_tools
 
 
 def _repo(tmp_path: Path, name: str) -> Path:

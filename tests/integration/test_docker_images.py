@@ -13,11 +13,19 @@ These tests require Docker to be installed and running.
 
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+# Skip all tests in this module if Docker is not available
+# Also mark as requires_tools since they build/test Docker images with security tools
+pytestmark = [
+    pytest.mark.skipif(not shutil.which("docker"), reason="Docker not installed"),
+    pytest.mark.requires_tools,
+]
 
 # Docker image configuration
 DOCKER_REGISTRY = "ghcr.io"
