@@ -349,6 +349,12 @@ PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
             "docs/MANUAL_INSTALLATION.md#lynis-windows",
         ),
     },
+    "noseyparker": {
+        "windows": (
+            "No Windows binaries available (Rust tool, Linux/macOS only)",
+            "https://github.com/praetorian-inc/noseyparker",
+        ),
+    },
 }
 
 

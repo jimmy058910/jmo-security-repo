@@ -232,20 +232,40 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "default": "https://github.com/anchore/syft/releases/download/v{version}/syft_{version}_{os_lower}_{arch_amd}.tar.gz",
     },
     # hadolint: "Linux-x86_64" (capital L, hyphen, lowercase arch)
-    "hadolint": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
+    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    "hadolint": {
+        "windows": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-Windows-x86_64.exe",
+        "default": "https://github.com/hadolint/hadolint/releases/download/v{version}/hadolint-{os}-{arch}",
+    },
     # shellcheck: lowercase "linux.x86_64" with dots
     "shellcheck": "https://github.com/koalaman/shellcheck/releases/download/v{version}/shellcheck-v{version}.{os_lower}.{arch_aarch}.tar.xz",
     # Go tools using lowercase "linux_amd64" format
-    "trufflehog": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_{os_lower}_{arch_amd}.tar.gz",
+    # trufflehog: Windows uses .zip, Linux/macOS use .tar.gz
+    "trufflehog": {
+        "windows": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_windows_{arch_amd}.zip",
+        "default": "https://github.com/trufflesecurity/trufflehog/releases/download/v{version}/trufflehog_{version}_{os_lower}_{arch_amd}.tar.gz",
+    },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
-    "bearer": "https://github.com/Bearer/bearer/releases/download/v{version}/bearer_{version}_{os_lower}_{arch_amd}.tar.gz",
+    # bearer: Windows uses .zip, Linux/macOS use .tar.gz
+    "bearer": {
+        "windows": "https://github.com/Bearer/bearer/releases/download/v{version}/bearer_{version}_windows_{arch_amd}.zip",
+        "default": "https://github.com/Bearer/bearer/releases/download/v{version}/bearer_{version}_{os_lower}_{arch_amd}.tar.gz",
+    },
     # horusec: lowercase "linux_amd64" (no version in filename)
-    "horusec": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_{os_lower}_{arch_amd}",
+    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    "horusec": {
+        "windows": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_windows_{arch_amd}.exe",
+        "default": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_{os_lower}_{arch_amd}",
+    },
     # noseyparker: Rust target triple format with 'v' prefix
     "noseyparker": "https://github.com/praetorian-inc/noseyparker/releases/download/v{version}/noseyparker-v{version}-{rust_arch}.tar.gz",
     # kubescape: "kubescape_{version}_linux_amd64" (underscores, version in filename)
-    "kubescape": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_{os_lower}_{arch_amd}",
+    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    "kubescape": {
+        "windows": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_windows_{arch_amd}.exe",
+        "default": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_{os_lower}_{arch_amd}",
+    },
 }
 
 # Official install scripts (preferred over direct binary downloads)
@@ -1699,9 +1719,13 @@ class ToolInstaller:
                     )
 
                 # Move to install directory
-                dest = self.install_dir / tool_name
+                # On Windows, ensure .exe extension for executable binaries
+                if self.platform == "windows" and url.endswith(".exe"):
+                    dest = self.install_dir / f"{tool_name}.exe"
+                else:
+                    dest = self.install_dir / tool_name
                 shutil.copy2(binary_path, dest)
-                dest.chmod(0o755)
+                dest.chmod(0o755)  # No-op on Windows, but harmless
 
                 # Verify
                 status = self.manager.check_tool(tool_name)

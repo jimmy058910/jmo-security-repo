@@ -18,27 +18,36 @@ from scripts.cli.tool_installer import (
 )
 
 
+def _get_url_templates(url_config: str | dict[str, str]) -> list[str]:
+    """Extract URL templates from config (handles both str and dict format)."""
+    if isinstance(url_config, str):
+        return [url_config]
+    return list(url_config.values())
+
+
 class TestBinaryURLPatterns:
     """Test that BINARY_URLS generate correct download URLs."""
 
     def test_all_urls_use_versioned_paths(self):
         """Verify no URLs use /latest/download/ pattern."""
-        for tool, url_template in BINARY_URLS.items():
-            assert "/latest/download/" not in url_template, (
-                f"{tool} URL uses /latest/download/ which breaks version pinning. "
-                f"Use /download/v{{version}}/ instead."
-            )
+        for tool, url_config in BINARY_URLS.items():
+            for url_template in _get_url_templates(url_config):
+                assert "/latest/download/" not in url_template, (
+                    f"{tool} URL uses /latest/download/ which breaks version pinning. "
+                    f"Use /download/v{{version}}/ instead."
+                )
 
     def test_all_urls_have_version_placeholder(self):
         """Every URL template must include {version} placeholder."""
-        for tool, url_template in BINARY_URLS.items():
-            assert (
-                "{version}" in url_template
-            ), f"{tool} URL template missing {{version}} placeholder"
+        for tool, url_config in BINARY_URLS.items():
+            for url_template in _get_url_templates(url_config):
+                assert (
+                    "{version}" in url_template
+                ), f"{tool} URL template missing {{version}} placeholder"
 
     def test_trivy_url_x86_64(self):
         """Test trivy URL generation for x86_64 Linux."""
-        url = BINARY_URLS["trivy"].format(
+        url = BINARY_URLS["trivy"]["default"].format(
             version="0.58.0",
             os="Linux",
             os_lower="linux",
@@ -55,7 +64,7 @@ class TestBinaryURLPatterns:
 
     def test_trivy_url_arm64(self):
         """Test trivy URL generation for arm64 Linux."""
-        url = BINARY_URLS["trivy"].format(
+        url = BINARY_URLS["trivy"]["default"].format(
             version="0.58.0",
             os="Linux",
             os_lower="linux",
@@ -72,7 +81,7 @@ class TestBinaryURLPatterns:
 
     def test_grype_url_x86_64(self):
         """Test grype URL for x86_64 Linux."""
-        url = BINARY_URLS["grype"].format(
+        url = BINARY_URLS["grype"]["default"].format(
             version="0.87.0",
             os="Linux",
             os_lower="linux",
@@ -89,7 +98,7 @@ class TestBinaryURLPatterns:
 
     def test_syft_url_x86_64(self):
         """Test syft URL for x86_64 Linux."""
-        url = BINARY_URLS["syft"].format(
+        url = BINARY_URLS["syft"]["default"].format(
             version="1.20.0",
             os="Linux",
             os_lower="linux",
@@ -106,7 +115,7 @@ class TestBinaryURLPatterns:
 
     def test_trufflehog_url_x86_64(self):
         """Test trufflehog URL for x86_64 Linux."""
-        url = BINARY_URLS["trufflehog"].format(
+        url = BINARY_URLS["trufflehog"]["default"].format(
             version="3.88.0",
             os="Linux",
             os_lower="linux",
@@ -157,7 +166,7 @@ class TestBinaryURLPatterns:
 
     def test_bearer_url_x86_64(self):
         """Test bearer URL for x86_64 Linux."""
-        url = BINARY_URLS["bearer"].format(
+        url = BINARY_URLS["bearer"]["default"].format(
             version="1.51.1",
             os="Linux",
             os_lower="linux",
@@ -208,7 +217,7 @@ class TestBinaryURLPatterns:
 
     def test_kubescape_url_x86_64(self):
         """Test kubescape URL for x86_64 Linux."""
-        url = BINARY_URLS["kubescape"].format(
+        url = BINARY_URLS["kubescape"]["default"].format(
             version="3.0.47",
             os="Linux",
             os_lower="linux",
@@ -226,7 +235,7 @@ class TestBinaryURLPatterns:
 
     def test_hadolint_url_x86_64(self):
         """Test hadolint URL for x86_64 Linux."""
-        url = BINARY_URLS["hadolint"].format(
+        url = BINARY_URLS["hadolint"]["default"].format(
             version="2.12.0",
             os="Linux",
             os_lower="linux",
@@ -243,7 +252,7 @@ class TestBinaryURLPatterns:
 
     def test_horusec_url_x86_64(self):
         """Test horusec URL for x86_64 Linux (no version in filename)."""
-        url = BINARY_URLS["horusec"].format(
+        url = BINARY_URLS["horusec"]["default"].format(
             version="2.8.0",
             os="Linux",
             os_lower="linux",
@@ -256,6 +265,109 @@ class TestBinaryURLPatterns:
         assert url == (
             "https://github.com/ZupIT/horusec/releases/download/v2.8.0/"
             "horusec_linux_amd64"
+        )
+
+    # Windows-specific URL tests
+    def test_trivy_url_windows(self):
+        """Test trivy URL generation for Windows."""
+        url = BINARY_URLS["trivy"]["windows"].format(
+            version="0.58.0",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/aquasecurity/trivy/releases/download/v0.58.0/"
+            "trivy_0.58.0_windows-64bit.zip"
+        )
+
+    def test_hadolint_url_windows(self):
+        """Test hadolint URL for Windows (direct .exe download)."""
+        url = BINARY_URLS["hadolint"]["windows"].format(
+            version="2.12.0",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/hadolint/hadolint/releases/download/v2.12.0/"
+            "hadolint-Windows-x86_64.exe"
+        )
+
+    def test_trufflehog_url_windows(self):
+        """Test trufflehog URL for Windows (.zip format)."""
+        url = BINARY_URLS["trufflehog"]["windows"].format(
+            version="3.88.0",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
+            "trufflehog_3.88.0_windows_amd64.zip"
+        )
+
+    def test_bearer_url_windows(self):
+        """Test bearer URL for Windows (.zip format)."""
+        url = BINARY_URLS["bearer"]["windows"].format(
+            version="1.51.1",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/Bearer/bearer/releases/download/v1.51.1/"
+            "bearer_1.51.1_windows_amd64.zip"
+        )
+
+    def test_horusec_url_windows(self):
+        """Test horusec URL for Windows (direct .exe download)."""
+        url = BINARY_URLS["horusec"]["windows"].format(
+            version="2.8.0",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/ZupIT/horusec/releases/download/v2.8.0/"
+            "horusec_windows_amd64.exe"
+        )
+
+    def test_kubescape_url_windows(self):
+        """Test kubescape URL for Windows (direct .exe download)."""
+        url = BINARY_URLS["kubescape"]["windows"].format(
+            version="3.0.47",
+            os="Windows",
+            os_lower="windows",
+            arch="x86_64",
+            arch_amd="amd64",
+            arch_aarch="x86_64",
+            trivy_arch="64bit",
+            rust_arch="x86_64-pc-windows-msvc",
+        )
+        assert url == (
+            "https://github.com/kubescape/kubescape/releases/download/v3.0.47/"
+            "kubescape_3.0.47_windows_amd64.exe"
         )
 
 

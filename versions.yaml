@@ -307,6 +307,18 @@ special_tools:
     brew_package: shellcheck
     apt_package: shellcheck
     notes: Bash/sh/ksh script security and best practices
+  falco:
+    version: 0.0.0
+    github_repo: falcosecurity/falco
+    description: Runtime security and threat detection (kernel module)
+    release_pattern: null
+    update_check: null
+    critical: false
+    installation: Manual - requires kernel module installation
+    notes: |
+      Falco requires kernel module or eBPF probe installation.
+      Not available via automatic installation.
+      See: https://falco.org/docs/getting-started/installation/
 docker_images:
   ubuntu:
     version: '22.04'
