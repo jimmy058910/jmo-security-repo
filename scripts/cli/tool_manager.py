@@ -75,7 +75,10 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
 }
 
 # Version commands for tools that don't use --version
-VERSION_COMMANDS: dict[str, list[str]] = {
+# Type can be:
+#   - list[str]: Universal command (works on all platforms)
+#   - dict[str, list[str]]: Platform-specific commands with keys "windows", "linux", "macos", "default"
+VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
     # Tools using 'version' subcommand (no dashes)
     "grype": ["grype", "version"],
     "syft": ["syft", "version"],
@@ -86,9 +89,17 @@ VERSION_COMMANDS: dict[str, list[str]] = {
     "falcoctl": ["falcoctl", "version"],
     # Tools using single dash -version
     "nuclei": ["nuclei", "-version"],
-    "zap": ["zap.sh", "-version"],
+    # ZAP: Platform-specific (zap.sh on Unix, zap.bat on Windows)
+    "zap": {
+        "windows": ["zap.bat", "-version"],
+        "default": ["zap.sh", "-version"],
+    },
     # Tools using special commands
-    "dependency-check": ["dependency-check.sh", "--version"],
+    # Dependency-check: Platform-specific (.sh on Unix, .bat on Windows)
+    "dependency-check": {
+        "windows": ["dependency-check.bat", "--version"],
+        "default": ["dependency-check.sh", "--version"],
+    },
     "lynis": ["lynis", "show", "version"],
     # yara-python is a Python library, not a CLI - check via Python import
     # The native 'yara' CLI is a separate package from yara-python
@@ -319,6 +330,27 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
     },
 }
 
+# Tools that require manual installation on specific platforms
+# These tools cannot be auto-installed due to platform limitations or upstream bugs.
+# The wizard will skip these tools and display helpful guidance instead of failing.
+#
+# Key: tool_name
+# Value: dict of platform -> (reason, documentation_url)
+PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
+    "prowler": {
+        "windows": (
+            "Requires Windows Long Path Support (registry change + reboot)",
+            "docs/MANUAL_INSTALLATION.md#prowler-windows",
+        ),
+    },
+    "lynis": {
+        "windows": (
+            "Shell script requires bash (use WSL or Git Bash)",
+            "docs/MANUAL_INSTALLATION.md#lynis-windows",
+        ),
+    },
+}
+
 
 def get_remediation_for_tool(
     tool_name: str,
@@ -334,18 +366,46 @@ def get_remediation_for_tool(
         issue_type: Type of issue (install, deps, version)
 
     Returns:
-        Dict with 'commands' (list of commands to run) and 'manual' (manual instructions)
+        Dict with:
+        - 'commands': list of commands to run
+        - 'manual': manual instructions (deprecated, use manual_reason)
+        - 'jmo_install': jmo tools install command
+        - 'is_manual': True if this tool requires manual installation on this platform
+        - 'manual_reason': Why manual installation is required
+        - 'manual_url': URL/path to documentation for manual installation
     """
     commands: list[str] = []
     manual: str | None = None
     jmo_install: str | None = None
+
+    # Check if this tool requires manual installation on this platform
+    # These tools have known platform-specific issues that can't be auto-fixed
+    if tool_name in PLATFORM_MANUAL_TOOLS:
+        platform_manual = PLATFORM_MANUAL_TOOLS[tool_name].get(platform)
+        if platform_manual:
+            reason, url = platform_manual
+            return {
+                "commands": [],
+                "manual": reason,  # For backwards compatibility
+                "jmo_install": None,
+                "is_manual": True,
+                "manual_reason": reason,
+                "manual_url": url,
+            }
 
     remediation = REMEDIATION_COMMANDS.get(tool_name)
     if not remediation:
         # Fall back to jmo tools install for unknown tools
         commands = [f"jmo tools install {tool_name}"]
         jmo_install = f"jmo tools install {tool_name}"
-        return {"commands": commands, "manual": manual, "jmo_install": jmo_install}
+        return {
+            "commands": commands,
+            "manual": manual,
+            "jmo_install": jmo_install,
+            "is_manual": False,
+            "manual_reason": None,
+            "manual_url": None,
+        }
 
     # Get jmo install command
     jmo_install = remediation.get("jmo_install")
@@ -372,7 +432,14 @@ def get_remediation_for_tool(
     if not commands:
         manual = remediation.get("manual", f"See JMo docs for {tool_name} installation")
 
-    return {"commands": commands, "manual": manual, "jmo_install": jmo_install}
+    return {
+        "commands": commands,
+        "manual": manual,
+        "jmo_install": jmo_install,
+        "is_manual": False,
+        "manual_reason": None,
+        "manual_url": None,
+    }
 
 
 @dataclass
@@ -694,25 +761,25 @@ class ToolManager:
                 return str(lynis_clone_path)
 
         # ZAP is extracted to ~/.jmo/bin/zap/ directory
-        # The actual script is at ~/.jmo/bin/zap/zap.sh
-        if binary_name == "zap.sh":
-            zap_path = home / ".jmo" / "bin" / "zap" / "zap.sh"
-            if zap_path.exists():
-                return str(zap_path)
+        # The actual script is at ~/.jmo/bin/zap/zap.sh (Unix) or zap.bat (Windows)
+        if binary_name in ("zap.sh", "zap.bat"):
+            # Check both zap.sh and zap.bat (cross-platform support)
+            for script_name in ("zap.bat", "zap.sh"):
+                zap_path = home / ".jmo" / "bin" / "zap" / script_name
+                if zap_path.exists():
+                    return str(zap_path)
 
         # dependency-check is extracted to ~/.jmo/bin/dependency-check/
-        # The script is at ~/.jmo/bin/dependency-check/bin/dependency-check.sh
-        if binary_name == "dependency-check.sh":
-            dc_path = (
-                home
-                / ".jmo"
-                / "bin"
-                / "dependency-check"
-                / "bin"
-                / "dependency-check.sh"
-            )
-            if dc_path.exists():
-                return str(dc_path)
+        # The script is at ~/.jmo/bin/dependency-check/bin/dependency-check.sh (Unix)
+        # or dependency-check.bat (Windows)
+        if binary_name in ("dependency-check.sh", "dependency-check.bat"):
+            # Check both .sh and .bat extensions (cross-platform support)
+            for script_name in ("dependency-check.bat", "dependency-check.sh"):
+                dc_path = (
+                    home / ".jmo" / "bin" / "dependency-check" / "bin" / script_name
+                )
+                if dc_path.exists():
+                    return str(dc_path)
 
         # yara-python is a Python library, not a CLI binary
         # Check if the module is importable instead of looking for a binary
@@ -745,11 +812,13 @@ class ToolManager:
             if p.exists() and p.is_file():
                 return str(p)
 
-        # Handle special cases
-        if binary_name == "zap.sh":
+        # Handle special cases for other ZAP locations
+        if binary_name in ("zap.sh", "zap.bat"):
             # ZAP can be in various locations
+            # Unix locations (.sh), Windows locations (.bat)
             zap_paths = [
                 home / "zap" / "zap.sh",
+                home / "zap" / "zap.bat",
                 Path("/opt/zaproxy/zap.sh"),
                 Path("/usr/share/zaproxy/zap.sh"),
             ]
@@ -757,9 +826,11 @@ class ToolManager:
                 if p.exists():
                     return str(p)
 
-        if binary_name == "dependency-check.sh":
+        # Handle special cases for other dependency-check locations
+        if binary_name in ("dependency-check.sh", "dependency-check.bat"):
             dc_paths = [
                 home / "dependency-check" / "bin" / "dependency-check.sh",
+                home / "dependency-check" / "bin" / "dependency-check.bat",
                 Path("/opt/dependency-check/bin/dependency-check.sh"),
             ]
             for p in dc_paths:
@@ -782,7 +853,21 @@ class ToolManager:
         # Get version command - use tool_name for lookup (not binary_name)
         # VERSION_COMMANDS uses tool names as keys (e.g., "zap" not "zap.sh")
         if tool_name in VERSION_COMMANDS:
-            cmd = list(VERSION_COMMANDS[tool_name])  # Copy to avoid mutation
+            version_cmd_config = VERSION_COMMANDS[tool_name]
+
+            # Handle platform-specific commands (dict) vs universal commands (list)
+            if isinstance(version_cmd_config, dict):
+                # Get command for current platform
+                cmd_template = version_cmd_config.get(self.platform)
+                if not cmd_template:
+                    # Fallback to "default" key
+                    cmd_template = version_cmd_config.get("default")
+                if not cmd_template:
+                    cmd_template = [binary_path, "--version"]
+                cmd = list(cmd_template)  # Copy to avoid mutation
+            else:
+                cmd = list(version_cmd_config)  # Copy to avoid mutation
+
             # Replace first element (the binary) with full path
             cmd[0] = binary_path
         else:
@@ -992,6 +1077,15 @@ class ToolManager:
                     )
             else:
                 return False, "Node.js not found (required for cdxgen)", ["node"]
+
+        # Lynis requires bash (shell script) - check on Windows
+        if tool_name == "lynis" and self.platform == "windows":
+            if not shutil.which("bash"):
+                return (
+                    False,
+                    "Requires bash (install WSL, Git Bash, or Cygwin)",
+                    ["bash"],
+                )
 
         return True, None, []
 

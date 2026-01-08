@@ -980,6 +980,9 @@ def check_tools_for_profile(
         # Collect fix commands for display and potential auto-execution
         fix_info: list[dict] = []
 
+        # Track manual-only tools separately for clearer display
+        manual_only_count = 0
+
         for status in tools_needing_attention:
             if not status.installed:
                 issue = "NOT INSTALLED"
@@ -996,16 +999,25 @@ def check_tools_for_profile(
                 }
             )
 
-            # Display the issue
-            icon = (
-                _UNICODE_FALLBACKS.get("❌", "[X]")
-                if not status.installed
-                else _UNICODE_FALLBACKS.get("⚠", "[!]")
-            )
+            # Display the issue - distinguish manual-only tools
+            is_manual = remediation.get("is_manual", False)
+            if is_manual:
+                manual_only_count += 1
+                icon = _UNICODE_FALLBACKS.get("📖", "[?]")
+                # Show manual reason instead of generic issue
+                issue = remediation.get("manual_reason", issue)
+            elif not status.installed:
+                icon = _UNICODE_FALLBACKS.get("❌", "[X]")
+            else:
+                icon = _UNICODE_FALLBACKS.get("⚠", "[!]")
+
             print(f"\n  {icon} {_colorize(status.name, 'yellow')}: {issue}")
 
-            # Show fix command
-            if remediation["commands"]:
+            # Show fix command or manual guidance
+            if is_manual:
+                url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
+                print(f"     See: {url}")
+            elif remediation["commands"]:
                 print(f"     Fix: {remediation['commands'][0]}")
                 if len(remediation["commands"]) > 1:
                     for cmd in remediation["commands"][1:]:
@@ -1107,9 +1119,10 @@ def _auto_fix_tools(
     """
     Automatically fix tools with issues using parallel installation.
 
-    Uses two-phase strategy:
-    1. Parallel installation for JMo-manageable tools (pip, npm, binary downloads)
-    2. Sequential execution for platform-specific commands (brew, apt, choco)
+    Uses three-phase strategy:
+    1. Skip manual-only tools (show guidance instead of failing)
+    2. Parallel installation for JMo-manageable tools (pip, npm, binary downloads)
+    3. Sequential execution for platform-specific commands (brew, apt, choco)
 
     Args:
         fix_info: List of dicts with tool name, issue, and remediation info
@@ -1120,9 +1133,58 @@ def _auto_fix_tools(
     Returns:
         Tuple of (should_continue, updated_available_tools)
     """
+    # Phase 0: Separate manual-only tools from auto-fixable tools
+    manual_tools: list[dict] = []
+    auto_fix_info: list[dict] = []
+
+    for info in fix_info:
+        remediation = info["remediation"]
+        if remediation.get("is_manual"):
+            manual_tools.append(info)
+        else:
+            auto_fix_info.append(info)
+
+    # Show manual tools guidance upfront (don't attempt install)
+    if manual_tools:
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('📖', '[?]')} {len(manual_tools)} tool(s) require manual installation:",
+                "yellow",
+            )
+        )
+        print("─" * 50)
+        for info in manual_tools:
+            tool_name = info["name"]
+            remediation = info["remediation"]
+            reason = remediation.get("manual_reason", "Manual installation required")
+            url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
+
+            print(
+                f"\n  {_UNICODE_FALLBACKS.get('⚠', '[!]')} {_colorize(tool_name, 'yellow')}"
+            )
+            print(f"     Reason: {reason}")
+            print(f"     See: {url}")
+        print("\n" + "─" * 50)
+        print(
+            _colorize(
+                "Tip: Use Docker mode for full tool support, or continue without these tools.",
+                "blue",
+            )
+        )
+
+    # If no auto-fixable tools, return early
+    if not auto_fix_info:
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} No tools can be auto-installed on this platform.",
+                "yellow",
+            )
+        )
+        return True, available
+
     print(
         _colorize(
-            f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(fix_info)} tool(s)...",
+            f"\n{_UNICODE_FALLBACKS.get('🔧', '[*]')} Auto-fixing {len(auto_fix_info)} tool(s)...",
             "blue",
         )
     )
@@ -1132,7 +1194,7 @@ def _auto_fix_tools(
     jmo_tools: list[str] = []
     platform_commands: list[tuple[str, list[str]]] = []  # (tool_name, commands)
 
-    for info in fix_info:
+    for info in auto_fix_info:
         tool_name = info["name"]
         remediation = info["remediation"]
 

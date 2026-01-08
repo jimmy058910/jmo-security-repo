@@ -9,6 +9,9 @@ Complete reference for installing JMo Security and its external security tools.
 - [External Tool Installation](#external-tool-installation)
 - [Platform-Specific Guide](#platform-specific-guide)
 - [Manual Installation Tools](#manual-installation-tools)
+  - [Windows-Specific Installation](#windows-specific-installation)
+    - [Prowler (Windows)](#prowler-windows)
+    - [Lynis (Windows)](#lynis-windows)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -424,7 +427,88 @@ newgrp docker
 
 ## Manual Installation Tools
 
-Three tools require manual installation due to complex dependencies.
+Some tools require manual installation due to complex dependencies or platform-specific limitations.
+
+### Windows-Specific Installation
+
+The following tools have special requirements on Windows that prevent automatic installation:
+
+#### Prowler (Windows) {#prowler-windows}
+
+**Issue:** Prowler installation on Windows fails due to long path limitations (>260 characters). The AWS SDK and its dependencies create deeply nested paths that exceed Windows' default MAX_PATH limit.
+
+**Solution:** Enable Windows Long Path Support (requires admin privileges and reboot):
+
+1. **Enable via Registry (Recommended):**
+
+   ```powershell
+   # Run PowerShell as Administrator
+   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+     -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+   ```
+
+2. **Enable via Group Policy (Alternative):**
+   - Press Win+R, type `gpedit.msc`
+   - Navigate to: Computer Configuration → Administrative Templates → System → Filesystem
+   - Enable "Enable Win32 long paths"
+
+3. **Reboot your system** (required for the change to take effect)
+
+4. **Install Prowler:**
+
+   ```powershell
+   pip install prowler
+   prowler -v  # Verify installation
+   ```
+
+**Alternative:** Use WSL2 or Docker mode for full Prowler support:
+
+```powershell
+# WSL2
+wsl -d Ubuntu-22.04
+pip install prowler
+
+# Docker
+docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --profile balanced
+```
+
+#### Lynis (Windows) {#lynis-windows}
+
+**Issue:** Lynis is a shell script that requires a Unix shell (bash) to run. It cannot run natively on Windows without a Unix-like environment.
+
+**Solution Options:**
+
+1. **Use WSL2 (Recommended):**
+
+   ```powershell
+   # Install WSL2 if not already installed
+   wsl --install -d Ubuntu-22.04
+
+   # From WSL2 terminal
+   sudo apt update && sudo apt install lynis -y
+   lynis show version
+   ```
+
+2. **Use Git Bash:**
+
+   ```bash
+   # Install Git for Windows (includes Git Bash)
+   # https://git-scm.com/download/win
+
+   # From Git Bash terminal
+   git clone https://github.com/CISOfy/lynis.git ~/.lynis
+   ~/.lynis/lynis show version
+   ```
+
+3. **Use Docker mode:**
+
+   ```powershell
+   docker run -v "$PWD:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan --profile balanced
+   ```
+
+**Note:** On Windows, JMo will skip Lynis if bash is not available. Use Docker mode for full tool coverage.
+
+---
 
 ### Docker Image Tool Counts
 

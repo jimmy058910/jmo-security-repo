@@ -1,0 +1,8 @@
+{
+  "tool": "semgrep",
+  "version": "1.146.0",
+  "generated_at": "2026-01-08T04:47:09.963957+00:00",
+  "sample_dir": "python-vulnerable",
+  "finding_count": 0,
+  "raw_output_hash": "0dbd1ae567a4"
+}

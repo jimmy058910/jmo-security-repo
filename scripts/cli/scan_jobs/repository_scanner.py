@@ -160,6 +160,7 @@ def scan_repository(
             semgrep_cmd = [
                 "semgrep",
                 "--config=auto",
+                "--config=p/security",  # Security rules (SQLi, XSS, etc.)
                 "--json",
                 "--output",
                 str(semgrep_out),

@@ -159,8 +159,9 @@ INSTALL_PRIORITIES: dict[Platform, list[str]] = {
 # Tools that require special installation handling
 # NOTE: kubescape moved to BINARY_URLS (v1.0.0) - direct binary download is more reliable
 SPECIAL_INSTALL: dict[str, str] = {
-    "zap": "extract_app",  # Extract tar.gz to directory
+    "zap": "extract_app",  # Extract zip to directory (cross-platform)
     "dependency-check": "extract_app",  # Extract zip to directory (Java CLI)
+    "scancode": "extract_app",  # Platform-specific pre-built releases (bypasses pip bug)
     "falco": "manual",  # Kernel module
     "afl++": "manual",  # Build from source
     "mobsf": "docker",  # Docker-only
@@ -170,9 +171,27 @@ SPECIAL_INSTALL: dict[str, str] = {
 
 # App archives that extract to a directory (not single binary)
 # These are downloaded, extracted, and the main script is linked/used
-EXTRACT_APP_URLS: dict[str, str] = {
-    "zap": "https://github.com/zaproxy/zaproxy/releases/download/v{version}/ZAP_{version}_Linux.tar.gz",
+#
+# Type can be str (universal) or dict (platform-specific)
+# For platform-specific URLs, use keys: "windows", "linux", "macos", "default"
+#
+# Available placeholders:
+#   {version}    - Tool version from versions.yaml
+#   {py_version} - Python version (e.g., "3.11") for tools requiring specific Python builds
+EXTRACT_APP_URLS: dict[str, str | dict[str, str]] = {
+    # ZAP: Use cross-platform release that works on all platforms
+    # Changed from Linux-only tarball to universal Crossplatform.zip
+    "zap": "https://github.com/zaproxy/zaproxy/releases/download/v{version}/ZAP_{version}_Crossplatform.zip",
+    # Dependency-check: Universal zip works on all platforms (Java-based)
     "dependency-check": "https://github.com/jeremylong/DependencyCheck/releases/download/v{version}/dependency-check-{version}-release.zip",
+    # ScanCode: Platform-specific pre-built releases (bypasses pip upstream bug)
+    # The pip install fails due to invalid PEP 440 specifier in extractcode dependency
+    # See: https://github.com/aboutcode-org/scancode-toolkit/issues/3944
+    "scancode": {
+        "windows": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-windows.zip",
+        "linux": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-linux.tar.gz",
+        "macos": "https://github.com/nexB/scancode-toolkit/releases/download/v{version}/scancode-toolkit-v{version}_py{py_version}-macos.tar.gz",
+    },
 }
 
 # Binary download URLs (GitHub releases)
@@ -1963,9 +1982,10 @@ class ToolInstaller:
     def _install_extract_app(
         self, tool_name: str, tool_info: ToolInfo, start_time: float
     ) -> InstallResult:
-        """Install app that extracts to a directory (e.g., ZAP).
+        """Install app that extracts to a directory (e.g., ZAP, scancode).
 
         Downloads archive, extracts to ~/.jmo/{tool_name}/, and verifies.
+        Supports platform-specific URLs for tools like scancode.
         Security: Uses safe_tar_extract/safe_zip_extract to prevent path traversal.
         """
         import time
@@ -1989,8 +2009,31 @@ class ToolInstaller:
                 duration_seconds=time.time() - start_time,
             )
 
-        url_template = EXTRACT_APP_URLS[tool_name]
-        url = url_template.format(version=tool_info.version)
+        url_config = EXTRACT_APP_URLS[tool_name]
+
+        # Handle platform-specific URLs (dict) vs universal URLs (str)
+        if isinstance(url_config, dict):
+            # Get URL for current platform
+            url_template = url_config.get(self.platform)
+            if not url_template:
+                # Try "default" fallback
+                url_template = url_config.get("default")
+            if not url_template:
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=False,
+                    method="extract_app",
+                    message=f"No {self.platform} URL defined for {tool_name}",
+                    duration_seconds=time.time() - start_time,
+                )
+        else:
+            url_template = url_config
+
+        # Get Python version for tools that need it (e.g., scancode pre-built releases)
+        py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+        # Format URL with version and optional py_version
+        url = url_template.format(version=tool_info.version, py_version=py_version)
         app_dir = self.install_dir / tool_name
 
         logger.debug(f"Downloading {tool_name} from: {url}")

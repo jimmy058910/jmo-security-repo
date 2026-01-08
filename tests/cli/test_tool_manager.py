@@ -39,12 +39,31 @@ def test_version_patterns_tool_specific():
 
 
 def test_version_commands_structure():
-    """Test VERSION_COMMANDS has correct structure."""
+    """Test VERSION_COMMANDS has correct structure.
+
+    VERSION_COMMANDS can be:
+    - list[str]: Universal command (works on all platforms)
+    - dict[str, list[str]]: Platform-specific commands with keys like "windows", "default"
+    """
     from scripts.cli.tool_manager import VERSION_COMMANDS
 
-    for tool, cmd in VERSION_COMMANDS.items():
-        assert isinstance(cmd, list)
-        assert len(cmd) >= 2
+    for tool, cmd_config in VERSION_COMMANDS.items():
+        if isinstance(cmd_config, dict):
+            # Platform-specific commands - validate each variant
+            assert (
+                "default" in cmd_config or "linux" in cmd_config
+            ), f"Platform-specific {tool} must have 'default' or 'linux' key"
+            for platform_key, cmd_list in cmd_config.items():
+                assert isinstance(
+                    cmd_list, list
+                ), f"{tool}[{platform_key}] must be a list"
+                assert (
+                    len(cmd_list) >= 2
+                ), f"{tool}[{platform_key}] must have at least 2 elements"
+        else:
+            # Universal command
+            assert isinstance(cmd_config, list), f"{tool} must be a list"
+            assert len(cmd_config) >= 2, f"{tool} must have at least 2 elements"
 
 
 def test_version_timeouts_reasonable():
