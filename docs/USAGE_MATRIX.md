@@ -179,6 +179,8 @@ jmo report ./results
 
 This matrix shows the **essential tools** for each target type (minimum viable configuration).
 
+> **Detailed Reference:** For complete tool-to-target mappings including content-triggered execution logic, see [PROFILES_AND_TOOLS.md - Scan Type Tool Matrix](PROFILES_AND_TOOLS.md#scan-type-tool-matrix).
+
 | Target Type | Essential Tools | Secondary Tools | Coverage Area |
 |-------------|-----------------|-----------------|---------------|
 | **Repositories** | trufflehog, semgrep, trivy | All other SAST/SCA tools | Secrets, SAST, SCA |
@@ -388,7 +390,7 @@ outputs: [json, md, html, sarif]
 
 ## See Also
 
-- [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) - Canonical tool lists and dependencies
+- [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) - Canonical tool lists, **tool selection philosophy**, **content-triggered execution**, and **scan type matrices**
 - [TESTING_MATRIX.md](TESTING_MATRIX.md) - Test coverage analysis
 - [USER_GUIDE.md](USER_GUIDE.md) - Complete usage reference
 - [docs/examples/](examples/) - CI/CD workflow examples

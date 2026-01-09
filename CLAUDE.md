@@ -208,11 +208,11 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 
 ## Scan Profiles
 
-> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - Complete tool lists, dependencies, manual installation
+> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - Complete tool lists, tool selection philosophy, content-triggered execution, scan type matrices, dependencies, manual installation
 
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
-| `fast` | 7 | 5-10 min | Pre-commit, PR validation | `:fast` |
+| `fast` | 8 | 5-10 min | Pre-commit, PR validation | `:fast` |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
 | `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
 | `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |

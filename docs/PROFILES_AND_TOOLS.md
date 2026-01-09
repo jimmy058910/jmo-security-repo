@@ -10,6 +10,9 @@ This document is the authoritative reference for which tools are included in eac
 - [Profile Overview](#profile-overview)
 - [Profile Tool Lists](#profile-tool-lists)
 - [Tool Categories](#tool-categories)
+- [Tool Selection Philosophy](#tool-selection-philosophy)
+- [Content-Triggered Tool Execution](#content-triggered-tool-execution)
+- [Scan Type Tool Matrix](#scan-type-tool-matrix)
 - [Complete Tool Reference](#complete-tool-reference)
 - [Manual Installation Tools](#manual-installation-tools)
 - [Dependencies](#dependencies)
@@ -250,6 +253,263 @@ deep:
 | MobSF | deep | Mobile app security [MANUAL] |
 | Lynis | deep | System hardening audit |
 | ShellCheck | fast+ | Shell script security |
+
+---
+
+## Tool Selection Philosophy
+
+JMo Security intentionally includes **overlapping tools** for defense-in-depth coverage. This section explains why certain tools exist alongside others that may seem duplicative.
+
+### Why Multiple Secrets Scanners?
+
+| Tool | Unique Value | Trade-off |
+|------|--------------|-----------|
+| **TruffleHog** | 800+ detectors, **API verification** (confirms secrets are live) | Higher false positive rate without verification |
+| **Nosey Parker** | 98.5% precision with ML filtering, 10x faster | No API verification, ~200 detectors |
+| **Semgrep-Secrets** | Code context awareness (understands variable assignments) | Pattern-based, no verification |
+
+**Rationale:** TruffleHog catches the most secrets; Nosey Parker has fewer false positives; Semgrep-Secrets understands code structure. Running all three in deep profile maximizes detection while cross-tool deduplication removes duplicates.
+
+### Why Multiple SCA Scanners?
+
+| Tool | Database | Unique Value |
+|------|----------|--------------|
+| **Trivy** | CVE/NVD + vendor advisories | Broadest coverage, multi-target (code, containers, IaC) |
+| **Grype** | Anchore vulnerability DB | Different data sources, catches CVEs Trivy may miss |
+| **Dependency-Check** | OWASP NVD | OWASP compliance reporting, CPE matching |
+
+**Rationale:** Vulnerability databases have different update cycles and coverage. Running multiple SCA tools with different databases reduces blind spots. Cross-tool deduplication (30-40% reduction) prevents duplicate noise.
+
+### Why Multiple SAST Scanners?
+
+| Tool | Strengths | Languages |
+|------|-----------|-----------|
+| **Semgrep** | Low false positives, fast, community rules | 30+ languages |
+| **Horusec** | Different rule engine, catches patterns Semgrep misses | 18+ languages |
+| **Bandit** | Deep Python expertise (weak crypto, shell injection) | Python only |
+| **Gosec** | Go-specific patterns (race conditions, memory safety) | Go only |
+| **Bearer** | Data privacy focus (GDPR/CCPA, PII exposure) | 12+ languages |
+
+**Rationale:** No single SAST tool catches everything. Language-specific tools (Bandit, Gosec) have deeper coverage than polyglot tools. Bearer adds privacy-specific rules that security-focused tools often miss.
+
+### Why Multiple IaC Scanners?
+
+| Tool | Focus Area |
+|------|------------|
+| **Checkov** | Broadest policy coverage (1000+ rules), multi-framework |
+| **Trivy** | Misconfiguration scanning integrated with vulnerability scanning |
+| **Kubescape** | NSA/CISA hardening guidelines, K8s-specific |
+| **Prowler** | Cloud provider native (AWS/Azure/GCP CIS benchmarks) |
+
+**Rationale:** Checkov provides breadth; specialized tools (Kubescape for K8s, Prowler for cloud) provide depth in their domains.
+
+---
+
+## Content-Triggered Tool Execution
+
+Some tools only execute when specific content is detected in the target repository. This reduces scan time and avoids irrelevant findings.
+
+### Conditional Execution Matrix
+
+| Tool | Trigger Condition | Behavior When Not Triggered |
+|------|-------------------|----------------------------|
+| **MobSF** | `*.apk` or `*.ipa` files detected | Writes empty stub |
+| **Prowler** | `*.tf`, `*.tfvars`, or `cloudformation.yaml` detected | Writes empty stub |
+| **ZAP** (repo mode) | HTML, JS, or PHP files detected | Writes empty stub |
+| **Trivy-RBAC** | Kubernetes manifests (`*deployment*.yaml`, `*service*.yaml`, `k8s/**/*.yaml`) | Writes empty stub |
+| **Falco** | Falco rule files (`*falco*.yaml`, `*falco*.yml`) detected | Writes empty stub |
+| **AFL++** | Instrumented binaries (`*-afl`, `*-fuzzer`, `bin/*`, `build/*`) detected | Writes empty stub |
+| **Hadolint** | `Dockerfile*` files detected | Writes empty stub |
+| **Lynis** | Never runs on repositories (system scanner) | Always writes stub |
+| **Akto** | URL targets only (not applicable to repositories) | Not invoked |
+
+### Detection Logic Details
+
+**MobSF (Mobile Security):**
+
+```python
+# Scans first mobile app found
+mobile_files = list(repo.glob("**/*.apk")) + list(repo.glob("**/*.ipa"))
+```
+
+**Prowler (Cloud Security):**
+
+```python
+# Only runs if cloud config files exist
+cloud_files = (
+    list(repo.glob("**/*.tf")) +
+    list(repo.glob("**/*.tfvars")) +
+    list(repo.glob("**/cloudformation.yaml")) +
+    list(repo.glob("**/cloudformation.json"))
+)
+```
+
+**ZAP (Web Scanning in repo mode):**
+
+```python
+# Scans static web files when present
+web_files = (
+    list(repo.glob("**/*.html")) +
+    list(repo.glob("**/*.js")) +
+    list(repo.glob("**/*.php"))
+)
+```
+
+**Trivy-RBAC (Kubernetes):**
+
+```python
+# Requires K8s manifests
+k8s_manifests = (
+    list(repo.glob("**/*deployment*.yaml")) +
+    list(repo.glob("**/*service*.yaml")) +
+    list(repo.glob("**/k8s/**/*.yaml"))
+)
+```
+
+### Stub Files
+
+When a tool doesn't run due to missing trigger content, JMo Security writes an empty stub file to:
+
+1. Indicate the tool was considered but not applicable
+2. Prevent downstream errors expecting output files
+3. Enable consistent reporting across all tools
+
+Stub format:
+
+```json
+{
+  "tool": "mobsf",
+  "status": "skipped",
+  "reason": "No applicable files found",
+  "findings": []
+}
+```
+
+---
+
+## Scan Type Tool Matrix
+
+Different target types invoke different subsets of tools. This matrix shows the complete mapping.
+
+### Target Type Overview
+
+| Target Type | CLI Flag | Scanner Module | Tool Count |
+|-------------|----------|----------------|------------|
+| **Local Repository** | `--repo .` | `repository_scanner.py` | Up to 28 (profile-dependent) |
+| **Container Image** | `--image nginx:latest` | `image_scanner.py` | 2 (trivy, syft) |
+| **IaC File** | Auto-detected | `iac_scanner.py` | 2 (checkov, trivy) |
+| **Web URL/API** | `--url https://...` | `url_scanner.py` | 3 (zap, nuclei, akto) |
+| **GitLab Remote** | `--gitlab group/repo` | `gitlab_scanner.py` | All repo tools + image tools |
+| **Kubernetes Cluster** | `--k8s` | `k8s_scanner.py` | 1 (trivy k8s mode) |
+
+### Detailed Tool Applicability
+
+#### Local Repository Scan (`jmo scan --repo .`)
+
+**Always Run (if in profile):**
+
+| Category | Tools |
+|----------|-------|
+| Secrets | trufflehog, noseyparker, semgrep-secrets |
+| SAST | semgrep, bandit, gosec, horusec, bearer |
+| SCA | trivy, grype, dependency-check |
+| SBOM | syft, cdxgen |
+| IaC | checkov, checkov-cicd, hadolint, kubescape, prowler* |
+| License | scancode |
+| Other | shellcheck, yara |
+
+**Conditional (content-triggered):**
+
+| Tool | Requires |
+|------|----------|
+| prowler | `*.tf`, `cloudformation.yaml` |
+| zap | HTML/JS/PHP files |
+| trivy-rbac | K8s manifests |
+| falco | Falco rule files |
+| mobsf | APK/IPA files |
+| afl++ | Instrumented binaries |
+
+**Never Run on Repositories:**
+
+| Tool | Reason |
+|------|--------|
+| lynis | System-level scanner (host OS audit) |
+| akto | Requires live API endpoints |
+
+#### Container Image Scan (`jmo scan --image nginx:latest`)
+
+| Tool | Mode | Output |
+|------|------|--------|
+| **trivy** | `trivy image --scanners vuln,secret,misconfig` | CVEs, secrets, misconfigs |
+| **syft** | `syft <image>` | SBOM (CycloneDX/SPDX) |
+
+#### IaC File Scan (auto-detected)
+
+| Tool | Mode | Targets |
+|------|------|---------|
+| **checkov** | `checkov -f <file>` | Terraform, CloudFormation, K8s, Dockerfile |
+| **trivy** | `trivy config <file>` | Misconfigurations |
+
+#### Web URL Scan (`jmo scan --url https://example.com`)
+
+| Tool | Mode | Focus |
+|------|------|-------|
+| **nuclei** | `nuclei -u <url>` | 4000+ vulnerability templates, CVE probes |
+| **zap** | `zap -quickurl <url>` | OWASP DAST, active scanning |
+| **akto** | `akto test --url <url>` | OWASP API Top 10 (deep profile only) |
+
+#### GitLab Remote Scan (`jmo scan --gitlab group/repo`)
+
+1. **Clone** repository (shallow, single branch)
+2. **Run all repository scanner tools** (same as `--repo`)
+3. **Discover container images** from:
+   - `Dockerfile` FROM lines
+   - `docker-compose.yml` image fields
+   - `*.k8s.yaml` container images
+4. **Scan discovered images** with trivy + syft
+5. **Aggregate results** under `individual-gitlab/<group>_<repo>/`
+
+#### Kubernetes Cluster Scan (`jmo scan --k8s`)
+
+| Tool | Mode | Targets |
+|------|------|---------|
+| **trivy** | `trivy k8s --all-namespaces all` | Pods, deployments, configmaps, secrets, RBAC |
+
+### Quick Reference: Tool → Target Type
+
+| Tool | Repo | Image | IaC | URL | GitLab | K8s |
+|------|:----:|:-----:|:---:|:---:|:------:|:---:|
+| trufflehog | ✅ | - | - | - | ✅ | - |
+| noseyparker | ✅ | - | - | - | ✅ | - |
+| semgrep | ✅ | - | - | - | ✅ | - |
+| semgrep-secrets | ✅ | - | - | - | ✅ | - |
+| bandit | ✅ | - | - | - | ✅ | - |
+| gosec | ✅ | - | - | - | ✅ | - |
+| horusec | ✅ | - | - | - | ✅ | - |
+| bearer | ✅ | - | - | - | ✅ | - |
+| trivy | ✅ | ✅ | ✅ | - | ✅ | ✅ |
+| grype | ✅ | - | - | - | ✅ | - |
+| dependency-check | ✅ | - | - | - | ✅ | - |
+| syft | ✅ | ✅ | - | - | ✅ | - |
+| cdxgen | ✅ | - | - | - | ✅ | - |
+| checkov | ✅ | - | ✅ | - | ✅ | - |
+| checkov-cicd | ✅ | - | - | - | ✅ | - |
+| hadolint | ✅* | - | - | - | ✅* | - |
+| kubescape | ✅ | - | - | - | ✅ | - |
+| prowler | ✅* | - | - | - | ✅* | - |
+| trivy-rbac | ✅* | - | - | - | ✅* | - |
+| scancode | ✅ | - | - | - | ✅ | - |
+| shellcheck | ✅ | - | - | - | ✅ | - |
+| yara | ✅ | - | - | - | ✅ | - |
+| falco | ✅* | - | - | - | ✅* | - |
+| nuclei | - | - | - | ✅ | - | - |
+| zap | ✅* | - | - | ✅ | ✅* | - |
+| akto | - | - | - | ✅ | - | - |
+| mobsf | ✅* | - | - | - | ✅* | - |
+| afl++ | ✅* | - | - | - | ✅* | - |
+| lynis | - | - | - | - | - | - |
+
+**Legend:** ✅ = Always applicable | ✅* = Content-triggered | - = Not applicable
 
 ---
 
@@ -511,4 +771,4 @@ When adding or removing tools:
 
 ---
 
-**Last Updated:** December 2025 | **JMo Security v1.0.0**
+**Last Updated:** January 2026 | **JMo Security v1.0.0**
