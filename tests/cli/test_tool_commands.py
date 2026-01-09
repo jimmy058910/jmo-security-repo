@@ -998,9 +998,11 @@ class TestUninstallTools:
         ):
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(returncode=0)
-                with patch("builtins.print"):
-                    errors = []
-                    _uninstall_tools([("semgrep", "pip")], errors)
+                # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
+                with patch("shutil.rmtree"):
+                    with patch("builtins.print"):
+                        errors = []
+                        _uninstall_tools([("semgrep", "pip")], errors)
 
         assert len(errors) == 0
         mock_run.assert_called()
@@ -1757,6 +1759,14 @@ class TestCmdToolsDebugComprehensive:
         mock_manager.check_tool.return_value = mock_status
         mock_manager._get_clean_env.return_value = {}
 
+        # Mock file command result (first subprocess.run call)
+        # cmd_tools_debug makes TWO subprocess calls:
+        # 1. `file` command to check binary type (line 267)
+        # 2. Version command (line 298)
+        mock_file_result = MagicMock()
+        mock_file_result.returncode = 0
+        mock_file_result.stdout = "executable"
+
         args = argparse.Namespace(
             tools=["trivy"],
         )
@@ -1767,7 +1777,11 @@ class TestCmdToolsDebugComprehensive:
             ):
                 with patch("builtins.print"):
                     with patch("subprocess.run") as mock_run:
-                        mock_run.side_effect = PermissionError("Access denied")
+                        # Use list: first call (file) succeeds, second (version) raises
+                        mock_run.side_effect = [
+                            mock_file_result,
+                            PermissionError("Access denied"),
+                        ]
                         result = cmd_tools_debug(args)
 
         assert result == 0
@@ -2796,7 +2810,9 @@ class TestUninstallToolsExecution:
             mock_registry_cls.return_value = mock_registry
 
             with patch("subprocess.run", side_effect=Exception("Network error")):
-                _uninstall_tools([("semgrep", "pip")], errors)
+                # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
+                with patch("shutil.rmtree"):
+                    _uninstall_tools([("semgrep", "pip")], errors)
 
         assert len(errors) == 1
         assert "pip uninstall" in errors[0]
@@ -2821,7 +2837,9 @@ class TestUninstallToolsExecution:
             with patch.object(
                 subprocess_module, "run", side_effect=Exception("npm error")
             ):
-                _uninstall_tools([("eslint", "npm")], errors)
+                # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
+                with patch("shutil.rmtree"):
+                    _uninstall_tools([("eslint", "npm")], errors)
 
         assert len(errors) == 1
         assert "npm uninstall" in errors[0]

@@ -269,23 +269,27 @@ def test_scan_url_missing_tools_with_allow(tmp_path):
     results_dir.mkdir()
 
     with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
+        # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
+        with patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None):
+            with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
+                with patch(
+                    "scripts.cli.scan_jobs.url_scanner.ToolRunner"
+                ) as MockRunner:
+                    MockRunner.return_value.run_all_parallel.return_value = []
 
-                url, statuses = scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap", "nuclei"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
+                    url, statuses = scan_url(
+                        url="https://example.com",
+                        results_dir=results_dir,
+                        tools=["zap", "nuclei"],
+                        timeout=300,
+                        retries=0,
+                        per_tool_config={},
+                        allow_missing_tools=True,
+                    )
 
-                assert statuses["zap"] is True
-                assert statuses["nuclei"] is True
-                assert mock_stub.call_count == 2
+                    assert statuses["zap"] is True
+                    assert statuses["nuclei"] is True
+                    assert mock_stub.call_count == 2
 
 
 def test_scan_url_per_tool_timeout(tmp_path):
@@ -531,21 +535,23 @@ def test_scan_url_custom_write_stub_func(tmp_path):
         stub_calls.append((tool, path))
 
     with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+        # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
+        with patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None):
+            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+                MockRunner.return_value.run_all_parallel.return_value = []
 
-            scan_url(
-                url="https://example.com",
-                results_dir=results_dir,
-                tools=["zap", "nuclei"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                write_stub_func=mock_write_stub,
-            )
+                scan_url(
+                    url="https://example.com",
+                    results_dir=results_dir,
+                    tools=["zap", "nuclei"],
+                    timeout=300,
+                    retries=0,
+                    per_tool_config={},
+                    allow_missing_tools=True,
+                    write_stub_func=mock_write_stub,
+                )
 
-            assert len(stub_calls) == 2
+                assert len(stub_calls) == 2
 
 
 def test_scan_url_zap_command_selection(tmp_path):

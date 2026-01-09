@@ -255,6 +255,8 @@ class TestUrlScanner:
                 "scripts.cli.scan_jobs.url_scanner.tool_exists",
                 side_effect=mock_tool_exists,
             ),
+            # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
+            patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None),
         ):
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
