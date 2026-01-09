@@ -20,6 +20,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from scripts.core.exceptions import OPANotFoundException
 from scripts.core.secure_temp import secure_temp_file
 from typing import Any, Dict, List, Optional, cast
 
@@ -94,11 +95,7 @@ class PolicyEngine:
         # This provides better error messages on Windows where FileNotFoundError
         # may not be raised reliably
         if shutil.which(self.opa_binary) is None:
-            raise RuntimeError(
-                f"OPA binary not found: {self.opa_binary}. "
-                "Install via: jmo tools install opa or download from "
-                "https://www.openpolicyagent.org/docs/latest/#running-opa"
-            )
+            raise OPANotFoundException()
 
         try:
             result = subprocess.run(
@@ -125,10 +122,7 @@ class PolicyEngine:
 
             logger.debug(f"OPA version: {result.stdout.strip()}")
         except FileNotFoundError:
-            raise RuntimeError(
-                f"OPA binary not found: {self.opa_binary}. "
-                "Install via: make tools or download from https://www.openpolicyagent.org/docs/latest/#running-opa"
-            )
+            raise OPANotFoundException()
         except subprocess.TimeoutExpired:
             raise RuntimeError("OPA binary timed out during verification")
 

@@ -231,7 +231,14 @@ class PluginLoader:
             self._load_plugin(self._adapter_paths[name])
             elapsed = (time.perf_counter() - start_time) * 1000
             logger.debug(f"Lazy-loaded adapter {name} in {elapsed:.1f}ms")
-            return self.registry.get(name)
+            # Use direct lookup to avoid recursion through LazyPluginRegistry.get()
+            # Try both underscore and hyphenated variants since metadata.name may differ
+            result = self.registry._plugins.get(name)
+            if result is None:
+                # Try hyphenated version (e.g., "dependency_check" -> "dependency-check")
+                hyphenated_name = name.replace("_", "-")
+                result = self.registry._plugins.get(hyphenated_name)
+            return result
         except Exception as e:
             logger.warning(f"Failed to lazy-load adapter {name}: {e}")
             return None

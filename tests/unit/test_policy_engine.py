@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from scripts.core.exceptions import OPANotFoundException
 from scripts.core.policy_engine import PolicyEngine, PolicyMetadata, PolicyResult
 
 
@@ -113,9 +114,9 @@ class TestPolicyEngine:
         assert engine.opa_binary == "/usr/local/bin/opa"
 
     def test_init_opa_not_found(self) -> None:
-        """Test PolicyEngine raises when OPA not found."""
+        """Test PolicyEngine raises OPANotFoundException when OPA not found."""
         with patch("scripts.core.policy_engine.shutil.which", return_value=None):
-            with pytest.raises(RuntimeError, match="OPA binary not found"):
+            with pytest.raises(OPANotFoundException):
                 PolicyEngine()
 
     def test_init_opa_timeout(self) -> None:

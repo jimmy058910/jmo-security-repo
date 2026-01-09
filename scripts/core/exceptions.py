@@ -51,6 +51,30 @@ class ToolNotFoundException(JmoSecurityException):
         super().__init__(f"Security tool not found: {tool}")
 
 
+class OPANotFoundException(ToolNotFoundException):
+    """Raised when OPA (Open Policy Agent) binary is not installed or not in PATH.
+
+    OPA is required for policy evaluation but is optional - scans can complete
+    without it. This exception allows graceful degradation when OPA is unavailable.
+
+    The exception provides installation instructions for the user.
+
+    Example:
+        >>> if not shutil.which("opa"):
+        ...     raise OPANotFoundException()
+    """
+
+    INSTALL_INSTRUCTIONS = (
+        "OPA not installed. Install via: jmo tools install opa "
+        "or download from https://www.openpolicyagent.org/docs/latest/#running-opa"
+    )
+
+    def __init__(self):
+        # Initialize with the tool name "opa"
+        super(ToolNotFoundException, self).__init__(self.INSTALL_INSTRUCTIONS)
+        self.tool = "opa"
+
+
 class AdapterParseException(JmoSecurityException):
     """Raised when a tool adapter fails to parse tool output.
 
@@ -221,6 +245,7 @@ class ToolExecutionException(JmoSecurityException):
 __all__ = [
     "JmoSecurityException",
     "ToolNotFoundException",
+    "OPANotFoundException",
     "AdapterParseException",
     "FingerprintCollisionException",
     "ComplianceMappingException",

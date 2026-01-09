@@ -1112,11 +1112,11 @@ from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import map_tool_severity  # For tool-specific severity mapping
 
 @adapter_plugin(PluginMetadata(
-    name="snyk",  # CRITICAL: Must match tool output filename (snyk.json)
+    name="snyk",  # CRITICAL: Must use underscores, matching adapter filename (snyk_adapter.py → "snyk")
     version="1.0.0",
     author="Your Name",
     description="Adapter for Snyk SCA scanner",
-    tool_name="snyk",
+    tool_name="snyk",  # The actual binary/command name (can use hyphens like "dependency-check")
     schema_version="1.2.0",
     output_format="json",
     exit_codes={0: "clean", 1: "findings", 2: "error"}
@@ -1367,7 +1367,7 @@ for name in registry.list_plugins():
 - [ ] Uses `@adapter_plugin` decorator with complete `PluginMetadata`
 - [ ] Implements `parse()` method returning `List[Finding]`
 - [ ] Uses `map_tool_severity()` for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if needed)
-- [ ] `metadata.name` matches expected output filename (e.g., `trivy` → `trivy.json`)
+- [ ] `metadata.name` uses underscores, matching adapter filename (e.g., `dependency_check_adapter.py` → `"dependency_check"`)
 - [ ] Tests added in `tests/adapters/test_<tool>_adapter.py`
 - [ ] Validation passes: `jmo adapters validate`
 - [ ] Integration test with real tool output

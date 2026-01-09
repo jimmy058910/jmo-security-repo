@@ -230,6 +230,11 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 5. Add test in `tests/adapters/test_<tool>_adapter.py`
 6. Update documentation
 
+**Naming Convention (CRITICAL):**
+
+- `PluginMetadata.name` must use **underscores**, matching the adapter filename (e.g., `dependency_check_adapter.py` → `name="dependency_check"`)
+- `PluginMetadata.tool_name` is the actual binary name (can use hyphens, e.g., `tool_name="dependency-check"`)
+
 **Important:** Adapters should NOT handle compliance enrichment. Return raw findings and let `normalize_and_report.py` handle enrichment centrally via `enrich_findings_with_compliance()`. This single-pass batch operation is more efficient than per-adapter enrichment.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow.

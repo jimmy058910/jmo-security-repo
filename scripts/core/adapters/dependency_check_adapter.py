@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 @adapter_plugin(
     PluginMetadata(
-        name="dependency-check",
+        name="dependency_check",
         version="1.0.0",
         author="JMo Security",
         description="Adapter for OWASP Dependency-Check SCA tool",

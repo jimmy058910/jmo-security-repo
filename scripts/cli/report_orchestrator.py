@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from scripts.core.config import load_config_with_env_overrides
+from scripts.core.exceptions import OPANotFoundException
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.reporters.compliance_reporter import (
@@ -290,6 +291,10 @@ def cmd_report(args, _log_fn) -> int:
         except (OSError, PermissionError) as e:
             _log_fn(args, "DEBUG", f"Failed to write policy reports: {e}")
             logger.debug(f"Policy report write failed: {e}")
+        except OPANotFoundException as e:
+            # OPA not installed - graceful degradation with warning (not error)
+            _log_fn(args, "WARN", f"Policy evaluation skipped: {e}")
+            logger.warning("Policy evaluation skipped: OPA not installed")
         except Exception as e:
             _log_fn(args, "ERROR", f"Policy evaluation failed: {e}")
             logger.error(f"Policy evaluation error: {e}", exc_info=True)

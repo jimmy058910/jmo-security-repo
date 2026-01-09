@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 @adapter_plugin(
     PluginMetadata(
-        name="trivy-rbac",
+        name="trivy_rbac",
         version="1.0.0",
         author="JMo Security",
         description="Adapter for Trivy Kubernetes RBAC security assessment",

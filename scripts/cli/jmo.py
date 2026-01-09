@@ -2225,6 +2225,10 @@ class ProgressTracker:
     Thread-safe for concurrent scan operations.
     """
 
+    # Suffixes for multi-phase tools (e.g., noseyparker-init, noseyparker-scan)
+    # These phases should be counted as a single logical tool
+    _PHASE_SUFFIXES = ("-init", "-scan", "-report")
+
     def __init__(self, total: int, args, total_tools: int = 0):
         """Initialize progress tracker.
 
@@ -2245,6 +2249,29 @@ class ProgressTracker:
         self.total_tools = total_tools
         self.tools_completed = 0
         self.tools_in_progress: set[str] = set()
+        # Track completed logical tools (base names, not phases)
+        self._completed_base_tools: set[str] = set()
+
+    def _get_base_tool_name(self, tool_name: str) -> str:
+        """Extract base tool name from a potentially phased tool name.
+
+        Multi-phase tools like noseyparker run as:
+        - noseyparker-init
+        - noseyparker-scan
+        - noseyparker-report
+
+        All should be counted as one logical tool "noseyparker".
+
+        Args:
+            tool_name: The tool name (may include phase suffix)
+
+        Returns:
+            Base tool name without phase suffix
+        """
+        for suffix in self._PHASE_SUFFIXES:
+            if tool_name.endswith(suffix):
+                return tool_name[: -len(suffix)]
+        return tool_name
 
     def start(self):
         """Start progress tracking timer."""
@@ -2303,29 +2330,42 @@ class ProgressTracker:
     def update_tool(self, tool_name: str, status: str, findings_count: int = 0):
         """Update progress when a tool starts or completes.
 
+        Multi-phase tools (e.g., noseyparker-init, noseyparker-scan, noseyparker-report)
+        are counted as a single logical tool for progress display. This ensures the
+        progress shows "12/12 tools" not "15/12 tools" when phases are involved.
+
         Args:
-            tool_name: Name of the tool
+            tool_name: Name of the tool (may include phase suffix)
             status: "start" when tool begins, "success"/"error" when done
             findings_count: Number of findings (unused for now)
         """
         import sys
 
+        # Get the base tool name (strip phase suffixes like -init, -scan, -report)
+        base_tool_name = self._get_base_tool_name(tool_name)
+
         with self._lock:
             if status == "start":
                 self.tools_in_progress.add(tool_name)
             else:
-                # Tool completed
+                # Tool/phase completed
                 self.tools_in_progress.discard(tool_name)
-                self.tools_completed += 1
+
+                # Only count this as a completed tool if the base tool hasn't been
+                # counted yet. This handles multi-phase tools correctly.
+                if base_tool_name not in self._completed_base_tools:
+                    self._completed_base_tools.add(base_tool_name)
+                    self.tools_completed += 1
 
                 if self.total_tools > 0:
                     percentage = int((self.tools_completed / self.total_tools) * 100)
                     status_icon = "✓" if status == "success" else "✗"
 
                     # Show inline progress (overwrites previous line)
+                    # Display the base tool name for consistency
                     progress_line = (
                         f"\r[{self.tools_completed}/{self.total_tools}] "
-                        f"{status_icon} {tool_name} ({percentage}%)"
+                        f"{status_icon} {base_tool_name} ({percentage}%)"
                     )
                     # Pad to clear leftover characters
                     print(f"{progress_line:<60}", end="", file=sys.stderr, flush=True)
