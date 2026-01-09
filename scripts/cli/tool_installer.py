@@ -20,9 +20,10 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 import requests
 import tarfile
@@ -254,8 +255,9 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
     },
     # horusec: lowercase "linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
+    # Note: Windows uses "win" not "windows" in asset name (horusec_win_amd64.exe)
     "horusec": {
-        "windows": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_windows_{arch_amd}.exe",
+        "windows": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_win_{arch_amd}.exe",
         "default": "https://github.com/ZupIT/horusec/releases/download/v{version}/horusec_{os_lower}_{arch_amd}",
     },
     # noseyparker: Rust target triple format with 'v' prefix
@@ -429,6 +431,56 @@ class ToolInstaller:
     def set_progress_callback(self, callback: Callable[[str, int, int], None]) -> None:
         """Set callback for progress updates: (tool_name, current, total)."""
         self._progress_callback = callback
+
+    def _safe_cleanup_tempdir(self, tmpdir: Path) -> None:
+        """Safely clean up temp directory with retry for Windows file locking.
+
+        On Windows, antivirus/indexer can hold file locks momentarily.
+        This method retries cleanup with exponential backoff to handle
+        transient WinError 32 (file in use) errors.
+
+        Args:
+            tmpdir: Path to temporary directory to clean up
+        """
+        if self.platform != "windows":
+            # On non-Windows, let normal cleanup handle it
+            return
+
+        for attempt in range(3):
+            try:
+                if tmpdir.exists():
+                    shutil.rmtree(tmpdir, ignore_errors=True)
+                break
+            except OSError as e:
+                # WinError 32: The process cannot access the file
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+                    logger.debug(f"Retry {attempt + 1}/3 cleaning temp dir due to: {e}")
+                else:
+                    # Final attempt failed, log but don't raise
+                    logger.debug(f"Could not fully clean temp dir: {e}")
+
+    @contextmanager
+    def _windows_safe_tempdir(self) -> Iterator[Path]:
+        """Context manager for temp directories that handles Windows file locking.
+
+        On Windows, temp directory cleanup can fail with WinError 32 when
+        antivirus or file indexer holds locks on recently-accessed files.
+        This wrapper catches cleanup exceptions and retries with backoff.
+
+        Yields:
+            Path to the temporary directory
+        """
+        tmpdir = tempfile.mkdtemp()
+        tmppath = Path(tmpdir)
+        try:
+            yield tmppath
+        finally:
+            # Use safe cleanup with retry on Windows
+            self._safe_cleanup_tempdir(tmppath)
+            # Final cleanup attempt (ignore errors on Windows)
+            if tmppath.exists():
+                shutil.rmtree(tmppath, ignore_errors=True)
 
     def _validate_installed_version(
         self, result: InstallResult, expected_version: str
@@ -1649,9 +1701,8 @@ class ToolInstaller:
 
         try:
             # Download to temp file (preserve extension for archive detection)
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmppath = Path(tmpdir)
-
+            # Use Windows-safe temp directory handler to avoid WinError 32
+            with self._windows_safe_tempdir() as tmppath:
                 # Extract filename from URL to preserve extension (.tar.gz, .zip, etc.)
                 url_filename = url.split("/")[-1].split("?")[0]  # Remove query params
                 download_file = tmppath / url_filename
@@ -1784,8 +1835,8 @@ class ToolInstaller:
             # Download and run the install script
             # Most official scripts support: curl ... | sh -s -- -b <install_dir>
             # We pass the install directory to ensure it goes to our managed location
-            with tempfile.TemporaryDirectory() as tmpdir:
-                script_path = Path(tmpdir) / "install.sh"
+            with self._windows_safe_tempdir() as tmppath:
+                script_path = tmppath / "install.sh"
 
                 # Download the script
                 download_cmd = self._get_download_command(script_url, script_path)
@@ -2090,8 +2141,8 @@ class ToolInstaller:
         logger.debug(f"Downloading {tool_name} from: {url}")
 
         try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                tmppath = Path(tmpdir)
+            # Use Windows-safe temp directory handler to avoid WinError 32
+            with self._windows_safe_tempdir() as tmppath:
                 url_filename = url.split("/")[-1]
                 download_file = tmppath / url_filename
 

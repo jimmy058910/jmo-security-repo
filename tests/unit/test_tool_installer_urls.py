@@ -348,9 +348,10 @@ class TestBinaryURLPatterns:
             trivy_arch="64bit",
             rust_arch="x86_64-pc-windows-msvc",
         )
+        # Note: horusec uses "win" not "windows" in asset name
         assert url == (
             "https://github.com/ZupIT/horusec/releases/download/v2.8.0/"
-            "horusec_windows_amd64.exe"
+            "horusec_win_amd64.exe"
         )
 
     def test_kubescape_url_windows(self):

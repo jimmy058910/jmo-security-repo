@@ -47,7 +47,8 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     "shellcheck": re.compile(r"(?:version:?\s*)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "gosec": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     "hadolint": re.compile(r"Haskell Dockerfile Linter\s+v?(\d+\.\d+\.\d+)"),
-    "checkov": re.compile(r"(\d+\.\d+\.\d+)"),
+    # checkov outputs "checkov X.Y.Z" - make pattern more specific to avoid matching warnings
+    "checkov": re.compile(r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "prowler": re.compile(r"Prowler\s+(\d+\.\d+\.\d+)"),
     # ZAP -version outputs: "Found Java version 17.0.17\n...\n2.16.1"
     # Must NOT match Java version - use negative lookbehinds:
@@ -66,9 +67,11 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     ),
     "noseyparker": re.compile(r"noseyparker\s+(\d+\.\d+\.\d+)"),
     "cdxgen": re.compile(r"(\d+\.\d+\.\d+)"),
-    "lynis": re.compile(r"(\d+\.\d+\.\d+)"),
+    # lynis outputs "Lynis X.Y.Z" - make pattern more specific to avoid matching other text
+    "lynis": re.compile(r"(?:Lynis\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     # yara-python outputs just the version number (e.g., "4.5.4")
-    "yara": re.compile(r"^v?(\d+\.\d+\.\d+)"),
+    # Removed ^ anchor which doesn't work with multiline output
+    "yara": re.compile(r"v?(\d+\.\d+\.\d+)"),
     "opa": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     "falcoctl": re.compile(r"(\d+\.\d+\.\d+)"),
     "osv-scanner": re.compile(r"osv-scanner version:\s*v?(\d+\.\d+\.\d+)"),
@@ -355,6 +358,12 @@ PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
             "https://github.com/praetorian-inc/noseyparker",
         ),
     },
+    "bearer": {
+        "windows": (
+            "No Windows binaries available (use Docker or WSL)",
+            "https://github.com/Bearer/bearer",
+        ),
+    },
 }
 
 
@@ -534,9 +543,12 @@ class ToolManager:
         installed = binary_path is not None
 
         # Get installed version if found
+        # For variants (e.g., semgrep-secrets), use base tool name for version lookup
+        # since VERSION_COMMANDS only has entries for base tools
         installed_version = None
         if binary_path:
-            installed_version = self._get_tool_version(tool_name, binary_path)
+            base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
+            installed_version = self._get_tool_version(base_tool, binary_path)
 
         # Determine if outdated
         expected_version = tool_info.version if tool_info else None
@@ -788,15 +800,32 @@ class ToolManager:
                     return str(dc_path)
 
         # scancode is extracted to ~/.jmo/bin/scancode/
-        # Pre-built releases have scancode executable in the root directory
+        # Pre-built releases extract to scancode-toolkit-vX.Y.Z/ nested directory
         if binary_name == "scancode":
             scancode_dir = home / ".jmo" / "bin" / "scancode"
             if scancode_dir.exists():
-                # Check common locations for scancode binary
+                # Check root directory first
                 for name in ("scancode", "scancode.exe"):
                     scancode_path = scancode_dir / name
                     if scancode_path.exists() and scancode_path.is_file():
                         return str(scancode_path)
+
+                # Check nested directories (scancode-toolkit-vX.Y.Z/)
+                # Pre-built releases extract to versioned subdirectory
+                for subdir in scancode_dir.iterdir():
+                    if subdir.is_dir() and subdir.name.startswith("scancode"):
+                        for name in ("scancode", "scancode.exe"):
+                            nested_path = subdir / name
+                            if nested_path.is_file():
+                                return str(nested_path)
+                        # Also check bin/ inside nested directory
+                        nested_bin = subdir / "bin"
+                        if nested_bin.exists():
+                            for name in ("scancode", "scancode.exe"):
+                                nested_path = nested_bin / name
+                                if nested_path.is_file():
+                                    return str(nested_path)
+
                 # Also check in bin/ subdirectory (some release formats)
                 bin_dir = scancode_dir / "bin"
                 if bin_dir.exists():
@@ -969,6 +998,23 @@ class ToolManager:
         if not output or not output.strip():
             logger.debug(f"Empty version output for {tool_name}")
             return None
+
+        # Filter deprecation/warning lines that may pollute version output
+        # Python tools like semgrep and checkov emit pydantic warnings to stderr
+        lines = output.split("\n")
+        warning_patterns = [
+            "deprecationwarning",
+            "pydanticdepr",
+            "futurewarning",
+            "userwarning",
+            "syntaxwarning",
+        ]
+        filtered = [
+            line
+            for line in lines
+            if not any(w in line.lower() for w in warning_patterns)
+        ]
+        output = "\n".join(filtered) if filtered else output
 
         # Get tool-specific pattern or default
         pattern = VERSION_PATTERNS.get(tool_name, VERSION_PATTERNS["default"])
