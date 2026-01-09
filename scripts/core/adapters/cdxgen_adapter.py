@@ -131,7 +131,8 @@ def _load_cdxgen_internal(path: str | Path) -> list[dict[str, Any]]:
     # Validate BOM format
     bom_format = data.get("bomFormat")
     if bom_format != "CycloneDX":
-        logger.warning(f"Invalid BOM format: {bom_format}")
+        # Use debug level to avoid noise when cdxgen outputs empty/non-SBOM files
+        logger.debug(f"Invalid BOM format: {bom_format}")
         return []
 
     # Extract spec version

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import subprocess  # nosec B404 - CLI needs subprocess
+import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -52,7 +53,6 @@ from scripts.cli.wizard_flows.telemetry_helper import (
     send_wizard_telemetry,
 )
 
-import sys
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -572,7 +572,20 @@ def select_execution_mode(force_docker: bool = False) -> bool:
     print("  2. Native - Direct tool execution")
 
     choice = input("\nChoice [1]: ").strip()
-    return choice != "2"  # Default to Docker (1)
+    use_docker = choice != "2"  # Default to Docker (1)
+
+    # Warn Windows users about limited native tool availability
+    if not use_docker and sys.platform == "win32":
+        print(
+            _colorize(
+                "\n⚠️  Note: Some security tools (lynis, shellcheck, falco) may not be "
+                "available natively on Windows. Consider using Docker mode for full "
+                "tool coverage, or run 'jmo tools check' to verify installed tools.",
+                "yellow",
+            )
+        )
+
+    return use_docker
 
 
 def select_target_type() -> str:

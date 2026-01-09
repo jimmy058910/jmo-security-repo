@@ -24,9 +24,15 @@ _detector = TargetDetector()
 
 
 def _prompt_text(question: str, default: str = "") -> str:
-    """Prompt user for text input."""
+    """Prompt user for text input.
+
+    Handles paths that users paste with surrounding quotes (common on Windows
+    when copying paths from File Explorer).
+    """
     prompt = f"{question} [{default}]: " if default else f"{question}: "
     value = input(prompt).strip()
+    # Strip surrounding quotes from paths (Windows users often paste quoted paths)
+    value = value.strip('"').strip("'")
     return value if value else default
 
 

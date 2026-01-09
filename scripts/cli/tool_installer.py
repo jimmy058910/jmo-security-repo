@@ -268,6 +268,12 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
         "windows": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_windows_{arch_amd}.exe",
         "default": "https://github.com/kubescape/kubescape/releases/download/v{version}/kubescape_{version}_{os_lower}_{arch_amd}",
     },
+    # OPA (Open Policy Agent): "opa_linux_amd64" (no version in filename)
+    # Windows provides .exe directly, Linux/macOS provide binary without extension
+    "opa": {
+        "windows": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_windows_{arch_amd}.exe",
+        "default": "https://github.com/open-policy-agent/opa/releases/download/v{version}/opa_{os_lower}_{arch_amd}",
+    },
 }
 
 # Official install scripts (preferred over direct binary downloads)

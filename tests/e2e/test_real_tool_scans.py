@@ -16,28 +16,61 @@ They will be skipped automatically if the required tool is not available.
 
 import json
 import shutil
+import subprocess
 
 import pytest
 
 from scripts.cli.jmo import cmd_scan
 
 
-# Tool availability checks - skip tests if tools not installed
+def _tool_works(tool_name: str, version_flag: str = "--version") -> bool:
+    """Check if a tool exists AND works (not just exists in PATH).
+
+    Some tools may exist but be broken due to dependency issues.
+    This function actually runs the tool to verify it's functional.
+
+    Args:
+        tool_name: Name of the tool binary
+        version_flag: Flag to check version (default: --version)
+
+    Returns:
+        True if tool exists and runs successfully, False otherwise
+    """
+    if shutil.which(tool_name) is None:
+        return False
+
+    try:
+        result = subprocess.run(
+            [tool_name, version_flag],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        # Return code 0 or 1 (some tools return 1 for --version)
+        # Also check that there's no Python traceback in stderr
+        if "Traceback" in result.stderr or "ImportError" in result.stderr:
+            return False
+        return result.returncode in (0, 1)
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        return False
+
+
+# Tool availability checks - verify tools actually WORK, not just exist
 requires_trivy = pytest.mark.skipif(
-    shutil.which("trivy") is None,
-    reason="trivy not installed",
+    not _tool_works("trivy"),
+    reason="trivy not installed or not functional",
 )
 requires_semgrep = pytest.mark.skipif(
-    shutil.which("semgrep") is None,
-    reason="semgrep not installed",
+    not _tool_works("semgrep"),
+    reason="semgrep not installed or not functional",
 )
 requires_trufflehog = pytest.mark.skipif(
-    shutil.which("trufflehog") is None,
-    reason="trufflehog not installed",
+    not _tool_works("trufflehog"),
+    reason="trufflehog not installed or not functional",
 )
 requires_checkov = pytest.mark.skipif(
-    shutil.which("checkov") is None,
-    reason="checkov not installed",
+    not _tool_works("checkov"),
+    reason="checkov not installed or not functional",
 )
 
 

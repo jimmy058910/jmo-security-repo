@@ -27,7 +27,7 @@ from typing import Any
 from scripts.core.exceptions import AdapterParseException
 
 # Plugin system (v0.9.0)
-from scripts.core.plugin_loader import get_plugin_registry
+from scripts.core.plugin_loader import get_plugin_registry, get_plugin_loader
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.compliance_mapper import enrich_findings_with_compliance
@@ -126,8 +126,9 @@ def deduplicate_findings_streaming(
 def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
 
-    # Get lazy-loading registry (adapters load on-demand)
+    # Get lazy-loading registry and loader for tool name normalization
     registry = get_plugin_registry()
+    loader = get_plugin_loader()
 
     jobs = []
     max_workers = 8
@@ -180,8 +181,12 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
                     if tool_name == "afl++":
                         tool_name = "aflplusplus"
 
+                    # Normalize tool name to adapter name (e.g., "checkov-cicd" → "checkov")
+                    # This handles variant filenames from scan profiles
+                    adapter_name = loader._tool_to_adapter_name(tool_name)
+
                     # Get plugin for this tool
-                    plugin_class = registry.get(tool_name)
+                    plugin_class = registry.get(adapter_name)
                     if plugin_class is None:
                         logger.warning(
                             f"No adapter plugin found for: {tool_name} ({tool_output})"

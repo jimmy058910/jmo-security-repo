@@ -50,6 +50,8 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     # checkov outputs "checkov X.Y.Z" - make pattern more specific to avoid matching warnings
     "checkov": re.compile(r"(?:checkov\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "prowler": re.compile(r"Prowler\s+(\d+\.\d+\.\d+)"),
+    # semgrep --version outputs "X.Y.Z" on first line (after filtering Python warnings)
+    "semgrep": re.compile(r"^(\d+\.\d+\.\d+)$", re.MULTILINE),
     # ZAP -version outputs: "Found Java version 17.0.17\n...\n2.16.1"
     # Must NOT match Java version - use negative lookbehinds:
     # - (?<!version ) - not preceded by "version " (excludes "Java version 17.0.17")
@@ -1008,6 +1010,14 @@ class ToolManager:
             "futurewarning",
             "userwarning",
             "syntaxwarning",
+            "runtimewarning",
+            "importwarning",
+            "pendingdeprecationwarning",
+            "resourcewarning",
+            # Common patterns in stderr that aren't version info
+            "traceback (most recent call last)",
+            'file "',
+            "warning:",
         ]
         filtered = [
             line

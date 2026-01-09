@@ -126,6 +126,15 @@ def find_tool(tool_name: str) -> str | None:
         if lynis_path.exists():
             return str(lynis_path)
 
+    # Yara is a Python module, not a binary - check via importlib
+    if tool_name == "yara":
+        import importlib.util
+
+        spec = importlib.util.find_spec("yara")
+        if spec is not None:
+            # Return a pseudo-path indicating the module is available
+            return "python:yara"
+
     # Generic check for tools in ~/.jmo/bin/{tool}/
     tool_in_subdir = jmo_bin / tool_name / tool_name
     if tool_in_subdir.exists():

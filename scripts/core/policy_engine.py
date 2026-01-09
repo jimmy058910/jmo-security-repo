@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -89,6 +90,16 @@ class PolicyEngine:
 
     def _verify_opa_available(self) -> None:
         """Verify OPA binary is available and version is compatible."""
+        # Check if OPA is in PATH before attempting to run
+        # This provides better error messages on Windows where FileNotFoundError
+        # may not be raised reliably
+        if shutil.which(self.opa_binary) is None:
+            raise RuntimeError(
+                f"OPA binary not found: {self.opa_binary}. "
+                "Install via: jmo tools install opa or download from "
+                "https://www.openpolicyagent.org/docs/latest/#running-opa"
+            )
+
         try:
             result = subprocess.run(
                 [self.opa_binary, "version"],

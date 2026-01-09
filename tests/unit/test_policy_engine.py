@@ -88,7 +88,12 @@ class TestPolicyEngine:
     @pytest.fixture
     def mock_opa_available(self) -> MagicMock:
         """Mock OPA binary availability check."""
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch(
+                "scripts.core.policy_engine.shutil.which", return_value="/usr/bin/opa"
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout="Version: 0.70.0\nBuild Commit: abc123",
@@ -109,13 +114,18 @@ class TestPolicyEngine:
 
     def test_init_opa_not_found(self) -> None:
         """Test PolicyEngine raises when OPA not found."""
-        with patch("subprocess.run", side_effect=FileNotFoundError):
+        with patch("scripts.core.policy_engine.shutil.which", return_value=None):
             with pytest.raises(RuntimeError, match="OPA binary not found"):
                 PolicyEngine()
 
     def test_init_opa_timeout(self) -> None:
         """Test PolicyEngine raises on OPA timeout."""
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("opa", 5)):
+        with (
+            patch(
+                "scripts.core.policy_engine.shutil.which", return_value="/usr/bin/opa"
+            ),
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("opa", 5)),
+        ):
             with pytest.raises(RuntimeError, match="timed out"):
                 PolicyEngine()
 
