@@ -403,6 +403,18 @@ mock_run.return_value = mock_subprocess_success(returncode=0)
 | Path separators | Uses backslashes `\` | Use `pathlib.Path` or forward slashes |
 | File locking | More aggressive locking | Close files before deletion |
 | Process spawning | Different error codes | Test for `!= 0` not specific codes |
+| HOME env variable | Windows uses `USERPROFILE`, not `HOME` | Use `Path.home()` or mock it (see below) |
+
+**HOME Directory Mocking (Cross-Platform):**
+
+```python
+# WRONG: Only works on Unix (HOME not set on Windows)
+monkeypatch.setenv("HOME", str(tmp_path))
+
+# CORRECT: Works on Windows, Linux, and macOS
+from pathlib import Path
+monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+```
 
 **Subprocess Testing Rules:**
 
