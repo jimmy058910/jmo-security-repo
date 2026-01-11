@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
+.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -12,7 +12,10 @@ help:
 	@echo "  fmt      - Run formatters (shfmt, black, ruff-format)"
 	@echo "  lint     - Run linters (shellcheck, ruff, bandit)"
 	@echo "  typecheck - Run mypy type checking on scripts/"
-	@echo "  test     - Run tests (pytest if tests/ exists)"
+	@echo "  test     - Run tests sequentially with coverage"
+	@echo "  test-fast    - Parallel tests, no coverage, skip slow (fastest dev loop)"
+	@echo "  test-parallel - Parallel tests with coverage (CI-like)"
+	@echo "  test-profile  - Profile test durations (identify slow tests)"
 	@echo "  verify   - Local CI: lint+test+fast security scans"
 	@echo "  clean    - Clean temporary artifacts"
 	@echo "  normalize-report - Aggregate tool outputs and write JSON/Markdown summaries"
@@ -123,6 +126,31 @@ TEST_FLAGS ?= -q --maxfail=1 --disable-warnings -m "not smoke and not requires_t
 test:
 	@if [ -d tests ]; then \
 		$(PY) -m pytest $(TEST_FLAGS) --cov --cov-report=term-missing ; \
+	else echo 'no tests/ directory'; fi
+
+# Fast parallel test for development (no coverage, skip slow tests)
+# Requires: pip install pytest-xdist
+test-fast:
+	@if [ -d tests ]; then \
+		$(PY) -m pytest -n auto -q --maxfail=3 --disable-warnings \
+			-m "not smoke and not requires_tools and not slow and not benchmark" tests/ ; \
+	else echo 'no tests/ directory'; fi
+
+# Parallel test with coverage (CI-like, use all cores)
+# Requires: pip install pytest-xdist
+test-parallel:
+	@if [ -d tests ]; then \
+		$(PY) -m pytest -n auto -q --disable-warnings \
+			-m "not smoke and not requires_tools" \
+			--cov --cov-report=term-missing tests/ ; \
+	else echo 'no tests/ directory'; fi
+
+# Profile test durations (run occasionally to identify slow tests)
+test-profile:
+	@if [ -d tests ]; then \
+		$(PY) -m pytest -q --disable-warnings \
+			-m "not smoke and not requires_tools" \
+			--durations=50 --durations-min=0.5 tests/ ; \
 	else echo 'no tests/ directory'; fi
 
 verify:

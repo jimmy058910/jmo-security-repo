@@ -154,10 +154,11 @@ def mock_db(tmp_path):
 
 def test_offer_trend_analysis_no_db(tmp_path, monkeypatch):
     """Test offer when no history database exists."""
+    from pathlib import Path
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
-    # Set HOME to tmp_path so .jmo/history.db doesn't exist
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Should not raise, just return silently
     offer_trend_analysis_after_scan("results")
@@ -165,6 +166,7 @@ def test_offer_trend_analysis_no_db(tmp_path, monkeypatch):
 
 def test_offer_trend_analysis_insufficient_scans(tmp_path, monkeypatch):
     """Test offer when < 2 scans in history."""
+    from pathlib import Path
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Create DB with only 1 scan
@@ -178,7 +180,8 @@ def test_offer_trend_analysis_insufficient_scans(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Should not prompt (returns silently)
     offer_trend_analysis_after_scan("results")
@@ -186,6 +189,7 @@ def test_offer_trend_analysis_insufficient_scans(tmp_path, monkeypatch):
 
 def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
     """Test offer when ≥2 scans exist (user declines)."""
+    from pathlib import Path
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Move mock DB to expected location
@@ -196,7 +200,8 @@ def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
 
     shutil.copy(mock_db, target_db)
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Mock user declining prompt AND explore_trends_interactive
     with mock.patch("builtins.input", return_value="n"):
@@ -210,6 +215,7 @@ def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
 
 def test_offer_trend_analysis_exception_handling(tmp_path, monkeypatch):
     """Test offer handles exceptions gracefully."""
+    from pathlib import Path
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Create invalid DB (missing table)
@@ -218,7 +224,8 @@ def test_offer_trend_analysis_exception_handling(tmp_path, monkeypatch):
     conn = sqlite3.connect(db_path)
     conn.close()
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Should not raise, just log debug message
     offer_trend_analysis_after_scan("results")
@@ -501,9 +508,9 @@ def test_explain_metrics(capsys):
 # ============================================================================
 
 
-@skip_on_windows
 def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     """Test --analyze-trends flag in non-interactive mode."""
+    from pathlib import Path
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -514,7 +521,8 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
 
     shutil.copy(mock_db, target_db)
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.chdir(tmp_path)
 
     # Create dummy repo directory
@@ -550,9 +558,9 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     assert mock_run.called
 
 
-@skip_on_windows
 def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-html flag."""
+    from pathlib import Path
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -563,7 +571,8 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
 
     shutil.copy(mock_db, target_db)
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.chdir(tmp_path)
 
     # Create dummy repo
@@ -605,9 +614,9 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     assert output_file.exists()
 
 
-@skip_on_windows
 def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-json flag."""
+    from pathlib import Path
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -618,7 +627,8 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
 
     shutil.copy(mock_db, target_db)
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.chdir(tmp_path)
 
     # Create dummy repo
@@ -662,9 +672,11 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
 
 def test_wizard_no_db_with_trend_flags(tmp_path, monkeypatch, capsys):
     """Test trend flags when no history database exists."""
+    from pathlib import Path
     from scripts.cli.wizard import run_wizard
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.chdir(tmp_path)
 
     # Create dummy repo
@@ -685,6 +697,7 @@ def test_wizard_no_db_with_trend_flags(tmp_path, monkeypatch, capsys):
 
 def test_wizard_insufficient_scans_with_trend_flags(tmp_path, monkeypatch):
     """Test trend flags when < 2 scans in history."""
+    from pathlib import Path
     from scripts.cli.wizard import run_wizard
 
     # Create DB with 1 scan
@@ -699,7 +712,8 @@ def test_wizard_insufficient_scans_with_trend_flags(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
     monkeypatch.chdir(tmp_path)
 
     # Create dummy repo

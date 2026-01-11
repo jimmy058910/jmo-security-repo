@@ -62,7 +62,7 @@ def build_iac_args(target: TargetConfig, use_docker: bool = False) -> list[str]:
         if target.iac_path:
             iac_abs = str(Path(target.iac_path).resolve())
             args.extend(["-v", f"{iac_abs}:/scan/iac-file"])
-            args.append(f"--{target.iac_type.replace('-', '-')}")
+            args.append(f"--{target.iac_type}")
             args.append("/scan/iac-file")
     else:
         args.append(f"--{target.iac_type}")

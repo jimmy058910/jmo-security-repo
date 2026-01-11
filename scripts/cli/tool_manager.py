@@ -9,6 +9,7 @@ across all supported platforms. This is the core logic for the
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -862,6 +863,10 @@ class ToolManager:
             home / ".kubescape" / "bin" / "kubescape",  # Kubescape's custom location
             Path("/usr/local/bin") / binary_name,
         ]
+
+        # Windows: Also check for .exe extension
+        if os.name == "nt":
+            common_paths.append(home / ".jmo" / "bin" / f"{binary_name}.exe")
 
         for p in common_paths:
             if p.exists() and p.is_file():

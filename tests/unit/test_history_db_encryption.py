@@ -16,7 +16,15 @@ import os
 
 import pytest
 
-from scripts.core.history_db import encrypt_raw_finding, decrypt_raw_finding
+# Skip entire module if cryptography is not available
+cryptography_fernet = pytest.importorskip(
+    "cryptography.fernet", reason="cryptography.fernet required for encryption tests"
+)
+
+from scripts.core.history_db import (  # noqa: E402
+    decrypt_raw_finding,
+    encrypt_raw_finding,
+)
 
 
 class TestRawFindingEncryption:

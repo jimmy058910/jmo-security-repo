@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess  # nosec B404: imported for controlled, vetted CLI invocations
 import time
@@ -144,6 +145,12 @@ def find_tool(tool_name: str) -> str | None:
     direct_binary = jmo_bin / tool_name
     if direct_binary.exists() and direct_binary.is_file():
         return str(direct_binary)
+
+    # Windows: Check for .exe extension (tools like hadolint.exe, kubescape.exe)
+    if os.name == "nt":
+        exe_binary = jmo_bin / f"{tool_name}.exe"
+        if exe_binary.exists() and exe_binary.is_file():
+            return str(exe_binary)
 
     return None
 

@@ -4,6 +4,7 @@ pytest-split>=0.9.0  # Test sharding for CI parallelization
 pytest-timeout>=2.3.0  # Safety net to prevent infinite test hangs
 hypothesis
 pytest-rerunfailures
+pytest-xdist>=3.5.0  # Parallel test execution with -n auto
 ruff
 bandit
 black

@@ -110,10 +110,10 @@ Recommendation: B - discuss with user before proceeding
 pip install -e ".[dev]"                # Install in editable mode with dev deps
 make pre-commit-install                # Setup pre-commit hooks
 jmo tools install --profile balanced   # Install security tools
-make test                              # Run tests (excludes slow e2e, matches CI)
+make test-fast                         # Fast parallel tests (recommended for dev)
 ```
 
-> **Note:** `make test` excludes `smoke` and `requires_tools` tests by default (matches CI). To run ALL tests including slow e2e tests: `pytest tests/`
+> **Note:** `make test` runs sequentially with coverage. Use `make test-fast` for 3-5x faster parallel execution during development. Requires `pytest-xdist` (included in dev deps).
 
 ### Essential Commands
 
@@ -130,6 +130,9 @@ make test                              # Run tests (excludes slow e2e, matches C
 | `jmo history list` | View scan history |
 | `make fmt` | Format code (Black + Ruff) |
 | `make lint` | Lint checks |
+| `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
+| `make test-parallel` | Parallel tests with coverage (CI-like) |
+| `make test` | Sequential tests with coverage (original) |
 
 > **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
 
@@ -258,6 +261,12 @@ subprocess.run(f"trivy image {image_name}", shell=True)  # CWE-78
 ### Testing
 
 ```bash
+# Recommended: Parallel execution (3-5x faster)
+make test-fast                                     # Fastest dev loop (no coverage)
+make test-parallel                                 # With coverage (CI-like)
+pytest -n auto tests/unit/                         # Direct pytest with parallelism
+
+# Manual pytest (sequential)
 pytest tests/unit/ -v                              # Unit tests
 pytest tests/adapters/ -v                          # Adapter tests
 pytest --cov=scripts --cov-report=term-missing     # With coverage

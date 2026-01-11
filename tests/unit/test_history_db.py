@@ -2541,6 +2541,16 @@ class TestDashboardFunctions:
         assert summary is None
 
 
+# Check if cryptography is available for encryption tests
+try:
+    from cryptography.fernet import Fernet  # noqa: F401
+
+    _HAS_CRYPTOGRAPHY = True
+except ImportError:
+    _HAS_CRYPTOGRAPHY = False
+
+
+@pytest.mark.skipif(not _HAS_CRYPTOGRAPHY, reason="cryptography.fernet not available")
 class TestEncryptionDecryption:
     """Test encryption and decryption of raw findings."""
 

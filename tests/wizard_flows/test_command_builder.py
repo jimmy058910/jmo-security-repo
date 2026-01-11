@@ -224,6 +224,26 @@ class TestBuildIacArgs:
         assert "--terraform" in args
         assert "/scan/iac-file" in args
 
+    def test_build_iac_args_k8s_manifest_docker_mode(self, tmp_path):
+        """Test building arguments for hyphenated IaC type (k8s-manifest) in Docker mode.
+
+        Regression test: ensures hyphens in IaC types are preserved correctly.
+        Previously had a no-op .replace('-', '-') that was removed.
+        """
+        iac_file = tmp_path / "deployment.yaml"
+        iac_file.touch()
+
+        target = MockTargetConfig()
+        target.iac_type = "k8s-manifest"
+        target.iac_path = str(iac_file)
+
+        args = build_iac_args(target, use_docker=True)
+
+        assert "-v" in args
+        # Key assertion: hyphenated flag must be preserved
+        assert "--k8s-manifest" in args
+        assert "/scan/iac-file" in args
+
 
 class TestBuildUrlArgs:
     """Tests for build_url_args function."""

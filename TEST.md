@@ -22,17 +22,26 @@ jmo tools install --profile balanced  # Install security scanners
 Run the test suite with coverage:
 
 ```bash
-make test                    # Fast tests (excludes smoke/e2e, matches CI)
+# Recommended: Parallel execution (3-5x faster)
+make test-fast               # Parallel, no coverage, skip slow (fastest dev loop)
+make test-parallel           # Parallel with coverage (CI-like)
+pytest -n auto tests/        # Direct pytest with auto-detected workers
+
+# Sequential execution
+make test                    # Sequential with coverage (original)
 pytest tests/                # ALL tests including slow e2e
 pytest tests/ -m "slow"      # Only slow tests
 ```
 
+- **Parallel tests** use `pytest-xdist` (`-n auto`) to utilize all CPU cores
+- `make test-fast` is recommended for development (~5 min vs ~15-20 min sequential)
 - `make test` excludes `smoke` and `requires_tools` markers by default (matches CI behavior)
 - Outputs show a coverage summary (threshold in CI is 85%)
 - Coverage config is defined in `.coveragerc`
 
 ### Test Configuration
 
+- **pytest-xdist**: Parallel test execution using `-n auto` (auto-detects CPU cores). Install: `pip install pytest-xdist`.
 - **pytest-timeout**: All tests have a 120-second timeout (configurable in `pyproject.toml`). Use `@pytest.mark.timeout(300)` for legitimately slow tests.
 - **Slow tests**: Tests marked with `@pytest.mark.slow` can be excluded with `-m "not slow"`.
 - **Cross-platform**: Tests must pass on Windows, Linux, and macOS. See `CLAUDE.md` for cross-platform testing guidelines.
