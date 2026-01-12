@@ -23,15 +23,19 @@ def _supports_ansi() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
 
-    # Always True on non-Windows
-    if sys.platform != "win32":
-        return True
-
-    # Check for modern terminal emulators that support ANSI
+    # Check for modern terminal emulators that support ANSI (before isatty check)
+    # These terminals handle ANSI even when stdout is redirected
     wt_session = os.environ.get("WT_SESSION")  # Windows Terminal
     term = os.environ.get("TERM", "")
-
     if wt_session or "xterm" in term or "256color" in term:
+        return True
+
+    # For other cases, require stdout to be a TTY
+    if not getattr(sys.stdout, "isatty", lambda: False)():
+        return False
+
+    # Always True on non-Windows (Unix terminals generally support ANSI)
+    if sys.platform != "win32":
         return True
 
     # Try to enable ANSI on Windows 10+ via SetConsoleMode
@@ -42,10 +46,20 @@ def _supports_ansi() -> bool:
         # STD_OUTPUT_HANDLE = -11
         # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
         handle = kernel32.GetStdHandle(-11)
+
+        # Check for invalid handle
+        if handle == -1 or handle is None or handle == 0:
+            return False
+
         mode = ctypes.c_ulong()
-        kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-        # Enable VT processing
-        kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        # GetConsoleMode returns non-zero on success
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+
+        # SetConsoleMode returns non-zero on success
+        if not kernel32.SetConsoleMode(handle, mode.value | 0x0004):
+            return False
+
         return True
     except Exception:
         pass
@@ -319,6 +333,10 @@ class PromptHelper:
         Returns:
             Colorized text with reset code, or plain text if ANSI not supported
         """
+        # Re-check NO_COLOR at runtime (can be set after import)
+        if os.environ.get("NO_COLOR"):
+            return text
+        # Also check cached ANSI support (Windows VT enablement)
         if not _ANSI_SUPPORTED:
             return text
         return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
@@ -332,14 +350,17 @@ class PromptHelper:
             text: Header text
             icon: Icon name (star, rocket, lock, package, chart)
         """
-        # Get dynamic width (minimum 40, cap at 80 for readability)
-        box_width = min(_get_terminal_width() - 4, 80)
-        inner_width = max(box_width - 2, 38)  # Account for box borders
+        # Get dynamic width: clamp to [40, 80] first, then calculate inner
+        box_width = max(40, min(_get_terminal_width(), 80))
+        inner_width = box_width - 4  # Account for box borders (2 chars each side)
 
         print()
         print(self.colorize("╔" + "═" * inner_width + "╗", "cyan"))
         icon_char = self.ICONS.get(icon, self.ICONS["star"])
         header_text = f"{icon_char}  {text}  {icon_char}"
+        # Truncate header if too long
+        if len(header_text) > inner_width:
+            header_text = header_text[: max(0, inner_width - 1)] + "…"
         print(self.colorize(f"║{header_text.center(inner_width)}║", "bold"))
         print(self.colorize("╚" + "═" * inner_width + "╝", "cyan"))
         print()
@@ -352,8 +373,8 @@ class PromptHelper:
             total: Total number of steps
             text: Step description
         """
-        # Get dynamic width
-        line_width = min(_get_terminal_width() - 2, 80)
+        # Get dynamic width: clamp to [40, 80] first
+        line_width = max(40, min(_get_terminal_width(), 80))
 
         # Progress bar
         progress_width = 20
@@ -414,13 +435,17 @@ class PromptHelper:
             title: Box title
             items: List of items to display
         """
-        # Get dynamic width
-        box_width = min(_get_terminal_width() - 4, 80)
+        # Get dynamic width: clamp to [40, 80] first
+        box_width = max(40, min(_get_terminal_width(), 80))
+        # Truncate title if too long
+        display_title = title
+        if len(title) > (box_width - 6):
+            display_title = title[: max(0, (box_width - 7))] + "…"
         # Calculate padding after title (minimum 4 dashes)
-        title_padding = max(4, box_width - len(title) - 3)
+        title_padding = max(4, box_width - len(display_title) - 3)
 
         print()
-        print(self.colorize("┌─ " + title + " " + "─" * title_padding, "cyan"))
+        print(self.colorize("┌─ " + display_title + " " + "─" * title_padding, "cyan"))
         for item in items:
             print(self.colorize(f"│ {self.ICONS['bullet']} {item}", "dim"))
         print(self.colorize("└" + "─" * box_width, "cyan"))

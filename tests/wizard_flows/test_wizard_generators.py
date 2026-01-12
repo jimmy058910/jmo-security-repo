@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from scripts.cli.wizard_generators import (
+    JMO_DOCKER_IMAGE_FULL,
     generate_docker_compose,
     generate_github_actions,
     generate_gitlab_ci,
@@ -185,7 +186,7 @@ def test_generate_github_actions_docker_mode(mock_config, mock_profiles):
     assert "name: Security Scan" in result
     assert "runs-on: ubuntu-latest" in result
     assert "container:" in result
-    assert "image: ghcr.io/jimmy058910/jmo-security:latest" in result
+    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
     assert "jmo scan --results results --profile balanced" in result
     assert "--threads 4" in result
     assert "--timeout 600" in result
@@ -403,7 +404,7 @@ def test_generate_gitlab_ci_default_workflow():
     assert "stages:" in result
     assert "- security-scan" in result
     assert "security-scan:" in result
-    assert "image: ghcr.io/jimmy058910/jmo-security:latest" in result
+    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
     assert "jmo scan --repo . --profile balanced" in result
     assert "artifacts:" in result
     assert "sast: results/summaries/findings.sarif" in result
@@ -459,7 +460,7 @@ def test_generate_docker_compose_default_workflow():
     assert "version: '3.8'" in result
     assert "services:" in result
     assert "jmo-security:" in result
-    assert "image: ghcr.io/jimmy058910/jmo-security:latest" in result
+    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in result
     assert "volumes:" in result
     assert ".:/scan:ro" in result
     assert "./results:/scan/results" in result

@@ -401,18 +401,27 @@ def _add_wizard_args(subparsers):
     )
     wizard_parser.add_argument(
         "--emit-script",
-        action="store_true",
-        help="Emit shell script instead of running",
+        metavar="FILE",
+        nargs="?",
+        const="jmo-scan.sh",
+        type=str,
+        help="Generate shell script (default: jmo-scan.sh)",
     )
     wizard_parser.add_argument(
         "--emit-make-target",
-        action="store_true",
-        help="Emit Makefile target instead of running",
+        metavar="FILE",
+        nargs="?",
+        const="Makefile.jmo",
+        type=str,
+        help="Generate Makefile target (default: Makefile.jmo)",
     )
     wizard_parser.add_argument(
         "--emit-gha",
-        action="store_true",
-        help="Emit GitHub Actions workflow instead of running",
+        metavar="FILE",
+        nargs="?",
+        const=".github/workflows/jmo-security.yml",
+        type=str,
+        help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
     )
     wizard_parser.add_argument(
         "--policy",

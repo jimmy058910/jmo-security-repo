@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import skip_on_windows, windows_only
+# Platform detection for skip markers
+IS_WINDOWS = sys.platform == "win32"
+skip_on_windows = pytest.mark.skipif(
+    IS_WINDOWS, reason="Test requires Unix-specific features"
+)
+windows_only = pytest.mark.skipif(not IS_WINDOWS, reason="Windows-only test")
 
 
 class TestUnicodePaths:
@@ -26,9 +32,9 @@ class TestUnicodePaths:
 
     def test_path_with_emoji_characters(self, tmp_path: Path):
         """Test wizard handles paths with emoji characters."""
-        # Create path with emoji (may fail on some Windows codepages)
+        # Create path with actual emoji (may fail on some Windows codepages)
         try:
-            emoji_dir = tmp_path / "project_secure"
+            emoji_dir = tmp_path / "project_🔒_secure"
             emoji_dir.mkdir()
         except (OSError, UnicodeError):
             pytest.skip("File system doesn't support emoji in paths")
@@ -42,7 +48,7 @@ class TestUnicodePaths:
     def test_path_with_cjk_characters(self, tmp_path: Path):
         """Test wizard handles paths with CJK characters."""
         try:
-            cjk_dir = tmp_path / "test"
+            cjk_dir = tmp_path / "测试项目"
             cjk_dir.mkdir()
         except (OSError, UnicodeError):
             pytest.skip("File system doesn't support CJK characters in paths")
@@ -56,7 +62,7 @@ class TestUnicodePaths:
     def test_path_with_accented_characters(self, tmp_path: Path):
         """Test wizard handles paths with European accented characters."""
         try:
-            accented_dir = tmp_path / "proyecto_de_prueba"
+            accented_dir = tmp_path / "próyecto_áccénts_ñ"
             accented_dir.mkdir()
         except (OSError, UnicodeError):
             pytest.skip("File system doesn't support accented characters in paths")
@@ -169,14 +175,16 @@ class TestHistoryDatabaseErrors:
     """Test wizard handles history database errors."""
 
     def test_corrupted_history_database(self, tmp_path: Path):
-        """Test wizard handles corrupted history.db."""
+        """Test wizard handles corrupted history.db via the wizard's DB path."""
+        from scripts.core.history_db import get_connection
+
         # Create corrupted database file
         db_path = tmp_path / "history.db"
         db_path.write_text("this is not a valid sqlite database")
 
-        # Attempting to connect should fail gracefully
+        # Attempting to use the wizard's get_connection should fail gracefully
         try:
-            conn = sqlite3.connect(str(db_path))
+            conn = get_connection(db_path)
             cursor = conn.execute("SELECT 1")
             cursor.fetchone()
             conn.close()

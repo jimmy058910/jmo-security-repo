@@ -17,6 +17,12 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     pass
 
+# Docker image configuration - use versioned tag for reproducibility
+# This should be updated with each release
+JMO_DOCKER_IMAGE = "ghcr.io/jimmy058910/jmo-security"
+JMO_DOCKER_TAG = "v1.0.0"  # Pin to release version, not :latest
+JMO_DOCKER_IMAGE_FULL = f"{JMO_DOCKER_IMAGE}:{JMO_DOCKER_TAG}"
+
 
 def generate_makefile_target(
     config: Any, command: str, workflow_type: str = "repo"
@@ -287,7 +293,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/jimmy058910/jmo-security:latest
+      image: {JMO_DOCKER_IMAGE_FULL}
     steps:
       - uses: actions/checkout@v4
 {setup_steps_str}
@@ -432,7 +438,7 @@ stages:
 
 security-scan-all:
   stage: security-scan
-  image: ghcr.io/jimmy058910/jmo-security:latest
+  image: {JMO_DOCKER_IMAGE_FULL}
   script:
     - jmo scan --repos-dir . --profile {profile}
   artifacts:
@@ -447,7 +453,7 @@ security-scan-all:
 
 security-report:
   stage: report
-  image: ghcr.io/jimmy058910/jmo-security:latest
+  image: {JMO_DOCKER_IMAGE_FULL}
   script:
     - jmo report ./results --profile
   dependencies:
@@ -469,7 +475,7 @@ stages:
 
 ci-security-audit:
   stage: security-audit
-  image: ghcr.io/jimmy058910/jmo-security:latest
+  image: {JMO_DOCKER_IMAGE_FULL}
   script:
     - jmo ci --repos-dir . --profile {profile} --fail-on HIGH
   artifacts:
@@ -491,7 +497,7 @@ stages:
 
 deployment-security-check:
   stage: pre-deployment
-  image: ghcr.io/jimmy058910/jmo-security:latest
+  image: {JMO_DOCKER_IMAGE_FULL}
   script:
     - jmo ci --profile {profile} --fail-on CRITICAL --image $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   artifacts:
@@ -511,7 +517,7 @@ stages:
 
 security-scan:
   stage: security-scan
-  image: ghcr.io/jimmy058910/jmo-security:latest
+  image: {JMO_DOCKER_IMAGE_FULL}
   script:
     - jmo scan --repo . --profile {profile}
   artifacts:
@@ -548,7 +554,7 @@ version: '3.8'
 
 services:
   jmo-security:
-    image: ghcr.io/jimmy058910/jmo-security:latest
+    image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - .:/scan:ro
       - ./results:/scan/results
@@ -562,7 +568,7 @@ services:
       - JMO_TELEMETRY_DISABLE=1
 
   jmo-report:
-    image: ghcr.io/jimmy058910/jmo-security:latest
+    image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - ./results:/scan/results
     command: report /scan/results --profile
@@ -579,7 +585,7 @@ version: '3.8'
 
 services:
   jmo-security:
-    image: ghcr.io/jimmy058910/jmo-security:latest
+    image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - .:/scan:ro
       - ./results:/scan/results
@@ -602,7 +608,7 @@ version: '3.8'
 
 services:
   jmo-security:
-    image: ghcr.io/jimmy058910/jmo-security:latest
+    image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./results:/scan/results
@@ -625,7 +631,7 @@ version: '3.8'
 
 services:
   jmo-security:
-    image: ghcr.io/jimmy058910/jmo-security:latest
+    image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - .:/scan:ro
       - ./results:/scan/results

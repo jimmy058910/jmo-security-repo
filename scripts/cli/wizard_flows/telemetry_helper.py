@@ -38,7 +38,7 @@ def prompt_telemetry_opt_in() -> bool:
     print()
 
     response = input("Enable anonymous telemetry? [y/N]: ").strip().lower()
-    return response == "y"
+    return response in ("y", "yes")
 
 
 def save_telemetry_preference(config_path: Path, enabled: bool) -> None:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
+
 if TYPE_CHECKING:
     from scripts.cli.wizard import TargetConfig, WizardConfig
 
@@ -147,7 +149,7 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         cmd_parts.extend(["-v", f"{results_abs}:/results"])
 
         # Image and base command
-        cmd_parts.append("ghcr.io/jimmy058910/jmo-security:latest")
+        cmd_parts.append(JMO_DOCKER_IMAGE_FULL)
         cmd_parts.append("scan")
 
         # Add target flags (non-volume args)

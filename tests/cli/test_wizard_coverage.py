@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 
 from scripts.cli.wizard import PROFILES
 from scripts.cli.wizard_generators import (
+    JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
@@ -79,7 +80,7 @@ def test_github_actions_gitlab_docker():
 
     # Verify Docker container usage
     assert "container:" in result
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in result
+    assert JMO_DOCKER_IMAGE_FULL in result
 
 
 def test_github_actions_gitlab_native():

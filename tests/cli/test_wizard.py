@@ -14,6 +14,7 @@ from scripts.cli.wizard import (
     run_wizard,
 )
 from scripts.cli.wizard_generators import (
+    JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
@@ -123,7 +124,7 @@ def test_generate_command_docker_mode():
     cmd = generate_command(config)
 
     assert "docker run" in cmd
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in cmd
+    assert JMO_DOCKER_IMAGE_FULL in cmd
     assert "--profile deep" in cmd
     assert "/scan" in cmd
     assert "/results" in cmd
@@ -225,7 +226,7 @@ def test_generate_github_actions_docker():
 
     assert "name: Security Scan" in workflow
     assert "container:" in workflow
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in workflow
+    assert JMO_DOCKER_IMAGE_FULL in workflow
     assert "jmo scan" in workflow
     assert "--profile deep" in workflow
     assert "actions/checkout@v4" in workflow
@@ -320,7 +321,7 @@ def test_run_wizard_emit_gha_docker():
 
     # Docker-specific assertions
     assert "container:" in workflow
-    assert "image: ghcr.io/jimmy058910/jmo-security:latest" in workflow
+    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in workflow
     assert "jmo scan" in workflow  # Docker uses `jmo` directly
     assert "--profile balanced" in workflow
     assert "--fail-on HIGH" in workflow

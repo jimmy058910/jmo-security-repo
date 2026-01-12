@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 
+from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 from scripts.cli.wizard_flows.command_builder import (
     build_command_parts,
     build_gitlab_args,
@@ -444,7 +445,7 @@ class TestBuildCommandParts:
         assert "docker" in parts
         assert "run" in parts
         assert "--rm" in parts
-        assert "ghcr.io/jimmy058910/jmo-security:latest" in parts
+        assert JMO_DOCKER_IMAGE_FULL in parts
         assert "scan" in parts
         assert "--profile" in parts
         assert "deep" in parts

@@ -18,6 +18,7 @@ Architecture Note:
 from unittest.mock import MagicMock
 
 
+from scripts.cli.wizard_generators import JMO_DOCKER_IMAGE_FULL
 from scripts.cli.wizard_flows.command_builder import (
     build_command_parts,
     build_gitlab_args,
@@ -400,7 +401,7 @@ def test_build_command_parts_docker_repo(tmp_path):
     assert cmd[0] == "docker"
     assert "run" in cmd
     assert "--rm" in cmd
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in cmd
+    assert JMO_DOCKER_IMAGE_FULL in cmd
     assert "scan" in cmd
     assert "--profile" in cmd
     assert "fast" in cmd

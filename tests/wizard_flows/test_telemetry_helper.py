@@ -33,6 +33,33 @@ def test_prompt_telemetry_opt_in_yes(mock_input):
     assert result is True
 
 
+@patch("builtins.input", return_value="yes")
+def test_prompt_telemetry_opt_in_yes_full_word(mock_input):
+    """Test telemetry opt-in when user types full 'yes' word."""
+    from scripts.cli.wizard_flows.telemetry_helper import prompt_telemetry_opt_in
+
+    result = prompt_telemetry_opt_in()
+    assert result is True
+
+
+@patch("builtins.input", return_value="YES")
+def test_prompt_telemetry_opt_in_yes_uppercase(mock_input):
+    """Test telemetry opt-in with uppercase YES."""
+    from scripts.cli.wizard_flows.telemetry_helper import prompt_telemetry_opt_in
+
+    result = prompt_telemetry_opt_in()
+    assert result is True
+
+
+@patch("builtins.input", return_value="")
+def test_prompt_telemetry_opt_in_empty_defaults_no(mock_input):
+    """Test telemetry defaults to opt-out on empty input."""
+    from scripts.cli.wizard_flows.telemetry_helper import prompt_telemetry_opt_in
+
+    result = prompt_telemetry_opt_in()
+    assert result is False
+
+
 @patch("builtins.input", return_value="n")
 def test_prompt_telemetry_opt_in_no(mock_input):
     """Test telemetry opt-out when user says no."""

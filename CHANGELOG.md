@@ -26,6 +26,34 @@ All notable changes to JMo Security will be documented in this file.
   - Improves display in split-pane IDEs and narrow terminal emulators
   - Files: `scripts/cli/wizard_flows/base_flow.py`
 
+### Fixed
+
+- **Wizard `--emit-script` Argument** - Fixed argument parsing for emit flags
+  - `--emit-script`, `--emit-make-target`, `--emit-gha` now correctly support optional filenames
+  - Example: `jmo wizard --emit-script` creates `jmo-scan.sh` (default)
+  - Example: `jmo wizard --emit-script custom.sh` creates `custom.sh`
+  - Files: `scripts/cli/jmo.py`
+
+- **Windows ANSI Detection** - Fixed false positives in terminal capability detection
+  - Now validates Windows API return values (GetConsoleMode/SetConsoleMode)
+  - Added isatty() check for non-TTY stdout (prevents raw escape codes in pipes)
+  - Known terminals (Windows Terminal, xterm) detected before isatty check
+  - Files: `scripts/cli/wizard_flows/base_flow.py`
+
+- **Runtime NO_COLOR Check** - colorize() now re-checks NO_COLOR environment variable
+  - Previously only checked at import time, missing late changes
+  - Files: `scripts/cli/wizard_flows/base_flow.py`
+
+- **Terminal Width Math** - Fixed minimum width enforcement
+  - Changed from `min(width - 4, 80)` to `max(40, min(width, 80))`
+  - Ensures 40-column minimum is actually enforced
+  - Added title truncation to prevent overflow on narrow terminals
+  - Files: `scripts/cli/wizard_flows/base_flow.py`
+
+- **Unicode Path Tests** - Tests now use actual Unicode characters
+  - Emoji: `project_🔒_secure`, CJK: `测试项目`, Accented: `próyecto_áccénts_ñ`
+  - Files: `tests/cli/test_wizard_edge_cases.py`
+
 ### Security
 
 - **Archive Extraction Hardening** - Defense-in-depth protection against path traversal attacks (CWE-22)
