@@ -2561,36 +2561,74 @@ def cmd_scan(args) -> int:
     signal.signal(signal.SIGTERM, _handle_stop)
 
     # Initialize progress tracker with tool count
+    # Use Rich progress display for wizard scans with human-readable output
     total_tools = len(tools)
-    progress = ProgressTracker(total_targets, args, total_tools=total_tools)
-    progress.start()
+    use_rich_progress = (
+        getattr(args, "from_wizard", False)
+        and getattr(args, "human_logs", False)
+        and sys.stderr.isatty()
+    )
 
-    # Create progress callback for orchestrator (target-level)
-    def progress_callback(target_type, target_id, statuses):
-        """Update progress tracker when scan completes."""
-        progress.update(target_type, target_id, elapsed=1.0)
+    if use_rich_progress:
+        # Use Rich-based progress tracker for clean, thread-safe display
+        from scripts.cli.rich_progress import RichScanProgressTracker
 
-    # Create tool-level progress callback
-    def tool_progress_callback(tool_name: str, status: str, findings_count: int = 0):
-        """Update progress tracker when individual tool starts/completes."""
-        progress.update_tool(tool_name, status, findings_count)
-
-    # Execute scans via orchestrator (replaces 158 lines of inline logic)
-    try:
-        all_results = orchestrator.scan_all(
-            targets,
-            per_tool_config,
-            progress_callback,
-            tool_progress_callback=tool_progress_callback,
+        rich_progress = RichScanProgressTracker(
+            total_targets=total_targets,
+            total_tools=total_tools,
+            args=args,
         )
-    except KeyboardInterrupt:
-        _log(args, "WARN", "Scan interrupted by user")
-        return 130
-    except Exception as e:
-        _log(args, "ERROR", f"Scan failed: {e}")
-        if not scan_config.allow_missing_tools:
-            raise
-        return 1
+
+        # Execute scans with Rich progress context
+        try:
+            with rich_progress:
+                all_results = orchestrator.scan_all(
+                    targets,
+                    per_tool_config,
+                    progress_callback=rich_progress.update,
+                    tool_progress_callback=rich_progress.update_tool,
+                )
+        except KeyboardInterrupt:
+            _log(args, "WARN", "Scan interrupted by user")
+            return 130
+        except Exception as e:
+            _log(args, "ERROR", f"Scan failed: {e}")
+            if not scan_config.allow_missing_tools:
+                raise
+            return 1
+    else:
+        # Use original carriage-return based progress tracker
+        progress = ProgressTracker(total_targets, args, total_tools=total_tools)
+        progress.start()
+
+        # Create progress callback for orchestrator (target-level)
+        def progress_callback(target_type, target_id, statuses):
+            """Update progress tracker when scan completes."""
+            progress.update(target_type, target_id, elapsed=1.0)
+
+        # Create tool-level progress callback
+        def tool_progress_callback(
+            tool_name: str, status: str, findings_count: int = 0
+        ):
+            """Update progress tracker when individual tool starts/completes."""
+            progress.update_tool(tool_name, status, findings_count)
+
+        # Execute scans via orchestrator (replaces 158 lines of inline logic)
+        try:
+            all_results = orchestrator.scan_all(
+                targets,
+                per_tool_config,
+                progress_callback,
+                tool_progress_callback=tool_progress_callback,
+            )
+        except KeyboardInterrupt:
+            _log(args, "WARN", "Scan interrupted by user")
+            return 130
+        except Exception as e:
+            _log(args, "ERROR", f"Scan failed: {e}")
+            if not scan_config.allow_missing_tools:
+                raise
+            return 1
 
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)

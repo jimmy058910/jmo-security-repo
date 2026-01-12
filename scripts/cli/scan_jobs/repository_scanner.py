@@ -1101,15 +1101,8 @@ def scan_repository(
     # ========== End of v1.0.0 New Tools ==========
 
     # Execute all tools with ToolRunner
-    if tool_defs:
-        tool_names = [t.name for t in tool_defs]
-        import sys
-
-        print(
-            f"INFO: Running {len(tool_defs)} tools on {name}: {', '.join(tool_names)}",
-            file=sys.stderr,
-        )
-
+    # Note: Tool progress is reported via progress_callback, not direct stderr prints
+    # This prevents overlapping output when Rich progress display is active
     runner = ToolRunner(
         tools=tool_defs,
         progress_callback=progress_callback,

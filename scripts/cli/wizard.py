@@ -494,6 +494,8 @@ class WizardConfig:
         self.analyze_trends: bool = False
         self.export_trends_html: bool = False
         self.export_trends_json: bool = False
+        # Policy evaluation flag (set by OPA pre-flight check)
+        self.policies_enabled: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -510,6 +512,7 @@ class WizardConfig:
             "analyze_trends": self.analyze_trends,
             "export_trends_html": self.export_trends_html,
             "export_trends_json": self.export_trends_json,
+            "policies_enabled": self.policies_enabled,
         }
 
 
@@ -1511,6 +1514,146 @@ def _install_missing_tools_interactive(
         return cont == "y", available
 
 
+def _check_policy_tools(
+    policies: list[str] | None,
+    skip_policies: bool,
+    yes: bool = False,
+    use_docker: bool = False,
+) -> tuple[bool, bool]:
+    """
+    Check if OPA is available when policies are configured.
+
+    This pre-flight check runs in Step 2 (after tool check) when the user
+    has specified --policy flags. OPA is required for policy evaluation.
+
+    Args:
+        policies: List of policies to evaluate (e.g., ['owasp-top-10', 'zero-secrets'])
+        skip_policies: Whether --skip-policies was specified
+        yes: Non-interactive mode
+        use_docker: Whether Docker mode is active (OPA bundled in image)
+
+    Returns:
+        Tuple of (should_continue: bool, policies_enabled: bool)
+        - should_continue: Whether wizard should proceed
+        - policies_enabled: Whether policy evaluation will run
+    """
+    # No policies configured or explicitly skipped - nothing to check
+    if not policies or skip_policies:
+        return True, False
+
+    # Docker mode has OPA bundled - skip check
+    if use_docker:
+        return True, True
+
+    # Check if OPA is available
+    from scripts.cli.scan_utils import tool_exists
+
+    print(
+        f"\nChecking policy tool availability ({len(policies)} policies configured)..."
+    )
+
+    if tool_exists("opa", warn=False):
+        print(
+            _colorize(
+                f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} OPA available - policy evaluation enabled",
+                "green",
+            )
+        )
+        return True, True
+
+    # OPA not found - warn user
+    print(
+        _colorize(
+            f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} OPA not installed",
+            "yellow",
+        )
+    )
+    print("Policy evaluation requires OPA (Open Policy Agent).")
+    print(f"Configured policies: {', '.join(policies)}")
+
+    # Non-interactive: continue without policies
+    if yes:
+        print(
+            _colorize(
+                "\nNon-interactive mode: continuing without policy evaluation",
+                "yellow",
+            )
+        )
+        return True, False
+
+    # Interactive: offer choices
+    print("\n" + "─" * 50)
+    print(_colorize("Options:", "blue"))
+    print("  [1] Continue scan without policy evaluation")
+    print("  [2] Install OPA and continue")
+    print("  [3] Cancel wizard")
+
+    while True:
+        choice = input("\nChoice [1]: ").strip() or "1"
+        if choice == "1":
+            print(
+                _colorize(
+                    "\nContinuing without policy evaluation",
+                    "yellow",
+                )
+            )
+            return True, False
+        elif choice == "2":
+            # Attempt OPA installation
+            return _install_opa_tool()
+        elif choice == "3":
+            return False, False
+        else:
+            print("Please enter 1, 2, or 3")
+
+
+def _install_opa_tool() -> tuple[bool, bool]:
+    """
+    Install OPA tool.
+
+    Returns:
+        Tuple of (should_continue, policies_enabled)
+    """
+    print("\nInstalling OPA...")
+
+    try:
+        from scripts.cli.tool_installer import ToolInstaller
+
+        installer = ToolInstaller()
+        result = installer.install_tool("opa")
+
+        if result.success:
+            print(
+                _colorize(
+                    f"{_UNICODE_FALLBACKS.get('✅', '[OK]')} OPA installed successfully",
+                    "green",
+                )
+            )
+            return True, True
+        else:
+            print(
+                _colorize(
+                    f"{_UNICODE_FALLBACKS.get('❌', '[X]')} OPA installation failed: {result.message}",
+                    "red",
+                )
+            )
+            print("Continuing without policy evaluation")
+            return True, False
+
+    except ImportError as e:
+        logger.warning(f"Tool installer unavailable: {e}")
+        print(_colorize(f"\nInstaller unavailable: {e}", "red"))
+        print(
+            "Install OPA manually: https://www.openpolicyagent.org/docs/latest/#running-opa"
+        )
+        return True, False
+    except Exception as e:
+        logger.warning(f"OPA installation failed: {e}")
+        print(_colorize(f"\nInstallation failed: {e}", "red"))
+        print("Continuing without policy evaluation")
+        return True, False
+
+
 def run_wizard(
     yes: bool = False,
     force_docker: bool = False,
@@ -1586,6 +1729,14 @@ def run_wizard(
             )
             if not should_continue:
                 return 0
+
+            # OPA pre-flight check (for policy evaluation)
+            should_continue, policies_enabled = _check_policy_tools(
+                policies, skip_policies, yes=True, use_docker=config.use_docker
+            )
+            if not should_continue:
+                return 0
+            config.policies_enabled = policies_enabled
         else:
             # Interactive mode with new multi-target selection
             config.profile = select_profile()
@@ -1608,6 +1759,15 @@ def run_wizard(
                 ):
                     print(_colorize("\nWizard cancelled", "yellow"))
                     return 0
+
+            # OPA pre-flight check (for policy evaluation)
+            should_continue, policies_enabled = _check_policy_tools(
+                policies, skip_policies, yes=False, use_docker=config.use_docker
+            )
+            if not should_continue:
+                print(_colorize("\nWizard cancelled", "yellow"))
+                return 0
+            config.policies_enabled = policies_enabled
 
             # Step 3a: Select target type
             target_type = select_target_type()
