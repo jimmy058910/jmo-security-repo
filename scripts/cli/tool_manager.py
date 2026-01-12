@@ -476,6 +476,8 @@ class ToolStatus:
     execution_ready: bool = True  # Tool can actually execute (not just binary exists)
     execution_warning: str | None = None  # Warning if not execution_ready
     missing_deps: list[str] | None = None  # Missing dependencies for execution
+    # Phase 4: Version detection error (startup crash, import error, etc.)
+    version_error: str | None = None  # Reason version couldn't be determined
 
     def __post_init__(self) -> None:
         """Initialize mutable defaults."""
@@ -498,6 +500,8 @@ class ToolStatus:
         """Get status text for display."""
         if not self.installed:
             return "MISSING"
+        if self.version_error:
+            return "STARTUP CRASH"  # Phase 4: Tool crashes on startup
         if not self.execution_ready:
             return "NOT READY"
         if self.is_outdated:
@@ -545,13 +549,16 @@ class ToolManager:
         binary_path = self._find_binary(binary_name)
         installed = binary_path is not None
 
-        # Get installed version if found
+        # Get installed version if found (Phase 4: with crash detection)
         # For variants (e.g., semgrep-secrets), use base tool name for version lookup
         # since VERSION_COMMANDS only has entries for base tools
         installed_version = None
+        version_error = None  # Phase 4: Track startup crash errors
         if binary_path:
             base_tool = TOOL_VARIANTS.get(tool_name, tool_name)
-            installed_version = self._get_tool_version(base_tool, binary_path)
+            installed_version, version_error = self._get_tool_version(
+                base_tool, binary_path
+            )
 
         # Determine if outdated
         expected_version = tool_info.version if tool_info else None
@@ -572,9 +579,14 @@ class ToolManager:
         missing_deps: list[str] = []
 
         if installed:
-            execution_ready, execution_warning, missing_deps = self._verify_execution(
-                tool_name
-            )
+            # Phase 4: If version_error detected, mark as not execution_ready
+            if version_error:
+                execution_ready = False
+                execution_warning = version_error
+            else:
+                execution_ready, execution_warning, missing_deps = (
+                    self._verify_execution(tool_name)
+                )
         else:
             execution_ready = False
             execution_warning = "Tool binary not found"
@@ -592,6 +604,7 @@ class ToolManager:
             execution_ready=execution_ready,
             execution_warning=execution_warning,
             missing_deps=missing_deps,
+            version_error=version_error,  # Phase 4
         )
 
     def check_profile(self, profile: str) -> dict[str, ToolStatus]:
@@ -762,6 +775,12 @@ class ToolManager:
         """
         Find binary in PATH or common locations.
 
+        Priority order (highest to lowest):
+        1. Isolated venvs (~/.jmo/tools/venvs/<tool_name>/) - for pip conflict tools
+        2. JMo managed locations (~/.jmo/bin/) - for extracted/cloned tools
+        3. User local bin (~/.local/bin/)
+        4. System PATH
+
         Args:
             binary_name: Name of the binary to find
 
@@ -770,7 +789,19 @@ class ToolManager:
         """
         home = Path.home()
 
-        # Check for tools with special installation paths FIRST
+        # Phase 3: Check isolated venv paths FIRST (highest priority)
+        # This ensures tools with pip conflicts (prowler, scancode) use
+        # their isolated venv executables instead of any system version
+        # Note: Lazy import to avoid circular dependency with tool_installer
+        from scripts.cli.tool_installer import get_isolated_tool_path, ISOLATED_TOOLS
+
+        tool_name = binary_name.removesuffix(".exe")  # Normalize for lookup
+        if tool_name in ISOLATED_TOOLS:
+            isolated_path = get_isolated_tool_path(tool_name)
+            if isolated_path is not None:
+                return str(isolated_path)
+
+        # Check for tools with special installation paths SECOND
         # (before PATH lookup, to prefer our managed versions)
 
         # lynis is cloned to ~/.jmo/bin/lynis/ directory
@@ -899,16 +930,21 @@ class ToolManager:
 
         return None
 
-    def _get_tool_version(self, tool_name: str, binary_path: str) -> str | None:
+    def _get_tool_version(
+        self, tool_name: str, binary_path: str
+    ) -> tuple[str | None, str | None]:
         """
-        Get installed version of a tool.
+        Get installed version of a tool with startup crash detection (Phase 4).
 
         Args:
             tool_name: Tool name (e.g., 'zap', not 'zap.sh')
             binary_path: Full path to binary
 
         Returns:
-            Version string or None if unable to determine
+            Tuple of (version_string, error_reason):
+            - (version, None) - success, version extracted
+            - (None, None) - version couldn't be parsed (normal case)
+            - (None, error) - startup crash detected (Phase 4)
         """
         # Get version command - use tool_name for lookup (not binary_name)
         # VERSION_COMMANDS uses tool names as keys (e.g., "zap" not "zap.sh")
@@ -946,6 +982,7 @@ class ToolManager:
             )
             # Combine stdout and stderr - some tools write version to stderr
             output = (result.stdout or "") + (result.stderr or "")
+            stderr_lower = (result.stderr or "").lower()
 
             # Log detailed debug info for troubleshooting
             logger.debug(
@@ -953,6 +990,41 @@ class ToolManager:
                 f"returncode={result.returncode}, "
                 f"stdout={result.stdout!r}, stderr={result.stderr!r}"
             )
+
+            # Phase 4: Detect startup crash indicators in stderr
+            # These indicate the tool exists but can't start due to dependency conflicts
+            crash_indicators = [
+                ("importerror", "ImportError - Python package conflict"),
+                ("modulenotfounderror", "ModuleNotFoundError - Missing dependency"),
+                (
+                    "traceback (most recent call last)",
+                    "Python traceback - startup crash",
+                ),
+                ("pydantic.errors", "Pydantic version conflict"),
+                ("validationerror", "Pydantic validation error"),
+                ("click.exceptions", "Click version conflict"),
+            ]
+
+            for indicator, error_msg in crash_indicators:
+                if indicator in stderr_lower:
+                    # Extract the actual error line for diagnostics
+                    lines = (result.stderr or "").split("\n")
+                    error_detail = None
+                    for line in reversed(lines):
+                        line_stripped = line.strip()
+                        if line_stripped and not line_stripped.startswith("File"):
+                            # Get the last non-file line as the actual error
+                            error_detail = line_stripped[:100]
+                            break
+
+                    full_error = error_msg
+                    if error_detail:
+                        full_error = f"{error_msg}: {error_detail}"
+
+                    logger.warning(
+                        f"Startup crash detected for {tool_name}: {full_error}"
+                    )
+                    return (None, full_error)
 
             # Check for command execution errors
             # Note: Some tools return non-zero even for --version, so we still try parsing
@@ -962,7 +1034,7 @@ class ToolManager:
                         f"Version command failed for {tool_name} "
                         f"(exit code {result.returncode}), no output"
                     )
-                return None
+                return (None, None)
 
             # Parse version from output
             version = self._parse_version(tool_name, output)
@@ -972,24 +1044,24 @@ class ToolManager:
                 logger.debug(
                     f"Could not parse version for {tool_name} from output: {sample!r}"
                 )
-            return version
+            return (version, None)
         except subprocess.TimeoutExpired:
             logger.debug(
                 f"Timeout ({timeout}s) getting version for {tool_name}. "
                 f"Try running '{' '.join(cmd)}' manually."
             )
-            return None
+            return (None, None)
         except FileNotFoundError:
             logger.debug(f"Binary not found at {binary_path} for {tool_name}")
-            return None
+            return (None, None)
         except PermissionError:
             logger.debug(f"Permission denied executing {binary_path} for {tool_name}")
-            return None
+            return (None, None)
         except (OSError, subprocess.SubprocessError) as e:
             logger.debug(
                 f"Error getting version for {tool_name}: {type(e).__name__}: {e}"
             )
-            return None
+            return (None, None)
 
     def _parse_version(self, tool_name: str, output: str) -> str | None:
         """

@@ -126,6 +126,7 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
 | `jmo tools check` | Check tool installation status |
 | `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster) |
+| `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
 | `make fmt` | Format code (Black + Ruff) |
@@ -346,6 +347,7 @@ See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidan
 |-------|----------|
 | Tests failing | `make test --maxfail=1`, check coverage ≥85% |
 | Tool not found | `jmo tools check`, then `jmo tools install` |
+| Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
 | Pre-commit fails | `make fmt`, `make lint` |
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history vacuum` |

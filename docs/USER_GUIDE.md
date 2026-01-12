@@ -305,6 +305,32 @@ jmo tools uninstall --yes
 - Homebrew-installed tools (run `brew uninstall <tool>`)
 - System packages installed via apt
 
+### Cleaning Isolated Venvs
+
+Some tools have conflicting pip dependencies (e.g., prowler and checkov have pydantic version conflicts). These tools are automatically installed in **isolated virtual environments** at `~/.jmo/tools/venvs/<tool>/`.
+
+```bash
+# Show what isolated venvs exist (dry run)
+jmo tools clean
+
+# Remove all isolated venvs
+jmo tools clean --force
+```
+
+**When to use:**
+
+- To fix corrupted tool installations
+- To reclaim disk space
+- Before reinstalling conflicting tools
+
+**After cleaning**, reinstall the tools:
+
+```bash
+jmo tools install prowler scancode
+```
+
+**Note:** Tools installed in isolated venvs are automatically discovered by `jmo tools check` and work transparently with all JMo commands.
+
 ### Pre-Scan Tool Checks
 
 The `jmo scan` and `jmo wizard` commands automatically check for missing tools:

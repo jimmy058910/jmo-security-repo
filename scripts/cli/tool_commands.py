@@ -19,6 +19,7 @@ from scripts.cli.tool_manager import (
     print_profile_summary,
     print_tool_status_table,
 )
+from scripts.cli.tool_installer import clean_isolated_venvs
 from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
 
 if TYPE_CHECKING:
@@ -96,6 +97,7 @@ def cmd_tools(args: argparse.Namespace) -> int:
         "outdated": cmd_tools_outdated,
         "uninstall": cmd_tools_uninstall,
         "debug": cmd_tools_debug,
+        "clean": cmd_tools_clean,  # Phase 5: Clean isolated venvs
     }
 
     handler = handlers.get(subcommand) if subcommand else None
@@ -1073,3 +1075,56 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     else:
         return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+def cmd_tools_clean(args: argparse.Namespace) -> int:
+    """
+    Clean isolated virtual environments (Phase 5).
+
+    Removes isolated venvs used for tools with pip conflicts (prowler, scancode).
+    Useful when you need to fix a corrupted installation or reclaim disk space.
+
+    Usage:
+        jmo tools clean           # Show what would be removed (dry run)
+        jmo tools clean --force   # Actually remove the isolated venvs
+
+    Returns:
+        0 on success, 1 if errors occurred
+    """
+    force = getattr(args, "force", False)
+
+    print("\n" + "=" * 60)
+    print("  JMo Security - Isolated Venv Cleanup")
+    print("=" * 60)
+
+    # Get list of venvs to clean
+    if force:
+        print(colorize("\nRemoving isolated virtual environments...", "yellow"))
+        removed = clean_isolated_venvs(dry_run=False)
+    else:
+        print("\nDry run - showing what would be removed:")
+        removed = clean_isolated_venvs(dry_run=True)
+
+    if not removed:
+        print(colorize("\nNo isolated venvs found.", "cyan"))
+        print("Location: ~/.jmo/tools/venvs/")
+        return 0
+
+    print(f"\n{len(removed)} isolated venv(s):")
+    for path in removed:
+        if force:
+            print(f"  {colorize('[REMOVED]', 'green')} {path}")
+        else:
+            print(f"  {colorize('[would remove]', 'cyan')} {path}")
+
+    print()
+    if force:
+        print(colorize(f"Cleaned {len(removed)} isolated venv(s).", "green"))
+        print("\nTo reinstall tools in isolated venvs, run:")
+        print("  jmo tools install prowler scancode")
+    else:
+        print("To actually remove these, run:")
+        print(colorize("  jmo tools clean --force", "cyan"))
+
+    print("=" * 60)
+    return 0

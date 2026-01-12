@@ -285,6 +285,101 @@ INSTALL_SCRIPTS: dict[str, str] = {
     "kubescape": "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh",
 }
 
+# ============================================================================
+# ISOLATED VENV CONFIGURATION (Phase 3)
+# ============================================================================
+# Known pip package conflicts - these tools need isolated virtual environments
+# to avoid dependency conflicts (e.g., pydantic version incompatibilities).
+#
+# Tools in this dict will be installed in ~/.jmo/tools/venvs/<tool_name>/
+# instead of the system Python environment.
+#
+# Format: {tool_name: {package, conflicts_with, reason}}
+ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
+    "prowler": {
+        "package": "prowler",
+        "conflicts_with": ["checkov"],
+        "reason": "Pydantic version conflict (prowler requires pydantic<2, checkov requires pydantic>=2)",
+    },
+    "scancode": {
+        "package": "scancode-toolkit",
+        "conflicts_with": [],
+        "reason": "Click version conflict with modern packages",
+    },
+}
+
+
+def get_isolated_venv_path(tool_name: str) -> Path:
+    """Get the path to an isolated venv for a tool.
+
+    Isolated venvs are used for tools with known dependency conflicts
+    that cannot coexist in the same Python environment.
+
+    Args:
+        tool_name: Name of the tool
+
+    Returns:
+        Path to the venv directory (~/.jmo/tools/venvs/<tool_name>/)
+    """
+    return Path.home() / ".jmo" / "tools" / "venvs" / tool_name
+
+
+def get_isolated_tool_path(tool_name: str) -> Path | None:
+    """Get the path to a tool executable in an isolated venv.
+
+    Args:
+        tool_name: Name of the tool
+
+    Returns:
+        Path to the executable, or None if not found
+    """
+    venv_dir = get_isolated_venv_path(tool_name)
+    if not venv_dir.exists():
+        return None
+
+    # Platform-specific bin directory and executable name
+    if sys.platform == "win32":
+        bin_dir = venv_dir / "Scripts"
+        exe_name = f"{tool_name}.exe"
+    else:
+        bin_dir = venv_dir / "bin"
+        exe_name = tool_name
+
+    exe_path = bin_dir / exe_name
+    if exe_path.exists():
+        return exe_path
+
+    return None
+
+
+def clean_isolated_venvs(dry_run: bool = True) -> list[str]:
+    """Remove isolated venv directories.
+
+    Used by 'jmo tools clean' command to remove isolated virtual environments
+    when they are no longer needed or to fix corrupted installations.
+
+    Args:
+        dry_run: If True, only list what would be deleted without actually deleting
+
+    Returns:
+        List of deleted (or would-delete if dry_run) paths
+    """
+    venvs_dir = Path.home() / ".jmo" / "tools" / "venvs"
+    if not venvs_dir.exists():
+        return []
+
+    removed: list[str] = []
+    for venv_dir in venvs_dir.iterdir():
+        if venv_dir.is_dir():
+            if dry_run:
+                logger.info(f"Would remove: {venv_dir}")
+            else:
+                logger.info(f"Removing: {venv_dir}")
+                shutil.rmtree(venv_dir)
+            removed.append(str(venv_dir))
+
+    return removed
+
 
 @dataclass
 class InstallResult:
@@ -823,12 +918,44 @@ class ToolInstaller:
                 f"[cyan]Installing {total_tools} tools...", total=total_tools
             )
 
-            # Stage 1: Batch pip installs
-            if pip_tools and not progress.is_cancelled():
+            # Stage 0: Install isolated pip tools (tools with dependency conflicts)
+            # These must be installed in separate venvs BEFORE batch pip install
+            isolated_pip_tools = [t for t in pip_tools if t in ISOLATED_TOOLS]
+            regular_pip_tools = [t for t in pip_tools if t not in ISOLATED_TOOLS]
+
+            if isolated_pip_tools and not progress.is_cancelled():
+                for tool_name in isolated_pip_tools:
+                    if progress.is_cancelled():
+                        break
+                    iso_task = rich_progress.add_task(
+                        f"[dim]isolated venv: {tool_name}...", total=None
+                    )
+                    progress.on_start(tool_name)
+
+                    # Get package spec from registry
+                    tool_info = self.registry.get_tool(tool_name)
+                    if tool_info and tool_info.pypi_package:
+                        package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
+                    else:
+                        # Fallback to using tool name as package
+                        pkg = ISOLATED_TOOLS[tool_name].get("package", tool_name)
+                        package_spec = pkg if isinstance(pkg, str) else tool_name
+
+                    result = self._isolated_pip_install(
+                        tool_name, package_spec, progress
+                    )
+                    progress.on_complete(tool_name, result)
+                    rich_progress.advance(main_task)
+                    status = "[green]✓[/]" if result.success else "[red]✗[/]"
+                    console.print(f"  {status} {tool_name} (isolated venv)")
+                    rich_progress.remove_task(iso_task)
+
+            # Stage 1: Batch pip installs (regular tools only, isolated tools already handled)
+            if regular_pip_tools and not progress.is_cancelled():
                 pip_task = rich_progress.add_task(
-                    f"[dim]pip batch ({len(pip_tools)} packages)...", total=None
+                    f"[dim]pip batch ({len(regular_pip_tools)} packages)...", total=None
                 )
-                pip_results = self._batch_pip_install(pip_tools, progress)
+                pip_results = self._batch_pip_install(regular_pip_tools, progress)
                 for result in pip_results:
                     progress.on_complete(result.tool_name, result)
                     rich_progress.advance(main_task)
@@ -911,10 +1038,31 @@ class ToolInstaller:
         max_workers: int,
     ) -> None:
         """Run parallel installation without Rich progress (for non-TTY)."""
-        # Stage 1: Batch pip installs
-        if pip_tools and not progress.is_cancelled():
-            logger.info(f"Installing {len(pip_tools)} pip packages in batch...")
-            pip_results = self._batch_pip_install(pip_tools, progress)
+        # Stage 0: Install isolated pip tools (tools with dependency conflicts)
+        isolated_pip_tools = [t for t in pip_tools if t in ISOLATED_TOOLS]
+        regular_pip_tools = [t for t in pip_tools if t not in ISOLATED_TOOLS]
+
+        if isolated_pip_tools and not progress.is_cancelled():
+            logger.info(
+                f"Installing {len(isolated_pip_tools)} tools in isolated venvs..."
+            )
+            for tool_name in isolated_pip_tools:
+                if progress.is_cancelled():
+                    break
+                progress.on_start(tool_name)
+                tool_info = self.registry.get_tool(tool_name)
+                if tool_info and tool_info.pypi_package:
+                    package_spec = f"{tool_info.pypi_package}=={tool_info.version}"
+                else:
+                    pkg = ISOLATED_TOOLS[tool_name].get("package", tool_name)
+                    package_spec = pkg if isinstance(pkg, str) else tool_name
+                result = self._isolated_pip_install(tool_name, package_spec, progress)
+                progress.on_complete(tool_name, result)
+
+        # Stage 1: Batch pip installs (regular tools only)
+        if regular_pip_tools and not progress.is_cancelled():
+            logger.info(f"Installing {len(regular_pip_tools)} pip packages in batch...")
+            pip_results = self._batch_pip_install(regular_pip_tools, progress)
             for result in pip_results:
                 progress.on_complete(result.tool_name, result)
 
@@ -954,6 +1102,148 @@ class ToolInstaller:
                         )
                     progress.on_complete(tool_name, result)
 
+    def _isolated_pip_install(
+        self,
+        tool_name: str,
+        package_spec: str,
+        progress: ParallelInstallProgress | None = None,
+    ) -> InstallResult:
+        """Install a tool in an isolated virtual environment.
+
+        Used for tools with known dependency conflicts (e.g., prowler/checkov
+        pydantic conflict) that cannot be installed in the same environment.
+
+        The isolated venv is created at ~/.jmo/tools/venvs/<tool_name>/
+
+        Args:
+            tool_name: Name of the tool
+            package_spec: Pip package specification (e.g., "prowler==5.16.0")
+            progress: Optional progress tracker for status updates
+
+        Returns:
+            InstallResult with success status and details
+        """
+        venv_dir = get_isolated_venv_path(tool_name)
+        start_time = time.time()
+
+        try:
+            # Step 1: Create venv if it doesn't exist
+            if not venv_dir.exists():
+                logger.info(f"Creating isolated venv for {tool_name} at {venv_dir}")
+                venv_dir.parent.mkdir(parents=True, exist_ok=True)
+
+                result = subprocess.run(
+                    [sys.executable, "-m", "venv", str(venv_dir)],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode != 0:
+                    return InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        method="isolated_venv",
+                        message=f"Failed to create venv: {result.stderr[:200]}",
+                        duration_seconds=time.time() - start_time,
+                    )
+
+            # Step 2: Get pip path in venv (platform-specific)
+            if sys.platform == "win32":
+                pip_path = venv_dir / "Scripts" / "pip.exe"
+            else:
+                pip_path = venv_dir / "bin" / "pip"
+
+            if not pip_path.exists():
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=False,
+                    method="isolated_venv",
+                    message=f"pip not found in venv at {pip_path}",
+                    duration_seconds=time.time() - start_time,
+                )
+
+            # Step 3: Upgrade pip in venv (helps with dependency resolution)
+            subprocess.run(
+                [str(pip_path), "install", "--upgrade", "pip"],
+                capture_output=True,
+                timeout=120,
+            )
+
+            # Step 4: Install the package
+            logger.info(f"Installing {package_spec} in isolated venv")
+            result = subprocess.run(
+                [str(pip_path), "install", "--quiet", package_spec],
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+
+            if result.returncode != 0:
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=False,
+                    method="isolated_venv",
+                    message=f"pip install failed: {result.stderr[:200]}",
+                    duration_seconds=time.time() - start_time,
+                )
+
+            # Step 5: Verify installation by checking if executable exists
+            tool_path = get_isolated_tool_path(tool_name)
+            if tool_path and tool_path.exists():
+                # Try to get version
+                version = None
+                try:
+                    version_result = subprocess.run(
+                        [str(tool_path), "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if version_result.returncode == 0:
+                        # Try to extract version from output
+                        output = version_result.stdout + version_result.stderr
+                        import re
+
+                        match = re.search(r"(\d+\.\d+\.\d+)", output)
+                        if match:
+                            version = match.group(1)
+                except Exception:
+                    pass  # Version detection is best-effort
+
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=True,
+                    method="isolated_venv",
+                    message=f"Installed in isolated venv at {venv_dir}",
+                    version_installed=version,
+                    duration_seconds=time.time() - start_time,
+                )
+            else:
+                return InstallResult(
+                    tool_name=tool_name,
+                    success=False,
+                    method="isolated_venv",
+                    message=f"Package installed but {tool_name} executable not found",
+                    duration_seconds=time.time() - start_time,
+                )
+
+        except subprocess.TimeoutExpired:
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="isolated_venv",
+                message="Installation timed out (10 minutes)",
+                duration_seconds=time.time() - start_time,
+            )
+        except Exception as e:
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                method="isolated_venv",
+                message=str(e),
+                duration_seconds=time.time() - start_time,
+            )
+
     def _batch_pip_install(
         self,
         pip_tools: list[str],
@@ -968,6 +1258,9 @@ class ToolInstaller:
         3. Reduced subprocess overhead
 
         Falls back to individual installs if batch fails.
+
+        NOTE: Tools in ISOLATED_TOOLS are filtered out before this method is called
+        and installed separately via _isolated_pip_install().
         """
         results: list[InstallResult] = []
         start_time = time.time()

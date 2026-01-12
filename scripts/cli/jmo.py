@@ -646,6 +646,37 @@ Examples:
         "--all", "-a", action="store_true", help="Debug all tools in balanced profile"
     )
 
+    # CLEAN - Phase 5: Clean isolated virtual environments
+    clean_parser = tools_subparsers.add_parser(
+        "clean",
+        help="Clean isolated venvs (pip conflict tools)",
+        description="""
+Clean isolated virtual environments used for tools with pip conflicts.
+
+Some tools (prowler, scancode) have conflicting dependencies (e.g., pydantic
+version conflicts) and are installed in isolated venvs at ~/.jmo/tools/venvs/.
+
+Use this command to:
+  - Reclaim disk space
+  - Fix corrupted isolated venv installations
+  - Reset before reinstalling conflicting tools
+
+Examples:
+  jmo tools clean           # Show what would be removed (dry run)
+  jmo tools clean --force   # Actually remove the isolated venvs
+
+After cleaning, reinstall tools with:
+  jmo tools install prowler scancode
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    clean_parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Actually remove (default is dry run)",
+    )
+
     return tools_parser
 
 

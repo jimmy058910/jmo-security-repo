@@ -1017,6 +1017,9 @@ def check_tools_for_profile(
         for status in tools_needing_attention:
             if not status.installed:
                 issue = "NOT INSTALLED"
+            # Phase 4: Detect startup crashes (pydantic conflicts, import errors)
+            elif status.version_error:
+                issue = f"STARTUP CRASH: {status.version_error}"
             else:
                 issue = status.execution_warning or "Missing dependencies"
 
@@ -1027,16 +1030,22 @@ def check_tools_for_profile(
                     "issue": issue,
                     "installed": status.installed,
                     "remediation": remediation,
+                    "version_error": status.version_error,  # Phase 4
                 }
             )
 
-            # Display the issue - distinguish manual-only tools
+            # Display the issue - distinguish different issue types
             is_manual = remediation.get("is_manual", False)
+            is_startup_crash = status.version_error is not None  # Phase 4
+
             if is_manual:
                 manual_only_count += 1
                 icon = _UNICODE_FALLBACKS.get("📖", "[?]")
                 # Show manual reason instead of generic issue
                 issue = remediation.get("manual_reason", issue)
+            elif is_startup_crash:
+                # Phase 4: Special display for startup crashes
+                icon = _UNICODE_FALLBACKS.get("💥", "[!!]")
             elif not status.installed:
                 icon = _UNICODE_FALLBACKS.get("❌", "[X]")
             else:
@@ -1048,6 +1057,21 @@ def check_tools_for_profile(
             if is_manual:
                 url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
                 print(f"     See: {url}")
+            elif is_startup_crash:
+                # Phase 4: Suggest reinstalling in isolated venv
+                print(
+                    _colorize(
+                        "     Fix: jmo tools clean && jmo tools install "
+                        f"{status.name}",
+                        "cyan",
+                    )
+                )
+                print(
+                    _colorize(
+                        "     (Reinstalls in isolated venv to avoid pip conflicts)",
+                        "dim",
+                    )
+                )
             elif remediation["commands"]:
                 print(f"     Fix: {remediation['commands'][0]}")
                 if len(remediation["commands"]) > 1:

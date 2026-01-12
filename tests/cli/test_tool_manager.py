@@ -270,8 +270,9 @@ def test_toolmanager_check_tool_found():
 
     manager = ToolManager(registry=mock_registry)
 
+    # Note: _get_tool_version now returns (version, error) tuple (Phase 4)
     with patch.object(manager, "_find_binary", return_value="/usr/bin/trivy"):
-        with patch.object(manager, "_get_tool_version", return_value="0.50.0"):
+        with patch.object(manager, "_get_tool_version", return_value=("0.50.0", None)):
             with patch.object(
                 manager, "_verify_execution", return_value=(True, None, [])
             ):
@@ -296,8 +297,9 @@ def test_toolmanager_check_tool_outdated():
 
     manager = ToolManager(registry=mock_registry)
 
+    # Note: _get_tool_version now returns (version, error) tuple (Phase 4)
     with patch.object(manager, "_find_binary", return_value="/usr/bin/trivy"):
-        with patch.object(manager, "_get_tool_version", return_value="0.49.0"):
+        with patch.object(manager, "_get_tool_version", return_value=("0.49.0", None)):
             with patch.object(manager, "_is_version_outdated", return_value=True):
                 with patch.object(
                     manager, "_verify_execution", return_value=(True, None, [])
@@ -991,7 +993,11 @@ class TestFindBinary:
 
 
 class TestGetToolVersion:
-    """Tests for _get_tool_version method."""
+    """Tests for _get_tool_version method.
+
+    Note: _get_tool_version now returns a tuple (version, error_reason) for
+    Phase 4 startup crash detection. Tests updated accordingly.
+    """
 
     def test_get_version_success(self):
         """Test successful version detection."""
@@ -1005,9 +1011,10 @@ class TestGetToolVersion:
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
-            version = manager._get_tool_version("trivy", "/usr/bin/trivy")
+            version, error = manager._get_tool_version("trivy", "/usr/bin/trivy")
 
         assert version == "0.50.0"
+        assert error is None
 
     def test_get_version_from_stderr(self):
         """Test version detection from stderr."""
@@ -1021,9 +1028,10 @@ class TestGetToolVersion:
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
-            version = manager._get_tool_version("semgrep", "/usr/bin/semgrep")
+            version, error = manager._get_tool_version("semgrep", "/usr/bin/semgrep")
 
         assert version == "1.50.0"
+        assert error is None
 
     def test_get_version_timeout(self):
         """Test version detection handles timeout."""
@@ -1033,9 +1041,12 @@ class TestGetToolVersion:
         manager = ToolManager()
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 10)):
-            version = manager._get_tool_version("slow-tool", "/usr/bin/slow-tool")
+            version, error = manager._get_tool_version(
+                "slow-tool", "/usr/bin/slow-tool"
+            )
 
         assert version is None
+        assert error is None  # Timeout is not a crash error
 
     def test_get_version_file_not_found(self):
         """Test version detection handles FileNotFoundError."""
@@ -1044,9 +1055,12 @@ class TestGetToolVersion:
         manager = ToolManager()
 
         with patch("subprocess.run", side_effect=FileNotFoundError("Binary not found")):
-            version = manager._get_tool_version("missing-tool", "/nonexistent/path")
+            version, error = manager._get_tool_version(
+                "missing-tool", "/nonexistent/path"
+            )
 
         assert version is None
+        assert error is None  # File not found is not a crash error
 
     def test_get_version_permission_denied(self):
         """Test version detection handles PermissionError."""
@@ -1055,9 +1069,12 @@ class TestGetToolVersion:
         manager = ToolManager()
 
         with patch("subprocess.run", side_effect=PermissionError("Access denied")):
-            version = manager._get_tool_version("protected-tool", "/usr/bin/protected")
+            version, error = manager._get_tool_version(
+                "protected-tool", "/usr/bin/protected"
+            )
 
         assert version is None
+        assert error is None  # Permission denied is not a crash error
 
     def test_get_version_os_error(self):
         """Test version detection handles generic OSError."""
@@ -1066,9 +1083,10 @@ class TestGetToolVersion:
         manager = ToolManager()
 
         with patch("subprocess.run", side_effect=OSError("Generic error")):
-            version = manager._get_tool_version("error-tool", "/usr/bin/error")
+            version, error = manager._get_tool_version("error-tool", "/usr/bin/error")
 
         assert version is None
+        assert error is None  # Generic OS error is not a crash error
 
     def test_get_version_no_output(self):
         """Test version detection handles empty output."""
@@ -1082,9 +1100,10 @@ class TestGetToolVersion:
         mock_result.returncode = 1
 
         with patch("subprocess.run", return_value=mock_result):
-            version = manager._get_tool_version("silent-tool", "/usr/bin/silent")
+            version, error = manager._get_tool_version("silent-tool", "/usr/bin/silent")
 
         assert version is None
+        assert error is None  # Empty output is not a crash error
 
     def test_get_version_parse_failure(self):
         """Test version detection handles unparseable output."""
@@ -1098,10 +1117,11 @@ class TestGetToolVersion:
         mock_result.returncode = 0
 
         with patch("subprocess.run", return_value=mock_result):
-            version = manager._get_tool_version("weird-tool", "/usr/bin/weird")
+            version, error = manager._get_tool_version("weird-tool", "/usr/bin/weird")
 
         # Should return None if version can't be parsed
         assert version is None
+        assert error is None  # Parse failure is not a crash error
 
     def test_get_version_custom_command(self):
         """Test version detection with tool-specific command."""
@@ -1116,6 +1136,7 @@ class TestGetToolVersion:
 
         with patch("subprocess.run", return_value=mock_result):
             # Trivy uses custom version command from VERSION_COMMANDS
-            version = manager._get_tool_version("trivy", "/usr/bin/trivy")
+            version, error = manager._get_tool_version("trivy", "/usr/bin/trivy")
 
         assert version is not None
+        assert error is None
