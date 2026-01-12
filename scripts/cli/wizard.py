@@ -1058,20 +1058,40 @@ def check_tools_for_profile(
                 url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
                 print(f"     See: {url}")
             elif is_startup_crash:
-                # Phase 4: Suggest reinstalling in isolated venv
-                print(
-                    _colorize(
-                        "     Fix: jmo tools clean && jmo tools install "
-                        f"{status.name}",
-                        "cyan",
+                # Phase 4: Suggest fix based on whether tool supports isolated venv
+                # Lazy import to avoid circular dependency
+                from scripts.cli.tool_installer import ISOLATED_TOOLS
+
+                if status.name in ISOLATED_TOOLS:
+                    # Tool will be reinstalled in isolated venv
+                    print(
+                        _colorize(
+                            "     Fix: jmo tools clean && jmo tools install "
+                            f"{status.name}",
+                            "cyan",
+                        )
                     )
-                )
-                print(
-                    _colorize(
-                        "     (Reinstalls in isolated venv to avoid pip conflicts)",
-                        "dim",
+                    print(
+                        _colorize(
+                            "     (Reinstalls in isolated venv to avoid pip conflicts)",
+                            "dim",
+                        )
                     )
-                )
+                else:
+                    # Tool not in ISOLATED_TOOLS - suggest manual pip reinstall
+                    print(
+                        _colorize(
+                            f"     Fix: pip uninstall {status.name} -y && "
+                            f"pip install {status.name}",
+                            "cyan",
+                        )
+                    )
+                    print(
+                        _colorize(
+                            "     (Dependency conflict - may need to resolve manually)",
+                            "dim",
+                        )
+                    )
             elif remediation["commands"]:
                 print(f"     Fix: {remediation['commands'][0]}")
                 if len(remediation["commands"]) > 1:
@@ -1285,37 +1305,37 @@ def _auto_fix_tools(
 
             installer = ToolInstaller()
 
-            # Use parallel installation
-            progress = installer.install_profile_parallel(
-                profile=profile,
-                skip_installed=False,  # We want to install these specific tools
+            # Use install_tools_parallel for SPECIFIC tools (not entire profile!)
+            # This fixes the bug where all 28 profile tools were being installed
+            progress = installer.install_tools_parallel(
+                tools=jmo_tools,  # Only install the tools that need fixing
+                skip_installed=False,  # Don't skip - these are broken/missing
                 max_workers=4,
                 show_progress=True,
             )
 
-            # Count results
+            # Count results - all results are for our tools now
             for result in progress.results:
-                if result.tool_name in jmo_tools:
-                    if result.success:
-                        if result.method != "skipped":
-                            fixed += 1
-                            print(
-                                _colorize(
-                                    f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {result.tool_name} installed!",
-                                    "green",
-                                )
-                            )
-                            if result.tool_name not in available:
-                                available.append(result.tool_name)
-                    else:
-                        failed += 1
-                        failed_tools.append(result.tool_name)
+                if result.success:
+                    if result.method != "skipped":
+                        fixed += 1
                         print(
                             _colorize(
-                                f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} {result.tool_name}: {result.message[:60]}",
-                                "red",
+                                f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {result.tool_name} installed!",
+                                "green",
                             )
                         )
+                        if result.tool_name not in available:
+                            available.append(result.tool_name)
+                else:
+                    failed += 1
+                    failed_tools.append(result.tool_name)
+                    print(
+                        _colorize(
+                            f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} {result.tool_name}: {result.message[:60]}",
+                            "red",
+                        )
+                    )
 
         except ImportError as e:
             logger.warning(f"Could not import ToolInstaller: {e}")

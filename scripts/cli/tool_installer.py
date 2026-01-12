@@ -294,12 +294,29 @@ INSTALL_SCRIPTS: dict[str, str] = {
 # Tools in this dict will be installed in ~/.jmo/tools/venvs/<tool_name>/
 # instead of the system Python environment.
 #
+# Pydantic version matrix:
+#   - prowler: requires pydantic<2 (v1.x)
+#   - semgrep: requires pydantic>=2 (TypeAdapter)
+#   - checkov: requires pydantic>=2 (model_serializer)
+#
+# These tools CANNOT coexist in the same Python environment!
+#
 # Format: {tool_name: {package, conflicts_with, reason}}
 ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
     "prowler": {
         "package": "prowler",
-        "conflicts_with": ["checkov"],
-        "reason": "Pydantic version conflict (prowler requires pydantic<2, checkov requires pydantic>=2)",
+        "conflicts_with": ["semgrep", "checkov"],
+        "reason": "Requires pydantic<2 (v1.x), conflicts with semgrep/checkov which need pydantic>=2",
+    },
+    "semgrep": {
+        "package": "semgrep",
+        "conflicts_with": ["prowler"],
+        "reason": "Requires pydantic>=2 (TypeAdapter), conflicts with prowler which needs pydantic<2",
+    },
+    "checkov": {
+        "package": "checkov",
+        "conflicts_with": ["prowler"],
+        "reason": "Requires pydantic>=2 (model_serializer), conflicts with prowler which needs pydantic<2",
     },
     "scancode": {
         "package": "scancode-toolkit",
@@ -873,6 +890,124 @@ class ToolInstaller:
         except ValueError:
             # Can't set signal handler in non-main thread
             pass
+
+        try:
+            if show_progress:
+                self._install_with_rich_progress(
+                    pip_tools, npm_tools, other_tools, progress, max_workers
+                )
+            else:
+                self._install_without_progress(
+                    pip_tools, npm_tools, other_tools, progress, max_workers
+                )
+        except KeyboardInterrupt:
+            logger.info("Installation cancelled")
+        finally:
+            try:
+                signal.signal(signal.SIGINT, original_handler)
+            except ValueError:
+                pass
+
+        return progress.to_install_progress()
+
+    def install_tools_parallel(
+        self,
+        tools: list[str],
+        skip_installed: bool = False,
+        max_workers: int = 4,
+        show_progress: bool = True,
+    ) -> InstallProgress:
+        """
+        Install a specific list of tools in parallel.
+
+        Unlike install_profile_parallel(), this method installs only the
+        specified tools rather than all tools from a profile.
+
+        Uses the same three-stage strategy:
+        1. Batch pip installs (with isolated venvs for conflicting tools)
+        2. Batch npm installs
+        3. Parallel binary downloads
+
+        Args:
+            tools: List of specific tool names to install
+            skip_installed: Skip already-installed tools (default: False)
+            max_workers: Maximum concurrent installations (default: 4, max: 8)
+            show_progress: Show Rich progress bars (default: True)
+
+        Returns:
+            InstallProgress with results for all tools
+        """
+        if not tools:
+            return InstallProgress(total=0)
+
+        # Cap max_workers at 8
+        max_workers = min(max_workers, 8)
+
+        # Pre-flight deduplication
+        tools = list(dict.fromkeys(tools))
+
+        # Categorize tools by installation method
+        pip_tools: list[str] = []
+        npm_tools: list[str] = []
+        other_tools: list[str] = []
+        skipped_results: list[InstallResult] = []
+
+        for tool_name in tools:
+            # Check if should skip
+            if skip_installed:
+                status = self.manager.check_tool(tool_name)
+                if status.installed and not status.version_error:
+                    skipped_results.append(
+                        InstallResult(
+                            tool_name=tool_name,
+                            success=True,
+                            method="skipped",
+                            message=f"Already installed (v{status.installed_version})",
+                            version_installed=status.installed_version,
+                        )
+                    )
+                    continue
+
+            # Categorize by install method
+            tool_info = self.registry.get_tool(tool_name)
+            if tool_info:
+                if tool_info.pypi_package:
+                    pip_tools.append(tool_name)
+                elif tool_info.npm_package:
+                    npm_tools.append(tool_name)
+                else:
+                    other_tools.append(tool_name)
+            else:
+                other_tools.append(tool_name)
+
+        # Create progress tracker
+        total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)
+        progress = ParallelInstallProgress(total=len(tools))
+
+        # Add skipped results
+        for result in skipped_results:
+            progress.on_complete(result.tool_name, result)
+
+        if total_to_install == 0:
+            logger.info("No tools to install (all skipped or already installed)")
+            return progress.to_install_progress()
+
+        logger.info(
+            f"Installing {total_to_install} tools: "
+            f"{len(pip_tools)} pip, {len(npm_tools)} npm, {len(other_tools)} binary"
+        )
+
+        # Handle keyboard interrupt gracefully
+        original_handler = signal.getsignal(signal.SIGINT)
+
+        def cancel_handler(signum: int, frame: object) -> None:
+            progress.cancel()
+            logger.info("Cancellation requested...")
+
+        try:
+            signal.signal(signal.SIGINT, cancel_handler)
+        except ValueError:
+            pass  # Not in main thread
 
         try:
             if show_progress:
