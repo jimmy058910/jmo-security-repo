@@ -357,13 +357,15 @@ def get_isolated_tool_path(tool_name: str) -> Path | None:
     if not venv_dir.exists():
         return None
 
-    # Platform-specific bin directory
+    # Platform-specific bin directory and extensions
+    # On Windows, pip may create .exe, .cmd, or no-extension scripts
     if sys.platform == "win32":
         bin_dir = venv_dir / "Scripts"
-        ext = ".exe"
+        # Order matters: prefer .exe, then .cmd, then no extension
+        extensions = [".exe", ".cmd", ""]
     else:
         bin_dir = venv_dir / "bin"
-        ext = ""
+        extensions = [""]
 
     # Try primary name first, then alternate names
     # Order: tool_name, tool_name-cli, tool_name_cli, underscored version
@@ -374,10 +376,12 @@ def get_isolated_tool_path(tool_name: str) -> Path | None:
         tool_name.replace("-", "_"),
     ]
 
+    # Try each name with each extension
     for name in names_to_try:
-        exe_path = bin_dir / f"{name}{ext}"
-        if exe_path.exists():
-            return exe_path
+        for ext in extensions:
+            exe_path = bin_dir / f"{name}{ext}"
+            if exe_path.exists():
+                return exe_path
 
     return None
 
