@@ -824,9 +824,19 @@ class ToolManager:
         # dependency-check is extracted to ~/.jmo/bin/dependency-check/
         # The script is at ~/.jmo/bin/dependency-check/bin/dependency-check.sh (Unix)
         # or dependency-check.bat (Windows)
-        if binary_name in ("dependency-check.sh", "dependency-check.bat"):
+        # Handle both exact script names and the base tool name
+        if binary_name in (
+            "dependency-check",
+            "dependency-check.sh",
+            "dependency-check.bat",
+        ):
             # Check both .sh and .bat extensions (cross-platform support)
-            for script_name in ("dependency-check.bat", "dependency-check.sh"):
+            # Prefer .bat on Windows, .sh on Unix
+            if sys.platform == "win32":
+                script_order = ("dependency-check.bat", "dependency-check.sh")
+            else:
+                script_order = ("dependency-check.sh", "dependency-check.bat")
+            for script_name in script_order:
                 dc_path = (
                     home / ".jmo" / "bin" / "dependency-check" / "bin" / script_name
                 )
@@ -1000,7 +1010,10 @@ class ToolManager:
                 cmd = list(version_cmd_config)  # Copy to avoid mutation
 
             # Replace first element (the binary) with full path
-            cmd[0] = binary_path
+            # EXCEPT for Python module tools (yara, etc.) where cmd[0] is sys.executable
+            # These tools use 'python -c "import X"' patterns, not binaries
+            if cmd[0] != sys.executable and binary_path:
+                cmd[0] = binary_path
         else:
             cmd = [binary_path, "--version"]
 
