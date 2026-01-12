@@ -946,9 +946,44 @@ class ToolManager:
             - (None, None) - version couldn't be parsed (normal case)
             - (None, error) - startup crash detected (Phase 4)
         """
+        # Check if this is an isolated venv tool - use special execution
+        from scripts.cli.tool_installer import (
+            ISOLATED_TOOLS,
+            get_isolated_venv_path,
+            get_isolated_tool_path,
+        )
+
+        use_isolated_venv = False
+        isolated_tool_path = None
+        clean_env = self._get_clean_env()
+
+        if tool_name in ISOLATED_TOOLS:
+            venv_dir = get_isolated_venv_path(tool_name)
+            if venv_dir.exists():
+                # Get the actual tool executable path (handles alternate names)
+                isolated_tool_path = get_isolated_tool_path(tool_name)
+                if isolated_tool_path and isolated_tool_path.exists():
+                    use_isolated_venv = True
+                    # Set up clean environment with venv's bin first in PATH
+                    # This ensures the console script uses the venv's Python
+                    if sys.platform == "win32":
+                        bin_dir = venv_dir / "Scripts"
+                    else:
+                        bin_dir = venv_dir / "bin"
+                    clean_env["PATH"] = (
+                        str(bin_dir) + os.pathsep + clean_env.get("PATH", "")
+                    )
+                    # Clear any Python path overrides to ensure venv isolation
+                    clean_env.pop("PYTHONPATH", None)
+                    clean_env.pop("PYTHONHOME", None)
+
         # Get version command - use tool_name for lookup (not binary_name)
         # VERSION_COMMANDS uses tool names as keys (e.g., "zap" not "zap.sh")
-        if tool_name in VERSION_COMMANDS:
+        if use_isolated_venv and isolated_tool_path:
+            # For isolated tools, use console script with clean env
+            # The clean PATH ensures the script uses venv's Python
+            cmd = [str(isolated_tool_path), "--version"]
+        elif tool_name in VERSION_COMMANDS:
             version_cmd_config = VERSION_COMMANDS[tool_name]
 
             # Handle platform-specific commands (dict) vs universal commands (list)
@@ -978,7 +1013,7 @@ class ToolManager:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=self._get_clean_env(),
+                env=clean_env,
             )
             # Combine stdout and stderr - some tools write version to stderr
             output = (result.stdout or "") + (result.stderr or "")

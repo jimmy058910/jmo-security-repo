@@ -344,6 +344,9 @@ def get_isolated_venv_path(tool_name: str) -> Path:
 def get_isolated_tool_path(tool_name: str) -> Path | None:
     """Get the path to a tool executable in an isolated venv.
 
+    Checks for the primary executable name and common alternate names
+    that different packages may use.
+
     Args:
         tool_name: Name of the tool
 
@@ -354,17 +357,27 @@ def get_isolated_tool_path(tool_name: str) -> Path | None:
     if not venv_dir.exists():
         return None
 
-    # Platform-specific bin directory and executable name
+    # Platform-specific bin directory
     if sys.platform == "win32":
         bin_dir = venv_dir / "Scripts"
-        exe_name = f"{tool_name}.exe"
+        ext = ".exe"
     else:
         bin_dir = venv_dir / "bin"
-        exe_name = tool_name
+        ext = ""
 
-    exe_path = bin_dir / exe_name
-    if exe_path.exists():
-        return exe_path
+    # Try primary name first, then alternate names
+    # Order: tool_name, tool_name-cli, tool_name_cli, underscored version
+    names_to_try = [
+        tool_name,
+        f"{tool_name}-cli",
+        f"{tool_name}_cli",
+        tool_name.replace("-", "_"),
+    ]
+
+    for name in names_to_try:
+        exe_path = bin_dir / f"{name}{ext}"
+        if exe_path.exists():
+            return exe_path
 
     return None
 
@@ -1267,8 +1280,14 @@ class ToolInstaller:
                 logger.info(f"Creating isolated venv for {tool_name} at {venv_dir}")
                 venv_dir.parent.mkdir(parents=True, exist_ok=True)
 
+                # Use --copies on Windows to create actual copies instead of symlinks
+                # This ensures the venv's Python is truly isolated
+                venv_cmd = [sys.executable, "-m", "venv", str(venv_dir)]
+                if sys.platform == "win32":
+                    venv_cmd.append("--copies")
+
                 result = subprocess.run(
-                    [sys.executable, "-m", "venv", str(venv_dir)],
+                    venv_cmd,
                     capture_output=True,
                     text=True,
                     timeout=120,
@@ -1282,11 +1301,15 @@ class ToolInstaller:
                         duration_seconds=time.time() - start_time,
                     )
 
-            # Step 2: Get pip path in venv (platform-specific)
+            # Step 2: Get Python and pip paths in venv (platform-specific)
             if sys.platform == "win32":
-                pip_path = venv_dir / "Scripts" / "pip.exe"
+                bin_dir = venv_dir / "Scripts"
+                python_path = bin_dir / "python.exe"
+                pip_path = bin_dir / "pip.exe"
             else:
-                pip_path = venv_dir / "bin" / "pip"
+                bin_dir = venv_dir / "bin"
+                python_path = bin_dir / "python"
+                pip_path = bin_dir / "pip"
 
             if not pip_path.exists():
                 return InstallResult(
@@ -1298,16 +1321,17 @@ class ToolInstaller:
                 )
 
             # Step 3: Upgrade pip in venv (helps with dependency resolution)
+            # Use explicit Python to ensure we're using venv's Python
             subprocess.run(
-                [str(pip_path), "install", "--upgrade", "pip"],
+                [str(python_path), "-m", "pip", "install", "--upgrade", "pip"],
                 capture_output=True,
                 timeout=120,
             )
 
-            # Step 4: Install the package
+            # Step 4: Install the package using venv's Python explicitly
             logger.info(f"Installing {package_spec} in isolated venv")
             result = subprocess.run(
-                [str(pip_path), "install", "--quiet", package_spec],
+                [str(python_path), "-m", "pip", "install", "--quiet", package_spec],
                 capture_output=True,
                 text=True,
                 timeout=600,
@@ -1323,19 +1347,29 @@ class ToolInstaller:
                 )
 
             # Step 5: Verify installation by checking if executable exists
+            # get_isolated_tool_path already handles alternate names
             tool_path = get_isolated_tool_path(tool_name)
             if tool_path and tool_path.exists():
-                # Try to get version
+                # Try to get version using console script with clean environment
+                # Clean PATH ensures the script uses venv's Python
                 version = None
                 try:
+                    # Create clean env with venv's bin dir first in PATH
+                    clean_env = os.environ.copy()
+                    clean_env["PATH"] = (
+                        str(bin_dir) + os.pathsep + clean_env.get("PATH", "")
+                    )
+                    clean_env.pop("PYTHONPATH", None)
+                    clean_env.pop("PYTHONHOME", None)
+
                     version_result = subprocess.run(
                         [str(tool_path), "--version"],
                         capture_output=True,
                         text=True,
                         timeout=30,
+                        env=clean_env,
                     )
                     if version_result.returncode == 0:
-                        # Try to extract version from output
                         output = version_result.stdout + version_result.stderr
                         import re
 
