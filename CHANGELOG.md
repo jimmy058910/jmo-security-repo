@@ -4,6 +4,28 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Wizard `--db` Flag** - Custom history database path support for wizard command
+  - Allows specifying alternate SQLite database location: `jmo wizard --db /path/to/history.db`
+  - Enables project-specific scan history tracking
+  - Files: `scripts/cli/jmo.py`, `scripts/cli/wizard.py`
+
+### Changed
+
+- **Wizard Windows Terminal Compatibility** - Improved ANSI color support on older Windows
+  - Automatic ANSI escape code detection for Windows 10+ terminals
+  - Respects `NO_COLOR` environment variable (standard)
+  - Enables virtual terminal processing via SetConsoleMode on Windows
+  - Graceful degradation to plain text on unsupported terminals
+  - Files: `scripts/cli/wizard_flows/base_flow.py`
+
+- **Wizard Dynamic Terminal Width** - Adaptive UI for narrow terminals
+  - Header boxes, progress bars, and summary boxes now adapt to terminal width
+  - Minimum width: 40 columns, maximum: 80 columns for readability
+  - Improves display in split-pane IDEs and narrow terminal emulators
+  - Files: `scripts/cli/wizard_flows/base_flow.py`
+
 ### Security
 
 - **Archive Extraction Hardening** - Defense-in-depth protection against path traversal attacks (CWE-22)

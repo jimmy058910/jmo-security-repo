@@ -425,6 +425,12 @@ def _add_wizard_args(subparsers):
         action="store_true",
         help="Skip policy evaluation entirely (overrides config defaults)",
     )
+    wizard_parser.add_argument(
+        "--db",
+        type=str,
+        default=None,
+        help="Path to SQLite history database (default: ~/.jmo/history.db)",
+    )
     return wizard_parser
 
 
@@ -2709,6 +2715,7 @@ def cmd_wizard(args):
         emit_gha=args.emit_gha,
         policies=getattr(args, "policies", None),
         skip_policies=getattr(args, "skip_policies", False),
+        db_path=getattr(args, "db", None),
     )
 
 

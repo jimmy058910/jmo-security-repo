@@ -5,9 +5,69 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+import os
 import re
+import shutil
 import subprocess  # nosec B404
+import sys
 import yaml
+
+
+def _supports_ansi() -> bool:
+    """Check if terminal supports ANSI escape codes.
+
+    Returns:
+        True if ANSI codes should work, False otherwise
+    """
+    # Check NO_COLOR environment variable (standard)
+    if os.environ.get("NO_COLOR"):
+        return False
+
+    # Always True on non-Windows
+    if sys.platform != "win32":
+        return True
+
+    # Check for modern terminal emulators that support ANSI
+    wt_session = os.environ.get("WT_SESSION")  # Windows Terminal
+    term = os.environ.get("TERM", "")
+
+    if wt_session or "xterm" in term or "256color" in term:
+        return True
+
+    # Try to enable ANSI on Windows 10+ via SetConsoleMode
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        # STD_OUTPUT_HANDLE = -11
+        # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        handle = kernel32.GetStdHandle(-11)
+        mode = ctypes.c_ulong()
+        kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+        # Enable VT processing
+        kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+        return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _get_terminal_width() -> int:
+    """Get terminal width with safe fallback.
+
+    Returns:
+        Terminal width in columns (minimum 40, maximum 120)
+    """
+    try:
+        columns = shutil.get_terminal_size().columns
+        return max(40, min(columns, 120))
+    except Exception:
+        return 80  # Safe default
+
+
+# Module-level ANSI support flag (computed once at import)
+_ANSI_SUPPORTED = _supports_ansi()
 
 
 class TargetDetector:
@@ -249,28 +309,39 @@ class PromptHelper:
     def colorize(self, text: str, color: str) -> str:
         """Apply ANSI color codes to text.
 
+        Respects NO_COLOR environment variable and gracefully degrades
+        on older Windows terminals that don't support ANSI escape codes.
+
         Args:
             text: Text to colorize
             color: Color name (blue, cyan, green, yellow, red, magenta, bold, dim)
 
         Returns:
-            Colorized text with reset code
+            Colorized text with reset code, or plain text if ANSI not supported
         """
+        if not _ANSI_SUPPORTED:
+            return text
         return f"{self.COLORS.get(color, '')}{text}{self.COLORS['reset']}"
 
     def print_header(self, text: str, icon: str = "star") -> None:
         """Print a formatted section header with icon.
 
+        Adapts to terminal width for better display on narrow terminals.
+
         Args:
             text: Header text
             icon: Icon name (star, rocket, lock, package, chart)
         """
+        # Get dynamic width (minimum 40, cap at 80 for readability)
+        box_width = min(_get_terminal_width() - 4, 80)
+        inner_width = max(box_width - 2, 38)  # Account for box borders
+
         print()
-        print(self.colorize("╔" + "═" * 68 + "╗", "cyan"))
+        print(self.colorize("╔" + "═" * inner_width + "╗", "cyan"))
         icon_char = self.ICONS.get(icon, self.ICONS["star"])
         header_text = f"{icon_char}  {text}  {icon_char}"
-        print(self.colorize(f"║{header_text.center(68)}║", "bold"))
-        print(self.colorize("╚" + "═" * 68 + "╝", "cyan"))
+        print(self.colorize(f"║{header_text.center(inner_width)}║", "bold"))
+        print(self.colorize("╚" + "═" * inner_width + "╝", "cyan"))
         print()
 
     def print_step(self, step: int, total: int, text: str) -> None:
@@ -281,6 +352,9 @@ class PromptHelper:
             total: Total number of steps
             text: Step description
         """
+        # Get dynamic width
+        line_width = min(_get_terminal_width() - 2, 80)
+
         # Progress bar
         progress_width = 20
         filled = int((step / total) * progress_width)
@@ -292,7 +366,7 @@ class PromptHelper:
         progress_text = f"[{bar}] {percentage}%"
 
         print()
-        print(self.colorize("─" * 70, "dim"))
+        print(self.colorize("─" * line_width, "dim"))
         print(
             self.colorize(f"{self.ICONS['arrow']} {step_text} {text}", "bold")
             + f"  {self.colorize(progress_text, 'cyan')}"
@@ -334,15 +408,22 @@ class PromptHelper:
     def print_summary_box(self, title: str, items: list[str]) -> None:
         """Print a summary box with items.
 
+        Adapts to terminal width for better display.
+
         Args:
             title: Box title
             items: List of items to display
         """
+        # Get dynamic width
+        box_width = min(_get_terminal_width() - 4, 80)
+        # Calculate padding after title (minimum 4 dashes)
+        title_padding = max(4, box_width - len(title) - 3)
+
         print()
-        print(self.colorize("┌─ " + title + " " + "─" * (66 - len(title)), "cyan"))
+        print(self.colorize("┌─ " + title + " " + "─" * title_padding, "cyan"))
         for item in items:
             print(self.colorize(f"│ {self.ICONS['bullet']} {item}", "dim"))
-        print(self.colorize("└" + "─" * 68, "cyan"))
+        print(self.colorize("└" + "─" * box_width, "cyan"))
         print()
 
     def prompt_choice(

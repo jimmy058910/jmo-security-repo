@@ -86,6 +86,21 @@ def _safe_print(text: str) -> None:
         print(text)
 
 
+# Module-level custom db_path storage (set by run_wizard)
+_custom_db_path: str | None = None
+
+
+def _get_db_path() -> Path:
+    """Get the history database path, respecting custom --db flag.
+
+    Returns:
+        Path to SQLite history database
+    """
+    if _custom_db_path:
+        return Path(_custom_db_path).expanduser().resolve()
+    return Path.home() / ".jmo" / "history.db"
+
+
 # Version (from pyproject.toml)
 __version__ = "0.7.1"
 
@@ -1507,6 +1522,7 @@ def run_wizard(
     export_trends_json: bool = False,
     policies: list[str] | None = None,
     skip_policies: bool = False,
+    db_path: str | None = None,
 ) -> int:
     """
     Run the interactive wizard.
@@ -1522,6 +1538,7 @@ def run_wizard(
         export_trends_json: Export trend report as JSON after scan
         policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
         skip_policies: Skip policy evaluation entirely
+        db_path: Path to SQLite history database (default: ~/.jmo/history.db)
 
     Returns:
         Exit code
@@ -1532,6 +1549,10 @@ def run_wizard(
         should_show_telemetry_banner,
         show_telemetry_banner,
     )
+
+    # Set custom db_path for this wizard run (module-level for helper access)
+    global _custom_db_path
+    _custom_db_path = db_path
 
     wizard_start_time = time.time()
 
@@ -1630,7 +1651,11 @@ def run_wizard(
             content = generate_shell_script(config, command)
             script_path = Path(emit_script)
             script_path.write_text(content)
-            script_path.chmod(0o755)
+            # Set execute permission (no effect on Windows, which lacks Unix permission bits)
+            try:
+                script_path.chmod(0o755)
+            except OSError:
+                pass  # Windows doesn't support Unix permissions
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
             send_wizard_telemetry(
                 wizard_start_time, config, __version__, artifact_type="shell"
@@ -1653,11 +1678,11 @@ def run_wizard(
 
         # Handle trend analysis after successful scan (if ≥2 scans exist)
         if result == 0 or result == 1:  # Success (0 = clean, 1 = findings)
-            db_path = Path.home() / ".jmo" / "history.db"
+            history_db_path = _get_db_path()
 
             # Non-interactive trend analysis
             if analyze_trends or export_trends_html or export_trends_json:
-                if not db_path.exists():
+                if not history_db_path.exists():
                     print(
                         _colorize(
                             "\n⚠ No history database found (need ≥2 scans)", "yellow"
@@ -1667,7 +1692,7 @@ def run_wizard(
                     try:
                         from scripts.core.history_db import get_connection
 
-                        conn = get_connection(db_path)
+                        conn = get_connection(history_db_path)
                         cursor = conn.execute("SELECT COUNT(*) FROM scans")
                         scan_count = cursor.fetchone()[0]
 
@@ -1684,7 +1709,7 @@ def run_wizard(
                                     _colorize("\n📊 Running trend analysis...", "blue")
                                 )
                                 _run_trend_command_interactive(
-                                    db_path, "analyze", last_n=30
+                                    history_db_path, "analyze", last_n=30
                                 )
 
                             if export_trends_html or export_trends_json:
@@ -1697,7 +1722,7 @@ def run_wizard(
                                     format_json_report,
                                 )
 
-                                analyzer = TrendAnalyzer(db_path)
+                                analyzer = TrendAnalyzer(history_db_path)
                                 report = analyzer.analyze_trends(last_n=30)
 
                                 if export_trends_html:
@@ -1790,19 +1815,17 @@ def offer_trend_analysis_after_scan(results_dir: str) -> None:
     Args:
         results_dir: Results directory from completed scan
     """
-    from pathlib import Path
-
     # Check if history database exists and has ≥2 scans
-    db_path = Path.home() / ".jmo" / "history.db"
+    history_db_path = _get_db_path()
 
-    if not db_path.exists():
+    if not history_db_path.exists():
         # No history yet, skip trend offer
         return
 
     try:
         from scripts.core.history_db import get_connection
 
-        conn = get_connection(db_path)
+        conn = get_connection(history_db_path)
         cursor = conn.execute("SELECT COUNT(*) FROM scans")
         scan_count = cursor.fetchone()[0]
 
@@ -1821,7 +1844,7 @@ def offer_trend_analysis_after_scan(results_dir: str) -> None:
         _safe_print("  • See top remediators")
 
         if _prompt_yes_no("\nExplore trends now?", default=False):
-            explore_trends_interactive(db_path, results_dir)
+            explore_trends_interactive(history_db_path, results_dir)
 
     except Exception as e:
         # Don't block user if trend offer fails
@@ -2371,19 +2394,20 @@ def run_diff_wizard(use_docker: bool = False) -> int:
 
         if mode == "history":
             # Load recent scans from SQLite
-            db_path = Path.home() / ".jmo" / "history.db"
+            history_db_path = _get_db_path()
 
-            if not db_path.exists():
+            if not history_db_path.exists():
                 print(
                     _colorize(
-                        f"\nError: History database not found at {db_path}", "red"
+                        f"\nError: History database not found at {history_db_path}",
+                        "red",
                     )
                 )
                 print("Run some scans first to populate the history database.")
                 return 1
 
             try:
-                scans = list_recent_scans(db_path, limit=20)
+                scans = list_recent_scans(history_db_path, limit=20)
 
                 if len(scans) < 2:
                     print(_colorize("\nError: Need at least 2 scans in history", "red"))
@@ -2581,7 +2605,7 @@ def run_diff_wizard(use_docker: bool = False) -> int:
                     [baseline_path, current_path] if mode == "directory" else None
                 )
                 self.scan_ids = [baseline_id, current_id] if mode == "history" else None
-                self.db = str(Path.home() / ".jmo" / "history.db")
+                self.db = str(_get_db_path())
                 self.severity = severity_filter if severity_filter else None
                 self.tool = None
                 self.only = category_filter
