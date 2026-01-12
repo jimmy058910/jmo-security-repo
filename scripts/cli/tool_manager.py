@@ -1292,6 +1292,25 @@ class ToolManager:
                     ["bash"],
                 )
 
+        # dependency-check requires Java 11+
+        if tool_name == "dependency-check":
+            java_version = self._get_java_version()
+            if java_version:
+                required_major = 11
+                if java_version[0] < required_major:
+                    ver_str = ".".join(map(str, java_version[:3]))
+                    return (
+                        False,
+                        f"Requires Java {required_major}+, found {ver_str}",
+                        ["java"],
+                    )
+            else:
+                return (
+                    False,
+                    "Java not found (dependency-check requires Java 11+)",
+                    ["java"],
+                )
+
         return True, None, []
 
     def _get_node_version(self) -> tuple[int, int, int] | None:
@@ -1308,6 +1327,45 @@ class ToolManager:
                 version = result.stdout.strip().lstrip("v")
                 parts = version.split(".")[:3]
                 return tuple(int(p) for p in parts if p.isdigit())  # type: ignore[return-value]  # Generator returns variable-length tuple, safe for version comparison
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+        return None
+
+    def _get_java_version(self) -> tuple[int, int, int] | None:
+        """Get Java version as tuple.
+
+        Handles various Java version formats:
+        - openjdk version "17.0.1" 2021-10-19
+        - java version "1.8.0_291"  (old format, 1.8 = Java 8)
+        - java 17.0.1 2021-10-19 LTS
+        """
+        try:
+            result = subprocess.run(
+                ["java", "-version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            # Java outputs version info to stderr
+            output = result.stderr or result.stdout
+            if result.returncode == 0 and output:
+                # Extract version from various formats
+                import re
+
+                # Match: "17.0.1" or "1.8.0_291" or "17.0.1"
+                match = re.search(r'"?(\d+)\.(\d+)\.(\d+)', output)
+                if match:
+                    major = int(match.group(1))
+                    minor = int(match.group(2))
+                    patch = int(match.group(3).split("_")[0])  # Handle 1.8.0_291
+
+                    # Handle old Java version format (1.8 = Java 8)
+                    if major == 1 and minor <= 8:
+                        major = minor
+                        minor = patch
+                        patch = 0
+
+                    return (major, minor, patch)
         except (subprocess.TimeoutExpired, OSError, ValueError):
             pass
         return None
