@@ -214,6 +214,51 @@ brew install nuclei
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 ```
 
+#### Java-Based Tools (Dependency-Check, ZAP)
+
+Several tools require **Java 11+** (Java 17+ recommended):
+
+- **OWASP Dependency-Check** - SCA/vulnerability scanner
+- **OWASP ZAP** - Dynamic application security testing
+
+**Install Java:**
+
+```bash
+# Windows (Chocolatey)
+choco install openjdk17 -y
+
+# Windows (Winget)
+winget install Microsoft.OpenJDK.17
+
+# macOS
+brew install openjdk@17
+
+# Linux (Ubuntu/Debian)
+sudo apt install openjdk-17-jre -y
+
+# Linux (RHEL/CentOS)
+sudo dnf install java-17-openjdk -y
+```
+
+**Verify Java installation:**
+
+```bash
+java -version
+# Should show: openjdk version "17.x.x" or similar
+```
+
+**Install Dependency-Check:**
+
+```bash
+# All platforms (after Java is installed)
+jmo tools install dependency-check
+
+# Or manual download from:
+# https://github.com/jeremylong/DependencyCheck/releases
+```
+
+> **Note:** The wizard will automatically detect if Java is missing and show a clear error message with installation instructions.
+
 ### Tool Compatibility Matrix
 
 | Tool | macOS | Linux | Windows | Docker |

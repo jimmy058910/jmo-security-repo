@@ -134,8 +134,11 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
 | `make test-parallel` | Parallel tests with coverage (CI-like) |
 | `make test` | Sequential tests with coverage (original) |
+| `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive) |
 
 > **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
+>
+> **Wizard Testing:** Run `python scripts/dev/test_wizard_tools.py --profile balanced` before `jmo wizard` to verify tool infrastructure. The script tests isolated venvs, version detection, and dependency checks (Java, Node.js, bash) non-interactively.
 
 ### Version Management (CRITICAL)
 
