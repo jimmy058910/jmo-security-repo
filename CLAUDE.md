@@ -36,6 +36,34 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 make fmt && make lint && make test
 ```
 
+### Plan Mode Format Rules
+
+When creating plans (via `/plan` or plan mode), follow these rules for scannable, actionable output:
+
+1. **Be extremely concise** - Sacrifice grammar for brevity. Use fragments, not sentences.
+2. **Single approach only** - Present your recommended solution, not all alternatives.
+3. **Include file paths** - List exact files to modify: `scripts/core/adapters/foo.py:45`
+4. **End with unresolved questions** - If any ambiguity remains, list questions at the end.
+
+**Good plan format:**
+
+```text
+## Changes
+- `scripts/cli/jmo.py:234` - add --timeout flag to scan command
+- `scripts/core/config.py:89` - add timeout to ScanConfig dataclass
+- `tests/unit/test_config.py` - add timeout validation tests
+
+## Unresolved
+- Default timeout value? (suggest 300s)
+```
+
+**Bad plan format:**
+
+```text
+I will modify the jmo.py file to add a new timeout flag. This flag will allow users to specify
+a custom timeout value for their scans. I'll also need to update the configuration system...
+```
+
 ### Artifact Guardrails (CI blocks these)
 
 - No `venv/`, `__pycache__/`, `build/`, `dist/` in git
@@ -456,6 +484,8 @@ with patch("module.tool_exists", return_value=True):
 **Features:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
 
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
+
+**Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
 
 ## Notes
 

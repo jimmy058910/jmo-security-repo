@@ -6,8 +6,9 @@ The JMo Security Wizard provides a guided, interactive experience for beginners 
 
 ## Table of Contents
 
-- [Five Workflow Types](#five-workflow-types)
 - [Visual Interface](#visual-interface)
+- [Tool Pre-Flight Check and Auto-Install](#tool-pre-flight-check-and-auto-install)
+- [Five Workflow Types](#five-workflow-types)
 - [Basic Interactive Mode](#basic-interactive-mode)
 - [Non-Interactive Mode](#non-interactive-mode)
 - [Docker Mode (Zero Installation)](#docker-mode-zero-installation)
@@ -179,6 +180,99 @@ Clear profile comparison before selection:
 - **Contextual guidance:** Smart recommendations based on detected files
 - **Environment awareness:** Production vs staging warnings prevent mistakes
 - **Accessibility:** Color-coded messages (green=success, yellow=warning, red=error)
+
+---
+
+## Tool Pre-Flight Check and Auto-Install
+
+When running in native mode (non-Docker), the wizard performs a pre-flight tool check and offers to **automatically fix** any issues.
+
+### Tool Status Display
+
+```text
+Checking 18 applicable tools for 'balanced' profile...
+
+✅ 15 tools ready
+⚠️  3 tool(s) need attention:
+
+  [!] dependency-check: Java not found (dependency-check requires Java 11+)
+     Fix: jmo tools install dependency-check
+
+  [!] cdxgen: Node.js not found (required for cdxgen)
+     Fix: jmo tools install cdxgen
+
+  [~] zap: STARTUP CRASH: pydantic version conflict
+     Fix: jmo tools clean && jmo tools install zap
+```
+
+### Dependency Auto-Install
+
+When tools require runtime dependencies (Java, Node.js), the wizard offers to **install them automatically**:
+
+```text
+⚠️  Some tools require runtime dependencies:
+   - Java 17+ (required by: dependency-check, zap)
+   - Node.js 20+ (required by: cdxgen)
+
+Install missing dependencies?
+  [1] Yes, install automatically
+  [2] No, skip tools requiring these dependencies
+  [3] Cancel
+
+Choice [1]: 1
+
+[*] Installing java via chocolatey...
+   ✅ Java 17+ installed: Installed via chocolatey
+
+[*] Installing node via chocolatey...
+   ✅ Node.js 20+ installed: Installed via chocolatey
+```
+
+**Supported package managers:**
+
+| Platform | Package Managers |
+|----------|-----------------|
+| Windows | Chocolatey, winget |
+| Linux | apt, dnf |
+| macOS | Homebrew |
+
+### Auto-Fix Options
+
+After dependency installation, the wizard offers tool installation options:
+
+```text
+Options:
+  [1] Auto-fix all issues (3 tools)
+  [2] Continue with 15 working tools (skip: dependency-check, cdxgen...)
+  [3] Show all fix commands (copy/paste manually)
+  [4] Cancel wizard
+```
+
+**Option 1 (Recommended):** Installs tools in parallel using `jmo tools install`.
+
+**Option 2:** Continues with available tools - useful when you don't need the missing tools.
+
+**Option 3:** Shows copy-paste commands for manual installation.
+
+### Platform-Specific Guidance
+
+Some tools require manual installation on certain platforms:
+
+```text
+📖 2 tool(s) require manual installation:
+──────────────────────────────────────────────────
+
+  ⚠️  prowler
+     Reason: AWS CLI required for cloud scanning
+     See: docs/MANUAL_INSTALLATION.md
+
+  ⚠️  lynis
+     Reason: Requires bash (install WSL, Git Bash, or Cygwin)
+     See: docs/MANUAL_INSTALLATION.md
+
+──────────────────────────────────────────────────
+Tip: Use Docker mode for full tool support, or continue without these tools.
+```
 
 ---
 

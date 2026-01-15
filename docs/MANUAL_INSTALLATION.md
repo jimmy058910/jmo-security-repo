@@ -272,7 +272,7 @@ jmo tools install dependency-check
 # https://github.com/jeremylong/DependencyCheck/releases
 ```
 
-> **Note:** The wizard will automatically detect if Java is missing and show a clear error message with installation instructions.
+> **Note:** The wizard will automatically detect if Java is missing and offer to **auto-install** it using your system's package manager (Chocolatey/winget on Windows, apt/dnf on Linux, Homebrew on macOS). If auto-install fails, it shows clear manual installation instructions.
 
 ### Tool Compatibility Matrix
 

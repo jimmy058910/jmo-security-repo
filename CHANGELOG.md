@@ -6,6 +6,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Added
 
+- **Wizard Dependency Auto-Install** - Automatic runtime dependency installation for security tools
+  - Detects available package managers: Chocolatey/winget (Windows), apt/dnf (Linux), Homebrew (macOS)
+  - Auto-installs Java 17+ for tools like dependency-check
+  - Auto-installs Node.js 20+ for tools like cdxgen
+  - Verifies installation success and prompts for terminal restart if needed
+  - Secure subprocess execution (shell=False, no command injection)
+  - User-prompted before installation (never auto-installs without consent)
+  - Files: `scripts/cli/tool_installer.py`, `scripts/cli/wizard.py`
+
 - **Wizard `--db` Flag** - Custom history database path support for wizard command
   - Allows specifying alternate SQLite database location: `jmo wizard --db /path/to/history.db`
   - Enables project-specific scan history tracking
@@ -53,6 +62,14 @@ All notable changes to JMo Security will be documented in this file.
 - **Unicode Path Tests** - Tests now use actual Unicode characters
   - Emoji: `project_🔒_secure`, CJK: `测试项目`, Accented: `próyecto_áccénts_ñ`
   - Files: `tests/cli/test_wizard_edge_cases.py`
+
+- **Scancode Installation on Windows** - Fixed pip installation failure due to extractcode dependency bug
+  - Scancode now uses pre-built binary download from GitHub releases (bypasses pip)
+  - Fixed tool categorization to check `SPECIAL_INSTALL` before `pypi_package`
+  - Affects `install_profile_parallel()` and `install_tools_parallel()` methods
+  - Removed scancode from `ISOLATED_TOOLS` (no longer uses isolated venv)
+  - See: https://github.com/aboutcode-org/scancode-toolkit/issues/3944
+  - Files: `scripts/cli/tool_installer.py`
 
 ### Security
 
