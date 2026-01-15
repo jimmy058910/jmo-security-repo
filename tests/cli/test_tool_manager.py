@@ -44,6 +44,7 @@ def test_version_commands_structure():
     VERSION_COMMANDS can be:
     - list[str]: Universal command (works on all platforms)
     - dict[str, list[str]]: Platform-specific commands with keys like "windows", "default"
+      May also include "fallback" key for commands to try if primary fails
     """
     from scripts.cli.tool_manager import VERSION_COMMANDS
 
@@ -1140,3 +1141,164 @@ class TestGetToolVersion:
 
         assert version is not None
         assert error is None
+
+
+# ========== Category 14: Tool-Specific Version Parsing ==========
+
+
+def test_parse_version_dependency_check():
+    """Test dependency-check version parsing with actual output format.
+
+    dependency-check outputs: "Dependency-Check Core version 12.1.0"
+    This tests the fixed regex pattern.
+    """
+    from scripts.cli.tool_manager import ToolManager
+
+    manager = ToolManager()
+    output = "Dependency-Check Core version 12.1.0"
+    version = manager._parse_version("dependency-check", output)
+
+    assert version == "12.1.0"
+
+
+def test_parse_version_dependency_check_multiline():
+    """Test dependency-check version parsing with full multiline output."""
+    from scripts.cli.tool_manager import ToolManager
+
+    manager = ToolManager()
+    # Simulating full output from dependency-check --version
+    output = """Dependency-Check Core version 12.1.0
+NVD API Endpoint: https://services.nvd.nist.gov/rest/json/cves/2.0
+"""
+    version = manager._parse_version("dependency-check", output)
+
+    assert version == "12.1.0"
+
+
+def test_parse_version_lynis():
+    """Test lynis version parsing with actual output format.
+
+    lynis --version outputs: "Lynis 3.1.3"
+    """
+    from scripts.cli.tool_manager import ToolManager
+
+    manager = ToolManager()
+    output = "Lynis 3.1.3"
+    version = manager._parse_version("lynis", output)
+
+    assert version == "3.1.3"
+
+
+def test_parse_version_lynis_show_version():
+    """Test lynis version parsing with 'lynis show version' output."""
+    from scripts.cli.tool_manager import ToolManager
+
+    manager = ToolManager()
+    # 'lynis show version' may output just the version number
+    output = "3.1.3"
+    version = manager._parse_version("lynis", output)
+
+    assert version == "3.1.3"
+
+
+class TestVersionCommandFallback:
+    """Tests for fallback version command functionality."""
+
+    def test_get_version_with_fallback_primary_succeeds(self):
+        """Test that fallback is not used when primary command succeeds."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        manager.platform = "linux"
+
+        mock_result = MagicMock()
+        mock_result.stdout = "Lynis 3.1.3"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
+
+        assert version == "3.1.3"
+        assert error is None
+        # Should only call subprocess.run once (primary command)
+        assert mock_run.call_count == 1
+
+    def test_get_version_with_fallback_primary_fails(self):
+        """Test that fallback is used when primary command fails to parse version."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        manager.platform = "linux"
+
+        # First call (primary) returns unparseable output
+        primary_result = MagicMock()
+        primary_result.stdout = "Unknown output format"
+        primary_result.stderr = ""
+        primary_result.returncode = 0
+
+        # Second call (fallback) returns valid version
+        fallback_result = MagicMock()
+        fallback_result.stdout = "3.1.3"
+        fallback_result.stderr = ""
+        fallback_result.returncode = 0
+
+        with patch(
+            "subprocess.run", side_effect=[primary_result, fallback_result]
+        ) as mock_run:
+            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
+
+        assert version == "3.1.3"
+        assert error is None
+        # Should call subprocess.run twice (primary + fallback)
+        assert mock_run.call_count == 2
+
+    def test_get_version_fallback_also_fails(self):
+        """Test behavior when both primary and fallback fail."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+        manager.platform = "linux"
+
+        # Both calls return unparseable output
+        mock_result = MagicMock()
+        mock_result.stdout = "Unparseable output"
+        mock_result.stderr = ""
+        mock_result.returncode = 0
+
+        with patch("subprocess.run", return_value=mock_result):
+            version, error = manager._get_tool_version("lynis", "/usr/bin/lynis")
+
+        assert version is None
+        assert error is None
+
+    def test_lynis_version_commands_structure(self):
+        """Test that lynis has both default and fallback commands configured."""
+        from scripts.cli.tool_manager import VERSION_COMMANDS
+
+        lynis_config = VERSION_COMMANDS.get("lynis")
+        assert lynis_config is not None
+        assert isinstance(lynis_config, dict)
+        assert "default" in lynis_config
+        assert "fallback" in lynis_config
+        assert lynis_config["default"] == ["lynis", "--version"]
+        assert lynis_config["fallback"] == ["lynis", "show", "version"]
+
+
+def test_dependency_check_pattern_matches_actual_output():
+    """Verify dependency-check regex matches the actual tool output."""
+    from scripts.cli.tool_manager import VERSION_PATTERNS
+
+    pattern = VERSION_PATTERNS["dependency-check"]
+
+    # Test actual output format
+    actual_output = "Dependency-Check Core version 12.1.0"
+    match = pattern.search(actual_output)
+    assert match is not None
+    assert match.group(1) == "12.1.0"
+
+    # Test with different version numbers
+    alt_output = "Dependency-Check Core version 9.0.10"
+    match = pattern.search(alt_output)
+    assert match is not None
+    assert match.group(1) == "9.0.10"

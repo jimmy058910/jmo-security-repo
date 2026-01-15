@@ -63,9 +63,10 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
         re.IGNORECASE,
     ),
     # dependency-check outputs: "Dependency-Check Core version X.Y.Z"
-    # or "dependency-check version: X.Y.Z" or just "version X.Y.Z"
+    # Match pattern: optional "Dependency-Check " prefix, optional "Core " prefix,
+    # then "version" (case-insensitive) followed by space and version number
     "dependency-check": re.compile(
-        r"(?:dependency.?check\s+)?(?:core\s+)?version:?\s*(\d+\.\d+\.\d+)",
+        r"(?:Dependency-?Check\s+)?(?:Core\s+)?[Vv]ersion\s+(\d+\.\d+\.\d+)",
         re.IGNORECASE,
     ),
     "noseyparker": re.compile(r"noseyparker\s+(\d+\.\d+\.\d+)"),
@@ -106,7 +107,11 @@ VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
         "windows": ["dependency-check.bat", "--version"],
         "default": ["dependency-check.sh", "--version"],
     },
-    "lynis": ["lynis", "show", "version"],
+    # lynis: --version works on most systems, fallback to "show version" subcommand
+    "lynis": {
+        "default": ["lynis", "--version"],
+        "fallback": ["lynis", "show", "version"],
+    },
     # yara-python is a Python library, not a CLI - check via Python import
     # The native 'yara' CLI is a separate package from yara-python
     "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
@@ -989,6 +994,8 @@ class ToolManager:
 
         # Get version command - use tool_name for lookup (not binary_name)
         # VERSION_COMMANDS uses tool names as keys (e.g., "zap" not "zap.sh")
+        fallback_cmd: list[str] | None = None  # Optional fallback command
+
         if use_isolated_venv and isolated_tool_path:
             # For isolated tools, use console script with clean env
             # The clean PATH ensures the script uses venv's Python
@@ -1006,6 +1013,11 @@ class ToolManager:
                 if not cmd_template:
                     cmd_template = [binary_path, "--version"]
                 cmd = list(cmd_template)  # Copy to avoid mutation
+
+                # Check for fallback command (used when primary fails)
+                fallback_template = version_cmd_config.get("fallback")
+                if fallback_template:
+                    fallback_cmd = list(fallback_template)
             else:
                 cmd = list(version_cmd_config)  # Copy to avoid mutation
 
@@ -1014,6 +1026,9 @@ class ToolManager:
             # These tools use 'python -c "import X"' patterns, not binaries
             if cmd[0] != sys.executable and binary_path:
                 cmd[0] = binary_path
+            # Also update fallback command with full binary path
+            if fallback_cmd and fallback_cmd[0] != sys.executable and binary_path:
+                fallback_cmd[0] = binary_path
         else:
             cmd = [binary_path, "--version"]
 
@@ -1092,6 +1107,39 @@ class ToolManager:
                 logger.debug(
                     f"Could not parse version for {tool_name} from output: {sample!r}"
                 )
+
+                # Try fallback command if primary failed and fallback exists
+                if fallback_cmd:
+                    logger.debug(
+                        f"Trying fallback version command for {tool_name}: {fallback_cmd}"
+                    )
+                    try:
+                        fallback_result = subprocess.run(
+                            fallback_cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout,
+                            env=clean_env,
+                        )
+                        fallback_output = (fallback_result.stdout or "") + (
+                            fallback_result.stderr or ""
+                        )
+                        if fallback_output.strip():
+                            version = self._parse_version(tool_name, fallback_output)
+                            if version:
+                                logger.debug(
+                                    f"Got version from fallback for {tool_name}: {version}"
+                                )
+                    except (
+                        subprocess.TimeoutExpired,
+                        FileNotFoundError,
+                        PermissionError,
+                        OSError,
+                    ) as e:
+                        logger.debug(
+                            f"Fallback version command failed for {tool_name}: {e}"
+                        )
+
             return (version, None)
         except subprocess.TimeoutExpired:
             logger.debug(
