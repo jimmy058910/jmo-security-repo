@@ -2,7 +2,7 @@
 
 > **Canonical source for JMo Security scan profiles and tool definitions.**
 
-This document is the authoritative reference for which tools are included in each scan profile. All profile definitions across the codebase (jmo.yml, tool_registry.py, wizard.py, Docker variants) MUST match this document.
+This document is the authoritative reference for which tools are included in each scan profile. All profile definitions across the codebase (jmo.yml, tool_registry.py, wizard_flows/profile_config.py, Docker variants) MUST match this document.
 
 ## Table of Contents
 
@@ -719,7 +719,7 @@ All sources MUST match. This table tracks current status:
 |--------|------|------|----------|------|--------|
 | **jmo.yml** | 8 | 14 | 18 | 28 | Canonical |
 | **tool_registry.py** | 8 | 14 | 18 | 28 | Must match |
-| **wizard.py** | 8 | 14 | 18 | 28 | Must match |
+| **wizard_flows/profile_config.py** | 8 | 14 | 18 | 28 | Must match |
 | **Dockerfile.fast** | 8 | - | - | - | Must match |
 | **Dockerfile.slim** | - | 14 | - | - | Must match |
 | **Dockerfile.balanced** | - | - | 18 | - | Must match |
@@ -753,7 +753,7 @@ When adding or removing tools:
 
 1. Update `jmo.yml` (canonical source)
 2. Update `scripts/core/tool_registry.py` PROFILE_TOOLS
-3. Update `scripts/cli/wizard.py` PROFILES
+3. Update `scripts/cli/wizard_flows/profile_config.py` PROFILES
 4. Update relevant Dockerfile variants
 5. Update `versions.yaml` with tool metadata
 6. Update this document

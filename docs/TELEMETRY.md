@@ -651,7 +651,7 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
 
 ### Wizard Integration
 
-**File:** `scripts/cli/wizard.py`
+**File:** `scripts/cli/wizard_flows/telemetry_helper.py`
 
 ```python
 def prompt_telemetry_opt_in() -> bool:
@@ -945,7 +945,7 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 ### Phase 1: MVP
 
 - [ ] Implement `scripts/core/telemetry.py` (stdlib only)
-- [ ] Add wizard opt-in prompt (`scripts/cli/wizard.py`)
+- [ ] Add wizard opt-in prompt (`scripts/cli/wizard_flows/telemetry_helper.py`)
 - [ ] Instrument 5 core events (scan.started, scan.completed, tool.failed, wizard.completed, report.generated)
 - [ ] Update `jmo.yml` schema to include `telemetry.enabled`
 - [ ] Create GitHub Gist backend (private)
