@@ -603,7 +603,7 @@ def test_select_execution_mode_interactive_docker(
     mock_input.assert_called_once()
 
 
-@patch("scripts.cli.wizard._prompt_choice", return_value="balanced")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice", return_value="balanced")
 def test_select_profile(mock_choice):
     """Test profile selection."""
     from scripts.cli.wizard import select_profile

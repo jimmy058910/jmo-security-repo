@@ -198,15 +198,13 @@ class TestHistoryDatabaseErrors:
 
     def test_missing_history_database_directory(self, tmp_path: Path):
         """Test wizard handles missing .jmo directory."""
-        from scripts.cli.wizard import _get_db_path
+        from scripts.cli.wizard import _get_db_path, WizardConfig
 
         # Mock Path.home to return a tmp directory without .jmo
         with patch.object(Path, "home", staticmethod(lambda: tmp_path)):
-            # Reset the module-level variable
-            import scripts.cli.wizard as wizard_module
-
-            original_custom = wizard_module._custom_db_path
-            wizard_module._custom_db_path = None
+            # Reset the class-level variable via set_db_path
+            original_custom = WizardConfig._custom_db_path
+            WizardConfig.set_db_path(None)
 
             try:
                 db_path = _get_db_path()
@@ -214,24 +212,22 @@ class TestHistoryDatabaseErrors:
                 assert ".jmo" in str(db_path)
                 assert "history.db" in str(db_path)
             finally:
-                wizard_module._custom_db_path = original_custom
+                WizardConfig._custom_db_path = original_custom
 
     def test_custom_db_path_respected(self, tmp_path: Path):
         """Test that custom --db flag is respected."""
-        from scripts.cli.wizard import _get_db_path
+        from scripts.cli.wizard import _get_db_path, WizardConfig
 
         custom_path = tmp_path / "custom_history.db"
 
-        import scripts.cli.wizard as wizard_module
-
-        original_custom = wizard_module._custom_db_path
-        wizard_module._custom_db_path = str(custom_path)
+        original_custom = WizardConfig._custom_db_path
+        WizardConfig.set_db_path(str(custom_path))
 
         try:
             result = _get_db_path()
             assert result == custom_path.resolve()
         finally:
-            wizard_module._custom_db_path = original_custom
+            WizardConfig._custom_db_path = original_custom
 
     @skip_on_windows  # File locking behavior differs on Windows
     def test_history_database_locked(self, tmp_path: Path):

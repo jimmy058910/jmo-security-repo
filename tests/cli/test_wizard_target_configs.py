@@ -62,7 +62,7 @@ def create_mock_target_config(target_type: str = "repo", **kwargs) -> TargetConf
 # =============================================================================
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_repo(mock_choice):
     """Test selecting repository target type."""
     mock_choice.return_value = "repo"
@@ -70,7 +70,7 @@ def test_select_target_type_repo(mock_choice):
     assert result == "repo"
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_image(mock_choice):
     """Test selecting container image target type."""
     mock_choice.return_value = "image"
@@ -78,7 +78,7 @@ def test_select_target_type_image(mock_choice):
     assert result == "image"
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_iac(mock_choice):
     """Test selecting IaC target type."""
     mock_choice.return_value = "iac"
@@ -86,7 +86,7 @@ def test_select_target_type_iac(mock_choice):
     assert result == "iac"
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_url(mock_choice):
     """Test selecting URL target type."""
     mock_choice.return_value = "url"
@@ -94,7 +94,7 @@ def test_select_target_type_url(mock_choice):
     assert result == "url"
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_gitlab(mock_choice):
     """Test selecting GitLab target type."""
     mock_choice.return_value = "gitlab"
@@ -102,7 +102,7 @@ def test_select_target_type_gitlab(mock_choice):
     assert result == "gitlab"
 
 
-@patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice")
 def test_select_target_type_k8s(mock_choice):
     """Test selecting Kubernetes target type."""
     mock_choice.return_value = "k8s"

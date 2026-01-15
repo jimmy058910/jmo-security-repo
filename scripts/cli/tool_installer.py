@@ -318,12 +318,227 @@ ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
         "conflicts_with": ["prowler"],
         "reason": "Requires pydantic>=2 (model_serializer), conflicts with prowler which needs pydantic<2",
     },
-    "scancode": {
-        "package": "scancode-toolkit",
-        "conflicts_with": [],
-        "reason": "Click version conflict with modern packages",
+    # NOTE: scancode removed from ISOLATED_TOOLS (v1.0.1) - now uses pre-built
+    # binary download via SPECIAL_INSTALL["scancode"] = "extract_app" due to
+    # upstream extractcode dependency bug (invalid PEP 440 specifier).
+    # See: https://github.com/aboutcode-org/scancode-toolkit/issues/3944
+}
+
+
+# ============================================================================
+# DEPENDENCY AUTO-INSTALL CONFIGURATION (Chunk 4)
+# ============================================================================
+# Runtime dependencies (Java, Node.js) can be auto-installed via package managers.
+# The wizard will detect missing deps and offer to install them automatically.
+#
+# Structure: {dep_name: {platform: {package_manager: [command_args]}}}
+# - Deps: "java", "node"
+# - Platforms: "windows", "linux", "macos"
+# - Package managers: chocolatey, winget, apt, dnf, brew
+
+DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str]]]] = {
+    "java": {
+        "windows": {
+            "chocolatey": ["choco", "install", "openjdk17", "-y"],
+            "winget": [
+                "winget",
+                "install",
+                "--id",
+                "Microsoft.OpenJDK.17",
+                "-e",
+                "--accept-source-agreements",
+                "--accept-package-agreements",
+            ],
+        },
+        "linux": {
+            "apt": ["sudo", "apt", "install", "-y", "openjdk-17-jre"],
+            "dnf": ["sudo", "dnf", "install", "-y", "java-17-openjdk"],
+        },
+        "macos": {
+            "brew": ["brew", "install", "openjdk@17"],
+        },
+    },
+    "node": {
+        "windows": {
+            "chocolatey": ["choco", "install", "nodejs-lts", "-y"],
+            "winget": [
+                "winget",
+                "install",
+                "--id",
+                "OpenJS.NodeJS.LTS",
+                "-e",
+                "--accept-source-agreements",
+                "--accept-package-agreements",
+            ],
+        },
+        "linux": {
+            "apt": ["sudo", "apt", "install", "-y", "nodejs"],
+            "dnf": ["sudo", "dnf", "install", "-y", "nodejs"],
+        },
+        "macos": {
+            "brew": ["brew", "install", "node@20"],
+        },
     },
 }
+
+# Commands to verify dependency installation succeeded
+DEPENDENCY_VERIFY_COMMANDS: dict[str, list[str]] = {
+    "java": ["java", "-version"],
+    "node": ["node", "--version"],
+}
+
+# Human-readable display names for dependencies
+DEPENDENCY_DISPLAY_NAMES: dict[str, str] = {
+    "java": "Java 17+",
+    "node": "Node.js 20+",
+}
+
+# Manual installation commands (fallback if auto-install fails)
+DEPENDENCY_MANUAL_COMMANDS: dict[str, dict[str, str]] = {
+    "java": {
+        "windows": "choco install openjdk17 -y  OR  winget install Microsoft.OpenJDK.17",
+        "linux": "sudo apt install openjdk-17-jre -y  OR  sudo dnf install java-17-openjdk -y",
+        "macos": "brew install openjdk@17",
+    },
+    "node": {
+        "windows": "choco install nodejs-lts -y  OR  winget install OpenJS.NodeJS.LTS",
+        "linux": "sudo apt install nodejs -y  OR  sudo dnf install nodejs -y",
+        "macos": "brew install node@20",
+    },
+}
+
+
+def _is_package_manager_available(pkg_manager: str) -> bool:
+    """Check if a package manager is available on this system.
+
+    Args:
+        pkg_manager: Package manager name (chocolatey, winget, apt, dnf, brew)
+
+    Returns:
+        True if the package manager is available and functional
+    """
+    check_commands = {
+        "chocolatey": ["choco", "--version"],
+        "winget": ["winget", "--version"],
+        "apt": ["apt", "--version"],
+        "dnf": ["dnf", "--version"],
+        "brew": ["brew", "--version"],
+    }
+
+    if pkg_manager not in check_commands:
+        return False
+
+    try:
+        result = subprocess.run(
+            check_commands[pkg_manager],
+            capture_output=True,
+            timeout=10,
+            shell=False,  # IMPORTANT: Never use shell=True
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def install_dependency(
+    dep_name: str,
+    platform: str,
+    console: Console | None = None,
+) -> tuple[bool, str]:
+    """
+    Auto-install a runtime dependency (java, node).
+
+    Tries each available package manager in order until one succeeds.
+    On Windows, the PATH may not update immediately after install,
+    so users may need to restart their terminal.
+
+    Args:
+        dep_name: Dependency name ("java" or "node")
+        platform: Current platform ("windows", "linux", "macos")
+        console: Optional Rich console for output (uses print if None)
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    if dep_name not in DEPENDENCY_INSTALL_COMMANDS:
+        return False, f"Unknown dependency: {dep_name}"
+
+    platform_commands = DEPENDENCY_INSTALL_COMMANDS[dep_name].get(platform, {})
+
+    if not platform_commands:
+        return False, f"No install method for {dep_name} on {platform}"
+
+    def _print(msg: str) -> None:
+        if console:
+            console.print(msg)
+        else:
+            print(msg)
+
+    # Try each package manager in order of preference
+    for pkg_manager, command in platform_commands.items():
+        if not _is_package_manager_available(pkg_manager):
+            continue
+
+        try:
+            _print(f"[*] Installing {dep_name} via {pkg_manager}...")
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout for package install
+                shell=False,  # IMPORTANT: Never use shell=True
+            )
+
+            if result.returncode == 0:
+                # Verify installation succeeded
+                verify_cmd = DEPENDENCY_VERIFY_COMMANDS.get(dep_name)
+                if verify_cmd:
+                    # On Windows, PATH may not update immediately after install
+                    verify_result = subprocess.run(
+                        verify_cmd,
+                        capture_output=True,
+                        timeout=10,
+                        shell=False,
+                    )
+                    if verify_result.returncode == 0:
+                        return True, f"Installed via {pkg_manager}"
+                    else:
+                        return (
+                            True,
+                            f"Installed via {pkg_manager} (restart terminal to use)",
+                        )
+                return True, f"Installed via {pkg_manager}"
+            else:
+                # Log error but try next package manager
+                stderr_preview = (
+                    result.stderr[:100] if result.stderr else "Unknown error"
+                )
+                _print(f"[dim]  {pkg_manager} failed: {stderr_preview}[/dim]")
+
+        except subprocess.TimeoutExpired:
+            _print(f"[yellow]  {pkg_manager} install timed out[/yellow]")
+        except Exception as e:
+            _print(f"[yellow]  {pkg_manager} error: {e}[/yellow]")
+
+    return False, "No package manager available or all install attempts failed"
+
+
+def get_manual_dependency_command(dep_name: str, platform: str) -> str:
+    """Get manual installation command for a dependency.
+
+    Used as fallback when auto-install fails, providing users with
+    copy-paste commands for their platform.
+
+    Args:
+        dep_name: Dependency name ("java" or "node")
+        platform: Current platform ("windows", "linux", "macos")
+
+    Returns:
+        Human-readable installation command string
+    """
+    return DEPENDENCY_MANUAL_COMMANDS.get(dep_name, {}).get(
+        platform, f"Install {dep_name} manually"
+    )
 
 
 def get_isolated_venv_path(tool_name: str) -> Path:
@@ -872,16 +1087,21 @@ class ToolInstaller:
                     continue
 
             # Categorize by install method
-            tool_info = self.registry.get_tool(tool_name)
-            if tool_info:
-                if tool_info.pypi_package:
-                    pip_tools.append(tool_name)
-                elif tool_info.npm_package:
-                    npm_tools.append(tool_name)
+            # IMPORTANT: Check SPECIAL_INSTALL first, as tools like scancode have
+            # pypi_package but require special installation (binary download)
+            if tool_name in SPECIAL_INSTALL:
+                other_tools.append(tool_name)
+            else:
+                tool_info = self.registry.get_tool(tool_name)
+                if tool_info:
+                    if tool_info.pypi_package:
+                        pip_tools.append(tool_name)
+                    elif tool_info.npm_package:
+                        npm_tools.append(tool_name)
+                    else:
+                        other_tools.append(tool_name)
                 else:
                     other_tools.append(tool_name)
-            else:
-                other_tools.append(tool_name)
 
         # Create progress tracker
         total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)
@@ -986,16 +1206,21 @@ class ToolInstaller:
                     continue
 
             # Categorize by install method
-            tool_info = self.registry.get_tool(tool_name)
-            if tool_info:
-                if tool_info.pypi_package:
-                    pip_tools.append(tool_name)
-                elif tool_info.npm_package:
-                    npm_tools.append(tool_name)
+            # IMPORTANT: Check SPECIAL_INSTALL first, as tools like scancode have
+            # pypi_package but require special installation (binary download)
+            if tool_name in SPECIAL_INSTALL:
+                other_tools.append(tool_name)
+            else:
+                tool_info = self.registry.get_tool(tool_name)
+                if tool_info:
+                    if tool_info.pypi_package:
+                        pip_tools.append(tool_name)
+                    elif tool_info.npm_package:
+                        npm_tools.append(tool_name)
+                    else:
+                        other_tools.append(tool_name)
                 else:
                     other_tools.append(tool_name)
-            else:
-                other_tools.append(tool_name)
 
         # Create progress tracker
         total_to_install = len(pip_tools) + len(npm_tools) + len(other_tools)

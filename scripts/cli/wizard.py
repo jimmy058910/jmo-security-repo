@@ -22,7 +22,7 @@ import logging
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 from scripts.core.exceptions import ToolExecutionException
 from scripts.cli.cpu_utils import get_cpu_count
@@ -53,212 +53,46 @@ from scripts.cli.wizard_flows.telemetry_helper import (
     send_wizard_telemetry,
 )
 
+# Phase 1 refactor: Import from new modules
+from scripts.cli.wizard_flows.config_models import (
+    TargetConfig,
+    WizardConfig,
+)
+from scripts.cli.wizard_flows.profile_config import (
+    PROFILES,
+    WIZARD_TOTAL_STEPS,
+    DIFF_WIZARD_TOTAL_STEPS,
+    TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
+    calculate_time_estimate,
+    format_time_range,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
+    safe_print as _safe_print,
+    prompt_text as _prompt_text,
+    prompt_choice as _prompt_choice,
+    select_mode as _select_mode,
+)
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 
-# Windows-safe Unicode fallback mappings for cp1252 compatibility
-_UNICODE_FALLBACKS = {
-    "📊": "[#]",  # Chart
-    "📖": "[?]",  # Book
-    "⚠": "[!]",  # Warning
-    "✅": "[OK]",  # Check mark
-    "❌": "[X]",  # Cross mark
-    "✗": "[x]",  # X mark
-    "✓": "[v]",  # Check mark small
-    "•": "*",  # Bullet
-    "→": "->",  # Arrow
-}
-
-
-def _safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-
-
-# Module-level custom db_path storage (set by run_wizard)
-_custom_db_path: str | None = None
-
-
+# Backward-compat: _get_db_path delegates to WizardConfig.get_db_path
 def _get_db_path() -> Path:
     """Get the history database path, respecting custom --db flag.
 
     Returns:
         Path to SQLite history database
     """
-    if _custom_db_path:
-        return Path(_custom_db_path).expanduser().resolve()
-    return Path.home() / ".jmo" / "history.db"
+    return WizardConfig.get_db_path()
 
 
 # Version (from pyproject.toml)
 __version__ = "0.7.1"
 
-# Profile definitions with resource estimates (v1.0.0)
-PROFILES = {
-    "fast": {
-        "name": "Fast",
-        "description": "Quick scans with 8 core tools (secrets, SAST, SCA, IaC)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "nuclei",
-            "shellcheck",
-        ],
-        "timeout": 300,
-        "threads": 8,
-        "est_time": "5-10 minutes",
-        "use_case": "Pre-commit checks, quick validation, CI/CD gate",
-    },
-    "slim": {
-        "name": "Slim",
-        "description": "Cloud/IaC focused scans with 14 tools (AWS, Azure, GCP, K8s)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "shellcheck",
-        ],
-        "timeout": 500,
-        "threads": 4,
-        "est_time": "12-18 minutes",
-        "use_case": "Cloud infrastructure, Kubernetes, IaC security",
-    },
-    "balanced": {
-        "name": "Balanced",
-        "description": "Production CI/CD with 18 tools (cloud, API, DAST, license)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "scancode",
-            "cdxgen",
-            "gosec",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "shellcheck",
-        ],
-        "timeout": 600,
-        "threads": 4,
-        "est_time": "18-25 minutes",
-        "use_case": "CI/CD pipelines, regular audits, production scans",
-    },
-    "deep": {
-        "name": "Deep",
-        "description": "Comprehensive audits with all 28 tools (mobile, fuzzing, runtime)",
-        "tools": [
-            "trufflehog",
-            "noseyparker",
-            "semgrep",
-            "semgrep-secrets",
-            "bandit",
-            "syft",
-            "trivy",
-            "trivy-rbac",
-            "checkov",
-            "checkov-cicd",
-            "hadolint",
-            "zap",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "akto",
-            "scancode",
-            "cdxgen",
-            "gosec",
-            "yara",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "falco",
-            "afl++",
-            "mobsf",
-            "lynis",
-        ],
-        "timeout": 900,
-        "threads": 2,
-        "est_time": "40-70 minutes",
-        "use_case": "Security audits, compliance scans, pre-release validation",
-    },
-}
-
-# Wizard step configuration - ensures consistent "Step X/Y" display
-WIZARD_TOTAL_STEPS = (
-    7  # Profile, Execution, Target Type, Target Config, Advanced, Review, Execute
-)
-DIFF_WIZARD_TOTAL_STEPS = 5  # Mode, Directories, Filters, Format, Execute
-
-# Empirical per-tool timing estimates in seconds (Fix 2.2 - Issue #10)
-# Based on actual runs against medium-sized repos (~10k-50k LOC)
-TOOL_TIME_ESTIMATES: dict[str, int] = {
-    # Fast tools (< 30s)
-    "trufflehog": 15,
-    "semgrep": 25,
-    "hadolint": 5,
-    "shellcheck": 10,
-    # Medium tools (30s - 2min)
-    "trivy": 45,
-    "grype": 40,
-    "syft": 30,
-    "checkov": 60,
-    "bearer": 50,
-    "nuclei": 90,
-    "noseyparker": 45,
-    "bandit": 30,
-    "gosec": 45,
-    # Slow tools (2min+)
-    "zap": 300,  # 5 min for DAST baseline
-    "horusec": 180,
-    "dependency-check": 240,
-    "prowler": 120,
-    "kubescape": 90,
-    "scancode": 150,
-    "cdxgen": 60,
-    "akto": 180,
-    "yara": 45,
-    "falco": 90,
-    "afl++": 120,
-    "mobsf": 300,
-    "lynis": 60,
-    # Default for unknown tools
-    "_default": 60,
-}
-
-# Chunk 3: Standardized error message templates for tool issues
+# Standardized error message templates for tool issues
 # These provide consistent, actionable guidance for different failure scenarios
 TOOL_ISSUE_TEMPLATES: dict[str, str] = {
     "linux_only": """  [{icon}] {tool}: Linux only
@@ -295,50 +129,6 @@ TOOL_ISSUE_TEMPLATES: dict[str, str] = {
 }
 
 
-def calculate_time_estimate(available_tools: list[str]) -> tuple[int, int]:
-    """Calculate dynamic time estimate based on available tools.
-
-    Uses TOOL_TIME_ESTIMATES with 20% buffer for overhead.
-
-    Args:
-        available_tools: List of tool names that will actually run
-
-    Returns:
-        Tuple of (min_seconds, max_seconds) estimate
-    """
-    total = 0
-    for tool in available_tools:
-        total += TOOL_TIME_ESTIMATES.get(tool, TOOL_TIME_ESTIMATES["_default"])
-
-    # Add buffer for overhead (parallel execution reduces time, but overhead adds)
-    min_time = int(total * 0.6)  # Best case with parallelization
-    max_time = int(total * 1.2)  # Worst case with retries
-
-    return min_time, max_time
-
-
-def format_time_range(min_sec: int, max_sec: int) -> str:
-    """Format time range as human-readable string.
-
-    Args:
-        min_sec: Minimum time in seconds
-        max_sec: Maximum time in seconds
-
-    Returns:
-        Human-readable time range (e.g., "4 min - 7 min")
-    """
-
-    def fmt(s: int) -> str:
-        if s < 60:
-            return f"{s}s"
-        elif s < 3600:
-            return f"{s // 60} min"
-        else:
-            return f"{s // 3600}h {(s % 3600) // 60}m"
-
-    return f"{fmt(min_sec)} - {fmt(max_sec)}"
-
-
 # Use PromptHelper from wizard_flows for all prompting/coloring
 _prompter = PromptHelper()
 _colorize = _prompter.colorize
@@ -346,94 +136,8 @@ _print_header = _prompter.print_header
 _print_step = _prompter.print_step
 
 
-def _prompt_text(question: str, default: str = "") -> str:
-    """Simple text prompt helper (used by configure_advanced)."""
-    prompt = f"{question} [{default}]: " if default else f"{question}: "
-    value = input(prompt).strip()
-    return value if value else default
-
-
-def _prompt_choice(
-    question: str, choices: list[tuple[str, str]], default: str = ""
-) -> str:
-    """
-    Prompt user for a choice from a list with numbered display.
-
-    Accepts both numeric input (1, 2, 3) and key input (balanced, fast)
-    for backward compatibility.
-
-    Args:
-        question: Question to ask
-        choices: List of (key, description) tuples
-        default: Default choice key
-
-    Returns:
-        Selected choice key
-    """
-    choice_keys = [c[0] for c in choices]
-
-    # Print question and choices with numbered format
-    print(f"\n{question}")
-    for i, (key, desc) in enumerate(choices, 1):
-        default_marker = " (default)" if key == default else ""
-        print(f"  {i}. {key:<12} - {desc}{default_marker}")
-
-    # Build prompt
-    choice_range = f"1-{len(choices)}"
-    if default:
-        prompt = f"Choice ({choice_range}) [{default}]: "
-    else:
-        prompt = f"Choice ({choice_range}): "
-
-    while True:
-        raw = input(prompt).strip()
-
-        # Handle empty input with default
-        if not raw and default:
-            return default
-
-        # Handle numeric input
-        if raw.isdigit():
-            idx = int(raw)
-            if 1 <= idx <= len(choices):
-                return choice_keys[idx - 1]
-            print(_colorize(f"Invalid choice. Enter 1-{len(choices)}", "red"))
-            continue
-
-        # Handle key input (backward compatibility, case-insensitive)
-        raw_lower = raw.lower()
-        for key in choice_keys:
-            if key.lower() == raw_lower:
-                return key
-
-        print(
-            _colorize(
-                f"Invalid choice. Enter 1-{len(choices)} or type option name",
-                "red",
-            )
-        )
-
-
 # Use PromptHelper.prompt_yes_no for all yes/no prompts
 _prompt_yes_no = _prompter.prompt_yes_no  # Direct delegation to PromptHelper
-
-
-def _select_mode(title: str, modes: list[tuple[str, str]], default: str = "") -> str:
-    """
-    Helper to select from modes with consistent formatting.
-
-    Uses numbered selection format with backward-compatible key input.
-
-    Args:
-        title: Mode category title (e.g., "Repository modes")
-        modes: List of (key, description) tuples
-        default: Default mode key
-
-    Returns:
-        Selected mode key
-    """
-    # _prompt_choice handles the display and input
-    return _prompt_choice(f"{title}:", modes, default=default)
 
 
 # Use Docker detection from validators module
@@ -450,106 +154,6 @@ _validate_path = validate_path
 _validate_url = validate_url
 _detect_iac_type = detect_iac_type
 _validate_k8s_context = validate_k8s_context
-
-
-class TargetConfig:
-    """Target-specific configuration for a single scan target."""
-
-    def __init__(self) -> None:
-        self.type: str = "repo"  # repo, image, iac, url, gitlab, k8s
-
-        # Repository targets (existing)
-        self.repo_mode: str = ""  # repo, repos-dir, targets, tsv
-        self.repo_path: str = ""
-        self.tsv_path: str = ""
-        self.tsv_dest: str = "repos-tsv"
-
-        # Container image targets (v0.6.0+)
-        self.image_name: str = ""
-        self.images_file: str = ""
-
-        # IaC targets (v0.6.0+)
-        self.iac_type: str = ""  # terraform, cloudformation, k8s-manifest
-        self.iac_path: str = ""
-
-        # Web URL targets (v0.6.0+)
-        self.url: str = ""
-        self.urls_file: str = ""
-        self.api_spec: str = ""
-
-        # GitLab targets (v0.6.0+)
-        self.gitlab_url: str = "https://gitlab.com"
-        self.gitlab_token: str = ""  # Prefer GITLAB_TOKEN env var
-        self.gitlab_repo: str = ""  # group/repo format
-        self.gitlab_group: str = ""
-
-        # Kubernetes targets (v0.6.0+)
-        self.k8s_context: str = ""
-        self.k8s_namespace: str = ""
-        self.k8s_all_namespaces: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "type": self.type,
-            "repo_mode": self.repo_mode,
-            "repo_path": self.repo_path,
-            "tsv_path": self.tsv_path,
-            "tsv_dest": self.tsv_dest,
-            "image_name": self.image_name,
-            "images_file": self.images_file,
-            "iac_type": self.iac_type,
-            "iac_path": self.iac_path,
-            "url": self.url,
-            "urls_file": self.urls_file,
-            "api_spec": self.api_spec,
-            "gitlab_url": self.gitlab_url,
-            "gitlab_token": "***" if self.gitlab_token else "",  # Redact token
-            "gitlab_repo": self.gitlab_repo,
-            "gitlab_group": self.gitlab_group,
-            "k8s_context": self.k8s_context,
-            "k8s_namespace": self.k8s_namespace,
-            "k8s_all_namespaces": self.k8s_all_namespaces,
-        }
-
-
-class WizardConfig:
-    """Configuration collected by the wizard."""
-
-    def __init__(self) -> None:
-        self.profile: str = "balanced"
-        self.use_docker: bool = False
-        self.target: TargetConfig = TargetConfig()
-        self.results_dir: str = "results"
-        self.threads: int | None = None
-        self.timeout: int | None = None
-        self.fail_on: str = ""
-        self.allow_missing_tools: bool = True
-        self.human_logs: bool = True
-        # Trend analysis flags (v1.0.0+)
-        self.analyze_trends: bool = False
-        self.export_trends_html: bool = False
-        self.export_trends_json: bool = False
-        # Policy evaluation flag (set by OPA pre-flight check)
-        self.policies_enabled: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "profile": self.profile,
-            "use_docker": self.use_docker,
-            "target": self.target.to_dict(),
-            "results_dir": self.results_dir,
-            "threads": self.threads,
-            "timeout": self.timeout,
-            "fail_on": self.fail_on,
-            "allow_missing_tools": self.allow_missing_tools,
-            "human_logs": self.human_logs,
-            "analyze_trends": self.analyze_trends,
-            "export_trends_html": self.export_trends_html,
-            "export_trends_json": self.export_trends_json,
-            "policies_enabled": self.policies_enabled,
-        }
 
 
 def select_profile() -> str:
@@ -1106,6 +710,7 @@ def check_tools_for_profile(
                     "remediation": remediation,
                     "version_error": status.version_error,  # Phase 4
                     "status_type": status.status_type,  # Chunk 3
+                    "missing_deps": status.missing_deps or [],  # Chunk 4
                 }
             )
 
@@ -1256,6 +861,42 @@ def _show_all_fix_commands(fix_info: list[dict], platform: str) -> None:
     print("═" * 60 + "\n")
 
 
+def _collect_missing_dependencies(fix_info: list[dict]) -> dict[str, list[str]]:
+    """
+    Collect missing dependencies and which tools need them.
+
+    Scans the fix_info list for tools that have missing runtime dependencies
+    (like Java or Node.js) and groups them by dependency.
+
+    Args:
+        fix_info: List of tool fix info dicts from check_tools_for_profile
+
+    Returns:
+        Dict mapping dependency name to list of tools requiring it.
+        Example: {"java": ["dependency-check", "zap"], "node": ["cdxgen"]}
+    """
+    deps: dict[str, list[str]] = {}
+
+    for info in fix_info:
+        # Check for missing_deps in the tool status
+        # This is populated by ToolManager._verify_execution()
+        missing = info.get("missing_deps", [])
+        if not missing:
+            continue
+
+        for dep in missing:
+            # Normalize dependency names
+            # "node" and "node20" both map to "node"
+            if dep.startswith("node"):
+                dep = "node"
+            if dep not in deps:
+                deps[dep] = []
+            if info["name"] not in deps[dep]:
+                deps[dep].append(info["name"])
+
+    return deps
+
+
 def _auto_fix_tools(
     fix_info: list[dict],
     platform: str,
@@ -1279,6 +920,63 @@ def _auto_fix_tools(
     Returns:
         Tuple of (should_continue, updated_available_tools)
     """
+    # Phase -1: Check for missing runtime dependencies (Chunk 4)
+    # Dependencies like Java/Node.js must be installed before the tools that need them
+    missing_deps = _collect_missing_dependencies(fix_info)
+
+    if missing_deps:
+        # Import dependency installation functions (lazy import to avoid circular deps)
+        from scripts.cli.tool_installer import (
+            install_dependency,
+            get_manual_dependency_command,
+            DEPENDENCY_DISPLAY_NAMES,
+        )
+
+        print(
+            _colorize(
+                f"\n{_UNICODE_FALLBACKS.get('⚠', '[!]')} Some tools require runtime dependencies:",
+                "yellow",
+            )
+        )
+        for dep, tools in missing_deps.items():
+            dep_display = DEPENDENCY_DISPLAY_NAMES.get(dep, dep)
+            tools_str = ", ".join(tools)
+            print(f"   - {dep_display} (required by: {tools_str})")
+
+        print(_colorize("\nInstall missing dependencies?", "blue"))
+        print("  [1] Yes, install automatically")
+        print("  [2] No, skip tools requiring these dependencies")
+        print("  [3] Cancel")
+
+        choice = input("\nChoice [1]: ").strip() or "1"
+
+        if choice == "1":
+            print()  # Blank line before install output
+            for dep in missing_deps:
+                dep_display = DEPENDENCY_DISPLAY_NAMES.get(dep, dep)
+                success, msg = install_dependency(dep, platform)
+                if success:
+                    print(
+                        _colorize(
+                            f"   {_UNICODE_FALLBACKS.get('✅', '[OK]')} {dep_display} installed: {msg}",
+                            "green",
+                        )
+                    )
+                else:
+                    print(
+                        _colorize(
+                            f"   {_UNICODE_FALLBACKS.get('❌', '[X]')} {dep_display} install failed: {msg}",
+                            "red",
+                        )
+                    )
+                    manual_cmd = get_manual_dependency_command(dep, platform)
+                    print(f"       Manual: {manual_cmd}")
+            print()  # Blank line after install output
+        elif choice == "3":
+            print(_colorize("Cancelled.", "yellow"))
+            return False, available
+        # choice == "2" continues without installing deps (tools may fail)
+
     # Phase 0: Separate manual-only tools from auto-fixable tools
     manual_tools: list[dict] = []
     auto_fix_info: list[dict] = []
@@ -1808,9 +1506,8 @@ def run_wizard(
         show_telemetry_banner,
     )
 
-    # Set custom db_path for this wizard run (module-level for helper access)
-    global _custom_db_path
-    _custom_db_path = db_path
+    # Set custom db_path for this wizard run (via WizardConfig class method)
+    WizardConfig.set_db_path(db_path)
 
     wizard_start_time = time.time()
 
