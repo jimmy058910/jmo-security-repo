@@ -460,8 +460,8 @@ def _auto_fix_tools(
         from scripts.cli.tool_installer import (
             install_dependency,
             get_manual_dependency_command,
-            DEPENDENCY_DISPLAY_NAMES,
         )
+        from scripts.core.install_config import DEPENDENCY_DISPLAY_NAMES
 
         print(
             colorize(
