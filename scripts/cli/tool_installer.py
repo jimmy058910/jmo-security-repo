@@ -17,11 +17,9 @@ import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -72,6 +70,7 @@ from scripts.core.archive_security import (
     safe_zip_extract,
 )
 from scripts.cli.installers.models import InstallResult, InstallProgress
+from scripts.cli.ui.progress import ParallelInstallProgress
 
 logger = logging.getLogger(__name__)
 
@@ -207,81 +206,6 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
     return DEPENDENCY_MANUAL_COMMANDS.get(dep_name, {}).get(
         platform, f"Install {dep_name} manually"
     )
-
-
-@dataclass
-class ParallelInstallProgress:
-    """Thread-safe progress tracking for parallel installations.
-
-    Uses threading.Lock to protect shared state from race conditions
-    when multiple threads update progress concurrently.
-
-    Attributes:
-        total: Total number of tools to install
-        completed: Number of successfully installed tools
-        failed: Number of failed installations
-        skipped: Number of skipped (already installed) tools
-        current_tools: List of tools currently being installed
-        results: List of InstallResult objects
-    """
-
-    total: int
-    completed: int = 0
-    failed: int = 0
-    skipped: int = 0
-    current_tools: list[str] = field(default_factory=list)
-    results: list[InstallResult] = field(default_factory=list)
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
-    _cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
-
-    def on_start(self, tool_name: str) -> None:
-        """Called when a tool installation begins (thread-safe)."""
-        with self._lock:
-            self.current_tools.append(tool_name)
-
-    def on_complete(self, tool_name: str, result: InstallResult) -> None:
-        """Called when a tool installation completes (thread-safe)."""
-        with self._lock:
-            if tool_name in self.current_tools:
-                self.current_tools.remove(tool_name)
-            self.results.append(result)
-            if result.success:
-                if result.method == "skipped":
-                    self.skipped += 1
-                else:
-                    self.completed += 1
-            else:
-                self.failed += 1
-
-    def get_status_line(self) -> str:
-        """Get current progress status for display (thread-safe)."""
-        with self._lock:
-            done = self.completed + self.failed + self.skipped
-            running = ", ".join(self.current_tools[:3])
-            if len(self.current_tools) > 3:
-                running += f" +{len(self.current_tools) - 3}"
-            return f"[{done}/{self.total}] Installing: {running}"
-
-    def is_cancelled(self) -> bool:
-        """Check if installation has been cancelled."""
-        return self._cancelled.is_set()
-
-    def cancel(self) -> None:
-        """Signal cancellation to all worker threads."""
-        self._cancelled.set()
-
-    def to_install_progress(self) -> InstallProgress:
-        """Convert to legacy InstallProgress for compatibility."""
-        with self._lock:
-            progress = InstallProgress(
-                total=self.total,
-                completed=self.completed + self.skipped,
-                successful=self.completed,
-                failed=self.failed,
-                skipped=self.skipped,
-                results=list(self.results),
-            )
-            return progress
 
 
 class ToolInstaller:
