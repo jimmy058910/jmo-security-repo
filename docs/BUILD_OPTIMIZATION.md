@@ -673,7 +673,7 @@ def cmd_tools_install(args) -> int:
 
 The wizard's auto-fix feature (`_auto_fix_tools()`) uses parallel installation by default.
 
-**File:** `scripts/cli/wizard.py`
+**File:** `scripts/cli/wizard_flows/tool_checker.py`
 
 ```python
 def _auto_fix_tools(
@@ -1193,7 +1193,7 @@ class TestParallelInstallProgress:
 | `scripts/cli/tool_installer.py` | `ParallelInstallProgress`, `install_profile_parallel()`, batch methods |
 | `scripts/cli/tool_commands.py` | Handle `--sequential` flag (parallel is default) |
 | `scripts/cli/jmo.py` | Add `--sequential`, `--jobs` arguments |
-| `scripts/cli/wizard.py` | Update `_auto_fix_tools()` to use parallel installation |
+| `scripts/cli/wizard_flows/tool_checker.py` | Update `_auto_fix_tools()` to use parallel installation |
 | `tests/unit/test_tool_installer_parallel.py` | New test file for thread safety |
 | `tests/cli/test_wizard.py` | Add parallel auto-fix tests |
 | `CLAUDE.md` | Document new CLI flags |

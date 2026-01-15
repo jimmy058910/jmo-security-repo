@@ -23,3 +23,8 @@ from .ui_helpers import safe_print as safe_print
 from .ui_helpers import prompt_text as prompt_text
 from .ui_helpers import prompt_choice as prompt_choice
 from .ui_helpers import select_mode as select_mode
+
+# Phase 2 refactor: Tool checking and installation
+from .tool_checker import check_tools_for_profile as check_tools_for_profile
+from .tool_checker import _check_policy_tools as _check_policy_tools
+from .tool_checker import _install_opa_tool as _install_opa_tool
