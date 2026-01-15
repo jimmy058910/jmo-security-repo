@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.cli.tool_installer import (
+from scripts.core.install_config import (
     BINARY_URLS,
     INSTALL_SCRIPTS,
     INSTALL_PRIORITIES,
@@ -519,7 +519,7 @@ class TestSpecialToolHandling:
 
     def test_lynis_installed_via_clone(self):
         """Verify lynis uses clone installation method."""
-        from scripts.cli.tool_installer import SPECIAL_INSTALL
+        from scripts.core.install_config import SPECIAL_INSTALL
 
         assert "lynis" in SPECIAL_INSTALL, "lynis should be in SPECIAL_INSTALL"
         assert (

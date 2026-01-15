@@ -19,7 +19,7 @@ from scripts.cli.tool_manager import (
     print_profile_summary,
     print_tool_status_table,
 )
-from scripts.cli.tool_installer import clean_isolated_venvs
+from scripts.core.paths import clean_isolated_venvs
 from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
 
 if TYPE_CHECKING:

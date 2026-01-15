@@ -12,13 +12,15 @@ from unittest.mock import patch, MagicMock
 import subprocess
 
 from scripts.cli.tool_installer import (
+    _is_package_manager_available,
+    install_dependency,
+    get_manual_dependency_command,
+)
+from scripts.core.install_config import (
     DEPENDENCY_INSTALL_COMMANDS,
     DEPENDENCY_VERIFY_COMMANDS,
     DEPENDENCY_DISPLAY_NAMES,
     DEPENDENCY_MANUAL_COMMANDS,
-    _is_package_manager_available,
-    install_dependency,
-    get_manual_dependency_command,
 )
 
 

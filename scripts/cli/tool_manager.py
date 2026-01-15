@@ -904,7 +904,8 @@ class ToolManager:
         # This ensures tools with pip conflicts (prowler, scancode) use
         # their isolated venv executables instead of any system version
         # Note: Lazy import to avoid circular dependency with tool_installer
-        from scripts.cli.tool_installer import get_isolated_tool_path, ISOLATED_TOOLS
+        from scripts.core.paths import get_isolated_tool_path
+        from scripts.core.install_config import ISOLATED_TOOLS
 
         tool_name = binary_name.removesuffix(".exe")  # Normalize for lookup
         if tool_name in ISOLATED_TOOLS:
@@ -1068,11 +1069,8 @@ class ToolManager:
             - (None, error) - startup crash detected (Phase 4)
         """
         # Check if this is an isolated venv tool - use special execution
-        from scripts.cli.tool_installer import (
-            ISOLATED_TOOLS,
-            get_isolated_venv_path,
-            get_isolated_tool_path,
-        )
+        from scripts.core.paths import get_isolated_venv_path, get_isolated_tool_path
+        from scripts.core.install_config import ISOLATED_TOOLS
 
         use_isolated_venv = False
         isolated_tool_path = None
