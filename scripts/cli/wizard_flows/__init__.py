@@ -28,3 +28,15 @@ from .ui_helpers import select_mode as select_mode
 from .tool_checker import check_tools_for_profile as check_tools_for_profile
 from .tool_checker import _check_policy_tools as _check_policy_tools
 from .tool_checker import _install_opa_tool as _install_opa_tool
+
+# Phase 3 refactor: Trend analysis flow
+from .trend_flow import (
+    offer_trend_analysis_after_scan as offer_trend_analysis_after_scan,
+)
+from .trend_flow import explore_trends_interactive as explore_trends_interactive
+from .trend_flow import _run_trend_command_interactive as _run_trend_command_interactive
+from .trend_flow import _compare_scans_interactive as _compare_scans_interactive
+from .trend_flow import _export_trends_interactive as _export_trends_interactive
+from .trend_flow import _explain_metrics_interactive as _explain_metrics_interactive
+from .trend_flow import TrendArgs as TrendArgs
+from .trend_flow import CompareArgs as CompareArgs

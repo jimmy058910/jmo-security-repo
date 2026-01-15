@@ -254,8 +254,9 @@ def test_explore_trends_menu_option_1(tmp_path, mock_db, capsys):
 
     with mock.patch("builtins.input", side_effect=inputs_with_enter):
         # Mock the _run_trend_command_interactive function
+        # Note: Must mock at trend_flow.py location since that's where the call originates
         with mock.patch(
-            "scripts.cli.wizard._run_trend_command_interactive"
+            "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
         ) as mock_run:
             explore_trends_interactive(mock_db, "results")
             # Verify it was called with correct params

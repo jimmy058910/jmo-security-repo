@@ -22,6 +22,15 @@ All notable changes to JMo Security will be documented in this file.
 
 ### Changed
 
+- **Wizard Refactoring Phase 3** - Extracted trend analysis flow to dedicated module
+  - Moved ~500 lines from `wizard.py` to `wizard_flows/trend_flow.py`
+  - Converted inner classes `TrendArgs` and `CompareArgs` to module-level dataclasses
+  - Functions extracted: `offer_trend_analysis_after_scan()`, `explore_trends_interactive()`,
+    `_run_trend_command_interactive()`, `_compare_scans_interactive()`,
+    `_export_trends_interactive()`, `_explain_metrics_interactive()`
+  - Backward compatible: all functions re-exported from `wizard.py`
+  - Files: `scripts/cli/wizard.py`, `scripts/cli/wizard_flows/trend_flow.py`, `scripts/cli/wizard_flows/__init__.py`
+
 - **Wizard Windows Terminal Compatibility** - Improved ANSI color support on older Windows
   - Automatic ANSI escape code detection for Windows 10+ terminals
   - Respects `NO_COLOR` environment variable (standard)
