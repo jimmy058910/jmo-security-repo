@@ -71,6 +71,7 @@ from scripts.core.archive_security import (
     safe_tar_extract,
     safe_zip_extract,
 )
+from scripts.cli.installers.models import InstallResult, InstallProgress
 
 logger = logging.getLogger(__name__)
 
@@ -206,44 +207,6 @@ def get_manual_dependency_command(dep_name: str, platform: str) -> str:
     return DEPENDENCY_MANUAL_COMMANDS.get(dep_name, {}).get(
         platform, f"Install {dep_name} manually"
     )
-
-
-@dataclass
-class InstallResult:
-    """Result of a tool installation attempt."""
-
-    tool_name: str
-    success: bool
-    method: str = ""
-    message: str = ""
-    version_installed: str | None = None
-    version_expected: str | None = None
-    version_mismatch: bool = False
-    duration_seconds: float = 0.0
-
-
-@dataclass
-class InstallProgress:
-    """Progress tracking for batch installations."""
-
-    total: int = 0
-    completed: int = 0
-    successful: int = 0
-    failed: int = 0
-    skipped: int = 0
-    results: list[InstallResult] = field(default_factory=list)
-
-    @property
-    def current(self) -> int:
-        return self.completed
-
-    def add_result(self, result: InstallResult) -> None:
-        self.results.append(result)
-        self.completed += 1
-        if result.success:
-            self.successful += 1
-        else:
-            self.failed += 1
 
 
 @dataclass
