@@ -40,3 +40,7 @@ from .trend_flow import _export_trends_interactive as _export_trends_interactive
 from .trend_flow import _explain_metrics_interactive as _explain_metrics_interactive
 from .trend_flow import TrendArgs as TrendArgs
 from .trend_flow import CompareArgs as CompareArgs
+
+# Phase 4 refactor: Diff wizard flow
+from .diff_flow import run_diff_wizard_impl as run_diff_wizard_impl
+from .diff_flow import DiffArgs as DiffArgs

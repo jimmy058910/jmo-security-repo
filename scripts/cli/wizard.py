@@ -61,7 +61,6 @@ from scripts.cli.wizard_flows.config_models import (
 from scripts.cli.wizard_flows.profile_config import (
     PROFILES,
     WIZARD_TOTAL_STEPS,
-    DIFF_WIZARD_TOTAL_STEPS,
     TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
     calculate_time_estimate,
     format_time_range,
@@ -106,6 +105,14 @@ from scripts.cli.wizard_flows.trend_flow import (  # noqa: F401
     TrendArgs,
     CompareArgs,
 )
+
+# Phase 4 refactor: Import diff wizard from diff_flow module
+from scripts.cli.wizard_flows.diff_flow import (
+    run_diff_wizard_impl,
+)
+
+# Re-exported for backward compatibility with tests
+from scripts.cli.wizard_flows.diff_flow import DiffArgs  # noqa: F401
 
 
 # Configure logging
@@ -976,8 +983,10 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
 
 
 def run_diff_wizard(use_docker: bool = False) -> int:
-    """
-    Run interactive diff wizard.
+    """Run the diff wizard for comparing scans.
+
+    This is a thin wrapper that delegates to the implementation
+    in wizard_flows/diff_flow.py (Phase 4 refactor).
 
     Guides user through:
     1. Scan selection from history (or directory paths)
@@ -985,278 +994,13 @@ def run_diff_wizard(use_docker: bool = False) -> int:
     3. Output format selection
     4. Diff execution and preview
 
+    Args:
+        use_docker: Whether to use Docker mode
+
     Returns:
         Exit code (0 = success, 1 = error, 130 = cancelled)
     """
-    try:
-        from scripts.core.history_db import list_recent_scans
-        from scripts.cli.diff_commands import cmd_diff
-
-        print(_colorize("\n=== JMo Security Diff Wizard ===\n", "bold"))
-        print("This wizard helps you compare two security scan results.\n")
-
-        # Step 1: Select comparison mode
-        _print_step(1, DIFF_WIZARD_TOTAL_STEPS, "Select Comparison Mode")
-        modes = [
-            ("history", "Compare scans from history database"),
-            ("directory", "Compare two result directories"),
-        ]
-
-        mode = _select_mode("Comparison modes", modes, default="history")
-
-        baseline_path = None
-        current_path = None
-        baseline_id = None
-        current_id = None
-
-        if mode == "history":
-            # Load recent scans from SQLite
-            history_db_path = _get_db_path()
-
-            if not history_db_path.exists():
-                print(
-                    _colorize(
-                        f"\nError: History database not found at {history_db_path}",
-                        "red",
-                    )
-                )
-                print("Run some scans first to populate the history database.")
-                return 1
-
-            try:
-                scans = list_recent_scans(history_db_path, limit=20)
-
-                if len(scans) < 2:
-                    print(_colorize("\nError: Need at least 2 scans in history", "red"))
-                    print("Run more scans or use directory mode instead.")
-                    return 1
-
-                # Display available scans
-                print("\nRecent scans:")
-                for i, scan in enumerate(scans, 1):
-                    timestamp = scan.get("timestamp_iso", "unknown")
-                    profile = scan.get("profile", "unknown")
-                    branch = scan.get("branch", "unknown")
-                    total = scan.get("total_findings", 0)
-                    scan_id = scan.get("id", "")[:8]
-
-                    print(
-                        f"  [{i:2d}] {scan_id}  {timestamp}  {profile:10s}  {branch:15s}  ({total} findings)"
-                    )
-
-                # Select baseline
-                while True:
-                    try:
-                        choice = input(
-                            _colorize("\nSelect baseline scan number: ", "bold")
-                        ).strip()
-                        idx = int(choice) - 1
-                        if 0 <= idx < len(scans):
-                            baseline_id = scans[idx]["id"]
-                            break
-                        print(_colorize("Invalid selection", "red"))
-                    except (ValueError, KeyboardInterrupt):
-                        raise KeyboardInterrupt
-
-                # Select current
-                while True:
-                    try:
-                        choice = input(
-                            _colorize("Select current scan number: ", "bold")
-                        ).strip()
-                        idx = int(choice) - 1
-                        if 0 <= idx < len(scans):
-                            current_id = scans[idx]["id"]
-                            if current_id != baseline_id:
-                                break
-                            print(_colorize("Must select different scans", "red"))
-                        else:
-                            print(_colorize("Invalid selection", "red"))
-                    except (ValueError, KeyboardInterrupt):
-                        raise KeyboardInterrupt
-
-            except Exception as e:
-                print(_colorize(f"\nError loading scan history: {e}", "red"))
-                return 1
-        else:
-            # Directory mode
-            _print_step(2, DIFF_WIZARD_TOTAL_STEPS, "Select Directories")
-
-            baseline_path = input(
-                _colorize("Baseline results directory: ", "bold")
-            ).strip()
-            if not Path(baseline_path).exists():
-                print(_colorize(f"Error: Directory not found: {baseline_path}", "red"))
-                return 1
-
-            current_path = input(
-                _colorize("Current results directory: ", "bold")
-            ).strip()
-            if not Path(current_path).exists():
-                print(_colorize(f"Error: Directory not found: {current_path}", "red"))
-                return 1
-
-        # Step 2: Filter options
-        _print_step(3, DIFF_WIZARD_TOTAL_STEPS, "Configure Filters (optional)")
-
-        print("\nSeverity filtering:")
-        print("  [1] All severities")
-        print("  [2] CRITICAL only")
-        print("  [3] CRITICAL + HIGH")
-        print("  [4] CRITICAL + HIGH + MEDIUM")
-
-        sev_choice = _prompt_choice(
-            "Select severity filter:",
-            [
-                ("1", "All"),
-                ("2", "CRITICAL"),
-                ("3", "CRITICAL,HIGH"),
-                ("4", "CRITICAL,HIGH,MEDIUM"),
-            ],
-            default="1",
-        )
-        severity_filter = {
-            "1": "",
-            "2": "CRITICAL",
-            "3": "CRITICAL,HIGH",
-            "4": "CRITICAL,HIGH,MEDIUM",
-        }[sev_choice]
-
-        print("\nCategory filtering:")
-        print("  [1] All changes")
-        print("  [2] New findings only")
-        print("  [3] Resolved findings only")
-        print("  [4] Modified findings only")
-
-        cat_choice = _prompt_choice(
-            "Select category filter:",
-            [("1", "All"), ("2", "New"), ("3", "Resolved"), ("4", "Modified")],
-            default="1",
-        )
-        category_filter = {"1": None, "2": "new", "3": "resolved", "4": "modified"}[
-            cat_choice
-        ]
-
-        # Step 3: Output format
-        _print_step(4, DIFF_WIZARD_TOTAL_STEPS, "Select Output Format")
-
-        formats = [
-            ("json", "Machine-readable JSON"),
-            ("md", "Markdown (GitHub/GitLab comments)"),
-            ("html", "Interactive HTML dashboard"),
-            ("sarif", "SARIF 2.1.0 (GitHub Security)"),
-        ]
-
-        output_format = _select_mode("Output formats", formats, default="html")
-
-        output_file = f"diff-report.{output_format}"
-        custom_output = input(
-            _colorize(f"Output file [{output_file}]: ", "bold")
-        ).strip()
-        if custom_output:
-            output_file = custom_output
-
-        # Step 4: Review and execute
-        _print_step(5, DIFF_WIZARD_TOTAL_STEPS, "Review and Execute")
-
-        print("\n" + _colorize("Diff Configuration:", "bold"))
-        if mode == "history":
-            print(f"  Mode: {_colorize('History Database', 'green')}")
-            print(f"  Baseline: {_colorize(baseline_id[:12], 'yellow')}")  # type: ignore[index]  # ID validated before slice
-            print(f"  Current: {_colorize(current_id[:12], 'yellow')}")  # type: ignore[index]  # ID validated before slice
-        else:
-            print(f"  Mode: {_colorize('Directory Comparison', 'green')}")
-            print(f"  Baseline: {baseline_path}")
-            print(f"  Current: {current_path}")
-
-        if severity_filter:
-            print(f"  Severity: {_colorize(severity_filter, 'yellow')}")
-        if category_filter:
-            print(f"  Category: {_colorize(category_filter, 'yellow')}")
-
-        print(f"  Format: {_colorize(output_format, 'green')}")
-        print(f"  Output: {output_file}")
-
-        if not _prompt_yes_no("\nGenerate diff report?", default=True):
-            print(_colorize("\nDiff cancelled", "yellow"))
-            return 0
-
-        # Build command args (mock argparse namespace)
-        class DiffArgs:
-            """
-            Argument container for result directory diff workflows in the wizard.
-
-            Stores user selections for comparing two result directories, enabling
-            regression detection in CI/CD pipelines and PR reviews.
-
-            Attributes:
-                directories (Optional[list[str]]): List of two result directories [baseline, current] (directory mode).
-                scan_ids (Optional[list[str]]): List of two scan IDs [baseline, current] (history mode).
-                db (str): Path to SQLite history database (for history mode).
-                severity (Optional[list[str]]): Filter by severity levels (e.g., ['CRITICAL', 'HIGH']).
-                tool (Optional[str]): Filter by specific tool (default: None = all tools).
-                only (str): Filter by change type ('all', 'new', 'fixed', 'modified').
-                no_modifications (bool): Skip modification detection for faster diffs (default: False).
-                format (str): Output format ('json', 'md', 'html', 'sarif').
-                output (str): Output file path.
-
-            Example:
-                >>> args = DiffArgs()
-                >>> args.directories = ['results-main', 'results-feature-branch']
-                >>> args.severity = ['HIGH', 'CRITICAL']
-                >>> args.only = 'new'
-                >>> args.format = 'md'
-                >>> # Generates: jmo diff results-main/ results-feature-branch/ --severity HIGH CRITICAL --only new --format md
-
-            See Also:
-                - jmo diff: Result directory comparison
-                - jmo history compare: Historical scan comparison
-                - docs/examples/diff-workflows.md: CI/CD integration examples
-
-            Note:
-                Wizard validates that both directories exist and contain summaries/findings.json.
-            """
-
-            def __init__(self):
-                self.directories = (
-                    [baseline_path, current_path] if mode == "directory" else None
-                )
-                self.scan_ids = [baseline_id, current_id] if mode == "history" else None
-                self.db = str(_get_db_path())
-                self.severity = severity_filter if severity_filter else None
-                self.tool = None
-                self.only = category_filter
-                self.no_modifications = False
-                self.format = output_format
-                self.output = output_file
-
-        args = DiffArgs()
-
-        # Execute diff
-        print(_colorize("\n=== Generating Diff Report ===\n", "bold"))
-        result = cmd_diff(args)
-
-        if result == 0:
-            _safe_print(_colorize(f"\n✓ Diff report generated: {output_file}", "green"))
-
-            # Auto-open HTML reports
-            if output_format == "html" and Path(output_file).exists():
-                if _prompt_yes_no("\nOpen report in browser?", default=True):
-                    import webbrowser
-
-                    webbrowser.open(f"file://{Path(output_file).resolve()}")
-        else:
-            _safe_print(_colorize("\n✗ Diff generation failed", "red"))
-
-        return result
-
-    except KeyboardInterrupt:
-        print(_colorize("\n\nDiff wizard cancelled", "yellow"))
-        return 130
-    except Exception as e:
-        print(_colorize(f"\n\nDiff wizard error: {e}", "red"))
-        logger.error(f"Diff wizard failure: {e}", exc_info=True)
-        return 1
+    return run_diff_wizard_impl(use_docker=use_docker)
 
 
 def main() -> int:
