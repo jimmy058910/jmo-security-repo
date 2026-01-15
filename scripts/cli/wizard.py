@@ -258,6 +258,42 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "_default": 60,
 }
 
+# Chunk 3: Standardized error message templates for tool issues
+# These provide consistent, actionable guidance for different failure scenarios
+TOOL_ISSUE_TEMPLATES: dict[str, str] = {
+    "linux_only": """  [{icon}] {tool}: Linux only
+       {reason}
+       Options:
+         - Docker: {docker_command}
+         - WSL2: wsl --install -d Ubuntu
+       Docs: {docs_url}""",
+    "no_windows_binary": """  [{icon}] {tool}: No Windows binary available
+       {reason}
+       Options:
+         - Docker: {docker_command}
+         - WSL2: wsl --install -d Ubuntu
+       Docs: {docs_url}""",
+    "missing_dependency": """  [{icon}] {tool}: {dependency} {min_version}+ required
+       {tool} requires {dependency} to run.
+       Auto-fix will install {dependency} automatically.
+       Manual: {manual_command}""",
+    "startup_crash": """  [!!] {tool}: STARTUP CRASH - {error_type}
+       Error: {error_detail}
+       Fix: jmo tools clean --force && jmo tools install {tool}
+            (Reinstalls in isolated virtual environment)""",
+    "docker_only": """  [{icon}] {tool}: Docker required
+       {reason}
+       Docker command:
+         {docker_command}
+       Docs: {docs_url}""",
+    "windows_registry": """  [{icon}] {tool}: Windows configuration required
+       {reason}
+       Fix (requires admin PowerShell):
+         {registry_command}
+       Then reboot and re-run: jmo tools install {tool}
+       Alternative: Use Docker mode""",
+}
+
 
 def calculate_time_estimate(available_tools: list[str]) -> tuple[int, int]:
     """Calculate dynamic time estimate based on available tools.
@@ -938,6 +974,10 @@ def check_tools_for_profile(
     This is the pre-flight tool check that runs before scan execution.
     If tools are missing, offers to install them or continue anyway.
 
+    Proactive filtering (Chunk 2): Tools incompatible with the current platform
+    are shown as "skipped" before the main tool check, keeping the failure list
+    focused on tools that can actually be fixed.
+
     Args:
         profile: Selected scan profile (fast, slim, balanced, deep)
         yes: Non-interactive mode (skip prompts)
@@ -955,17 +995,51 @@ def check_tools_for_profile(
     try:
         from scripts.cli.tool_manager import (
             ToolManager,
+            ToolStatusType,
             get_remediation_for_tool,
         )
-        from scripts.core.tool_registry import PROFILE_TOOLS, detect_platform
+        from scripts.core.tool_registry import (
+            detect_platform,
+            get_tools_for_profile_filtered,
+            get_skipped_tools_for_profile,
+        )
 
         manager = ToolManager()
         platform = detect_platform()
-        tools_in_profile = PROFILE_TOOLS.get(profile, [])
 
-        print(f"\nChecking {len(tools_in_profile)} tools for '{profile}' profile...")
+        # Proactive filtering: Show platform-incompatible tools BEFORE checking
+        # This makes the wizard output clearer by separating "won't work here"
+        # from "needs installation"
+        skipped_tools = get_skipped_tools_for_profile(profile, platform)
+        applicable_tools = get_tools_for_profile_filtered(profile, platform)
 
-        statuses = manager.check_profile(profile)
+        if skipped_tools:
+            print(
+                _colorize(
+                    f"\n{_UNICODE_FALLBACKS.get('~', '~')} Skipped on {platform} "
+                    f"({len(skipped_tools)} tools):",
+                    "dim",
+                )
+            )
+            for tool, reason in skipped_tools:
+                print(f"  {_colorize('~', 'yellow')} {tool}: {reason}")
+
+        # Use applicable_tools for the tool check (filtered list)
+        tools_in_profile = applicable_tools
+
+        print(
+            f"\nChecking {len(tools_in_profile)} applicable tools for '{profile}' profile..."
+        )
+
+        # Check only applicable tools (not the full profile which includes skipped tools)
+        # This prevents platform-incompatible tools from appearing in the "needs attention" list
+        all_statuses = manager.check_profile(profile)
+        statuses = {
+            name: status
+            for name, status in all_statuses.items()
+            if name in applicable_tools
+        }
+
         missing = [s for s in statuses.values() if not s.installed]
         outdated = [s for s in statuses.values() if s.is_outdated]
         # Use execution_ready for "available" (consistent with summary display)
@@ -1031,34 +1105,31 @@ def check_tools_for_profile(
                     "installed": status.installed,
                     "remediation": remediation,
                     "version_error": status.version_error,  # Phase 4
+                    "status_type": status.status_type,  # Chunk 3
                 }
             )
 
-            # Display the issue - distinguish different issue types
+            # Display the issue - use status_type for icon/color (Chunk 3)
             is_manual = remediation.get("is_manual", False)
-            is_startup_crash = status.version_error is not None  # Phase 4
 
             if is_manual:
                 manual_only_count += 1
                 icon = _UNICODE_FALLBACKS.get("📖", "[?]")
                 # Show manual reason instead of generic issue
                 issue = remediation.get("manual_reason", issue)
-            elif is_startup_crash:
-                # Phase 4: Special display for startup crashes
-                icon = _UNICODE_FALLBACKS.get("💥", "[!!]")
-            elif not status.installed:
-                icon = _UNICODE_FALLBACKS.get("❌", "[X]")
             else:
-                icon = _UNICODE_FALLBACKS.get("⚠", "[!]")
+                # Use status_type-based icon from STATUS_ICONS mapping
+                icon = f"[{status.status_icon}]"
 
-            print(f"\n  {icon} {_colorize(status.name, 'yellow')}: {issue}")
+            # Color based on status_type (Chunk 3: red for CRASH/FAILED/MISSING, yellow for others)
+            print(f"\n  {icon} {_colorize(status.name, status.status_color)}: {issue}")
 
             # Show fix command or manual guidance
             if is_manual:
                 url = remediation.get("manual_url", "docs/MANUAL_INSTALLATION.md")
                 print(f"     See: {url}")
-            elif is_startup_crash:
-                # Phase 4: Suggest fix based on whether tool supports isolated venv
+            elif status.status_type == ToolStatusType.CRASH:
+                # Phase 4/Chunk 3: Suggest fix based on whether tool supports isolated venv
                 # Lazy import to avoid circular dependency
                 from scripts.cli.tool_installer import ISOLATED_TOOLS
 

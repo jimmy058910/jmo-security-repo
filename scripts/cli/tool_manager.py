@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +30,44 @@ from scripts.core.tool_registry import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class ToolStatusType(Enum):
+    """Status categories for tool availability.
+
+    Used to distinguish between different reasons a tool may not be available,
+    allowing for more helpful UI feedback (e.g., yellow for "skipped on Windows"
+    vs red for "actually broken").
+    """
+
+    OK = "ok"  # Green - ready to use
+    OUTDATED = "outdated"  # Yellow - works but old version
+    SKIPPED = "skipped"  # Yellow - not applicable for platform/mode
+    MISSING = "missing"  # Red - not installed but could be
+    FAILED = "failed"  # Red - installed but broken
+    CRASH = "crash"  # Red - startup crash detected
+
+
+# Color mappings for Rich console output
+STATUS_COLORS: dict[ToolStatusType, str] = {
+    ToolStatusType.OK: "green",
+    ToolStatusType.OUTDATED: "yellow",
+    ToolStatusType.SKIPPED: "yellow",
+    ToolStatusType.MISSING: "red",
+    ToolStatusType.FAILED: "red",
+    ToolStatusType.CRASH: "bold red",
+}
+
+# Icon mappings for status display
+# FAILED uses "!" (not "X") to distinguish from MISSING - installed but broken vs not installed
+STATUS_ICONS: dict[ToolStatusType, str] = {
+    ToolStatusType.OK: "OK",
+    ToolStatusType.OUTDATED: "!",
+    ToolStatusType.SKIPPED: "~",
+    ToolStatusType.MISSING: "X",
+    ToolStatusType.FAILED: "!",  # Installed but can't execute
+    ToolStatusType.CRASH: "!!",
+}
 
 # Version extraction patterns for different tools
 VERSION_PATTERNS: dict[str, re.Pattern] = {
@@ -347,6 +386,7 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
 #
 # Key: tool_name
 # Value: dict of platform -> (reason, documentation_url)
+#        Special key "all" applies to all platforms (e.g., Docker-only tools)
 PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
     "prowler": {
         "windows": (
@@ -370,6 +410,40 @@ PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
         "windows": (
             "No Windows binaries available (use Docker or WSL)",
             "https://github.com/Bearer/bearer",
+        ),
+    },
+    # Linux-only tools (kernel requirements)
+    "falco": {
+        "windows": (
+            "Linux kernel module required - Use Docker: docker run --privileged falcosecurity/falco",
+            "https://falco.org/docs/install-operate/running/",
+        ),
+        "macos": (
+            "Linux kernel module required - Use Docker: docker run --privileged falcosecurity/falco",
+            "https://falco.org/docs/install-operate/running/",
+        ),
+    },
+    "afl++": {
+        "windows": (
+            "Linux only (requires ptrace, shared memory) - Use WSL2 or Docker",
+            "https://github.com/AFLplusplus/AFLplusplus#building-and-installing-afl",
+        ),
+        "macos": (
+            "Limited macOS support - Use Docker: docker run -it aflplusplus/aflplusplus",
+            "https://github.com/AFLplusplus/AFLplusplus",
+        ),
+    },
+    # Docker-only tools (complex native setup not recommended)
+    "mobsf": {
+        "all": (
+            "Docker recommended - docker run -it -p 8000:8000 opensecurity/mobile-security-framework-mobsf",
+            "https://mobsf.github.io/docs/#/docker",
+        ),
+    },
+    "akto": {
+        "all": (
+            "Microservice stack - Requires docker-compose. See Akto quick start guide.",
+            "https://docs.akto.io/getting-started/quick-start",
         ),
     },
 }
@@ -404,7 +478,11 @@ def get_remediation_for_tool(
     # Check if this tool requires manual installation on this platform
     # These tools have known platform-specific issues that can't be auto-fixed
     if tool_name in PLATFORM_MANUAL_TOOLS:
+        # Check platform-specific entry first, then fall back to "all"
         platform_manual = PLATFORM_MANUAL_TOOLS[tool_name].get(platform)
+        if not platform_manual:
+            # Check for "all" key (applies to all platforms, e.g., Docker-only tools)
+            platform_manual = PLATFORM_MANUAL_TOOLS[tool_name].get("all")
         if platform_manual:
             reason, url = platform_manual
             return {
@@ -467,7 +545,16 @@ def get_remediation_for_tool(
 
 @dataclass
 class ToolStatus:
-    """Status of a single tool with execution readiness (Fix 1.4)."""
+    """Status of a single tool with execution readiness (Fix 1.4).
+
+    The status_type field categorizes the tool's availability:
+    - OK: Ready to use
+    - OUTDATED: Works but has newer version available
+    - SKIPPED: Not applicable for platform/mode (yellow, not an error)
+    - MISSING: Not installed but could be
+    - FAILED: Installed but broken
+    - CRASH: Startup crash detected (dependency conflict)
+    """
 
     name: str
     installed: bool
@@ -483,35 +570,54 @@ class ToolStatus:
     missing_deps: list[str] | None = None  # Missing dependencies for execution
     # Phase 4: Version detection error (startup crash, import error, etc.)
     version_error: str | None = None  # Reason version couldn't be determined
+    # Chunk 3: Status type for UX improvements
+    status_type: ToolStatusType = ToolStatusType.OK
 
     def __post_init__(self) -> None:
-        """Initialize mutable defaults."""
+        """Initialize mutable defaults and derive status_type if not set."""
         if self.missing_deps is None:
             self.missing_deps = []
 
+        # Auto-derive status_type from other fields if still at default OK
+        # This provides backward compatibility - existing code that creates
+        # ToolStatus without status_type will get correct values
+        if self.status_type == ToolStatusType.OK:
+            self.status_type = self._derive_status_type()
+
+    def _derive_status_type(self) -> ToolStatusType:
+        """Derive status type from other fields."""
+        if not self.installed:
+            return ToolStatusType.MISSING
+        if self.version_error:
+            return ToolStatusType.CRASH
+        if not self.execution_ready:
+            return ToolStatusType.FAILED
+        if self.is_outdated:
+            return ToolStatusType.OUTDATED
+        return ToolStatusType.OK
+
     @property
     def status_icon(self) -> str:
-        """Get status icon for display."""
-        if not self.installed:
-            return "X"
-        if not self.execution_ready:
-            return "!"  # Installed but can't execute
-        if self.is_outdated:
-            return "!"
-        return "OK"
+        """Get status icon for display (uses status_type mapping)."""
+        return STATUS_ICONS.get(self.status_type, "?")
+
+    @property
+    def status_color(self) -> str:
+        """Get Rich color for this status."""
+        return STATUS_COLORS.get(self.status_type, "white")
 
     @property
     def status_text(self) -> str:
         """Get status text for display."""
-        if not self.installed:
-            return "MISSING"
-        if self.version_error:
-            return "STARTUP CRASH"  # Phase 4: Tool crashes on startup
-        if not self.execution_ready:
-            return "NOT READY"
-        if self.is_outdated:
-            return "OUTDATED"
-        return "OK"
+        status_text_map = {
+            ToolStatusType.OK: "OK",
+            ToolStatusType.OUTDATED: "OUTDATED",
+            ToolStatusType.SKIPPED: "SKIPPED",
+            ToolStatusType.MISSING: "MISSING",
+            ToolStatusType.FAILED: "NOT READY",
+            ToolStatusType.CRASH: "STARTUP CRASH",
+        }
+        return status_text_map.get(self.status_type, "UNKNOWN")
 
 
 class ToolManager:

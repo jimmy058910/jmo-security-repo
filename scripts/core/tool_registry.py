@@ -145,6 +145,195 @@ TOOL_VERSION_REQUIREMENTS: dict[str, dict[str, str]] = {
     "cdxgen": {"node": "20.0.0"},  # Requires Node.js 20+
 }
 
+# Platform compatibility requirements for tools
+# Tools not listed here are assumed to work on all platforms
+# This is used for proactive filtering in the wizard to skip incompatible tools
+TOOL_PLATFORM_REQUIREMENTS: dict[str, dict] = {
+    # Linux-only tools (kernel requirements)
+    "falco": {
+        "platforms": ["linux"],
+        "docker_image": "falcosecurity/falco",
+        "docker_flags": "--privileged",
+        "reason": "Requires Linux kernel module (eBPF or kernel module)",
+        "workarounds": ["docker"],
+    },
+    "afl++": {
+        "platforms": ["linux"],
+        "docker_image": "aflplusplus/aflplusplus",
+        "reason": "Requires Linux kernel features (ptrace, shared memory)",
+        "workarounds": ["docker", "wsl2"],
+    },
+    # Linux/macOS only (no Windows binaries)
+    "noseyparker": {
+        "platforms": ["linux", "macos"],
+        "docker_image": "ghcr.io/praetorian-inc/noseyparker",
+        "reason": "Rust binary not available for Windows",
+        "workarounds": ["docker", "wsl2"],
+    },
+    "bearer": {
+        "platforms": ["linux", "macos"],
+        "docker_image": "bearer/bearer",
+        "reason": "Go binary not available for Windows",
+        "workarounds": ["docker", "wsl2"],
+    },
+    # All platforms but with requirements
+    "lynis": {
+        "platforms": ["linux", "macos", "windows"],
+        "windows_requires": ["bash"],
+        "docker_image": "cisofy/lynis",
+        "reason": "Shell script requires bash interpreter",
+        "workarounds": ["git_bash", "wsl", "docker"],
+    },
+    "prowler": {
+        "platforms": ["linux", "macos", "windows"],
+        "windows_requires": ["long_path_support"],
+        "reason": "Creates deeply nested paths exceeding 260-char limit",
+        "workarounds": ["docker", "registry_fix"],
+    },
+    # Docker-only tools (complex setup not recommended natively)
+    "mobsf": {
+        "platforms": [],  # No native support recommended
+        "docker_image": "opensecurity/mobile-security-framework-mobsf",
+        "docker_ports": ["8000:8000"],
+        "reason": "Complex setup (Android SDK + Python dependencies)",
+        "workarounds": ["docker"],
+    },
+    "akto": {
+        "platforms": [],
+        "docker_compose": True,
+        "reason": "Microservice architecture requires docker-compose",
+        "workarounds": ["docker_compose"],
+    },
+}
+
+
+def get_platform_status(tool_name: str, platform: str) -> dict:
+    """
+    Get platform compatibility status for a tool.
+
+    This function checks whether a tool is supported on the given platform
+    and provides detailed information about any compatibility issues.
+
+    Args:
+        tool_name: Name of the tool (e.g., 'falco', 'noseyparker')
+        platform: Current platform ("windows", "linux", "macos")
+
+    Returns:
+        Dictionary with:
+        - supported: bool - whether the tool works on this platform
+        - reason: str | None - explanation if not supported
+        - requirements: list[str] - platform-specific requirements (if supported)
+        - workarounds: list[str] - alternative ways to run the tool
+        - docker_image: str | None - Docker image for container-based execution
+    """
+    if tool_name not in TOOL_PLATFORM_REQUIREMENTS:
+        # Tool not in requirements dict - assume universal support
+        return {
+            "supported": True,
+            "reason": None,
+            "workarounds": [],
+            "requirements": [],
+        }
+
+    req = TOOL_PLATFORM_REQUIREMENTS[tool_name]
+
+    # Check if platform is in supported list
+    platforms = req.get("platforms", ["linux", "macos", "windows"])
+    if platform not in platforms:
+        return {
+            "supported": False,
+            "reason": req.get("reason", f"Not available on {platform}"),
+            "workarounds": req.get("workarounds", []),
+            "docker_image": req.get("docker_image"),
+            "requirements": [],
+        }
+
+    # Check platform-specific requirements (e.g., windows_requires)
+    platform_requires = req.get(f"{platform}_requires", [])
+    if platform_requires:
+        return {
+            "supported": True,  # Supported but with requirements
+            "reason": req.get("reason"),
+            "requirements": platform_requires,
+            "workarounds": req.get("workarounds", []),
+            "docker_image": req.get("docker_image"),
+        }
+
+    return {
+        "supported": True,
+        "reason": None,
+        "workarounds": [],
+        "requirements": [],
+    }
+
+
+def get_tools_for_profile_filtered(
+    profile: str, platform: str | None = None
+) -> list[str]:
+    """
+    Get tools for a profile, optionally filtered by platform compatibility.
+
+    This is a module-level function that provides platform-filtered tool lists
+    for use in the wizard and other CLI components.
+
+    Args:
+        profile: Profile name (fast, slim, balanced, deep)
+        platform: Optional platform filter ("windows", "linux", "macos").
+                  If None, returns all tools for the profile.
+
+    Returns:
+        List of tool names compatible with the platform.
+
+    Example:
+        >>> get_tools_for_profile_filtered("deep", "windows")
+        ['trufflehog', 'semgrep', ...]  # Excludes falco, afl++, etc.
+    """
+    all_tools = PROFILE_TOOLS.get(profile, [])
+
+    if platform is None:
+        return all_tools
+
+    compatible_tools = []
+    for tool in all_tools:
+        status = get_platform_status(tool, platform)
+        if status["supported"]:
+            compatible_tools.append(tool)
+
+    return compatible_tools
+
+
+def get_skipped_tools_for_profile(profile: str, platform: str) -> list[tuple[str, str]]:
+    """
+    Get tools that will be skipped on this platform.
+
+    This function identifies tools that are not compatible with the current
+    platform and returns them with explanatory reasons. Used by the wizard
+    to proactively inform users before tool checking.
+
+    Args:
+        profile: Profile name (fast, slim, balanced, deep)
+        platform: Current platform ("windows", "linux", "macos")
+
+    Returns:
+        List of (tool_name, reason) tuples for incompatible tools.
+
+    Example:
+        >>> get_skipped_tools_for_profile("deep", "windows")
+        [('falco', 'Requires Linux kernel module (eBPF or kernel module)'),
+         ('afl++', 'Requires Linux kernel features (ptrace, shared memory)'),
+         ...]
+    """
+    all_tools = PROFILE_TOOLS.get(profile, [])
+    skipped = []
+
+    for tool in all_tools:
+        status = get_platform_status(tool, platform)
+        if not status["supported"]:
+            reason = status.get("reason", "Not available on this platform")
+            skipped.append((tool, reason))
+
+    return skipped
+
 
 @dataclass
 class ToolInfo:
