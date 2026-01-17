@@ -9,6 +9,7 @@ from scripts.cli.installers.base import (
     Downloader,
 )
 from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstaller
+from scripts.cli.installers.npm_installer import NpmInstaller
 
 __all__ = [
     "InstallResult",
@@ -20,4 +21,5 @@ __all__ = [
     "Downloader",
     "PipInstaller",
     "IsolatedPipInstaller",
+    "NpmInstaller",
 ]
