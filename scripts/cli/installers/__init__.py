@@ -10,6 +10,11 @@ from scripts.cli.installers.base import (
 )
 from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstaller
 from scripts.cli.installers.npm_installer import NpmInstaller
+from scripts.cli.installers.binary_installer import (
+    BinaryInstaller,
+    PlatformInfo,
+    get_platform_info,
+)
 
 __all__ = [
     "InstallResult",
@@ -22,4 +27,7 @@ __all__ = [
     "PipInstaller",
     "IsolatedPipInstaller",
     "NpmInstaller",
+    "BinaryInstaller",
+    "PlatformInfo",
+    "get_platform_info",
 ]
