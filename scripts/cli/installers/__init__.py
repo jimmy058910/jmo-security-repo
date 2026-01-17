@@ -8,6 +8,7 @@ from scripts.cli.installers.base import (
     DefaultSubprocessRunner,
     Downloader,
 )
+from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstaller
 
 __all__ = [
     "InstallResult",
@@ -17,4 +18,6 @@ __all__ = [
     "SubprocessRunner",
     "DefaultSubprocessRunner",
     "Downloader",
+    "PipInstaller",
+    "IsolatedPipInstaller",
 ]
