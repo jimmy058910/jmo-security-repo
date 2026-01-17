@@ -219,6 +219,8 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 ```text
 scripts/
 ├── cli/             # CLI commands (jmo.py, scan/report orchestrators, wizard)
+│   ├── installers/  # Tool installation strategies (Strategy pattern)
+│   └── ui/          # UI components (progress reporters)
 ├── core/            # Core logic (normalize_and_report.py, config.py, history_db.py)
 │   ├── adapters/    # Tool parsers (plugin architecture with @adapter_plugin)
 │   └── reporters/   # Output formatters (JSON/MD/HTML/SARIF/CSV)
@@ -232,9 +234,12 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 | File | Purpose |
 |------|---------|
 | `scripts/cli/jmo.py` | Main CLI entry point |
+| `scripts/cli/tool_installer.py` | Tool installation orchestrator |
+| `scripts/cli/installers/` | Strategy pattern installers (pip, npm, brew, binary) |
 | `scripts/core/normalize_and_report.py` | Aggregation engine |
 | `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
+| `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
 | `scripts/core/adapters/*.py` | Tool output parsers (28 adapters) |
 | `jmo.yml` | Main configuration |
