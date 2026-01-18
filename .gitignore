@@ -5,6 +5,10 @@
 .post-release-venv/
 venv*/
 
+# Claude Code temp directories (created during sessions)
+tmpclaude-*
+nul
+
 # Coverage artifacts
 .coverage*
 coverage.xml
@@ -79,6 +83,8 @@ DEVELOPER_ROADMAP.md
 BUSINESS_MODEL.md
 docs/VERSION_TAG.md
 BUSINESS_PLAN.md
+PRODUCT_DEFINITION.md
+docs/COMPLETENESS_ANALYZER.md
 
 # Archived documentation (historical reference)
 # Archive structure is tracked (README.md, v0.6.0/)
@@ -94,7 +100,13 @@ docs/archive/merged/*
 .mcp.json
 
 # Claude Code user-specific configuration (open-source project)
-.claude/
+# Ignore contents of .claude/ but allow ralph-cli-testing subdirectory
+.claude/*
+!.claude/ralph-cli-testing/
+# But ignore runtime artifacts within Ralph testing
+.claude/ralph-cli-testing/iteration-logs/
+.claude/ralph-cli-testing/test-results.json
+.claude/ralph-cli-testing/fixtures/results-*/
 samples/fixtures/infra-demo/docker-test-results/
 
 # Skill Seekers analysis artifacts (local development, not for public repo)
@@ -152,3 +164,9 @@ test-*.html
 *.backup
 *.new
 *.orig
+
+# Claude Code temporary working directories
+tmpclaude-*/
+
+# Conductor orchestration files (local development artifacts)
+/conductor/

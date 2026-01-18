@@ -90,9 +90,7 @@ class TestPolicyEngine:
     def mock_opa_available(self) -> MagicMock:
         """Mock OPA binary availability check."""
         with (
-            patch(
-                "scripts.core.policy_engine.shutil.which", return_value="/usr/bin/opa"
-            ),
+            patch("scripts.core.policy_engine.find_tool", return_value="/usr/bin/opa"),
             patch("subprocess.run") as mock_run,
         ):
             mock_run.return_value = MagicMock(
@@ -115,20 +113,33 @@ class TestPolicyEngine:
 
     def test_init_opa_not_found(self) -> None:
         """Test PolicyEngine raises OPANotFoundException when OPA not found."""
-        with patch("scripts.core.policy_engine.shutil.which", return_value=None):
+        with patch("scripts.core.policy_engine.find_tool", return_value=None):
             with pytest.raises(OPANotFoundException):
                 PolicyEngine()
 
     def test_init_opa_timeout(self) -> None:
         """Test PolicyEngine raises on OPA timeout."""
         with (
-            patch(
-                "scripts.core.policy_engine.shutil.which", return_value="/usr/bin/opa"
-            ),
+            patch("scripts.core.policy_engine.find_tool", return_value="/usr/bin/opa"),
             patch("subprocess.run", side_effect=subprocess.TimeoutExpired("opa", 5)),
         ):
             with pytest.raises(RuntimeError, match="timed out"):
                 PolicyEngine()
+
+    def test_init_finds_opa_in_jmo_bin(self) -> None:
+        """Test PolicyEngine finds OPA installed via jmo tools install."""
+        jmo_opa_path = str(Path.home() / ".jmo" / "bin" / "opa")
+        with (
+            patch("scripts.core.policy_engine.find_tool", return_value=jmo_opa_path),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="Version: 0.70.0\nBuild Commit: abc123",
+                stderr="",
+            )
+            engine = PolicyEngine()
+            assert engine._opa_path == jmo_opa_path
 
     def test_validate_policy_valid(
         self, mock_opa_available: MagicMock, tmp_path: Path

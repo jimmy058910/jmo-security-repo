@@ -15,11 +15,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from scripts.cli.scan_utils import find_tool
 from scripts.core.exceptions import OPANotFoundException
 from scripts.core.secure_temp import secure_temp_file
 from typing import Any, Dict, List, Optional, cast
@@ -87,19 +87,21 @@ class PolicyEngine:
             opa_binary: Path to OPA binary (default: "opa" in PATH)
         """
         self.opa_binary = opa_binary
+        self._opa_path: str | None = None  # Resolved path, set by _verify_opa_available
         self._verify_opa_available()
 
     def _verify_opa_available(self) -> None:
         """Verify OPA binary is available and version is compatible."""
-        # Check if OPA is in PATH before attempting to run
+        # Check if OPA is in PATH or ~/.jmo/bin/ before attempting to run
         # This provides better error messages on Windows where FileNotFoundError
         # may not be raised reliably
-        if shutil.which(self.opa_binary) is None:
+        self._opa_path = find_tool(self.opa_binary)
+        if self._opa_path is None:
             raise OPANotFoundException()
 
         try:
             result = subprocess.run(
-                [self.opa_binary, "version"],
+                [self._opa_path, "version"],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -167,7 +169,7 @@ class PolicyEngine:
             # Evaluate policy using OPA eval
             result = subprocess.run(
                 [
-                    self.opa_binary,
+                    self._opa_path,
                     "eval",
                     "-d",
                     str(policy_path),
@@ -265,7 +267,7 @@ class PolicyEngine:
             Tuple of (is_valid, error_message)
         """
         result = subprocess.run(
-            [self.opa_binary, "check", str(policy_path)],
+            [self._opa_path, "check", str(policy_path)],
             capture_output=True,
             text=True,
             timeout=10,
@@ -350,7 +352,7 @@ class PolicyEngine:
             # Use OPA to evaluate just the metadata
             result = subprocess.run(
                 [
-                    self.opa_binary,
+                    self._opa_path,
                     "eval",
                     "-d",
                     str(policy_path),
