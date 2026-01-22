@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
 
 
 class TestHelpVersion:
@@ -24,9 +23,9 @@ class TestHelpVersion:
 
         # Version should be in stdout
         version_pattern = r"\d+\.\d+\.\d+"
-        assert re.search(version_pattern, result.stdout), (
-            f"Version pattern not found in output: {result.stdout}"
-        )
+        assert re.search(
+            version_pattern, result.stdout
+        ), f"Version pattern not found in output: {result.stdout}"
 
     def test_hv_002_main_help(self, jmo_runner):
         """HV-002: jmo --help shows all command groups."""
@@ -133,4 +132,6 @@ class TestHelpOutputQuality:
         # stderr should be empty or only contain warnings
         if result.stderr:
             # Allow deprecation warnings but not errors
-            assert "error" not in result.stderr.lower(), f"Error in stderr: {result.stderr}"
+            assert (
+                "error" not in result.stderr.lower()
+            ), f"Error in stderr: {result.stderr}"

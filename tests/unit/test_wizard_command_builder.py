@@ -95,6 +95,19 @@ def test_build_repo_args_tsv_mode_no_dest():
     assert "--dest" not in args
 
 
+def test_build_repo_args_tsv_mode_no_dest_attr():
+    """Test build_repo_args with TSV mode where tsv_dest attribute doesn't exist."""
+    target = MagicMock(spec=["repo_mode", "tsv_path"])  # No tsv_dest attr
+    target.repo_mode = "tsv"
+    target.tsv_path = "./repos.tsv"
+
+    args = build_repo_args(target, use_docker=False)
+
+    assert "--tsv" in args
+    assert "./repos.tsv" in args
+    assert "--dest" not in args
+
+
 def test_build_repo_args_docker_mode(tmp_path):
     """Test build_repo_args with Docker volume mounting."""
     target = MagicMock()
@@ -451,3 +464,248 @@ def test_build_command_parts_docker_volumes(tmp_path):
     assert "-v" in cmd
     # Should have results mount
     assert any("/results" in arg for arg in cmd)
+
+
+# ========== Category 8: Docker Mode Extended Tests ==========
+
+
+def test_build_command_parts_docker_image(tmp_path):
+    """Test build_command_parts for Docker mode with image target."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "fast"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "image"
+    target.image_name = "nginx:latest"
+    target.images_file = None
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "docker"
+    assert "run" in cmd
+    assert "--rm" in cmd
+    assert JMO_DOCKER_IMAGE_FULL in cmd
+    assert "--image" in cmd
+    assert "nginx:latest" in cmd
+
+
+def test_build_command_parts_docker_iac(tmp_path):
+    """Test build_command_parts for Docker mode with IaC target."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "balanced"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "iac"
+    target.iac_type = "terraform"
+    target.iac_path = str(tmp_path / "main.tf")
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "docker"
+    assert "-v" in cmd
+    assert "--terraform" in cmd
+    assert "/scan/iac-file" in cmd
+
+
+def test_build_command_parts_docker_url(tmp_path):
+    """Test build_command_parts for Docker mode with URL target."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "balanced"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "url"
+    target.url = "https://example.com"
+    target.urls_file = None
+    target.api_spec = None
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "docker"
+    assert "--url" in cmd
+    assert "https://example.com" in cmd
+
+
+def test_build_command_parts_docker_gitlab(tmp_path):
+    """Test build_command_parts for Docker mode with GitLab target."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "balanced"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "gitlab"
+    target.gitlab_url = "https://gitlab.com"
+    target.gitlab_token = "secret"
+    target.gitlab_repo = "org/repo"
+    target.gitlab_group = None
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "docker"
+    assert "--gitlab-url" in cmd
+    assert "--gitlab-token" in cmd
+    assert "--gitlab-repo" in cmd
+
+
+def test_build_command_parts_docker_k8s(tmp_path):
+    """Test build_command_parts for Docker mode with Kubernetes target."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "balanced"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "k8s"
+    target.k8s_context = "minikube"
+    target.k8s_namespace = "default"
+    target.k8s_all_namespaces = False
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "docker"
+    assert "--k8s-context" in cmd
+    assert "--k8s-namespace" in cmd
+
+
+def test_build_command_parts_docker_unknown_target_type(tmp_path):
+    """Test build_command_parts for Docker mode with unknown target type."""
+    config = MagicMock()
+    config.use_docker = True
+    config.profile = "balanced"
+    config.results_dir = str(tmp_path / "results")
+
+    target = MagicMock()
+    target.type = "unknown_type"
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    # Should still build base docker command
+    assert cmd[0] == "docker"
+    assert JMO_DOCKER_IMAGE_FULL in cmd
+
+
+def test_build_command_parts_native_no_results_dir():
+    """Test build_command_parts native mode without results_dir."""
+    config = MagicMock()
+    config.use_docker = False
+    config.profile = "fast"
+    config.results_dir = None  # No results dir
+    config.threads = None
+    config.timeout = None
+    config.fail_on = None
+    config.allow_missing_tools = False
+    config.human_logs = False
+
+    target = MagicMock()
+    target.type = "repo"
+    target.repo_mode = "repo"
+    target.repo_path = "/path/to/repo"
+    config.target = target
+
+    cmd = build_command_parts(config)
+
+    assert cmd[0] == "jmo"
+    assert "--results-dir" not in cmd
+    assert "--repo" in cmd
+
+
+# ========== Category 9: Edge Cases ==========
+
+
+def test_build_repo_args_docker_mode_no_repo_path():
+    """Test build_repo_args Docker mode when repo_path is None."""
+    target = MagicMock()
+    target.repo_path = None
+
+    args = build_repo_args(target, use_docker=True)
+
+    # Should return empty list when no repo_path
+    assert args == []
+
+
+def test_build_image_args_no_image_or_file():
+    """Test build_image_args when neither image_name nor images_file set."""
+    target = MagicMock()
+    target.image_name = None
+    target.images_file = None
+
+    args = build_image_args(target, use_docker=False)
+
+    assert args == []
+
+
+def test_build_iac_args_docker_mode_no_iac_path():
+    """Test build_iac_args Docker mode when iac_path is None."""
+    target = MagicMock()
+    target.iac_path = None
+    target.iac_type = "terraform"
+
+    args = build_iac_args(target, use_docker=True)
+
+    # Should return empty when no iac_path
+    assert args == []
+
+
+def test_build_url_args_no_url_or_file():
+    """Test build_url_args when neither url, urls_file, nor api_spec set."""
+    target = MagicMock()
+    target.url = None
+    target.urls_file = None
+    target.api_spec = None
+
+    args = build_url_args(target, use_docker=False)
+
+    assert args == []
+
+
+def test_build_gitlab_args_no_url():
+    """Test build_gitlab_args when gitlab_url is None."""
+    target = MagicMock()
+    target.gitlab_url = None
+    target.gitlab_token = None
+    target.gitlab_repo = None
+    target.gitlab_group = None
+
+    args = build_gitlab_args(target, use_docker=False)
+
+    assert args == []
+
+
+def test_build_k8s_args_no_context():
+    """Test build_k8s_args when k8s_context is None."""
+    target = MagicMock()
+    target.k8s_context = None
+    target.k8s_namespace = None
+    target.k8s_all_namespaces = False
+
+    args = build_k8s_args(target, use_docker=False)
+
+    assert args == []
+
+
+def test_build_repo_args_unknown_mode_native():
+    """Test build_repo_args with unknown repo_mode returns empty args.
+
+    This tests the implicit else branch when repo_mode doesn't match
+    any known mode (repo, repos-dir, targets, tsv).
+    """
+    target = MagicMock()
+    target.repo_mode = "unknown_mode"
+    target.repo_path = "/path/to/something"
+
+    args = build_repo_args(target, use_docker=False)
+
+    # Unknown mode should return empty args (no match in if/elif chain)
+    assert args == []

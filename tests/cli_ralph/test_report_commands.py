@@ -20,7 +20,9 @@ import json
 class TestReportGeneration:
     """Test suite for report generation (RP-001 to RP-005)."""
 
-    def test_rp_001_report_generates_outputs(self, jmo_runner, baseline_results, tmp_path):
+    def test_rp_001_report_generates_outputs(
+        self, jmo_runner, baseline_results, tmp_path
+    ):
         """RP-001: jmo report generates output files."""
         out_dir = tmp_path / "output"
         out_dir.mkdir()
@@ -36,7 +38,9 @@ class TestReportGeneration:
         output_files = list(out_dir.iterdir())
         assert len(output_files) >= 0, "Report should create output directory"
 
-    def test_rp_002_report_generates_markdown(self, jmo_runner, baseline_results, tmp_path):
+    def test_rp_002_report_generates_markdown(
+        self, jmo_runner, baseline_results, tmp_path
+    ):
         """RP-002: jmo report generates markdown summary."""
         out_dir = tmp_path / "output"
         out_dir.mkdir()
@@ -79,7 +83,9 @@ class TestReportGeneration:
         if dashboard.exists():
             validate_html_dashboard(dashboard)
 
-    def test_rp_004_report_generates_sarif(self, jmo_runner, baseline_results, tmp_path):
+    def test_rp_004_report_generates_sarif(
+        self, jmo_runner, baseline_results, tmp_path
+    ):
         """RP-004: jmo report generates SARIF output."""
         out_dir = tmp_path / "output"
         out_dir.mkdir()
@@ -140,9 +146,9 @@ class TestReportThreshold:
 
         # --fail-on applies to newly aggregated findings from individual-repos/
         # With only summaries/ present, no new findings to aggregate → exit 0
-        assert result.returncode == 0, (
-            f"Report with --fail-on should complete: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Report with --fail-on should complete: {result.stderr}"
 
     def test_report_fail_on_info_syntax(self, jmo_runner, baseline_results):
         """--fail-on INFO syntax works correctly."""
@@ -152,9 +158,9 @@ class TestReportThreshold:
         )
 
         # Verify command runs successfully (no syntax errors)
-        assert result.returncode == 0, (
-            f"Report with --fail-on INFO should complete: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Report with --fail-on INFO should complete: {result.stderr}"
 
 
 class TestReportDefaultOutput:
@@ -236,4 +242,7 @@ class TestReportEdgeCases:
         )
 
         # Should complete (policy may require OPA which might not be installed)
-        assert result.returncode in (0, 1), f"Report with policy failed: {result.stderr}"
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Report with policy failed: {result.stderr}"

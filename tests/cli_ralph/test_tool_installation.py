@@ -13,7 +13,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
 
 import pytest
 
@@ -58,9 +57,10 @@ class TestToolInstallation:
 
         # Some failures are acceptable on Windows
         # Exit code 0 or 1 (partial success) are OK
-        assert result.returncode in (0, 1), (
-            f"Installation completely failed: {result.stderr}"
-        )
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Installation completely failed: {result.stderr}"
 
         # Verify some tools installed by running check
         check_result = jmo_runner(
@@ -82,10 +82,12 @@ class TestToolInstallation:
                 )
 
                 # Should have at least minimum expected tools
-                min_expected = expected_tool_count["min"] // 2  # Half of min for fast profile
-                assert installed >= min_expected or installed >= 2, (
-                    f"Too few tools installed: {installed} < {min_expected}"
-                )
+                min_expected = (
+                    expected_tool_count["min"] // 2
+                )  # Half of min for fast profile
+                assert (
+                    installed >= min_expected or installed >= 2
+                ), f"Too few tools installed: {installed} < {min_expected}"
             except json.JSONDecodeError:
                 # If JSON parsing fails, just verify the command ran
                 pass
@@ -141,9 +143,9 @@ class TestToolInstallation:
         combined = (result.stdout + result.stderr).lower()
         # Should indicate cleanup happened or nothing to clean
         cleanup_indicators = ["clean", "removed", "deleted", "no", "nothing", "success"]
-        assert any(ind in combined for ind in cleanup_indicators), (
-            f"No cleanup indication: {result.stdout}"
-        )
+        assert any(
+            ind in combined for ind in cleanup_indicators
+        ), f"No cleanup indication: {result.stdout}"
 
 
 class TestWindowsExcludedTools:
@@ -189,9 +191,9 @@ class TestWindowsExcludedTools:
         has_skip = any(ind in combined for ind in skip_indicators)
 
         # Either skipped gracefully or failed (both acceptable on Windows)
-        assert result.returncode != 0 or has_skip, (
-            "falco should fail or skip on Windows"
-        )
+        assert (
+            result.returncode != 0 or has_skip
+        ), "falco should fail or skip on Windows"
 
 
 class TestInstallationEdgeCases:
@@ -205,9 +207,11 @@ class TestInstallationEdgeCases:
         )
 
         # Should fail
-        assert result.returncode != 0 or "error" in result.stderr.lower() or "not found" in result.stderr.lower(), (
-            "Invalid tool should cause error"
-        )
+        assert (
+            result.returncode != 0
+            or "error" in result.stderr.lower()
+            or "not found" in result.stderr.lower()
+        ), "Invalid tool should cause error"
 
     def test_install_without_yes_flag_dry_run(self, jmo_runner):
         """Install dry-run mode shows what would be installed."""

@@ -28,9 +28,9 @@ class TestHistoryList:
         # History list should show scan IDs or timestamps
         list_indicators = ["scan", "timestamp", "profile", "finding", "id", "main"]
         has_content = any(ind in output for ind in list_indicators)
-        assert has_content or "no scans" in output, (
-            f"No history content: {result.stdout}"
-        )
+        assert (
+            has_content or "no scans" in output
+        ), f"No history content: {result.stdout}"
 
     def test_history_list_json(self, run_jmo_with_history):
         """History list --json outputs valid JSON."""
@@ -81,10 +81,12 @@ class TestHistoryShow:
             if scans and isinstance(scans[0], dict):
                 scan_id = scans[0].get("id") or scans[0].get("scan_id")
                 if scan_id:
-                    show_result = run_jmo_with_history(["history", "show", str(scan_id)])
-                    assert show_result.returncode == 0, (
-                        f"Show failed: {show_result.stderr}"
+                    show_result = run_jmo_with_history(
+                        ["history", "show", str(scan_id)]
                     )
+                    assert (
+                        show_result.returncode == 0
+                    ), f"Show failed: {show_result.stderr}"
                     return
         except (json.JSONDecodeError, IndexError, KeyError, TypeError):
             pass
@@ -106,13 +108,19 @@ class TestHistoryStats:
         # Should show some statistics
         output = result.stdout.lower()
         stats_indicators = [
-            "total", "scan", "finding", "critical", "high",
-            "average", "count", "statistic",
+            "total",
+            "scan",
+            "finding",
+            "critical",
+            "high",
+            "average",
+            "count",
+            "statistic",
         ]
         has_stats = any(ind in output for ind in stats_indicators)
-        assert has_stats or result.returncode == 0, (
-            f"No stats in output: {result.stdout}"
-        )
+        assert (
+            has_stats or result.returncode == 0
+        ), f"No stats in output: {result.stdout}"
 
 
 class TestHistoryQuery:
@@ -120,9 +128,7 @@ class TestHistoryQuery:
 
     def test_hs_004_history_query_severity(self, run_jmo_with_history):
         """HS-004: jmo history query --severity filters findings."""
-        result = run_jmo_with_history(
-            ["history", "query", "--severity", "CRITICAL"]
-        )
+        result = run_jmo_with_history(["history", "query", "--severity", "CRITICAL"])
 
         # Command should work (may have no results)
         assert result.returncode in (0, 1), f"Query failed: {result.stderr}"
@@ -140,7 +146,8 @@ class TestHistoryEdgeCases:
         # Create proper database with required schema
         db_path = jmo_dir / "history.db"
         conn = sqlite3.connect(db_path)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER,
@@ -157,14 +164,17 @@ class TestHistoryEdgeCases:
                 info_count INTEGER,
                 jmo_version TEXT
             )
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version TEXT PRIMARY KEY,
                 applied_at INTEGER,
                 applied_at_iso TEXT
             )
-        """)
+        """
+        )
         conn.commit()
         conn.close()
 

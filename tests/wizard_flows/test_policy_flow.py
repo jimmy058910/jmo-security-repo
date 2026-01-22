@@ -143,6 +143,49 @@ def test_parse_policy_choice_all():
     assert result == recommended
 
 
+@patch("builtins.input", return_value="1,a,3")
+def test_parse_policy_choice_custom_with_invalid_input(mock_input):
+    """Test _parse_policy_choice with custom selection containing invalid (non-numeric) values.
+
+    Regression test for TASK-003: ValueError crash when entering "1,a,3" in custom selection.
+    The function should gracefully skip non-numeric entries instead of crashing.
+    """
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
+    from pathlib import Path
+
+    # Create mock policies (indices 0, 1, 2)
+    mock_path1 = MagicMock(spec=Path)
+    mock_path2 = MagicMock(spec=Path)
+    mock_path3 = MagicMock(spec=Path)
+    policies_with_metadata = [
+        (mock_path1, {"name": "policy1"}),
+        (mock_path2, {"name": "policy2"}),
+        (mock_path3, {"name": "policy3"}),
+    ]
+
+    # Input "1,a,3" should parse as indices [0, 2] (skipping "a")
+    # Returns policies at index 0 and 2
+    result = _parse_policy_choice("c", policies_with_metadata, [])
+
+    # Should return policies 1 and 3 (indices 0 and 2), skipping invalid "a"
+    assert len(result) == 2
+    assert result[0] is mock_path1  # "1" -> index 0
+    assert result[1] is mock_path3  # "3" -> index 2
+
+
+@patch("builtins.input", return_value="abc,xyz")
+def test_parse_policy_choice_custom_all_invalid(mock_input):
+    """Test _parse_policy_choice when all custom inputs are invalid."""
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
+
+    mock_path = MagicMock()
+    policies_with_metadata = [(mock_path, {"name": "policy1"})]
+
+    # All invalid input should return empty list, not crash
+    result = _parse_policy_choice("c", policies_with_metadata, [])
+    assert result == []
+
+
 @patch("builtins.open", new_callable=mock_open)
 def test_export_violations_json(mock_file):
     """Test _export_violations_json function."""

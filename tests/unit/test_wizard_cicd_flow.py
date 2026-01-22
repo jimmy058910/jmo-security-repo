@@ -457,3 +457,112 @@ def test_build_command_scan_images_no_images():
     cmd = flow.build_command(targets, options)
 
     assert "--images-file" not in cmd
+
+
+# ========== Category 6: Edge Cases for Full Coverage ==========
+
+
+def test_detect_images_gitlab_job_string_image(tmp_path):
+    """Test _detect_images_from_ci extracts job-level string images from GitLab CI."""
+    gitlab_ci_content = """
+stages:
+  - test
+  - deploy
+
+test:
+  image: python:3.9
+  script:
+    - pytest
+
+deploy:
+  image: alpine:3.18
+  script:
+    - ./deploy.sh
+"""
+    gitlab_ci = tmp_path / ".gitlab-ci.yml"
+    gitlab_ci.write_text(gitlab_ci_content)
+
+    flow = CICDFlow()
+    images = flow._detect_images_from_ci([], gitlab_ci, None)
+
+    # Both job-level string images should be detected
+    assert "python:3.9" in images
+    assert "alpine:3.18" in images
+
+
+def test_detect_images_jenkinsfile_unreadable(tmp_path):
+    """Test _detect_images_from_ci handles unreadable Jenkinsfile gracefully."""
+    jenkinsfile = tmp_path / "Jenkinsfile"
+    # Write binary content that will cause UnicodeDecodeError on read
+    jenkinsfile.write_bytes(b"\x80\x81\x82invalid binary content")
+
+    flow = CICDFlow()
+    images = flow._detect_images_from_ci([], None, jenkinsfile)
+
+    # Should handle gracefully and return empty list
+    assert images == []
+
+
+def test_detect_images_gitlab_ci_non_dict_config(tmp_path):
+    """Test _detect_images_from_ci when GitLab CI config is not a dict (e.g., null or scalar).
+
+    Covers branch 205->226 (ci_config is not a dict).
+    """
+    gitlab_ci = tmp_path / ".gitlab-ci.yml"
+    # YAML that parses to a scalar, not a dict
+    gitlab_ci.write_text("just a string, not a dict")
+
+    flow = CICDFlow()
+    images = flow._detect_images_from_ci([], gitlab_ci, None)
+
+    # Should handle gracefully - no images extracted from non-dict config
+    assert images == []
+
+
+def test_detect_images_gitlab_ci_global_image_list(tmp_path):
+    """Test _detect_images_from_ci when global image is a list (invalid, neither str nor dict).
+
+    Covers branch 211->215 (global image is neither string nor dict with name).
+    """
+    gitlab_ci_content = """
+image:
+  - item1
+  - item2
+
+stages:
+  - test
+"""
+    gitlab_ci = tmp_path / ".gitlab-ci.yml"
+    gitlab_ci.write_text(gitlab_ci_content)
+
+    flow = CICDFlow()
+    images = flow._detect_images_from_ci([], gitlab_ci, None)
+
+    # List is neither str nor dict-with-name, so no image extracted
+    assert images == []
+
+
+def test_detect_images_gitlab_ci_job_image_list(tmp_path):
+    """Test _detect_images_from_ci when job image is a list (invalid, neither str nor dict).
+
+    Covers branch 220->215 (job image is neither string nor dict with name).
+    """
+    gitlab_ci_content = """
+stages:
+  - test
+
+test_job:
+  image:
+    - image_item1
+    - image_item2
+  script:
+    - echo test
+"""
+    gitlab_ci = tmp_path / ".gitlab-ci.yml"
+    gitlab_ci.write_text(gitlab_ci_content)
+
+    flow = CICDFlow()
+    images = flow._detect_images_from_ci([], gitlab_ci, None)
+
+    # Job image as list is neither str nor dict-with-name, so no image extracted
+    assert images == []

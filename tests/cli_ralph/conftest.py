@@ -22,10 +22,7 @@ import pytest
 # Re-export platform detection from main conftest
 from tests.conftest import (
     IS_WINDOWS,
-    IS_LINUX,
     IS_MACOS,
-    skip_on_windows,
-    jmo_runner,
 )
 
 
@@ -34,7 +31,7 @@ from tests.conftest import (
 # ============================================================================
 
 RALPH_FIXTURES_DIR = (
-    Path(__file__).parent.parent.parent / ".claude" / "ralph-cli-testing" / "fixtures"
+    Path(__file__).parent.parent.parent / "tools" / "ralph-testing" / "fixtures"
 )
 
 # Tools that NEVER work on Windows
@@ -258,7 +255,9 @@ def validate_findings_json() -> Callable[[Path], dict[str, Any]]:
         assert "meta" in data, "Missing 'meta' section"
         meta = data["meta"]
         assert "schema_version" in meta, "Missing schema_version"
-        assert meta["schema_version"] == "1.2.0", f"Unexpected schema: {meta['schema_version']}"
+        assert (
+            meta["schema_version"] == "1.2.0"
+        ), f"Unexpected schema: {meta['schema_version']}"
         assert "finding_count" in meta, "Missing finding_count"
 
         # Validate findings array

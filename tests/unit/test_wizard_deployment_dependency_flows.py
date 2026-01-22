@@ -59,6 +59,15 @@ def test_deployment_detect_environment_from_node_env(monkeypatch):
     assert env == "staging"
 
 
+def test_deployment_detect_environment_from_env_var_staging(monkeypatch):
+    """Test _detect_environment from ENVIRONMENT=staging variable."""
+    flow = DeploymentFlow()
+
+    monkeypatch.setenv("ENVIRONMENT", "my-staging-env")
+    env = flow._detect_environment()
+    assert env == "staging"
+
+
 def test_deployment_detect_environment_from_env_file(tmp_path, monkeypatch):
     """Test _detect_environment from .env file."""
     monkeypatch.chdir(tmp_path)
@@ -68,6 +77,17 @@ def test_deployment_detect_environment_from_env_file(tmp_path, monkeypatch):
     flow = DeploymentFlow()
     env = flow._detect_environment()
     assert env == "production"
+
+
+def test_deployment_detect_environment_from_env_file_staging(tmp_path, monkeypatch):
+    """Test _detect_environment from .env file with staging."""
+    monkeypatch.chdir(tmp_path)
+
+    (tmp_path / ".env").write_text("ENVIRONMENT=staging\nAPI_KEY=secret")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    assert env == "staging"
 
 
 def test_deployment_detect_environment_from_k8s_manifest(tmp_path, monkeypatch):
@@ -83,12 +103,81 @@ def test_deployment_detect_environment_from_k8s_manifest(tmp_path, monkeypatch):
     assert env == "production"
 
 
+def test_deployment_detect_environment_from_k8s_manifest_staging(tmp_path, monkeypatch):
+    """Test _detect_environment from Kubernetes namespace with staging."""
+    monkeypatch.chdir(tmp_path)
+
+    k8s_dir = tmp_path / "k8s"
+    k8s_dir.mkdir()
+    (k8s_dir / "deployment.yml").write_text("namespace: staging\nkind: Deployment")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    assert env == "staging"
+
+
+def test_deployment_detect_environment_k8s_manifest_read_error(tmp_path, monkeypatch):
+    """Test _detect_environment handles k8s file read errors gracefully."""
+    monkeypatch.chdir(tmp_path)
+
+    k8s_dir = tmp_path / "k8s"
+    k8s_dir.mkdir()
+    # Create file with invalid encoding
+    (k8s_dir / "deployment.yml").write_bytes(b"\x80\x81namespace: production")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    # Should not crash, should return default
+    assert env == "staging"
+
+
 def test_deployment_detect_environment_default_staging(tmp_path, monkeypatch):
     """Test _detect_environment defaults to staging."""
     monkeypatch.chdir(tmp_path)
 
     flow = DeploymentFlow()
     env = flow._detect_environment()
+    assert env == "staging"
+
+
+def test_deployment_detect_environment_env_var_non_matching(tmp_path, monkeypatch):
+    """Test _detect_environment falls through when env var doesn't match prod/staging."""
+    monkeypatch.chdir(tmp_path)
+
+    # Set env var to something that doesn't contain 'prod' or 'stag'
+    monkeypatch.setenv("ENVIRONMENT", "development")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    # Should fall through to default
+    assert env == "staging"
+
+
+def test_deployment_detect_environment_env_file_non_matching(tmp_path, monkeypatch):
+    """Test _detect_environment falls through when .env file doesn't match prod/staging."""
+    monkeypatch.chdir(tmp_path)
+
+    # Create .env file without prod/staging keywords
+    (tmp_path / ".env").write_text("ENVIRONMENT=development\nDEBUG=true")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    # Should fall through to default
+    assert env == "staging"
+
+
+def test_deployment_detect_environment_k8s_non_matching(tmp_path, monkeypatch):
+    """Test _detect_environment falls through when k8s namespace doesn't match prod/staging."""
+    monkeypatch.chdir(tmp_path)
+
+    k8s_dir = tmp_path / "k8s"
+    k8s_dir.mkdir()
+    # Create k8s file without prod/staging namespace
+    (k8s_dir / "deployment.yml").write_text("namespace: development\nkind: Deployment")
+
+    flow = DeploymentFlow()
+    env = flow._detect_environment()
+    # Should fall through to default
     assert env == "staging"
 
 
@@ -165,6 +254,57 @@ def test_deployment_print_detected_targets_with_images(capsys):
     captured = capsys.readouterr()
     assert "Container images: 3 detected" in captured.out
     assert "nginx:latest" in captured.out
+
+
+def test_deployment_print_detected_targets_many_images_truncates(capsys):
+    """Test _print_detected_deployment_targets truncates when >3 images."""
+    flow = DeploymentFlow()
+    targets = {
+        "images": ["nginx:1", "nginx:2", "nginx:3", "nginx:4", "nginx:5"],
+        "iac": [],
+        "web": [],
+    }
+
+    flow._print_detected_deployment_targets(targets)
+
+    captured = capsys.readouterr()
+    assert "Container images: 5 detected" in captured.out
+    assert "... and 2 more" in captured.out
+
+
+def test_deployment_print_detected_targets_many_iac_truncates(capsys):
+    """Test _print_detected_deployment_targets truncates when >3 IaC files."""
+    flow = DeploymentFlow()
+    targets = {
+        "images": [],
+        "iac": [Path("main.tf"), Path("vars.tf"), Path("out.tf"), Path("prov.tf"), Path("data.tf")],
+        "web": [],
+    }
+
+    flow._print_detected_deployment_targets(targets)
+
+    captured = capsys.readouterr()
+    assert "IaC files: 5 detected" in captured.out
+    assert "... and 2 more" in captured.out
+
+
+def test_deployment_print_detected_targets_exactly_3_iac_no_truncation(capsys):
+    """Test _print_detected_deployment_targets does NOT truncate when exactly 3 IaC files."""
+    flow = DeploymentFlow()
+    targets = {
+        "images": [],
+        "iac": [Path("main.tf"), Path("vars.tf"), Path("out.tf")],
+        "web": ["http://localhost:8080"],
+    }
+
+    flow._print_detected_deployment_targets(targets)
+
+    captured = capsys.readouterr()
+    assert "IaC files: 3 detected" in captured.out
+    # Should NOT show "... and N more" since we have exactly 3
+    assert "... and" not in captured.out.split("IaC files")[1].split("Web URLs")[0]
+    # Verify web URLs section appears
+    assert "Web URLs: 1 detected" in captured.out
 
 
 def test_deployment_print_detected_targets_with_iac(capsys):

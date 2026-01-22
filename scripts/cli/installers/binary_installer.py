@@ -249,7 +249,9 @@ class BinaryInstaller(BaseInstaller):
                 download_file = tmppath / url_filename
 
                 # Download the file
-                success, error_msg = self._download(url, download_file, tool_info.version)
+                success, error_msg = self._download(
+                    url, download_file, tool_info.version
+                )
                 if not success:
                     return InstallResult(
                         tool_name=tool_name,
@@ -349,7 +351,11 @@ class BinaryInstaller(BaseInstaller):
         )
 
     def _download(
-        self, url: str, dest: Path, version: str, timeout: int = DOWNLOAD_TIMEOUT_SECONDS
+        self,
+        url: str,
+        dest: Path,
+        version: str,
+        timeout: int = DOWNLOAD_TIMEOUT_SECONDS,
     ) -> tuple[bool, str | None]:
         """Download file from URL using curl or wget.
 
@@ -367,7 +373,10 @@ class BinaryInstaller(BaseInstaller):
         """
         download_cmd = self._get_download_command(url, dest)
         if not download_cmd:
-            return False, "No download tool available (curl/wget). Install curl or wget."
+            return (
+                False,
+                "No download tool available (curl/wget). Install curl or wget.",
+            )
 
         result = self._runner.run(
             download_cmd,
@@ -571,7 +580,9 @@ class BinaryInstaller(BaseInstaller):
                 # WinError 32: The process cannot access the file
                 if attempt < MAX_CLEANUP_RETRIES - 1:
                     time.sleep(CLEANUP_RETRY_BACKOFF_FACTOR * (attempt + 1))
-                    logger.debug(f"Retry {attempt + 1}/{MAX_CLEANUP_RETRIES} cleaning temp dir due to: {e}")
+                    logger.debug(
+                        f"Retry {attempt + 1}/{MAX_CLEANUP_RETRIES} cleaning temp dir due to: {e}"
+                    )
                 else:
                     # Final attempt failed, log but don't raise
                     logger.debug(f"Could not fully clean temp dir: {e}")

@@ -718,3 +718,143 @@ class TestRunDiffWizardHTMLBrowserOpen:
         # Cleanup
         if output_file.exists():
             output_file.unlink()
+
+
+class TestRunDiffWizardExceptionHandling:
+    """Test cases for generic exception handling in run_diff_wizard."""
+
+    def test_diff_wizard_generic_exception_in_flow(self, tmp_path):
+        """Test diff wizard handles generic exceptions in main flow.
+
+        Covers lines 348-351 in diff_flow.py: the except Exception handler
+        that catches non-KeyboardInterrupt exceptions, logs them, and returns 1.
+        """
+        from scripts.cli.wizard import run_diff_wizard
+
+        # Create directories so we get past initial validation
+        baseline = tmp_path / "baseline"
+        current = tmp_path / "current"
+        baseline.mkdir()
+        current.mkdir()
+
+        inputs = [
+            "2",  # Directory mode
+            str(baseline),
+            str(current),
+            "1",  # All severities
+            "1",  # All categories
+            "2",  # Markdown
+            "",  # Default output
+            "y",  # Confirm
+        ]
+
+        # Make cmd_diff raise a generic exception (not KeyboardInterrupt)
+        with patch("builtins.input", side_effect=inputs):
+            with patch(
+                "scripts.cli.diff_commands.cmd_diff",
+                side_effect=RuntimeError("Database connection failed"),
+            ):
+                result = run_diff_wizard()
+
+        # Generic exception should return error code 1 (not 130 for interrupt)
+        assert result == 1
+
+    def test_diff_wizard_exception_during_history_load(self, tmp_path):
+        """Test exception during history database loading.
+
+        Covers the try/except around list_recent_scans() at lines 148-202.
+        """
+        from scripts.cli.wizard import run_diff_wizard
+
+        # Create a valid-looking but corrupted database
+        db_path = tmp_path / ".jmo" / "history.db"
+        db_path.parent.mkdir(parents=True)
+        db_path.write_text("not a valid sqlite database")
+
+        inputs = [
+            "1",  # History mode - will fail when loading corrupted DB
+        ]
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch("builtins.input", side_effect=inputs):
+                result = run_diff_wizard()
+
+        # Should return error 1 due to database load failure
+        assert result == 1
+
+    def test_diff_wizard_value_error_during_scan_selection(self, tmp_path):
+        """Test ValueError during scan selection triggers KeyboardInterrupt re-raise.
+
+        The ValueError catch at line 180/197 re-raises KeyboardInterrupt,
+        returning exit code 130.
+        """
+        from scripts.cli.wizard import run_diff_wizard
+
+        import sqlite3
+
+        # Create valid DB with proper schema
+        db_path = tmp_path / ".jmo" / "history.db"
+        db_path.parent.mkdir(parents=True)
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE scans (
+                id TEXT PRIMARY KEY,
+                timestamp INTEGER NOT NULL,
+                timestamp_iso TEXT NOT NULL,
+                profile TEXT NOT NULL,
+                branch TEXT,
+                total_findings INTEGER,
+                tools TEXT NOT NULL,
+                targets TEXT NOT NULL,
+                target_type TEXT NOT NULL
+            )
+        """
+        )
+        cursor.executemany(
+            """INSERT INTO scans
+            (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                (
+                    "scan-001",
+                    1730455200,
+                    "2025-11-01T10:00:00",
+                    "balanced",
+                    "main",
+                    10,
+                    "semgrep",
+                    "/repo",
+                    "repo",
+                ),
+                (
+                    "scan-002",
+                    1730541600,
+                    "2025-11-02T10:00:00",
+                    "balanced",
+                    "main",
+                    8,
+                    "semgrep",
+                    "/repo",
+                    "repo",
+                ),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        # Enter non-numeric value for baseline selection - raises ValueError
+        # which is caught and re-raises KeyboardInterrupt
+        inputs = [
+            "1",  # History mode
+            "abc",  # Invalid non-numeric input triggers ValueError -> KeyboardInterrupt
+        ]
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch("builtins.input", side_effect=inputs):
+                result = run_diff_wizard()
+
+        # ValueError in scan selection re-raises KeyboardInterrupt -> 130
+        assert result == 130

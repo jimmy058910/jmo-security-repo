@@ -30,11 +30,19 @@ class TestPolicyList:
 
         # Should list policies or indicate none available
         output = result.stdout.lower()
-        policy_indicators = ["policy", "rule", "suppress", "built-in", "custom", "owasp", "zero"]
+        policy_indicators = [
+            "policy",
+            "rule",
+            "suppress",
+            "built-in",
+            "custom",
+            "owasp",
+            "zero",
+        ]
         has_content = any(ind in output for ind in policy_indicators)
-        assert has_content or "no polic" in output or result.returncode == 0, (
-            f"No policy list: {result.stdout}"
-        )
+        assert (
+            has_content or "no polic" in output or result.returncode == 0
+        ), f"No policy list: {result.stdout}"
 
 
 class TestPolicyValidate:
@@ -61,9 +69,7 @@ class TestPolicyValidate:
 
     def test_policy_validate_nonexistent(self, jmo_runner, tmp_path):
         """Validating non-existent policy should fail."""
-        result = jmo_runner(
-            ["policy", "validate", str(tmp_path / "nonexistent.yml")]
-        )
+        result = jmo_runner(["policy", "validate", str(tmp_path / "nonexistent.yml")])
 
         # Should fail
         assert result.returncode != 0, "Should fail for non-existent file"
@@ -90,9 +96,11 @@ class TestPolicyTest:
 
         result = jmo_runner(
             [
-                "policy", "test",
+                "policy",
+                "test",
                 str(baseline_results),
-                "--policy", str(suppress_file),
+                "--policy",
+                str(suppress_file),
             ],
             timeout=60,
         )
@@ -104,9 +112,9 @@ class TestPolicyTest:
         output = result.stdout.lower()
         test_indicators = ["suppress", "match", "skip", "apply", "finding", "0", "test"]
         has_results = any(ind in output for ind in test_indicators)
-        assert has_results or result.returncode == 0, (
-            f"No test results: {result.stdout}"
-        )
+        assert (
+            has_results or result.returncode == 0
+        ), f"No test results: {result.stdout}"
 
 
 class TestPolicyShow:
@@ -131,9 +139,9 @@ class TestPolicyShow:
                 output = result.stdout.lower()
                 show_indicators = ["rule", "severity", "description", "name"]
                 has_content = any(ind in output for ind in show_indicators)
-                assert has_content or len(output) > 20, (
-                    f"No policy details: {result.stdout}"
-                )
+                assert (
+                    has_content or len(output) > 20
+                ), f"No policy details: {result.stdout}"
                 return
 
         # If no common policies found, just verify command exists
@@ -160,6 +168,6 @@ class TestPolicyEdgeCases:
 
         if result.returncode != 0:
             # Should have clear error message about OPA
-            assert "opa" in result.stderr.lower(), (
-                f"Error should mention OPA: {result.stderr}"
-            )
+            assert (
+                "opa" in result.stderr.lower()
+            ), f"Error should mention OPA: {result.stderr}"

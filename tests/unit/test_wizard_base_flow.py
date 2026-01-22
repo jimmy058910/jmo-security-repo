@@ -635,3 +635,282 @@ def test_base_wizard_flow_estimate_time():
     assert flow._estimate_time("balanced") == "15-20 minutes"
     assert flow._estimate_time("deep") == "30-60 minutes"
     assert flow._estimate_time("unknown") == "15-20 minutes"  # Default
+
+
+def test_base_wizard_flow_execute_all_empty_lists():
+    """Test BaseWizardFlow execute with targets that have empty lists."""
+
+    class EmptyListsFlow(BaseWizardFlow):
+        def detect_targets(self):
+            return {"repos": [], "images": [], "iac": []}
+
+        def prompt_user(self):
+            return {}
+
+        def build_command(self, targets, options):
+            return []
+
+    flow = EmptyListsFlow()
+    result = flow.execute()
+
+    assert result == 1  # All empty lists = no targets
+
+
+def test_prompter_prompt_choice_text_input():
+    """Test PromptHelper prompt_choice with text input (case-insensitive)."""
+    prompter = PromptHelper()
+    choices = ["Option A", "Option B", "Option C"]
+
+    with patch("builtins.input", return_value="option b"):
+        result = prompter.prompt_choice("Select:", choices)
+        assert result == "Option B"
+
+
+def test_prompter_prompt_yes_no_retry():
+    """Test PromptHelper prompt_yes_no retries on invalid input."""
+    prompter = PromptHelper()
+
+    with patch("builtins.input", side_effect=["maybe", "possibly", "y"]):
+        result = prompter.prompt_yes_no("Continue?")
+        assert result is True
+
+
+def test_detect_images_unreadable_dockerfile(tmp_path):
+    """Test detect_images handles unreadable Dockerfile gracefully."""
+    detector = TargetDetector()
+
+    # Create a subdirectory for the Dockerfile that will fail
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    dockerfile = subdir / "Dockerfile"
+    dockerfile.write_bytes(b"\xff\xfe invalid unicode")
+
+    images = detector.detect_images(tmp_path)
+
+    # Should not crash
+    assert isinstance(images, list)
+
+
+def test_detect_web_apps_compose_with_non_string_ports(tmp_path):
+    """Test detect_web_apps handles non-string port mappings."""
+    detector = TargetDetector()
+
+    # Compose with integer port (no colon, so skip)
+    compose_content = """
+services:
+  web:
+    ports:
+      - 8080
+      - "3000:3000"
+"""
+    (tmp_path / "docker-compose.yml").write_text(compose_content)
+
+    urls = detector.detect_web_apps(tmp_path)
+
+    # Should get 3000:3000 but not 8080 (no colon)
+    assert "http://localhost:3000" in urls
+
+
+def test_prompter_print_header_long_title(capsys):
+    """Test PromptHelper print_header truncates long titles."""
+    prompter = PromptHelper()
+
+    # Very long header that should be truncated
+    long_title = "A" * 200
+    prompter.print_header(long_title, "star")
+
+    captured = capsys.readouterr()
+    # Should contain truncation ellipsis
+    assert "…" in captured.out
+
+
+def test_prompter_print_summary_box_long_title(capsys):
+    """Test PromptHelper print_summary_box truncates long titles."""
+    prompter = PromptHelper()
+
+    # Very long title
+    long_title = "B" * 200
+    prompter.print_summary_box(long_title, ["Item 1"])
+
+    captured = capsys.readouterr()
+    assert "…" in captured.out
+
+
+def test_prompter_colorize_no_color_env(monkeypatch):
+    """Test PromptHelper colorize respects NO_COLOR environment variable."""
+    prompter = PromptHelper()
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    result = prompter.colorize("test", "green")
+
+    # Should return plain text without ANSI codes
+    assert result == "test"
+
+
+def test_target_detector_defaults_to_cwd(tmp_path, monkeypatch):
+    """Test TargetDetector methods default to current working directory."""
+    detector = TargetDetector()
+
+    # Change to tmp_path to avoid picking up project files
+    monkeypatch.chdir(tmp_path)
+
+    # All methods should accept None and not crash
+    repos = detector.detect_repos(None)
+    images = detector.detect_images(None)
+    iac = detector.detect_iac(None)
+    web_apps = detector.detect_web_apps(None)
+    packages = detector.detect_package_files(None)
+    locks = detector.detect_lock_files(None)
+
+    # All should return lists
+    assert isinstance(repos, list)
+    assert isinstance(images, list)
+    assert isinstance(iac, list)
+    assert isinstance(web_apps, list)
+    assert isinstance(packages, list)
+    assert isinstance(locks, list)
+
+
+def test_artifact_generator_generate_makefile(tmp_path):
+    """Test ArtifactGenerator.generate_makefile delegates to wizard_generators."""
+    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
+
+    generator = ArtifactGenerator()
+    output = tmp_path / "Makefile"
+
+    # Mock the underlying generator to avoid complex config requirements
+    with patch("scripts.cli.wizard_generators.generate_makefile_target") as mock_gen:
+        mock_gen.return_value = "# Mock Makefile\nsecurity-scan:\n\tjmo scan"
+        generator.generate_makefile(["jmo", "scan", "--profile", "balanced"], output)
+
+    # Verify the generator was called
+    mock_gen.assert_called_once()
+
+
+def test_artifact_generator_generate_github_actions(tmp_path):
+    """Test ArtifactGenerator.generate_github_actions delegates to wizard_generators."""
+    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
+
+    generator = ArtifactGenerator()
+    output = tmp_path / ".github" / "workflows" / "security.yml"
+    output.parent.mkdir(parents=True)
+
+    # Mock the underlying generator to avoid complex config requirements
+    with patch("scripts.cli.wizard_generators.generate_github_actions") as mock_gen:
+        mock_gen.return_value = "# Mock GHA workflow"
+        generator.generate_github_actions(
+            ["jmo", "scan", "--profile", "balanced"], output
+        )
+
+    mock_gen.assert_called_once()
+
+
+def test_artifact_generator_generate_shell_script(tmp_path):
+    """Test ArtifactGenerator.generate_shell_script delegates to wizard_generators."""
+    from scripts.cli.wizard_flows.base_flow import ArtifactGenerator
+
+    generator = ArtifactGenerator()
+    output = tmp_path / "scan.sh"
+
+    # Mock the underlying generator
+    with patch("scripts.cli.wizard_generators.generate_shell_script") as mock_gen:
+        mock_gen.return_value = "#!/bin/bash\njmo scan"
+        generator.generate_shell_script(
+            ["jmo", "scan", "--profile", "balanced"], output
+        )
+
+    mock_gen.assert_called_once()
+
+
+# ========== Category 4: ANSI Support Detection ==========
+
+
+def test_supports_ansi_no_color_env(monkeypatch):
+    """Test _supports_ansi respects NO_COLOR environment variable."""
+    from scripts.cli.wizard_flows import base_flow
+
+    monkeypatch.setenv("NO_COLOR", "1")
+
+    # Call the function directly
+    result = base_flow._supports_ansi()
+
+    assert result is False
+
+
+def test_supports_ansi_windows_terminal_env(monkeypatch):
+    """Test _supports_ansi detects Windows Terminal via WT_SESSION."""
+    from scripts.cli.wizard_flows import base_flow
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("WT_SESSION", "some-session-id")
+
+    result = base_flow._supports_ansi()
+
+    assert result is True
+
+
+def test_supports_ansi_xterm_env(monkeypatch):
+    """Test _supports_ansi detects xterm from TERM variable."""
+    from scripts.cli.wizard_flows import base_flow
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("WT_SESSION", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+
+    result = base_flow._supports_ansi()
+
+    assert result is True
+
+
+def test_get_terminal_width_fallback():
+    """Test _get_terminal_width returns safe default on exception."""
+    from scripts.cli.wizard_flows import base_flow
+
+    with patch("shutil.get_terminal_size", side_effect=Exception("test")):
+        result = base_flow._get_terminal_width()
+
+    assert result == 80
+
+
+def test_get_terminal_width_clamping():
+    """Test _get_terminal_width clamps to min/max bounds."""
+    from scripts.cli.wizard_flows import base_flow
+
+    # Test minimum clamping
+    with patch("shutil.get_terminal_size") as mock_size:
+        mock_size.return_value = MagicMock(columns=20)
+        result = base_flow._get_terminal_width()
+        assert result == 40  # Minimum
+
+    # Test maximum clamping
+    with patch("shutil.get_terminal_size") as mock_size:
+        mock_size.return_value = MagicMock(columns=200)
+        result = base_flow._get_terminal_width()
+        assert result == 120  # Maximum
+
+
+def test_base_wizard_flow_abstract_methods():
+    """Test BaseWizardFlow abstract methods are enforced."""
+
+    # Verify abstract methods are defined
+    abstract_methods = BaseWizardFlow.__abstractmethods__
+    assert "detect_targets" in abstract_methods
+    assert "prompt_user" in abstract_methods
+    assert "build_command" in abstract_methods
+
+
+def test_prompter_colorize_ansi_not_supported(monkeypatch):
+    """Test PromptHelper colorize when ANSI not supported."""
+    from scripts.cli.wizard_flows import base_flow
+
+    # Set the module-level flag to False
+    original_flag = base_flow._ANSI_SUPPORTED
+    base_flow._ANSI_SUPPORTED = False
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+    try:
+        prompter = PromptHelper()
+        result = prompter.colorize("test", "green")
+        assert result == "test"  # No ANSI codes
+    finally:
+        base_flow._ANSI_SUPPORTED = original_flag

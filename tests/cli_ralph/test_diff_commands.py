@@ -27,9 +27,7 @@ class TestDiffBasic:
         output = result.stdout.lower()
         change_indicators = ["add", "remov", "new", "fixed", "change", "+", "-"]
         has_changes = any(ind in output for ind in change_indicators)
-        assert has_changes or "no change" in output, (
-            f"No diff output: {result.stdout}"
-        )
+        assert has_changes or "no change" in output, f"No diff output: {result.stdout}"
 
     def test_df_002_diff_json_format(
         self,
@@ -52,9 +50,9 @@ class TestDiffBasic:
                 # Should have diff-related structure
                 diff_keys = ["added", "removed", "unchanged", "new", "fixed", "summary"]
                 has_diff_structure = any(key in data for key in diff_keys)
-                assert has_diff_structure or isinstance(data, (dict, list)), (
-                    f"Unexpected JSON structure: {list(data.keys()) if isinstance(data, dict) else 'list'}"
-                )
+                assert has_diff_structure or isinstance(
+                    data, (dict, list)
+                ), f"Unexpected JSON structure: {list(data.keys()) if isinstance(data, dict) else 'list'}"
             except json.JSONDecodeError:
                 # JSON might have non-JSON prefix (logs)
                 # Try to find JSON object in output
@@ -100,7 +98,8 @@ class TestDiffFilters:
                 "diff",
                 str(baseline_results),
                 str(current_results),
-                "--severity", "CRITICAL,HIGH",
+                "--severity",
+                "CRITICAL,HIGH",
             ],
             timeout=60,
         )
@@ -120,7 +119,8 @@ class TestDiffFilters:
                 "diff",
                 str(baseline_results),
                 str(current_results),
-                "--tool", "semgrep",
+                "--tool",
+                "semgrep",
             ],
             timeout=60,
         )
@@ -140,7 +140,8 @@ class TestDiffFilters:
                 "diff",
                 str(baseline_results),
                 str(current_results),
-                "--only", "new",
+                "--only",
+                "new",
             ],
             timeout=60,
         )
@@ -163,12 +164,19 @@ class TestDiffEdgeCases:
 
         # Should indicate no changes
         output = result.stdout.lower()
-        no_change_indicators = ["no change", "identical", "same", "0 added", "0 removed", "0 new"]
+        no_change_indicators = [
+            "no change",
+            "identical",
+            "same",
+            "0 added",
+            "0 removed",
+            "0 new",
+        ]
         has_no_changes = any(ind in output for ind in no_change_indicators)
         # Or might just show empty diff
-        assert has_no_changes or "add" not in output, (
-            f"Should show no changes: {result.stdout}"
-        )
+        assert (
+            has_no_changes or "add" not in output
+        ), f"Should show no changes: {result.stdout}"
 
     def test_diff_nonexistent_baseline(self, jmo_runner, current_results, tmp_path):
         """Diff with non-existent baseline should fail gracefully."""

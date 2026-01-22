@@ -24,14 +24,22 @@ class TestTrendsAnalyze:
         # Should show trend information
         output = result.stdout.lower()
         trend_indicators = [
-            "trend", "improv", "worsen", "stable",
-            "increas", "decreas", "change", "direction",
-            "finding", "security", "score",
+            "trend",
+            "improv",
+            "worsen",
+            "stable",
+            "increas",
+            "decreas",
+            "change",
+            "direction",
+            "finding",
+            "security",
+            "score",
         ]
         has_trend = any(ind in output for ind in trend_indicators)
-        assert has_trend or "no data" in output or "insufficient" in output, (
-            f"No trend info: {result.stdout}"
-        )
+        assert (
+            has_trend or "no data" in output or "insufficient" in output
+        ), f"No trend info: {result.stdout}"
 
 
 class TestTrendsScore:
@@ -48,9 +56,9 @@ class TestTrendsScore:
         score_indicators = ["score", "rating", "grade", "%", "100", "point", "security"]
         has_score = any(ind in output for ind in score_indicators)
         # Or might show message about insufficient data
-        assert has_score or "no data" in output or "insufficient" in output, (
-            f"No score info: {result.stdout}"
-        )
+        assert (
+            has_score or "no data" in output or "insufficient" in output
+        ), f"No score info: {result.stdout}"
 
 
 class TestTrendsInsights:
@@ -65,14 +73,21 @@ class TestTrendsInsights:
         # Should provide some insights or message
         output = result.stdout.lower()
         insight_indicators = [
-            "insight", "recommend", "suggest", "action",
-            "improve", "focus", "priority", "finding",
-            "trend", "security",
+            "insight",
+            "recommend",
+            "suggest",
+            "action",
+            "improve",
+            "focus",
+            "priority",
+            "finding",
+            "trend",
+            "security",
         ]
         has_insight = any(ind in output for ind in insight_indicators)
-        assert has_insight or "no data" in output or result.returncode == 0, (
-            f"No insights: {result.stdout}"
-        )
+        assert (
+            has_insight or "no data" in output or result.returncode == 0
+        ), f"No insights: {result.stdout}"
 
 
 class TestTrendsExplain:
@@ -87,13 +102,20 @@ class TestTrendsExplain:
         # Should explain the methodology
         output = result.stdout.lower()
         explain_indicators = [
-            "mann-kendall", "statistic", "methodology", "calculate",
-            "trend", "significance", "analysis", "how", "score",
+            "mann-kendall",
+            "statistic",
+            "methodology",
+            "calculate",
+            "trend",
+            "significance",
+            "analysis",
+            "how",
+            "score",
         ]
         has_explanation = any(ind in output for ind in explain_indicators)
-        assert has_explanation or result.returncode == 0, (
-            f"No explanation: {result.stdout}"
-        )
+        assert (
+            has_explanation or result.returncode == 0
+        ), f"No explanation: {result.stdout}"
 
 
 class TestTrendsEdgeCases:
@@ -110,19 +132,22 @@ class TestTrendsEdgeCases:
         now = datetime.now(timezone.utc)
 
         # Create schema
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version TEXT PRIMARY KEY,
                 applied_at INTEGER NOT NULL,
                 applied_at_iso TEXT NOT NULL
             )
-        """)
+        """
+        )
         conn.execute(
             "INSERT INTO schema_version VALUES (?, ?, ?)",
             ("1.0.0", int(now.timestamp()), now.isoformat()),
         )
 
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER,
@@ -139,13 +164,17 @@ class TestTrendsEdgeCases:
                 info_count INTEGER,
                 jmo_version TEXT
             )
-        """)
-        conn.execute("""
+        """
+        )
+        conn.execute(
+            """
             INSERT INTO scans VALUES (
                 'single-scan', ?, ?, 'fast', '[]', '[]', 'repo',
                 5, 1, 1, 1, 1, 1, '1.0.0'
             )
-        """, (int(now.timestamp()), now.isoformat()))
+        """,
+            (int(now.timestamp()), now.isoformat()),
+        )
         conn.commit()
         conn.close()
 
@@ -155,9 +184,10 @@ class TestTrendsEdgeCases:
         )
 
         # Should handle single scan gracefully (may show "insufficient data")
-        assert result.returncode in (0, 1), (
-            f"Should handle single scan: {result.stderr}"
-        )
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Should handle single scan: {result.stderr}"
 
     def test_trends_help(self, jmo_runner):
         """Trends --help shows available subcommands."""

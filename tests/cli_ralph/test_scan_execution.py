@@ -13,11 +13,9 @@ Usage:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
-from tests.conftest import IS_WINDOWS
 
 
 # Mark entire module as slow (actual scans)
@@ -45,9 +43,12 @@ class TestScanExecution:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(python_vulnerable_fixture),
-                "--results-dir", str(results_dir),
-                "--profile-name", "fast",
+                "--repo",
+                str(python_vulnerable_fixture),
+                "--results-dir",
+                str(results_dir),
+                "--profile-name",
+                "fast",
                 "--allow-missing-tools",
                 "--human-logs",
             ],
@@ -55,9 +56,9 @@ class TestScanExecution:
         )
 
         # Scan should complete (exit 0 even if some tools missing)
-        assert result.returncode == 0, (
-            f"Scan failed: {result.stderr}\nstdout: {result.stdout}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Scan failed: {result.stderr}\nstdout: {result.stdout}"
 
         # Verify findings.json was created
         findings_path = results_dir / "summaries" / "findings.json"
@@ -87,16 +88,17 @@ class TestScanExecution:
             [
                 "fast",
                 str(python_vulnerable_fixture),
-                "--results-dir", str(results_dir),
+                "--results-dir",
+                str(results_dir),
                 "--allow-missing-tools",
             ],
             timeout=300,
         )
 
         # Should complete successfully
-        assert result.returncode == 0, (
-            f"Fast scan failed: {result.stderr}\nstdout: {result.stdout}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Fast scan failed: {result.stderr}\nstdout: {result.stdout}"
 
     def test_sc_003_verify_findings_schema(
         self,
@@ -113,9 +115,12 @@ class TestScanExecution:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(python_vulnerable_fixture),
-                "--results-dir", str(results_dir),
-                "--profile-name", "fast",
+                "--repo",
+                str(python_vulnerable_fixture),
+                "--results-dir",
+                str(results_dir),
+                "--profile-name",
+                "fast",
                 "--allow-missing-tools",
             ],
             timeout=300,
@@ -157,9 +162,12 @@ class TestScanExecution:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(python_vulnerable_fixture),
-                "--results-dir", str(results_dir),
-                "--profile-name", "fast",
+                "--repo",
+                str(python_vulnerable_fixture),
+                "--results-dir",
+                str(results_dir),
+                "--profile-name",
+                "fast",
                 "--allow-missing-tools",
             ],
             timeout=300,
@@ -199,18 +207,22 @@ class TestScanExecution:
         result = jmo_runner(
             [
                 "scan",
-                "--image", "python:3.11-slim",
-                "--results-dir", str(results_dir),
+                "--image",
+                "python:3.11-slim",
+                "--results-dir",
+                str(results_dir),
                 "--allow-missing-tools",
-                "--timeout", "120",
+                "--timeout",
+                "120",
             ],
             timeout=180,
         )
 
         # Should complete (may have findings or not depending on trivy availability)
-        assert result.returncode in (0, 1), (
-            f"Image scan failed unexpectedly: {result.stderr}"
-        )
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Image scan failed unexpectedly: {result.stderr}"
 
 
 class TestScanEdgeCases:
@@ -221,7 +233,8 @@ class TestScanEdgeCases:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(tmp_path / "nonexistent"),
+                "--repo",
+                str(tmp_path / "nonexistent"),
                 "--allow-missing-tools",
             ],
             timeout=30,
@@ -233,12 +246,12 @@ class TestScanEdgeCases:
 
         # Should show warning about no targets or missing path
         combined = (result.stdout + result.stderr).lower()
-        has_warning = any(ind in combined for ind in [
-            "no scan targets", "warning", "skip", "missing"
-        ])
-        assert has_warning or result.returncode == 0, (
-            f"Should complete gracefully: {result.stderr}"
+        has_warning = any(
+            ind in combined for ind in ["no scan targets", "warning", "skip", "missing"]
         )
+        assert (
+            has_warning or result.returncode == 0
+        ), f"Should complete gracefully: {result.stderr}"
 
     def test_scan_empty_directory(self, jmo_runner, tmp_path):
         """Scanning empty directory should complete gracefully."""
@@ -248,8 +261,10 @@ class TestScanEdgeCases:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(empty_dir),
-                "--profile-name", "fast",
+                "--repo",
+                str(empty_dir),
+                "--profile-name",
+                "fast",
                 "--allow-missing-tools",
             ],
             timeout=60,
@@ -266,16 +281,16 @@ class TestScanEdgeCases:
         output = result.stdout.lower()
         # Should mention the flag (may be different wording)
         assert (
-            "allow" in output
-            or "missing" in output
-            or "skip" in output
+            "allow" in output or "missing" in output or "skip" in output
         ), "Should document handling of missing tools"
 
 
 class TestScanOutputFormats:
     """Tests for scan output format options."""
 
-    def test_scan_human_logs_flag(self, jmo_runner, python_vulnerable_fixture, tmp_path):
+    def test_scan_human_logs_flag(
+        self, jmo_runner, python_vulnerable_fixture, tmp_path
+    ):
         """--human-logs should produce human-readable output."""
         results_dir = tmp_path / "results"
         results_dir.mkdir()
@@ -283,9 +298,12 @@ class TestScanOutputFormats:
         result = jmo_runner(
             [
                 "scan",
-                "--repo", str(python_vulnerable_fixture),
-                "--results-dir", str(results_dir),
-                "--profile-name", "fast",
+                "--repo",
+                str(python_vulnerable_fixture),
+                "--results-dir",
+                str(results_dir),
+                "--profile-name",
+                "fast",
                 "--allow-missing-tools",
                 "--human-logs",
             ],
@@ -296,7 +314,6 @@ class TestScanOutputFormats:
         combined = result.stdout + result.stderr
         # Human logs shouldn't start with '{' (JSON)
         if combined.strip():
-            is_json = combined.strip().startswith("{")
             # Human logs are OK even if some JSON appears in tool output
             # Just verify the command ran
             assert result.returncode == 0 or "error" not in combined.lower()

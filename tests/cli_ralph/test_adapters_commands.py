@@ -7,7 +7,6 @@ Tests verify adapter listing and validation commands.
 
 from __future__ import annotations
 
-import pytest
 
 
 class TestAdaptersList:
@@ -34,7 +33,15 @@ class TestAdaptersList:
         # Output should show adapter information
         output = result.stdout.lower()
         # Should show category or tool information
-        info_indicators = ["sast", "sca", "secret", "container", "iac", "adapter", "tool"]
+        info_indicators = [
+            "sast",
+            "sca",
+            "secret",
+            "container",
+            "iac",
+            "adapter",
+            "tool",
+        ]
         has_info = any(ind in output for ind in info_indicators)
         assert has_info or len(output) > 50, f"Limited adapter info: {result.stdout}"
 
@@ -54,9 +61,9 @@ class TestAdaptersValidate:
         has_indicator = any(ind in combined for ind in validation_indicators)
 
         # May also just complete silently on success
-        assert result.returncode == 0 or has_indicator, (
-            f"No validation status: {result.stdout}"
-        )
+        assert (
+            result.returncode == 0 or has_indicator
+        ), f"No validation status: {result.stdout}"
 
 
 class TestAdaptersEdgeCases:

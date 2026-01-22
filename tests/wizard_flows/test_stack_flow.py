@@ -260,3 +260,138 @@ def test_entire_stack_flow_recommendations_github_workflows(mock_base_init, tmp_
             "github actions" in r.lower() or "ci/cd" in r.lower()
             for r in recommendations
         )
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_prompt_user_no_recommendations(mock_base_init, tmp_path):
+    """Test prompt_user when no recommendations generated (false branch line 35->39)."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+    # Targets with no special conditions that would trigger recommendations
+    flow.detected_targets = {
+        "repos": [],
+        "images": ["nginx:latest"],  # Has images, so no Dockerfile recommendation
+        "iac": [Path("main.tf")],  # Has IaC, so no terraform recommendation
+        "web": [],
+    }
+    flow.prompter = MagicMock()
+    flow.prompter.print_summary_box.return_value = None
+    flow.prompter.prompt_choice.return_value = "fast"
+    flow.prompter.prompt_yes_no.side_effect = [False, False]
+
+    # Mock all helper methods to return False (no special dirs)
+    with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
+        options = flow.prompt_user()
+
+    assert options["profile"] == "fast"
+    assert options["emit_artifacts"] is False
+    assert options["parallel"] is False
+    # print_summary_box should NOT be called when no recommendations
+    # (recommendations list is empty so the if block is skipped)
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_build_command_empty_targets(mock_base_init, tmp_path):
+    """Test build_command with all empty targets (false branches lines 75-90)."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    targets = {
+        "repos": [],  # Empty - tests 75->79 false branch
+        "images": [],  # Empty - tests 79->85 false branch
+        "iac": [],  # Empty - tests 85->90 false branch
+        "web": [],  # Empty - tests 90->93 false branch
+    }
+
+    options = {"profile": "deep", "emit_artifacts": False, "parallel": True}
+
+    cmd = flow.build_command(targets, options)
+
+    assert cmd == ["jmo", "scan", "--profile", "deep"]
+    # No additional args since all targets are empty
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_recommendations_no_gitlab_ci(mock_base_init, tmp_path):
+    """Test recommendations when .gitlab-ci.yml does NOT exist (false branch 121->128)."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    targets = {"repos": [], "images": ["nginx:latest"], "iac": [], "web": []}
+
+    with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
+        # Don't create .gitlab-ci.yml
+        recommendations = flow._generate_recommendations(targets)
+
+        assert isinstance(recommendations, list)
+        # Should NOT have GitLab recommendation
+        assert not any("gitlab" in r.lower() for r in recommendations)
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_k8s_dir_alternative(mock_base_init, tmp_path):
+    """Test _has_k8s_dir with k8s/ instead of kubernetes/ directory."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
+        # Create k8s dir (alternative name)
+        (tmp_path / "k8s").mkdir()
+
+        result = flow._has_k8s_dir()
+        assert result is True
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_has_dockerfile_false(mock_base_init, tmp_path):
+    """Test _has_dockerfile returns False when no Dockerfile present."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
+        result = flow._has_dockerfile()
+        assert result is False
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_github_workflows_empty(mock_base_init, tmp_path):
+    """Test _has_github_workflows returns False when workflows dir exists but is empty."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    with patch("scripts.cli.wizard_flows.stack_flow.Path.cwd", return_value=tmp_path):
+        # Create .github/workflows dir but don't add any yml files
+        workflows_dir = tmp_path / ".github" / "workflows"
+        workflows_dir.mkdir(parents=True)
+
+        result = flow._has_github_workflows()
+        assert result is False
+
+
+@patch("scripts.cli.wizard_flows.stack_flow.BaseWizardFlow.__init__", return_value=None)
+def test_entire_stack_flow_build_command_many_iac_files(mock_base_init, tmp_path):
+    """Test build_command limits IaC files to first 5."""
+    from scripts.cli.wizard_flows.stack_flow import EntireStackFlow
+
+    flow = EntireStackFlow()
+
+    targets = {
+        "repos": [],
+        "images": [],
+        "iac": [Path(f"file{i}.tf") for i in range(10)],  # 10 IaC files
+        "web": [],
+    }
+
+    options = {"profile": "balanced", "emit_artifacts": False, "parallel": False}
+
+    cmd = flow.build_command(targets, options)
+
+    # Count how many --terraform-state args there are
+    terraform_count = cmd.count("--terraform-state")
+    assert terraform_count == 5  # Limited to first 5

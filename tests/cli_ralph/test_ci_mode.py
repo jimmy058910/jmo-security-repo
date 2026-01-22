@@ -99,9 +99,9 @@ class TestReportPassCases:
         )
 
         # Should pass - only INFO findings, threshold is HIGH
-        assert result.returncode == 0, (
-            f"Report should pass with INFO findings at HIGH threshold: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Report should pass with INFO findings at HIGH threshold: {result.stderr}"
 
     def test_report_empty_results_passes(self, jmo_runner, tmp_path):
         """Report passes with zero findings."""
@@ -126,9 +126,9 @@ class TestReportPassCases:
         )
 
         # Should pass - no findings
-        assert result.returncode == 0, (
-            f"Report should pass with no findings: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Report should pass with no findings: {result.stderr}"
 
 
 class TestThresholdEdgeCases:
@@ -166,8 +166,17 @@ class TestThresholdEdgeCases:
         combined = result.stdout + result.stderr
         # Should have some structured output (counts, status, etc.)
         ci_indicators = [
-            "critical", "high", "medium", "low", "info",
-            "total", "finding", "fail", "pass", "wrote", "report",
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info",
+            "total",
+            "finding",
+            "fail",
+            "pass",
+            "wrote",
+            "report",
         ]
         has_structure = any(ind in combined.lower() for ind in ci_indicators)
         assert has_structure, f"Report output should be structured: {combined}"

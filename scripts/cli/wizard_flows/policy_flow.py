@@ -318,7 +318,19 @@ def _parse_policy_choice(
         return [path for path, _ in policies_with_metadata]
     elif choice == "c":
         numbers_input = input("Enter policy numbers (comma-separated, e.g. 1,3,5): ")
-        indices = [int(x.strip()) - 1 for x in numbers_input.split(",") if x.strip()]
+
+        def safe_int(x: str) -> int | None:
+            """Parse string to int, returning None for invalid values."""
+            try:
+                return int(x.strip()) - 1
+            except ValueError:
+                return None
+
+        indices = [
+            i
+            for i in (safe_int(x) for x in numbers_input.split(",") if x.strip())
+            if i is not None
+        ]
         return [
             policies_with_metadata[i][0]
             for i in indices

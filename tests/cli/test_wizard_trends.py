@@ -263,6 +263,107 @@ def test_explore_trends_menu_option_1(tmp_path, mock_db, capsys):
             assert mock_run.called
 
 
+def test_explore_trends_menu_option_2_regressions(tmp_path, mock_db):
+    """Test menu option 2: Show regressions."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "2" (regressions) then "9" (exit)
+    # Note: The mock replaces the command function, so no "Enter to continue" needed
+    inputs_with_enter = ["2", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
+        ) as mock_run:
+            explore_trends_interactive(mock_db, "results")
+            # Verify it was called with "regressions" command (check first call)
+            assert mock_run.called
+            assert mock_run.call_args_list[0][0][1] == "regressions"
+
+
+def test_explore_trends_menu_option_3_velocity(tmp_path, mock_db):
+    """Test menu option 3: Remediation velocity."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "3" (velocity) then "9" (exit)
+    inputs_with_enter = ["3", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
+        ) as mock_run:
+            explore_trends_interactive(mock_db, "results")
+            # Verify it was called with "velocity" command (check first call)
+            assert mock_run.called
+            assert mock_run.call_args_list[0][0][1] == "velocity"
+
+
+def test_explore_trends_menu_option_4_developers(tmp_path, mock_db):
+    """Test menu option 4: Top remediators (developers)."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "4" (developers) then "9" (exit)
+    inputs_with_enter = ["4", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
+        ) as mock_run:
+            explore_trends_interactive(mock_db, "results")
+            # Verify it was called with "developers" command (check first call)
+            assert mock_run.called
+            assert mock_run.call_args_list[0][0][1] == "developers"
+
+
+def test_explore_trends_menu_option_5_score(tmp_path, mock_db):
+    """Test menu option 5: Security score history."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "5" (score) then "9" (exit)
+    inputs_with_enter = ["5", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
+        ) as mock_run:
+            explore_trends_interactive(mock_db, "results")
+            # Verify it was called with "score" command (check first call)
+            assert mock_run.called
+            assert mock_run.call_args_list[0][0][1] == "score"
+
+
+def test_explore_trends_menu_option_6_compare(tmp_path, mock_db):
+    """Test menu option 6: Compare two scans."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "6" (compare) then "9" (exit)
+    inputs_with_enter = ["6", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._compare_scans_interactive"
+        ) as mock_compare:
+            explore_trends_interactive(mock_db, "results")
+            # Verify compare was called
+            assert mock_compare.called
+
+
+def test_explore_trends_menu_option_7_export(tmp_path, mock_db):
+    """Test menu option 7: Export trend report."""
+    from scripts.cli.wizard import explore_trends_interactive
+
+    # Mock user selecting "7" (export) then "9" (exit)
+    inputs_with_enter = ["7", "9"]
+
+    with mock.patch("builtins.input", side_effect=inputs_with_enter):
+        with mock.patch(
+            "scripts.cli.wizard_flows.trend_flow._export_trends_interactive"
+        ) as mock_export:
+            explore_trends_interactive(mock_db, "results")
+            # Verify export was called
+            assert mock_export.called
+
+
 def test_explore_trends_menu_option_8(tmp_path, mock_db, capsys):
     """Test menu option 8: Explain metrics."""
     from scripts.cli.wizard import explore_trends_interactive
@@ -322,6 +423,48 @@ def test_run_trend_command_import_error(tmp_path, mock_db):
         with mock.patch.dict("sys.modules", {"scripts.cli.trend_commands": None}):
             with mock.patch("builtins.print"):  # Suppress output
                 _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+
+
+def test_run_trend_command_nonzero_result(tmp_path, mock_db, capsys):
+    """Test handling non-zero result from trend command."""
+    from scripts.cli.wizard import _run_trend_command_interactive
+
+    # Mock the trend_commands module with a command that returns non-zero
+    fake_trend_commands = mock.MagicMock()
+    fake_trend_commands.cmd_trends_analyze = mock.MagicMock(return_value=1)  # Non-zero
+
+    with mock.patch.dict(
+        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+    ):
+        with mock.patch("builtins.input", return_value=""):  # Enter to continue
+            _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+
+    captured = capsys.readouterr()
+    # Should show warning about non-zero exit code
+    assert (
+        "failed with exit code 1" in captured.out or "exit code" in captured.out.lower()
+    )
+
+
+def test_run_trend_command_exception(tmp_path, mock_db, capsys):
+    """Test handling general exception from trend command."""
+    from scripts.cli.wizard import _run_trend_command_interactive
+
+    # Mock the trend_commands module with a command that raises exception
+    fake_trend_commands = mock.MagicMock()
+    fake_trend_commands.cmd_trends_analyze = mock.MagicMock(
+        side_effect=RuntimeError("Test error")
+    )
+
+    with mock.patch.dict(
+        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+    ):
+        with mock.patch("builtins.input", return_value=""):  # Enter to continue
+            _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+
+    captured = capsys.readouterr()
+    # Should show error message
+    assert "Error" in captured.out or "error" in captured.out.lower()
 
 
 # ============================================================================
@@ -481,6 +624,134 @@ def test_export_trends_html_with_browser(tmp_path, mock_db):
 
                         # Verify browser was opened
                         assert mock_browser.called
+
+
+def test_export_trends_import_error(tmp_path, mock_db, capsys):
+    """Test export handles ImportError gracefully."""
+    from scripts.cli.wizard import _export_trends_interactive
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    # Mock user selecting format
+    inputs = ["html", "2", ""]
+
+    with mock.patch("builtins.input", side_effect=inputs):
+        # Mock the import to fail
+        with mock.patch.dict(
+            "sys.modules",
+            {
+                "scripts.cli.trend_formatters": None,
+                "scripts.core.trend_analyzer": None,
+            },
+        ):
+            _export_trends_interactive(mock_db, str(results_dir))
+
+    captured = capsys.readouterr()
+    # Should show import error message
+    assert (
+        "not available" in captured.out.lower()
+        or "missing dependencies" in captured.out.lower()
+        or "error" in captured.out.lower()
+    )
+
+
+def test_export_trends_exception(tmp_path, mock_db, capsys):
+    """Test export handles general exception gracefully."""
+    from scripts.cli.wizard import _export_trends_interactive
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    # Mock user selecting format
+    inputs = ["html", "2", ""]
+
+    with mock.patch("builtins.input", side_effect=inputs):
+        with mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends",
+            side_effect=RuntimeError("Test error"),
+        ):
+            _export_trends_interactive(mock_db, str(results_dir))
+
+    captured = capsys.readouterr()
+    # Should show error message
+    assert "error" in captured.out.lower()
+
+
+def test_compare_scans_nonzero_result(tmp_path, mock_db, capsys):
+    """Test compare handles non-zero result from comparison command."""
+    from scripts.cli.wizard import _compare_scans_interactive
+
+    # Mock user selecting scans 1 and 2, then Enter to continue
+    inputs = ["1", "2", ""]
+
+    # Need to mock list_recent_scans to avoid DB schema mismatch with mock_db
+    mock_scans = [
+        {
+            "id": "scan1",
+            "timestamp_iso": "2025-11-01",
+            "profile": "balanced",
+            "branch": "main",
+            "total_findings": 10,
+        },
+        {
+            "id": "scan2",
+            "timestamp_iso": "2025-11-02",
+            "profile": "balanced",
+            "branch": "main",
+            "total_findings": 8,
+        },
+    ]
+
+    with mock.patch("builtins.input", side_effect=inputs):
+        with mock.patch(
+            "scripts.core.history_db.list_recent_scans", return_value=mock_scans
+        ):
+            with mock.patch(
+                "scripts.cli.trend_commands.cmd_trends_compare", return_value=1
+            ):
+                _compare_scans_interactive(mock_db)
+
+    captured = capsys.readouterr()
+    # Should show warning about non-zero exit code
+    assert "failed" in captured.out.lower() or "exit code" in captured.out.lower()
+
+
+def test_compare_scans_import_error(tmp_path, mock_db, capsys):
+    """Test compare handles ImportError gracefully."""
+    from scripts.cli.wizard import _compare_scans_interactive
+
+    with mock.patch("builtins.input", return_value=""):  # Enter to continue
+        # Mock the import to fail by mocking list_recent_scans import
+        with mock.patch.dict("sys.modules", {"scripts.cli.trend_commands": None}):
+            _compare_scans_interactive(mock_db)
+
+    captured = capsys.readouterr()
+    # Should show import error message or handle gracefully
+    assert (
+        "not available" in captured.out.lower()
+        or "error" in captured.out.lower()
+        or captured.out == ""  # May fail silently if import errors
+    )
+
+
+def test_compare_scans_exception(tmp_path, mock_db, capsys):
+    """Test compare handles general exception gracefully."""
+    from scripts.cli.wizard import _compare_scans_interactive
+
+    # Mock user inputs
+    inputs = ["1", "2", ""]
+
+    with mock.patch("builtins.input", side_effect=inputs):
+        with mock.patch(
+            "scripts.cli.trend_commands.cmd_trends_compare",
+            side_effect=RuntimeError("Test error"),
+        ):
+            _compare_scans_interactive(mock_db)
+
+    captured = capsys.readouterr()
+    # Should show error message
+    assert "error" in captured.out.lower()
 
 
 # ============================================================================

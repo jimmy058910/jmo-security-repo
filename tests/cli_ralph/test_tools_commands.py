@@ -21,7 +21,15 @@ class TestToolsCheck:
 
         # Output shows profile summary with installation status
         output = result.stdout.lower()
-        summary_indicators = ["profile", "installed", "fast", "balanced", "deep", "required", "missing"]
+        summary_indicators = [
+            "profile",
+            "installed",
+            "fast",
+            "balanced",
+            "deep",
+            "required",
+            "missing",
+        ]
         found = sum(1 for ind in summary_indicators if ind in output)
         assert found >= 2, f"No profile summary found in output: {result.stdout}"
 
@@ -34,7 +42,16 @@ class TestToolsCheck:
 
         # Should show status indicators
         output = result.stdout.lower()
-        status_indicators = ["ok", "missing", "not found", "installed", "version", "✓", "✗", "x"]
+        status_indicators = [
+            "ok",
+            "missing",
+            "not found",
+            "installed",
+            "version",
+            "✓",
+            "✗",
+            "x",
+        ]
         has_status = any(ind in output for ind in status_indicators)
         assert has_status or "tool" in output, f"No status info: {result.stdout}"
 
@@ -74,7 +91,18 @@ class TestToolsList:
 
         output = result.stdout.lower()
         # Should show some categorization or profile info
-        category_indicators = ["sast", "sca", "secret", "container", "iac", "profile", "category", "fast", "balanced", "deep"]
+        category_indicators = [
+            "sast",
+            "sca",
+            "secret",
+            "container",
+            "iac",
+            "profile",
+            "category",
+            "fast",
+            "balanced",
+            "deep",
+        ]
         has_category = any(ind in output for ind in category_indicators)
         # Or just a list of tools is acceptable
         assert has_category or len(output) > 100, f"Limited tool info: {result.stdout}"
@@ -87,23 +115,29 @@ class TestToolsInstallDryRun:
         """TM-006: jmo tools install --dry-run --yes shows what would be installed."""
         # Need --yes to avoid interactive prompt even in dry-run
         result = jmo_runner(
-            ["tools", "install", "--profile", "fast", "--dry-run", "--yes"],
-            timeout=60
+            ["tools", "install", "--profile", "fast", "--dry-run", "--yes"], timeout=60
         )
 
         assert result.returncode == 0, f"Command failed: {result.stderr}"
 
         output = result.stdout.lower() + result.stderr.lower()
         # Should mention dry run or show tools that would be installed
-        dry_run_indicators = ["dry", "would", "skip", "already", "simulation", "install"]
+        dry_run_indicators = [
+            "dry",
+            "would",
+            "skip",
+            "already",
+            "simulation",
+            "install",
+        ]
         has_indicator = any(indicator in output for indicator in dry_run_indicators)
 
         # Or it should list tools
         has_tools = any(tool in output for tool in ["trivy", "bandit", "semgrep"])
 
-        assert has_indicator or has_tools, (
-            f"No dry-run indication in output: {result.stdout}\n{result.stderr}"
-        )
+        assert (
+            has_indicator or has_tools
+        ), f"No dry-run indication in output: {result.stdout}\n{result.stderr}"
 
 
 class TestToolsOutdated:
@@ -154,9 +188,12 @@ class TestToolsEdgeCases:
 
         # Should fail with meaningful error
         combined = (result.stdout + result.stderr).lower()
-        assert result.returncode != 0 or "error" in combined or "unknown" in combined or "invalid" in combined, (
-            "Unknown profile should cause error"
-        )
+        assert (
+            result.returncode != 0
+            or "error" in combined
+            or "unknown" in combined
+            or "invalid" in combined
+        ), "Unknown profile should cause error"
 
     def test_tools_debug_unknown_tool(self, jmo_runner):
         """Debug of unknown tool should provide helpful info."""

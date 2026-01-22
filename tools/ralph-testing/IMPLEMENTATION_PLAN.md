@@ -1,0 +1,522 @@
+# Implementation Plan - CLI Testing
+
+This file is shared state between Ralph Loop iterations. Claude reads it to find work and updates it to record progress.
+
+---
+
+## Task Templates
+
+### BUG Task
+```
+### TASK-XXX: [Bug] Description
+**Type:** Bug
+**Priority:** Critical | High | Medium
+**Score:** [S+F+C] = X (S:X, F:X, C:X)
+**Confidence:** XX%
+**Status:** Open | In Progress | Resolved
+**File:** path/to/file.py:LINE
+**Symptom:**
+[Error message or behavior]
+**Root Cause:** [Analysis]
+**Fix:** [Solution]
+**Resolution:** [Notes after fixing]
+```
+
+### COVERAGE Task
+```
+### TASK-XXX: [Coverage] Module needs tests
+**Type:** Coverage
+**Priority:** High | Medium
+**Score:** [S+F+C] = X
+**Confidence:** 100%
+**Status:** Open | In Progress | Resolved
+**Target:** path/to/file.py::function_name
+**Current Coverage:** X%
+**Gap:**
+- [ ] Happy path test
+- [ ] Error path test
+- [ ] Edge cases
+**Resolution:** [Notes after fixing]
+```
+
+### SECURITY Task
+```
+### TASK-XXX: [Security] Description
+**Type:** Security
+**Priority:** Critical | High
+**Score:** [S+F+C] = X
+**Confidence:** XX%
+**CWE:** CWE-XXX
+**Status:** Open | In Progress | Resolved
+**File:** path/to/file.py:LINE
+**Vulnerability:** [Code snippet]
+**Risk:** [Impact]
+**Fix:** [Secure implementation]
+**Resolution:** [Notes after fixing]
+```
+
+---
+
+## Task Statistics
+
+| Type | Critical | High | Medium | Total |
+|------|----------|------|--------|-------|
+| Bug | 0 | 0 | 0 | 0 |
+| Coverage | 0 | 0 | 0 | 0 |
+| Security | 0 | 0 | - | 0 |
+| **Total** | **0** | **0** | **0** | **0** |
+
+---
+
+## Current Tasks
+
+_No open tasks - wizard codebase at 93% combined coverage._
+
+---
+
+## Resolved Tasks
+
+### TASK-018: [Coverage] diff_flow.py at 92% - exception paths untested
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:1, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/diff_flow.py:348-351
+**Current Coverage:** 92% → 95%
+**Gap:**
+- [x] Exception handling in run_diff_wizard() - line 348-351
+- [x] Generic exception logging and error message display
+**Note:** Need to trigger non-KeyboardInterrupt exception in main flow
+**Resolution:** Added 3 tests to TestRunDiffWizardExceptionHandling class in tests/cli/test_wizard_diff.py:
+- `test_diff_wizard_generic_exception_in_flow` - RuntimeError from cmd_diff triggers exception handler, returns 1
+- `test_diff_wizard_exception_during_history_load` - Corrupted SQLite database triggers load error, returns 1
+- `test_diff_wizard_value_error_during_scan_selection` - Non-numeric input triggers ValueError→KeyboardInterrupt, returns 130
+All 24 wizard_diff tests + 93 cli_ralph tests + 330 wizard_flows tests passing (2026-01-20)
+
+### TASK-016: [Coverage] tool_checker.py at 73% - dependency installation flow untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:2, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/tool_checker.py:460-508
+**Current Coverage:** 73% → 77%
+**Gap:**
+- [x] `_prompt_and_install_dependencies()` - Lines 460-508: dependency installation menu display
+- [x] Choice "1" - auto install dependencies (success/failure paths)
+- [x] Choice "2" - skip tools requiring deps
+- [x] Choice "3" - cancel
+- [x] Manual command display when auto-install fails
+**Note:** Requires mocking `install_dependency`, `get_manual_dependency_command`, and `input()`
+**Resolution:** Added 7 tests to TestAutoFixToolsDependencies class in tests/cli/test_wizard_tool_checker.py:
+- `test_dependency_menu_displayed_with_missing_deps` - Verifies menu appears when deps missing
+- `test_choice_1_auto_install_success` - Installs java dependency successfully
+- `test_choice_1_auto_install_failure_shows_manual` - Shows manual command on failure
+- `test_choice_2_skip_deps_continues` - Skips deps and continues with available tools
+- `test_choice_3_cancel` - Cancels wizard when user chooses cancel
+- `test_multiple_dependencies_installed` - Installs java and node in sequence
+- `test_no_deps_skips_menu` - Skips menu when no deps needed
+All 40 tool_checker tests + 93 cli_ralph tests passing (2026-01-19)
+
+### TASK-017: [Coverage] tool_checker.py platform command execution untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:2, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/tool_checker.py:646-727
+**Current Coverage:** 73% → 80%
+**Gap:**
+- [x] Platform command execution loop (lines 655-727)
+- [x] TimeoutExpired exception path (lines 696-704)
+- [x] Generic exception path (lines 705-713)
+- [x] Command truncation display for long commands
+- [x] Success/failure tracking per platform command
+**Note:** Shell=True used (nosec B602) - test subprocess.run mocking
+**Resolution:** Added 12 tests to TestPlatformCommandExecution class in tests/cli/test_wizard_tool_checker.py:
+- `test_platform_command_success` - Successful command execution, tool marked as fixed
+- `test_platform_command_failure_with_error_stderr` - Error in stderr triggers failure tracking
+- `test_platform_command_nonzero_return_no_error_continues` - Non-zero without error/failed keywords continues
+- `test_platform_command_timeout_expired` - TimeoutExpired exception path (lines 696-704)
+- `test_platform_command_generic_exception` - Generic exception path (lines 705-713)
+- `test_platform_command_truncation_long_command` - Commands >60 chars show truncated with "..."
+- `test_platform_command_adds_yes_flag_to_jmo_install` - jmo tools install gets --yes added
+- `test_platform_command_skips_empty_commands` - Empty commands in list skipped
+- `test_platform_command_multiple_commands_per_tool` - Multiple commands execute in sequence
+- `test_platform_command_second_command_fails` - Break on command failure
+- `test_summary_output_all_fixed` - Summary shows all tools fixed
+- `test_summary_output_partial_failure` - Summary shows partial failure
+All 52 tool_checker tests + 93 cli_ralph tests passing (2026-01-20)
+
+### TASK-015: [Coverage] stack_flow.py recommendation logic untested
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/stack_flow.py
+**Current Coverage:** 17% → 99%
+**Gap:**
+- [x] `EntireStackFlow.prompt_user()` - Recommendations display, options
+- [x] `EntireStackFlow._generate_recommendations()` - Smart recommendation logic
+- [x] `EntireStackFlow._has_dockerfile()`, `_has_terraform_dir()`, `_has_k8s_dir()`, `_has_github_workflows()` - Helper methods
+**Implementation:** Extended `tests/wizard_flows/test_stack_flow.py`
+**Resolution:** Verified coverage was already 92% (not 17% as initially recorded). Added 7 tests for full branch coverage:
+- `test_entire_stack_flow_prompt_user_no_recommendations` - Empty recommendations list (false branch 35→39)
+- `test_entire_stack_flow_build_command_empty_targets` - All empty targets (false branches 75→79, 79→85, 85→90, 90→93)
+- `test_entire_stack_flow_recommendations_no_gitlab_ci` - Missing .gitlab-ci.yml
+- `test_entire_stack_flow_k8s_dir_alternative` - k8s/ instead of kubernetes/
+- `test_entire_stack_flow_has_dockerfile_false` - No Dockerfile present
+- `test_entire_stack_flow_github_workflows_empty` - Empty workflows dir
+- `test_entire_stack_flow_build_command_many_iac_files` - IaC truncation to 5 files
+All 20 stack_flow tests + 93 cli_ralph tests passing (2026-01-19)
+
+### TASK-014: [Coverage] deployment_flow.py interactive methods untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:2, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/deployment_flow.py
+**Current Coverage:** 8% → 100%
+**Gap:**
+- [x] `DeploymentFlow.prompt_user()` - Environment detection, profile/fail-on selection
+- [x] `DeploymentFlow._print_detected_deployment_targets()` - Summary display
+- [x] `DeploymentFlow.build_command()` - Command building with images/IaC/URLs
+**Implementation:** Extended `tests/unit/test_wizard_deployment_dependency_flows.py`
+**Resolution:** Verified coverage was already 96% (not 8% as initially recorded). Added 6 tests for full branch coverage:
+- `test_deployment_print_detected_targets_many_images_truncates` - Truncation when >3 images
+- `test_deployment_print_detected_targets_many_iac_truncates` - Truncation when >3 IaC files
+- `test_deployment_print_detected_targets_exactly_3_iac_no_truncation` - No truncation at boundary (false branch)
+- `test_deployment_detect_environment_env_var_non_matching` - Env var without prod/staging falls through
+- `test_deployment_detect_environment_env_file_non_matching` - .env file without prod/staging falls through
+- `test_deployment_detect_environment_k8s_non_matching` - K8s namespace without prod/staging falls through
+All 34 deployment_flow tests + 93 cli_ralph tests passing (2026-01-19)
+
+### TASK-013: [Coverage] cicd_flow.py interactive methods untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:2, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/cicd_flow.py
+**Current Coverage:** 7% → 100%
+**Gap:**
+- [x] `CICDFlow.prompt_user()` - Interactive profile/options selection
+- [x] `CICDFlow._print_detected_pipelines()` - Summary output
+- [x] `CICDFlow.build_command()` - Command building with pipeline_images.txt
+**Implementation:** Extended `tests/unit/test_wizard_cicd_flow.py`
+**Resolution:** Verified coverage was already 98% (not 7% as initially recorded). Added 3 tests for branch coverage edge cases:
+- `test_detect_images_gitlab_ci_non_dict_config` - GitLab CI config parsing to non-dict (branch 205→226)
+- `test_detect_images_gitlab_ci_global_image_list` - Global image as list instead of string/dict (branch 211→215)
+- `test_detect_images_gitlab_ci_job_image_list` - Job image as list instead of string/dict (branch 220→215)
+All 30 cicd_flow tests + 93 cli_ralph tests passing (2026-01-19)
+
+---
+
+## Deferred Issues
+
+<!-- Items found but not tasked (Priority < MEDIUM or Confidence < threshold) -->
+
+| Description | Score | Reason Deferred |
+|-------------|-------|-----------------|
+| shell=True in tool_checker.py:672 for platform commands | 4 | Has nosec comment, commands from trusted source (get_remediation_for_tool) |
+| Hardcoded timeout=300 in tool_checker.py:675 | 3 | Enhancement only - works fine as-is |
+| base_flow.py exception handlers swallow errors silently (lines 64, 79) | 3 | Terminal width detection - intentional fallback behavior |
+| No integration tests in tests/cli_ralph/ for wizard flows | 5 | Low confidence - cli_ralph is for jmo CLI, not wizard |
+| ui_helpers.py at 93% coverage | 3 | Enhancement only - minor untested lines (119, 133-134) |
+| ArtifactGenerator methods in base_flow.py (lines 567-591) | 3 | Enhancement only - thin wrappers around wizard_generators |
+| PromptHelper.print_info/warning/error (lines 403-427) | 3 | Simple print wrappers - low value tests |
+| trend_flow.py lines 304-305: Unknown command handling | 3 | Already covered by test_run_trend_command_unknown |
+| tool_checker.py lines 859-864: Exception handling during install | 3 | Low frequency - already has similar tests |
+| base_flow.py lines 34-67: Windows ctypes VT enablement | 3 | Platform-specific ctypes code - impractical to unit test |
+| tool_checker.py lines 629-642: ToolInstaller ImportError fallback | 3 | Rare code path - ToolInstaller always available in tests |
+| diff_flow.py lines 152-154, 196-198: Error handling edge cases | 3 | UI error handling - 95% coverage sufficient |
+| target_configurators.py branch coverage gaps (79-80, 93, 101, 106) | 3 | Minor validation paths - 91% coverage sufficient |
+| deployment_flow.py lines 186-199: Environment detection edge cases | 3 | File parsing fallbacks - 93% coverage sufficient |
+| trend_flow.py lines 382-399: ValueError in scan selection loops | 3 | Input validation - similar to diff_flow patterns already documented |
+
+---
+
+## Resolved Tasks
+
+### TASK-012: [Coverage] telemetry_helper.py missing unit tests
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:2, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/telemetry_helper.py
+**Current Coverage:** 33% → 100%
+**Gap:**
+- [x] `prompt_telemetry_opt_in()` - Tests for user prompt flow (y, yes, YES, empty, n)
+- [x] `save_telemetry_preference()` - Tests for YAML update, new file, corrupted file
+- [x] `send_wizard_telemetry()` - Tests for event sending with mock send_event, no config, exception handling
+**Implementation:** Existing tests in `tests/wizard_flows/test_telemetry_helper.py`
+**Resolution:** Verified coverage was already 100% (not 33% as initially recorded). The test file contains 14 tests covering all 54 statements and 4 branches. Tests cover:
+- prompt_telemetry_opt_in: 5 tests (y, yes, YES, empty input defaults to no, explicit n)
+- save_telemetry_preference: 3 tests (exists check, new file creation, corrupted YAML handling)
+- send_wizard_telemetry: 4 tests (no config exists, with config + docker mode, exception handling)
+All 93 cli_ralph tests + 14 telemetry helper tests passing (2026-01-19)
+
+### TASK-011: [Coverage] Low-coverage workflow classes (cicd, deployment, dependency, repo, stack flows)
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:1, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/{cicd,deployment,dependency,repo,stack}_flow.py
+**Current Coverage:** 7-19% → 97% (combined)
+**Gap:**
+These modules inherit from BaseWizardFlow and implement workflow-specific logic:
+- [x] `CICDFlow` - detect_targets(), prompt_user(), build_command() - 98% coverage
+- [x] `DeploymentFlow` - environment detection, targets with images+iac - 96% coverage
+- [x] `DependencyFlow` - lock file detection, package file handling - 100% coverage
+- [x] `RepoFlow` - repo detection, prompt user for repo selection - 100% coverage
+- [x] `StackFlow` - full stack detection, recommendations - 92% coverage
+**Implementation:** Extended existing `tests/unit/test_wizard_cicd_flow.py` and `tests/unit/test_wizard_deployment_dependency_flows.py`
+**Resolution:** Verified existing coverage was actually 92-100% (not 7-19% as initially recorded). Added 7 new tests:
+- cicd_flow: `test_detect_images_gitlab_job_string_image` (job-level string images), `test_detect_images_jenkinsfile_unreadable` (read error handling)
+- deployment_flow: `test_deployment_detect_environment_from_env_var_staging`, `test_deployment_detect_environment_from_env_file_staging`, `test_deployment_detect_environment_from_k8s_manifest_staging`, `test_deployment_detect_environment_k8s_manifest_read_error`
+Remaining branch partials (205->226, 35->39, etc.) are false-branch paths for optional `if` blocks - not functional gaps.
+All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
+
+### TASK-010: [Coverage] command_builder.py Docker mode branches untested
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/command_builder.py
+**Current Coverage:** 58% → 100%
+**Gap:**
+- [x] `build_repo_args()` - Docker mode with repo_path mount
+- [x] `build_image_args()` - Docker mode with images_file mount
+- [x] `build_iac_args()` - Docker mode with iac_path mount
+- [x] `build_url_args()` - Docker mode with urls_file mount
+- [x] `build_command_parts()` - Docker mode volume extraction logic (lines 140-144)
+- [x] `build_command_parts()` - Native mode with all optional flags (threads, timeout, fail_on, allow_missing_tools, human_logs)
+**Implementation:** Extend `tests/unit/test_wizard_command_builder.py` with Docker mode tests
+**Resolution:** Verified coverage was already 100% (not 58% as initially recorded). The test file contains 42 tests covering all 118 statements and 72 branches. All Docker mode tests already exist: `test_build_repo_args_docker_mode`, `test_build_image_args_batch_docker`, `test_build_iac_args_docker_mode`, `test_build_url_args_batch_docker`, and `test_build_command_parts_docker_*` tests. Native mode with optional flags covered by `test_build_command_parts_native_repo`. No additional tests needed (2026-01-18)
+
+### TASK-009: [Coverage] base_flow.py BaseWizardFlow.execute() untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/base_flow.py
+**Current Coverage:** 32% -> 91%
+**Gap:**
+- [x] `BaseWizardFlow.execute()` - Full template method workflow with mocked subprocess
+- [x] `BaseWizardFlow.execute()` - User cancellation at confirmation step
+- [x] `BaseWizardFlow.execute()` - Subprocess exception handling
+- [x] `BaseWizardFlow.execute()` - No targets detected error
+- [x] `BaseWizardFlow._estimate_time()` - All profile mappings
+- [x] `TargetDetector.detect_web_apps()` - docker-compose port detection
+- [x] `TargetDetector.detect_iac()` - Various IaC file patterns
+- [x] `PromptHelper.print_summary_box()` - Title truncation on narrow terminals
+**Implementation:** Extend `tests/unit/test_wizard_base_flow.py` with execute() tests using mocked subprocess
+**Resolution:** Added 19 new tests to achieve 91% coverage (up from 82%). Key additions:
+- BaseWizardFlow.execute(): Tests for empty lists, success/failure/cancel/exception paths
+- PromptHelper: Text input choice, yes/no retry, NO_COLOR env, ANSI not supported
+- TargetDetector: Unreadable Dockerfile, non-string ports, cwd default behavior
+- ArtifactGenerator: All three generator methods tested via mocks
+- ANSI Support: NO_COLOR, WT_SESSION, TERM detection, terminal width clamping
+Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platform-specific and impractical to unit test. All 72 base_flow tests + 94 cli_ralph tests passing (2026-01-18)
+
+### TASK-008: [Coverage] validators.py functions need direct testing
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/validators.py
+**Current Coverage:** 25% -> 100%
+**Gap:**
+- [x] `validate_path()` - All exception types (OSError, ValueError, TypeError, RuntimeError)
+- [x] `validate_url()` - HTTPError with various codes
+- [x] `validate_url()` - URLError for DNS/connection failures
+- [x] `validate_url()` - Timeout handling
+- [x] `detect_iac_type()` - All file types (terraform, cloudformation, k8s-manifest)
+- [x] `detect_iac_type()` - YAML content analysis paths
+- [x] `validate_k8s_context()` - Context list parsing, "current" mode
+- [x] `check_docker_running()` - Timeout and FileNotFoundError paths
+**Implementation:** Extended `tests/unit/test_wizard_validators.py` with focused unit tests
+**Resolution:** Verified coverage was already 100% (not 25% as initially recorded). The test file `tests/unit/test_wizard_validators.py` contains 43 tests covering all 87 statements and 20 branches. All code paths including exception handling for OSError, ValueError, TypeError, RuntimeError, HTTPError, URLError, TimeoutError, and FileNotFoundError are fully tested. No additional tests needed (2026-01-18)
+
+### TASK-007: [Coverage] target_configurators.py interactive functions untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 8 (S:3, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/target_configurators.py
+**Current Coverage:** 98% -> 100%
+**Gap:**
+- [x] `configure_repo_target()` - Happy path for each repo_mode (repo, repos-dir, targets, tsv)
+- [x] `configure_repo_target()` - Path validation failure and retry loop
+- [x] `configure_repo_target()` - Empty repos-dir warning prompt
+- [x] `configure_image_target()` - Single mode and batch mode
+- [x] `configure_iac_target()` - Path validation and IaC type detection
+- [x] `configure_url_target()` - Single URL, batch, and API modes
+- [x] `configure_url_target()` - URL unreachable warning and continue anyway
+- [x] `configure_gitlab_target()` - Token from env vs manual input
+- [x] `configure_k8s_target()` - kubectl missing warning, context validation
+- [x] Truncation display when >5 repos/images/URLs (lines 93, 150, 252)
+**Implementation:** Extended `tests/unit/test_wizard_target_configurators.py`
+**Resolution:** Coverage was already at 98% (not 8% as initially recorded). Added 3 tests for truncation branches to achieve 100% coverage:
+- `test_configure_repo_target_repos_dir_many_repos_truncates` - Tests "... and N more" display for repos
+- `test_configure_image_target_batch_many_images_truncates` - Tests "... and N more" display for images
+- `test_configure_url_target_batch_many_urls_truncates` - Tests "... and N more" display for URLs
+All 36 target_configurators tests passing (2026-01-18)
+
+### TASK-006: [Coverage] policy_flow.py navigation edge cases
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/policy_flow.py
+**Current Coverage:** ~85% -> ~92% (estimated)
+**Gap:**
+- [x] `_parse_policy_choice()` with invalid comma-separated numbers (e.g., "1,99,3")
+- [x] `_parse_policy_choice()` with non-numeric values (e.g., "1,abc,2")
+- [x] `_parse_policy_choice()` with empty custom input
+- [x] `display_policy_violations_interactive()` with empty results dict
+- [x] `_show_all_violations_paginated()` with 0 violations
+- [x] `_show_all_violations_paginated()` single page and navigation
+- [x] Navigation edge cases (next at last, prev at first)
+- [x] Export error handling (file write failures)
+- [x] `_display_violation()` with empty/whitespace path
+- [x] `_truncate_sensitive()` with various content types
+- [x] `_extract_rule_id()` for PCI, CIS, NIST patterns
+- [x] `_extract_severity_tag()` for severity extraction
+- [x] `_display_violation()` with hardening policy type
+- [x] `_display_violation()` with long messages (>200 chars)
+- [x] Policy evaluation error handling
+- [x] `_normalize_policy_name()` various formats
+**Implementation:** Added 27 new edge case tests to `tests/cli/test_wizard_policy_integration.py`
+**Resolution:** Comprehensive edge case coverage added (2026-01-18):
+- _parse_policy_choice: 3 tests (out-of-range, non-numeric, empty)
+- display_policy_violations_interactive: 4 tests (empty results, show all, navigation edges)
+- _show_all_violations_paginated: 4 tests (zero, single page, navigation, invalid)
+- Export functions: 2 tests (JSON/MD write errors)
+- _display_violation: 4 tests (empty path, whitespace path, hardening, long message)
+- _truncate_sensitive: 3 tests (short, long base64, private key)
+- _extract_rule_id: 4 tests (PCI, CIS, NIST, unknown)
+- _extract_severity_tag: 1 test (all severities)
+- Policy evaluation: 1 test (evaluation error)
+- _normalize_policy_name: 1 test (various formats)
+All 94 CLI Ralph tests + 58 policy integration tests passing (2026-01-18)
+
+### TASK-005: [Coverage] trend_flow.py interactive functions untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 8 (S:2, F:3, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/trend_flow.py
+**Current Coverage:** 67% -> ~85% (estimated)
+**Gap:**
+- [x] `explore_trends_interactive()` - menu loop options 2-5 (regressions, velocity, developers, score)
+- [x] `explore_trends_interactive()` - menu options 6 (compare) and 7 (export) dispatch
+- [x] `_run_trend_command_interactive()` - non-zero result handling (lines 310-314)
+- [x] `_run_trend_command_interactive()` - exception handling
+- [x] `_compare_scans_interactive()` - non-zero result, import error, exception paths
+- [x] `_export_trends_interactive()` - ImportError path (lines 510-514)
+- [x] `_export_trends_interactive()` - Exception path (lines 515-518)
+**Implementation:** Extended `tests/cli/test_wizard_trends.py` with 14 new tests
+**Resolution:** Added comprehensive test coverage for trend_flow.py interactive functions:
+- Menu options 2-7: 6 tests (regressions, velocity, developers, score, compare, export)
+- _run_trend_command_interactive: 2 tests (nonzero result, exception)
+- _export_trends_interactive: 2 tests (import error, exception)
+- _compare_scans_interactive: 3 tests (nonzero result, import error, exception)
+All 94 CLI Ralph tests + 36 wizard trends tests passing (2026-01-18)
+
+### TASK-004: [Coverage] tool_checker.py critical functions untested
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 9 (S:3, F:3, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/cli/wizard_flows/tool_checker.py
+**Current Coverage:** 46% -> ~75% (estimated)
+**Gap:**
+- [x] `check_tools_for_profile()` - main entry point, only tested indirectly
+- [x] `_check_policy_tools()` - OPA availability check, no direct tests
+- [x] `_install_opa_tool()` - OPA installation, no direct tests
+- [x] `_show_all_fix_commands()` - command display, no tests
+- [x] `_collect_missing_dependencies()` - dependency grouping, no tests
+- [x] Lines 248-274: Crash detection for startup crashes
+- [x] Lines 310-340: Interactive choice handling (options 1-4)
+- [ ] Lines 460-508: Missing dependency installation flow (deferred - requires integration test)
+- [ ] Lines 617-642: JMo tools parallel installation path (covered by existing tests)
+- [ ] Lines 739-746: Post-fix re-check (covered by existing tests)
+**Implementation:** Created `tests/cli/test_wizard_tool_checker.py` with 33 new tests
+**Resolution:** Added comprehensive test coverage (33 tests) for tool_checker.py functions including:
+- check_tools_for_profile: 6 tests (docker mode, all ready, yes mode, import/generic error, skipped tools)
+- _check_policy_tools: 8 tests (no policies, skip, docker, OPA available/missing, interactive choices)
+- _install_opa_tool: 4 tests (success, failure, import error, exception)
+- _show_all_fix_commands: 3 tests (remediation, jmo install, empty)
+- _collect_missing_dependencies: 8 tests (empty, no deps, single/multiple deps, node normalization, duplicates)
+- Interactive choices: 3 tests (auto-fix, continue, cancel)
+- Crash detection: 1 test (startup crash display)
+All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
+
+### TASK-003: [Bug] ValueError crash in policy_flow custom selection
+**Type:** Bug
+**Priority:** Critical
+**Score:** [S+F+C] = 11 (S:4, F:3, C:4)
+**Status:** Resolved
+**File:** scripts/cli/wizard_flows/policy_flow.py:321
+**Symptom:** `ValueError: invalid literal for int() with base 10: 'a'` when entering non-numeric values
+**Root Cause:** List comprehension `int(x.strip()) - 1` lacked try/except
+**Fix:** Added `safe_int()` helper that returns None for invalid values, filter out None
+**Resolution:** Fixed in policy_flow.py:321-330, added 2 regression tests in test_policy_flow.py (2026-01-17)
+
+### TASK-002: Fix RALPH_FIXTURES_DIR path after directory move
+**Type:** Bug
+**Priority:** Critical
+**Status:** Resolved
+**Test:** 32 tests (diff, report, history, trends, ci, policy)
+**Error:** `FileNotFoundError: .claude/ralph-cli-testing/fixtures not found`
+**Root Cause:** Refactoring moved files but forgot to update conftest.py path
+**Fix:** Changed `.claude/ralph-cli-testing` to `tools/ralph-testing` in conftest.py:36-38
+**Resolution:** All 94 tests passing after fix (2026-01-17)
+
+### TASK-001: Validate test suite baseline
+**Type:** Bug
+**Priority:** High
+**Status:** Resolved
+**Description:** Run full test suite and verify all 94 tests pass
+**Resolution:** All 94 tests passed in 7m 5s (2026-01-17). Suite is stable.
+
+---
+
+## Audit History
+
+| Date | Mode | Target | Tasks Created | Notes |
+|------|------|--------|---------------|-------|
+| 2026-01-20 | audit | wizard + wizard_flows | 0 | Re-audit - 676 passed, 1 skip. 93% coverage. All uncovered lines in Deferred. |
+| 2026-01-20 | audit | wizard + wizard_flows | 0 | Final audit - 676 tests pass, 1 skip. Combined coverage 93%. No actionable gaps found. |
+| 2026-01-19 | audit | wizard + wizard_flows | 3 | Re-audit after TASK-015 resolved. 655 tests pass, 1 skip. tool_checker.py 73%, diff_flow.py 92%. |
+| 2026-01-19 | audit | wizard + wizard_flows | 4 | Re-audit after TASK-006 through TASK-011 resolved. 348 tests pass, 1 skip. Overall wizard_flows 52% coverage. |
+| 2026-01-18 | audit | wizard + wizard_flows | 5 | Comprehensive wizard audit, 647 tests pass, 52% overall coverage |
+| 2026-01-17 | test | - | 0 | Initial validation, all 94 tests pass |
+
+---
+
+## Notes
+
+- All 676 wizard tests passing (1 skipped - history database locked test on Windows)
+- Overall wizard_flows coverage: 93%
+- High coverage (>95%): validators.py (100%), profile_config.py (100%), config_models.py (100%), telemetry_helper.py (100%), dependency_flow.py (100%), repo_flow.py (100%), stack_flow.py (99%), command_builder.py (97%), cicd_flow.py (96%), diff_flow.py (95%)
+- Good coverage (85-95%): deployment_flow.py (93%), tool_checker.py (93%), trend_flow.py (92%), ui_helpers.py (93%), target_configurators.py (91%), base_flow.py (85%)
+- Windows platform (4 tools excluded: falco, afl++, mobsf, akto)
+- OPA detection fix was applied (find_tool instead of shutil.which)
+- No security vulnerabilities found - all subprocess calls use shell=False (except nosec B602 in tool_checker.py for platform commands)
+- No bugs found - all 676 tests passing
+- Remaining coverage gaps are low-priority: platform-specific code (Windows ctypes), rare exception paths, UI error handling
+- test suite execution time: ~2.5 minutes (156 seconds)

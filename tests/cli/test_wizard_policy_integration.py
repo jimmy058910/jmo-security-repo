@@ -1097,5 +1097,518 @@ def test_policy_evaluation_menu_noninteractive_mode(
     assert "Non-interactive mode" in captured.out
 
 
+# ========== EDGE CASE TESTS (TASK-006) ====================
+
+
+def test_parse_policy_choice_custom_with_out_of_range_numbers(sample_policy_metadata):
+    """Test custom selection with out-of-range numbers filters invalid indices."""
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
+    from unittest.mock import patch
+
+    # Convert PolicyMetadata objects to dicts (5 policies)
+    policies_with_metadata = [
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
+        for meta in sample_policy_metadata
+    ]
+
+    # Mock input with out-of-range index (99 is invalid for 5 policies)
+    with patch("builtins.input", return_value="1,99,3"):
+        result = _parse_policy_choice("c", policies_with_metadata, [])
+
+    # Should return only valid indices (0 and 2, ignoring 99)
+    assert len(result) == 2
+    assert "zero-secrets" in str(result[0])  # Index 0
+    assert "pci-dss" in str(result[1])  # Index 2
+
+
+def test_parse_policy_choice_custom_with_non_numeric_values(sample_policy_metadata):
+    """Test custom selection filters non-numeric values gracefully."""
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
+    from unittest.mock import patch
+
+    policies_with_metadata = [
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
+        for meta in sample_policy_metadata
+    ]
+
+    # Mix of valid and invalid values
+    with patch("builtins.input", return_value="1,abc,2,xyz,3"):
+        result = _parse_policy_choice("c", policies_with_metadata, [])
+
+    # Should return only valid indices (0, 1, 2)
+    assert len(result) == 3
+    assert "zero-secrets" in str(result[0])
+    assert "owasp-top-10" in str(result[1])
+    assert "pci-dss" in str(result[2])
+
+
+def test_parse_policy_choice_custom_with_empty_input(sample_policy_metadata):
+    """Test custom selection with empty input returns empty list."""
+    from scripts.cli.wizard_flows.policy_flow import _parse_policy_choice
+    from unittest.mock import patch
+
+    policies_with_metadata = [
+        (
+            Path(f"{meta.name}.rego"),
+            {
+                "name": meta.name,
+                "version": meta.version,
+                "description": meta.description,
+            },
+        )
+        for meta in sample_policy_metadata
+    ]
+
+    with patch("builtins.input", return_value=""):
+        result = _parse_policy_choice("c", policies_with_metadata, [])
+
+    assert result == []
+
+
+def test_display_policy_violations_interactive_empty_results():
+    """Test violation viewer with empty results dict (no policies evaluated)."""
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
+    import sys
+    from io import StringIO
+
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    # Empty results dict
+    display_policy_violations_interactive({})
+
+    sys.stdout = sys.__stdout__
+    output = captured_output.getvalue()
+
+    # Should print "All policies passed" since there are no failures
+    assert "All policies passed" in output
+
+
+def test_show_all_violations_paginated_zero_violations(capsys):
+    """Test pagination with 0 violations."""
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
+
+    _show_all_violations_paginated([], "test-policy")
+
+    captured = capsys.readouterr()
+    assert "No violations to display" in captured.out
+
+
+def test_show_all_violations_paginated_single_page(capsys):
+    """Test pagination with single page (<=20 violations)."""
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
+    from unittest.mock import patch
+
+    violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(5)]
+
+    # Single page should show "Press Enter to continue"
+    with patch("builtins.input", return_value=""):
+        _show_all_violations_paginated(violations, "test-policy")
+
+    captured = capsys.readouterr()
+    assert "Page 1/1" in captured.out
+
+
+def test_show_all_violations_paginated_navigation(capsys):
+    """Test pagination navigation (next, prev, quit)."""
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
+    from unittest.mock import patch
+
+    # Create 25 violations (2 pages with page_size=20)
+    violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(25)]
+
+    # Navigate: next (n), previous (p), quit (q)
+    with patch("builtins.input", side_effect=["n", "p", "q"]):
+        _show_all_violations_paginated(violations, "test-policy", page_size=20)
+
+    captured = capsys.readouterr()
+    assert "Page 1/2" in captured.out
+    assert "Page 2/2" in captured.out
+
+
+def test_show_all_violations_paginated_invalid_choice(capsys):
+    """Test pagination with invalid choice."""
+    from scripts.cli.wizard_flows.policy_flow import _show_all_violations_paginated
+    from unittest.mock import patch
+
+    violations = [{"category": "TEST", "message": f"Violation {i}"} for i in range(25)]
+
+    # Invalid choice, then quit
+    with patch("builtins.input", side_effect=["x", "q"]):
+        _show_all_violations_paginated(violations, "test-policy", page_size=20)
+
+    captured = capsys.readouterr()
+    assert "Invalid choice: x" in captured.out
+
+
+def test_display_policy_violations_interactive_show_all_option(capsys):
+    """Test violation viewer 'Show all violations' option."""
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
+    from scripts.core.policy_engine import PolicyResult
+    from unittest.mock import patch
+
+    # Create 5 violations
+    violations = [{"category": "TEST", "message": f"Problem {i}"} for i in range(5)]
+
+    results = {
+        "test-policy": PolicyResult(
+            policy_name="test-policy",
+            passed=False,
+            violations=violations,
+        ),
+    }
+
+    # Choose "3" (show all), press Enter to continue, then "6" (exit)
+    with patch("builtins.input", side_effect=["3", "", "6"]):
+        display_policy_violations_interactive(results)
+
+    captured = capsys.readouterr()
+    assert "test-policy" in captured.out
+
+
+def test_display_policy_violations_interactive_next_at_last_policy(capsys):
+    """Test navigation 'next' when already at last policy shows message."""
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
+    from scripts.core.policy_engine import PolicyResult
+    from unittest.mock import patch
+
+    # Single failed policy
+    results = {
+        "only-policy": PolicyResult(
+            policy_name="only-policy",
+            passed=False,
+            violations=[{"category": "TEST", "message": "Problem"}],
+        ),
+    }
+
+    # Try to go next when there's only one policy, then exit
+    with patch("builtins.input", side_effect=["4", "6"]):
+        display_policy_violations_interactive(results)
+
+    captured = capsys.readouterr()
+    assert "No more policies to view" in captured.out
+
+
+def test_display_policy_violations_interactive_prev_at_first_policy(capsys):
+    """Test navigation 'prev' when already at first policy shows message."""
+    from scripts.cli.wizard_flows.policy_flow import (
+        display_policy_violations_interactive,
+    )
+    from scripts.core.policy_engine import PolicyResult
+    from unittest.mock import patch
+
+    results = {
+        "first-policy": PolicyResult(
+            policy_name="first-policy",
+            passed=False,
+            violations=[{"category": "TEST", "message": "Problem 1"}],
+        ),
+        "second-policy": PolicyResult(
+            policy_name="second-policy",
+            passed=False,
+            violations=[{"category": "TEST", "message": "Problem 2"}],
+        ),
+    }
+
+    # Try to go prev at first policy, then exit
+    with patch("builtins.input", side_effect=["5", "6"]):
+        display_policy_violations_interactive(results)
+
+    captured = capsys.readouterr()
+    assert "Already at first policy" in captured.out
+
+
+def test_export_violations_json_file_write_error(tmp_path, capsys):
+    """Test JSON export with file write error."""
+    from scripts.core.policy_engine import PolicyResult
+    from scripts.cli.wizard_flows.policy_flow import _export_violations_json
+    from unittest.mock import patch
+    import os
+
+    result = PolicyResult(
+        policy_name="test-policy",
+        passed=False,
+        violations=[{"category": "TEST", "message": "Error"}],
+    )
+
+    # Change to a directory that will cause an error
+    original_dir = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        # Mock open to raise an error
+        with patch("builtins.open", side_effect=PermissionError("Access denied")):
+            with pytest.raises(PermissionError):
+                _export_violations_json("test-policy", result)
+    finally:
+        os.chdir(original_dir)
+
+
+def test_export_violations_markdown_file_write_error(tmp_path, capsys):
+    """Test Markdown export with file write error."""
+    from scripts.core.policy_engine import PolicyResult
+    from scripts.cli.wizard_flows.policy_flow import _export_violations_markdown
+    from unittest.mock import patch
+    import os
+
+    result = PolicyResult(
+        policy_name="test-policy",
+        passed=False,
+        violations=[{"category": "TEST", "message": "Error"}],
+    )
+
+    original_dir = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        # Mock open to raise an error
+        with patch("builtins.open", side_effect=PermissionError("Access denied")):
+            with pytest.raises(PermissionError):
+                _export_violations_markdown("test-policy", result)
+    finally:
+        os.chdir(original_dir)
+
+
+def test_display_violation_empty_path():
+    """Test _display_violation with empty path (Fix 3.4)."""
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
+    import sys
+    from io import StringIO
+
+    violation = {
+        "category": "TEST",
+        "message": "Some issue",
+        "path": "",  # Empty path
+    }
+
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    _display_violation(1, violation)
+
+    sys.stdout = sys.__stdout__
+    output = captured_output.getvalue()
+
+    # Should NOT display "Location:" for empty path
+    assert "Location:" not in output
+
+
+def test_display_violation_whitespace_path():
+    """Test _display_violation with whitespace-only path."""
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
+    import sys
+    from io import StringIO
+
+    violation = {
+        "category": "TEST",
+        "message": "Some issue",
+        "path": "   ",  # Whitespace-only path
+    }
+
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    _display_violation(1, violation)
+
+    sys.stdout = sys.__stdout__
+    output = captured_output.getvalue()
+
+    # Should NOT display "Location:" for whitespace-only path
+    assert "Location:" not in output
+
+
+def test_truncate_sensitive_short_content():
+    """Test _truncate_sensitive with content shorter than threshold."""
+    from scripts.cli.wizard_flows.policy_flow import _truncate_sensitive
+
+    # Short base64 (less than 60 chars) should not be redacted
+    short_text = "This is a short key: abc123def456"
+    result = _truncate_sensitive(short_text)
+    assert result == short_text
+
+
+def test_truncate_sensitive_long_base64():
+    """Test _truncate_sensitive with long base64 content."""
+    from scripts.cli.wizard_flows.policy_flow import _truncate_sensitive
+
+    # Long base64 string (60+ chars)
+    long_b64 = "A" * 100
+    text = f"Secret key: {long_b64}"
+    result = _truncate_sensitive(text)
+    assert "[BASE64_DATA REDACTED]" in result
+
+
+def test_truncate_sensitive_private_key():
+    """Test _truncate_sensitive with private key."""
+    from scripts.cli.wizard_flows.policy_flow import _truncate_sensitive
+
+    key = "-----BEGIN RSA PRIVATE KEY-----\nLongKeyContentHere\n-----END RSA PRIVATE KEY-----"
+    result = _truncate_sensitive(key)
+    assert "[PRIVATE_KEY REDACTED]" in result
+
+
+def test_extract_rule_id_pci():
+    """Test _extract_rule_id for PCI DSS rules."""
+    from scripts.cli.wizard_flows.policy_flow import _extract_rule_id
+
+    finding = "Violation of PCI DSS 6.2.4: Store sensitive data securely"
+    result = _extract_rule_id(finding, "pci-dss")
+    assert result == "PCI-6.2.4"
+
+
+def test_extract_rule_id_cis():
+    """Test _extract_rule_id for CIS controls."""
+    from scripts.cli.wizard_flows.policy_flow import _extract_rule_id
+
+    finding = "CIS Control 5.1 detected"
+    result = _extract_rule_id(finding, "cis")
+    assert result == "CIS-5.1"
+
+
+def test_extract_rule_id_nist():
+    """Test _extract_rule_id for NIST controls."""
+    from scripts.cli.wizard_flows.policy_flow import _extract_rule_id
+
+    finding = "Violation of NIST AC-2 access control"
+    result = _extract_rule_id(finding, "nist")
+    assert result == "NIST-AC-2"
+
+
+def test_extract_rule_id_unknown():
+    """Test _extract_rule_id returns Unknown for unrecognized patterns."""
+    from scripts.cli.wizard_flows.policy_flow import _extract_rule_id
+
+    finding = "Generic security issue"
+    result = _extract_rule_id(finding, "generic-policy")
+    assert result == "Unknown"
+
+
+def test_extract_severity_tag():
+    """Test _extract_severity_tag extracts severity from text."""
+    from scripts.cli.wizard_flows.policy_flow import _extract_severity_tag
+
+    assert _extract_severity_tag("CRITICAL: Major vulnerability") == "CRITICAL"
+    assert _extract_severity_tag("HIGH: Serious issue") == "HIGH"
+    assert _extract_severity_tag("MEDIUM: Moderate concern") == "MEDIUM"
+    assert _extract_severity_tag("LOW: Minor issue") == "LOW"
+    assert _extract_severity_tag("INFO: Informational") == "INFO"
+    assert _extract_severity_tag("Generic message") == "security"
+
+
+def test_display_violation_hardening_policy():
+    """Test _display_violation with hardening policy type."""
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
+    import sys
+    from io import StringIO
+
+    violation = {
+        "category": "Unknown",
+        "message": "HIGH: Use secure defaults",
+    }
+
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    _display_violation(1, violation, "production-hardening")
+
+    sys.stdout = sys.__stdout__
+    output = captured_output.getvalue()
+
+    # Should extract HIGH as category and remove from message
+    assert "[HIGH]" in output
+    # Should show cleaned message without "HIGH:" prefix
+    assert "Use secure defaults" in output
+
+
+def test_display_violation_long_message():
+    """Test _display_violation truncates messages over 200 chars."""
+    from scripts.cli.wizard_flows.policy_flow import _display_violation
+    import sys
+    from io import StringIO
+
+    violation = {
+        "category": "TEST",
+        "message": "A" * 300,  # 300 chars, exceeds 200 limit
+    }
+
+    captured_output = StringIO()
+    sys.stdout = captured_output
+
+    _display_violation(1, violation)
+
+    sys.stdout = sys.__stdout__
+    output = captured_output.getvalue()
+
+    # Should end with "..."
+    assert "..." in output
+
+
+@patch("scripts.cli.wizard_flows.policy_flow.Path.glob")
+@patch("scripts.cli.wizard_flows.policy_flow.PolicyEngine")
+def test_policy_evaluation_menu_evaluation_error(
+    mock_engine_class, mock_glob, tmp_path, sample_findings, capsys
+):
+    """Test policy evaluation handles evaluation errors gracefully."""
+    from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
+
+    # Mock PolicyEngine
+    mock_engine = MagicMock()
+    mock_engine_class.return_value = mock_engine
+
+    # Mock policy files - use zero-secrets.rego so it gets recommended for fast profile
+    mock_policy_files = [Path("policies/builtin/zero-secrets.rego")]
+    mock_glob.return_value = mock_policy_files
+
+    # Mock get_metadata - use zero-secrets name so it's recommended
+    mock_engine.get_metadata.return_value = {
+        "name": "zero-secrets",
+        "version": "1.0.0",
+        "description": "Block secrets",
+    }
+
+    # Mock evaluate to raise exception
+    mock_engine.evaluate.side_effect = Exception("OPA evaluation failed")
+
+    policy_evaluation_menu(
+        tmp_path, "fast", sample_findings, non_interactive=True
+    )
+
+    # Should handle error gracefully
+    captured = capsys.readouterr()
+    assert "ERROR" in captured.out
+
+
+def test_normalize_policy_name():
+    """Test _normalize_policy_name handles various formats."""
+    from scripts.cli.wizard_flows.policy_flow import _normalize_policy_name
+
+    assert (
+        _normalize_policy_name("OWASP Top 10 2021 Enforcer") == "owasptop102021enforcer"
+    )
+    assert _normalize_policy_name("zero-secrets") == "zerosecrets"
+    assert _normalize_policy_name("PCI_DSS_4.0") == "pcidss40"
+    assert _normalize_policy_name("production.hardening") == "productionhardening"
+
+
 # ========== COVERAGE TARGET: ≥90% ====================
 # Run: pytest tests/cli/test_wizard_policy_integration.py -v --cov=scripts.cli.wizard_flows.policy_flow --cov-report=term-missing

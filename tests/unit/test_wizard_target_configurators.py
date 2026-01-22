@@ -888,3 +888,98 @@ def test_configure_k8s_target_current_context():
 
         assert result.k8s_context == "current"
         assert result.k8s_namespace == "kube-system"
+
+
+# ========== Category 7: Truncation Display Tests (>5 items) ==========
+
+
+def test_configure_repo_target_repos_dir_many_repos_truncates(capsys):
+    """Test configure_repo_target shows '... and N more' when >5 repos detected."""
+    mock_config = MagicMock()
+    mock_print_step = MagicMock()
+
+    # Create 8 mock repos to trigger truncation
+    mock_repos = [MagicMock(name=f"repo{i}") for i in range(8)]
+
+    with (
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._prompter"
+        ) as mock_prompter,
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._detector"
+        ) as mock_detector,
+        patch(
+            "scripts.cli.wizard_flows.target_configurators.validate_path"
+        ) as mock_validate,
+        patch("builtins.input", return_value="/path/to/repos-dir"),
+    ):
+        mock_prompter.prompt_choice.return_value = "repos-dir"
+        mock_validate.return_value = Path("/path/to/repos-dir")
+        mock_detector.detect_repos.return_value = mock_repos
+
+        result = configure_repo_target(mock_config, mock_print_step)
+
+        assert result.type == "repo"
+        # Check that truncation message was printed
+        captured = capsys.readouterr()
+        assert "... and 3 more" in captured.out
+
+
+def test_configure_image_target_batch_many_images_truncates(capsys):
+    """Test configure_image_target shows '... and N more' when >5 images in file."""
+    mock_config = MagicMock()
+    mock_print_step = MagicMock()
+
+    # Create file content with 8 images
+    images_content = "\n".join([f"image{i}:latest" for i in range(8)])
+
+    with (
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._prompter"
+        ) as mock_prompter,
+        patch(
+            "scripts.cli.wizard_flows.target_configurators.validate_path"
+        ) as mock_validate,
+        patch("builtins.input", return_value="./images.txt"),
+    ):
+        mock_prompter.prompt_choice.return_value = "batch"
+        mock_path = MagicMock(spec=Path)
+        mock_path.read_text.return_value = images_content
+        mock_validate.return_value = mock_path
+
+        result = configure_image_target(mock_config, mock_print_step)
+
+        assert result.type == "image"
+        # Check that truncation message was printed
+        captured = capsys.readouterr()
+        assert "... and 3 more" in captured.out
+
+
+def test_configure_url_target_batch_many_urls_truncates(capsys):
+    """Test configure_url_target shows '... and N more' when >5 URLs in file."""
+    mock_config = MagicMock()
+    mock_print_step = MagicMock()
+
+    # Create file content with 8 URLs
+    urls_content = "\n".join([f"https://app{i}.com" for i in range(8)])
+
+    with (
+        patch(
+            "scripts.cli.wizard_flows.target_configurators._prompter"
+        ) as mock_prompter,
+        patch(
+            "scripts.cli.wizard_flows.target_configurators.validate_path"
+        ) as mock_validate,
+        patch("builtins.input", return_value="./urls.txt"),
+    ):
+        mock_prompter.prompt_choice.return_value = "batch"
+        mock_path = MagicMock(spec=Path)
+        mock_path.read_text.return_value = urls_content
+        mock_validate.return_value = mock_path
+
+        result = configure_url_target(mock_config, mock_print_step)
+
+        assert result.type == "url"
+        # Check that truncation message was printed
+        captured = capsys.readouterr()
+        assert "... and 3 more" in captured.out

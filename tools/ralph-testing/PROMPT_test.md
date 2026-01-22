@@ -68,7 +68,7 @@ Test categories (94 total tests):
 
 ## Notes
 
-- Tests use fixtures from `.claude/ralph-cli-testing/fixtures/`
+- Tests use fixtures from `tools/ralph-testing/fixtures/`
 - History/trends tests use `--db` flag for test database
 - Windows excludes some tools (falco, afl++, mobsf, akto)
 - All tests should pass before starting build mode
