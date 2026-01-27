@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "target": "WebGoat/WebGoat",
+    "version": "2023.8",
+    "generated": "2026-01-22T00:00:00Z",
+    "profile": "balanced",
+    "tools_used": [
+      "semgrep",
+      "trivy",
+      "trufflehog",
+      "checkov",
+      "gitleaks",
+      "dependency-check"
+    ],
+    "notes": "OWASP WebGoat - Java-based deliberately insecure application for security training"
+  },
+  "expected_findings": [
+    {
+      "rule_id": "CWE-89",
+      "severity": "CRITICAL",
+      "category": "sqli",
+      "min_count": 5,
+      "description": "SQL Injection vulnerabilities in Java database code"
+    },
+    {
+      "rule_id": "CWE-79",
+      "severity": "HIGH",
+      "category": "xss",
+      "min_count": 3,
+      "description": "Cross-Site Scripting (XSS) vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-611",
+      "severity": "HIGH",
+      "category": "xxe",
+      "min_count": 2,
+      "description": "XML External Entity (XXE) processing vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-502",
+      "severity": "CRITICAL",
+      "category": "deserialization",
+      "min_count": 2,
+      "description": "Java insecure deserialization vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-78",
+      "severity": "CRITICAL",
+      "category": "command-injection",
+      "min_count": 1,
+      "description": "OS Command Injection vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-22",
+      "severity": "HIGH",
+      "category": "path-traversal",
+      "min_count": 2,
+      "description": "Path Traversal vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-798",
+      "severity": "HIGH",
+      "category": "hardcoded-secrets",
+      "min_count": 1,
+      "description": "Hardcoded credentials in Java source files"
+    },
+    {
+      "rule_id": "CWE-327",
+      "severity": "MEDIUM",
+      "category": "weak-crypto",
+      "min_count": 2,
+      "description": "Use of weak cryptographic algorithms"
+    },
+    {
+      "rule_id": "CWE-352",
+      "severity": "MEDIUM",
+      "category": "csrf",
+      "min_count": 1,
+      "description": "Missing CSRF protection"
+    },
+    {
+      "rule_id": "maven-vulnerability",
+      "severity": "HIGH",
+      "category": "dependency",
+      "min_count": 3,
+      "description": "Known vulnerabilities in Maven dependencies"
+    }
+  ],
+  "tolerance": {
+    "missing_critical": 0,
+    "missing_high": 2,
+    "missing_medium": 4,
+    "extra_findings_ratio": 0.35
+  }
+}

@@ -24,6 +24,8 @@
     - test: Run test suite, discover failures, populate IMPLEMENTATION_PLAN.md
     - build: Fix one task per iteration until plan is empty
     - audit: Comprehensive multi-phase analysis (code review, coverage gaps, etc.)
+    - validate: Validate scan accuracy against known-vulnerable targets
+    - dedup: Analyze deduplication effectiveness and cluster quality
 
 .PARAMETER Target
     Scope for audit mode:
@@ -66,10 +68,16 @@
 
     # Full robust run with all safeguards
     .\tools\ralph-testing\loop.ps1 -SkipPermissions -MaxDurationMinutes 120 -StruggleThreshold 3 -DelayBetweenIterations 2
+
+    # Validate scan accuracy against baselines
+    .\tools\ralph-testing\loop.ps1 -Mode validate -SkipPermissions
+
+    # Analyze deduplication effectiveness
+    .\tools\ralph-testing\loop.ps1 -Mode dedup -SkipPermissions
 #>
 
 param(
-    [ValidateSet("auto", "test", "build", "audit")]
+    [ValidateSet("auto", "test", "build", "audit", "validate", "dedup")]
     [string]$Mode = "auto",
 
     [ValidateSet("all", "wizard", "cli")]
@@ -107,13 +115,15 @@ $LoopStartTime = Get-Date
 
 # Prompt file mapping
 $PromptFiles = @{
-    "test"  = "$RalphDir/PROMPT_test.md"
-    "audit" = "$RalphDir/PROMPT_audit.md"
-    "build" = "$RalphDir/PROMPT_build.md"
+    "test"     = "$RalphDir/PROMPT_test.md"
+    "audit"    = "$RalphDir/PROMPT_audit.md"
+    "build"    = "$RalphDir/PROMPT_build.md"
+    "validate" = "$RalphDir/PROMPT_validate.md"
+    "dedup"    = "$RalphDir/PROMPT_dedup_analysis.md"
 }
 
 # Single-run modes default to 1 iteration
-if (($Mode -eq "audit" -or $Mode -eq "test") -and $MaxIterations -eq 0) {
+if (($Mode -in @("audit", "test", "validate", "dedup")) -and $MaxIterations -eq 0) {
     $MaxIterations = 1
 }
 

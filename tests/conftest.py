@@ -215,3 +215,95 @@ def normalize_path(path: str | Path) -> str:
     if IS_WINDOWS:
         normalized = normalized.lower()
     return normalized
+
+
+# ============================================================================
+# Integration Test Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def sample_vulnerable_code(tmp_path: Path) -> Path:
+    """
+    Create a minimal vulnerable code sample for integration testing.
+
+    Creates JavaScript and Python files with intentional vulnerabilities
+    that should be detected by security tools.
+
+    Returns:
+        Path to the temporary directory containing vulnerable code
+    """
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+
+    # JavaScript with SQL injection and XSS
+    (src_dir / "app.js").write_text(
+        '''
+const express = require('express');
+const app = express();
+
+app.get('/user', (req, res) => {
+    const userId = req.query.id;
+    // SQL Injection vulnerability
+    const query = "SELECT * FROM users WHERE id = " + userId;
+    db.query(query);
+});
+
+app.get('/search', (req, res) => {
+    const term = req.query.q;
+    // XSS vulnerability
+    res.send("<h1>Results for: " + term + "</h1>");
+});
+'''
+    )
+
+    # Python with hardcoded secret
+    (src_dir / "config.py").write_text(
+        '''
+# Hardcoded credentials
+API_KEY = "sk-1234567890abcdef1234567890abcdef"
+DATABASE_PASSWORD = "admin123"
+'''
+    )
+
+    # package.json for npm detection
+    (tmp_path / "package.json").write_text(
+        '''
+{
+  "name": "test-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "lodash": "4.17.20"
+  }
+}
+'''
+    )
+
+    return tmp_path
+
+
+@pytest.fixture
+def docker_available() -> bool:
+    """
+    Check if Docker is available for testing.
+
+    Returns:
+        True if Docker is available, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+@pytest.fixture
+def skip_without_docker(docker_available: bool):
+    """Skip test if Docker is not available."""
+    if not docker_available:
+        pytest.skip("Docker not available")

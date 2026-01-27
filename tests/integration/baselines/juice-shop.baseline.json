@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "target": "juice-shop/juice-shop",
+    "version": "16.0.0",
+    "generated": "2026-01-22T00:00:00Z",
+    "profile": "balanced",
+    "tools_used": [
+      "semgrep",
+      "trivy",
+      "trufflehog",
+      "njsscan",
+      "checkov",
+      "gitleaks"
+    ],
+    "notes": "OWASP Juice Shop - intentionally vulnerable web application for security training"
+  },
+  "expected_findings": [
+    {
+      "rule_id": "CWE-79",
+      "severity": "HIGH",
+      "category": "xss",
+      "min_count": 5,
+      "description": "Cross-Site Scripting (XSS) vulnerabilities in user input handling"
+    },
+    {
+      "rule_id": "CWE-89",
+      "severity": "CRITICAL",
+      "category": "sqli",
+      "min_count": 3,
+      "description": "SQL Injection vulnerabilities in database queries"
+    },
+    {
+      "rule_id": "CWE-22",
+      "severity": "HIGH",
+      "category": "path-traversal",
+      "min_count": 2,
+      "description": "Path Traversal vulnerabilities allowing file access"
+    },
+    {
+      "rule_id": "CWE-798",
+      "severity": "HIGH",
+      "category": "hardcoded-secrets",
+      "min_count": 1,
+      "description": "Hardcoded credentials and secrets in source code"
+    },
+    {
+      "rule_id": "CWE-327",
+      "severity": "MEDIUM",
+      "category": "weak-crypto",
+      "min_count": 1,
+      "description": "Use of weak cryptographic algorithms"
+    },
+    {
+      "rule_id": "CWE-502",
+      "severity": "HIGH",
+      "category": "deserialization",
+      "min_count": 1,
+      "description": "Insecure deserialization vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-918",
+      "severity": "MEDIUM",
+      "category": "ssrf",
+      "min_count": 1,
+      "description": "Server-Side Request Forgery (SSRF) vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-352",
+      "severity": "MEDIUM",
+      "category": "csrf",
+      "min_count": 1,
+      "description": "Cross-Site Request Forgery (CSRF) vulnerabilities"
+    },
+    {
+      "rule_id": "CWE-1321",
+      "severity": "HIGH",
+      "category": "prototype-pollution",
+      "min_count": 1,
+      "description": "JavaScript prototype pollution vulnerabilities"
+    },
+    {
+      "rule_id": "npm-vulnerability",
+      "severity": "HIGH",
+      "category": "dependency",
+      "min_count": 5,
+      "description": "Known vulnerabilities in npm dependencies"
+    }
+  ],
+  "tolerance": {
+    "missing_critical": 0,
+    "missing_high": 1,
+    "missing_medium": 3,
+    "extra_findings_ratio": 0.3
+  }
+}

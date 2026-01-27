@@ -523,3 +523,50 @@ jobs:
           pre-commit run --all-files --show-diff-on-failure
           # Run yamllint separately on our repo files only
           yamllint -c .yamllint.yaml .
+
+  # ==============================================================================
+  # INTEGRATION TESTS - Nightly only
+  # Tests scan pipeline, deduplication, and tool integration
+  # ==============================================================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r requirements-dev.txt
+
+      - name: Install minimal security tools
+        run: |
+          # Install semgrep for SAST testing
+          pip install semgrep
+          # Install trufflehog for secrets testing
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run integration tests (not slow)
+        run: |
+          python -m pytest tests/integration/ \
+            -v \
+            -m "integration and not slow" \
+            --tb=short \
+            --durations=10
+
+      - name: Run deduplication accuracy tests
+        run: |
+          python -m pytest tests/integration/test_dedup_accuracy.py \
+            -v \
+            --tb=short
