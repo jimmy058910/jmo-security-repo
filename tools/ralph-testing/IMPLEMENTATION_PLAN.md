@@ -62,9 +62,9 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
 | Bug | 0 | 0 | 0 | 0 |
-| Coverage | 0 | 2 | 1 | 3 |
+| Coverage | 0 | 1 | 1 | 2 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **2** | **1** | **3** |
+| **Total** | **0** | **1** | **1** | **2** |
 
 ---
 
@@ -133,14 +133,23 @@ All 33 secure_temp tests passing (2026-01-29).
 **Priority:** High
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/core/workflow_generators/gitlab_ci.py
-**Current Coverage:** 8%
+**Current Coverage:** 8% → 99%
 **Gap:**
-- [ ] GitLabCIGenerator class - nearly all methods untested
-- [ ] Template generation functions
-- [ ] CI/CD pipeline configuration builders
-**Note:** Low coverage module, but may be lower priority if not frequently used
+- [x] GitLabCIGenerator class - nearly all methods untested
+- [x] Template generation functions
+- [x] CI/CD pipeline configuration builders
+**Note:** Initial audit incorrectly reported 8% - actual coverage was already 98% via integration tests.
+**Resolution:** Created tests/unit/test_workflow_generators_gitlab_ci.py with 6 unit tests for branch partials:
+- `test_generate_script_no_repositories_target` - targets without repositories key (branch 130->141)
+- `test_generate_script_repositories_without_repos_dir` - repos dict without repos_dir (branch 132->134)
+- `test_generate_notification_jobs_empty_channels` - empty channels list (branch 224->223)
+- `test_generate_script_urls_only_no_repos_no_images` - URL-only targets
+- `test_format_timeout_unknown_profile_uses_default` - unknown profile timeout fallback
+- `test_to_yaml_no_description_annotation` - missing description annotation
+Remaining 1% uncovered: theoretical branches (25->29 when _generate_variables returns empty dict - not possible in current impl).
+All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 
 ### TASK-023: [Coverage] normalize_and_report.py at 79% coverage
 **Type:** Coverage
