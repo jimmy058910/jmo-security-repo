@@ -87,14 +87,20 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 **Priority:** High
 **Score:** [S+F+C] = 8 (S:3, F:3, C:2)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/core/archive_security.py
-**Current Coverage:** 19%
+**Current Coverage:** 19% → 98%
 **Gap:**
-- [ ] safe_tar_extract() function - lines 60-86 untested
-- [ ] safe_zip_extract() function - lines 103-109 untested
-- [ ] _is_safe_path() helper - lines 35-42 untested
+- [x] safe_tar_extract() function - lines 60-86 untested
+- [x] safe_zip_extract() function - lines 103-109 untested
+- [x] _is_safe_path() helper - lines 35-42 untested
 **Note:** Critical security module for path traversal prevention. Testing recommended.
+**Resolution:** Created tests/unit/test_archive_security.py with 22 tests:
+- TestIsSafePath: 7 tests (simple, nested, traversal, absolute, dots, nested-back)
+- TestSafeTarExtract: 9 tests (simple, nested, traversal, symlink warning, hardlink warning, safe symlink, empty linkname, Python 3.11 fallback, fallback symlink skip)
+- TestSafeZipExtract: 6 tests (simple, nested, traversal, deep traversal, multiple files, absolute path)
+Note: Python 3.12+ `data` filter provides defense in depth - tests verify warning is logged AND filter raises for unsafe links.
+All 22 tests + 93 cli_ralph tests passing (2026-01-29).
 
 ### TASK-021: [Coverage] secure_temp.py at 77% coverage
 **Type:** Coverage
