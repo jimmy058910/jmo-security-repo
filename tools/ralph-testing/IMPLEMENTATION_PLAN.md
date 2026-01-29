@@ -61,10 +61,10 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 0 | 1 | 0 | 1 |
-| Coverage | 0 | 2 | 2 | 4 |
+| Bug | 0 | 0 | 0 | 0 |
+| Coverage | 0 | 2 | 1 | 3 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **3** | **2** | **5** |
+| **Total** | **0** | **2** | **1** | **3** |
 
 ---
 
@@ -107,14 +107,26 @@ All 22 tests + 93 cli_ralph tests passing (2026-01-29).
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/core/secure_temp.py
-**Current Coverage:** 77%
+**Current Coverage:** 77% → 97%
 **Gap:**
-- [ ] Cleanup failure exception paths (lines 104-106, 179-181)
-- [ ] fd cleanup when still open (lines 169-172)
-- [ ] is_secure_permissions() helper (lines 214-216)
+- [x] Cleanup failure exception paths (lines 104-106, 179-181)
+- [x] fd cleanup when still open (lines 169-172)
+- [x] is_secure_permissions() helper (lines 214-216)
 **Note:** Security-related temp file handling. Some exception paths untested.
+**Resolution:** Added 9 new tests to tests/unit/test_secure_temp.py:
+- TestCleanupFailurePaths: 4 tests for exception handling
+  - `test_secure_temp_dir_cleanup_failure_logs_warning` - rmtree failure logs warning
+  - `test_secure_temp_file_cleanup_failure_logs_warning` - unlink failure logs warning
+  - `test_secure_temp_file_fd_still_open_on_exception` - fd closed in finally block
+  - `test_secure_temp_file_fd_close_oserror_handled` - OSError silently caught
+- TestIsSecurePermissionsHelper: 5 tests for is_secure_permissions()
+  - `test_is_secure_permissions_directory_true/false` - Directory permission checks
+  - `test_is_secure_permissions_file_true/false` - File permission checks
+  - `test_is_secure_permissions_uses_correct_expected` - DIR vs FILE constant selection
+Remaining 3% uncovered: branch partials for cleanup paths when temp doesn't exist (defensive code).
+All 33 secure_temp tests passing (2026-01-29).
 
 ### TASK-022: [Coverage] gitlab_ci workflow generator at 8% coverage
 **Type:** Coverage

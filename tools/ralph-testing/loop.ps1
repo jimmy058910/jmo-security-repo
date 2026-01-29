@@ -28,10 +28,14 @@
     - dedup: Analyze deduplication effectiveness and cluster quality
 
 .PARAMETER Target
-    Scope for audit mode:
-    - all: Audit entire CLI (default)
-    - wizard: Focus on jmo wizard and wizard_flows
-    - cli: Focus on main CLI commands
+    Scope for audit mode (each loads a dedicated prompt):
+    - wizard: Focus on jmo wizard and wizard_flows (default)
+    - cli: Focus on jmo.py, scan_orchestrator, tool_installer, installers/
+    - core: Focus on history_db, normalize_and_report, config, dedup
+    - adapters: Focus on 29 tool adapters (consistency, parsing)
+    - reporters: Focus on 13 reporters (XSS, output safety)
+    - security: Cross-cutting security audit (CWE hunting)
+    - all: Cycle through all targets sequentially
 
 .PARAMETER MaxIterations
     Maximum iterations before stopping (0 = infinite until plan empty)
@@ -54,8 +58,16 @@
     # Build mode only (fix issues until complete)
     .\tools\ralph-testing\loop.ps1 -Mode build
 
-    # Comprehensive wizard audit (single iteration)
-    .\tools\ralph-testing\loop.ps1 -Mode audit -Target wizard
+    # Audit specific targets (each has dedicated prompt)
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target wizard -SkipPermissions
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target cli -SkipPermissions
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target core -SkipPermissions
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target adapters -SkipPermissions
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target reporters -SkipPermissions
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target security -SkipPermissions
+
+    # Full codebase audit (cycles through all targets)
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Target all -SkipPermissions -MaxIterations 20
 
     # Full autonomy with circuit breaker (2 hour max)
     .\tools\ralph-testing\loop.ps1 -SkipPermissions -MaxDurationMinutes 120
@@ -80,8 +92,8 @@ param(
     [ValidateSet("auto", "test", "build", "audit", "validate", "dedup")]
     [string]$Mode = "auto",
 
-    [ValidateSet("all", "wizard", "cli")]
-    [string]$Target = "all",
+    [ValidateSet("all", "wizard", "cli", "core", "adapters", "reporters", "security")]
+    [string]$Target = "wizard",
 
     [int]$MaxIterations = 0,
 
@@ -113,13 +125,20 @@ $ConsecutiveFailures = 0
 $ForceAudit = $false
 $LoopStartTime = Get-Date
 
-# Prompt file mapping
+# Prompt file mapping - compound keys for audit:target
 $PromptFiles = @{
-    "test"     = "$RalphDir/PROMPT_test.md"
-    "audit"    = "$RalphDir/PROMPT_audit.md"
-    "build"    = "$RalphDir/PROMPT_build.md"
-    "validate" = "$RalphDir/PROMPT_validate.md"
-    "dedup"    = "$RalphDir/PROMPT_dedup_analysis.md"
+    "test"             = "$RalphDir/PROMPT_test.md"
+    "build"            = "$RalphDir/PROMPT_build.md"
+    "validate"         = "$RalphDir/PROMPT_validate.md"
+    "dedup"            = "$RalphDir/PROMPT_dedup_analysis.md"
+    # Audit targets - compound keys
+    "audit:wizard"     = "$RalphDir/PROMPT_audit_wizard.md"
+    "audit:cli"        = "$RalphDir/PROMPT_audit_cli.md"
+    "audit:core"       = "$RalphDir/PROMPT_audit_core.md"
+    "audit:adapters"   = "$RalphDir/PROMPT_audit_adapters.md"
+    "audit:reporters"  = "$RalphDir/PROMPT_audit_reporters.md"
+    "audit:security"   = "$RalphDir/PROMPT_audit_security.md"
+    "audit:all"        = "$RalphDir/PROMPT_audit_all.md"
 }
 
 # Single-run modes default to 1 iteration
@@ -153,18 +172,24 @@ function Get-OpenTaskCount {
 }
 
 # Function to determine effective mode for this iteration
+# Returns compound key for audit modes (e.g., "audit:wizard", "audit:cli")
 function Get-EffectiveMode {
     param(
         [string]$RequestedMode,
+        [string]$AuditTarget,
         [bool]$ForceAuditMode = $false
     )
 
     # Struggle detection can force audit mode
     if ($ForceAuditMode) {
-        return "audit"
+        return "audit:$AuditTarget"
     }
 
     if ($RequestedMode -ne "auto") {
+        # For audit mode, return compound key with target
+        if ($RequestedMode -eq "audit") {
+            return "audit:$AuditTarget"
+        }
         return $RequestedMode
     }
 
@@ -172,7 +197,7 @@ function Get-EffectiveMode {
     if (Test-HasOpenTasks) {
         return "build"
     } else {
-        return "audit"
+        return "audit:$AuditTarget"
     }
 }
 
@@ -251,7 +276,8 @@ while ($true) {
     }
 
     # Determine effective mode for this iteration (may be forced by struggle detection)
-    $EffectiveMode = Get-EffectiveMode -RequestedMode $Mode -ForceAuditMode $ForceAudit
+    # Returns compound key for audit modes (e.g., "audit:wizard")
+    $EffectiveMode = Get-EffectiveMode -RequestedMode $Mode -AuditTarget $Target -ForceAuditMode $ForceAudit
     $ForceAudit = $false  # Reset after use
     $PromptFile = $PromptFiles[$EffectiveMode]
     $OpenTasks = Get-OpenTaskCount

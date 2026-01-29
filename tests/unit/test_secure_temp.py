@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shutil
 import stat
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -278,3 +279,195 @@ class TestEdgeCases:
             large_content = "x" * 1_000_000  # 1MB
             temp_path.write_text(large_content)
             assert len(temp_path.read_text()) == 1_000_000
+
+
+class TestCleanupFailurePaths:
+    """Tests for cleanup failure exception handling paths."""
+
+    def test_secure_temp_dir_cleanup_failure_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that cleanup failure logs warning instead of raising (lines 104-106)."""
+        import logging
+        from unittest.mock import patch
+
+        caplog.set_level(logging.WARNING)
+
+        # Make rmtree raise an exception after the context exits
+        original_rmtree = shutil.rmtree
+        call_count = [0]
+
+        def failing_rmtree(_path, *_args, **_kwargs):
+            call_count[0] += 1
+            raise PermissionError("Simulated cleanup failure")
+
+        with patch("scripts.core.secure_temp.shutil.rmtree", failing_rmtree):
+            with secure_temp_dir(parent_dir=tmp_path) as temp_path:
+                saved_path = temp_path
+                assert temp_path.exists()
+            # Exception should NOT propagate - cleanup failure is logged not raised
+            # Check warning was logged
+            assert any("Failed to clean up temp directory" in record.message for record in caplog.records)
+            assert any("PermissionError" in record.message for record in caplog.records)
+        # rmtree was called
+        assert call_count[0] >= 1
+        # Cleanup manually since mock prevented it
+        if saved_path.exists():
+            original_rmtree(saved_path)
+
+    def test_secure_temp_file_cleanup_failure_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test that file cleanup failure logs warning instead of raising (lines 179-181)."""
+        import logging
+        from unittest.mock import patch
+
+        caplog.set_level(logging.WARNING)
+
+        # We need to mock the Path.unlink method to fail
+        original_unlink = Path.unlink
+
+        def failing_unlink(_self, *_args, **_kwargs):
+            raise PermissionError("Simulated file cleanup failure")
+
+        with patch.object(Path, "unlink", failing_unlink):
+            with secure_temp_file(parent_dir=tmp_path) as temp_path:
+                saved_path = temp_path
+                assert temp_path.exists()
+            # Exception should NOT propagate
+            assert any("Failed to clean up temp file" in record.message for record in caplog.records)
+            assert any("PermissionError" in record.message for record in caplog.records)
+        # Cleanup manually
+        if saved_path.exists():
+            original_unlink(saved_path)
+
+    def test_secure_temp_file_fd_still_open_on_exception(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that fd is closed if still open when exception occurs (lines 169-172)."""
+        from unittest.mock import patch
+
+        # Track os.close calls
+        close_calls = []
+        original_close = os.close
+
+        def tracking_close(fd):
+            close_calls.append(fd)
+            return original_close(fd)
+
+        # We need to simulate a scenario where fd is still set when finally runs.
+        # This happens if an exception occurs between mkstemp and os.close.
+        # Mock os.chmod to raise exception after mkstemp
+        original_chmod = os.chmod
+        first_chmod = [True]
+
+        def failing_chmod(path, mode):
+            if first_chmod[0]:
+                first_chmod[0] = False
+                raise PermissionError("Simulated chmod failure")
+            return original_chmod(path, mode)
+
+        with patch("scripts.core.secure_temp.os.close", tracking_close):
+            with patch("scripts.core.secure_temp.os.chmod", failing_chmod):
+                try:
+                    with secure_temp_file(parent_dir=tmp_path):
+                        pass
+                except PermissionError:
+                    pass
+
+        # fd should have been closed in finally block (lines 169-172)
+        # The fd was created by mkstemp and should be closed
+        assert len(close_calls) >= 1
+
+    def test_secure_temp_file_fd_close_oserror_handled(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that OSError from closing fd is silently caught (line 171-172)."""
+        from unittest.mock import patch
+
+        # We need:
+        # 1. chmod to fail so we never reach the normal os.close(fd); fd = None
+        # 2. In finally block, os.close(fd) to raise OSError
+        # The first os.close call is from finally block since chmod failed
+
+        close_calls = []
+
+        def always_fail_close(fd):
+            close_calls.append(fd)
+            raise OSError("Bad file descriptor")
+
+        original_chmod = os.chmod
+
+        def failing_chmod(path, mode):
+            # Fail on first call (the temp file chmod)
+            raise RuntimeError("Simulated chmod failure")
+
+        with patch("scripts.core.secure_temp.os.close", always_fail_close):
+            with patch("scripts.core.secure_temp.os.chmod", failing_chmod):
+                try:
+                    with secure_temp_file(parent_dir=tmp_path):
+                        pass
+                except RuntimeError:
+                    pass
+
+        # The finally block should have attempted to close the fd
+        # and the OSError should be caught silently (pass on line 172)
+        assert len(close_calls) >= 1
+
+
+class TestIsSecurePermissionsHelper:
+    """Tests for is_secure_permissions helper function (lines 214-216)."""
+
+    def test_is_secure_permissions_directory_true(self, tmp_path: Path) -> None:
+        """Test is_secure_permissions returns True for secure directory permissions."""
+        test_dir = tmp_path / "secure_dir"
+        test_dir.mkdir()
+        os.chmod(test_dir, DIR_PERMISSIONS)  # 0o700
+        # On Windows, this will pass but permissions aren't enforced same way
+        result = is_secure_permissions(test_dir, is_directory=True)
+        if not IS_WINDOWS:
+            assert result is True
+
+    def test_is_secure_permissions_directory_false(self, tmp_path: Path) -> None:
+        """Test is_secure_permissions returns False for insecure directory permissions."""
+        test_dir = tmp_path / "insecure_dir"
+        test_dir.mkdir()
+        os.chmod(test_dir, 0o755)  # rwxr-xr-x - not owner-only
+        result = is_secure_permissions(test_dir, is_directory=True)
+        if not IS_WINDOWS:
+            assert result is False
+
+    def test_is_secure_permissions_file_true(self, tmp_path: Path) -> None:
+        """Test is_secure_permissions returns True for secure file permissions."""
+        test_file = tmp_path / "secure_file.txt"
+        test_file.write_text("test")
+        os.chmod(test_file, FILE_PERMISSIONS)  # 0o600
+        result = is_secure_permissions(test_file, is_directory=False)
+        if not IS_WINDOWS:
+            assert result is True
+
+    def test_is_secure_permissions_file_false(self, tmp_path: Path) -> None:
+        """Test is_secure_permissions returns False for insecure file permissions."""
+        test_file = tmp_path / "insecure_file.txt"
+        test_file.write_text("test")
+        os.chmod(test_file, 0o644)  # rw-r--r-- - not owner-only
+        result = is_secure_permissions(test_file, is_directory=False)
+        if not IS_WINDOWS:
+            assert result is False
+
+    def test_is_secure_permissions_uses_correct_expected(self, tmp_path: Path) -> None:
+        """Test is_secure_permissions uses DIR_PERMISSIONS or FILE_PERMISSIONS based on flag."""
+        from unittest.mock import patch
+
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+
+        # When is_directory=True, should compare against DIR_PERMISSIONS (0o700)
+        with patch("scripts.core.secure_temp.get_temp_dir_permissions", return_value=DIR_PERMISSIONS):
+            assert is_secure_permissions(test_file, is_directory=True) is True
+            assert is_secure_permissions(test_file, is_directory=False) is False
+
+        # When is_directory=False, should compare against FILE_PERMISSIONS (0o600)
+        with patch("scripts.core.secure_temp.get_temp_dir_permissions", return_value=FILE_PERMISSIONS):
+            assert is_secure_permissions(test_file, is_directory=False) is True
+            assert is_secure_permissions(test_file, is_directory=True) is False

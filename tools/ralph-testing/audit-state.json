@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "description": "Tracks audit history per target for cooldown logic",
+  "cooldown_rules": {
+    "clean_days": 7,
+    "partial_days": 3,
+    "issues_days": 0
+  },
+  "audits": {
+    "wizard": {
+      "last_audit": "2026-01-27",
+      "status": "clean",
+      "tasks_created": 0,
+      "coverage_percent": 93,
+      "notes": "18 resolved tasks, codebase stable"
+    },
+    "cli": {
+      "last_audit": "2026-01-29",
+      "status": "partial",
+      "tasks_created": 1,
+      "coverage_percent": 45,
+      "notes": "tool_installer.py at 17% (many installation paths untested - requires mocking external tools). tool_commands.py at 91%. 1 failing test (test_lynis_version_command - test expectation mismatch with dict-based VERSION_COMMANDS). Main gaps: actual binary download/install paths. Security: subprocess calls use shell=False."
+    },
+    "core": {
+      "last_audit": "2026-01-29",
+      "status": "partial",
+      "tasks_created": 1,
+      "coverage_percent": 85,
+      "notes": "history_db.py 85%, dedup_enhanced.py 91%, normalize_and_report.py 79%. 323 tests passing. Main gaps: batch_insert_findings (lines 1598-1628), upsert_findings_batch (1669-1717), batch_insert_findings_optimized (1758-1803). SQL properly parameterized. No injection vectors."
+    },
+    "adapters": {
+      "last_audit": "2026-01-29",
+      "status": "clean",
+      "tasks_created": 0,
+      "coverage_percent": 91,
+      "notes": "558 tests passing. All 29 adapters audited. 100%: bandit, gosec, noseyparker, trufflehog, zap. 95-99%: bearer, checkov, hadolint, semgrep, shellcheck, syft, trivy, semgrep_secrets. 85-94%: remaining adapters. No new issues found - all use safe_load_json_file() and parameterized severity mapping."
+    },
+    "reporters": {
+      "last_audit": "2026-01-29",
+      "status": "clean",
+      "tasks_created": 0,
+      "coverage_percent": 95,
+      "notes": "392 tests passing. 13 reporters audited. 100%: diff_sarif, policy, suppression. 95-98%: basic, compliance, diff_md, simple_html, yaml. 83-94%: csv, diff_json, diff_html, html, sarif. XSS prevention in html_reporter.py (lines 73-86) escapes </script>, <script, <!--, backticks. No injection vectors found."
+    },
+    "security": {
+      "last_audit": "2026-01-29",
+      "status": "partial",
+      "tasks_created": 4,
+      "coverage_percent": 87,
+      "notes": "Cross-cutting CWE analysis complete. No critical vulnerabilities. 4 coverage gaps identified: archive_security.py (19%), secure_temp.py (77%), gitlab_ci.py (8%). All subprocess calls use shell=False (except 1 nosec). Path traversal prevention in place. SQL injection protected via parameterized queries. YAML uses safe_load throughout. No pickle/eval/exec usage."
+    }
+  }
+}
