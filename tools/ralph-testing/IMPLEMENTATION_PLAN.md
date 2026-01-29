@@ -61,16 +61,83 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 0 | 0 | 0 | 0 |
-| Coverage | 0 | 0 | 0 | 0 |
+| Bug | 0 | 1 | 0 | 1 |
+| Coverage | 0 | 2 | 2 | 4 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **0** | **0** | **0** |
+| **Total** | **0** | **3** | **2** | **5** |
 
 ---
 
 ## Current Tasks
 
-_No open tasks - wizard codebase at 93% combined coverage._
+### TASK-019: [Bug] test_lynis_version_command failing
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/unit/test_tool_installer_urls.py:534
+**Symptom:** `AssertionError: assert {'default': ['lynis', '--version'], ...} == ['lynis', 'show', 'version']`
+**Root Cause:** Test expects `VERSION_COMMANDS["lynis"]` to be a flat list, but code changed to dict with `default`/`fallback` keys for platform-specific handling
+**Fix:** Update test to check `VERSION_COMMANDS["lynis"]["fallback"]` or adjust expectation for new dict structure
+**Resolution:** Updated test to check dict structure. Now verifies: (1) lynis config is a dict, (2) `default` key contains `["lynis", "--version"]`, (3) `fallback` key contains `["lynis", "show", "version"]`. All 36 test_tool_installer_urls tests passing (2026-01-29).
+
+### TASK-020: [Coverage] archive_security.py at 19% coverage
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 8 (S:3, F:3, C:2)
+**Confidence:** 100%
+**Status:** Open
+**Target:** scripts/core/archive_security.py
+**Current Coverage:** 19%
+**Gap:**
+- [ ] safe_tar_extract() function - lines 60-86 untested
+- [ ] safe_zip_extract() function - lines 103-109 untested
+- [ ] _is_safe_path() helper - lines 35-42 untested
+**Note:** Critical security module for path traversal prevention. Testing recommended.
+
+### TASK-021: [Coverage] secure_temp.py at 77% coverage
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Open
+**Target:** scripts/core/secure_temp.py
+**Current Coverage:** 77%
+**Gap:**
+- [ ] Cleanup failure exception paths (lines 104-106, 179-181)
+- [ ] fd cleanup when still open (lines 169-172)
+- [ ] is_secure_permissions() helper (lines 214-216)
+**Note:** Security-related temp file handling. Some exception paths untested.
+
+### TASK-022: [Coverage] gitlab_ci workflow generator at 8% coverage
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Open
+**Target:** scripts/core/workflow_generators/gitlab_ci.py
+**Current Coverage:** 8%
+**Gap:**
+- [ ] GitLabCIGenerator class - nearly all methods untested
+- [ ] Template generation functions
+- [ ] CI/CD pipeline configuration builders
+**Note:** Low coverage module, but may be lower priority if not frequently used
+
+### TASK-023: [Coverage] normalize_and_report.py at 79% coverage
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Open
+**Target:** scripts/core/normalize_and_report.py
+**Current Coverage:** 79%
+**Gap:**
+- [ ] Lines 225-227, 232-242: Trivy-Syft enrichment exception paths
+- [ ] Lines 247-252, 260-269, 274-276: Compliance/priority enrichment exceptions
+- [ ] Lines 313-333: SBOM matching edge cases
+- [ ] Lines 582-621: Report generation edge cases
+**Note:** Core aggregation module. Exception paths and edge cases need coverage.
 
 ---
 
@@ -499,6 +566,9 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 | Date | Mode | Target | Tasks Created | Notes |
 |------|------|--------|---------------|-------|
+| 2026-01-29 | full-audit | security, core, cli, adapters, reporters | 5 | Full codebase audit. security: 4 tasks (archive_security 19%, secure_temp 77%). core: 1 task (normalize 79%). cli: 1 bug (lynis test). adapters: 0 (91% coverage). reporters: 0 (95% coverage). |
+| 2026-01-27 | audit | wizard + wizard_flows | 0 | Re-audit - 676 passed, 1 skip. 93% coverage. No new gaps. Codebase stable. |
+| 2026-01-27 | audit | wizard + wizard_flows | 0 | Ralph audit cycle - 676 passed, 1 skip. 93% combined coverage. All uncovered lines in Deferred. |
 | 2026-01-20 | audit | wizard + wizard_flows | 0 | Re-audit - 676 passed, 1 skip. 93% coverage. All uncovered lines in Deferred. |
 | 2026-01-20 | audit | wizard + wizard_flows | 0 | Final audit - 676 tests pass, 1 skip. Combined coverage 93%. No actionable gaps found. |
 | 2026-01-19 | audit | wizard + wizard_flows | 3 | Re-audit after TASK-015 resolved. 655 tests pass, 1 skip. tool_checker.py 73%, diff_flow.py 92%. |
@@ -510,13 +580,37 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 ## Notes
 
+### Full Codebase Audit Summary (2026-01-29)
+
+**Targets Audited:** 6 (security, core, cli, adapters, reporters, wizard)
+
+| Target | Status | Coverage | Tasks | Key Findings |
+|--------|--------|----------|-------|--------------|
+| security | partial | 87% | 4 | archive_security.py 19%, secure_temp.py 77%, gitlab_ci.py 8%. No critical vulnerabilities. |
+| core | partial | 85% | 1 | history_db 85%, dedup 91%, normalize 79%. SQL parameterized. |
+| cli | partial | 45% | 1 | tool_installer 17% (install paths need mocking), 1 failing test |
+| adapters | clean | 91% | 0 | 558 tests, all 29 adapters consistent |
+| reporters | clean | 95% | 0 | 392 tests, XSS prevention in place |
+| wizard | clean | 93% | 0 | 676 tests, no new issues |
+
+**Security Posture:**
+- All subprocess calls use `shell=False` (except 1 nosec B602 in tool_checker.py for platform commands)
+- Path traversal prevention via archive_security.py and path_sanitizers.py
+- SQL injection protected via parameterized queries in history_db.py
+- YAML uses safe_load throughout codebase
+- No pickle/eval/exec usage found
+- XSS prevention in HTML reporters
+
+**Overall Test Suite:**
+- ~5,000+ tests across all modules
+- 87% overall coverage (CI requires ≥85%)
+- 1 failing test: test_lynis_version_command (test expectation mismatch)
+
+### Wizard Notes (Previous Audits)
 - All 676 wizard tests passing (1 skipped - history database locked test on Windows)
 - Overall wizard_flows coverage: 93%
 - High coverage (>95%): validators.py (100%), profile_config.py (100%), config_models.py (100%), telemetry_helper.py (100%), dependency_flow.py (100%), repo_flow.py (100%), stack_flow.py (99%), command_builder.py (97%), cicd_flow.py (96%), diff_flow.py (95%)
 - Good coverage (85-95%): deployment_flow.py (93%), tool_checker.py (93%), trend_flow.py (92%), ui_helpers.py (93%), target_configurators.py (91%), base_flow.py (85%)
 - Windows platform (4 tools excluded: falco, afl++, mobsf, akto)
 - OPA detection fix was applied (find_tool instead of shutil.which)
-- No security vulnerabilities found - all subprocess calls use shell=False (except nosec B602 in tool_checker.py for platform commands)
-- No bugs found - all 676 tests passing
 - Remaining coverage gaps are low-priority: platform-specific code (Windows ctypes), rare exception paths, UI error handling
-- test suite execution time: ~2.5 minutes (156 seconds)

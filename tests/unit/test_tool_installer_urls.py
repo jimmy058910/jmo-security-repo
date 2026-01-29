@@ -527,12 +527,20 @@ class TestSpecialToolHandling:
         ), "lynis should use clone installation method"
 
     def test_lynis_version_command(self):
-        """Verify lynis version command is correct."""
+        """Verify lynis version command is correct (dict with default/fallback)."""
         from scripts.cli.tool_manager import VERSION_COMMANDS
 
-        lynis_cmd = VERSION_COMMANDS.get("lynis", [])
-        assert lynis_cmd == [
+        lynis_config = VERSION_COMMANDS.get("lynis", {})
+        # lynis uses platform-specific dict with default and fallback commands
+        assert isinstance(
+            lynis_config, dict
+        ), "lynis version config should be a dict with default/fallback"
+        assert lynis_config.get("default") == [
+            "lynis",
+            "--version",
+        ], "lynis default version check should use 'lynis --version'"
+        assert lynis_config.get("fallback") == [
             "lynis",
             "show",
             "version",
-        ], "lynis version check should use 'lynis show version'"
+        ], "lynis fallback version check should use 'lynis show version'"
