@@ -62,9 +62,9 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
 | Bug | 0 | 0 | 0 | 0 |
-| Coverage | 0 | 1 | 1 | 2 |
+| Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **1** | **1** | **2** |
+| **Total** | **0** | **0** | **0** | **0** |
 
 ---
 
@@ -156,15 +156,31 @@ All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/core/normalize_and_report.py
-**Current Coverage:** 79%
+**Current Coverage:** 79% → 100%
 **Gap:**
-- [ ] Lines 225-227, 232-242: Trivy-Syft enrichment exception paths
-- [ ] Lines 247-252, 260-269, 274-276: Compliance/priority enrichment exceptions
-- [ ] Lines 313-333: SBOM matching edge cases
-- [ ] Lines 582-621: Report generation edge cases
+- [x] Lines 225-227, 232-242: Trivy-Syft enrichment exception paths
+- [x] Lines 247-252, 260-269, 274-276: Compliance/priority enrichment exceptions
+- [x] Lines 313-333: SBOM matching edge cases
+- [x] Lines 582-621: Report generation edge cases
 **Note:** Core aggregation module. Exception paths and edge cases need coverage.
+**Resolution:** Created tests/unit/test_normalize_enrichment_exceptions.py with 32 tests:
+- TestTrivySyftEnrichmentExceptions: 1 test for generic Exception handler
+- TestComplianceEnrichmentExceptions: 3 tests for FileNotFoundError, TypeError, and generic Exception
+- TestPriorityEnrichmentExceptions: 3 tests for KeyError, ValueError, and generic Exception
+- TestDedupThresholdValidation: 4 tests for threshold validation (out-of-range, invalid value, clustering failure)
+- TestSafeLoadPluginExceptionPaths: 6 tests for FileNotFoundError, AdapterParseException, PermissionError, OSError, generic Exception, profiling timing failure
+- TestSbomIndexEdgeCases: 3 tests for non-dict findings, non-dict raw field
+- TestEnrichTrivyWithSyftEdgeCases: 1 test for non-dict findings
+- TestClusterCrossToolDuplicates: 3 tests for single/empty findings, consensus creation
+- TestDeprecatedSafeLoad: 2 tests for profiling timing failure, non-profiling path
+- TestAflPlusPlusHandling: 1 test for afl++.json normalization
+- TestSyftIndexPathBranch: 1 test for name-only packages (no path)
+- TestPriorityEnrichmentLoop: 2 tests for finding id not in scores, empty findings
+- TestDedupThresholdValidRange: 1 test for valid threshold applied
+- TestProgressCallbackExit: 1 test for progress callback intervals
+All 65 normalize tests + 93 cli_ralph tests passing (2026-01-29).
 
 ---
 
