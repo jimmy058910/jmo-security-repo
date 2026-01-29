@@ -377,8 +377,10 @@ while ($true) {
     Write-Host "(Monitor in another terminal: Get-Content $ProgressFile -Wait)" -ForegroundColor DarkGray
 
     # ─────────────────────────────────────────────────────────────
-    # RALPH PLAYBOOK PATTERN: cat PROMPT.md | claude -p [flags]
-    # Using stdin piping + stream-json for reliability
+    # RALPH PLAYBOOK PATTERN with LIVE TEXT STREAMING
+    # Parses stream-json in real-time, displays assistant text,
+    # logs raw JSON to iteration log for debugging
+    # Reference: https://www.aihero.dev/heres-how-to-stream-claude-code-with-afk-ralph
     # ─────────────────────────────────────────────────────────────
 
     Write-Host "Starting fresh session ($EffectiveMode mode)..." -ForegroundColor DarkGray
@@ -390,9 +392,31 @@ while ($true) {
         $ClaudeFlags += "--dangerously-skip-permissions"
     }
 
-    # Use stdin piping like Ralph Playbook: cat PROMPT.md | claude -p
-    # Note: Output may not display in real-time but execution is more reliable
-    Get-Content $PromptFile -Raw | & claude @ClaudeFlags
+    # Stream with real-time text extraction
+    # - Logs raw JSON to iteration log for debugging
+    # - Extracts and displays assistant text as it streams
+    Get-Content $PromptFile -Raw | & claude @ClaudeFlags 2>&1 | ForEach-Object {
+        $line = $_
+
+        # Log raw JSON to iteration log for debugging
+        $line | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+        # Parse and display assistant text in real-time
+        if ($line -match '^\{') {
+            try {
+                $json = $line | ConvertFrom-Json
+                if ($json.type -eq "assistant") {
+                    foreach ($content in $json.message.content) {
+                        if ($content.type -eq "text" -and $content.text) {
+                            Write-Host -NoNewline $content.text
+                        }
+                    }
+                }
+            } catch {
+                # Non-parseable line, skip silently
+            }
+        }
+    }
 
     # Stop progress monitor
     $PowerShell.Stop()
