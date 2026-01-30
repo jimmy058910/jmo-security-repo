@@ -50,8 +50,11 @@ class TestAdaptersValidate:
     """Test suite for `jmo adapters validate` command (AD-003)."""
 
     def test_ad_003_adapters_validate(self, jmo_runner):
-        """AD-003: jmo adapters validate checks all adapter registrations."""
-        result = jmo_runner(["adapters", "validate"])
+        """AD-003: jmo adapters validate checks a specific adapter file."""
+        # The validate command requires a file argument
+        # Use bandit_adapter.py as a known-good adapter
+        adapter_file = "scripts/core/adapters/bandit_adapter.py"
+        result = jmo_runner(["adapters", "validate", adapter_file])
 
         assert result.returncode == 0, f"Validation failed: {result.stderr}"
 

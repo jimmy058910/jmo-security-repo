@@ -1686,10 +1686,12 @@ Documentation: https://docs.jmotools.com
 
     try:
         return ap.parse_args()
-    except SystemExit:
+    except SystemExit as e:
         import os
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
+        # Only suppress exit(0) for help/version during pytest
+        # Let errors (exit code != 0) propagate naturally
+        if os.getenv("PYTEST_CURRENT_TEST") and e.code == 0:
             return argparse.Namespace()
         raise
 
@@ -2798,33 +2800,60 @@ def cmd_wizard(args):
 
 
 def cmd_setup(args):
-    """Run tool verification and installation."""
-    import subprocess  # nosec B404 - needed for tool installation
+    """Run tool verification and installation.
 
-    script = (
-        Path(__file__).resolve().parent.parent / "core" / "check_and_install_tools.sh"
-    )
-    if not script.exists():
-        sys.stderr.write(f"ERROR: Tool setup script not found: {script}\n")
-        return 1
+    This is a wrapper around `jmo tools` commands for backwards compatibility.
+    Replaces the previous bash script implementation to work cross-platform.
+    """
+    import argparse
 
-    cmd = ["bash", str(script)]
+    from scripts.cli.tool_commands import cmd_tools_check, cmd_tools_install
 
+    # --print-commands: Show what would be installed without installing
+    if args.print_commands:
+        # Create args for tools install --dry-run --print-script
+        tools_args = argparse.Namespace(
+            profile="balanced",
+            tools=[],
+            dry_run=False,
+            print_script=True,
+            yes=True,
+            sequential=False,
+            jobs=4,
+        )
+        return cmd_tools_install(tools_args)
+
+    # --auto-install: Install missing tools
     if args.auto_install:
-        cmd.append("--install")
-    elif args.print_commands:
-        cmd.append("--print-commands")
-
-    if args.strict:
-        cmd.append("--strict")
-
-    rc = subprocess.run(cmd).returncode  # nosec B603 - controlled command
-
-    if rc != 0 and args.strict:
-        sys.stderr.write("ERROR: Tool setup failed\n")
+        tools_args = argparse.Namespace(
+            profile="balanced",
+            tools=[],
+            dry_run=False,
+            print_script=False,
+            yes=True,  # Non-interactive
+            sequential=False,
+            jobs=4,
+            force=getattr(args, "force_reinstall", False),
+        )
+        rc = cmd_tools_install(tools_args)
+        if rc != 0 and args.strict:
+            sys.stderr.write("ERROR: Tool setup failed\n")
         return rc
 
-    return 0
+    # Default: Check tool status
+    tools_args = argparse.Namespace(
+        profile="balanced",
+        tools=[],
+        json=False,
+    )
+    rc = cmd_tools_check(tools_args)
+
+    # In strict mode, exit non-zero if tools are missing
+    if args.strict and rc != 0:
+        sys.stderr.write("ERROR: Some tools are missing (strict mode)\n")
+        return 1
+
+    return rc
 
 
 def cmd_profile(args, profile_name: str):

@@ -61,95 +61,85 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 0 | 0 | 0 | 0 |
+| Bug | 1 | 0 | 0 | 1 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **0** | **0** | **0** |
+| **Total** | **1** | **0** | **0** | **1** |
 
 ---
 
 ## Current Tasks
 
-### TASK-019: [Bug] test_lynis_version_command failing
+### TASK-024: [Bug] cmd_setup fails on Windows - bash script path handling
+**Type:** Bug
+**Priority:** Critical
+**Score:** [S+F+C] = 9 (S:3, F:3, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** scripts/cli/jmo.py:2800-2827
+**Symptom:**
+```
+/bin/bash: C:Projectsjmo-security-reposcriptscorecheck_and_install_tools.sh: No such file or directory
+ERROR: Tool setup failed
+```
+**Root Cause:** `cmd_setup()` invokes bash script with Windows path. The path is correctly constructed via `Path`, but subprocess passes it to bash which cannot interpret Windows paths. Additionally, this creates platform-specific behavior.
+**Fix:** Replaced bash script invocation with pure Python implementation using existing `cmd_tools_check` and `cmd_tools_install` from tool_commands.py.
+**Resolution:** (2026-01-29) Rewrote `cmd_setup()` to use the Python-based tool management infrastructure instead of bash script:
+- `--print-commands` → `cmd_tools_install(print_script=True)`
+- `--auto-install` → `cmd_tools_install(yes=True)`
+- Default → `cmd_tools_check()`
+Also fixed argparse SystemExit handling in `parse_args()` to only suppress exit(0) during pytest, allowing error exits to propagate correctly. Fixed test_adapters_commands.py to provide required file argument to `adapters validate`. All 24 setup tests + 4 adapter tests passing.
+
+### TASK-025: [Bug] Untracked test files have broken imports and logic
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
 **Confidence:** 100%
-**Status:** Resolved
-**File:** tests/unit/test_tool_installer_urls.py:534
-**Symptom:** `AssertionError: assert {'default': ['lynis', '--version'], ...} == ['lynis', 'show', 'version']`
-**Root Cause:** Test expects `VERSION_COMMANDS["lynis"]` to be a flat list, but code changed to dict with `default`/`fallback` keys for platform-specific handling
-**Fix:** Update test to check `VERSION_COMMANDS["lynis"]["fallback"]` or adjust expectation for new dict structure
-**Resolution:** Updated test to check dict structure. Now verifies: (1) lynis config is a dict, (2) `default` key contains `["lynis", "--version"]`, (3) `fallback` key contains `["lynis", "show", "version"]`. All 36 test_tool_installer_urls tests passing (2026-01-29).
+**Status:** Open
+**Files:**
+- tests/core/test_error_recovery.py - imports `JsonReporter` and `HistoryDB` which don't exist
+- tests/cli_ralph/test_setup_command.py - 6 failing tests due to TASK-024
+- tests/cli_ralph/test_schedule_command.py - 1 failing test (unknown subcommand returns 0 instead of error)
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'scripts.core.reporters.json_reporter'
+ImportError: cannot import name 'HistoryDB' from 'scripts.core.history_db'
+```
+**Root Cause:** Untracked test files reference classes/modules that don't exist or have incorrect API expectations.
+**Fix:**
+1. Remove or update `test_error_recovery.py` - fix imports to use actual module names
+2. Fix `test_schedule_command.py` - update test expectation for unknown subcommand behavior
+3. Block `test_setup_command.py` tests until TASK-024 is resolved
 
-### TASK-020: [Coverage] archive_security.py at 19% coverage
-**Type:** Coverage
-**Priority:** High
-**Score:** [S+F+C] = 8 (S:3, F:3, C:2)
-**Confidence:** 100%
-**Status:** Resolved
-**Target:** scripts/core/archive_security.py
-**Current Coverage:** 19% → 98%
-**Gap:**
-- [x] safe_tar_extract() function - lines 60-86 untested
-- [x] safe_zip_extract() function - lines 103-109 untested
-- [x] _is_safe_path() helper - lines 35-42 untested
-**Note:** Critical security module for path traversal prevention. Testing recommended.
-**Resolution:** Created tests/unit/test_archive_security.py with 22 tests:
-- TestIsSafePath: 7 tests (simple, nested, traversal, absolute, dots, nested-back)
-- TestSafeTarExtract: 9 tests (simple, nested, traversal, symlink warning, hardlink warning, safe symlink, empty linkname, Python 3.11 fallback, fallback symlink skip)
-- TestSafeZipExtract: 6 tests (simple, nested, traversal, deep traversal, multiple files, absolute path)
-Note: Python 3.12+ `data` filter provides defense in depth - tests verify warning is logged AND filter raises for unsafe links.
-All 22 tests + 93 cli_ralph tests passing (2026-01-29).
+---
 
-### TASK-021: [Coverage] secure_temp.py at 77% coverage
-**Type:** Coverage
-**Priority:** Medium
-**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
-**Confidence:** 100%
-**Status:** Resolved
-**Target:** scripts/core/secure_temp.py
-**Current Coverage:** 77% → 97%
-**Gap:**
-- [x] Cleanup failure exception paths (lines 104-106, 179-181)
-- [x] fd cleanup when still open (lines 169-172)
-- [x] is_secure_permissions() helper (lines 214-216)
-**Note:** Security-related temp file handling. Some exception paths untested.
-**Resolution:** Added 9 new tests to tests/unit/test_secure_temp.py:
-- TestCleanupFailurePaths: 4 tests for exception handling
-  - `test_secure_temp_dir_cleanup_failure_logs_warning` - rmtree failure logs warning
-  - `test_secure_temp_file_cleanup_failure_logs_warning` - unlink failure logs warning
-  - `test_secure_temp_file_fd_still_open_on_exception` - fd closed in finally block
-  - `test_secure_temp_file_fd_close_oserror_handled` - OSError silently caught
-- TestIsSecurePermissionsHelper: 5 tests for is_secure_permissions()
-  - `test_is_secure_permissions_directory_true/false` - Directory permission checks
-  - `test_is_secure_permissions_file_true/false` - File permission checks
-  - `test_is_secure_permissions_uses_correct_expected` - DIR vs FILE constant selection
-Remaining 3% uncovered: branch partials for cleanup paths when temp doesn't exist (defensive code).
-All 33 secure_temp tests passing (2026-01-29).
+## Deferred Issues
 
-### TASK-022: [Coverage] gitlab_ci workflow generator at 8% coverage
-**Type:** Coverage
-**Priority:** High
-**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
-**Confidence:** 100%
-**Status:** Resolved
-**Target:** scripts/core/workflow_generators/gitlab_ci.py
-**Current Coverage:** 8% → 99%
-**Gap:**
-- [x] GitLabCIGenerator class - nearly all methods untested
-- [x] Template generation functions
-- [x] CI/CD pipeline configuration builders
-**Note:** Initial audit incorrectly reported 8% - actual coverage was already 98% via integration tests.
-**Resolution:** Created tests/unit/test_workflow_generators_gitlab_ci.py with 6 unit tests for branch partials:
-- `test_generate_script_no_repositories_target` - targets without repositories key (branch 130->141)
-- `test_generate_script_repositories_without_repos_dir` - repos dict without repos_dir (branch 132->134)
-- `test_generate_notification_jobs_empty_channels` - empty channels list (branch 224->223)
-- `test_generate_script_urls_only_no_repos_no_images` - URL-only targets
-- `test_format_timeout_unknown_profile_uses_default` - unknown profile timeout fallback
-- `test_to_yaml_no_description_annotation` - missing description annotation
-Remaining 1% uncovered: theoretical branches (25->29 when _generate_variables returns empty dict - not possible in current impl).
-All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
+<!-- Items found but not tasked (Priority < MEDIUM or Confidence < threshold) -->
+
+| Description | Score | Reason Deferred |
+|-------------|-------|-----------------|
+| shell=True in tool_checker.py:672 for platform commands | 4 | Has nosec comment, commands from trusted source (get_remediation_for_tool) |
+| Hardcoded timeout=300 in tool_checker.py:675 | 3 | Enhancement only - works fine as-is |
+| base_flow.py exception handlers swallow errors silently (lines 64, 79) | 3 | Terminal width detection - intentional fallback behavior |
+| No integration tests in tests/cli_ralph/ for wizard flows | 5 | Low confidence - cli_ralph is for jmo CLI, not wizard |
+| ui_helpers.py at 93% coverage | 3 | Enhancement only - minor untested lines (119, 133-134) |
+| ArtifactGenerator methods in base_flow.py (lines 567-591) | 3 | Enhancement only - thin wrappers around wizard_generators |
+| PromptHelper.print_info/warning/error (lines 403-427) | 3 | Simple print wrappers - low value tests |
+| trend_flow.py lines 304-305: Unknown command handling | 3 | Already covered by test_run_trend_command_unknown |
+| tool_checker.py lines 859-864: Exception handling during install | 3 | Low frequency - already has similar tests |
+| base_flow.py lines 34-67: Windows ctypes VT enablement | 3 | Platform-specific ctypes code - impractical to unit test |
+| tool_checker.py lines 629-642: ToolInstaller ImportError fallback | 3 | Rare code path - ToolInstaller always available in tests |
+| diff_flow.py lines 152-154, 196-198: Error handling edge cases | 3 | UI error handling - 95% coverage sufficient |
+| target_configurators.py branch coverage gaps (79-80, 93, 101, 106) | 3 | Minor validation paths - 91% coverage sufficient |
+| deployment_flow.py lines 186-199: Environment detection edge cases | 3 | File parsing fallbacks - 93% coverage sufficient |
+| trend_flow.py lines 382-399: ValueError in scan selection loops | 3 | Input validation - similar to diff_flow patterns already documented |
+| command_builder.py line 205: unreachable else branch | 3 | Defensive code path - cannot reach without breaking type hints |
+| base_flow.py line 443: single-line exception path | 3 | Print statement exception - low value |
+
+---
+
+## Resolved Tasks
 
 ### TASK-023: [Coverage] normalize_and_report.py at 79% coverage
 **Type:** Coverage
@@ -182,9 +172,86 @@ All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 - TestProgressCallbackExit: 1 test for progress callback intervals
 All 65 normalize tests + 93 cli_ralph tests passing (2026-01-29).
 
----
+### TASK-022: [Coverage] gitlab_ci workflow generator at 8% coverage
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/core/workflow_generators/gitlab_ci.py
+**Current Coverage:** 8% → 99%
+**Gap:**
+- [x] GitLabCIGenerator class - nearly all methods untested
+- [x] Template generation functions
+- [x] CI/CD pipeline configuration builders
+**Note:** Initial audit incorrectly reported 8% - actual coverage was already 98% via integration tests.
+**Resolution:** Created tests/unit/test_workflow_generators_gitlab_ci.py with 6 unit tests for branch partials:
+- `test_generate_script_no_repositories_target` - targets without repositories key (branch 130->141)
+- `test_generate_script_repositories_without_repos_dir` - repos dict without repos_dir (branch 132->134)
+- `test_generate_notification_jobs_empty_channels` - empty channels list (branch 224->223)
+- `test_generate_script_urls_only_no_repos_no_images` - URL-only targets
+- `test_format_timeout_unknown_profile_uses_default` - unknown profile timeout fallback
+- `test_to_yaml_no_description_annotation` - missing description annotation
+Remaining 1% uncovered: theoretical branches (25->29 when _generate_variables returns empty dict - not possible in current impl).
+All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 
-## Resolved Tasks
+### TASK-021: [Coverage] secure_temp.py at 77% coverage
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/core/secure_temp.py
+**Current Coverage:** 77% → 97%
+**Gap:**
+- [x] Cleanup failure exception paths (lines 104-106, 179-181)
+- [x] fd cleanup when still open (lines 169-172)
+- [x] is_secure_permissions() helper (lines 214-216)
+**Note:** Security-related temp file handling. Some exception paths untested.
+**Resolution:** Added 9 new tests to tests/unit/test_secure_temp.py:
+- TestCleanupFailurePaths: 4 tests for exception handling
+  - `test_secure_temp_dir_cleanup_failure_logs_warning` - rmtree failure logs warning
+  - `test_secure_temp_file_cleanup_failure_logs_warning` - unlink failure logs warning
+  - `test_secure_temp_file_fd_still_open_on_exception` - fd closed in finally block
+  - `test_secure_temp_file_fd_close_oserror_handled` - OSError silently caught
+- TestIsSecurePermissionsHelper: 5 tests for is_secure_permissions()
+  - `test_is_secure_permissions_directory_true/false` - Directory permission checks
+  - `test_is_secure_permissions_file_true/false` - File permission checks
+  - `test_is_secure_permissions_uses_correct_expected` - DIR vs FILE constant selection
+Remaining 3% uncovered: branch partials for cleanup paths when temp doesn't exist (defensive code).
+All 33 secure_temp tests passing (2026-01-29).
+
+### TASK-020: [Coverage] archive_security.py at 19% coverage
+**Type:** Coverage
+**Priority:** High
+**Score:** [S+F+C] = 8 (S:3, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Target:** scripts/core/archive_security.py
+**Current Coverage:** 19% → 98%
+**Gap:**
+- [x] safe_tar_extract() function - lines 60-86 untested
+- [x] safe_zip_extract() function - lines 103-109 untested
+- [x] _is_safe_path() helper - lines 35-42 untested
+**Note:** Critical security module for path traversal prevention. Testing recommended.
+**Resolution:** Created tests/unit/test_archive_security.py with 22 tests:
+- TestIsSafePath: 7 tests (simple, nested, traversal, absolute, dots, nested-back)
+- TestSafeTarExtract: 9 tests (simple, nested, traversal, symlink warning, hardlink warning, safe symlink, empty linkname, Python 3.11 fallback, fallback symlink skip)
+- TestSafeZipExtract: 6 tests (simple, nested, traversal, deep traversal, multiple files, absolute path)
+Note: Python 3.12+ `data` filter provides defense in depth - tests verify warning is logged AND filter raises for unsafe links.
+All 22 tests + 93 cli_ralph tests passing (2026-01-29).
+
+### TASK-019: [Bug] test_lynis_version_command failing
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/unit/test_tool_installer_urls.py:534
+**Symptom:** `AssertionError: assert {'default': ['lynis', '--version'], ...} == ['lynis', 'show', 'version']`
+**Root Cause:** Test expects `VERSION_COMMANDS["lynis"]` to be a flat list, but code changed to dict with `default`/`fallback` keys for platform-specific handling
+**Fix:** Update test to check `VERSION_COMMANDS["lynis"]["fallback"]` or adjust expectation for new dict structure
+**Resolution:** Updated test to check dict structure. Now verifies: (1) lynis config is a dict, (2) `default` key contains `["lynis", "--version"]`, (3) `fallback` key contains `["lynis", "show", "version"]`. All 36 test_tool_installer_urls tests passing (2026-01-29).
 
 ### TASK-018: [Coverage] diff_flow.py at 92% - exception paths untested
 **Type:** Coverage
@@ -346,6 +413,8 @@ All 30 cicd_flow tests + 93 cli_ralph tests passing (2026-01-19)
 | target_configurators.py branch coverage gaps (79-80, 93, 101, 106) | 3 | Minor validation paths - 91% coverage sufficient |
 | deployment_flow.py lines 186-199: Environment detection edge cases | 3 | File parsing fallbacks - 93% coverage sufficient |
 | trend_flow.py lines 382-399: ValueError in scan selection loops | 3 | Input validation - similar to diff_flow patterns already documented |
+| command_builder.py line 205: unreachable else branch | 3 | Defensive code path - cannot reach without breaking type hints |
+| base_flow.py line 443: single-line exception path | 3 | Print statement exception - low value |
 
 ---
 
@@ -609,6 +678,9 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 | Date | Mode | Target | Tasks Created | Notes |
 |------|------|--------|---------------|-------|
+| 2026-01-29 | full-audit -Force | all 6 targets | 2 | Force re-audit: TASK-024 (cmd_setup Windows bug), TASK-025 (broken untracked tests). Core tests passing: adapters 1886, reporters 392, wizard 987, core 283. |
+| 2026-01-29 | full-audit -Force | all 6 targets | 0 | Force re-audit: All targets now clean. security 97%, core 86%, cli 90%, adapters 92%, reporters 95%, wizard 93%. ~3,500+ tests passing. All previous tasks resolved. |
+| 2026-01-29 | audit | wizard + wizard_flows | 0 | Re-audit: 676 passed, 1 skip. 93% combined coverage. No actionable gaps found. Codebase stable. |
 | 2026-01-29 | full-audit | security, core, cli, adapters, reporters | 5 | Full codebase audit. security: 4 tasks (archive_security 19%, secure_temp 77%). core: 1 task (normalize 79%). cli: 1 bug (lynis test). adapters: 0 (91% coverage). reporters: 0 (95% coverage). |
 | 2026-01-27 | audit | wizard + wizard_flows | 0 | Re-audit - 676 passed, 1 skip. 93% coverage. No new gaps. Codebase stable. |
 | 2026-01-27 | audit | wizard + wizard_flows | 0 | Ralph audit cycle - 676 passed, 1 skip. 93% combined coverage. All uncovered lines in Deferred. |
@@ -623,31 +695,34 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 ## Notes
 
-### Full Codebase Audit Summary (2026-01-29)
+### Full Codebase Audit Summary (2026-01-29 -Force #2)
 
 **Targets Audited:** 6 (security, core, cli, adapters, reporters, wizard)
 
-| Target | Status | Coverage | Tasks | Key Findings |
-|--------|--------|----------|-------|--------------|
-| security | partial | 87% | 4 | archive_security.py 19%, secure_temp.py 77%, gitlab_ci.py 8%. No critical vulnerabilities. |
-| core | partial | 85% | 1 | history_db 85%, dedup 91%, normalize 79%. SQL parameterized. |
-| cli | partial | 45% | 1 | tool_installer 17% (install paths need mocking), 1 failing test |
-| adapters | clean | 91% | 0 | 558 tests, all 29 adapters consistent |
-| reporters | clean | 95% | 0 | 392 tests, XSS prevention in place |
-| wizard | clean | 93% | 0 | 676 tests, no new issues |
+**Test Results:**
+- adapters: 1886 passed
+- reporters: 392 passed, 1 skipped
+- wizard: 987 passed, 1 skipped
+- core: 283 passed (218 history_db/dedup + 65 normalize)
+- cli: 147 passed (scan_orchestrator + tool_installer)
 
-**Security Posture:**
+**Issues Found:**
+
+1. **TASK-024 (Critical)**: `jmo setup` command fails on Windows due to bash script path handling. Return code 127 from bash.
+
+2. **TASK-025 (High)**: Untracked test files have broken imports:
+   - `tests/core/test_error_recovery.py` - imports non-existent `JsonReporter` and `HistoryDB`
+   - 5 failing tests in test_error_recovery.py
+   - 6 failing tests in test_setup_command.py (blocked by TASK-024)
+   - 1 failing test in test_schedule_command.py
+
+**Security Posture (Verified):**
 - All subprocess calls use `shell=False` (except 1 nosec B602 in tool_checker.py for platform commands)
-- Path traversal prevention via archive_security.py and path_sanitizers.py
-- SQL injection protected via parameterized queries in history_db.py
-- YAML uses safe_load throughout codebase
+- Path traversal prevention via archive_security._is_safe_path() - 98% covered
+- SQL injection protected via parameterized queries in history_db.py - no f-string SQL
+- YAML uses safe_load throughout codebase - verified grep found no unsafe usage
 - No pickle/eval/exec usage found
-- XSS prevention in HTML reporters
-
-**Overall Test Suite:**
-- ~5,000+ tests across all modules
-- 87% overall coverage (CI requires ≥85%)
-- 1 failing test: test_lynis_version_command (test expectation mismatch)
+- XSS prevention in HTML reporters - escape functions in simple_html and html_reporter
 
 ### Wizard Notes (Previous Audits)
 - All 676 wizard tests passing (1 skipped - history database locked test on Windows)
