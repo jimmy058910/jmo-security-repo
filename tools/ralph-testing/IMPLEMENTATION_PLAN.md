@@ -61,10 +61,10 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 1 | 0 | 0 | 1 |
+| Bug | 0 | 0 | 0 | 0 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **1** | **0** | **0** | **1** |
+| **Total** | **0** | **0** | **0** | **0** |
 
 ---
 
@@ -95,7 +95,7 @@ Also fixed argparse SystemExit handling in `parse_args()` to only suppress exit(
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Files:**
 - tests/core/test_error_recovery.py - imports `JsonReporter` and `HistoryDB` which don't exist
 - tests/cli_ralph/test_setup_command.py - 6 failing tests due to TASK-024
@@ -110,6 +110,14 @@ ImportError: cannot import name 'HistoryDB' from 'scripts.core.history_db'
 1. Remove or update `test_error_recovery.py` - fix imports to use actual module names
 2. Fix `test_schedule_command.py` - update test expectation for unknown subcommand behavior
 3. Block `test_setup_command.py` tests until TASK-024 is resolved
+**Resolution:** (2026-01-29) Fixed test_error_recovery.py:
+- Replaced `from scripts.core.reporters.json_reporter import JsonReporter` → `from scripts.core.reporters.basic_reporter import write_json`
+- Replaced `from scripts.core.history_db import HistoryDB` → `from scripts.core.history_db import init_database, get_connection` (5 occurrences)
+- Rewrote tests to use functional API instead of non-existent class-based API
+- test_disk_full_during_db_insert: Used mock on sqlite3.connect instead of patching read-only Connection.execute
+- All 21 tests now pass (19 pass, 2 skip on Windows)
+test_setup_command.py: All tests pass now that TASK-024 is resolved.
+test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 2 skip)
 
 ---
 
