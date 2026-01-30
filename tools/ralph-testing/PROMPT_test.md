@@ -2,7 +2,7 @@
 
 ## Your Mission
 
-Run the full test suite, analyze failures, and populate IMPLEMENTATION_PLAN.md with tasks.
+Run the full test suite, analyze failures, and populate `tools/ralph-testing/IMPLEMENTATION_PLAN.md` with tasks.
 
 ## Workflow
 

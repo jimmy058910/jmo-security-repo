@@ -8,46 +8,46 @@
   },
   "audits": {
     "wizard": {
-      "last_audit": "2026-01-27",
+      "last_audit": "2026-01-29",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 93,
-      "notes": "18 resolved tasks, codebase stable"
+      "notes": "371 wizard tests passing. All flows at 91-100%: validators 100%, telemetry_helper 100%, dependency_flow 100%, repo_flow 100%, stack_flow 99%, command_builder 97%, cicd_flow 96%, diff_flow 95%, tool_checker 93%, trend_flow 92%, target_configurators 91%."
     },
     "cli": {
       "last_audit": "2026-01-29",
       "status": "partial",
-      "tasks_created": 1,
-      "coverage_percent": 45,
-      "notes": "tool_installer.py at 17% (many installation paths untested - requires mocking external tools). tool_commands.py at 91%. 1 failing test (test_lynis_version_command - test expectation mismatch with dict-based VERSION_COMMANDS). Main gaps: actual binary download/install paths. Security: subprocess calls use shell=False."
+      "tasks_created": 2,
+      "coverage_percent": 90,
+      "notes": "1426 CLI tests passing. Fixed TASK-027 (test imports using from tests.conftest) and TASK-028 (test_history_query and test_policy_test API changes). 8 untracked test files now importable."
     },
     "core": {
       "last_audit": "2026-01-29",
-      "status": "partial",
-      "tasks_created": 1,
-      "coverage_percent": 85,
-      "notes": "history_db.py 85%, dedup_enhanced.py 91%, normalize_and_report.py 79%. 323 tests passing. Main gaps: batch_insert_findings (lines 1598-1628), upsert_findings_batch (1669-1717), batch_insert_findings_optimized (1758-1803). SQL properly parameterized. No injection vectors."
+      "status": "clean",
+      "tasks_created": 0,
+      "coverage_percent": 86,
+      "notes": "151 history_db tests + 21 error_recovery tests passing. history_db.py SQL parameterized. get_query_plan() uses f-string but only internal queries. All TASK-020 through TASK-023 resolved."
     },
     "adapters": {
       "last_audit": "2026-01-29",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 91,
-      "notes": "558 tests passing. All 29 adapters audited. 100%: bandit, gosec, noseyparker, trufflehog, zap. 95-99%: bearer, checkov, hadolint, semgrep, shellcheck, syft, trivy, semgrep_secrets. 85-94%: remaining adapters. No new issues found - all use safe_load_json_file() and parameterized severity mapping."
+      "coverage_percent": 92,
+      "notes": "1886 tests passing. All 29 adapters audited. 100%: bandit, gosec, noseyparker, hadolint. 97-99%: trufflehog, zap, syft, semgrep_secrets, semgrep, trivy, shellcheck. All use safe_load_json_file()."
     },
     "reporters": {
       "last_audit": "2026-01-29",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 95,
-      "notes": "392 tests passing. 13 reporters audited. 100%: diff_sarif, policy, suppression. 95-98%: basic, compliance, diff_md, simple_html, yaml. 83-94%: csv, diff_json, diff_html, html, sarif. XSS prevention in html_reporter.py (lines 73-86) escapes </script>, <script, <!--, backticks. No injection vectors found."
+      "notes": "392 tests passing (1 skip). 26 HTML security tests passing. XSS escaping verified. JSON script injection prevented. CSP headers present."
     },
     "security": {
       "last_audit": "2026-01-29",
-      "status": "partial",
-      "tasks_created": 4,
-      "coverage_percent": 87,
-      "notes": "Cross-cutting CWE analysis complete. No critical vulnerabilities. 4 coverage gaps identified: archive_security.py (19%), secure_temp.py (77%), gitlab_ci.py (8%). All subprocess calls use shell=False (except 1 nosec). Path traversal prevention in place. SQL injection protected via parameterized queries. YAML uses safe_load throughout. No pickle/eval/exec usage."
+      "status": "clean",
+      "tasks_created": 0,
+      "coverage_percent": 97,
+      "notes": "31 security tests passing (1 skip). shell=True only in tool_checker.py:672 (nosec B602, hardcoded commands). No os.system/popen for injection. yaml.safe_load throughout (14 uses). No eval/exec/pickle. Path traversal protected via _is_safe_path(). SQL injection tests pass. Added pythonpath to pyproject.toml for consistent imports."
     }
   }
 }

@@ -24,7 +24,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.conftest import IS_WINDOWS, skip_on_windows
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import IS_WINDOWS, skip_on_windows
 
 
 # ============================================================================

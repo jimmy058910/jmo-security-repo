@@ -61,14 +61,64 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 0 | 0 | 0 | 0 |
+| Bug | 0 | 2 | 0 | 2 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **0** | **0** | **0** |
+| **Total** | **0** | **2** | **0** | **2** |
 
 ---
 
 ## Current Tasks
+
+### TASK-027: [Bug] Test files use `from tests.conftest` breaking imports
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Files:**
+- tests/core/test_error_recovery.py:27
+- tests/cli_ralph/conftest.py:23
+- tests/cli_ralph/test_schedule_command.py:17
+- tests/cli_ralph/test_tool_installation.py:19
+- tests/cli_ralph/test_wizard_command.py:16
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'tests'
+```
+**Root Cause:** Test files import from `tests.conftest` but `tests/` is not a proper package in PYTHONPATH. When running from repo root, pytest doesn't add `tests/` to sys.path automatically.
+**Fix:** Two-part fix:
+1. Add `pythonpath = ["."]` to pyproject.toml [tool.pytest.ini_options] for consistent imports
+2. Change imports to use relative path with sys.path.insert:
+   ```python
+   import sys
+   from pathlib import Path
+   sys.path.insert(0, str(Path(__file__).parent.parent))
+   from conftest import IS_WINDOWS, skip_on_windows
+   ```
+**Resolution:** (2026-01-29) Fixed all 5 files with sys.path.insert pattern. Added `pythonpath = ["."]` to pyproject.toml. Security and integration tests now pass (31 security, 34 integration).
+
+### TASK-028: [Bug] CLI tests use wrong command arguments
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Files:**
+- tests/cli_ralph/test_history_commands.py:131 - uses `--severity` flag that doesn't exist
+- tests/cli_ralph/test_policy_commands.py:97-109 - passes results dir instead of --findings-file
+**Symptom:**
+```
+error: unrecognized arguments: --severity
+error: the following arguments are required: --findings-file
+```
+**Root Cause:** Test assumptions don't match actual CLI API:
+- `jmo history query` takes SQL query, not `--severity` filter
+- `jmo policy test` requires `--findings-file` flag and policy name, not directory + `--policy`
+**Fix:**
+1. test_hs_004_history_query_severity: Use SQL query `SELECT * FROM findings WHERE severity = 'CRITICAL' LIMIT 10`
+2. test_pl_003_policy_test: Use `--findings-file` flag with findings.json path and built-in policy name "zero-secrets"
+**Resolution:** (2026-01-29) Fixed both tests. All 56 cli_ralph tests now passing.
 
 ### TASK-024: [Bug] cmd_setup fails on Windows - bash script path handling
 **Type:** Bug
@@ -700,6 +750,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 | Date | Mode | Target | Tasks Created | Notes |
 |------|------|--------|---------------|-------|
+| 2026-01-29 | full-audit -Force | all 6 targets | 2 | Force re-audit: TASK-027 (test imports), TASK-028 (CLI test API). All targets clean after fixes. security 31/32 pass, adapters 1886 pass, reporters 392 pass, cli 1426+56 pass, core 172 pass. |
 | 2026-01-29 | full-audit -Force | all 6 targets | 2 | Force re-audit: TASK-024 (cmd_setup Windows bug), TASK-025 (broken untracked tests). Core tests passing: adapters 1886, reporters 392, wizard 987, core 283. |
 | 2026-01-29 | full-audit -Force | all 6 targets | 0 | Force re-audit: All targets now clean. security 97%, core 86%, cli 90%, adapters 92%, reporters 95%, wizard 93%. ~3,500+ tests passing. All previous tasks resolved. |
 | 2026-01-29 | audit | wizard + wizard_flows | 0 | Re-audit: 676 passed, 1 skip. 93% combined coverage. No actionable gaps found. Codebase stable. |
@@ -717,9 +768,35 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 ## Notes
 
-### Full Codebase Audit Summary (2026-01-29 -Force #2)
+### Full Codebase Audit Summary (2026-01-29 -Force #3)
 
 **Targets Audited:** 6 (security, core, cli, adapters, reporters, wizard)
+
+**Test Results:**
+- security: 31 passed, 1 skipped
+- adapters: 1886 passed
+- reporters: 392 passed, 1 skipped
+- cli: 1426 passed + 56 cli_ralph passed
+- core: 151 history_db + 21 error_recovery = 172 passed
+
+**Issues Found & Fixed:**
+
+1. **TASK-027 (High)**: Test files use `from tests.conftest` breaking imports (5 files fixed with sys.path.insert + pythonpath in pyproject.toml)
+
+2. **TASK-028 (High)**: CLI tests use wrong command arguments:
+   - test_history_query: used `--severity` flag (doesn't exist, takes SQL query)
+   - test_policy_test: used results dir instead of `--findings-file`
+
+**Security Posture (Verified):**
+- All subprocess calls use `shell=False` (except 1 nosec B602 in tool_checker.py for platform commands)
+- os.system/popen: 5 findings, all are `platform.system()` calls for OS detection (false positives)
+- Path traversal prevention via archive_security._is_safe_path() - 98% covered
+- SQL injection protected via parameterized queries in history_db.py - no f-string SQL (except get_query_plan internal debug)
+- YAML uses safe_load throughout codebase - verified grep found no unsafe usage
+- No pickle/eval/exec usage found
+- XSS prevention in HTML reporters - escape functions in simple_html and html_reporter
+
+### Full Codebase Audit Summary (2026-01-29 -Force #2)
 
 **Test Results:**
 - adapters: 1886 passed
@@ -737,14 +814,6 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
    - 5 failing tests in test_error_recovery.py
    - 6 failing tests in test_setup_command.py (blocked by TASK-024)
    - 1 failing test in test_schedule_command.py
-
-**Security Posture (Verified):**
-- All subprocess calls use `shell=False` (except 1 nosec B602 in tool_checker.py for platform commands)
-- Path traversal prevention via archive_security._is_safe_path() - 98% covered
-- SQL injection protected via parameterized queries in history_db.py - no f-string SQL
-- YAML uses safe_load throughout codebase - verified grep found no unsafe usage
-- No pickle/eval/exec usage found
-- XSS prevention in HTML reporters - escape functions in simple_html and html_reporter
 
 ### Wizard Notes (Previous Audits)
 - All 676 wizard tests passing (1 skipped - history database locked test on Windows)

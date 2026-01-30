@@ -20,7 +20,8 @@ from typing import Any, Callable
 import pytest
 
 # Re-export platform detection from main conftest
-from tests.conftest import (
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import (
     IS_WINDOWS,
     IS_MACOS,
 )

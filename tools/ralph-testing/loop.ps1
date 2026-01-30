@@ -29,13 +29,13 @@
 
 .PARAMETER Target
     Scope for audit mode (each loads a dedicated prompt):
-    - wizard: Focus on jmo wizard and wizard_flows (default)
+    - all: Cycle through all targets sequentially (default, full codebase)
+    - wizard: Focus on jmo wizard and wizard_flows
     - cli: Focus on jmo.py, scan_orchestrator, tool_installer, installers/
     - core: Focus on history_db, normalize_and_report, config, dedup
     - adapters: Focus on 29 tool adapters (consistency, parsing)
     - reporters: Focus on 13 reporters (XSS, output safety)
     - security: Cross-cutting security audit (CWE hunting)
-    - all: Cycle through all targets sequentially
 
 .PARAMETER MaxIterations
     Maximum iterations before stopping (0 = infinite until plan empty)
@@ -47,6 +47,11 @@
 .PARAMETER FreshSession
     Force a fresh session for each iteration (don't use --continue)
     This matches the original Ralph Playbook behavior exactly.
+
+.PARAMETER Force
+    Bypass cooldown rules and force a full audit regardless of audit-state.json.
+    Use when you want to re-audit targets that were recently audited.
+    This injects a FORCE MODE instruction into the prompt that overrides cooldowns.
 
 .EXAMPLE
     # Auto mode - discovers and fixes issues automatically
@@ -68,6 +73,9 @@
 
     # Full codebase audit (cycles through all targets)
     .\tools\ralph-testing\loop.ps1 -Mode audit -Target all -SkipPermissions -MaxIterations 20
+
+    # Force audit (bypass cooldowns, re-audit even if recently audited)
+    .\tools\ralph-testing\loop.ps1 -Mode audit -Force -SkipPermissions
 
     # Full autonomy with circuit breaker (2 hour max)
     .\tools\ralph-testing\loop.ps1 -SkipPermissions -MaxDurationMinutes 120
@@ -93,13 +101,16 @@ param(
     [string]$Mode = "auto",
 
     [ValidateSet("all", "wizard", "cli", "core", "adapters", "reporters", "security")]
-    [string]$Target = "wizard",
+    [string]$Target = "all",
 
     [int]$MaxIterations = 0,
 
     [switch]$SkipPermissions,
 
     [switch]$FreshSession,
+
+    # Force audit even if within cooldown period (ignores audit-state.json cooldowns)
+    [switch]$Force,
 
     # Circuit breaker: max total runtime in minutes (0 = unlimited)
     [int]$MaxDurationMinutes = 0,
@@ -229,6 +240,40 @@ function Test-SpecificationComplete {
     }
 }
 
+# Function to check if all audit targets are in cooldown
+# Returns $true if every target has been audited recently and is clean/partial
+function Test-AllTargetsInCooldown {
+    $StateFile = "$RalphDir/audit-state.json"
+    if (-not (Test-Path $StateFile)) {
+        return $false
+    }
+
+    try {
+        $State = Get-Content $StateFile -Raw | ConvertFrom-Json
+        $Targets = @("wizard", "cli", "core", "adapters", "reporters", "security")
+
+        foreach ($target in $Targets) {
+            $audit = $State.audits.$target
+            if (-not $audit) { return $false }
+
+            # Check if target needs auditing based on cooldown rules
+            $lastAudit = [DateTime]::Parse($audit.last_audit)
+            $daysSince = ((Get-Date) - $lastAudit).Days
+
+            # Targets with issues always need attention
+            if ($audit.status -eq "issues") { return $false }
+            # Partial targets need re-audit after 3 days
+            if ($audit.status -eq "partial" -and $daysSince -ge 3) { return $false }
+            # Clean targets need re-audit after 7 days
+            if ($audit.status -eq "clean" -and $daysSince -ge 7) { return $false }
+        }
+
+        return $true  # All targets in cooldown
+    } catch {
+        return $false
+    }
+}
+
 # Banner
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -246,6 +291,9 @@ if ($DelayBetweenIterations -gt 0) {
     Write-Host "Rate Limiting: ${DelayBetweenIterations}s between iterations"
 }
 Write-Host "Skip Permissions: $SkipPermissions"
+if ($Force) {
+    Write-Host "Force Mode: TRUE (ignoring cooldowns)" -ForegroundColor Yellow
+}
 Write-Host ""
 
 # Build skip permissions flag once
@@ -291,10 +339,24 @@ while ($true) {
     # ════════════════════════════════════════════════════════════════
     # ITERATION HEADER - displayed BEFORE starting this iteration
     # ════════════════════════════════════════════════════════════════
+
+    # Determine if Force will be applied to this audit
+    $AutoForceAudit = ($Mode -eq "auto" -and $EffectiveMode.StartsWith("audit:"))
+    $ModeDisplay = $EffectiveMode
+    if ($Mode -eq "auto") {
+        if ($AutoForceAudit) {
+            $ModeDisplay = "$EffectiveMode (auto+force)"
+        } else {
+            $ModeDisplay = "$EffectiveMode (auto)"
+        }
+    } elseif ($Force -and $EffectiveMode.StartsWith("audit:")) {
+        $ModeDisplay = "$EffectiveMode (force)"
+    }
+
     Write-Host ""
     Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host "  ITERATION $Iteration - $Timestamp" -ForegroundColor Yellow
-    Write-Host "  Mode: $EffectiveMode$(if ($Mode -eq 'auto') { ' (auto)' }) | Open Tasks: $OpenTasks" -ForegroundColor Yellow
+    Write-Host "  Mode: $ModeDisplay | Open Tasks: $OpenTasks" -ForegroundColor Yellow
     Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
     Write-Host ""
 
@@ -315,67 +377,6 @@ while ($true) {
 
     $StartTime = Get-Date
 
-    # Start background progress monitor (updates every 60 seconds)
-    # Writes to both a progress file AND attempts console output
-    $ProgressFile = "$LogDir/progress.txt"
-    "Started at $(Get-Date -Format 'HH:mm:ss')" | Out-File -FilePath $ProgressFile -Encoding utf8
-
-    $Runspace = [runspacefactory]::CreateRunspace()
-    $Runspace.Open()
-    $Runspace.SessionStateProxy.SetVariable("PlanFile", $PlanFile)
-    $Runspace.SessionStateProxy.SetVariable("StartTime", $StartTime)
-    $Runspace.SessionStateProxy.SetVariable("ProgressFile", $ProgressFile)
-
-    $ProgressScript = {
-        while ($true) {
-            Start-Sleep -Seconds 60
-            $Elapsed = [math]::Round(((Get-Date) - $StartTime).TotalMinutes, 1)
-            $Now = Get-Date -Format "HH:mm:ss"
-
-            # Count git changes
-            try {
-                $GitOutput = & git status --porcelain 2>$null
-                $GitChanges = if ($GitOutput) { ($GitOutput | Measure-Object).Count } else { 0 }
-            } catch { $GitChanges = "?" }
-
-            # Get current task from plan
-            $CurrentTask = "working"
-            if (Test-Path $PlanFile) {
-                $PlanContent = Get-Content $PlanFile -Raw -ErrorAction SilentlyContinue
-                if ($PlanContent -match "### (TASK-\d+)[^\r\n]*") {
-                    $Lines = $PlanContent -split "`n"
-                    for ($i = 0; $i -lt $Lines.Count; $i++) {
-                        if ($Lines[$i] -match "### (TASK-\d+)") {
-                            $TaskId = $Matches[1]
-                            for ($j = $i; $j -lt [Math]::Min($i + 8, $Lines.Count); $j++) {
-                                if ($Lines[$j] -match "\*\*Status:\*\* In Progress") {
-                                    $CurrentTask = $TaskId
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            $ProgressMsg = "[$Now] ${Elapsed}m elapsed | $CurrentTask | Files changed: $GitChanges"
-
-            # Write to progress file (guaranteed to work)
-            $ProgressMsg | Out-File -FilePath $ProgressFile -Encoding utf8
-
-            # Also try stderr for console display
-            try { [Console]::Error.WriteLine($ProgressMsg) } catch {}
-        }
-    }
-
-    $PowerShell = [powershell]::Create()
-    $PowerShell.Runspace = $Runspace
-    $PowerShell.AddScript($ProgressScript) | Out-Null
-    $ProgressHandle = $PowerShell.BeginInvoke()
-
-    Write-Host "Progress file: $ProgressFile" -ForegroundColor DarkGray
-    Write-Host "(Monitor in another terminal: Get-Content $ProgressFile -Wait)" -ForegroundColor DarkGray
-
     # ─────────────────────────────────────────────────────────────
     # RALPH PLAYBOOK PATTERN with LIVE TEXT STREAMING
     # Parses stream-json in real-time, displays assistant text,
@@ -395,34 +396,78 @@ while ($true) {
     # Stream with real-time text extraction
     # - Logs raw JSON to iteration log for debugging
     # - Extracts and displays assistant text as it streams
-    Get-Content $PromptFile -Raw | & claude @ClaudeFlags 2>&1 | ForEach-Object {
+    #
+    # Claude Code stream-json format (per https://www.ytyng.com/en/blog/claude-stream-json-jq/):
+    #   {"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}}
+    #
+    # We extract: stream_event.event.delta.text for real-time streaming
+
+    # Build prompt content (with optional force mode injection)
+    $PromptContent = Get-Content $PromptFile -Raw
+
+    # Inject Force instruction when:
+    # 1. User explicitly specified -Force flag, OR
+    # 2. Auto mode is switching to audit (bypass cooldowns for the audit→build→audit cycle)
+    $ShouldForceAudit = $Force -or ($Mode -eq "auto" -and $EffectiveMode.StartsWith("audit:"))
+
+    if ($ShouldForceAudit -and $EffectiveMode.StartsWith("audit:")) {
+        $ForceReason = if ($Force) { "user specified -Force flag" } else { "auto mode audit cycle (bypassing cooldowns)" }
+        $ForceInstruction = @"
+
+---
+
+## FORCE MODE ACTIVE
+
+**CRITICAL OVERRIDE:** Force mode is active because: $ForceReason
+
+You MUST:
+1. **IGNORE ALL COOLDOWN RULES** - Do not skip targets based on last_audit dates
+2. **AUDIT ALL TARGETS** regardless of their status in audit-state.json
+3. Run the full audit cycle as if all targets have never been audited
+4. Still update audit-state.json with new timestamps after auditing
+
+Proceed with full audit of all targets NOW.
+"@
+        $PromptContent = $PromptContent + $ForceInstruction
+    }
+
+    $PromptContent | & claude @ClaudeFlags 2>&1 | ForEach-Object {
         $line = $_
 
         # Log raw JSON to iteration log for debugging
         $line | Out-File -FilePath $LogFile -Append -Encoding utf8
 
-        # Parse and display assistant text in real-time
+        # Parse and display Claude activity in real-time
         if ($line -match '^\{') {
             try {
                 $json = $line | ConvertFrom-Json
-                if ($json.type -eq "assistant") {
+
+                # Handle assistant messages (text output OR tool calls)
+                if ($json.type -eq "assistant" -and $json.message) {
                     foreach ($content in $json.message.content) {
                         if ($content.type -eq "text" -and $content.text) {
+                            # Text output from Claude - display it
                             Write-Host -NoNewline $content.text
                         }
+                        elseif ($content.type -eq "tool_use" -and $content.name) {
+                            # Tool call - show brief indicator
+                            Write-Host -NoNewline "[" -ForegroundColor DarkGray
+                            Write-Host -NoNewline $content.name -ForegroundColor Cyan
+                            Write-Host -NoNewline "] " -ForegroundColor DarkGray
+                        }
                     }
+                }
+                # Handle result message (final output)
+                elseif ($json.type -eq "result" -and $json.result) {
+                    Write-Host ""
+                    Write-Host "=== Result ===" -ForegroundColor Green
+                    Write-Host $json.result
                 }
             } catch {
                 # Non-parseable line, skip silently
             }
         }
     }
-
-    # Stop progress monitor
-    $PowerShell.Stop()
-    $PowerShell.Dispose()
-    $Runspace.Close()
-    $Runspace.Dispose()
 
     # ════════════════════════════════════════════════════════════════
     # POST-ITERATION: Only reached AFTER Claude exits
@@ -463,8 +508,25 @@ while ($true) {
     Write-Host "────────────────────────────────────────────────────────────" -ForegroundColor Gray
 
     if ($Mode -eq "auto") {
-        # Auto mode: Track if audit found nothing
-        if ($EffectiveMode -eq "audit" -and $NewOpenTasks -eq 0) {
+        # Auto mode: Check if audit ran and found nothing
+        # EffectiveMode is compound key like "audit:all", "audit:wizard", etc.
+        $WasAuditMode = $EffectiveMode.StartsWith("audit:")
+
+        if ($WasAuditMode -and $OpenTasks -eq 0 -and $NewOpenTasks -eq 0) {
+            # Audit ran with no tasks before AND found no new tasks
+            # This means we're done - no work to do
+            Write-Host ""
+            Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "  AUTO MODE COMPLETE" -ForegroundColor Green
+            Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "- No open tasks in plan"
+            Write-Host "- Audit found no new issues (cooldowns may be active)"
+            Write-Host "- Run with -Force to bypass cooldowns"
+            Write-Host ""
+            Write-Host "Total iterations: $Iteration"
+            break
+        } elseif ($WasAuditMode -and $NewOpenTasks -eq 0) {
+            # Audit found nothing but there were tasks before (now resolved)
             $ConsecutiveEmptyAudits++
             Write-Host "Audit found no new issues. (Empty audits: $ConsecutiveEmptyAudits)" -ForegroundColor Cyan
 
@@ -497,7 +559,17 @@ while ($true) {
     # STRUGGLE DETECTION: Track consecutive failures
     # ════════════════════════════════════════════════════════════════
 
-    $MadeProgress = ($ClaudeExitCode -eq 0) -and ($NewOpenTasks -lt $OpenTasks -or ($EffectiveMode -eq "audit" -and $NewOpenTasks -gt 0))
+    # Determine if we made progress this iteration
+    # Note: EffectiveMode is compound key like "audit:all", so use StartsWith
+    $WasAuditMode = $EffectiveMode.StartsWith("audit:")
+
+    # In auto mode with 0→0 tasks after audit, this isn't struggle - it's completion
+    # (the completion check above should have exited, but be safe here too)
+    if ($Mode -eq "auto" -and $WasAuditMode -and $NewOpenTasks -eq 0 -and $OpenTasks -eq 0) {
+        $MadeProgress = $true  # Not struggling, just done
+    } else {
+        $MadeProgress = ($ClaudeExitCode -eq 0) -and ($NewOpenTasks -lt $OpenTasks -or ($WasAuditMode -and $NewOpenTasks -gt 0))
+    }
 
     if (-not $MadeProgress) {
         $ConsecutiveFailures++

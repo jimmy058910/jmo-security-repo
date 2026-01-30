@@ -143,6 +143,7 @@ markers = [
     "docker: marks tests that require Docker to be running",
     "baseline: marks tests that validate against vulnerability baselines",
     "e2e: marks end-to-end tests that validate complete workflows",
+    "stress: marks tests as stress tests requiring significant resources",
 ]
 # Test durations file for pytest-split sharding
 # Generate with: pytest --store-durations --durations-path=.test_durations
@@ -154,6 +155,8 @@ markers = [
 # - Set PYTEST_TIMEOUT=0 to disable in local debugging
 timeout = 120
 timeout_method = "thread"  # Works on Windows (unlike signal)
+# pythonpath: Ensure tests can import 'scripts' package without PYTHONPATH env var
+pythonpath = ["."]
 
 [tool.coverage.run]
 omit = [

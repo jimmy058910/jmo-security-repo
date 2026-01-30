@@ -14,9 +14,13 @@ from __future__ import annotations
 
 import json
 
+import sys
+from pathlib import Path
+
 import pytest
 
-from tests.conftest import IS_WINDOWS
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from conftest import IS_WINDOWS
 
 
 # Mark entire module as slow (actual installations)
