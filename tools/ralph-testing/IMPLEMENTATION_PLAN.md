@@ -119,6 +119,20 @@ ImportError: cannot import name 'HistoryDB' from 'scripts.core.history_db'
 test_setup_command.py: All tests pass now that TASK-024 is resolved.
 test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 2 skip)
 
+### TASK-026: Test Module Naming Conflict
+**Type:** Bug
+**Priority:** Medium
+**Score:** [S:2 + F:3 + C:1] = 6 (Test organization issue)
+**Confidence:** 95%
+**Status:** Resolved
+**Target:** tests/cli_ralph/
+**Gap/Symptom:** Test collection errors due to duplicate module names between `tests/cli/` and `tests/cli_ralph/` directories. Files with same basename (`test_diff_commands.py`, `test_history_commands.py`, `test_policy_commands.py`) exist in both directories, causing pytest import conflicts.
+**Fix:** Either:
+1. Rename cli_ralph test files to unique basenames (e.g., `test_ralph_diff_commands.py`)
+2. Or consolidate tests into single directory structure
+3. Or add `__init__.py` with proper namespace isolation
+**Resolution:** (2026-01-29) Added `__init__.py` files to both `tests/cli/` and `tests/cli_ralph/` directories to make them proper Python packages. This allows pytest to distinguish between modules with the same basename in different directories. Verified fix: `python -m pytest tests/cli/ tests/cli_ralph/ --collect-only` now collects 1673 tests without import errors.
+
 ---
 
 ## Deferred Issues
