@@ -766,3 +766,239 @@ def test_cmd_report_profiling_data_written(tmp_path, mock_config, minimal_args):
     timings_data = json.loads(timings_file.read_text())
     assert "aggregate_seconds" in timings_data
     assert "recommended_threads" in timings_data
+
+
+# =============================================================================
+# Bug #3 + #5: Scan metadata tests
+# =============================================================================
+
+
+def test_cmd_report_reads_profile_from_scan_metadata(
+    tmp_path, mock_config, minimal_args
+):
+    """Test cmd_report reads profile from .scan_metadata.json.
+
+    Bug #3 fix: Profile name should be read from scan metadata file
+    instead of falling back to config's default_profile.
+    """
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+
+    # Create scan metadata file with "deep" profile
+    scan_metadata = {
+        "profile": "deep",
+        "tools": ["trivy", "semgrep", "bandit", "hadolint"],
+        "timestamp": "2025-01-15T10:00:00+00:00",
+        "target_count": 1,
+    }
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
+
+    # Config has different default profile
+    mock_config.default_profile = "balanced"
+
+    mock_log = MagicMock()
+    captured_metadata = {}
+
+    def capture_metadata(findings, path, metadata=None):
+        """Capture metadata passed to write_json."""
+        if metadata:
+            captured_metadata.update(metadata)
+
+    with patch(
+        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+        return_value=mock_config,
+    ):
+        with patch("scripts.cli.report_orchestrator.gather_results", return_value=[]):
+            with patch(
+                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
+            ):
+                with patch(
+                    "scripts.cli.report_orchestrator.write_json",
+                    side_effect=capture_metadata,
+                ):
+                    with patch("scripts.cli.report_orchestrator.write_markdown"):
+                        with patch("scripts.cli.report_orchestrator.send_event"):
+                            cmd_report(minimal_args, mock_log)
+
+    # Verify profile is "deep" from scan metadata, not "balanced" from config
+    assert captured_metadata.get("profile") == "deep"
+
+
+def test_cmd_report_reads_tools_from_scan_metadata(tmp_path, mock_config, minimal_args):
+    """Test cmd_report reads tools list from .scan_metadata.json.
+
+    Bug #5 fix: meta.tools should include all tools from scan,
+    not just tools that produced findings.
+    """
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+
+    # Create scan metadata with 4 tools
+    scan_metadata = {
+        "profile": "deep",
+        "tools": ["trivy", "semgrep", "bandit", "hadolint"],
+        "timestamp": "2025-01-15T10:00:00+00:00",
+        "target_count": 1,
+    }
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
+
+    # Only trivy has findings
+    findings_with_single_tool = [
+        {"id": "f1", "severity": "HIGH", "tool": {"name": "trivy"}},
+    ]
+
+    mock_log = MagicMock()
+    captured_metadata = {}
+
+    def capture_metadata(findings, path, metadata=None):
+        if metadata:
+            captured_metadata.update(metadata)
+
+    with patch(
+        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+        return_value=mock_config,
+    ):
+        with patch(
+            "scripts.cli.report_orchestrator.gather_results",
+            return_value=findings_with_single_tool,
+        ):
+            with patch(
+                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
+            ):
+                with patch(
+                    "scripts.cli.report_orchestrator.write_json",
+                    side_effect=capture_metadata,
+                ):
+                    with patch("scripts.cli.report_orchestrator.write_markdown"):
+                        with patch("scripts.cli.report_orchestrator.send_event"):
+                            cmd_report(minimal_args, mock_log)
+
+    # Verify all 4 tools from scan metadata are included, not just trivy
+    assert set(captured_metadata.get("tools", [])) == {
+        "trivy",
+        "semgrep",
+        "bandit",
+        "hadolint",
+    }
+
+
+def test_cmd_report_falls_back_to_config_profile(tmp_path, mock_config, minimal_args):
+    """Test cmd_report falls back to config profile when no scan metadata."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+
+    # No .scan_metadata.json file
+    mock_config.default_profile = "balanced"
+
+    mock_log = MagicMock()
+    captured_metadata = {}
+
+    def capture_metadata(findings, path, metadata=None):
+        if metadata:
+            captured_metadata.update(metadata)
+
+    with patch(
+        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+        return_value=mock_config,
+    ):
+        with patch("scripts.cli.report_orchestrator.gather_results", return_value=[]):
+            with patch(
+                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
+            ):
+                with patch(
+                    "scripts.cli.report_orchestrator.write_json",
+                    side_effect=capture_metadata,
+                ):
+                    with patch("scripts.cli.report_orchestrator.write_markdown"):
+                        with patch("scripts.cli.report_orchestrator.send_event"):
+                            cmd_report(minimal_args, mock_log)
+
+    # Should fall back to config default_profile
+    assert captured_metadata.get("profile") == "balanced"
+
+
+def test_cmd_report_handles_corrupt_scan_metadata(tmp_path, mock_config, minimal_args):
+    """Test cmd_report handles corrupt .scan_metadata.json gracefully."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+
+    # Create corrupt scan metadata file
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    scan_metadata_path.write_text("{ invalid json", encoding="utf-8")
+
+    mock_config.default_profile = "balanced"
+
+    mock_log = MagicMock()
+    captured_metadata = {}
+
+    def capture_metadata(findings, path, metadata=None):
+        if metadata:
+            captured_metadata.update(metadata)
+
+    with patch(
+        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+        return_value=mock_config,
+    ):
+        with patch("scripts.cli.report_orchestrator.gather_results", return_value=[]):
+            with patch(
+                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
+            ):
+                with patch(
+                    "scripts.cli.report_orchestrator.write_json",
+                    side_effect=capture_metadata,
+                ):
+                    with patch("scripts.cli.report_orchestrator.write_markdown"):
+                        with patch("scripts.cli.report_orchestrator.send_event"):
+                            cmd_report(minimal_args, mock_log)
+
+    # Should gracefully fall back to config default_profile
+    assert captured_metadata.get("profile") == "balanced"
+
+
+def test_cmd_report_infers_tools_from_findings_without_metadata(
+    tmp_path, mock_config, minimal_args
+):
+    """Test cmd_report infers tools from findings when no scan metadata exists."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+    minimal_args.results_dir_pos = str(results_dir)
+
+    # No .scan_metadata.json file
+    findings = [
+        {"id": "f1", "severity": "HIGH", "tool": {"name": "trivy"}},
+        {"id": "f2", "severity": "MEDIUM", "tool": {"name": "semgrep"}},
+    ]
+
+    mock_log = MagicMock()
+    captured_metadata = {}
+
+    def capture_metadata(findings, path, metadata=None):
+        if metadata:
+            captured_metadata.update(metadata)
+
+    with patch(
+        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
+        return_value=mock_config,
+    ):
+        with patch(
+            "scripts.cli.report_orchestrator.gather_results", return_value=findings
+        ):
+            with patch(
+                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
+            ):
+                with patch(
+                    "scripts.cli.report_orchestrator.write_json",
+                    side_effect=capture_metadata,
+                ):
+                    with patch("scripts.cli.report_orchestrator.write_markdown"):
+                        with patch("scripts.cli.report_orchestrator.send_event"):
+                            cmd_report(minimal_args, mock_log)
+
+    # Should infer tools from findings
+    assert set(captured_metadata.get("tools", [])) == {"semgrep", "trivy"}

@@ -103,6 +103,19 @@ def find_tool(tool_name: str) -> str | None:
     home = Path.home()
     jmo_bin = home / ".jmo" / "bin"
 
+    # Check isolated venv paths first (prowler, checkov, semgrep, bandit, scancode, etc.)
+    # These are installed at ~/.jmo/tools/venvs/{tool}/bin/{tool}
+    venvs_dir = home / ".jmo" / "tools" / "venvs" / tool_name
+    if venvs_dir.exists():
+        # Linux/macOS: bin/{tool}
+        venv_bin = venvs_dir / "bin" / tool_name
+        if venv_bin.exists():
+            return str(venv_bin)
+        # Windows: Scripts/{tool}.exe
+        venv_scripts = venvs_dir / "Scripts" / f"{tool_name}.exe"
+        if venv_scripts.exists():
+            return str(venv_scripts)
+
     # ZAP baseline script is inside the extracted ZAP directory
     if tool_name == "zap-baseline.py":
         zap_baseline = jmo_bin / "zap" / "zap-baseline.py"
@@ -335,6 +348,7 @@ def write_stub(tool: str, out_path: Path) -> None:
         "noseyparker": {"matches": []},
         "syft": {"artifacts": []},
         "trivy": {"Results": []},
+        "grype": {"matches": []},
         "hadolint": [],
         "checkov": {"results": {"failed_checks": []}},
         "tfsec": {"results": []},

@@ -215,7 +215,11 @@ class ToolRunner:
                         continue
 
             except subprocess.TimeoutExpired:
+                # Tool timed out - log and retry if attempts remain
                 last_error = f"Timeout after {tool.timeout}s"
+                logger.warning(
+                    f"{tool.name} timed out after {tool.timeout}s (attempt {attempt}/{attempts})"
+                )
                 if attempt < attempts:
                     time.sleep(2)  # Longer delay after timeout
                     continue
@@ -231,14 +235,6 @@ class ToolRunner:
                     duration=duration,
                     error_message=f"Tool not found: {tool.command[0]}",
                 )
-
-            except subprocess.TimeoutExpired:
-                # Tool timed out - log and retry if attempts remain
-                last_error = f"Timeout after {tool.timeout}s"
-                logger.debug(f"{tool.name} timed out (attempt {attempt}/{attempts})")
-                if attempt < attempts:
-                    time.sleep(1)
-                    continue
             except (OSError, PermissionError) as e:
                 # System errors (file not found, permissions, etc.)
                 last_error = str(e)

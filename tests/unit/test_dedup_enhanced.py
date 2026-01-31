@@ -1424,3 +1424,154 @@ def test_lsh_transitive_clustering():
     # All three should be in same cluster due to transitivity
     assert len(clusters) == 1
     assert len(clusters[0].findings) == 3
+
+
+# ===== Bug #1 Fix: Deduplicated detected_by Tests =====
+
+
+def test_consensus_detected_by_no_duplicates():
+    """Test that same tool appearing multiple times in cluster only appears once in detected_by.
+
+    Bug #1 fix: When the same tool (e.g., bandit) reports multiple findings that
+    get clustered together, the detected_by array should only list that tool once.
+    """
+    cluster = FindingCluster(
+        representative={
+            "id": "fp1",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "HIGH",
+            "message": "SQL Injection in query",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        }
+    )
+    # Add another finding from the SAME tool
+    cluster.add(
+        {
+            "id": "fp2",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "HIGH",
+            "message": "SQL Injection in related query",
+            "location": {"path": "app.py", "startLine": 43},
+            "raw": {},
+        },
+        similarity=0.90,
+    )
+    # Add a third finding from the SAME tool
+    cluster.add(
+        {
+            "id": "fp3",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "MEDIUM",
+            "message": "Possible SQL injection",
+            "location": {"path": "app.py", "startLine": 44},
+            "raw": {},
+        },
+        similarity=0.85,
+    )
+
+    consensus = cluster.to_consensus_finding()
+
+    # detected_by should have bandit ONLY ONCE, not 3 times
+    assert len(consensus["detected_by"]) == 1
+    assert consensus["detected_by"][0]["name"] == "bandit"
+
+
+def test_consensus_detected_by_multiple_tools():
+    """Test that different tools all appear in detected_by."""
+    cluster = FindingCluster(
+        representative={
+            "id": "fp1",
+            "tool": {"name": "trivy", "version": "0.50.0"},
+            "severity": "HIGH",
+            "message": "SQL Injection vulnerability",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        }
+    )
+    cluster.add(
+        {
+            "id": "fp2",
+            "tool": {"name": "semgrep", "version": "1.60.0"},
+            "severity": "HIGH",
+            "message": "SQL injection detected",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        },
+        similarity=0.90,
+    )
+    cluster.add(
+        {
+            "id": "fp3",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "MEDIUM",
+            "message": "Possible SQL injection",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        },
+        similarity=0.85,
+    )
+
+    consensus = cluster.to_consensus_finding()
+
+    # All 3 different tools should appear
+    assert len(consensus["detected_by"]) == 3
+    tool_names = {t["name"] for t in consensus["detected_by"]}
+    assert tool_names == {"trivy", "semgrep", "bandit"}
+
+
+def test_consensus_detected_by_mixed_same_and_different():
+    """Test mix of same and different tools in detected_by."""
+    cluster = FindingCluster(
+        representative={
+            "id": "fp1",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "HIGH",
+            "message": "SQL Injection",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        }
+    )
+    # Same tool (bandit)
+    cluster.add(
+        {
+            "id": "fp2",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "HIGH",
+            "message": "SQL injection variant",
+            "location": {"path": "app.py", "startLine": 43},
+            "raw": {},
+        },
+        similarity=0.90,
+    )
+    # Different tool (semgrep)
+    cluster.add(
+        {
+            "id": "fp3",
+            "tool": {"name": "semgrep", "version": "1.60.0"},
+            "severity": "HIGH",
+            "message": "SQL injection detected",
+            "location": {"path": "app.py", "startLine": 42},
+            "raw": {},
+        },
+        similarity=0.88,
+    )
+    # Same tool again (bandit - third time)
+    cluster.add(
+        {
+            "id": "fp4",
+            "tool": {"name": "bandit", "version": "1.7.0"},
+            "severity": "MEDIUM",
+            "message": "Possible SQL injection",
+            "location": {"path": "app.py", "startLine": 44},
+            "raw": {},
+        },
+        similarity=0.85,
+    )
+
+    consensus = cluster.to_consensus_finding()
+
+    # Should have exactly 2 tools: bandit (once) and semgrep (once)
+    assert len(consensus["detected_by"]) == 2
+    tool_names = {t["name"] for t in consensus["detected_by"]}
+    assert tool_names == {"bandit", "semgrep"}

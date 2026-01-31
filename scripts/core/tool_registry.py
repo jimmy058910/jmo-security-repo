@@ -39,7 +39,8 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "hadolint",
         "nuclei",
         "shellcheck",
-    ],  # 8 tools
+        "opa",  # Policy engine for policy-as-code evaluation
+    ],  # 9 tools
     "slim": [
         "trufflehog",
         "semgrep",
@@ -55,7 +56,8 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "horusec",
         "dependency-check",
         "shellcheck",
-    ],  # 14 tools
+        "opa",  # Policy engine for policy-as-code evaluation
+    ],  # 15 tools
     "balanced": [
         "trufflehog",
         "semgrep",
@@ -75,7 +77,8 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "horusec",
         "dependency-check",
         "shellcheck",
-    ],  # 18 tools
+        "opa",  # Policy engine for policy-as-code evaluation
+    ],  # 19 tools
     "deep": [
         "trufflehog",
         "noseyparker",
@@ -105,7 +108,8 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "afl++",
         "mobsf",
         "lynis",
-    ],  # 28 tools
+        "opa",  # Policy engine for policy-as-code evaluation
+    ],  # 29 tools
 }
 
 # Tool name normalization - maps jmo.yml names to binary names
@@ -130,11 +134,14 @@ TOOL_VARIANTS: dict[str, str] = {
 # Execution requirements - commands/dependencies needed to actually run tools (Fix 1.4)
 # Maps tool name to list of commands that must be available for execution
 TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
-    "zap": ["zap.sh"],  # ZAP launcher script (installed via jmo tools install)
+    "zap": ["zap.sh", "java"],  # ZAP launcher script + Java runtime
     "nuclei": ["nuclei"],  # Standard binary
     "horusec": ["horusec"],  # horusec binary (optionally needs docker)
     "cdxgen": ["cdxgen", "node"],  # Requires Node.js 20+
-    "dependency-check": ["dependency-check.sh"],  # Java wrapper script
+    "dependency-check": [
+        "dependency-check.sh",
+        "java",
+    ],  # Java wrapper script + Java runtime
     "prowler": ["prowler"],
     "kubescape": ["kubescape"],
     "gosec": ["gosec"],
@@ -144,6 +151,15 @@ TOOL_EXECUTION_COMMANDS: dict[str, list[str]] = {
 TOOL_VERSION_REQUIREMENTS: dict[str, dict[str, str]] = {
     "cdxgen": {"node": "20.0.0"},  # Requires Node.js 20+
 }
+
+# Content-triggered tools: Only run when applicable content is detected
+# These are skipped in standard scans but activated when relevant files found
+# (e.g., mobsf for Android APKs, akto for API specs)
+CONTENT_TRIGGERED_TOOLS: set[str] = {"mobsf", "akto"}
+
+# Manual install tools: Require manual installation due to platform limitations
+# These cannot be auto-installed via jmo tools install
+MANUAL_INSTALL_TOOLS: set[str] = {"falco", "afl++", "mobsf", "akto"}
 
 # Platform compatibility requirements for tools
 # Tools not listed here are assumed to work on all platforms

@@ -32,16 +32,16 @@ def test_profile_tools_fast_count():
     """Test fast profile has expected number of tools."""
     from scripts.core.tool_registry import PROFILE_TOOLS
 
-    # Fast profile should have 8 tools per architecture doc
-    assert len(PROFILE_TOOLS["fast"]) == 8
+    # Fast profile: 8 core tools + OPA for policy-as-code = 9 tools
+    assert len(PROFILE_TOOLS["fast"]) == 9
 
 
 def test_profile_tools_deep_count():
     """Test deep profile has expected number of tools."""
     from scripts.core.tool_registry import PROFILE_TOOLS
 
-    # Deep profile should have 28 tools per architecture doc
-    assert len(PROFILE_TOOLS["deep"]) == 28
+    # Deep profile: 28 security tools + OPA for policy-as-code = 29 tools
+    assert len(PROFILE_TOOLS["deep"]) == 29
 
 
 def test_tool_binary_names_mapping():

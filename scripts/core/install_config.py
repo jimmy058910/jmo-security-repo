@@ -239,7 +239,7 @@ ISOLATED_TOOLS: dict[str, dict[str, str | list[str]]] = {
 # - Platforms: "windows", "linux", "macos"
 # - Package managers: chocolatey, winget, apt, dnf, brew
 
-DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str]]]] = {
+DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str] | str]]] = {
     "java": {
         "windows": {
             "chocolatey": ["choco", "install", "openjdk17", "-y"],
@@ -254,8 +254,10 @@ DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str]]]] = {
             ],
         },
         "linux": {
-            "apt": ["sudo", "apt", "install", "-y", "openjdk-17-jre"],
-            "dnf": ["sudo", "dnf", "install", "-y", "java-17-openjdk"],
+            # Use default-jre-headless for broader compatibility across Debian/Ubuntu versions
+            # openjdk-17-jre may not be available in slim images without extra repos
+            "apt": ["sudo", "apt-get", "install", "-y", "default-jre-headless"],
+            "dnf": ["sudo", "dnf", "install", "-y", "java-17-openjdk-headless"],
         },
         "macos": {
             "brew": ["brew", "install", "openjdk@17"],
@@ -275,8 +277,11 @@ DEPENDENCY_INSTALL_COMMANDS: dict[str, dict[str, dict[str, list[str]]]] = {
             ],
         },
         "linux": {
-            "apt": ["sudo", "apt", "install", "-y", "nodejs"],
-            "dnf": ["sudo", "dnf", "install", "-y", "nodejs"],
+            # NodeSource provides Node.js 20+ (apt's default nodejs is often v12-18)
+            # Install order: try nodesource first, fallback to apt/dnf
+            "nodesource": "curl_script",  # Special marker - handled in install_dependency()
+            "apt": ["sudo", "apt-get", "install", "-y", "nodejs", "npm"],
+            "dnf": ["sudo", "dnf", "install", "-y", "nodejs", "npm"],
         },
         "macos": {
             "brew": ["brew", "install", "node@20"],
@@ -300,12 +305,12 @@ DEPENDENCY_DISPLAY_NAMES: dict[str, str] = {
 DEPENDENCY_MANUAL_COMMANDS: dict[str, dict[str, str]] = {
     "java": {
         "windows": "choco install openjdk17 -y  OR  winget install Microsoft.OpenJDK.17",
-        "linux": "sudo apt install openjdk-17-jre -y  OR  sudo dnf install java-17-openjdk -y",
+        "linux": "sudo apt-get install default-jre-headless -y  OR  sudo dnf install java-17-openjdk-headless -y",
         "macos": "brew install openjdk@17",
     },
     "node": {
         "windows": "choco install nodejs-lts -y  OR  winget install OpenJS.NodeJS.LTS",
-        "linux": "sudo apt install nodejs -y  OR  sudo dnf install nodejs -y",
+        "linux": "curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && sudo apt-get install nodejs -y",
         "macos": "brew install node@20",
     },
 }

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -2602,6 +2604,24 @@ def cmd_scan(args) -> int:
         and sys.stderr.isatty()
     )
 
+    # Log scan start message with context about tools being used
+    # Show skipped tools if any were filtered out (missing_tools is set by _check_scan_tools)
+    skipped_count = len(missing_tools) if missing_tools else 0
+    if skipped_count > 0:
+        # Provide context about skipped tools
+        _log(
+            args,
+            "INFO",
+            f"Starting scan with {total_tools} tools for {total_targets} target(s) "
+            f"({skipped_count} skipped: {', '.join(missing_tools[:3])}{'...' if skipped_count > 3 else ''})",
+        )
+    else:
+        _log(
+            args,
+            "INFO",
+            f"Starting scan with {total_tools} tools for {total_targets} target(s)...",
+        )
+
     if use_rich_progress:
         # Use Rich-based progress tracker for clean, thread-safe display
         from scripts.cli.rich_progress import RichScanProgressTracker
@@ -2688,6 +2708,16 @@ def cmd_scan(args) -> int:
     )
 
     _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
+
+    # Write scan metadata for report phase (Bug #3 fix: preserve profile name)
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    scan_metadata = {
+        "profile": profile_name,
+        "tools": tools,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "target_count": total_targets,
+    }
+    scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
 
     # BUG #2 FIX: Automatically run report phase to aggregate findings and store history
     # This ensures --no-store-history flag (default: enabled) actually works

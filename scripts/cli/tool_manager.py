@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Callable
 
 from scripts.core.tool_registry import (
+    CONTENT_TRIGGERED_TOOLS,
+    MANUAL_INSTALL_TOOLS,
     PROFILE_TOOLS,
     TOOL_EXECUTION_COMMANDS,
     TOOL_VARIANTS,
@@ -27,6 +29,8 @@ from scripts.core.tool_registry import (
     ToolRegistry,
     detect_platform,
     get_install_hint,
+    get_skipped_tools_for_profile,
+    get_tools_for_profile_filtered,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,6 +116,10 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     "cdxgen": re.compile(r"(\d+\.\d+\.\d+)"),
     # lynis outputs "Lynis X.Y.Z" - make pattern more specific to avoid matching other text
     "lynis": re.compile(r"(?:Lynis\s+)?(\d+\.\d+\.\d+)", re.IGNORECASE),
+    # scancode outputs "ScanCode version X.Y.Z" or "ScanCode Toolkit version X.Y.Z"
+    "scancode": re.compile(
+        r"(?:ScanCode(?:\s+Toolkit)?\s+)?[Vv]ersion\s+(\d+\.\d+\.\d+)", re.IGNORECASE
+    ),
     # yara-python outputs just the version number (e.g., "4.5.4")
     # Removed ^ anchor which doesn't work with multiline output
     "yara": re.compile(r"v?(\d+\.\d+\.\d+)"),
@@ -151,6 +159,8 @@ VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
         "default": ["lynis", "--version"],
         "fallback": ["lynis", "show", "version"],
     },
+    # scancode: --version outputs "ScanCode version X.Y.Z"
+    "scancode": ["scancode", "--version"],
     # yara-python is a Python library, not a CLI - check via Python import
     # The native 'yara' CLI is a separate package from yara-python
     "yara": [sys.executable, "-c", "import yara; print(yara.YARA_VERSION)"],
@@ -620,6 +630,74 @@ class ToolStatus:
         return status_text_map.get(self.status_type, "UNKNOWN")
 
 
+@dataclass
+class ToolStatusSummary:
+    """Unified tool status summary for consistent reporting.
+
+    Provides a single source of truth for tool counts used by:
+    - Wizard tool checker
+    - Scan initialization
+    - Status reporting
+
+    This eliminates confusion from different counting systems reporting
+    different numbers (e.g., "Installing 27 tools... 25 installed... 22 ready").
+    """
+
+    profile_name: str
+    profile_total: int  # Tools defined in profile (e.g., 29 for deep)
+    platform_applicable: int  # Tools applicable to this platform
+    installed: int  # Tools with binary found
+    execution_ready: int  # Tools ready to run (all dependencies met)
+
+    # Breakdown of non-ready tools
+    platform_skipped: list[str]  # Not supported on this platform
+    manual_install: list[str]  # Require manual installation
+    missing_dependency: list[str]  # Missing Java/Node/bash
+    not_installed: list[str]  # Not installed at all
+    version_issues: list[str]  # Startup crash or version detection failed
+    content_triggered: list[str]  # Skip until content detected
+
+    def __post_init__(self) -> None:
+        """Ensure list fields are initialized."""
+        if self.platform_skipped is None:
+            self.platform_skipped = []
+        if self.manual_install is None:
+            self.manual_install = []
+        if self.missing_dependency is None:
+            self.missing_dependency = []
+        if self.not_installed is None:
+            self.not_installed = []
+        if self.version_issues is None:
+            self.version_issues = []
+        if self.content_triggered is None:
+            self.content_triggered = []
+
+    @property
+    def needs_attention_count(self) -> int:
+        """Count of tools needing attention (excludes platform-skipped and content-triggered)."""
+        return (
+            len(self.manual_install)
+            + len(self.missing_dependency)
+            + len(self.not_installed)
+            + len(self.version_issues)
+        )
+
+    @property
+    def skipped_count(self) -> int:
+        """Count of tools that will be skipped in this scan."""
+        return (
+            len(self.platform_skipped)
+            + len(self.manual_install)
+            + len(self.content_triggered)
+        )
+
+    def format_status_line(self) -> str:
+        """Format a concise status line for display."""
+        if self.execution_ready == self.platform_applicable:
+            return f"All {self.platform_applicable} tools ready"
+        return f"{self.execution_ready}/{self.platform_applicable} tools ready ({self.needs_attention_count} need attention)"
+
+
 class ToolManager:
     """Manage security tool installations."""
 
@@ -701,6 +779,9 @@ class ToolManager:
         else:
             execution_ready = False
             execution_warning = "Tool binary not found"
+            # Pre-install dependency check: detect missing deps BEFORE install
+            # This allows wizard to prompt for dependency installation first
+            missing_deps = self._check_preinstall_deps(tool_name)
 
         return ToolStatus(
             name=tool_name,
@@ -844,6 +925,85 @@ class ToolManager:
                 )
 
         return drift
+
+    def get_tool_summary(self, profile: str) -> ToolStatusSummary:
+        """
+        Get unified tool status summary for a profile.
+
+        This is the single source of truth for tool counts used everywhere:
+        - Wizard tool checker
+        - Scan initialization
+        - Status reporting
+
+        Args:
+            profile: Profile name ('fast', 'slim', 'balanced', 'deep')
+
+        Returns:
+            ToolStatusSummary with all counts and categorized tool lists
+        """
+        # Get profile total from definition
+        profile_tools = PROFILE_TOOLS.get(profile, [])
+        profile_total = len(profile_tools)
+
+        # Get platform-filtered tools
+        platform_applicable_tools = get_tools_for_profile_filtered(
+            profile, self.platform
+        )
+        platform_applicable = len(platform_applicable_tools)
+
+        # Get platform-skipped tools with reasons
+        skipped_with_reasons = get_skipped_tools_for_profile(profile, self.platform)
+        platform_skipped = [tool for tool, _reason in skipped_with_reasons]
+
+        # Check tool statuses for applicable tools only
+        statuses = {name: self.check_tool(name) for name in platform_applicable_tools}
+
+        # Categorize tools
+        installed_tools: list[str] = []
+        execution_ready_tools: list[str] = []
+        manual_install: list[str] = []
+        missing_dependency: list[str] = []
+        not_installed: list[str] = []
+        version_issues: list[str] = []
+        content_triggered: list[str] = []
+
+        for name, status in statuses.items():
+            # Check if content-triggered (always skipped in standard scans)
+            if name in CONTENT_TRIGGERED_TOOLS:
+                content_triggered.append(name)
+                continue
+
+            # Check if installed
+            if status.installed:
+                installed_tools.append(name)
+
+                # Check execution readiness
+                if status.execution_ready:
+                    execution_ready_tools.append(name)
+                elif status.version_error:
+                    version_issues.append(name)
+                elif status.missing_deps:
+                    missing_dependency.append(name)
+            else:
+                # Not installed - check if manual-only
+                if name in MANUAL_INSTALL_TOOLS:
+                    manual_install.append(name)
+                else:
+                    not_installed.append(name)
+
+        return ToolStatusSummary(
+            profile_name=profile,
+            profile_total=profile_total,
+            platform_applicable=platform_applicable,
+            installed=len(installed_tools),
+            execution_ready=len(execution_ready_tools),
+            platform_skipped=platform_skipped,
+            manual_install=manual_install,
+            missing_dependency=missing_dependency,
+            not_installed=not_installed,
+            version_issues=version_issues,
+            content_triggered=content_triggered,
+        )
 
     def _compare_version_direction(
         self, installed: str | None, expected: str | None
@@ -1139,6 +1299,61 @@ class ToolManager:
         # Use tool-specific timeout (Java tools need longer JVM startup time)
         timeout = VERSION_TIMEOUTS.get(tool_name, 10)
 
+        # Determine working directory for tools that need to run from their directory
+        # Lynis requires running from its installation directory to find include files
+        cwd: str | None = None
+        if tool_name == "lynis" and binary_path:
+            cwd = str(Path(binary_path).parent)
+
+        # ZAP: Read version from file instead of running Java app (too slow)
+        if tool_name == "zap" and binary_path:
+            zap_dir = Path(binary_path).parent
+            # Try reading version from ZAP's version file
+            version_files = [
+                zap_dir / "ZAP_VERSION",
+                zap_dir / "zap.version",
+            ]
+            for vf in version_files:
+                if vf.exists():
+                    try:
+                        version_text = vf.read_text(encoding="utf-8").strip()
+                        # ZAP_VERSION contains "2.16.1" or "v2.16.1"
+                        if re.match(r"^v?\d+\.\d+\.\d+", version_text):
+                            return (version_text.lstrip("v").split()[0], None)
+                    except Exception:
+                        pass
+            # Fallback: Parse version from directory name (ZAP_2.16.1_Crossplatform)
+            if "ZAP_" in zap_dir.name:
+                match = re.search(r"ZAP_(\d+\.\d+\.\d+)", zap_dir.name)
+                if match:
+                    return (match.group(1), None)
+            # If no version file found, we'll try the command but it's slow
+
+        # Scancode: Read version from SCANCODE_VERSION file (running the binary can be slow)
+        if tool_name == "scancode" and binary_path:
+            scancode_dir = Path(binary_path).parent
+            # Check both in binary dir and parent (in case binary is in nested dir)
+            version_files = [
+                scancode_dir / "SCANCODE_VERSION",
+                scancode_dir.parent / "SCANCODE_VERSION",
+            ]
+            for vf in version_files:
+                if vf.exists():
+                    try:
+                        version_text = vf.read_text(encoding="utf-8").strip()
+                        # SCANCODE_VERSION contains "v32.4.1" or "32.4.1"
+                        if re.match(r"^v?\d+\.\d+\.\d+", version_text):
+                            return (version_text.lstrip("v").split()[0], None)
+                    except Exception:
+                        pass
+            # Fallback: Parse version from directory name (scancode-toolkit-vX.Y.Z)
+            for parent in [scancode_dir, scancode_dir.parent]:
+                match = re.search(
+                    r"scancode-toolkit-v?(\d+\.\d+\.\d+)", parent.name, re.I
+                )
+                if match:
+                    return (match.group(1), None)
+
         try:
             result = subprocess.run(
                 cmd,
@@ -1146,6 +1361,7 @@ class ToolManager:
                 text=True,
                 timeout=timeout,
                 env=clean_env,
+                cwd=cwd,
             )
             # Combine stdout and stderr - some tools write version to stderr
             output = (result.stdout or "") + (result.stderr or "")
@@ -1224,6 +1440,7 @@ class ToolManager:
                             text=True,
                             timeout=timeout,
                             env=clean_env,
+                            cwd=cwd,
                         )
                         fallback_output = (fallback_result.stdout or "") + (
                             fallback_result.stderr or ""
@@ -1465,6 +1682,37 @@ class ToolManager:
 
         return True, None, []
 
+    def _check_preinstall_deps(self, tool_name: str) -> list[str]:
+        """
+        Check for missing runtime dependencies BEFORE tool installation.
+
+        This enables the wizard to detect and prompt for dependency installation
+        (e.g., Node.js for cdxgen) before attempting to install the tool.
+
+        Args:
+            tool_name: Name of the tool to check
+
+        Returns:
+            List of missing dependency names (e.g., ["node", "java"])
+        """
+        # Get required execution commands for this tool
+        required = TOOL_EXECUTION_COMMANDS.get(tool_name, [])
+        missing = []
+
+        for cmd in required:
+            # Skip the tool's own binary (that's what we're trying to install)
+            if cmd == tool_name:
+                continue
+            # Check for common dependency binaries
+            if cmd in ("node", "npm", "java", "bash", "go", "cargo"):
+                if not shutil.which(cmd):
+                    # Normalize node/npm to "node" for dependency tracking
+                    dep = "node" if cmd == "npm" else cmd
+                    if dep not in missing:
+                        missing.append(dep)
+
+        return missing
+
     def _get_node_version(self) -> tuple[int, int, int] | None:
         """Get Node.js version as tuple."""
         try:
@@ -1537,7 +1785,7 @@ def print_tool_status_table(
         show_hints: Whether to show installation hints for missing tools
     """
     if colorize is None:
-        colorize = lambda text, color: text  # noqa: E731
+        colorize = lambda text, _color: text  # noqa: E731
 
     # Calculate column widths
     name_width = max(len(name) for name in statuses.keys())
@@ -1592,7 +1840,7 @@ def print_profile_summary(
         colorize: Optional colorize function
     """
     if colorize is None:
-        colorize = lambda text, color: text  # noqa: E731
+        colorize = lambda text, _color: text  # noqa: E731
 
     print("\nProfile Summary:")
     print("-" * 50)

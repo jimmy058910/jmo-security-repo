@@ -87,7 +87,7 @@ def _is_package_manager_available(pkg_manager: str) -> bool:
     check_commands = {
         "chocolatey": ["choco", "--version"],
         "winget": ["winget", "--version"],
-        "apt": ["apt", "--version"],
+        "apt": ["apt-get", "--version"],  # Use apt-get for scripts (apt is interactive)
         "dnf": ["dnf", "--version"],
         "brew": ["brew", "--version"],
     }
@@ -141,15 +141,60 @@ def install_dependency(
         else:
             print(msg)
 
+    # Determine if running as root (for sudo handling)
+    is_root = os.getuid() == 0 if hasattr(os, "getuid") else False  # type: ignore[attr-defined]
+    sudo_available = shutil.which("sudo") is not None
+
     # Try each package manager in order of preference
     for pkg_manager, command in platform_commands.items():
+        # Special case: NodeSource for Node.js 20+ on Linux
+        if pkg_manager == "nodesource" and command == "curl_script":
+            if shutil.which("curl"):
+                _print(f"[*] Installing Node.js 20 via NodeSource...")
+                try:
+                    # Download and run NodeSource setup script
+                    curl_cmd = ["curl", "-fsSL", "https://deb.nodesource.com/setup_20.x", "-o", "/tmp/nodesource_setup.sh"]
+                    subprocess.run(curl_cmd, capture_output=True, timeout=60, check=True)
+
+                    # Run the setup script
+                    setup_cmd = ["bash", "/tmp/nodesource_setup.sh"]
+                    if not is_root and sudo_available:
+                        setup_cmd = ["sudo"] + setup_cmd
+                    subprocess.run(setup_cmd, capture_output=True, timeout=120, check=True)
+
+                    # Install nodejs
+                    install_cmd = ["apt-get", "install", "-y", "nodejs"]
+                    if not is_root and sudo_available:
+                        install_cmd = ["sudo"] + install_cmd
+                    result = subprocess.run(install_cmd, capture_output=True, text=True, timeout=300)
+
+                    if result.returncode == 0:
+                        return True, "Installed Node.js 20 via NodeSource"
+                except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                    _print(f"[dim]  NodeSource setup failed: {e}[/dim]")
+            continue  # Try next package manager
+
         if not _is_package_manager_available(pkg_manager):
             continue
+
+        # Handle sudo: strip if running as root or sudo not available
+        actual_command = list(command)  # Copy to avoid mutation
+        if actual_command and actual_command[0] == "sudo":
+            if is_root or not sudo_available:
+                actual_command = actual_command[1:]  # Strip "sudo"
+
+        # For apt: run apt-get update first (package lists may be stale/missing)
+        if pkg_manager == "apt":
+            _print(f"[*] Updating package lists...")
+            update_cmd = ["apt-get", "update"]
+            if not is_root and sudo_available:
+                update_cmd = ["sudo"] + update_cmd
+            subprocess.run(update_cmd, capture_output=True, timeout=120)
 
         try:
             _print(f"[*] Installing {dep_name} via {pkg_manager}...")
             result = subprocess.run(
-                command,
+                actual_command,
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout for package install
@@ -443,7 +488,7 @@ class ToolInstaller:
         self,
         profile: str,
         skip_installed: bool = True,
-        parallel: bool = False,
+        _parallel: bool = False,  # TODO: Not implemented yet
     ) -> InstallProgress:
         """
         Install all tools for a scan profile.
@@ -451,7 +496,7 @@ class ToolInstaller:
         Args:
             profile: Profile name (fast, slim, balanced, deep)
             skip_installed: Skip tools that are already installed
-            parallel: Install tools in parallel (not implemented yet)
+            _parallel: Install tools in parallel (not implemented yet)
 
         Returns:
             InstallProgress with results for all tools
@@ -582,7 +627,7 @@ class ToolInstaller:
         # Set up signal handler for graceful Ctrl+C
         original_handler = signal.getsignal(signal.SIGINT)
 
-        def signal_handler(signum, frame):
+        def signal_handler(_signum: int, _frame: object) -> None:
             logger.info("Installation cancelled by user")
             progress.cancel()
             raise KeyboardInterrupt
@@ -707,7 +752,7 @@ class ToolInstaller:
         # Handle keyboard interrupt gracefully
         original_handler = signal.getsignal(signal.SIGINT)
 
-        def cancel_handler(signum: int, frame: object) -> None:
+        def cancel_handler(_signum: int, _frame: object) -> None:
             progress.cancel()
             logger.info("Cancellation requested...")
 
@@ -948,7 +993,7 @@ class ToolInstaller:
         self,
         tool_name: str,
         package_spec: str,
-        progress: ParallelInstallProgress | None = None,
+        _progress: ParallelInstallProgress | None = None,  # TODO: Not used yet
     ) -> InstallResult:
         """Install a tool in an isolated virtual environment.
 
@@ -960,7 +1005,7 @@ class ToolInstaller:
         Args:
             tool_name: Name of the tool
             package_spec: Pip package specification (e.g., "prowler==5.16.0")
-            progress: Optional progress tracker for status updates
+            _progress: Optional progress tracker for status updates (not used yet)
 
         Returns:
             InstallResult with success status and details
@@ -2382,6 +2427,30 @@ class ToolInstaller:
                     for exe in bin_dir.iterdir():
                         if exe.is_file():
                             exe.chmod(0o755)
+
+                # Scancode: Run ./configure to set up the Python venv
+                # The pre-built release requires this step to create venv/bin/scancode
+                if tool_name == "scancode":
+                    configure_script = app_dir / "configure"
+                    if configure_script.exists():
+                        configure_script.chmod(0o755)
+                        logger.debug(f"Running scancode configure script in {app_dir}")
+                        try:
+                            configure_result = subprocess.run(
+                                ["./configure"],
+                                cwd=str(app_dir),
+                                capture_output=True,
+                                text=True,
+                                timeout=300,  # Configure can take a while
+                            )
+                            if configure_result.returncode != 0:
+                                logger.warning(
+                                    f"Scancode configure warning: {configure_result.stderr[:200]}"
+                                )
+                        except subprocess.TimeoutExpired:
+                            logger.warning("Scancode configure timed out after 300s")
+                        except Exception as e:
+                            logger.warning(f"Scancode configure failed: {e}")
 
                 # Verify installation
                 status = self.manager.check_tool(tool_name)

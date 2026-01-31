@@ -862,6 +862,105 @@ class TestRepositoryScanner:
             assert "bandit" in [call for call in stub_calls]
             assert len(stub_calls) == 2  # Only semgrep and bandit
 
+    def test_timeout_writes_stub_file(self, tmp_path):
+        """Test that tools that timeout get stub files written"""
+        repo = tmp_path / "timeout-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        def mock_tool_exists(tool_name):
+            return tool_name in ["semgrep", "semgrep-secrets"]
+
+        stub_calls = []
+
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append(tool_name)
+            output_path.write_text("{}")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            # Simulate semgrep-secrets timing out
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="semgrep", status="success", attempts=1),
+                ToolResult(
+                    tool="semgrep-secrets",
+                    status="error",
+                    attempts=2,
+                    error_message="Timeout after 900s",
+                ),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["semgrep", "semgrep-secrets"],
+                timeout=900,
+                retries=1,
+                per_tool_config={},
+                allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # semgrep should succeed
+            assert statuses["semgrep"] is True
+
+            # semgrep-secrets should fail but have stub written
+            assert statuses["semgrep-secrets"] is False
+
+            # Stub should be written for timed out tool
+            assert "semgrep-secrets" in stub_calls
+
+    def test_timeout_records_attempts(self, tmp_path):
+        """Test that timed out tools record their attempt counts"""
+        repo = tmp_path / "timeout-attempts-repo"
+        repo.mkdir()
+
+        def mock_tool_exists(tool_name):
+            return tool_name == "semgrep-secrets"
+
+        def mock_write_stub(tool_name, output_path):
+            output_path.write_text("{}")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            # Simulate tool timing out after 3 attempts
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="semgrep-secrets",
+                    status="retry_exhausted",
+                    attempts=3,
+                    error_message="Timeout after 900s",
+                ),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["semgrep-secrets"],
+                timeout=900,
+                retries=2,
+                per_tool_config={},
+                allow_missing_tools=False,
+                tool_exists_func=mock_tool_exists,
+                write_stub_func=mock_write_stub,
+            )
+
+            # Tool should be marked as failed
+            assert statuses["semgrep-secrets"] is False
+
+            # Attempts should be recorded in metadata
+            assert "__attempts__" in statuses
+            assert statuses["__attempts__"]["semgrep-secrets"] == 3
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

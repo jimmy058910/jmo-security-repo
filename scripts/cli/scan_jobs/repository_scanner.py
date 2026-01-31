@@ -157,10 +157,26 @@ def scan_repository(
         semgrep_out = out_dir / "semgrep.json"
         if _tool_exists("semgrep"):
             semgrep_flags = get_tool_flags("semgrep")
+
+            # Get semgrep configs from per_tool_config (allows offline mode)
+            # Default: ["auto", "p/security"] - p/security requires network
+            # Offline: ["auto"] - local rules only
+            semgrep_tool_config = per_tool_config.get("semgrep", {})
+            if isinstance(semgrep_tool_config, dict):
+                semgrep_configs = semgrep_tool_config.get(
+                    "configs", ["auto", "p/security"]
+                )
+            else:
+                semgrep_configs = ["auto", "p/security"]
+
+            # Build config arguments
+            config_args = []
+            for cfg in semgrep_configs:
+                config_args.extend(["--config", cfg])
+
             semgrep_cmd = [
                 "semgrep",
-                "--config=auto",
-                "--config=p/security",  # Security rules (SQLi, XSS, etc.)
+                *config_args,
                 "--json",
                 "--output",
                 str(semgrep_out),
@@ -1155,8 +1171,17 @@ def scan_repository(
                 statuses[result.tool] = True
             else:
                 statuses[result.tool] = False
+        elif "Timeout" in result.error_message:
+            # Tool timed out - write stub so report phase has consistent files
+            # and mark as failed (timeout is a failure state)
+            tool_out = out_dir / f"{result.tool}.json"
+            if not tool_out.exists():
+                _write_stub(result.tool, tool_out)
+            statuses[result.tool] = False
+            if result.attempts > 0:
+                attempts_map[result.tool] = result.attempts
         else:
-            # Other errors (timeout, non-zero exit, etc.)
+            # Other errors (non-zero exit, etc.)
             statuses[result.tool] = False
             if result.attempts > 0:
                 attempts_map[result.tool] = result.attempts

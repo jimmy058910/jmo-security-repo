@@ -1302,3 +1302,316 @@ def test_dependency_check_pattern_matches_actual_output():
     match = pattern.search(alt_output)
     assert match is not None
     assert match.group(1) == "9.0.10"
+
+
+# ========== Category 15: ToolStatusSummary Tests ==========
+
+
+class TestToolStatusSummary:
+    """Tests for ToolStatusSummary dataclass."""
+
+    def test_toolstatussummary_defaults(self):
+        """Test ToolStatusSummary with default values."""
+        from scripts.cli.tool_manager import ToolStatusSummary
+
+        summary = ToolStatusSummary(
+            profile_name="deep",
+            profile_total=29,
+            platform_applicable=27,
+            installed=25,
+            execution_ready=22,
+            platform_skipped=["falco", "afl++"],
+            manual_install=[],
+            missing_dependency=["zap"],
+            not_installed=["noseyparker"],
+            version_issues=["prowler"],
+            content_triggered=["mobsf", "akto"],
+        )
+
+        assert summary.profile_name == "deep"
+        assert summary.profile_total == 29
+        assert summary.platform_applicable == 27
+        assert summary.installed == 25
+        assert summary.execution_ready == 22
+        assert len(summary.platform_skipped) == 2
+        assert len(summary.content_triggered) == 2
+
+    def test_toolstatussummary_needs_attention_count(self):
+        """Test needs_attention_count property."""
+        from scripts.cli.tool_manager import ToolStatusSummary
+
+        summary = ToolStatusSummary(
+            profile_name="balanced",
+            profile_total=18,
+            platform_applicable=16,
+            installed=14,
+            execution_ready=12,
+            platform_skipped=["falco", "afl++"],
+            manual_install=["mobsf"],
+            missing_dependency=["zap"],
+            not_installed=["bearer"],
+            version_issues=["prowler"],
+            content_triggered=[],
+        )
+
+        # needs_attention = manual(1) + missing_deps(1) + not_installed(1) + version_issues(1) = 4
+        assert summary.needs_attention_count == 4
+
+    def test_toolstatussummary_skipped_count(self):
+        """Test skipped_count property."""
+        from scripts.cli.tool_manager import ToolStatusSummary
+
+        summary = ToolStatusSummary(
+            profile_name="deep",
+            profile_total=29,
+            platform_applicable=27,
+            installed=25,
+            execution_ready=22,
+            platform_skipped=["falco", "afl++"],
+            manual_install=["mobsf"],
+            missing_dependency=[],
+            not_installed=[],
+            version_issues=[],
+            content_triggered=["akto"],
+        )
+
+        # skipped = platform(2) + manual(1) + content_triggered(1) = 4
+        assert summary.skipped_count == 4
+
+    def test_toolstatussummary_format_status_line_all_ready(self):
+        """Test format_status_line when all tools are ready."""
+        from scripts.cli.tool_manager import ToolStatusSummary
+
+        summary = ToolStatusSummary(
+            profile_name="fast",
+            profile_total=9,
+            platform_applicable=9,
+            installed=9,
+            execution_ready=9,
+            platform_skipped=[],
+            manual_install=[],
+            missing_dependency=[],
+            not_installed=[],
+            version_issues=[],
+            content_triggered=[],
+        )
+
+        status_line = summary.format_status_line()
+        assert "All 9 tools ready" in status_line
+
+    def test_toolstatussummary_format_status_line_partial(self):
+        """Test format_status_line when some tools need attention."""
+        from scripts.cli.tool_manager import ToolStatusSummary
+
+        summary = ToolStatusSummary(
+            profile_name="balanced",
+            profile_total=18,
+            platform_applicable=16,
+            installed=14,
+            execution_ready=12,
+            platform_skipped=["falco", "afl++"],
+            manual_install=[],
+            missing_dependency=["zap"],
+            not_installed=["bearer"],
+            version_issues=[],
+            content_triggered=[],
+        )
+
+        status_line = summary.format_status_line()
+        assert "12/16 tools ready" in status_line
+        assert "2 need attention" in status_line
+
+
+class TestGetToolSummary:
+    """Tests for get_tool_summary method."""
+
+    def test_get_tool_summary_basic(self):
+        """Test get_tool_summary returns ToolStatusSummary."""
+        from scripts.cli.tool_manager import ToolManager, ToolStatusSummary
+
+        manager = ToolManager()
+
+        # Mock check_tool to return predictable results
+        mock_status_installed = MagicMock()
+        mock_status_installed.installed = True
+        mock_status_installed.execution_ready = True
+        mock_status_installed.version_error = None
+        mock_status_installed.missing_deps = []
+
+        mock_status_missing = MagicMock()
+        mock_status_missing.installed = False
+        mock_status_missing.execution_ready = False
+        mock_status_missing.version_error = None
+        mock_status_missing.missing_deps = []
+
+        def mock_check_tool(name):
+            if name in ["trivy", "semgrep", "checkov"]:
+                return mock_status_installed
+            return mock_status_missing
+
+        with patch.object(manager, "check_tool", side_effect=mock_check_tool):
+            with patch(
+                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
+                return_value=["trivy", "semgrep", "checkov", "bearer"],
+            ):
+                with patch(
+                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
+                    return_value=[("falco", "Linux only")],
+                ):
+                    with patch(
+                        "scripts.cli.tool_manager.PROFILE_TOOLS",
+                        {"fast": ["trivy", "semgrep", "checkov", "bearer", "falco"]},
+                    ):
+                        summary = manager.get_tool_summary("fast")
+
+        assert isinstance(summary, ToolStatusSummary)
+        assert summary.profile_name == "fast"
+        assert summary.profile_total == 5  # Total in profile
+        assert summary.platform_applicable == 4  # After filtering
+        assert summary.installed == 3  # Tools with installed=True
+        assert summary.execution_ready == 3  # Tools that are ready
+        assert "falco" in summary.platform_skipped
+
+    def test_get_tool_summary_with_content_triggered(self):
+        """Test get_tool_summary identifies content-triggered tools."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_status = MagicMock()
+        mock_status.installed = True
+        mock_status.execution_ready = True
+        mock_status.version_error = None
+        mock_status.missing_deps = []
+
+        with patch.object(manager, "check_tool", return_value=mock_status):
+            with patch(
+                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
+                return_value=["trivy", "mobsf", "akto"],
+            ):
+                with patch(
+                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
+                    return_value=[],
+                ):
+                    with patch(
+                        "scripts.cli.tool_manager.PROFILE_TOOLS",
+                        {"deep": ["trivy", "mobsf", "akto"]},
+                    ):
+                        with patch(
+                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
+                            {"mobsf", "akto"},
+                        ):
+                            summary = manager.get_tool_summary("deep")
+
+        # mobsf and akto should be in content_triggered
+        assert "mobsf" in summary.content_triggered
+        assert "akto" in summary.content_triggered
+        assert len(summary.content_triggered) == 2
+
+    def test_get_tool_summary_with_version_issues(self):
+        """Test get_tool_summary detects version/crash issues."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_status_ok = MagicMock()
+        mock_status_ok.installed = True
+        mock_status_ok.execution_ready = True
+        mock_status_ok.version_error = None
+        mock_status_ok.missing_deps = []
+
+        mock_status_crash = MagicMock()
+        mock_status_crash.installed = True
+        mock_status_crash.execution_ready = False
+        mock_status_crash.version_error = "ImportError - pydantic conflict"
+        mock_status_crash.missing_deps = []
+
+        def mock_check_tool(name):
+            if name == "prowler":
+                return mock_status_crash
+            return mock_status_ok
+
+        with patch.object(manager, "check_tool", side_effect=mock_check_tool):
+            with patch(
+                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
+                return_value=["trivy", "prowler"],
+            ):
+                with patch(
+                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
+                    return_value=[],
+                ):
+                    with patch(
+                        "scripts.cli.tool_manager.PROFILE_TOOLS",
+                        {"balanced": ["trivy", "prowler"]},
+                    ):
+                        with patch(
+                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
+                            set(),
+                        ):
+                            summary = manager.get_tool_summary("balanced")
+
+        assert "prowler" in summary.version_issues
+
+    def test_get_tool_summary_with_manual_install(self):
+        """Test get_tool_summary identifies manual install tools."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        mock_status_ok = MagicMock()
+        mock_status_ok.installed = True
+        mock_status_ok.execution_ready = True
+        mock_status_ok.version_error = None
+        mock_status_ok.missing_deps = []
+
+        mock_status_missing = MagicMock()
+        mock_status_missing.installed = False
+        mock_status_missing.execution_ready = False
+        mock_status_missing.version_error = None
+        mock_status_missing.missing_deps = []
+
+        def mock_check_tool(name):
+            if name == "mobsf":
+                return mock_status_missing
+            return mock_status_ok
+
+        with patch.object(manager, "check_tool", side_effect=mock_check_tool):
+            with patch(
+                "scripts.cli.tool_manager.get_tools_for_profile_filtered",
+                return_value=["trivy", "mobsf"],
+            ):
+                with patch(
+                    "scripts.cli.tool_manager.get_skipped_tools_for_profile",
+                    return_value=[],
+                ):
+                    with patch(
+                        "scripts.cli.tool_manager.PROFILE_TOOLS",
+                        {"deep": ["trivy", "mobsf"]},
+                    ):
+                        with patch(
+                            "scripts.cli.tool_manager.CONTENT_TRIGGERED_TOOLS",
+                            set(),
+                        ):
+                            with patch(
+                                "scripts.cli.tool_manager.MANUAL_INSTALL_TOOLS",
+                                {"mobsf"},
+                            ):
+                                summary = manager.get_tool_summary("deep")
+
+        # mobsf not installed and in MANUAL_INSTALL_TOOLS
+        assert "mobsf" in summary.manual_install
+
+    def test_get_tool_summary_invalid_profile(self):
+        """Test get_tool_summary with invalid profile."""
+        from scripts.cli.tool_manager import ToolManager
+
+        manager = ToolManager()
+
+        with patch(
+            "scripts.cli.tool_manager.PROFILE_TOOLS",
+            {"fast": ["trivy"]},
+        ):
+            summary = manager.get_tool_summary("nonexistent")
+
+        assert summary.profile_total == 0
+        assert summary.platform_applicable == 0

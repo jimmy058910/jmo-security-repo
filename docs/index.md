@@ -114,6 +114,7 @@
 | Document | Purpose |
 |----------|---------|
 | [CI Troubleshooting](../CONTRIBUTING.md#ci-troubleshooting) | Debugging CI failures |
+| [Manual Testing Checklist](MANUAL_TESTING_CHECKLIST.md) | Pre-release manual verification across all platforms |
 | [Release Process](RELEASE.md) | Release workflow, WSL/macOS validation |
 | [Version Management](VERSION_MANAGEMENT.md) | Tool version system |
 
@@ -123,6 +124,8 @@
 |----------|---------|
 | [Contributing](../CONTRIBUTING.md) | Development setup, git workflow, standards |
 | [Testing Guide](../TEST.md) | Test suite documentation |
+| [Testing Matrix](TESTING_MATRIX.md) | Automated test coverage analysis |
+| [Platform Notes](PLATFORM_NOTES.md) | Cross-platform compatibility |
 | [Dependency Management](DEPENDENCY_MANAGEMENT.md) | Managing dependencies |
 
 ### Project

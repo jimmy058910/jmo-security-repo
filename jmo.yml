@@ -224,6 +224,15 @@ profiles:
         - critical,high,medium,low
       noseyparker:
         timeout: 1200
+      semgrep-secrets:
+        # p/secrets ruleset is very large (3000+ rules) and slow
+        # First run downloads rules from semgrep.dev, subsequent runs use cache
+        timeout: 1800
+        flags:
+        - --exclude
+        - node_modules
+        - --exclude
+        - .git
       afl++:
         timeout: 1800
         flags:

@@ -71,6 +71,58 @@ class MockInstallProgress:
         self.failed = sum(1 for r in self.results if not r.success)
 
 
+class MockToolStatusSummary:
+    """Mock ToolStatusSummary for testing (unified tool counting)."""
+
+    def __init__(
+        self,
+        profile_name: str = "fast",
+        profile_total: int = 9,
+        platform_applicable: int = 9,
+        installed: int = 9,
+        execution_ready: int = 9,
+        platform_skipped: list[str] | None = None,
+        manual_install: list[str] | None = None,
+        missing_dependency: list[str] | None = None,
+        not_installed: list[str] | None = None,
+        version_issues: list[str] | None = None,
+        content_triggered: list[str] | None = None,
+    ):
+        self.profile_name = profile_name
+        self.profile_total = profile_total
+        self.platform_applicable = platform_applicable
+        self.installed = installed
+        self.execution_ready = execution_ready
+        self.platform_skipped = platform_skipped or []
+        self.manual_install = manual_install or []
+        self.missing_dependency = missing_dependency or []
+        self.not_installed = not_installed or []
+        self.version_issues = version_issues or []
+        self.content_triggered = content_triggered or []
+
+    @property
+    def needs_attention_count(self) -> int:
+        return (
+            len(self.manual_install)
+            + len(self.missing_dependency)
+            + len(self.not_installed)
+            + len(self.version_issues)
+        )
+
+    @property
+    def skipped_count(self) -> int:
+        return (
+            len(self.platform_skipped)
+            + len(self.manual_install)
+            + len(self.content_triggered)
+        )
+
+    def format_status_line(self) -> str:
+        if self.execution_ready == self.platform_applicable:
+            return f"All {self.platform_applicable} tools ready"
+        return f"{self.execution_ready}/{self.platform_applicable} tools ready ({self.needs_attention_count} need attention)"
+
+
 # ============================================================================
 # check_tools_for_profile() tests
 # ============================================================================
@@ -270,12 +322,12 @@ class TestCheckToolsForProfile:
     @patch("scripts.cli.wizard_flows.tool_checker._get_colorize")
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
+    @patch(
+        "scripts.core.tool_registry.PROFILE_TOOLS",
+        {"fast": ["trivy", "falco", "lynis"]},
+    )
     def test_skipped_tools_displayed(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_tool_manager,
         mock_colorize,
@@ -288,16 +340,22 @@ class TestCheckToolsForProfile:
 
         # Setup mocks
         mock_detect_platform.return_value = "windows"
-        mock_get_filtered.return_value = ["trivy"]
-        mock_get_skipped.return_value = [
-            ("falco", "Not available on Windows"),
-            ("lynis", "Linux only"),
-        ]
         mock_colorize.return_value = lambda text, color: text
-        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~"}
+        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "~": "~", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
 
+        # Create mock ToolStatusSummary with platform-skipped tools
+        mock_summary = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=3,
+            platform_applicable=1,
+            installed=1,
+            execution_ready=1,
+            platform_skipped=["falco", "lynis"],
+        )
+
         manager_instance = MagicMock()
+        manager_instance.get_tool_summary.return_value = mock_summary
         manager_instance.check_profile.return_value = {
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
         }
@@ -312,7 +370,7 @@ class TestCheckToolsForProfile:
         assert should_continue is True
         # Check output contains skipped tools info
         captured = capsys.readouterr()
-        assert "Skipped on windows" in captured.out or "falco" in captured.out
+        assert "falco" in captured.out or "lynis" in captured.out
 
 
 # ============================================================================
@@ -883,12 +941,9 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
+    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_1_auto_fix(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_get_remediation,
         mock_tool_manager,
@@ -903,10 +958,8 @@ class TestInteractiveChoices:
 
         # Setup
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["trivy", "bandit"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
-        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
+        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "is_manual": False,
@@ -918,7 +971,18 @@ class TestInteractiveChoices:
         bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
         bandit_status.status_type = ToolStatusType.MISSING
 
+        # Create mock summary showing one tool needs attention
+        mock_summary = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=2,
+            platform_applicable=2,
+            installed=1,
+            execution_ready=1,
+            not_installed=["bandit"],
+        )
+
         manager_instance = MagicMock()
+        manager_instance.get_tool_summary.return_value = mock_summary
         manager_instance.check_profile.return_value = {
             "trivy": MockToolStatus("trivy"),
             "bandit": bandit_status,
@@ -942,12 +1006,9 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
+    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_2_continue_with_available(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_get_remediation,
         mock_tool_manager,
@@ -960,10 +1021,8 @@ class TestInteractiveChoices:
         from scripts.cli.tool_manager import ToolStatusType
 
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["trivy", "bandit"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
-        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
+        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "is_manual": False,
@@ -974,7 +1033,18 @@ class TestInteractiveChoices:
         bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
         bandit_status.status_type = ToolStatusType.MISSING
 
+        # Create mock summary showing one tool needs attention
+        mock_summary = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=2,
+            platform_applicable=2,
+            installed=1,
+            execution_ready=1,
+            not_installed=["bandit"],
+        )
+
         manager_instance = MagicMock()
+        manager_instance.get_tool_summary.return_value = mock_summary
         manager_instance.check_profile.return_value = {
             "trivy": MockToolStatus("trivy"),
             "bandit": bandit_status,
@@ -999,12 +1069,9 @@ class TestInteractiveChoices:
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.tool_manager.get_remediation_for_tool")
     @patch("scripts.core.tool_registry.detect_platform")
-    @patch("scripts.core.tool_registry.get_tools_for_profile_filtered")
-    @patch("scripts.core.tool_registry.get_skipped_tools_for_profile")
+    @patch("scripts.core.tool_registry.PROFILE_TOOLS", {"fast": ["trivy", "bandit"]})
     def test_choice_4_cancel(
         self,
-        mock_get_skipped,
-        mock_get_filtered,
         mock_detect_platform,
         mock_get_remediation,
         mock_tool_manager,
@@ -1017,10 +1084,8 @@ class TestInteractiveChoices:
         from scripts.cli.tool_manager import ToolStatusType
 
         mock_detect_platform.return_value = "linux"
-        mock_get_filtered.return_value = ["trivy", "bandit"]
-        mock_get_skipped.return_value = []
         mock_colorize.return_value = lambda text, color: text
-        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]"}
+        mock_fallbacks.return_value = {"✅": "[OK]", "⚠": "[!]", "○": "o"}
         mock_print_step.return_value = lambda s, t, m: None
         mock_get_remediation.return_value = {
             "is_manual": False,
@@ -1031,7 +1096,18 @@ class TestInteractiveChoices:
         bandit_status = MockToolStatus("bandit", installed=False, execution_ready=False)
         bandit_status.status_type = ToolStatusType.MISSING
 
+        # Create mock summary showing one tool needs attention
+        mock_summary = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=2,
+            platform_applicable=2,
+            installed=1,
+            execution_ready=1,
+            not_installed=["bandit"],
+        )
+
         manager_instance = MagicMock()
+        manager_instance.get_tool_summary.return_value = mock_summary
         manager_instance.check_profile.return_value = {
             "trivy": MockToolStatus("trivy"),
             "bandit": bandit_status,
@@ -1631,7 +1707,9 @@ class TestPlatformCommandExecution:
         # Mock re-check - tool now ready
         manager_instance = MagicMock()
         manager_instance.check_profile.return_value = {
-            "some-tool": MockToolStatus("some-tool", installed=True, execution_ready=True),
+            "some-tool": MockToolStatus(
+                "some-tool", installed=True, execution_ready=True
+            ),
         }
         mock_tool_manager.return_value = manager_instance
 
@@ -1684,7 +1762,9 @@ class TestPlatformCommandExecution:
             "🔧": "[*]",
             "⏳": "[.]",
         }
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="slow-install", timeout=300)
+        mock_run.side_effect = subprocess.TimeoutExpired(
+            cmd="slow-install", timeout=300
+        )
 
         # Mock re-check - no tools ready
         manager_instance = MagicMock()
@@ -1801,12 +1881,16 @@ class TestPlatformCommandExecution:
         # Mock re-check
         manager_instance = MagicMock()
         manager_instance.check_profile.return_value = {
-            "long-pkg": MockToolStatus("long-pkg", installed=True, execution_ready=True),
+            "long-pkg": MockToolStatus(
+                "long-pkg", installed=True, execution_ready=True
+            ),
         }
         mock_tool_manager.return_value = manager_instance
 
         # Create a command longer than 60 chars
-        long_cmd = "pip install some-very-long-package-name-that-exceeds-sixty-characters"
+        long_cmd = (
+            "pip install some-very-long-package-name-that-exceeds-sixty-characters"
+        )
         assert len(long_cmd) > 60
 
         fix_info = [
@@ -1921,7 +2005,9 @@ class TestPlatformCommandExecution:
         # Mock re-check
         manager_instance = MagicMock()
         manager_instance.check_profile.return_value = {
-            "sparse-tool": MockToolStatus("sparse-tool", installed=True, execution_ready=True),
+            "sparse-tool": MockToolStatus(
+                "sparse-tool", installed=True, execution_ready=True
+            ),
         }
         mock_tool_manager.return_value = manager_instance
 
@@ -1977,7 +2063,9 @@ class TestPlatformCommandExecution:
         # Mock re-check
         manager_instance = MagicMock()
         manager_instance.check_profile.return_value = {
-            "multi-cmd": MockToolStatus("multi-cmd", installed=True, execution_ready=True),
+            "multi-cmd": MockToolStatus(
+                "multi-cmd", installed=True, execution_ready=True
+            ),
         }
         mock_tool_manager.return_value = manager_instance
 
@@ -2108,13 +2196,21 @@ class TestPlatformCommandExecution:
                 "name": "tool-a",
                 "issue": "Not installed",
                 "missing_deps": [],
-                "remediation": {"is_manual": False, "commands": ["pip install a"], "jmo_install": ""},
+                "remediation": {
+                    "is_manual": False,
+                    "commands": ["pip install a"],
+                    "jmo_install": "",
+                },
             },
             {
                 "name": "tool-b",
                 "issue": "Not installed",
                 "missing_deps": [],
-                "remediation": {"is_manual": False, "commands": ["pip install b"], "jmo_install": ""},
+                "remediation": {
+                    "is_manual": False,
+                    "commands": ["pip install b"],
+                    "jmo_install": "",
+                },
             },
         ]
 
@@ -2163,7 +2259,9 @@ class TestPlatformCommandExecution:
         # Mock re-check
         manager_instance = MagicMock()
         manager_instance.check_profile.return_value = {
-            "success-tool": MockToolStatus("success-tool", installed=True, execution_ready=True),
+            "success-tool": MockToolStatus(
+                "success-tool", installed=True, execution_ready=True
+            ),
         }
         mock_tool_manager.return_value = manager_instance
 
@@ -2172,13 +2270,21 @@ class TestPlatformCommandExecution:
                 "name": "success-tool",
                 "issue": "Not installed",
                 "missing_deps": [],
-                "remediation": {"is_manual": False, "commands": ["pip install a"], "jmo_install": ""},
+                "remediation": {
+                    "is_manual": False,
+                    "commands": ["pip install a"],
+                    "jmo_install": "",
+                },
             },
             {
                 "name": "fail-tool",
                 "issue": "Not installed",
                 "missing_deps": [],
-                "remediation": {"is_manual": False, "commands": ["pip install b"], "jmo_install": ""},
+                "remediation": {
+                    "is_manual": False,
+                    "commands": ["pip install b"],
+                    "jmo_install": "",
+                },
             },
         ]
 

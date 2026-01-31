@@ -124,17 +124,21 @@ class FindingCluster:
         # Start with representative as base
         consensus = self.representative.copy()
 
-        # Build detected_by array
+        # Build detected_by array (deduplicated by tool name)
+        seen_tools: set[str] = set()
         detected_by = []
         for finding in self.findings:
             tool_info = finding.get("tool", {})
             if isinstance(tool_info, dict):
-                detected_by.append(
-                    {
-                        "name": tool_info.get("name", "unknown"),
-                        "version": tool_info.get("version", "unknown"),
-                    }
-                )
+                tool_name = tool_info.get("name", "unknown")
+                if tool_name not in seen_tools:
+                    seen_tools.add(tool_name)
+                    detected_by.append(
+                        {
+                            "name": tool_name,
+                            "version": tool_info.get("version", "unknown"),
+                        }
+                    )
 
         consensus["detected_by"] = detected_by
 

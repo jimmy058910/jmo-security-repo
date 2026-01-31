@@ -125,14 +125,29 @@ def cmd_report(args, _log_fn) -> int:
 
     # Collect scan metadata
     scan_id = str(uuid.uuid4())
-    profile = getattr(cfg, "default_profile", "") or ""
-    tools_used = []
 
-    # Infer tools from findings
-    for f in findings:
-        tool_name = f.get("tool", {}).get("name", "")
-        if tool_name and tool_name not in tools_used:
-            tools_used.append(tool_name)
+    # Read profile from scan metadata if available (Bug #3 fix)
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    profile = ""
+    tools_from_scan: list[str] = []
+    if scan_metadata_path.exists():
+        try:
+            scan_meta = json.loads(scan_metadata_path.read_text(encoding="utf-8"))
+            profile = scan_meta.get("profile", "")
+            tools_from_scan = scan_meta.get("tools", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not profile:
+        profile = getattr(cfg, "default_profile", "") or ""
+
+    # Use tools from scan metadata if available, else infer from findings (Bug #5 fix)
+    tools_used: list[str] = tools_from_scan.copy() if tools_from_scan else []
+    if not tools_used:
+        # Fallback: infer tools from findings
+        for f in findings:
+            tool_name = f.get("tool", {}).get("name", "")
+            if tool_name and tool_name not in tools_used:
+                tools_used.append(tool_name)
 
     # Count targets scanned
     target_count = 0

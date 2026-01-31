@@ -108,45 +108,60 @@ def check_tools_for_profile(
     try:
         from scripts.cli.tool_manager import (
             ToolManager,
+            ToolStatusSummary,
             ToolStatusType,
             get_remediation_for_tool,
         )
         from scripts.core.tool_registry import (
+            PROFILE_TOOLS,
             detect_platform,
-            get_tools_for_profile_filtered,
-            get_skipped_tools_for_profile,
         )
 
         manager = ToolManager()
         platform = detect_platform()
 
-        # Proactive filtering: Show platform-incompatible tools BEFORE checking
-        # This makes the wizard output clearer by separating "won't work here"
-        # from "needs installation"
-        skipped_tools = get_skipped_tools_for_profile(profile, platform)
-        applicable_tools = get_tools_for_profile_filtered(profile, platform)
+        # Get unified tool status summary (single source of truth)
+        summary: ToolStatusSummary = manager.get_tool_summary(profile)
 
-        if skipped_tools:
+        # Show profile info with clear breakdown
+        print(
+            colorize(
+                f"\n{summary.profile_name.capitalize()} profile: {summary.profile_total} tools",
+                "blue",
+            )
+        )
+
+        # Show platform-skipped tools if any
+        if summary.platform_skipped:
+            platform_reason = f"{len(summary.platform_skipped)} {platform}-incompatible"
             print(
                 colorize(
-                    f"\n{FALLBACKS.get('~', '~')} Skipped on {platform} "
-                    f"({len(skipped_tools)} tools):",
+                    f"  {FALLBACKS.get('~', '~')} {platform_reason}: {', '.join(summary.platform_skipped)}",
                     "dim",
                 )
             )
-            for tool, reason in skipped_tools:
-                print(f"  {colorize('~', 'yellow')} {tool}: {reason}")
 
-        # Use applicable_tools for the tool check (filtered list)
-        tools_in_profile = applicable_tools
+        # Show content-triggered tools if any
+        if summary.content_triggered:
+            print(
+                colorize(
+                    f"  {FALLBACKS.get('○', 'o')} {len(summary.content_triggered)} content-triggered: {', '.join(summary.content_triggered)}",
+                    "dim",
+                )
+            )
 
-        print(
-            f"\nChecking {len(tools_in_profile)} applicable tools for '{profile}' profile..."
-        )
+        print(f"\nChecking {summary.platform_applicable} applicable tools...")
 
-        # Check only applicable tools (not the full profile which includes skipped tools)
-        # This prevents platform-incompatible tools from appearing in the "needs attention" list
+        # Get detailed statuses for tools needing attention
         all_statuses = manager.check_profile(profile)
+
+        # Filter to platform-applicable tools only
+        applicable_tools = [
+            name
+            for name in PROFILE_TOOLS.get(profile, [])
+            if name not in summary.platform_skipped
+            and name not in summary.content_triggered
+        ]
         statuses = {
             name: status
             for name, status in all_statuses.items()
@@ -168,7 +183,7 @@ def check_tools_for_profile(
         if not tools_needing_attention:
             print(
                 colorize(
-                    f"\n{FALLBACKS.get('✅', '[OK]')} All {len(tools_in_profile)} tools ready!",
+                    f"\n{FALLBACKS.get('✅', '[OK]')} {summary.format_status_line()}",
                     "green",
                 )
             )
@@ -181,16 +196,16 @@ def check_tools_for_profile(
                 )
             return True, available
 
-        # Show consolidated status
+        # Show consolidated status with unified counts
         print(
             colorize(
-                f"\n{FALLBACKS.get('✅', '[OK]')} {len(available)} tools ready",
+                f"\n{FALLBACKS.get('✅', '[OK]')} {summary.execution_ready} tools ready",
                 "green",
             )
         )
         print(
             colorize(
-                f"{FALLBACKS.get('⚠', '[!]')} {len(tools_needing_attention)} tool(s) need attention:",
+                f"{FALLBACKS.get('⚠', '[!]')} {summary.needs_attention_count} tool(s) need attention:",
                 "yellow",
             )
         )
@@ -593,8 +608,14 @@ def _auto_fix_tools(
     if jmo_tools:
         print(
             colorize(
-                f"\n{FALLBACKS.get('⚡', '[*]')} Installing {len(jmo_tools)} tools in parallel...",
+                f"\n{FALLBACKS.get('⚡', '[*]')} Installing {len(jmo_tools)} tools...",
                 "cyan",
+            )
+        )
+        print(
+            colorize(
+                "   (isolated venvs: sequential | binaries: parallel | pip batch: single command)",
+                "dim",
             )
         )
 
@@ -625,6 +646,15 @@ def _auto_fix_tools(
                         )
                         if result.tool_name not in available:
                             available.append(result.tool_name)
+                elif result.method in ("manual", "docker"):
+                    # Manual/Docker tools are expected to fail auto-install - show as skipped, not failed
+                    print(
+                        colorize(
+                            f"   {FALLBACKS.get('⏭', '[~]')} {result.tool_name}: {result.message[:60]}",
+                            "yellow",
+                        )
+                    )
+                    # Don't count as failed - these are expected skips
                 else:
                     failed += 1
                     failed_tools.append(result.tool_name)
@@ -745,32 +775,47 @@ def _auto_fix_tools(
         print(f"Failed tools: {', '.join(failed_tools)}")
         print("These may require manual installation. See: docs/MANUAL_INSTALLATION.md")
 
-    # Re-check tool status to update available list
+    # Re-check tool status to update available list using unified summary
     print("\nRe-checking tool status...")
     try:
         from scripts.cli.tool_manager import ToolManager
 
         manager = ToolManager()
+        summary = manager.get_tool_summary(profile)
+
+        # Get list of execution-ready tools
         statuses = manager.check_profile(profile)
         available = [name for name, s in statuses.items() if s.execution_ready]
-        ready_count = len(available)
-        total_count = len(statuses)
 
-        if ready_count == total_count:
+        if summary.execution_ready == summary.platform_applicable:
             print(
                 colorize(
-                    f"{FALLBACKS.get('✅', '[OK]')} All {total_count} tools now ready!",
+                    f"{FALLBACKS.get('✅', '[OK]')} {summary.format_status_line()}",
                     "green",
                 )
             )
         else:
-            not_ready = total_count - ready_count
             print(
                 colorize(
-                    f"{FALLBACKS.get('✅', '[OK]')} {ready_count}/{total_count} tools ready ({not_ready} still need attention)",
+                    f"{FALLBACKS.get('✅', '[OK]')} {summary.format_status_line()}",
                     "yellow",
                 )
             )
+            # Show breakdown of what still needs attention
+            if summary.manual_install:
+                print(
+                    colorize(
+                        f"  {FALLBACKS.get('○', 'o')} {len(summary.manual_install)} require manual install: {', '.join(summary.manual_install)}",
+                        "dim",
+                    )
+                )
+            if summary.version_issues:
+                print(
+                    colorize(
+                        f"  {FALLBACKS.get('⚠', '[!]')} {len(summary.version_issues)} with version issues: {', '.join(summary.version_issues)}",
+                        "dim",
+                    )
+                )
 
     except Exception as e:
         logger.warning(f"Re-check failed: {e}")

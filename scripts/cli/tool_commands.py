@@ -283,9 +283,23 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
 
         # Determine version command
         if tool_name in VERSION_COMMANDS:
-            cmd = list(VERSION_COMMANDS[tool_name])
+            version_cmd_config = VERSION_COMMANDS[tool_name]
+            # Handle platform-specific commands (dict) vs universal commands (list)
+            if isinstance(version_cmd_config, dict):
+                current_platform = platform.system().lower()
+                if current_platform == "darwin":
+                    current_platform = "macos"
+                cmd_template = version_cmd_config.get(current_platform)
+                if not cmd_template:
+                    cmd_template = version_cmd_config.get("default")
+                if not cmd_template:
+                    cmd_template = [binary_path, "--version"]
+                cmd = list(cmd_template)
+                print(f"Version command: {' '.join(cmd)} (platform: {current_platform})")
+            else:
+                cmd = list(version_cmd_config)
+                print(f"Version command: {' '.join(cmd)}")
             cmd[0] = binary_path
-            print(f"Version command: {' '.join(cmd)}")
         else:
             cmd = [binary_path, "--version"]
             print(f"Version command: {' '.join(cmd)} (default)")

@@ -173,6 +173,21 @@ def test_write_stub_noseyparker(tmp_path):
     assert content == {"matches": []}
 
 
+def test_write_stub_grype(tmp_path):
+    """Test write_stub creates correct empty stub for grype.
+
+    Bug #2 fix: grype was missing from stub dictionary, causing
+    grype failures to produce {} instead of {"matches": []}.
+    """
+    out_path = tmp_path / "grype.json"
+
+    write_stub("grype", out_path)
+
+    assert out_path.exists()
+    content = json.loads(out_path.read_text())
+    assert content == {"matches": []}
+
+
 # ========== Category 3: write_stub() Tests - NDJSON Tools ==========
 
 

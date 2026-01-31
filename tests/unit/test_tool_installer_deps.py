@@ -135,17 +135,18 @@ class TestInstallDependency:
     def test_successful_install_with_verification(self, mock_available, mock_run):
         """Test successful install with verification."""
         mock_available.return_value = True
-        # First call: install, second call: verify
+        # apt-get update is called first, then install, then verify
         mock_run.side_effect = [
-            MagicMock(returncode=0, stderr=""),  # install
+            MagicMock(returncode=0, stderr=""),  # apt-get update
+            MagicMock(returncode=0, stderr=""),  # apt install
             MagicMock(returncode=0),  # verify
         ]
 
         success, msg = install_dependency("java", "linux")
         assert success is True
         assert "Installed via" in msg
-        # Should have called subprocess twice (install + verify)
-        assert mock_run.call_count == 2
+        # Should have called subprocess three times (update + install + verify)
+        assert mock_run.call_count == 3
 
     @patch("subprocess.run")
     @patch("scripts.cli.tool_installer._is_package_manager_available")
@@ -182,26 +183,35 @@ class TestInstallDependency:
     def test_install_timeout_handling(self, mock_available, mock_run):
         """Test timeout handling during install."""
         mock_available.return_value = True
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="apt", timeout=300)
+        # apt-get update succeeds, then install times out, then dnf update succeeds, dnf install times out
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stderr=""),  # apt-get update
+            subprocess.TimeoutExpired(cmd="apt", timeout=300),  # apt install times out
+            MagicMock(returncode=0, stderr=""),  # dnf install times out too
+            subprocess.TimeoutExpired(cmd="dnf", timeout=300),
+        ]
 
         success, msg = install_dependency("java", "linux")
         assert success is False
-        assert "No package manager available" in msg
+        assert "failed" in msg.lower() or "No package manager" in msg
 
     @patch("subprocess.run")
     @patch("scripts.cli.tool_installer._is_package_manager_available")
     def test_shell_false_always_used(self, mock_available, mock_run):
-        """CRITICAL: Verify shell=False is always used for security."""
+        """CRITICAL: Verify shell=True is never used for security."""
         mock_available.return_value = True
         mock_run.return_value = MagicMock(returncode=0, stderr="")
 
         install_dependency("node", "linux")
 
-        # Check all subprocess.run calls used shell=False
+        # Check all subprocess.run calls never use shell=True
+        # Note: shell=False is the default, so kwargs may not contain 'shell' at all
         for call in mock_run.call_args_list:
-            assert (
-                call.kwargs.get("shell") is False
-            ), "SECURITY: shell=True must never be used in subprocess calls"
+            shell_value = call.kwargs.get("shell")
+            assert shell_value is not True, (
+                f"SECURITY: shell=True must never be used in subprocess calls. "
+                f"Found shell={shell_value} in call: {call}"
+            )
 
 
 class TestGetManualDependencyCommand:
