@@ -141,14 +141,13 @@ class TestUrlScanner:
 
     def test_scan_url_with_tool_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
-        with (
-            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
-            patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
-            patch(
-                "scripts.cli.scan_jobs.url_scanner.find_tool",
-                return_value="/usr/bin/zap.sh",
-            ),
-        ):
+
+        def mock_find_tool(tool_name):
+            if tool_name in ["zap.sh", "zap"]:
+                return "/usr/bin/zap.sh"
+            return None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
@@ -170,6 +169,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify ToolRunner was called
@@ -240,8 +240,8 @@ class TestUrlScanner:
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -249,15 +249,7 @@ class TestUrlScanner:
             stub_calls.append((tool_name, str(output_path)))
             output_path.write_text("{}")
 
-        with (
-            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
-            patch(
-                "scripts.cli.scan_jobs.url_scanner.tool_exists",
-                side_effect=mock_tool_exists,
-            ),
-            # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
-            patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None),
-        ):
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
             mock_runner.run_all_parallel.return_value = []
@@ -270,6 +262,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -282,14 +275,15 @@ class TestUrlScanner:
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
-        with (
-            patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner,
-            patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True),
-            patch(
-                "scripts.cli.scan_jobs.url_scanner.find_tool",
-                return_value="/usr/bin/zap.sh",
-            ),
-        ):
+
+        def mock_find_tool(tool_name):
+            if tool_name in ["zap.sh", "zap"]:
+                return "/usr/bin/zap.sh"
+            if tool_name == "nuclei":
+                return "/usr/bin/nuclei"
+            return None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
@@ -313,6 +307,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

@@ -119,9 +119,9 @@ class TestIacScanner:
         iac_file = tmp_path / "deployment.yaml"
         iac_file.write_text("apiVersion: v1\nkind: Pod")
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -146,7 +146,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,  # Inject mock
+                find_tool_func=mock_find_tool,  # Inject mock
             )
 
             # Verify ToolRunner was called
@@ -259,8 +259,8 @@ class TestIacScanner:
         iac_file = tmp_path / "main.tf"
         iac_file.write_text('resource "aws_s3_bucket" "test" {}')
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -282,7 +282,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -298,8 +298,10 @@ class TestIacScanner:
         iac_file = tmp_path / "stack.yaml"
         iac_file.write_text("AWSTemplateFormatVersion: 2010-09-09")
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["checkov", "trivy"]
+        def mock_find_tool(tool_name):
+            if tool_name in ["checkov", "trivy"]:
+                return f"/usr/bin/{tool_name}"
+            return None
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -326,7 +328,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

@@ -51,9 +51,9 @@ class TestK8sScanner:
     def test_scan_k8s_all_namespaces(self, tmp_path):
         """Test K8s scanning with all namespaces"""
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -79,7 +79,7 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify --all-namespaces flag is used
@@ -93,9 +93,9 @@ class TestK8sScanner:
     def test_scan_k8s_custom_context(self, tmp_path):
         """Test K8s scanning with custom context"""
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -120,7 +120,7 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify --context flag is used
@@ -169,9 +169,9 @@ class TestK8sScanner:
     def test_scan_k8s_with_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -200,7 +200,7 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()
@@ -275,8 +275,8 @@ class TestK8sScanner:
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -302,7 +302,7 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -314,8 +314,8 @@ class TestK8sScanner:
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
 
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -346,7 +346,7 @@ class TestK8sScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

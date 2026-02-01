@@ -61,16 +61,51 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 1 | 3 | 0 | 4 |
+| Bug | 2 | 3 | 0 | 5 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **1** | **3** | **0** | **4** |
+| **Total** | **2** | **3** | **0** | **5** |
 
-**Status:** All 30 tasks resolved (as of 2026-02-01).
+**Status:** 31 resolved, 0 open.
 
 ---
 
 ## Current Tasks
+
+### TASK-031: [WIZARD-OUTPUT] Scanner modules use bare tool names instead of full paths
+**Type:** Bug
+**Priority:** Critical
+**Score:** [S+F+C] = 12 (S:4, F:4, C:4)
+**Confidence:** 100%
+**Status:** Resolved
+**Files:**
+- scripts/cli/scan_jobs/image_scanner.py - FIXED (2026-02-01)
+- scripts/cli/scan_jobs/iac_scanner.py - FIXED (2026-02-01)
+- scripts/cli/scan_jobs/k8s_scanner.py - FIXED (2026-02-01)
+- scripts/cli/scan_jobs/url_scanner.py - FIXED (2026-02-01)
+**Symptom:**
+```
+Image scan completes with 0 findings. Tools report success but output files contain empty arrays:
+{"Results": []} (trivy.json - 15 bytes)
+{"artifacts": []} (syft.json - 17 bytes)
+```
+**Root Cause:**
+Same pattern as TASK-029. All scanner modules (`image_scanner.py`, `iac_scanner.py`, `k8s_scanner.py`, `url_scanner.py`) check `tool_exists()` but then use bare tool names in commands instead of the full path from `find_tool()`.
+
+When trivy is installed at `~/.jmo/bin/trivy.exe` (not in PATH), the command `["trivy", "image", ...]` fails with FileNotFoundError, which gets silently caught and results in empty stub files.
+
+**Fix:**
+1. Change import from `tool_exists` to `find_tool`
+2. Change parameter from `tool_exists_func` to `find_tool_func`
+3. Replace pattern `if _tool_exists("tool")` → `tool_path = _find_tool("tool"); if tool_path:`
+4. Use `tool_path` in command instead of hardcoded string
+5. Update all test files to use new `find_tool_func` parameter
+
+**Resolution:** (2026-02-01) Fixed all scanner modules and their test files:
+- iac_scanner.py tests: Changed `tool_exists_func` → `find_tool_func`, mock functions now return full paths
+- k8s_scanner.py tests: Changed `tool_exists_func` → `find_tool_func`, mock functions now return full paths
+- url_scanner.py tests: Removed unnecessary `tool_exists` patches, added `find_tool_func` parameter
+All 49 scanner tests pass (9 image, 9 iac, 9 k8s, 10 url, 12 scan_jobs).
 
 ### TASK-029: [WIZARD-CRASH] repository_scanner.py uses tool names instead of full paths
 **Type:** Bug
