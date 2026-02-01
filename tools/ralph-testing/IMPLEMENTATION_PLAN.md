@@ -61,14 +61,85 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 0 | 2 | 0 | 2 |
+| Bug | 1 | 3 | 0 | 4 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **0** | **2** | **0** | **2** |
+| **Total** | **1** | **3** | **0** | **4** |
+
+**Status:** All 30 tasks resolved (as of 2026-02-01).
 
 ---
 
 ## Current Tasks
+
+### TASK-029: [WIZARD-CRASH] repository_scanner.py uses tool names instead of full paths
+**Type:** Bug
+**Priority:** Critical
+**Score:** [S+F+C] = 12 (S:4, F:4, C:4)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** scripts/cli/scan_jobs/repository_scanner.py (25+ occurrences)
+**Symptom:**
+```
+All security tools return empty results (0 findings).
+FileNotFoundError: [WinError 2] The system cannot find the file specified
+```
+**Root Cause:**
+The repository scanner checks `tool_exists()` (which calls `find_tool()` to locate tools in `~/.jmo/bin/`), but then creates commands with just the tool name instead of the full path. Example:
+```python
+# Current (buggy):
+if _tool_exists("trivy"):
+    trivy_cmd = ["trivy", "fs", ...]  # Uses bare name, not found in PATH!
+```
+When `subprocess.run(["trivy", ...])` executes, it fails with FileNotFoundError because `~/.jmo/bin/` is not in the system PATH. The tool runner catches this error and writes a stub file, masking the failure.
+
+**Affected Tools (25+):**
+- trivy (line 232)
+- trufflehog (line 157)
+- semgrep (line 202)
+- syft (line 263)
+- checkov (line 290)
+- hadolint (line 318)
+- bandit (line 351)
+- noseyparker (line 384+)
+- gosec (line 701)
+- grype (line 950)
+- kubescape (line 817)
+- horusec (line 1087)
+- cdxgen (line 761)
+- and more...
+
+**Fix:**
+Replace all occurrences of hardcoded tool names with `_find_tool(tool_name)`:
+```python
+# Fixed:
+trivy_path = _find_tool("trivy")
+if trivy_path:
+    trivy_cmd = [trivy_path, "fs", ...]
+```
+
+Already correctly implemented for:
+- `dependency-check` (line 1118): `dc_path = _find_tool("dependency-check")`
+- `zap-baseline.py` (line 489): `zap_baseline_path = _find_tool("zap-baseline.py")`
+
+**Resolution:** (2026-02-01) Fixed all 25+ tool definitions in repository_scanner.py to use `_find_tool()` for full paths. Changed pattern from `if _tool_exists("tool")` with hardcoded name to `tool_path = _find_tool("tool"); if tool_path:` with path in command. Updated tests in test_repository_scanner.py to use `find_tool_func` instead of `tool_exists_func`. Wizard scan now finds 84 findings from 4 tools (syft: 41, cdxgen: 23, hadolint: 11, trivy: 9).
+
+### TASK-030: [WIZARD-CONFIG] Semgrep HTTP 404 downloading rules
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** scripts/cli/scan_jobs/repository_scanner.py:191-195
+**Symptom:**
+```json
+{"code": 2, "level": "error", "type": "SemgrepError", "message": "Failed to download configuration from https://semgrep.dev/c/p/security HTTP 404."}
+```
+**Root Cause:**
+Default semgrep configs included `["auto", "p/security"]`. The `p/security` registry ruleset was deprecated by Semgrep and returns HTTP 404.
+**Fix:**
+Changed default to `["auto"]` only. The `auto` config uses Semgrep Registry auto-detection which works without authentication. Users can customize via `per_tool.semgrep.configs` in jmo.yml if needed.
+**Resolution:** (2026-02-01) Changed default semgrep configs from `["auto", "p/security"]` to `["auto"]` in repository_scanner.py. Updated documentation in USER_GUIDE.md to show `configs` as a per_tool option. Updated USAGE_MATRIX.md to reference `--config auto` instead of deprecated `p/security-audit`. All 21 repository scanner tests pass.
 
 ### TASK-027: [Bug] Test files use `from tests.conftest` breaking imports
 **Type:** Bug

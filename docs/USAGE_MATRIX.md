@@ -307,7 +307,7 @@ This matrix shows the recommended execution mode for each use case.
 |------|------------------|--------------|--------------|---------------------|
 | **trufflehog** | Verified secret detection | Repos, GitLab | `--only-verified` | ~5% (verified) |
 | **noseyparker** | Deep secret scanning | Repos | `--max-matches-per-file 100` | ~30-40% |
-| **semgrep** | Multi-language SAST | Repos | `--config p/security-audit` | ~10-15% |
+| **semgrep** | Multi-language SAST | Repos | `--config auto` | ~10-15% |
 | **bandit** | Python-specific SAST | Repos | `--severity-level high` | ~20-30% |
 | **syft** | SBOM generation | Repos, Images | `-q` | 0% (informational) |
 | **trivy** | Universal vulnerability scanner | All types | `--severity HIGH,CRITICAL` | ~5-10% |

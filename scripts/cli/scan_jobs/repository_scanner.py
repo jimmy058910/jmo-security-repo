@@ -57,7 +57,18 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import find_tool, tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
+
+# Per-tool timeout defaults (seconds) for tools that typically run longer
+# These serve as MINIMUM timeouts - user/profile configs can increase but not decrease
+TOOL_TIMEOUT_DEFAULTS: dict[str, int] = {
+    "cdxgen": 600,  # 10 min - with --no-install-deps optimization (was 30 min)
+    "dependency-check": 1200,  # 20 min - NVD database sync can take a while
+    "scancode": 1200,  # 20 min - license scanning large codebases
+    "horusec": 900,  # 15 min - multi-language SAST
+    "zap": 900,  # 15 min - DAST scanning
+    "prowler": 600,  # 10 min - cloud config scanning
+}
 
 
 def scan_repository(
@@ -98,7 +109,6 @@ def scan_repository(
     tool_defs = []
 
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
     _write_stub = write_stub_func or write_stub
     _find_tool = find_tool_func or find_tool
 
@@ -107,13 +117,27 @@ def scan_repository(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:
-        """Get timeout override for specific tool."""
+        """Get timeout for tool, respecting per-tool defaults for slow tools.
+
+        Priority order:
+        1. User's per_tool_config timeout (if specified)
+        2. TOOL_TIMEOUT_DEFAULTS (minimum for known slow tools)
+        3. Profile default timeout
+
+        Slow tools (cdxgen, dependency-check, scancode) have minimum timeouts
+        to prevent premature termination. User config can increase but profile
+        defaults can't decrease below the minimum.
+        """
+        # Check user's per_tool_config first
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
             override = tool_cfg.get("timeout")
             if isinstance(override, int) and override > 0:
                 return override
-        return default
+
+        # Use per-tool default as minimum (user didn't specify override)
+        tool_minimum = TOOL_TIMEOUT_DEFAULTS.get(tool, 0)
+        return max(default, tool_minimum)
 
     def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
@@ -127,10 +151,11 @@ def scan_repository(
     # TruffleHog: Verified secrets scanning
     if "trufflehog" in tools:
         trufflehog_out = out_dir / "trufflehog.json"
-        if _tool_exists("trufflehog"):
+        trufflehog_path = _find_tool("trufflehog")
+        if trufflehog_path:
             trufflehog_flags = get_tool_flags("trufflehog")
             trufflehog_cmd = [
-                "trufflehog",
+                trufflehog_path,
                 "git",
                 f"file://{repo}",
                 "--json",
@@ -155,19 +180,19 @@ def scan_repository(
     # Semgrep: Static analysis
     if "semgrep" in tools:
         semgrep_out = out_dir / "semgrep.json"
-        if _tool_exists("semgrep"):
+        semgrep_path = _find_tool("semgrep")
+        if semgrep_path:
             semgrep_flags = get_tool_flags("semgrep")
 
             # Get semgrep configs from per_tool_config (allows offline mode)
-            # Default: ["auto", "p/security"] - p/security requires network
-            # Offline: ["auto"] - local rules only
+            # Default: ["auto"] - uses Semgrep Registry auto-detection
+            # Custom: ["p/python", "p/javascript"] - specify language packs
+            # Note: "p/security" ruleset was deprecated, use "auto" instead
             semgrep_tool_config = per_tool_config.get("semgrep", {})
             if isinstance(semgrep_tool_config, dict):
-                semgrep_configs = semgrep_tool_config.get(
-                    "configs", ["auto", "p/security"]
-                )
+                semgrep_configs = semgrep_tool_config.get("configs", ["auto"])
             else:
-                semgrep_configs = ["auto", "p/security"]
+                semgrep_configs = ["auto"]
 
             # Build config arguments
             config_args = []
@@ -175,7 +200,7 @@ def scan_repository(
                 config_args.extend(["--config", cfg])
 
             semgrep_cmd = [
-                "semgrep",
+                semgrep_path,
                 *config_args,
                 "--json",
                 "--output",
@@ -201,10 +226,11 @@ def scan_repository(
     # Trivy: Vulnerability and secrets scanning
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
-        if _tool_exists("trivy"):
+        trivy_path = _find_tool("trivy")
+        if trivy_path:
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-                "trivy",
+                trivy_path,
                 "fs",
                 "-q",
                 "-f",
@@ -234,10 +260,11 @@ def scan_repository(
     # Syft: SBOM generation
     if "syft" in tools:
         syft_out = out_dir / "syft.json"
-        if _tool_exists("syft"):
+        syft_path = _find_tool("syft")
+        if syft_path:
             syft_flags = get_tool_flags("syft")
             syft_cmd = [
-                "syft",
+                syft_path,
                 f"dir:{repo}",
                 "-o",
                 "json",
@@ -261,10 +288,11 @@ def scan_repository(
     # Checkov: IaC policy checks
     if "checkov" in tools:
         checkov_out = out_dir / "checkov.json"
-        if _tool_exists("checkov"):
+        checkov_path = _find_tool("checkov")
+        if checkov_path:
             checkov_flags = get_tool_flags("checkov")
             checkov_cmd = [
-                "checkov",
+                checkov_path,
                 "-d",
                 str(repo),
                 "-o",
@@ -289,7 +317,8 @@ def scan_repository(
     # Hadolint: Dockerfile linting
     if "hadolint" in tools:
         hadolint_out = out_dir / "hadolint.json"
-        if _tool_exists("hadolint"):
+        hadolint_path = _find_tool("hadolint")
+        if hadolint_path:
             hadolint_flags = get_tool_flags("hadolint")
 
             # Find Dockerfiles in repository
@@ -298,7 +327,7 @@ def scan_repository(
                 # Hadolint scans one file at a time; use first Dockerfile found
                 dockerfile = dockerfiles[0]
                 hadolint_cmd = [
-                    "hadolint",
+                    hadolint_path,
                     "-f",
                     "json",
                     *hadolint_flags,
@@ -322,10 +351,11 @@ def scan_repository(
     # Bandit: Python security analysis
     if "bandit" in tools:
         bandit_out = out_dir / "bandit.json"
-        if _tool_exists("bandit"):
+        bandit_path = _find_tool("bandit")
+        if bandit_path:
             bandit_flags = get_tool_flags("bandit")
             bandit_cmd = [
-                "bandit",
+                bandit_path,
                 "-r",
                 str(repo),
                 "-f",
@@ -355,14 +385,15 @@ def scan_repository(
         noseyparker_flags = get_tool_flags("noseyparker")
 
         # Strategy 1: Try local noseyparker binary (two-phase: scan + report)
-        if _tool_exists("noseyparker"):
+        noseyparker_path = _find_tool("noseyparker")
+        if noseyparker_path:
             # Nosey Parker requires a datastore directory
             datastore_dir = out_dir / ".noseyparker_datastore"
             datastore_dir.mkdir(parents=True, exist_ok=True)
 
             # Phase 1: Initialize datastore (idempotent)
             init_cmd = [
-                "noseyparker",
+                noseyparker_path,
                 "datastore",
                 "init",
                 "--datastore",
@@ -370,7 +401,7 @@ def scan_repository(
             ]
             # Phase 2: Scan repository
             scan_cmd = [
-                "noseyparker",
+                noseyparker_path,
                 "scan",
                 "--datastore",
                 str(datastore_dir),
@@ -379,7 +410,7 @@ def scan_repository(
             ]
             # Phase 3: Generate JSON report
             report_cmd = [
-                "noseyparker",
+                noseyparker_path,
                 "report",
                 "--format",
                 "json",
@@ -422,37 +453,34 @@ def scan_repository(
                 )
             )
         # Strategy 2: Fallback to Docker-based noseyparker
-        elif (
-            _tool_exists("docker")
-            and Path(__file__)
-            .parent.parent.parent.joinpath("core/run_noseyparker_docker.sh")
-            .exists()
-        ):
-            docker_script = (
+        else:
+            docker_np_path = _find_tool("docker")
+            noseyparker_docker_script = (
                 Path(__file__).parent.parent.parent / "core/run_noseyparker_docker.sh"
             )
-            docker_cmd = [
-                "bash",
-                str(docker_script),
-                "--repo",
-                str(repo),
-                "--out",
-                str(noseyparker_out),
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="noseyparker",
-                    command=docker_cmd,
-                    output_file=noseyparker_out,
-                    timeout=get_tool_timeout("noseyparker", timeout),
-                    retries=retries,
-                    ok_return_codes=(0,),
-                    capture_stdout=False,  # Script writes file directly
+            if docker_np_path and noseyparker_docker_script.exists():
+                docker_cmd = [
+                    "bash",
+                    str(noseyparker_docker_script),
+                    "--repo",
+                    str(repo),
+                    "--out",
+                    str(noseyparker_out),
+                ]
+                tool_defs.append(
+                    ToolDefinition(
+                        name="noseyparker",
+                        command=docker_cmd,
+                        output_file=noseyparker_out,
+                        timeout=get_tool_timeout("noseyparker", timeout),
+                        retries=retries,
+                        ok_return_codes=(0,),
+                        capture_stdout=False,  # Script writes file directly
+                    )
                 )
-            )
-        elif allow_missing_tools:
-            _write_stub("noseyparker", noseyparker_out)
-            statuses["noseyparker"] = True
+            elif allow_missing_tools:
+                _write_stub("noseyparker", noseyparker_out)
+                statuses["noseyparker"] = True
 
     # ZAP: Web vulnerability scanning (limited to repositories with web servers)
     # Note: ZAP is best suited for live URLs (see url_scanner.py).
@@ -462,7 +490,8 @@ def scan_repository(
         # ZAP baseline scan can analyze HTML/JS files in repository
         # This is a limited use case; full DAST requires --url target
         zap_baseline_path = _find_tool("zap-baseline.py")
-        if zap_baseline_path or _tool_exists("docker"):
+        zap_docker_path = _find_tool("docker")
+        if zap_baseline_path or zap_docker_path:
             zap_flags = get_tool_flags("zap")
             # Check for web-related files (HTML, JS, PHP, etc.)
             web_files = (
@@ -498,33 +527,35 @@ def scan_repository(
                             capture_stdout=False,
                         )
                     )
-                elif _tool_exists("docker"):
-                    # Fallback to Docker-based ZAP
-                    zap_cmd = [
-                        "docker",
-                        "run",
-                        "--rm",
-                        "-v",
-                        f"{repo}:/zap/wrk:ro",
-                        "ghcr.io/zaproxy/zaproxy:stable",
-                        "zap-baseline.py",
-                        "-t",
-                        f"/zap/wrk/{target_file.relative_to(repo)}",
-                        "-J",
-                        "/zap/wrk/zap-output.json",
-                        *zap_flags,
-                    ]
-                    tool_defs.append(
-                        ToolDefinition(
-                            name="zap",
-                            command=zap_cmd,
-                            output_file=zap_out,
-                            timeout=get_tool_timeout("zap", timeout),
-                            retries=retries,
-                            ok_return_codes=(0, 1, 2),
-                            capture_stdout=False,
+                else:
+                    docker_path = _find_tool("docker")
+                    if docker_path:
+                        # Fallback to Docker-based ZAP
+                        zap_cmd = [
+                            docker_path,
+                            "run",
+                            "--rm",
+                            "-v",
+                            f"{repo}:/zap/wrk:ro",
+                            "ghcr.io/zaproxy/zaproxy:stable",
+                            "zap-baseline.py",
+                            "-t",
+                            f"/zap/wrk/{target_file.relative_to(repo)}",
+                            "-J",
+                            "/zap/wrk/zap-output.json",
+                            *zap_flags,
+                        ]
+                        tool_defs.append(
+                            ToolDefinition(
+                                name="zap",
+                                command=zap_cmd,
+                                output_file=zap_out,
+                                timeout=get_tool_timeout("zap", timeout),
+                                retries=retries,
+                                ok_return_codes=(0, 1, 2),
+                                capture_stdout=False,
+                            )
                         )
-                    )
             else:
                 # No web files found - write empty stub
                 _write_stub("zap", zap_out)
@@ -538,7 +569,8 @@ def scan_repository(
     # For repositories, we check for Falco rule files and validate them.
     if "falco" in tools:
         falco_out = out_dir / "falco.json"
-        if _tool_exists("falco"):
+        falco_path = _find_tool("falco")
+        if falco_path:
             falco_flags = get_tool_flags("falco")
             # Look for Falco rule files in repository
             falco_rules = list(repo.glob("**/*falco*.yaml")) + list(
@@ -548,7 +580,7 @@ def scan_repository(
                 # Validate Falco rules using falco --validate
                 rules_file = falco_rules[0]
                 falco_cmd = [
-                    "falco",
+                    falco_path,
                     "--validate",
                     str(rules_file),
                     "--output-json",
@@ -578,7 +610,9 @@ def scan_repository(
     # For repositories, we check for compiled binaries and run basic fuzz testing.
     if "afl++" in tools:
         afl_out = out_dir / "aflplusplus.json"
-        if _tool_exists("afl-fuzz") or _tool_exists("afl-analyze"):
+        afl_fuzz_path = _find_tool("afl-fuzz")
+        afl_analyze_path = _find_tool("afl-analyze")
+        if afl_fuzz_path or afl_analyze_path:
             afl_flags = get_tool_flags("afl++")
             # Look for compiled binaries or fuzzing harnesses
             binaries = []
@@ -590,7 +624,7 @@ def scan_repository(
                 ]
                 binaries.extend(found)
 
-            if binaries and _tool_exists("afl-analyze"):
+            if binaries and afl_analyze_path:
                 # Run afl-analyze on the first binary found
                 binary = binaries[0]
                 # Create minimal input corpus
@@ -600,7 +634,7 @@ def scan_repository(
 
                 # Run AFL++ dry run (no actual fuzzing, just validation)
                 afl_cmd = [
-                    "afl-fuzz",
+                    afl_fuzz_path or afl_analyze_path,
                     "-i",
                     str(corpus_dir),
                     "-o",
@@ -640,10 +674,11 @@ def scan_repository(
     if "checkov-cicd" in tools:
         checkov_cicd_out = out_dir / "checkov-cicd.json"
         checkov_cicd_temp_dir = out_dir / "checkov-cicd-temp"
-        if _tool_exists("checkov"):
+        checkov_cicd_path = _find_tool("checkov")
+        if checkov_cicd_path:
             checkov_cicd_flags = get_tool_flags("checkov-cicd")
             checkov_cicd_cmd = [
-                "checkov",
+                checkov_cicd_path,
                 "--framework",
                 "github_actions",
                 "--output",
@@ -672,10 +707,11 @@ def scan_repository(
     # Gosec: Go security analyzer
     if "gosec" in tools:
         gosec_out = out_dir / "gosec.json"
-        if _tool_exists("gosec"):
+        gosec_path = _find_tool("gosec")
+        if gosec_path:
             gosec_flags = get_tool_flags("gosec")
             gosec_cmd = [
-                "gosec",
+                gosec_path,
                 "-fmt=json",
                 f"-out={gosec_out}",
                 *gosec_flags,
@@ -699,10 +735,11 @@ def scan_repository(
     # OSV-Scanner: Vulnerability scanner for open source
     if "osv-scanner" in tools:
         osv_out = out_dir / "osv.json"
-        if _tool_exists("osv-scanner"):
+        osv_path = _find_tool("osv-scanner")
+        if osv_path:
             osv_flags = get_tool_flags("osv-scanner")
             osv_cmd = [
-                "osv-scanner",
+                osv_path,
                 "--format",
                 "json",
                 "--output",
@@ -726,12 +763,19 @@ def scan_repository(
             statuses["osv-scanner"] = True
 
     # cdxgen: SBOM and dependency analysis
+    # Performance optimizations (v1.0.1):
+    # - --no-install-deps: Don't run npm/pip install (major speedup, was causing 9+ min scans)
+    # - --required-only: Skip optional/dev dependencies (reduces noise)
+    # These can be overridden via per_tool_config flags if full analysis needed
     if "cdxgen" in tools:
         cdxgen_out = out_dir / "cdxgen.json"
-        if _tool_exists("cdxgen"):
+        cdxgen_path = _find_tool("cdxgen")
+        if cdxgen_path:
             cdxgen_flags = get_tool_flags("cdxgen")
             cdxgen_cmd = [
-                "cdxgen",
+                cdxgen_path,
+                "--no-install-deps",  # Don't install dependencies (major speedup)
+                "--required-only",  # Only required deps, skip optional/dev
                 "-o",
                 str(cdxgen_out),
                 *cdxgen_flags,
@@ -755,10 +799,11 @@ def scan_repository(
     # ScanCode: License and copyright scanner
     if "scancode" in tools:
         scancode_out = out_dir / "scancode.json"
-        if _tool_exists("scancode"):
+        scancode_path = _find_tool("scancode")
+        if scancode_path:
             scancode_flags = get_tool_flags("scancode")
             scancode_cmd = [
-                "scancode",
+                scancode_path,
                 "--json",
                 str(scancode_out),
                 *scancode_flags,
@@ -782,10 +827,11 @@ def scan_repository(
     # Kubescape: Kubernetes security scanner
     if "kubescape" in tools:
         kubescape_out = out_dir / "kubescape.json"
-        if _tool_exists("kubescape"):
+        kubescape_path = _find_tool("kubescape")
+        if kubescape_path:
             kubescape_flags = get_tool_flags("kubescape")
             kubescape_cmd = [
-                "kubescape",
+                kubescape_path,
                 "scan",
                 str(repo),
                 "--format",
@@ -812,10 +858,11 @@ def scan_repository(
     # Bearer: Data security and privacy scanner
     if "bearer" in tools:
         bearer_out = out_dir / "bearer.json"
-        if _tool_exists("bearer"):
+        bearer_path = _find_tool("bearer")
+        if bearer_path:
             bearer_flags = get_tool_flags("bearer")
             bearer_cmd = [
-                "bearer",
+                bearer_path,
                 "scan",
                 str(repo),
                 "--format",
@@ -851,11 +898,12 @@ def scan_repository(
             + list(repo.glob("**/cloudformation.yaml"))
             + list(repo.glob("**/cloudformation.json"))
         )
-        if cloud_files and _tool_exists("prowler"):
+        prowler_path = _find_tool("prowler")
+        if cloud_files and prowler_path:
             prowler_flags = get_tool_flags("prowler")
             # Run Prowler in configuration scanning mode
             prowler_cmd = [
-                "prowler",
+                prowler_path,
                 "--output-formats",
                 "json",
                 "--output-directory",
@@ -882,14 +930,15 @@ def scan_repository(
     # YARA: Malware detection
     if "yara" in tools:
         yara_out = out_dir / "yara.json"
-        if _tool_exists("yara"):
+        yara_path = _find_tool("yara")
+        if yara_path:
             yara_flags = get_tool_flags("yara")
             # Use built-in rules or user-provided rules
             rules_path = per_tool_config.get("yara", {}).get(
                 "rules_path", "/usr/share/yara/rules"
             )
             yara_cmd = [
-                "yara",
+                yara_path,
                 "-r",  # Recursive
                 "-w",  # Disable warnings
                 "-s",  # Print matched strings
@@ -915,10 +964,11 @@ def scan_repository(
     # Grype: Vulnerability scanner for containers and filesystems
     if "grype" in tools:
         grype_out = out_dir / "grype.json"
-        if _tool_exists("grype"):
+        grype_path = _find_tool("grype")
+        if grype_path:
             grype_flags = get_tool_flags("grype")
             grype_cmd = [
-                "grype",
+                grype_path,
                 f"dir:{repo}",
                 "-o",
                 "json",
@@ -945,11 +995,12 @@ def scan_repository(
         mobsf_out = out_dir / "mobsf.json"
         # Check for mobile app files
         mobile_files = list(repo.glob("**/*.apk")) + list(repo.glob("**/*.ipa"))
-        if mobile_files and _tool_exists("mobsf"):
+        mobsf_path = _find_tool("mobsf")
+        if mobile_files and mobsf_path:
             mobsf_flags = get_tool_flags("mobsf")
             mobile_file = mobile_files[0]  # Scan first found mobile app
             mobsf_cmd = [
-                "mobsf",
+                mobsf_path,
                 "-f",
                 str(mobile_file),
                 "-o",
@@ -990,10 +1041,11 @@ def scan_repository(
             + list(repo.glob("**/*service*.yaml"))
             + list(repo.glob("**/k8s/**/*.yaml"))
         )
-        if k8s_manifests and _tool_exists("trivy"):
+        trivy_rbac_path = _find_tool("trivy")
+        if k8s_manifests and trivy_rbac_path:
             trivy_rbac_flags = get_tool_flags("trivy-rbac")
             trivy_rbac_cmd = [
-                "trivy",
+                trivy_rbac_path,
                 "config",
                 "--format",
                 "json",
@@ -1022,10 +1074,11 @@ def scan_repository(
     # Semgrep Secrets: Hardcoded credentials detection
     if "semgrep-secrets" in tools:
         semgrep_secrets_out = out_dir / "semgrep-secrets.json"
-        if _tool_exists("semgrep"):
+        semgrep_secrets_path = _find_tool("semgrep")
+        if semgrep_secrets_path:
             semgrep_secrets_flags = get_tool_flags("semgrep-secrets")
             semgrep_secrets_cmd = [
-                "semgrep",
+                semgrep_secrets_path,
                 "--config",
                 "p/secrets",
                 "--json",
@@ -1052,10 +1105,11 @@ def scan_repository(
     # Horusec: Multi-language SAST scanner (18+ languages)
     if "horusec" in tools:
         horusec_out = out_dir / "horusec.json"
-        if _tool_exists("horusec"):
+        horusec_path = _find_tool("horusec")
+        if horusec_path:
             horusec_flags = get_tool_flags("horusec")
             horusec_cmd = [
-                "horusec",
+                horusec_path,
                 "start",
                 "-p",
                 str(repo),

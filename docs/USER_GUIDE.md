@@ -90,6 +90,10 @@ open results/summaries/dashboard.html       # macOS
 
 Outputs are written under `results/` by default, with unified summaries in `results/summaries/` (JSON/MD/YAML/HTML/SARIF). SARIF is enabled by default via `jmo.yml`.
 
+## CLI Reference
+
+For complete CLI documentation including all commands and flags, see [CLI_REFERENCE.md](CLI_REFERENCE.md).
+
 ### Beginner mode: jmo wrapper (optional, simpler commands)
 
 Prefer memorable commands that verify tools, optionally clone from a TSV, run the right profile, and open results at the end? Use `jmo`:
@@ -1692,6 +1696,10 @@ per_tool:
   trivy:
     flags: ["--ignore-unfixed"]
     timeout: 1200
+  semgrep:
+    # Override Semgrep registry configs (default: ["auto"])
+    # Use language-specific packs or local rules for offline scanning
+    configs: ["auto", "p/python", "p/javascript"]
 profiles:
   balanced:
     per_tool:
@@ -2904,85 +2912,58 @@ TruffleHog output looks empty
 
 - Depending on flags and repo history, TruffleHog may stream JSON objects rather than a single array. The CLI captures and writes this stream verbatim; empty output is valid if no secrets are detected.
 
-## Reference: CLI synopsis
+## CLI Commands Quick Reference
 
-Scan (with multi-target support)
+For complete CLI documentation with all flags and options, see **[CLI_REFERENCE.md](CLI_REFERENCE.md)**.
 
-```bash
-jmo scan [--repo PATH | --repos-dir DIR | --targets FILE] \
-  [--image IMAGE | --images-file FILE] \
-  [--terraform-state FILE | --cloudformation FILE | --k8s-manifest FILE] \
-  [--url URL | --urls-file FILE | --api-spec FILE_OR_URL] \
-  [--gitlab-repo REPO | --gitlab-group GROUP] [--gitlab-url URL] [--gitlab-token TOKEN] \
-  [--k8s-context CONTEXT] [--k8s-namespace NS | --k8s-all-namespaces] \
-  [--results-dir DIR] [--config FILE] [--tools ...] [--timeout SECS] [--threads N] \
-  [--allow-missing-tools] [--profile-name NAME] [--log-level LEVEL] [--human-logs]
-```
+### Command Overview
 
-Report
+| Command | Purpose |
+|---------|---------|
+| `jmo wizard` | Interactive guided scanning |
+| `jmo fast` | Quick scan (8 tools, 5-10 min) |
+| `jmo balanced` | Production scan (18 tools, 18-25 min) |
+| `jmo full` | Comprehensive audit (28 tools, 40-70 min) |
+| `jmo scan` | Low-level scan with full control |
+| `jmo report` | Generate reports from scan results |
+| `jmo ci` | Scan + report for CI/CD pipelines |
+| `jmo diff` | Compare two scans |
+| `jmo tools` | Manage security tool installation |
+| `jmo history` | Manage scan history database |
+| `jmo trends` | Analyze security trends |
+| `jmo schedule` | Manage scheduled scans |
+| `jmo policy` | Policy-as-Code management |
+| `jmo attest` | Generate SLSA attestations |
+| `jmo verify` | Verify attestations |
+| `jmo build` | Build Docker images |
+| `jmo mcp-server` | Start AI remediation server |
+| `jmo setup` | First-time setup |
+| `jmo adapters` | Manage adapter plugins |
 
-```bash
-jmo report RESULTS_DIR [--out DIR] [--config FILE] [--fail-on SEV] [--profile] \
-  [--threads N] [--log-level LEVEL] [--human-logs]
-```
-
-CI (scan + report with multi-target support)
-
-```bash
-jmo ci [--repo PATH | --repos-dir DIR | --targets FILE] \
-  [--image IMAGE | --images-file FILE] \
-  [--terraform-state FILE | --cloudformation FILE | --k8s-manifest FILE] \
-  [--url URL | --urls-file FILE | --api-spec FILE_OR_URL] \
-  [--gitlab-repo REPO | --gitlab-group GROUP] [--gitlab-url URL] [--gitlab-token TOKEN] \
-  [--k8s-context CONTEXT] [--k8s-namespace NS | --k8s-all-namespaces] \
-  [--results-dir DIR] [--config FILE] [--tools ...] [--timeout SECS] [--threads N] \
-  [--allow-missing-tools] [--profile-name NAME] [--fail-on SEV] [--profile] \
-  [--policy NAME] [--fail-on-policy-violation] [--strict-versions] \
-  [--log-level LEVEL] [--human-logs]
-```
-
-Trends (Statistical trend analysis)
+### Quick Examples
 
 ```bash
-# Main analysis command
-jmo trends analyze [--branch NAME] [--since TIMESTAMP] [--scans N] [--min-scans N] \
-  [--format terminal|json|html] [--output FILE] [--db PATH] \
-  [--export csv|prometheus|grafana|dashboard] [--export-file FILE]
+# Interactive wizard (recommended for beginners)
+jmo wizard
 
-# Show scan context window
-jmo trends show [SCAN_ID] [--window N] [--branch NAME] [--format terminal|json] [--db PATH]
+# Quick scan of a single repository
+jmo fast --repo ./myapp
 
-# Detect regressions
-jmo trends regressions [--scan-id ID] [--branch NAME] [--severity LEVEL] \
-  [--format terminal|json] [--db PATH]
+# Production scan with multiple repositories
+jmo balanced --repos-dir ~/repos --human-logs
 
-# Security score
-jmo trends score [--branch NAME] [--scans N] [--format terminal|json] [--db PATH]
+# CI/CD pipeline with failure threshold
+jmo ci --repo . --fail-on HIGH --profile-name balanced
 
 # Compare two scans
-jmo trends compare SCAN_ID_1 SCAN_ID_2 [--format terminal|json] [--db PATH]
+jmo diff baseline-results/ current-results/
 
-# Automated insights
-jmo trends insights [--branch NAME] [--scans N] [--format terminal|json] [--db PATH]
-
-# Explain terminology
-jmo trends explain [mann-kendall|security-score|regression|trends|all]
-
-# Developer attribution
-jmo trends developers [--scan-id ID] [--branch NAME] [--format terminal|json] \
-  [--team-map FILE] [--velocity] [--db PATH]
-```
-
-Diff (Machine-readable diff)
-
-```bash
-jmo diff BASELINE_DIR CURRENT_DIR [--format terminal|json|md|sarif|html] \
-  [--output FILE] [--fail-on NEW_CRITICAL|NEW_HIGH] [--severity-filter LEVEL] \
-  [--show-context] [--attribution]
+# Check tool installation status
+jmo tools check --profile balanced
 ```
 
 ---
 
 Happy scanning!
 
-**Last Updated:** December 2025
+**Last Updated:** January 2026
