@@ -61,16 +61,101 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 2 | 3 | 0 | 5 |
+| Bug | 2 | 6 | 0 | 8 |
 | Coverage | 0 | 0 | 0 | 0 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **2** | **3** | **0** | **5** |
+| **Total** | **2** | **6** | **0** | **8** |
 
-**Status:** 31 resolved, 0 open.
+**Status:** 35 resolved, 0 open.
 
 ---
 
 ## Current Tasks
+
+### TASK-035: [Bug] scan_jobs tests still use tool_exists instead of find_tool
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 8 (S:3, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**Files:**
+- tests/scan_jobs/test_scanner_k8s.py (16 tests - FIXED)
+- tests/scan_jobs/test_scanner_iac.py (13 tests - FIXED)
+- tests/scan_jobs/test_scanner_gitlab.py (tests don't directly use tool_exists - OK)
+**Symptom:**
+```
+AttributeError: module 'scripts.cli.scan_jobs.k8s_scanner' has no attribute 'tool_exists'
+29 failed tests in tests/scan_jobs/
+```
+**Root Cause:**
+When the scanner modules (url_scanner, iac_scanner, k8s_scanner, repository_scanner) were updated to use `find_tool` instead of `tool_exists` for TASK-029/TASK-031, the corresponding test files were not updated. Tests still patch `tool_exists` which no longer exists in the modules.
+**Fix:**
+Update all test files to:
+1. Replace `patch("...scanner.tool_exists", return_value=True/False)` with `find_tool_func` parameter
+2. Use pattern: `find_tool_func=lambda tool: f"/usr/bin/{tool}" if tool in ["trivy", ...] else None`
+3. Similar to the fixes applied to test_scanner_url.py and test_scanner_repository.py
+**Resolution:** (2026-02-01) Fixed test_scanner_k8s.py (16 tests) and test_scanner_iac.py (13 tests):
+- Removed all `patch("...tool_exists")` calls which were patching non-existent attributes
+- Added `_make_find_tool_func()` helper function to each test file
+- Updated all test functions to pass `find_tool_func` parameter instead of patching
+- test_scanner_gitlab.py doesn't directly use tool_exists (it mocks `scan_repository` instead)
+- All 112 scan_jobs tests pass
+
+### TASK-034: [Bug] test_tr_004_trends_explain uses run_jmo_with_history incorrectly
+**Type:** Bug
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli_ralph/test_trends_commands.py:96-98
+**Symptom:**
+```
+jmo trends explain: error: argument metric: invalid choice: 'C:\\...\\history.db'
+```
+**Root Cause:**
+The `run_jmo_with_history` fixture adds `--db` flag at the END of args, but `trends explain` is a documentation command that takes a positional `metric` argument. The database path was being interpreted as the metric.
+**Fix:** Changed from `run_jmo_with_history` to `jmo_runner` since `trends explain` is a pure documentation command that doesn't need a database.
+**Resolution:** (2026-02-01) Fixed by using `jmo_runner` instead. Test passes.
+
+### TASK-033: [Bug] test_profiles_complete fails - profile has 'warning' field
+**Type:** Bug
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard.py:26-38
+**Symptom:**
+```
+AssertionError: Extra items in the left set: 'warning'
+```
+**Root Cause:**
+The "deep" profile in profile_config.py includes an optional `warning` field for first-run notes about dependency-check. The test expected exact match of required fields only.
+**Fix:** Updated test to allow optional fields:
+```python
+optional_fields = {"warning"}
+assert required_fields <= profile_keys  # All required present
+assert not (profile_keys - required_fields - optional_fields)  # No unexpected fields
+```
+**Resolution:** (2026-02-01) Fixed test. All profile tests pass.
+
+### TASK-032: [WIZARD-HANG] Wizard hangs at policy selection in automation mode
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 9 (S:3, F:3, C:3)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** scripts/cli/wizard.py:1030
+**Symptom:**
+```
+Wizard completes scan successfully but then blocks at interactive policy selection prompt:
+"Enter choice [a/r/s/c/1-5]: "
+Timeout (exit code 143) after 600s despite --auto-fix flag
+```
+**Root Cause:**
+The `offer_policy_evaluation_after_scan()` function is called unconditionally in the else block after scan completion (line 1030-1045). This function uses `input()` for interactive policy selection, ignoring the `has_full_presets` and `yes` flags that indicate automation mode.
+**Fix:**
+Changed `else:` to `elif not (yes or has_full_presets):` on line 1030 to skip interactive post-scan offers when in automation mode (using presets or --yes flag).
+**Resolution:** (2026-02-01) Fixed by adding automation mode check. Wizard now exits cleanly after scan in automation mode. IMAGE mode scan completes in 84s with 1218 findings from 2 tools (trivy: 81, syft: 1137).
 
 ### TASK-031: [WIZARD-OUTPUT] Scanner modules use bare tool names instead of full paths
 **Type:** Bug

@@ -18,6 +18,28 @@ from scripts.cli.scan_jobs.iac_scanner import scan_iac_file
 from scripts.core.tool_runner import ToolResult
 
 
+def _make_find_tool_func(available_tools: list[str] | None = None):
+    """Create a find_tool function for testing.
+
+    Args:
+        available_tools: List of available tool names, or None for all tools available.
+
+    Returns:
+        A function that returns tool paths for available tools, None otherwise.
+    """
+    if available_tools is None:
+        # All tools available
+        def find_tool(tool: str) -> str | None:
+            return f"/usr/bin/{tool}"
+
+    else:
+        # Only specified tools available
+        def find_tool(tool: str) -> str | None:
+            return f"/usr/bin/{tool}" if tool in available_tools else None
+
+    return find_tool
+
+
 @pytest.fixture
 def terraform_file(tmp_path):
     """Create a mock Terraform file."""
@@ -37,50 +59,50 @@ def test_scan_iac_file_basic_success(tmp_path, terraform_file):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout='{"check_type": "terraform"}',
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=3.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout='{"check_type": "terraform"}',
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=3.0,
+                attempts=1,
+                output_file=results_dir / "main" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            iac_id, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov", "trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        iac_id, statuses = scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov", "trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            assert iac_id == "terraform:main.tf"
-            assert statuses["checkov"] is True
-            assert statuses["trivy"] is True
+        assert iac_id == "terraform:main.tf"
+        assert statuses["checkov"] is True
+        assert statuses["trivy"] is True
 
 
 def test_scan_iac_file_cloudformation(tmp_path):
@@ -98,37 +120,37 @@ Resources:
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout='{"check_type": "cloudformation"}',
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "template" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout='{"check_type": "cloudformation"}',
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "template" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            iac_id, statuses = scan_iac_file(
-                iac_type="cloudformation",
-                iac_path=cf_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        iac_id, statuses = scan_iac_file(
+            iac_type="cloudformation",
+            iac_path=cf_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            assert iac_id == "cloudformation:template.yaml"
-            assert statuses["checkov"] is True
+        assert iac_id == "cloudformation:template.yaml"
+        assert statuses["checkov"] is True
 
 
 def test_scan_iac_file_k8s_manifest(tmp_path):
@@ -148,37 +170,37 @@ spec:
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=3.0,
-                    attempts=1,
-                    output_file=results_dir / "deployment" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=3.0,
+                attempts=1,
+                output_file=results_dir / "deployment" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            iac_id, statuses = scan_iac_file(
-                iac_type="k8s",
-                iac_path=k8s_file,
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        iac_id, statuses = scan_iac_file(
+            iac_type="k8s",
+            iac_path=k8s_file,
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            assert iac_id == "k8s:deployment.yaml"
-            assert statuses["trivy"] is True
+        assert iac_id == "k8s:deployment.yaml"
+        assert statuses["trivy"] is True
 
 
 def test_scan_iac_file_missing_tools_no_allow(tmp_path, terraform_file):
@@ -186,7 +208,31 @@ def test_scan_iac_file_missing_tools_no_allow(tmp_path, terraform_file):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=False):
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
+
+        iac_id, statuses = scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov", "trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func([]),  # No tools available
+        )
+
+        assert "checkov" not in statuses
+        assert "trivy" not in statuses
+
+
+def test_scan_iac_file_missing_tools_with_allow(tmp_path, terraform_file):
+    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    with patch("scripts.cli.scan_jobs.iac_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             MockRunner.return_value.run_all_parallel.return_value = []
 
@@ -198,37 +244,13 @@ def test_scan_iac_file_missing_tools_no_allow(tmp_path, terraform_file):
                 timeout=300,
                 retries=0,
                 per_tool_config={},
-                allow_missing_tools=False,
+                allow_missing_tools=True,
+                find_tool_func=_make_find_tool_func([]),  # No tools available
             )
 
-            assert "checkov" not in statuses
-            assert "trivy" not in statuses
-
-
-def test_scan_iac_file_missing_tools_with_allow(tmp_path, terraform_file):
-    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.iac_scanner.write_stub") as mock_stub:
-            with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
-
-                iac_id, statuses = scan_iac_file(
-                    iac_type="terraform",
-                    iac_path=terraform_file,
-                    results_dir=results_dir,
-                    tools=["checkov", "trivy"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
-
-                assert statuses["checkov"] is True
-                assert statuses["trivy"] is True
-                assert mock_stub.call_count == 2
+            assert statuses["checkov"] is True
+            assert statuses["trivy"] is True
+            assert mock_stub.call_count == 2
 
 
 def test_scan_iac_file_per_tool_timeout(tmp_path, terraform_file):
@@ -240,39 +262,39 @@ def test_scan_iac_file_per_tool_timeout(tmp_path, terraform_file):
         "checkov": {"timeout": 600},
     }
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout="{}",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout="{}",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+        scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            checkov_def = next(t for t in tools_passed if t.name == "checkov")
-            assert checkov_def.timeout == 600
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        checkov_def = next(t for t in tools_passed if t.name == "checkov")
+        assert checkov_def.timeout == 600
 
 
 def test_scan_iac_file_per_tool_flags(tmp_path, terraform_file):
@@ -284,40 +306,40 @@ def test_scan_iac_file_per_tool_flags(tmp_path, terraform_file):
         "checkov": {"flags": ["--framework", "terraform"]},
     }
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout="{}",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout="{}",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+        scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            checkov_def = next(t for t in tools_passed if t.name == "checkov")
-            assert "--framework" in checkov_def.command
-            assert "terraform" in checkov_def.command
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        checkov_def = next(t for t in tools_passed if t.name == "checkov")
+        assert "--framework" in checkov_def.command
+        assert "terraform" in checkov_def.command
 
 
 def test_scan_iac_file_tool_failure(tmp_path, terraform_file):
@@ -325,36 +347,36 @@ def test_scan_iac_file_tool_failure(tmp_path, terraform_file):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="error",
-                    stdout="",
-                    stderr="timeout",
-                    returncode=124,
-                    duration=300.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="Timeout after 300s",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="error",
+                stdout="",
+                stderr="timeout",
+                returncode=124,
+                duration=300.0,
+                attempts=1,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="Timeout after 300s",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            iac_id, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        iac_id, statuses = scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            assert statuses["checkov"] is False
+        assert statuses["checkov"] is False
 
 
 def test_scan_iac_file_retry_tracking(tmp_path, terraform_file):
@@ -362,38 +384,38 @@ def test_scan_iac_file_retry_tracking(tmp_path, terraform_file):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout="{}",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=2,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout="{}",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=2,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            iac_id, statuses = scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        iac_id, statuses = scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=2,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            assert statuses["checkov"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["checkov"] == 2
+        assert statuses["checkov"] is True
+        assert "__attempts__" in statuses
+        assert statuses["__attempts__"]["checkov"] == 2
 
 
 def test_scan_iac_file_checkov_stdout_capture(tmp_path, terraform_file):
@@ -401,72 +423,69 @@ def test_scan_iac_file_checkov_stdout_capture(tmp_path, terraform_file):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="checkov",
-                    status="success",
-                    stdout='{"results": []}',
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "main" / "checkov.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="checkov",
+                status="success",
+                stdout='{"results": []}',
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "main" / "checkov.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=_make_find_tool_func(),
+        )
 
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            checkov_def = next(t for t in tools_passed if t.name == "checkov")
-            assert checkov_def.capture_stdout is True
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        checkov_def = next(t for t in tools_passed if t.name == "checkov")
+        assert checkov_def.capture_stdout is True
 
 
 def test_scan_iac_file_output_dir_creation(tmp_path, terraform_file):
     """Test output directory created correctly for IaC file."""
     results_dir = tmp_path / "results"
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=[],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-            )
+        scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=[],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=_make_find_tool_func([]),  # No tools available
+        )
 
-            output_dir = results_dir / "main"
-            assert output_dir.exists()
-            assert output_dir.is_dir()
+        output_dir = results_dir / "main"
+        assert output_dir.exists()
+        assert output_dir.is_dir()
 
 
-def test_scan_iac_file_custom_tool_exists_func(tmp_path, terraform_file):
-    """Test using custom tool_exists_func."""
+def test_scan_iac_file_custom_find_tool_func(tmp_path, terraform_file):
+    """Test using custom find_tool_func."""
     results_dir = tmp_path / "results"
     results_dir.mkdir()
-
-    def mock_tool_exists(tool: str) -> bool:
-        return tool == "checkov"
 
     with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
         mock_results = [
@@ -494,7 +513,7 @@ def test_scan_iac_file_custom_tool_exists_func(tmp_path, terraform_file):
             retries=0,
             per_tool_config={},
             allow_missing_tools=True,
-            tool_exists_func=mock_tool_exists,
+            find_tool_func=_make_find_tool_func(["checkov"]),  # Only checkov available
         )
 
         assert "checkov" in statuses
@@ -511,20 +530,20 @@ def test_scan_iac_file_custom_write_stub_func(tmp_path, terraform_file):
     def mock_write_stub(tool: str, path: Path) -> None:
         stub_calls.append((tool, path))
 
-    with patch("scripts.cli.scan_jobs.iac_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            scan_iac_file(
-                iac_type="terraform",
-                iac_path=terraform_file,
-                results_dir=results_dir,
-                tools=["checkov", "trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                write_stub_func=mock_write_stub,
-            )
+        scan_iac_file(
+            iac_type="terraform",
+            iac_path=terraform_file,
+            results_dir=results_dir,
+            tools=["checkov", "trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=_make_find_tool_func([]),  # No tools available
+            write_stub_func=mock_write_stub,
+        )
 
-            assert len(stub_calls) == 2
+        assert len(stub_calls) == 2

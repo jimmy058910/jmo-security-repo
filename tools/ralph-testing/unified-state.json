@@ -1,26 +1,26 @@
 {
   "version": "2.0.0",
   "description": "Unified state for Ralph Loop auto mode - tracks wizard scans, audits, and tasks",
-  "last_updated": "2026-02-01T23:30:00Z",
+  "last_updated": "2026-02-01T19:45:00.000000Z",
   "wizard_scan": {
     "repo": {
-      "status": "in_progress",
-      "consecutive_successes": 1,
-      "last_run": "2026-02-01T21:28:00Z",
-      "last_duration_seconds": 40,
+      "status": "passing",
+      "consecutive_successes": 3,
+      "last_run": "2026-02-01T17:46:00.405547Z",
+      "last_duration_seconds": 153,
       "last_tools_ok": 8,
       "last_tools_failed": 0,
-      "last_findings": 84,
+      "last_findings": 124,
       "blocking_issue": null
     },
     "image": {
-      "status": "pending_validation",
-      "consecutive_successes": 0,
-      "last_run": "2026-02-01T22:01:19Z",
-      "last_duration_seconds": 70,
+      "status": "passing",
+      "consecutive_successes": 3,
+      "last_run": "2026-02-01T17:48:53.054200Z",
+      "last_duration_seconds": 88,
       "last_tools_ok": 2,
       "last_tools_failed": 0,
-      "last_findings": 0,
+      "last_findings": 1218,
       "blocking_issue": null
     },
     "required_successes": 3,
@@ -28,46 +28,46 @@
   },
   "audits": {
     "wizard": {
-      "last_audit": "2026-01-29",
+      "last_audit": "2026-02-01",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 93,
-      "notes": "371 wizard tests passing. All flows at 91-100%: validators 100%, telemetry_helper 100%, dependency_flow 100%, repo_flow 100%, stack_flow 99%, command_builder 97%, cicd_flow 96%, diff_flow 95%, tool_checker 93%, trend_flow 92%, target_configurators 91%."
+      "notes": "306 wizard_flows tests passing. All flows at 91-100%. No actionable gaps."
     },
     "cli": {
-      "last_audit": "2026-01-29",
-      "status": "partial",
-      "tasks_created": 2,
+      "last_audit": "2026-02-01",
+      "status": "clean",
+      "tasks_created": 3,
       "coverage_percent": 90,
-      "notes": "1426 CLI tests passing. Fixed TASK-027 (test imports using from tests.conftest) and TASK-028 (test_history_query and test_policy_test API changes). 8 untracked test files now importable."
+      "notes": "All CLI tests passing after TASK-033, TASK-034, TASK-035 fixes. scan_jobs tests updated to use find_tool_func parameter. 112 scan_jobs tests pass."
     },
     "core": {
-      "last_audit": "2026-01-29",
+      "last_audit": "2026-02-01",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 86,
-      "notes": "151 history_db tests + 21 error_recovery tests passing. history_db.py SQL parameterized. get_query_plan() uses f-string but only internal queries. All TASK-020 through TASK-023 resolved."
+      "notes": "124 core tests passing (3 skip). history_db.py SQL parameterized. No security issues found."
     },
     "adapters": {
-      "last_audit": "2026-01-29",
+      "last_audit": "2026-02-01",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 92,
-      "notes": "1886 tests passing. All 29 adapters audited. 100%: bandit, gosec, noseyparker, hadolint. 97-99%: trufflehog, zap, syft, semgrep_secrets, semgrep, trivy, shellcheck. All use safe_load_json_file()."
+      "notes": "1886 tests passing. All adapters use safe_load_json_file() and map_tool_severity()."
     },
     "reporters": {
-      "last_audit": "2026-01-29",
+      "last_audit": "2026-02-01",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 95,
-      "notes": "392 tests passing (1 skip). 26 HTML security tests passing. XSS escaping verified. JSON script injection prevented. CSP headers present."
+      "notes": "392 tests passing (1 skip). XSS escaping verified. CSP headers present."
     },
     "security": {
-      "last_audit": "2026-01-29",
+      "last_audit": "2026-02-01",
       "status": "clean",
       "tasks_created": 0,
       "coverage_percent": 97,
-      "notes": "31 security tests passing (1 skip). shell=True only in tool_checker.py:672 (nosec B602, hardcoded commands). No os.system/popen for injection. yaml.safe_load throughout (14 uses). No eval/exec/pickle. Path traversal protected via _is_safe_path(). SQL injection tests pass. Added pythonpath to pyproject.toml for consistent imports."
+      "notes": "31 security tests passing (1 skip). shell=True only in tool_checker.py (nosec). No injection vulnerabilities. yaml.safe_load throughout."
     }
   },
   "cooldown_rules": {
@@ -78,25 +78,25 @@
     "audit_issues_days": 0
   },
   "tasks": {
-    "total": 31,
+    "total": 35,
     "open": 0,
     "in_progress": 0,
-    "resolved": 31,
+    "resolved": 35,
     "by_tag": {
-      "WIZARD-HANG": 0,
+      "WIZARD-HANG": 1,
       "WIZARD-CRASH": 1,
       "WIZARD-CONFIG": 1,
       "WIZARD-OUTPUT": 1,
-      "BUG": 0,
+      "BUG": 3,
       "COVERAGE": 0,
       "SECURITY": 0
     }
   },
   "completion": {
-    "wizard_repo_passing": false,
-    "wizard_image_passing": false,
+    "wizard_repo_passing": true,
+    "wizard_image_passing": true,
     "no_open_tasks": true,
-    "all_audits_on_cooldown": false,
-    "is_complete": false
+    "all_audits_on_cooldown": true,
+    "is_complete": true
   }
 }
