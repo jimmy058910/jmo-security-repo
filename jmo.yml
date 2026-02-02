@@ -19,16 +19,8 @@ fail_on: ''
 default_profile: balanced
 profiles:
   fast:
-    # v1.0.0: 8 tools for fast pre-commit checks (5-10 min)
-    tools:
-    - trufflehog
-    - semgrep
-    - syft
-    - trivy
-    - checkov
-    - hadolint
-    - nuclei
-    - shellcheck
+    # v1.0.0: 9 tools for fast pre-commit checks (5-10 min)
+    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 8
     timeout: 300
     policy:
@@ -57,21 +49,7 @@ profiles:
   slim:
     # v1.0.0: 14 tools for cloud/IaC focused scans (12-18 min)
     # Optimized for AWS/Azure/GCP, Kubernetes, and infrastructure scanning
-    tools:
-    - trufflehog
-    - semgrep
-    - syft
-    - trivy
-    - checkov
-    - hadolint
-    - nuclei
-    - prowler
-    - kubescape
-    - grype
-    - bearer
-    - horusec
-    - dependency-check
-    - shellcheck
+    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 4
     timeout: 500
     policy:
@@ -105,25 +83,7 @@ profiles:
         - --silent
   balanced:
     # v1.0.0: 18 tools for production scans (18-25 min)
-    tools:
-    - trufflehog
-    - semgrep
-    - syft
-    - trivy
-    - checkov
-    - hadolint
-    - zap
-    - nuclei
-    - prowler
-    - kubescape
-    - scancode
-    - cdxgen
-    - gosec
-    - grype
-    - bearer
-    - horusec
-    - dependency-check
-    - shellcheck
+    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 4
     timeout: 600
     policy:
@@ -160,36 +120,8 @@ profiles:
         flags:
         - --silent
   deep:
-    # v1.0.0: 28 tools for comprehensive audits (40-70 min)
-    tools:
-    - trufflehog
-    - noseyparker
-    - semgrep
-    - semgrep-secrets
-    - bandit
-    - syft
-    - trivy
-    - trivy-rbac
-    - checkov
-    - checkov-cicd
-    - hadolint
-    - zap
-    - nuclei
-    - prowler
-    - kubescape
-    - akto
-    - scancode
-    - cdxgen
-    - gosec
-    - yara
-    - grype
-    - bearer
-    - horusec
-    - dependency-check
-    - falco
-    - afl++
-    - mobsf
-    - lynis
+    # v1.0.0: 29 tools for comprehensive audits (40-70 min)
+    # Tool list defined in scripts/core/tool_registry.py:PROFILE_TOOLS (single source of truth)
     threads: 2
     timeout: 900
     retries: 1

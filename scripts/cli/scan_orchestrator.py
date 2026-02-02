@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.validation import validate_url, validate_container_image
+from scripts.core.tool_registry import filter_tools_for_scan_type
 
 logger = logging.getLogger(__name__)
 
@@ -674,14 +675,23 @@ class ScanOrchestrator:
         futures = []
         max_workers = self.get_effective_max_workers()
 
+        # Filter tools by scan type for smarter tool selection
+        # This avoids running URL-only tools on repos, repo-only tools on images, etc.
+        repo_tools = filter_tools_for_scan_type(self.config.tools, "repo")
+        image_tools = filter_tools_for_scan_type(self.config.tools, "image")
+        iac_tools = filter_tools_for_scan_type(self.config.tools, "iac")
+        url_tools = filter_tools_for_scan_type(self.config.tools, "url")
+        gitlab_tools = filter_tools_for_scan_type(self.config.tools, "gitlab")
+        k8s_tools = filter_tools_for_scan_type(self.config.tools, "k8s")
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit repositories
+            # Submit repositories - use repo-filtered tools
             for repo in targets.repos:
                 future = executor.submit(
                     scan_repository,
                     repo,
                     self.config.results_dir / "individual-repos",
-                    self.config.tools,
+                    repo_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -690,13 +700,13 @@ class ScanOrchestrator:
                 )
                 futures.append(("repo", repo.name, future))
 
-            # Submit images
+            # Submit images - use image-filtered tools (trivy, syft only)
             for image in targets.images:
                 future = executor.submit(
                     scan_image,
                     image,
                     self.config.results_dir / "individual-images",
-                    self.config.tools,
+                    image_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -704,14 +714,14 @@ class ScanOrchestrator:
                 )
                 futures.append(("image", image, future))
 
-            # Submit IaC files
+            # Submit IaC files - use IaC-filtered tools
             for iac_type, iac_path in targets.iac_files:
                 future = executor.submit(
                     scan_iac_file,
                     iac_type,
                     iac_path,
                     self.config.results_dir / "individual-iac",
-                    self.config.tools,
+                    iac_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -719,13 +729,13 @@ class ScanOrchestrator:
                 )
                 futures.append(("iac", str(iac_path), future))
 
-            # Submit URLs
+            # Submit URLs - use URL-filtered tools (nuclei, zap, akto only)
             for url in targets.urls:
                 future = executor.submit(
                     scan_url,
                     url,
                     self.config.results_dir / "individual-web",
-                    self.config.tools,
+                    url_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -733,13 +743,13 @@ class ScanOrchestrator:
                 )
                 futures.append(("url", url, future))
 
-            # Submit GitLab repos
+            # Submit GitLab repos - use gitlab-filtered tools
             for gitlab_repo_info in targets.gitlab_repos:
                 future = executor.submit(
                     scan_gitlab_repo,
                     gitlab_repo_info,
                     self.config.results_dir / "individual-gitlab",
-                    self.config.tools,
+                    gitlab_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,
@@ -748,13 +758,13 @@ class ScanOrchestrator:
                 repo_id = f"{gitlab_repo_info.get('group', '')}_{gitlab_repo_info.get('name', '')}"
                 futures.append(("gitlab", repo_id, future))
 
-            # Submit K8s resources
+            # Submit K8s resources - use k8s-filtered tools (trivy only)
             for k8s_resource_info in targets.k8s_resources:
                 future = executor.submit(
                     scan_k8s_resource,
                     k8s_resource_info,
                     self.config.results_dir / "individual-k8s",
-                    self.config.tools,
+                    k8s_tools,
                     self.config.timeout,
                     self.config.retries,
                     per_tool_config,

@@ -149,6 +149,8 @@ def scan_repository(
         return []
 
     # TruffleHog: Verified secrets scanning
+    # Uses filesystem mode to scan working directory (not just git history)
+    # This catches secrets that may not be committed yet or in non-git directories
     if "trufflehog" in tools:
         trufflehog_out = out_dir / "trufflehog.json"
         trufflehog_path = _find_tool("trufflehog")
@@ -156,8 +158,8 @@ def scan_repository(
             trufflehog_flags = get_tool_flags("trufflehog")
             trufflehog_cmd = [
                 trufflehog_path,
-                "git",
-                f"file://{repo}",
+                "filesystem",
+                str(repo),
                 "--json",
                 "--no-update",
                 *trufflehog_flags,

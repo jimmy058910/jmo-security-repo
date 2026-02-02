@@ -54,10 +54,9 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "grype",
         "bearer",
         "horusec",
-        "dependency-check",
         "shellcheck",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 15 tools
+    ],  # 14 tools
     "balanced": [
         "trufflehog",
         "semgrep",
@@ -75,10 +74,9 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "grype",
         "bearer",
         "horusec",
-        "dependency-check",
         "shellcheck",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 19 tools
+    ],  # 18 tools
     "deep": [
         "trufflehog",
         "noseyparker",
@@ -160,6 +158,111 @@ CONTENT_TRIGGERED_TOOLS: set[str] = {"mobsf", "akto"}
 # Manual install tools: Require manual installation due to platform limitations
 # These cannot be auto-installed via jmo tools install
 MANUAL_INSTALL_TOOLS: set[str] = {"falco", "afl++", "mobsf", "akto"}
+
+# Scan type applicability - which tools apply to which target types
+# Based on docs/PROFILES_AND_TOOLS.md Scan Type Tool Matrix
+# This enables smarter tool selection: only run tools applicable to the target
+TOOL_SCAN_TYPES: dict[str, set[str]] = {
+    # Tools that work on repositories (code analysis)
+    "repo": {
+        "trufflehog",
+        "noseyparker",
+        "semgrep",
+        "semgrep-secrets",
+        "bandit",
+        "syft",
+        "trivy",
+        "checkov",
+        "checkov-cicd",
+        "hadolint",
+        "gosec",
+        "osv-scanner",
+        "cdxgen",
+        "scancode",
+        "kubescape",
+        "bearer",
+        "prowler",
+        "yara",
+        "grype",
+        "trivy-rbac",
+        "horusec",
+        "dependency-check",
+        "shellcheck",
+        "opa",
+        # Content-triggered (only run when applicable files found)
+        "zap",
+        "falco",
+        "mobsf",
+        "afl++",
+        "nuclei",
+    },
+    # Tools that work on container images
+    "image": {"trivy", "syft"},
+    # Tools that work on live URLs (DAST)
+    "url": {"nuclei", "zap", "akto"},
+    # Tools that work on Kubernetes clusters
+    "k8s": {"trivy"},
+    # Tools that work on IaC files
+    "iac": {"trivy", "checkov", "kubescape"},
+    # Tools that work on GitLab repos (same as repo + image discovery)
+    "gitlab": {
+        "trufflehog",
+        "noseyparker",
+        "semgrep",
+        "semgrep-secrets",
+        "bandit",
+        "syft",
+        "trivy",
+        "checkov",
+        "checkov-cicd",
+        "hadolint",
+        "gosec",
+        "osv-scanner",
+        "cdxgen",
+        "scancode",
+        "kubescape",
+        "bearer",
+        "prowler",
+        "yara",
+        "grype",
+        "trivy-rbac",
+        "horusec",
+        "dependency-check",
+        "shellcheck",
+        "opa",
+        "zap",
+        "falco",
+        "mobsf",
+        "afl++",
+        "nuclei",
+    },
+}
+
+
+def filter_tools_for_scan_type(tools: list[str], scan_type: str) -> list[str]:
+    """
+    Filter tools list to only include tools applicable to the scan type.
+
+    This enables smarter tool selection - don't run ZAP on repo scans,
+    don't run trufflehog on URL scans, etc.
+
+    Args:
+        tools: Full list of tools from profile
+        scan_type: One of 'repo', 'image', 'url', 'k8s', 'iac', 'gitlab'
+
+    Returns:
+        Filtered list containing only applicable tools
+
+    Example:
+        >>> filter_tools_for_scan_type(["trufflehog", "nuclei", "trivy"], "image")
+        ["trivy"]  # Only trivy applies to image scans
+    """
+    applicable = TOOL_SCAN_TYPES.get(scan_type, set())
+    if not applicable:
+        # Unknown scan type - return all tools (fail-safe)
+        return tools
+    return [t for t in tools if t in applicable]
+
 
 # Platform compatibility requirements for tools
 # Tools not listed here are assumed to work on all platforms

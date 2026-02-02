@@ -13,6 +13,7 @@ from scripts.core.exceptions import (
     ConfigurationException,
 )
 from scripts.core.config import load_config
+from scripts.core.tool_registry import PROFILE_TOOLS
 from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
 from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
 from scripts.cli.schedule_commands import cmd_schedule
@@ -81,14 +82,25 @@ def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 def _effective_scan_settings(args) -> dict[str, Any]:
     """Compute effective scan settings from CLI, config, and optional profile.
 
-    Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool
+    Returns dict with keys: tools, threads, timeout, include, exclude, retries, per_tool, skip_tools
+
+    Note: Tool lists come from PROFILE_TOOLS in tool_registry.py (single source of truth).
+    jmo.yml profiles only configure threads, timeout, per_tool settings - not tool lists.
     """
     cfg = load_config(getattr(args, "config", None))
     profile_name = getattr(args, "profile_name", None) or cfg.default_profile
     profile = {}
     if profile_name and isinstance(cfg.profiles, dict):
         profile = cfg.profiles.get(profile_name, {}) or {}
-    tools = getattr(args, "tools", None) or profile.get("tools") or cfg.tools
+
+    # Tool list priority: CLI --tools > PROFILE_TOOLS registry > config default
+    # Note: jmo.yml profiles no longer contain tools: arrays (moved to tool_registry.py)
+    tools = getattr(args, "tools", None)
+    if not tools:
+        if profile_name and profile_name in PROFILE_TOOLS:
+            tools = PROFILE_TOOLS[profile_name]
+        else:
+            tools = cfg.tools  # Fallback to top-level config tools
     threads = getattr(args, "threads", None) or profile.get("threads") or cfg.threads
     timeout = (
         getattr(args, "timeout", None) or profile.get("timeout") or cfg.timeout or 600
@@ -99,6 +111,12 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     if isinstance(profile.get("retries"), int):
         retries = profile["retries"]
     per_tool = _merge_dict(cfg.per_tool, profile.get("per_tool", {}))
+
+    # Handle --skip-tools flag to exclude specific tools
+    skip_tools = getattr(args, "skip_tools", None) or []
+    if skip_tools and tools:
+        tools = [t for t in tools if t not in skip_tools]
+
     return {
         "tools": tools,
         "threads": threads,
@@ -107,6 +125,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
         "exclude": exclude,
         "retries": max(0, int(retries or 0)),
         "per_tool": per_tool,
+        "skip_tools": skip_tools,
     }
 
 
@@ -172,6 +191,12 @@ def _add_scan_config_args(parser):
         "--config", default="jmo.yml", help="Config file (default: jmo.yml)"
     )
     parser.add_argument("--tools", nargs="*", help="Override tools list from config")
+    parser.add_argument(
+        "--skip-tools",
+        nargs="*",
+        default=[],
+        help="Tools to skip (e.g., --skip-tools dependency-check cdxgen)",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -401,6 +426,86 @@ def _add_wizard_args(subparsers):
         action="store_true",
         help="Non-interactive mode: use defaults for all prompts",
     )
+
+    # Preset flags for automation (enables non-interactive wizard runs)
+    preset_group = wizard_parser.add_argument_group(
+        "preset options",
+        "Preset wizard choices for automation (use with --yes for fully non-interactive)",
+    )
+    preset_group.add_argument(
+        "--profile",
+        choices=["fast", "slim", "balanced", "deep"],
+        help="Scan profile (fast=8 tools, slim=14, balanced=18, deep=28)",
+    )
+    preset_group.add_argument(
+        "--target-type",
+        choices=["repo", "image", "iac", "url"],
+        help="Target type to scan",
+    )
+    preset_group.add_argument(
+        "--target",
+        metavar="PATH_OR_IMAGE",
+        help="Target value (repo path, image name, IaC path, or URL)",
+    )
+
+    # Execution mode
+    exec_group = wizard_parser.add_mutually_exclusive_group()
+    exec_group.add_argument(
+        "--native",
+        action="store_true",
+        help="Use native execution mode (tools installed locally)",
+    )
+    exec_group.add_argument(
+        "--docker",
+        action="store_true",
+        help="Use Docker execution mode (tools bundled in container)",
+    )
+
+    # Tool installation flags
+    install_group = wizard_parser.add_argument_group(
+        "tool installation",
+        "Control automatic tool installation during wizard",
+    )
+    install_group.add_argument(
+        "--auto-fix",
+        action="store_true",
+        help="Automatically install missing tools without prompting",
+    )
+    install_group.add_argument(
+        "--install-deps",
+        action="store_true",
+        help="Automatically install missing dependencies (Java, Node.js)",
+    )
+
+    # Advanced configuration
+    advanced_group = wizard_parser.add_argument_group(
+        "advanced options",
+        "Override advanced scan settings",
+    )
+    advanced_group.add_argument(
+        "--threads",
+        type=int,
+        metavar="N",
+        help="Number of parallel threads for scanning",
+    )
+    advanced_group.add_argument(
+        "--timeout",
+        type=int,
+        metavar="SECONDS",
+        help="Per-tool timeout in seconds",
+    )
+    advanced_group.add_argument(
+        "--fail-on",
+        choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+        help="Severity threshold for CI failures",
+    )
+    advanced_group.add_argument(
+        "--results-dir",
+        metavar="DIR",
+        help="Output directory for scan results (default: results)",
+    )
+
+    # Artifact generation
     wizard_parser.add_argument(
         "--emit-script",
         metavar="FILE",
@@ -425,6 +530,8 @@ def _add_wizard_args(subparsers):
         type=str,
         help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
     )
+
+    # Policy evaluation
     wizard_parser.add_argument(
         "--policy",
         action="append",
@@ -2273,11 +2380,19 @@ class ProgressTracker:
 
     Tracks completed/total targets and provides formatted progress updates.
     Thread-safe for concurrent scan operations.
+
+    Features:
+    - Spinner animation for running tools (distinguishes from completed)
+    - Elapsed time display for long-running tools
+    - Background refresh thread for smooth animation
     """
 
     # Suffixes for multi-phase tools (e.g., noseyparker-init, noseyparker-scan)
     # These phases should be counted as a single logical tool
     _PHASE_SUFFIXES = ("-init", "-scan", "-report")
+
+    # Braille spinner frames for smooth animation
+    _SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     def __init__(self, total: int, args, total_tools: int = 0):
         """Initialize progress tracker.
@@ -2301,6 +2416,13 @@ class ProgressTracker:
         self.tools_in_progress: set[str] = set()
         # Track completed logical tools (base names, not phases)
         self._completed_base_tools: set[str] = set()
+        # Elapsed time tracking for running tools
+        self._tool_start_times: dict[str, float] = {}
+        # Spinner animation state
+        self._spinner_idx = 0
+        # Background refresh thread control
+        self._stop_refresh = False
+        self._refresh_thread: threading.Thread | None = None
 
     def _get_base_tool_name(self, tool_name: str) -> str:
         """Extract base tool name from a potentially phased tool name.
@@ -2324,10 +2446,74 @@ class ProgressTracker:
         return tool_name
 
     def start(self):
-        """Start progress tracking timer."""
+        """Start progress tracking timer and background refresh thread."""
         import time
 
         self._start_time = time.time()
+        self._start_refresh_thread()
+
+    def stop(self):
+        """Stop the background refresh thread."""
+        self._stop_refresh = True
+        if self._refresh_thread and self._refresh_thread.is_alive():
+            self._refresh_thread.join(timeout=0.5)
+
+    def _start_refresh_thread(self):
+        """Start background thread to refresh display every 250ms."""
+        import threading
+
+        def refresh_loop():
+            import time
+
+            while not self._stop_refresh:
+                time.sleep(0.25)
+                with self._lock:
+                    if self.tools_in_progress:
+                        self._refresh_display()
+
+        self._stop_refresh = False
+        self._refresh_thread = threading.Thread(target=refresh_loop, daemon=True)
+        self._refresh_thread.start()
+
+    def _format_elapsed(self, elapsed: float) -> str:
+        """Format elapsed time as human-readable string."""
+        if elapsed < 60:
+            return f"{int(elapsed)}s"
+        else:
+            mins = int(elapsed // 60)
+            secs = int(elapsed % 60)
+            return f"{mins}m{secs}s"
+
+    def _refresh_display(self):
+        """Refresh progress line with current elapsed time and spinner.
+
+        Called by background thread to keep display updated during long-running tools.
+        Must be called with self._lock held.
+        """
+        import sys
+        import time
+
+        if not self.tools_in_progress or self.total_tools <= 0:
+            return
+
+        # Show longest-running tool (most relevant for user waiting)
+        oldest_tool = min(
+            self.tools_in_progress,
+            key=lambda t: self._tool_start_times.get(t, time.time()),
+        )
+        base_name = self._get_base_tool_name(oldest_tool)
+        elapsed = time.time() - self._tool_start_times.get(oldest_tool, time.time())
+        elapsed_str = self._format_elapsed(elapsed)
+
+        spinner = self._SPINNER_FRAMES[self._spinner_idx % len(self._SPINNER_FRAMES)]
+        self._spinner_idx += 1
+
+        percentage = int((self.tools_completed / self.total_tools) * 100)
+        progress_line = (
+            f"\r[{self.tools_completed}/{self.total_tools}] "
+            f"{spinner} {base_name} ({elapsed_str}) [{percentage}%]"
+        )
+        print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
 
     def update(self, target_type: str, target_name: str, elapsed: float):
         """Update progress after completing a target scan.
@@ -2377,7 +2563,31 @@ class ProgressTracker:
             mins = (seconds % 3600) // 60
             return f"{hours}h {mins}m"
 
-    def update_tool(self, tool_name: str, status: str, findings_count: int = 0):
+    def log(self, level: str, message: str) -> None:
+        """Log message, clearing the \\r line first for clean output.
+
+        Args:
+            level: Log level (INFO, WARN, ERROR)
+            message: Log message
+        """
+        import sys
+
+        with self._lock:
+            # Clear current \r line, print on new line
+            print("\r" + " " * 70 + "\r", end="", file=sys.stderr, flush=True)
+            print(f"[{level}] {message}", file=sys.stderr)
+
+    def update_tool(
+        self,
+        tool_name: str,
+        status: str,
+        findings_count: int = 0,  # noqa: ARG002
+        *,
+        message: str = "",
+        attempt: int = 1,
+        max_attempts: int = 1,
+        **kwargs,  # noqa: ARG002 - Forward compatibility
+    ) -> None:
         """Update progress when a tool starts or completes.
 
         Multi-phase tools (e.g., noseyparker-init, noseyparker-scan, noseyparker-report)
@@ -2386,8 +2596,12 @@ class ProgressTracker:
 
         Args:
             tool_name: Name of the tool (may include phase suffix)
-            status: "start" when tool begins, "success"/"error" when done
+            status: "start"/"success"/"error"/"retrying"/"timeout"
             findings_count: Number of findings (unused for now)
+            message: Optional message (e.g., timeout reason)
+            attempt: Current attempt number (for retries)
+            max_attempts: Maximum attempts configured
+            **kwargs: Forward compatibility for future parameters
         """
         import sys
 
@@ -2395,11 +2609,44 @@ class ProgressTracker:
         base_tool_name = self._get_base_tool_name(tool_name)
 
         with self._lock:
+            # Handle intermediate statuses (retrying/timeout)
+            if status == "retrying":
+                self.log(
+                    "WARN",
+                    f"{base_tool_name}: Retry {attempt}/{max_attempts} - {message}",
+                )
+                return  # Don't update completion count
+
+            if status == "timeout":
+                self.log(
+                    "ERROR",
+                    f"{base_tool_name}: Timed out after {max_attempts} attempts",
+                )
+                # Fall through to mark as failed
+
             if status == "start":
+                import time
+
                 self.tools_in_progress.add(tool_name)
+                self._tool_start_times[tool_name] = time.time()
+
+                # Show running tool with spinner (distinguishes from completed)
+                if self.total_tools > 0:
+                    percentage = int((self.tools_completed / self.total_tools) * 100)
+                    spinner = self._SPINNER_FRAMES[
+                        self._spinner_idx % len(self._SPINNER_FRAMES)
+                    ]
+                    self._spinner_idx += 1
+                    progress_line = (
+                        f"\r[{self.tools_completed}/{self.total_tools}] "
+                        f"{spinner} {base_tool_name} (0s) [{percentage}%]"
+                    )
+                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
             else:
-                # Tool/phase completed
+                # Tool/phase completed (success, error, or timeout)
                 self.tools_in_progress.discard(tool_name)
+                # Clean up start time
+                self._tool_start_times.pop(tool_name, None)
 
                 # Only count this as a completed tool if the base tool hasn't been
                 # counted yet. This handles multi-phase tools correctly.
@@ -2409,19 +2656,21 @@ class ProgressTracker:
 
                 if self.total_tools > 0:
                     percentage = int((self.tools_completed / self.total_tools) * 100)
+                    # Checkmark for success, X for failure - clearly shows COMPLETED
                     status_icon = "✓" if status == "success" else "✗"
 
                     # Show inline progress (overwrites previous line)
                     # Display the base tool name for consistency
                     progress_line = (
                         f"\r[{self.tools_completed}/{self.total_tools}] "
-                        f"{status_icon} {base_tool_name} ({percentage}%)"
+                        f"{status_icon} {base_tool_name} [{percentage}%]"
                     )
                     # Pad to clear leftover characters
-                    print(f"{progress_line:<60}", end="", file=sys.stderr, flush=True)
+                    print(f"{progress_line:<70}", end="", file=sys.stderr, flush=True)
 
-                    # Print newline when all tools complete
+                    # Print newline and stop refresh when all tools complete
                     if self.tools_completed >= self.total_tools:
+                        self._stop_refresh = True
                         print("", file=sys.stderr)
 
 
@@ -2605,21 +2854,31 @@ def cmd_scan(args) -> int:
     )
 
     # Log scan start message with context about tools being used
-    # Show skipped tools if any were filtered out (missing_tools is set by _check_scan_tools)
+    # Use ToolStatusSummary for consistent counts with wizard display
+    profile_name = getattr(args, "profile_name", None) or cfg.default_profile
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        tm = ToolManager()
+        summary = tm.get_tool_summary(profile_name)
+        platform_applicable = summary.platform_applicable
+    except Exception:
+        platform_applicable = total_tools  # Fallback to actual tool count
+
     skipped_count = len(missing_tools) if missing_tools else 0
     if skipped_count > 0:
-        # Provide context about skipped tools
+        # Provide context about skipped tools with consistent denominator
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools} tools for {total_targets} target(s) "
+            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s) "
             f"({skipped_count} skipped: {', '.join(missing_tools[:3])}{'...' if skipped_count > 3 else ''})",
         )
     else:
         _log(
             args,
             "INFO",
-            f"Starting scan with {total_tools} tools for {total_targets} target(s)...",
+            f"Starting scan with {total_tools}/{platform_applicable} tools for {total_targets} target(s)...",
         )
 
     if use_rich_progress:
@@ -2818,6 +3077,15 @@ def cmd_wizard(args):
     sys.path.insert(0, str(wizard_script.parent))
     from wizard import run_wizard
 
+    # Determine execution mode from flags
+    # --docker means use_docker=True, --native means use_docker=False
+    # Neither flag means None (let wizard detect/prompt)
+    use_docker = None
+    if getattr(args, "docker", False):
+        use_docker = True
+    elif getattr(args, "native", False):
+        use_docker = False
+
     return run_wizard(
         yes=args.yes,
         emit_script=args.emit_script,
@@ -2826,6 +3094,17 @@ def cmd_wizard(args):
         policies=getattr(args, "policies", None),
         skip_policies=getattr(args, "skip_policies", False),
         db_path=getattr(args, "db", None),
+        # Preset options for automation
+        profile=getattr(args, "profile", None),
+        target_type=getattr(args, "target_type", None),
+        target=getattr(args, "target", None),
+        use_docker=use_docker,
+        auto_fix=getattr(args, "auto_fix", False),
+        install_deps=getattr(args, "install_deps", False),
+        threads=getattr(args, "threads", None),
+        timeout=getattr(args, "timeout", None),
+        fail_on=getattr(args, "fail_on", None),
+        results_dir=getattr(args, "results_dir", None),
     )
 
 
