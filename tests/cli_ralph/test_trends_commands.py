@@ -93,9 +93,10 @@ class TestTrendsInsights:
 class TestTrendsExplain:
     """Test suite for `jmo trends explain` command (TR-004)."""
 
-    def test_tr_004_trends_explain(self, run_jmo_with_history):
+    def test_tr_004_trends_explain(self, jmo_runner):
         """TR-004: jmo trends explain describes methodology."""
-        result = run_jmo_with_history(["trends", "explain"])
+        # Note: trends explain is a documentation command - no database needed
+        result = jmo_runner(["trends", "explain"])
 
         assert result.returncode == 0, f"Command failed: {result.stderr}"
 

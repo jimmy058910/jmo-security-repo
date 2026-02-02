@@ -8,7 +8,6 @@ Tests verify adapter listing and validation commands.
 from __future__ import annotations
 
 
-
 class TestAdaptersList:
     """Test suite for `jmo adapters list` command (AD-001 to AD-002)."""
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_image(
@@ -26,7 +26,7 @@ def scan_image(
     retries: int,
     per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Callable[[str], bool] | None = None,
+    find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
 ) -> tuple[str, dict[str, bool]]:
     """
@@ -40,7 +40,7 @@ def scan_image(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
@@ -48,7 +48,7 @@ def scan_image(
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
+    _find_tool = find_tool_func or find_tool
     _write_stub = write_stub_func or write_stub
 
     statuses: dict[str, bool] = {}
@@ -80,10 +80,11 @@ def scan_image(
     # Trivy image scan
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
-        if _tool_exists("trivy"):
+        trivy_path = _find_tool("trivy")
+        if trivy_path:
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-                "trivy",
+                trivy_path,
                 "image",
                 "-q",
                 "-f",
@@ -113,10 +114,11 @@ def scan_image(
     # Syft SBOM generation
     if "syft" in tools:
         syft_out = out_dir / "syft.json"
-        if _tool_exists("syft"):
+        syft_path = _find_tool("syft")
+        if syft_path:
             syft_flags = get_tool_flags("syft")
             syft_cmd = [
-                "syft",
+                syft_path,
                 image,
                 "-o",
                 "json",

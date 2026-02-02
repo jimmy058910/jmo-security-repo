@@ -16,9 +16,6 @@ from __future__ import annotations
 import pytest
 
 
-
-
-
 # ============================================================================
 # Profile/Threads Matrix Tests
 # ============================================================================
@@ -71,9 +68,7 @@ class TestScanProfileThreadsMatrix:
             ("deep", 8),
         ],
     )
-    def test_profile_command_with_threads(
-        self, jmo_runner, tmp_path, profile, threads
-    ):
+    def test_profile_command_with_threads(self, jmo_runner, tmp_path, profile, threads):
         """Verify profile commands accept --threads flag."""
         (tmp_path / "test.py").write_text("print('hello')", encoding="utf-8")
 
@@ -209,7 +204,11 @@ class TestBatchTargetFlags:
         )
         # Should show error about mutually exclusive
         combined = result.stdout.lower() + result.stderr.lower()
-        assert result.returncode != 0 or "mutually exclusive" in combined or "not allowed" in combined
+        assert (
+            result.returncode != 0
+            or "mutually exclusive" in combined
+            or "not allowed" in combined
+        )
 
 
 # ============================================================================
@@ -519,9 +518,7 @@ class TestLoggingFlags:
 class TestCICommandFlags:
     """Test CI command flag combinations."""
 
-    @pytest.mark.parametrize(
-        "fail_on", ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
-    )
+    @pytest.mark.parametrize("fail_on", ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"])
     def test_ci_fail_on_levels(self, jmo_runner, tmp_path, fail_on):
         """Verify --fail-on accepts all severity levels."""
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
@@ -638,9 +635,7 @@ class TestConfigFileFlag:
     def test_scan_config_flag(self, jmo_runner, tmp_path):
         """Verify scan accepts custom config file."""
         config_file = tmp_path / "custom-jmo.yml"
-        config_file.write_text(
-            "default_profile: fast\nfail_on: HIGH", encoding="utf-8"
-        )
+        config_file.write_text("default_profile: fast\nfail_on: HIGH", encoding="utf-8")
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         result = jmo_runner(
@@ -662,9 +657,7 @@ class TestConfigFileFlag:
     def test_profile_config_flag(self, jmo_runner, tmp_path):
         """Verify profile commands accept custom config file."""
         config_file = tmp_path / "custom-jmo.yml"
-        config_file.write_text(
-            "default_profile: fast\nfail_on: HIGH", encoding="utf-8"
-        )
+        config_file.write_text("default_profile: fast\nfail_on: HIGH", encoding="utf-8")
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         result = jmo_runner(

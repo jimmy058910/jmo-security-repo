@@ -22,49 +22,52 @@ def test_scan_image_basic_success(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-                ToolResult(
-                    tool="syft",
-                    status="success",
-                    stdout='{"artifacts": []}',
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "syft.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            image_name, statuses = scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy", "syft"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+            ToolResult(
+                tool="syft",
+                status="success",
+                stdout='{"artifacts": []}',
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "syft.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert image_name == "nginx:latest"
-            assert statuses["trivy"] is True
-            assert statuses["syft"] is True
+        image_name, statuses = scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy", "syft"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert image_name == "nginx:latest"
+        assert statuses["trivy"] is True
+        assert statuses["syft"] is True
 
 
 def test_scan_image_name_sanitization(tmp_path):
@@ -72,39 +75,42 @@ def test_scan_image_name_sanitization(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=1,
-                    output_file=results_dir
-                    / "gcr.io_myproject_myimage_v1.2.3"
-                    / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            scan_image(
-                image="gcr.io/myproject/myimage:v1.2.3",
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=1,
+                output_file=results_dir
+                / "gcr.io_myproject_myimage_v1.2.3"
+                / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify sanitized directory created
-            sanitized_dir = results_dir / "gcr.io_myproject_myimage_v1.2.3"
-            assert sanitized_dir.exists()
+        scan_image(
+            image="gcr.io/myproject/myimage:v1.2.3",
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify sanitized directory created
+        sanitized_dir = results_dir / "gcr.io_myproject_myimage_v1.2.3"
+        assert sanitized_dir.exists()
 
 
 def test_scan_image_missing_tools_no_allow(tmp_path):
@@ -112,7 +118,37 @@ def test_scan_image_missing_tools_no_allow(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=False):
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
+
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
+
+        image_name, statuses = scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy", "syft"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Tools not in statuses when missing and not allowed
+        assert "trivy" not in statuses
+        assert "syft" not in statuses
+
+
+def test_scan_image_missing_tools_with_allow(tmp_path):
+    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
+
+    with patch("scripts.cli.scan_jobs.image_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             MockRunner.return_value.run_all_parallel.return_value = []
 
@@ -123,37 +159,13 @@ def test_scan_image_missing_tools_no_allow(tmp_path):
                 timeout=300,
                 retries=0,
                 per_tool_config={},
-                allow_missing_tools=False,
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
             )
 
-            # Tools not in statuses when missing and not allowed
-            assert "trivy" not in statuses
-            assert "syft" not in statuses
-
-
-def test_scan_image_missing_tools_with_allow(tmp_path):
-    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.image_scanner.write_stub") as mock_stub:
-            with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
-
-                image_name, statuses = scan_image(
-                    image="nginx:latest",
-                    results_dir=results_dir,
-                    tools=["trivy", "syft"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
-
-                assert statuses["trivy"] is True
-                assert statuses["syft"] is True
-                assert mock_stub.call_count == 2
+            assert statuses["trivy"] is True
+            assert statuses["syft"] is True
+            assert mock_stub.call_count == 2
 
 
 def test_scan_image_per_tool_timeout(tmp_path):
@@ -165,39 +177,42 @@ def test_scan_image_per_tool_timeout(tmp_path):
         "trivy": {"timeout": 1200},
     }
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify custom timeout used
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            trivy_def = next(t for t in tools_passed if t.name == "trivy")
-            assert trivy_def.timeout == 1200
+        scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify custom timeout used
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        trivy_def = next(t for t in tools_passed if t.name == "trivy")
+        assert trivy_def.timeout == 1200
 
 
 def test_scan_image_per_tool_flags(tmp_path):
@@ -209,40 +224,43 @@ def test_scan_image_per_tool_flags(tmp_path):
         "trivy": {"flags": ["--severity", "HIGH,CRITICAL"]},
     }
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify custom flags passed
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            trivy_def = next(t for t in tools_passed if t.name == "trivy")
-            assert "--severity" in trivy_def.command
-            assert "HIGH,CRITICAL" in trivy_def.command
+        scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify custom flags passed
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        trivy_def = next(t for t in tools_passed if t.name == "trivy")
+        assert "--severity" in trivy_def.command
+        assert "HIGH,CRITICAL" in trivy_def.command
 
 
 def test_scan_image_tool_failure(tmp_path):
@@ -250,35 +268,38 @@ def test_scan_image_tool_failure(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="error",
-                    stdout="",
-                    stderr="timeout",
-                    returncode=124,
-                    duration=300.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="Timeout after 300s",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            image_name, statuses = scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="error",
+                stdout="",
+                stderr="timeout",
+                returncode=124,
+                duration=300.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "trivy.json",
+                capture_stdout=False,
+                error_message="Timeout after 300s",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["trivy"] is False
+        image_name, statuses = scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["trivy"] is False
 
 
 def test_scan_image_retry_tracking(tmp_path):
@@ -286,37 +307,40 @@ def test_scan_image_retry_tracking(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=3,
-                    output_file=results_dir / "nginx_latest" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            image_name, statuses = scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=3,
+                output_file=results_dir / "nginx_latest" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["trivy"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["trivy"] == 3
+        image_name, statuses = scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=2,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["trivy"] is True
+        assert "__attempts__" in statuses
+        assert statuses["__attempts__"]["trivy"] == 3
 
 
 def test_scan_image_syft_stdout_capture(tmp_path):
@@ -324,72 +348,78 @@ def test_scan_image_syft_stdout_capture(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="syft",
-                    status="success",
-                    stdout='{"artifacts": [{"name": "nginx"}]}',
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "nginx_latest" / "syft.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/usr/bin/{tool}"
 
-            scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["syft"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="syft",
+                status="success",
+                stdout='{"artifacts": [{"name": "nginx"}]}',
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "nginx_latest" / "syft.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify syft configured with capture_stdout=True
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            syft_def = next(t for t in tools_passed if t.name == "syft")
-            assert syft_def.capture_stdout is True
+        scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["syft"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify syft configured with capture_stdout=True
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        syft_def = next(t for t in tools_passed if t.name == "syft")
+        assert syft_def.capture_stdout is True
 
 
 def test_scan_image_output_dir_creation(tmp_path):
     """Test output directory created correctly for image."""
     results_dir = tmp_path / "results"
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
 
-            scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=[],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            # Verify output directory created
-            output_dir = results_dir / "nginx_latest"
-            assert output_dir.exists()
-            assert output_dir.is_dir()
+        scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=[],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify output directory created
+        output_dir = results_dir / "nginx_latest"
+        assert output_dir.exists()
+        assert output_dir.is_dir()
 
 
-def test_scan_image_custom_tool_exists_func(tmp_path):
-    """Test using custom tool_exists_func."""
+def test_scan_image_custom_find_tool_func(tmp_path):
+    """Test using custom find_tool_func."""
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    def mock_tool_exists(tool: str) -> bool:
-        return tool == "trivy"
+    def mock_find_tool(tool: str) -> str | None:
+        return f"/custom/path/{tool}" if tool == "trivy" else None
 
     with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
         mock_results = [
@@ -416,7 +446,7 @@ def test_scan_image_custom_tool_exists_func(tmp_path):
             retries=0,
             per_tool_config={},
             allow_missing_tools=True,
-            tool_exists_func=mock_tool_exists,
+            find_tool_func=mock_find_tool,
         )
 
         assert "trivy" in statuses
@@ -433,19 +463,22 @@ def test_scan_image_custom_write_stub_func(tmp_path):
     def mock_write_stub(tool: str, path: Path) -> None:
         stub_calls.append((tool, path))
 
-    with patch("scripts.cli.scan_jobs.image_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
 
-            scan_image(
-                image="nginx:latest",
-                results_dir=results_dir,
-                tools=["trivy", "syft"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                write_stub_func=mock_write_stub,
-            )
+    with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            assert len(stub_calls) == 2
+        scan_image(
+            image="nginx:latest",
+            results_dir=results_dir,
+            tools=["trivy", "syft"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+            write_stub_func=mock_write_stub,
+        )
+
+        assert len(stub_calls) == 2

@@ -75,7 +75,14 @@ jmo tools install --profile balanced
 
 **Best for:** Pre-release validation, compliance audits (SOC2, PCI-DSS, HIPAA), security assessments.
 
-**Tools included:** Balanced profile + backup secrets scanning (Nosey Parker), Python SAST (Bandit), malware detection (YARA), runtime security (Falco), fuzzing (AFL++), mobile security (MobSF), API security (Akto), and system hardening (Lynis).
+**Tools included:** Balanced profile + backup secrets scanning (Nosey Parker), Python SAST (Bandit), malware detection (YARA), runtime security (Falco), fuzzing (AFL++), mobile security (MobSF), API security (Akto), system hardening (Lynis), and dependency vulnerability analysis (OWASP Dependency-Check).
+
+> **First-Run Warning:** The `dependency-check` tool downloads the NIST NVD database (~2GB) on its first run, which can take **30-90 minutes** depending on network speed and NIST API rate limits. Subsequent runs use the cached database and complete in **2-5 minutes**.
+>
+> For faster repeat scans in Docker, mount a persistent volume:
+> ```bash
+> docker run -v dep-check-cache:/root/.dependency-check -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan
+> ```
 
 ---
 
@@ -108,20 +115,20 @@ slim:
   - hadolint
   - nuclei
   - shellcheck
-  # Additional (6)
+  # Additional (5)
   - prowler         # Multi-cloud CSPM (AWS/Azure/GCP/K8s)
   - kubescape       # Kubernetes security (NSA/CISA)
   - grype           # Vulnerability scanner (Anchore DB)
   - bearer          # Data privacy/SAST (GDPR/CCPA)
   - horusec         # Multi-language SAST (18+ languages)
-  - dependency-check # OWASP SCA (NVD integration)
+  # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
 ### Balanced Profile (18 tools)
 
 ```yaml
 balanced:
-  # Slim profile (14)
+  # Slim profile (13)
   - trufflehog
   - semgrep
   - syft
@@ -135,12 +142,12 @@ balanced:
   - grype
   - bearer
   - horusec
-  - dependency-check
   # Additional (4)
   - zap             # OWASP ZAP - DAST
   - scancode        # License/copyright scanning
   - cdxgen          # CycloneDX SBOM (30+ languages)
   - gosec           # Go security analyzer
+  # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
 ### Deep Profile (28 tools)
@@ -160,7 +167,7 @@ deep:
   - grype
   - bearer
   - horusec
-  - dependency-check
+  - dependency-check  # OWASP SCA - deep only (30-40min first-run NVD download)
   - zap
   # Extended scanning (6)
   - scancode

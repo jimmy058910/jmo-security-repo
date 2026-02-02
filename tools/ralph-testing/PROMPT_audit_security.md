@@ -50,7 +50,7 @@ No explanations. No summaries. No questions.
 ## Execution Phases
 
 ### Phase 0: Check Audit State (SILENT)
-Read `tools/ralph-testing/audit-state.json` and check `audits.security`:
+Read `tools/ralph-testing/unified-state.json` and check `audits.security`:
 - If `status == "clean"` AND `last_audit` < 7 days ago: EXIT EARLY with "Security audit clean, skipping."
 - Otherwise: Continue with audit
 
@@ -153,7 +153,7 @@ For each vulnerability found:
    - Updated statistics table
    - Lower-risk items in "Deferred Issues" section
 
-2. Update `tools/ralph-testing/audit-state.json`:
+2. Update `tools/ralph-testing/unified-state.json`:
    - Set `audits.security.last_audit` to today's date
    - Set `audits.security.status` based on task count (0=clean, 1-3=partial, 4+=issues)
    - Set `audits.security.tasks_created` to number of new tasks
@@ -214,5 +214,5 @@ grep -rn "nosec" scripts/ --include="*.py"
 ✅ Run grep scans for each CWE silently
 ✅ Verify findings are real vulnerabilities
 ✅ Create task entries with CWE reference
-✅ Update audit-state.json
+✅ Update unified-state.json
 ✅ "Security audit complete. 3 vulnerabilities found."

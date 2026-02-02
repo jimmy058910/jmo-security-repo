@@ -17,7 +17,6 @@ import json
 import pytest
 
 
-
 # Mark entire module as slow (actual scans)
 pytestmark = [
     pytest.mark.slow,

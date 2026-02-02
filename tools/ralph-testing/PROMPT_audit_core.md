@@ -47,7 +47,7 @@ No explanations. No summaries. No questions.
 ## Execution Phases
 
 ### Phase 0: Check Audit State (SILENT)
-Read `tools/ralph-testing/audit-state.json` and check `audits.core`:
+Read `tools/ralph-testing/unified-state.json` and check `audits.core`:
 - If `status == "clean"` AND `last_audit` < 7 days ago: EXIT EARLY with "Core audit clean, skipping."
 - Otherwise: Continue with audit
 
@@ -121,7 +121,7 @@ For each issue found with Priority >= MEDIUM (score 4+):
    - Updated statistics table
    - Low-priority items in "Deferred Issues" section
 
-2. Update `tools/ralph-testing/audit-state.json`:
+2. Update `tools/ralph-testing/unified-state.json`:
    - Set `audits.core.last_audit` to today's date
    - Set `audits.core.status` based on task count (0=clean, 1-3=partial, 4+=issues)
    - Set `audits.core.tasks_created` to number of new tasks
@@ -179,5 +179,5 @@ Only create tasks for score >= 4. Lower scores go to Deferred.
 ✅ Grep for SQL injection patterns
 ✅ Analyze code silently
 ✅ Create task entries in `tools/ralph-testing/IMPLEMENTATION_PLAN.md`
-✅ Update audit-state.json
+✅ Update unified-state.json
 ✅ "Core audit complete. 5 tasks created."

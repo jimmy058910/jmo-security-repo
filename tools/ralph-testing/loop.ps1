@@ -26,6 +26,7 @@
     - audit: Comprehensive multi-phase analysis (code review, coverage gaps, etc.)
     - validate: Validate scan accuracy against known-vulnerable targets
     - dedup: Analyze deduplication effectiveness and cluster quality
+    - wizard-scan: Test jmo wizard with automation flags against Juice Shop repo
 
 .PARAMETER Target
     Scope for audit mode (each loads a dedicated prompt):
@@ -94,10 +95,13 @@
 
     # Analyze deduplication effectiveness
     .\tools\ralph-testing\loop.ps1 -Mode dedup -SkipPermissions
+
+    # Wizard scan - test jmo wizard automation against Juice Shop (needs 3 successes)
+    .\tools\ralph-testing\loop.ps1 -Mode wizard-scan -SkipPermissions
 #>
 
 param(
-    [ValidateSet("auto", "test", "build", "audit", "validate", "dedup")]
+    [ValidateSet("auto", "test", "build", "audit", "validate", "dedup", "wizard-scan")]
     [string]$Mode = "auto",
 
     [ValidateSet("all", "wizard", "cli", "core", "adapters", "reporters", "security")]
@@ -136,25 +140,34 @@ $ConsecutiveFailures = 0
 $ForceAudit = $false
 $LoopStartTime = Get-Date
 
-# Prompt file mapping - compound keys for audit:target
+# Prompt file mapping - compound keys for audit:target and wizard-scan:mode
 $PromptFiles = @{
-    "test"             = "$RalphDir/PROMPT_test.md"
-    "build"            = "$RalphDir/PROMPT_build.md"
-    "validate"         = "$RalphDir/PROMPT_validate.md"
-    "dedup"            = "$RalphDir/PROMPT_dedup_analysis.md"
+    "test"                = "$RalphDir/PROMPT_test.md"
+    "build"               = "$RalphDir/PROMPT_build.md"
+    "validate"            = "$RalphDir/PROMPT_validate.md"
+    "dedup"               = "$RalphDir/PROMPT_dedup_analysis.md"
+    # Wizard-scan modes (v2.0 - repo and image)
+    "wizard-scan"         = "$RalphDir/PROMPT_wizard_scan.md"
+    "wizard-scan:repo"    = "$RalphDir/PROMPT_wizard_scan.md"
+    "wizard-scan:image"   = "$RalphDir/PROMPT_wizard_scan.md"
     # Audit targets - compound keys
-    "audit:wizard"     = "$RalphDir/PROMPT_audit_wizard.md"
-    "audit:cli"        = "$RalphDir/PROMPT_audit_cli.md"
-    "audit:core"       = "$RalphDir/PROMPT_audit_core.md"
-    "audit:adapters"   = "$RalphDir/PROMPT_audit_adapters.md"
-    "audit:reporters"  = "$RalphDir/PROMPT_audit_reporters.md"
-    "audit:security"   = "$RalphDir/PROMPT_audit_security.md"
-    "audit:all"        = "$RalphDir/PROMPT_audit_all.md"
+    "audit:wizard"        = "$RalphDir/PROMPT_audit_wizard.md"
+    "audit:cli"           = "$RalphDir/PROMPT_audit_cli.md"
+    "audit:core"          = "$RalphDir/PROMPT_audit_core.md"
+    "audit:adapters"      = "$RalphDir/PROMPT_audit_adapters.md"
+    "audit:reporters"     = "$RalphDir/PROMPT_audit_reporters.md"
+    "audit:security"      = "$RalphDir/PROMPT_audit_security.md"
+    "audit:all"           = "$RalphDir/PROMPT_audit_all.md"
 }
 
-# Single-run modes default to 1 iteration
+# Single-run modes default to 1 iteration (except wizard-scan which needs multiple for 3 successes)
 if (($Mode -in @("audit", "test", "validate", "dedup")) -and $MaxIterations -eq 0) {
     $MaxIterations = 1
+}
+
+# Wizard-scan mode defaults to 25 iterations (max allowed before giving up)
+if ($Mode -eq "wizard-scan" -and $MaxIterations -eq 0) {
+    $MaxIterations = 25
 }
 
 # Ensure log directory exists
@@ -184,6 +197,14 @@ function Get-OpenTaskCount {
 
 # Function to determine effective mode for this iteration
 # Returns compound key for audit modes (e.g., "audit:wizard", "audit:cli")
+# Returns "wizard-scan:repo" or "wizard-scan:image" for wizard modes
+#
+# Auto Mode Cycle (v2.0):
+#   1. If open tasks exist → build (fix issues)
+#   2. If wizard-scan needs attention → wizard-scan (repo or image mode)
+#   3. If audits need attention → audit (discover new issues)
+#   4. All complete → exit
+#
 function Get-EffectiveMode {
     param(
         [string]$RequestedMode,
@@ -201,15 +222,37 @@ function Get-EffectiveMode {
         if ($RequestedMode -eq "audit") {
             return "audit:$AuditTarget"
         }
+        # For wizard-scan mode, determine which sub-mode
+        if ($RequestedMode -eq "wizard-scan") {
+            $WizardMode = Get-WizardModeToRun
+            return "wizard-scan:$WizardMode"
+        }
         return $RequestedMode
     }
 
-    # Auto mode: check plan state
+    # Auto mode: smart cycling through phases (v2.0)
+    #
+    # Priority 1: Fix open tasks (build mode)
     if (Test-HasOpenTasks) {
         return "build"
-    } else {
-        return "audit:$AuditTarget"
     }
+
+    # Priority 2: Run wizard-scan if not complete (needs 3 consecutive successes for BOTH modes)
+    if (Test-WizardScanNeedsAttention) {
+        $WizardMode = Get-WizardModeToRun
+        return "wizard-scan:$WizardMode"
+    }
+
+    # Priority 3: Check if all audits are on cooldown - if so, we might be complete
+    if (Test-AllTargetsInCooldown) {
+        # Double-check wizard completion
+        if (Test-WizardScanComplete) {
+            return "complete"  # Special mode indicating all done
+        }
+    }
+
+    # Priority 4: Run audit to discover new issues
+    return "audit:$AuditTarget"
 }
 
 # Function for enhanced completion detection
@@ -240,61 +283,263 @@ function Test-SpecificationComplete {
     }
 }
 
-# Function to check if all audit targets are in cooldown
-# Returns $true if every target has been audited recently and is clean/partial
-function Test-AllTargetsInCooldown {
-    $StateFile = "$RalphDir/audit-state.json"
+# ════════════════════════════════════════════════════════════════════════════
+# UNIFIED STATE MANAGEMENT (v2.0)
+# ════════════════════════════════════════════════════════════════════════════
+
+# Function to read the unified state file
+function Get-UnifiedState {
+    $StateFile = "$RalphDir/unified-state.json"
     if (-not (Test-Path $StateFile)) {
-        return $false
+        # Fall back to creating default state
+        return @{
+            wizard_scan = @{
+                repo = @{ consecutive_successes = 0; status = "not_started" }
+                image = @{ consecutive_successes = 0; status = "not_started" }
+                required_successes = 3
+            }
+            audits = @{}
+            tasks = @{ open = 0 }
+            completion = @{ is_complete = $false }
+            cooldown_rules = @{
+                wizard_passing_days = 1
+                audit_clean_days = 7
+                audit_partial_days = 3
+            }
+        }
     }
 
     try {
-        $State = Get-Content $StateFile -Raw | ConvertFrom-Json
-        $Targets = @("wizard", "cli", "core", "adapters", "reporters", "security")
-
-        foreach ($target in $Targets) {
-            $audit = $State.audits.$target
-            if (-not $audit) { return $false }
-
-            # Check if target needs auditing based on cooldown rules
-            $lastAudit = [DateTime]::Parse($audit.last_audit)
-            $daysSince = ((Get-Date) - $lastAudit).Days
-
-            # Targets with issues always need attention
-            if ($audit.status -eq "issues") { return $false }
-            # Partial targets need re-audit after 3 days
-            if ($audit.status -eq "partial" -and $daysSince -ge 3) { return $false }
-            # Clean targets need re-audit after 7 days
-            if ($audit.status -eq "clean" -and $daysSince -ge 7) { return $false }
-        }
-
-        return $true  # All targets in cooldown
+        return Get-Content $StateFile -Raw | ConvertFrom-Json
     } catch {
-        return $false
+        Write-Host "WARNING: Failed to parse unified-state.json" -ForegroundColor Yellow
+        return $null
     }
 }
 
-# Banner
-Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Ralph CLI Testing Loop v3.0" -ForegroundColor Cyan
-Write-Host "  (Robust Autonomous Execution)" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Mode: $Mode$(if ($Mode -eq 'auto') { ' (auto-switches between audit/build)' })"
-if ($Mode -eq "audit" -or $Mode -eq "auto") {
-    Write-Host "Target: $Target"
+# Function to check if all audit targets are in cooldown
+# Returns $true if every target has been audited recently and is clean/partial
+function Test-AllTargetsInCooldown {
+    $State = Get-UnifiedState
+    if (-not $State) { return $false }
+
+    # Also check legacy file for backwards compatibility
+    $LegacyFile = "$RalphDir/audit-state.json"
+    if ((Test-Path $LegacyFile) -and -not $State.audits) {
+        try {
+            $LegacyState = Get-Content $LegacyFile -Raw | ConvertFrom-Json
+            $State.audits = $LegacyState.audits
+        } catch {}
+    }
+
+    $Targets = @("wizard", "cli", "core", "adapters", "reporters", "security")
+    $Rules = $State.cooldown_rules
+
+    foreach ($target in $Targets) {
+        $audit = $State.audits.$target
+        if (-not $audit) { return $false }
+
+        try {
+            $lastAudit = [DateTime]::Parse($audit.last_audit)
+            $daysSince = ((Get-Date) - $lastAudit).Days
+        } catch {
+            return $false
+        }
+
+        # Targets with issues always need attention
+        if ($audit.status -eq "issues") { return $false }
+        # Partial targets need re-audit after cooldown
+        $partialDays = if ($Rules.audit_partial_days) { $Rules.audit_partial_days } else { 3 }
+        if ($audit.status -eq "partial" -and $daysSince -ge $partialDays) { return $false }
+        # Clean targets need re-audit after cooldown
+        $cleanDays = if ($Rules.audit_clean_days) { $Rules.audit_clean_days } else { 7 }
+        if ($audit.status -eq "clean" -and $daysSince -ge $cleanDays) { return $false }
+    }
+
+    return $true  # All targets in cooldown
 }
-Write-Host "Max Iterations: $(if ($MaxIterations -eq 0) { 'Infinite' } else { $MaxIterations })"
-Write-Host "Max Duration: $(if ($MaxDurationMinutes -eq 0) { 'Unlimited' } else { "$MaxDurationMinutes min" })"
-Write-Host "Struggle Threshold: $StruggleThreshold consecutive failures"
-if ($DelayBetweenIterations -gt 0) {
-    Write-Host "Rate Limiting: ${DelayBetweenIterations}s between iterations"
+
+# Function to check wizard-scan progress (both repo and image need 3 successes)
+function Test-WizardScanComplete {
+    $State = Get-UnifiedState
+    if (-not $State) { return $false }
+
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+
+    $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
+        $State.wizard_scan.repo.consecutive_successes
+    } else { 0 }
+
+    $ImageSuccesses = if ($State.wizard_scan.image.consecutive_successes) {
+        $State.wizard_scan.image.consecutive_successes
+    } else { 0 }
+
+    # Both modes must have required successes
+    return ($RepoSuccesses -ge $Required) -and ($ImageSuccesses -ge $Required)
 }
-Write-Host "Skip Permissions: $SkipPermissions"
-if ($Force) {
-    Write-Host "Force Mode: TRUE (ignoring cooldowns)" -ForegroundColor Yellow
+
+# Function to check if repo wizard needs attention
+function Test-WizardRepoNeedsAttention {
+    $State = Get-UnifiedState
+    if (-not $State) { return $true }
+
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Repo = $State.wizard_scan.repo
+
+    # Needs attention if not yet passing
+    if ($Repo.consecutive_successes -lt $Required) { return $true }
+
+    # Needs attention if has blocking issue
+    if ($Repo.blocking_issue) { return $true }
+
+    # Check cooldown if already passing
+    if ($Repo.last_run) {
+        try {
+            $lastRun = [DateTime]::Parse($Repo.last_run)
+            $daysSince = ((Get-Date) - $lastRun).Days
+            $cooldownDays = if ($State.cooldown_rules.wizard_passing_days) {
+                $State.cooldown_rules.wizard_passing_days
+            } else { 1 }
+            return $daysSince -ge $cooldownDays
+        } catch {}
+    }
+
+    return $false
 }
-Write-Host ""
+
+# Function to check if image wizard needs attention
+function Test-WizardImageNeedsAttention {
+    $State = Get-UnifiedState
+    if (-not $State) { return $true }
+
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Image = $State.wizard_scan.image
+
+    # Needs attention if not yet passing
+    if ($Image.consecutive_successes -lt $Required) { return $true }
+
+    # Needs attention if has blocking issue
+    if ($Image.blocking_issue) { return $true }
+
+    # Check cooldown if already passing
+    if ($Image.last_run) {
+        try {
+            $lastRun = [DateTime]::Parse($Image.last_run)
+            $daysSince = ((Get-Date) - $lastRun).Days
+            $cooldownDays = if ($State.cooldown_rules.wizard_passing_days) {
+                $State.cooldown_rules.wizard_passing_days
+            } else { 1 }
+            return $daysSince -ge $cooldownDays
+        } catch {}
+    }
+
+    return $false
+}
+
+# Function to check wizard-scan needs attention (either mode)
+function Test-WizardScanNeedsAttention {
+    return (Test-WizardRepoNeedsAttention) -or (Test-WizardImageNeedsAttention)
+}
+
+# Function to get which wizard mode to run (repo or image)
+# Returns "repo" or "image" based on which has fewer successes
+function Get-WizardModeToRun {
+    $State = Get-UnifiedState
+    if (-not $State) { return "repo" }
+
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+
+    $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
+        $State.wizard_scan.repo.consecutive_successes
+    } else { 0 }
+
+    $ImageSuccesses = if ($State.wizard_scan.image.consecutive_successes) {
+        $State.wizard_scan.image.consecutive_successes
+    } else { 0 }
+
+    # If both complete, check which needs re-run based on cooldown
+    if ($RepoSuccesses -ge $Required -and $ImageSuccesses -ge $Required) {
+        if (Test-WizardRepoNeedsAttention) { return "repo" }
+        if (Test-WizardImageNeedsAttention) { return "image" }
+        return "repo"  # Default
+    }
+
+    # Run whichever has fewer successes (repo if tied)
+    if ($RepoSuccesses -le $ImageSuccesses) {
+        return "repo"
+    }
+    return "image"
+}
+
+# Function to check if auto mode is complete
+function Test-AutoModeComplete {
+    $State = Get-UnifiedState
+    if (-not $State) { return $false }
+
+    # Check all four criteria
+    $NoOpenTasks = -not (Test-HasOpenTasks)
+    $WizardComplete = Test-WizardScanComplete
+    $AllAuditsOnCooldown = Test-AllTargetsInCooldown
+
+    return $NoOpenTasks -and $WizardComplete -and $AllAuditsOnCooldown
+}
+
+# Function to display unified status dashboard
+function Show-UnifiedStatus {
+    $State = Get-UnifiedState
+    if (-not $State) {
+        Write-Host "[No state file found]" -ForegroundColor DarkGray
+        return
+    }
+
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+
+    $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
+        $State.wizard_scan.repo.consecutive_successes
+    } else { 0 }
+
+    $ImageSuccesses = if ($State.wizard_scan.image.consecutive_successes) {
+        $State.wizard_scan.image.consecutive_successes
+    } else { 0 }
+
+    $OpenTasks = Get-OpenTaskCount
+
+    # Count clean audits
+    $CleanAudits = 0
+    $Targets = @("wizard", "cli", "core", "adapters", "reporters", "security")
+    foreach ($target in $Targets) {
+        if ($State.audits.$target.status -eq "clean") { $CleanAudits++ }
+    }
+
+    # Build status line colors
+    $TaskColor = if ($OpenTasks -eq 0) { "Green" } else { "Yellow" }
+    $RepoColor = if ($RepoSuccesses -ge $Required) { "Green" } else { "Yellow" }
+    $ImageColor = if ($ImageSuccesses -ge $Required) { "Green" } else { "Yellow" }
+    $RepoCheck = if ($RepoSuccesses -ge $Required) { " OK" } else { "" }
+    $ImageCheck = if ($ImageSuccesses -ge $Required) { " OK" } else { "" }
+
+    Write-Host ""
+    Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|              UNIFIED AUTO MODE STATUS v2.0               |" -ForegroundColor Cyan
+    Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host -NoNewline "| Tasks:  " -ForegroundColor Cyan
+    Write-Host -NoNewline "$OpenTasks open" -ForegroundColor $TaskColor
+    Write-Host -NoNewline " | Audits: $CleanAudits/6 clean" -ForegroundColor Cyan
+    Write-Host "                      |" -ForegroundColor Cyan
+    Write-Host -NoNewline "| Wizard REPO:  $RepoSuccesses/$Required" -ForegroundColor Cyan
+    Write-Host -NoNewline "$RepoCheck" -ForegroundColor $RepoColor
+    Write-Host -NoNewline " | IMAGE: $ImageSuccesses/$Required" -ForegroundColor Cyan
+    Write-Host -NoNewline "$ImageCheck" -ForegroundColor $ImageColor
+    Write-Host "                      |" -ForegroundColor Cyan
+    Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
+}
+
+# Compact banner - just essential info
+$IterLimit = if ($MaxIterations -eq 0) { "∞" } else { $MaxIterations }
+$Duration = if ($MaxDurationMinutes -eq 0) { "∞" } else { "${MaxDurationMinutes}m" }
+$SkipInfo = if ($SkipPermissions) { " --skip-perms" } else { "" }
+$ForceInfo = if ($Force) { " --force" } else { "" }
+Write-Host "Ralph v4.0 | $Mode | iter=$IterLimit dur=$Duration$SkipInfo$ForceInfo" -ForegroundColor Cyan
 
 # Build skip permissions flag once
 $SkipFlag = if ($SkipPermissions) { "--dangerously-skip-permissions" } else { $null }
@@ -324,41 +569,45 @@ while ($true) {
     }
 
     # Determine effective mode for this iteration (may be forced by struggle detection)
-    # Returns compound key for audit modes (e.g., "audit:wizard")
+    # Returns compound key for audit modes (e.g., "audit:wizard") or wizard modes (e.g., "wizard-scan:repo")
     $EffectiveMode = Get-EffectiveMode -RequestedMode $Mode -AuditTarget $Target -ForceAuditMode $ForceAudit
     $ForceAudit = $false  # Reset after use
+
+    # Handle "complete" mode - auto mode detected all work is done
+    if ($EffectiveMode -eq "complete") {
+        Write-Host ""
+        Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+        Write-Host "  UNIFIED AUTO MODE COMPLETE!" -ForegroundColor Green
+        Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+        Show-UnifiedStatus
+        Write-Host ""
+        Write-Host "All completion criteria met:" -ForegroundColor Green
+        Write-Host "  - No open tasks in IMPLEMENTATION_PLAN.md"
+        Write-Host "  - Wizard REPO: 3/3 consecutive successes"
+        Write-Host "  - Wizard IMAGE: 3/3 consecutive successes"
+        Write-Host "  - All audit targets on cooldown"
+        Write-Host ""
+        Write-Host "Total iterations: $($Iteration - 1)"
+        break
+    }
+
     $PromptFile = $PromptFiles[$EffectiveMode]
     $OpenTasks = Get-OpenTaskCount
 
     # Verify prompt file exists
-    if (-not (Test-Path $PromptFile)) {
-        Write-Host "ERROR: Prompt file not found: $PromptFile" -ForegroundColor Red
+    if (-not $PromptFile -or -not (Test-Path $PromptFile)) {
+        Write-Host "ERROR: Prompt file not found for mode: $EffectiveMode" -ForegroundColor Red
+        Write-Host "  Expected: $PromptFile" -ForegroundColor Red
         exit 1
     }
 
-    # ════════════════════════════════════════════════════════════════
-    # ITERATION HEADER - displayed BEFORE starting this iteration
-    # ════════════════════════════════════════════════════════════════
-
-    # Determine if Force will be applied to this audit
-    $AutoForceAudit = ($Mode -eq "auto" -and $EffectiveMode.StartsWith("audit:"))
+    # Compact iteration header
     $ModeDisplay = $EffectiveMode
-    if ($Mode -eq "auto") {
-        if ($AutoForceAudit) {
-            $ModeDisplay = "$EffectiveMode (auto+force)"
-        } else {
-            $ModeDisplay = "$EffectiveMode (auto)"
-        }
-    } elseif ($Force -and $EffectiveMode.StartsWith("audit:")) {
-        $ModeDisplay = "$EffectiveMode (force)"
-    }
+    if ($Mode -eq "auto") { $ModeDisplay = "$EffectiveMode (auto)" }
+    elseif ($Force -and $EffectiveMode.StartsWith("audit:")) { $ModeDisplay = "$EffectiveMode (force)" }
 
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
-    Write-Host "  ITERATION $Iteration - $Timestamp" -ForegroundColor Yellow
-    Write-Host "  Mode: $ModeDisplay | Open Tasks: $OpenTasks" -ForegroundColor Yellow
-    Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Yellow
-    Write-Host ""
+    Write-Host "[$Iteration] $Timestamp | $ModeDisplay | tasks=$OpenTasks" -ForegroundColor Yellow
 
     # Log header
     "=== Iteration $Iteration started at $Timestamp ===" | Out-File -FilePath $LogFile -Encoding utf8
@@ -402,8 +651,44 @@ while ($true) {
     #
     # We extract: stream_event.event.delta.text for real-time streaming
 
-    # Build prompt content (with optional force mode injection)
+    # Build prompt content (with optional mode injections)
     $PromptContent = Get-Content $PromptFile -Raw
+
+    # Inject wizard mode instruction for wizard-scan modes
+    if ($EffectiveMode.StartsWith("wizard-scan:")) {
+        $WizardSubMode = $EffectiveMode -replace "wizard-scan:", ""
+
+        # Build mode-specific details (avoid nested here-strings)
+        if ($WizardSubMode -eq "repo") {
+            $ModeDetails = @"
+**REPO MODE** - Testing SAST, secrets, SCA, and IaC scanning:
+- Target: ``tools/ralph-testing/fixtures/juice-shop`` (cloned repo)
+- Results: ``tools/ralph-testing/wizard-results/repo/``
+- Command: ``jmo wizard --profile balanced --target-type repo --target tools/ralph-testing/fixtures/juice-shop ...``
+"@
+        } else {
+            $ModeDetails = @"
+**IMAGE MODE** - Testing container image scanning:
+- Target: ``bkimminich/juice-shop:latest`` (Docker image)
+- Results: ``tools/ralph-testing/wizard-results/image/``
+- Command: ``jmo wizard --profile balanced --target-type image --target bkimminich/juice-shop:latest ...``
+"@
+        }
+
+        $WizardModeInstruction = @"
+
+---
+
+## WIZARD MODE: $($WizardSubMode.ToUpper())
+
+**This iteration is running in $WizardSubMode mode.**
+
+$ModeDetails
+
+**State File:** Update ``tools/ralph-testing/unified-state.json`` in the ``wizard_scan.$WizardSubMode`` section after the scan.
+"@
+        $PromptContent = $PromptContent + $WizardModeInstruction
+    }
 
     # Inject Force instruction when:
     # 1. User explicitly specified -Force flag, OR
@@ -422,9 +707,9 @@ while ($true) {
 
 You MUST:
 1. **IGNORE ALL COOLDOWN RULES** - Do not skip targets based on last_audit dates
-2. **AUDIT ALL TARGETS** regardless of their status in audit-state.json
+2. **AUDIT ALL TARGETS** regardless of their status in unified-state.json
 3. Run the full audit cycle as if all targets have never been audited
-4. Still update audit-state.json with new timestamps after auditing
+4. Still update unified-state.json with new timestamps after auditing
 
 Proceed with full audit of all targets NOW.
 "@
@@ -508,40 +793,62 @@ Proceed with full audit of all targets NOW.
     Write-Host "────────────────────────────────────────────────────────────" -ForegroundColor Gray
 
     if ($Mode -eq "auto") {
-        # Auto mode: Check if audit ran and found nothing
-        # EffectiveMode is compound key like "audit:all", "audit:wizard", etc.
+        # Auto mode: Check completion status
+        # EffectiveMode is compound key like "audit:all", "audit:wizard", "wizard-scan:repo", etc.
         $WasAuditMode = $EffectiveMode.StartsWith("audit:")
+        $WasWizardScan = $EffectiveMode.StartsWith("wizard-scan:")
 
-        if ($WasAuditMode -and $OpenTasks -eq 0 -and $NewOpenTasks -eq 0) {
-            # Audit ran with no tasks before AND found no new tasks
-            # This means we're done - no work to do
+        # Check if wizard-scan achieved successes
+        if ($WasWizardScan) {
+            $WizardSubMode = $EffectiveMode -replace "wizard-scan:", ""
+            $State = Get-UnifiedState
+            if ($State) {
+                $Successes = if ($WizardSubMode -eq "repo") {
+                    $State.wizard_scan.repo.consecutive_successes
+                } else {
+                    $State.wizard_scan.image.consecutive_successes
+                }
+                $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+                Write-Host "Wizard ${WizardSubMode}: $Successes/$Required consecutive successes" -ForegroundColor Cyan
+            }
+        }
+
+        # Check if full auto mode is complete
+        if (Test-AutoModeComplete) {
             Write-Host ""
             Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-            Write-Host "  AUTO MODE COMPLETE" -ForegroundColor Green
+            Write-Host "  UNIFIED AUTO MODE COMPLETE" -ForegroundColor Green
             Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-            Write-Host "- No open tasks in plan"
-            Write-Host "- Audit found no new issues (cooldowns may be active)"
-            Write-Host "- Run with -Force to bypass cooldowns"
+            Show-UnifiedStatus
+            Write-Host ""
+            Write-Host "All criteria met:"
+            Write-Host "  - No open tasks"
+            Write-Host "  - Wizard REPO: 3/3 successes"
+            Write-Host "  - Wizard IMAGE: 3/3 successes"
+            Write-Host "  - All audits on cooldown"
             Write-Host ""
             Write-Host "Total iterations: $Iteration"
             break
-        } elseif ($WasAuditMode -and $NewOpenTasks -eq 0) {
-            # Audit found nothing but there were tasks before (now resolved)
+        }
+
+        if ($WasAuditMode -and $OpenTasks -eq 0 -and $NewOpenTasks -eq 0) {
+            # Audit ran with no tasks before AND found no new tasks
             $ConsecutiveEmptyAudits++
             Write-Host "Audit found no new issues. (Empty audits: $ConsecutiveEmptyAudits)" -ForegroundColor Cyan
-
-            if ($ConsecutiveEmptyAudits -ge 2) {
-                Write-Host ""
-                Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-                Write-Host "  COMPLETE - No issues found!" -ForegroundColor Green
-                Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
-                Write-Host "Total iterations: $Iteration"
-                Write-Host "Two consecutive audits found no issues."
-                break
-            }
-        } else {
-            # Reset counter if we found tasks or were in build mode
+        } elseif (-not $WasWizardScan) {
+            # Reset counter if we found tasks or were in build mode (not wizard-scan)
             $ConsecutiveEmptyAudits = 0
+        }
+    } elseif ($Mode -eq "wizard-scan") {
+        # Wizard-scan mode: Check for 3 consecutive successes (both modes)
+        if (Test-WizardScanComplete) {
+            Write-Host ""
+            Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+            Write-Host "  WIZARD-SCAN COMPLETE - Both REPO and IMAGE passing!" -ForegroundColor Green
+            Write-Host "════════════════════════════════════════════════════════════" -ForegroundColor Green
+            Show-UnifiedStatus
+            Write-Host "Total iterations: $Iteration"
+            break
         }
     } else {
         # Non-auto modes: Original completion check
@@ -560,13 +867,17 @@ Proceed with full audit of all targets NOW.
     # ════════════════════════════════════════════════════════════════
 
     # Determine if we made progress this iteration
-    # Note: EffectiveMode is compound key like "audit:all", so use StartsWith
+    # Note: EffectiveMode is compound key like "audit:all", "wizard-scan:repo", so use StartsWith
     $WasAuditMode = $EffectiveMode.StartsWith("audit:")
+    $WasWizardScan = $EffectiveMode.StartsWith("wizard-scan:")
 
     # In auto mode with 0→0 tasks after audit, this isn't struggle - it's completion
     # (the completion check above should have exited, but be safe here too)
     if ($Mode -eq "auto" -and $WasAuditMode -and $NewOpenTasks -eq 0 -and $OpenTasks -eq 0) {
         $MadeProgress = $true  # Not struggling, just done
+    } elseif ($WasWizardScan) {
+        # Wizard-scan progress is measured by exit code (Claude handles state tracking)
+        $MadeProgress = ($ClaudeExitCode -eq 0)
     } else {
         $MadeProgress = ($ClaudeExitCode -eq 0) -and ($NewOpenTasks -lt $OpenTasks -or ($WasAuditMode -and $NewOpenTasks -gt 0))
     }
@@ -618,5 +929,16 @@ Write-Host "Total runtime: $TotalRuntime"
 if ($FinalSpec.Total -gt 0) {
     Write-Host "Final progress: $($FinalSpec.Resolved)/$($FinalSpec.Total) tasks resolved ($($FinalSpec.CompletionRate)%)"
 }
+# Show unified status if relevant
+if ($Mode -in @("auto", "wizard-scan")) {
+    Show-UnifiedStatus
+    $WizardComplete = Test-WizardScanComplete
+    if ($WizardComplete) {
+        Write-Host "Wizard-scan: COMPLETE (REPO + IMAGE both passing)" -ForegroundColor Green
+    } else {
+        Write-Host "Wizard-scan: IN PROGRESS (check unified-state.json)" -ForegroundColor Yellow
+    }
+}
 Write-Host "Logs saved to: $LogDir"
+Write-Host "State file: $RalphDir/unified-state.json"
 Write-Host "Learnings: $LearningsFile"

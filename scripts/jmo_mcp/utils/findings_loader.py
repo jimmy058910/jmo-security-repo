@@ -49,11 +49,18 @@ class FindingsLoader:
         """
         try:
             with open(self.findings_file, encoding="utf-8") as f:
-                findings = json.load(f)
+                data = json.load(f)
 
-            # findings.json is a list of findings
-            if not isinstance(findings, list):
-                raise ValueError("findings.json must contain a list of findings")
+            # Handle both v1.0.0 wrapper format and legacy list format
+            if isinstance(data, dict) and "findings" in data:
+                findings = data["findings"]
+            elif isinstance(data, list):
+                findings = data
+            else:
+                raise ValueError(
+                    f"findings.json must contain a list or v1.0.0 wrapper, "
+                    f"got {type(data).__name__}"
+                )
 
             logger.info(f"Loaded {len(findings)} findings from {self.findings_file}")
             return findings

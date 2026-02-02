@@ -32,10 +32,19 @@ def test_profiles_complete():
         "est_time",
         "use_case",
     }
+    # Optional fields that may be present in some profiles
+    optional_fields = {"warning"}
 
     for profile_name, profile in PROFILES.items():
         assert isinstance(profile_name, str)
-        assert set(profile.keys()) == required_fields
+        profile_keys = set(profile.keys())
+        # All required fields must be present
+        assert (
+            required_fields <= profile_keys
+        ), f"Missing required fields in {profile_name}"
+        # Only required or optional fields are allowed
+        extra_fields = profile_keys - required_fields - optional_fields
+        assert not extra_fields, f"Unexpected fields {extra_fields} in {profile_name}"
         assert isinstance(profile["tools"], list)
         assert len(profile["tools"]) > 0
         assert isinstance(profile["timeout"], int)

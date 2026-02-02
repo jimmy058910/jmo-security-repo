@@ -38,58 +38,73 @@ def mock_repo(tmp_path):
     return repo
 
 
+def _make_find_tool_func(available_tools: list[str] | None = None):
+    """Create a mock find_tool function that returns paths for specified tools."""
+    if available_tools is None:
+        # Default: all tools available
+        def find_tool(tool: str) -> str | None:
+            return f"/usr/bin/{tool}"
+
+    else:
+
+        def find_tool(tool: str) -> str | None:
+            return f"/usr/bin/{tool}" if tool in available_tools else None
+
+    return find_tool
+
+
 def test_scan_repository_basic_success(tmp_path, mock_repo):
     """Test basic repository scan with mock tools."""
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # Mock tool_exists and ToolRunner
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Mock successful tool results
-            mock_results = [
-                ToolResult(
-                    tool="trufflehog",
-                    status="success",
-                    stdout='{"key": "value"}',
-                    stderr="",
-                    returncode=0,
-                    duration=1.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "trufflehog.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-                ToolResult(
-                    tool="semgrep",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=2.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "semgrep.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    # Mock find_tool to return paths for requested tools
+    mock_find_tool = _make_find_tool_func(["trufflehog", "semgrep"])
 
-            name, statuses = scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["trufflehog", "semgrep"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Mock successful tool results
+        mock_results = [
+            ToolResult(
+                tool="trufflehog",
+                status="success",
+                stdout='{"key": "value"}',
+                stderr="",
+                returncode=0,
+                duration=1.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "trufflehog.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+            ToolResult(
+                tool="semgrep",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=2.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "semgrep.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert name == "test-repo"
-            assert statuses["trufflehog"] is True
-            assert statuses["semgrep"] is True
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["trufflehog", "semgrep"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert name == "test-repo"
+        assert statuses["trufflehog"] is True
+        assert statuses["semgrep"] is True
 
 
 def test_scan_repository_missing_tools_no_allow(tmp_path, mock_repo):
@@ -97,11 +112,40 @@ def test_scan_repository_missing_tools_no_allow(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=False
-    ):
+    # No tools available
+    mock_find_tool = _make_find_tool_func([])
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Return empty results (no tools run)
+        MockRunner.return_value.run_all_parallel.return_value = []
+
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["trufflehog", "semgrep"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert name == "test-repo"
+        # Tools not in statuses dict when missing and not allowed
+        assert "trufflehog" not in statuses
+        assert "semgrep" not in statuses
+
+
+def test_scan_repository_missing_tools_with_allow(tmp_path, mock_repo):
+    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    # No tools available
+    mock_find_tool = _make_find_tool_func([])
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Return empty results (no tools run)
             MockRunner.return_value.run_all_parallel.return_value = []
 
             name, statuses = scan_repository(
@@ -111,44 +155,15 @@ def test_scan_repository_missing_tools_no_allow(tmp_path, mock_repo):
                 timeout=300,
                 retries=0,
                 per_tool_config={},
-                allow_missing_tools=False,
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
             )
 
             assert name == "test-repo"
-            # Tools not in statuses dict when missing and not allowed
-            assert "trufflehog" not in statuses
-            assert "semgrep" not in statuses
-
-
-def test_scan_repository_missing_tools_with_allow(tmp_path, mock_repo):
-    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=False
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.write_stub") as mock_stub:
-            with patch(
-                "scripts.cli.scan_jobs.repository_scanner.ToolRunner"
-            ) as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
-
-                name, statuses = scan_repository(
-                    repo=mock_repo,
-                    results_dir=results_dir,
-                    tools=["trufflehog", "semgrep"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
-
-                assert name == "test-repo"
-                # Stubs written for missing tools
-                assert statuses["trufflehog"] is True
-                assert statuses["semgrep"] is True
-                assert mock_stub.call_count == 2
+            # Stubs written for missing tools
+            assert statuses["trufflehog"] is True
+            assert statuses["semgrep"] is True
+            assert mock_stub.call_count == 2
 
 
 def test_scan_repository_per_tool_timeout(tmp_path, mock_repo):
@@ -161,44 +176,44 @@ def test_scan_repository_per_tool_timeout(tmp_path, mock_repo):
         "semgrep": {"timeout": 600},  # Custom timeout for semgrep
     }
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["trivy"])
 
-            scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,  # Default timeout
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify ToolRunner called with tools
-            MockRunner.assert_called_once()
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
+        scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,  # Default timeout
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
 
-            # Find trivy tool definition
-            trivy_def = next(t for t in tools_passed if t.name == "trivy")
-            assert trivy_def.timeout == 1200  # Custom timeout used
+        # Verify ToolRunner called with tools
+        MockRunner.assert_called_once()
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+
+        # Find trivy tool definition
+        trivy_def = next(t for t in tools_passed if t.name == "trivy")
+        assert trivy_def.timeout == 1200  # Custom timeout used
 
 
 def test_scan_repository_per_tool_flags(tmp_path, mock_repo):
@@ -210,43 +225,43 @@ def test_scan_repository_per_tool_flags(tmp_path, mock_repo):
         "semgrep": {"flags": ["--exclude", "node_modules", "--exclude", ".git"]},
     }
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="semgrep",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "semgrep.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["semgrep"])
 
-            scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["semgrep"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="semgrep",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "semgrep.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify flags passed to semgrep
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            semgrep_def = next(t for t in tools_passed if t.name == "semgrep")
+        scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["semgrep"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
 
-            assert "--exclude" in semgrep_def.command
-            assert "node_modules" in semgrep_def.command
+        # Verify flags passed to semgrep
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        semgrep_def = next(t for t in tools_passed if t.name == "semgrep")
+
+        assert "--exclude" in semgrep_def.command
+        assert "node_modules" in semgrep_def.command
 
 
 def test_scan_repository_tool_failure(tmp_path, mock_repo):
@@ -254,38 +269,38 @@ def test_scan_repository_tool_failure(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Mock tool failure
-            mock_results = [
-                ToolResult(
-                    tool="semgrep",
-                    status="error",
-                    stdout="",
-                    stderr="timeout",
-                    returncode=124,
-                    duration=300.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "semgrep.json",
-                    capture_stdout=False,
-                    error_message="Timeout after 300s",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["semgrep"])
 
-            name, statuses = scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["semgrep"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Mock tool failure
+        mock_results = [
+            ToolResult(
+                tool="semgrep",
+                status="error",
+                stdout="",
+                stderr="timeout",
+                returncode=124,
+                duration=300.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "semgrep.json",
+                capture_stdout=False,
+                error_message="Timeout after 300s",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["semgrep"] is False
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["semgrep"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["semgrep"] is False
 
 
 def test_scan_repository_retry_tracking(tmp_path, mock_repo):
@@ -293,40 +308,40 @@ def test_scan_repository_retry_tracking(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Mock tool that succeeded after retries
-            mock_results = [
-                ToolResult(
-                    tool="trivy",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=10.0,
-                    attempts=3,  # Required 3 attempts
-                    output_file=results_dir / "test-repo" / "trivy.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["trivy"])
 
-            name, statuses = scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["trivy"],
-                timeout=300,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Mock tool that succeeded after retries
+        mock_results = [
+            ToolResult(
+                tool="trivy",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=10.0,
+                attempts=3,  # Required 3 attempts
+                output_file=results_dir / "test-repo" / "trivy.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["trivy"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["trivy"] == 3
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["trivy"],
+            timeout=300,
+            retries=2,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["trivy"] is True
+        assert "__attempts__" in statuses
+        assert statuses["__attempts__"]["trivy"] == 3
 
 
 def test_scan_repository_hadolint_dockerfile_detection(tmp_path, mock_repo):
@@ -334,43 +349,44 @@ def test_scan_repository_hadolint_dockerfile_detection(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="hadolint",
-                    status="success",
-                    stdout='[{"level":"warning"}]',
-                    stderr="",
-                    returncode=0,
-                    duration=1.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "hadolint.json",
-                    capture_stdout=True,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["hadolint"])
 
-            scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["hadolint"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="hadolint",
+                status="success",
+                stdout='[{"level":"warning"}]',
+                stderr="",
+                returncode=0,
+                duration=1.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "hadolint.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            # Verify hadolint was invoked (Dockerfile exists in mock_repo)
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            hadolint_def = next((t for t in tools_passed if t.name == "hadolint"), None)
+        scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["hadolint"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
 
-            assert hadolint_def is not None
-            assert "hadolint" in hadolint_def.command
+        # Verify hadolint was invoked (Dockerfile exists in mock_repo)
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        hadolint_def = next((t for t in tools_passed if t.name == "hadolint"), None)
+
+        assert hadolint_def is not None
+        # Command contains full path to hadolint
+        assert "/usr/bin/hadolint" in hadolint_def.command[0]
 
 
 def test_scan_repository_hadolint_no_dockerfile(tmp_path):
@@ -382,26 +398,26 @@ def test_scan_repository_hadolint_no_dockerfile(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # hadolint should not be in tool definitions
-            MockRunner.return_value.run_all_parallel.return_value = []
+    mock_find_tool = _make_find_tool_func(["hadolint"])
 
-            name, statuses = scan_repository(
-                repo=repo,
-                results_dir=results_dir,
-                tools=["hadolint"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # hadolint should not be in tool definitions
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            # Should write stub when no Dockerfile found (allow_missing_tools=True)
-            # or not include hadolint if tool doesn't exist
-            # In this case, no Dockerfile means hadolint won't run
+        name, statuses = scan_repository(
+            repo=repo,
+            results_dir=results_dir,
+            tools=["hadolint"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Should write stub when no Dockerfile found (allow_missing_tools=True)
+        # or not include hadolint if tool doesn't exist
+        # In this case, no Dockerfile means hadolint won't run
 
 
 def test_scan_repository_noseyparker_multi_phase(tmp_path, mock_repo):
@@ -409,11 +425,75 @@ def test_scan_repository_noseyparker_multi_phase(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
+    mock_find_tool = _make_find_tool_func(["noseyparker"])
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Mock all three noseyparker phases
+        mock_results = [
+            ToolResult(
+                tool="noseyparker-init",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=0.5,
+                attempts=1,
+                output_file=None,
+                capture_stdout=False,
+                error_message="",
+            ),
+            ToolResult(
+                tool="noseyparker-scan",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=None,
+                capture_stdout=False,
+                error_message="",
+            ),
+            ToolResult(
+                tool="noseyparker-report",
+                status="success",
+                stdout='{"findings": []}',
+                stderr="",
+                returncode=0,
+                duration=1.0,
+                attempts=1,
+                output_file=results_dir / "test-repo" / "noseyparker.json",
+                capture_stdout=True,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
+
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["noseyparker"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # All three phases succeeded -> noseyparker successful
+        assert statuses["noseyparker"] is True
+
+
+def test_scan_repository_noseyparker_partial_failure(tmp_path, mock_repo):
+    """Test noseyparker failure when one phase fails."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    mock_find_tool = _make_find_tool_func(["noseyparker"])
+
+    with patch("scripts.cli.scan_jobs.repository_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Mock all three noseyparker phases
+            # Mock init success, scan failure
             mock_results = [
                 ToolResult(
                     tool="noseyparker-init",
@@ -429,27 +509,15 @@ def test_scan_repository_noseyparker_multi_phase(tmp_path, mock_repo):
                 ),
                 ToolResult(
                     tool="noseyparker-scan",
-                    status="success",
+                    status="error",
                     stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
+                    stderr="timeout",
+                    returncode=124,
+                    duration=300.0,
                     attempts=1,
                     output_file=None,
                     capture_stdout=False,
-                    error_message="",
-                ),
-                ToolResult(
-                    tool="noseyparker-report",
-                    status="success",
-                    stdout='{"findings": []}',
-                    stderr="",
-                    returncode=0,
-                    duration=1.0,
-                    attempts=1,
-                    output_file=results_dir / "test-repo" / "noseyparker.json",
-                    capture_stdout=True,
-                    error_message="",
+                    error_message="Timeout after 300s",
                 ),
             ]
             MockRunner.return_value.run_all_parallel.return_value = mock_results
@@ -461,67 +529,13 @@ def test_scan_repository_noseyparker_multi_phase(tmp_path, mock_repo):
                 timeout=300,
                 retries=0,
                 per_tool_config={},
-                allow_missing_tools=False,
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
             )
 
-            # All three phases succeeded -> noseyparker successful
+            # Partial failure -> write stub with allow_missing_tools
             assert statuses["noseyparker"] is True
-
-
-def test_scan_repository_noseyparker_partial_failure(tmp_path, mock_repo):
-    """Test noseyparker failure when one phase fails."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.write_stub") as mock_stub:
-            with patch(
-                "scripts.cli.scan_jobs.repository_scanner.ToolRunner"
-            ) as MockRunner:
-                # Mock init success, scan failure
-                mock_results = [
-                    ToolResult(
-                        tool="noseyparker-init",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=0.5,
-                        attempts=1,
-                        output_file=None,
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                    ToolResult(
-                        tool="noseyparker-scan",
-                        status="error",
-                        stdout="",
-                        stderr="timeout",
-                        returncode=124,
-                        duration=300.0,
-                        attempts=1,
-                        output_file=None,
-                        capture_stdout=False,
-                        error_message="Timeout after 300s",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
-
-                name, statuses = scan_repository(
-                    repo=mock_repo,
-                    results_dir=results_dir,
-                    tools=["noseyparker"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
-
-                # Partial failure -> write stub with allow_missing_tools
-                assert statuses["noseyparker"] is True
-                mock_stub.assert_called()
+            mock_stub.assert_called()
 
 
 def test_scan_repository_checkov_cicd_directory_handling(tmp_path, mock_repo):
@@ -529,50 +543,50 @@ def test_scan_repository_checkov_cicd_directory_handling(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=True
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            # Mock checkov-cicd creating temp directory structure
-            mock_results = [
-                ToolResult(
-                    tool="checkov-cicd",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=5.0,
-                    attempts=1,
-                    output_file=results_dir
-                    / "test-repo"
-                    / "checkov-cicd-temp"
-                    / "results_json.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    mock_find_tool = _make_find_tool_func(["checkov"])
 
-            # Create the temp file that checkov would create
-            temp_dir = results_dir / "test-repo" / "checkov-cicd-temp"
-            temp_dir.mkdir(parents=True)
-            temp_file = temp_dir / "results_json.json"
-            temp_file.write_text("{}")
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        # Mock checkov-cicd creating temp directory structure
+        mock_results = [
+            ToolResult(
+                tool="checkov-cicd",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=5.0,
+                attempts=1,
+                output_file=results_dir
+                / "test-repo"
+                / "checkov-cicd-temp"
+                / "results_json.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            name, statuses = scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["checkov-cicd"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+        # Create the temp file that checkov would create
+        temp_dir = results_dir / "test-repo" / "checkov-cicd-temp"
+        temp_dir.mkdir(parents=True)
+        temp_file = temp_dir / "results_json.json"
+        temp_file.write_text("{}")
 
-            assert statuses["checkov-cicd"] is True
-            # Verify final checkov-cicd.json exists after file move
-            final_file = results_dir / "test-repo" / "checkov-cicd.json"
-            assert final_file.exists()
+        name, statuses = scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["checkov-cicd"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["checkov-cicd"] is True
+        # Verify final checkov-cicd.json exists after file move
+        final_file = results_dir / "test-repo" / "checkov-cicd.json"
+        assert final_file.exists()
 
 
 def test_scan_repository_output_dir_creation(tmp_path, mock_repo):
@@ -580,36 +594,36 @@ def test_scan_repository_output_dir_creation(tmp_path, mock_repo):
     results_dir = tmp_path / "results"
     # Don't create results_dir - scan_repository should create it
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=False
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    mock_find_tool = _make_find_tool_func([])
 
-            scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=[],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            # Verify output directory created
-            output_dir = results_dir / "test-repo"
-            assert output_dir.exists()
-            assert output_dir.is_dir()
+        scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=[],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify output directory created
+        output_dir = results_dir / "test-repo"
+        assert output_dir.exists()
+        assert output_dir.is_dir()
 
 
-def test_scan_repository_custom_tool_exists_func(tmp_path, mock_repo):
-    """Test using custom tool_exists_func for testing."""
+def test_scan_repository_custom_find_tool_func(tmp_path, mock_repo):
+    """Test using custom find_tool_func for testing."""
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    def mock_tool_exists(tool: str) -> bool:
-        """Custom tool existence checker."""
-        return tool == "trivy"  # Only trivy exists
+    def mock_find_tool(tool: str) -> str | None:
+        """Custom tool finder that only finds trivy."""
+        return "/usr/bin/trivy" if tool == "trivy" else None
 
     with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
         mock_results = [
@@ -636,7 +650,7 @@ def test_scan_repository_custom_tool_exists_func(tmp_path, mock_repo):
             retries=0,
             per_tool_config={},
             allow_missing_tools=True,
-            tool_exists_func=mock_tool_exists,
+            find_tool_func=mock_find_tool,
         )
 
         # Only trivy should run
@@ -656,24 +670,24 @@ def test_scan_repository_custom_write_stub_func(tmp_path, mock_repo):
         """Custom stub writer that tracks calls."""
         stub_calls.append((tool, path))
 
-    with patch(
-        "scripts.cli.scan_jobs.repository_scanner.tool_exists", return_value=False
-    ):
-        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    mock_find_tool = _make_find_tool_func([])
 
-            scan_repository(
-                repo=mock_repo,
-                results_dir=results_dir,
-                tools=["trivy", "semgrep"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-                write_stub_func=mock_write_stub,
-            )
+    with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            # Verify stub writer called
-            assert len(stub_calls) == 2
-            assert ("trivy", results_dir / "test-repo" / "trivy.json") in stub_calls
-            assert ("semgrep", results_dir / "test-repo" / "semgrep.json") in stub_calls
+        scan_repository(
+            repo=mock_repo,
+            results_dir=results_dir,
+            tools=["trivy", "semgrep"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+            write_stub_func=mock_write_stub,
+        )
+
+        # Verify stub writer called
+        assert len(stub_calls) == 2
+        assert ("trivy", results_dir / "test-repo" / "trivy.json") in stub_calls
+        assert ("semgrep", results_dir / "test-repo" / "semgrep.json") in stub_calls

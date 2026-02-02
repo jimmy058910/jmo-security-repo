@@ -74,6 +74,8 @@ def check_tools_for_profile(
     profile: str,
     yes: bool = False,
     use_docker: bool = False,
+    auto_fix: bool = False,
+    install_deps: bool = False,
 ) -> tuple[bool, list[str]]:
     """
     Check tool availability for the selected profile.
@@ -89,6 +91,8 @@ def check_tools_for_profile(
         profile: Selected scan profile (fast, slim, balanced, deep)
         yes: Non-interactive mode (skip prompts)
         use_docker: True if using Docker (tools bundled in image)
+        auto_fix: Automatically install missing tools without prompting
+        install_deps: Automatically install missing dependencies (Java, Node.js)
 
     Returns:
         Tuple of (should_continue: bool, available_tools: list[str])
@@ -308,8 +312,25 @@ def check_tools_for_profile(
                 )
             )
 
-        # Non-interactive mode: continue with available tools
+        # Non-interactive mode: handle auto_fix or continue with available tools
         if yes:
+            # If auto_fix is enabled, automatically install missing tools
+            if auto_fix and tools_needing_attention:
+                print(
+                    colorize(
+                        f"\nAuto-fix enabled: installing {len(tools_needing_attention)} missing tool(s)...",
+                        "blue",
+                    )
+                )
+                return _auto_fix_tools(
+                    fix_info,
+                    platform,
+                    profile,
+                    available,
+                    auto_install_deps=install_deps,
+                )
+
+            # No auto_fix: continue with available tools
             print(
                 colorize(
                     f"\nNon-interactive mode: continuing with {len(available)} available tools",
@@ -445,6 +466,7 @@ def _auto_fix_tools(
     platform: str,
     profile: str,
     available: list[str],
+    auto_install_deps: bool = False,
 ) -> tuple[bool, list[str]]:
     """
     Automatically fix tools with issues using parallel installation.
@@ -459,6 +481,7 @@ def _auto_fix_tools(
         platform: Current platform (linux, macos, windows)
         profile: Profile name
         available: Currently available tool names
+        auto_install_deps: Automatically install dependencies without prompting
 
     Returns:
         Tuple of (should_continue, updated_available_tools)
@@ -489,12 +512,22 @@ def _auto_fix_tools(
             tools_str = ", ".join(tools)
             print(f"   - {dep_display} (required by: {tools_str})")
 
-        print(colorize("\nInstall missing dependencies?", "blue"))
-        print("  [1] Yes, install automatically")
-        print("  [2] No, skip tools requiring these dependencies")
-        print("  [3] Cancel")
+        # If auto_install_deps is enabled, skip the prompt and install
+        if auto_install_deps:
+            choice = "1"
+            print(
+                colorize(
+                    "\nAuto-installing dependencies (--install-deps flag)...",
+                    "blue",
+                )
+            )
+        else:
+            print(colorize("\nInstall missing dependencies?", "blue"))
+            print("  [1] Yes, install automatically")
+            print("  [2] No, skip tools requiring these dependencies")
+            print("  [3] Cancel")
 
-        choice = input("\nChoice [1]: ").strip() or "1"
+            choice = input("\nChoice [1]: ").strip() or "1"
 
         if choice == "1":
             print()  # Blank line before install output

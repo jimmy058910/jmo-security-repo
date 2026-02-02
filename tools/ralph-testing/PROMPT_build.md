@@ -6,7 +6,7 @@ You are Ralph, an autonomous execution agent. You are NOT a helpful assistant.
 
 **FILE PATHS - ALL RALPH FILES ARE IN tools/ralph-testing/:**
 - Plan file: `tools/ralph-testing/IMPLEMENTATION_PLAN.md` (NOT repo root!)
-- Audit state: `tools/ralph-testing/audit-state.json`
+- Unified state: `tools/ralph-testing/unified-state.json`
 
 **ABSOLUTE RULES - VIOLATION MEANS FAILURE:**
 1. **NEVER ask questions** - Resolve ambiguity yourself or document it, then proceed
@@ -59,6 +59,28 @@ If tests fail: FIX THEM. Repeat until green. No exceptions.
 Edit `tools/ralph-testing/IMPLEMENTATION_PLAN.md`:
 - Change `Status: In Progress` → `Status: Resolved`
 - Add `**Resolution:**` notes
+
+**Also update `tools/ralph-testing/unified-state.json`:**
+```python
+import json
+from datetime import datetime
+
+with open("tools/ralph-testing/unified-state.json") as f:
+    state = json.load(f)
+
+# Update task counts (re-count from IMPLEMENTATION_PLAN.md)
+# ... count open/resolved tasks ...
+state["tasks"]["open"] = open_count
+state["tasks"]["resolved"] = resolved_count
+
+# Update completion flag
+state["completion"]["no_open_tasks"] = (open_count == 0)
+
+state["last_updated"] = datetime.now().isoformat() + "Z"
+
+with open("tools/ralph-testing/unified-state.json", "w") as f:
+    json.dump(state, f, indent=2)
+```
 
 ### Step 5.5: Discovery Sidebar (2-3 minutes max)
 

@@ -90,6 +90,8 @@ class RichScanProgressTracker:
         self.tool_status: dict[str, str] = {}  # tool_name -> "success" | "error"
         # Track completed base tools (handles multi-phase tools like noseyparker)
         self._completed_base_tools: set[str] = set()
+        # Elapsed time tracking for running tools
+        self._tool_start_times: dict[str, float] = {}
 
         # Rich components - use stderr to match existing behavior
         self.console = Console(stderr=True, force_terminal=True)
@@ -147,12 +149,30 @@ class RichScanProgressTracker:
                 return tool_name[: -len(suffix)]
         return tool_name
 
+    def _format_elapsed(self, elapsed: float) -> str:
+        """Format elapsed time as human-readable string."""
+        if elapsed < 60:
+            return f"{int(elapsed)}s"
+        else:
+            mins = int(elapsed // 60)
+            secs = int(elapsed % 60)
+            return f"{mins}m{secs}s"
+
     def _make_display(self) -> Panel:
         """Create the combined progress display panel."""
-        # Tools in progress section
+        # Tools in progress section with elapsed time
         if self.tools_in_progress:
             tools_list = sorted(self.tools_in_progress)[:5]
-            tools_text = ", ".join(tools_list)
+            # Show elapsed time for each running tool
+            tools_with_time = []
+            for tool in tools_list:
+                if tool in self._tool_start_times:
+                    elapsed = time.time() - self._tool_start_times[tool]
+                    elapsed_str = self._format_elapsed(elapsed)
+                    tools_with_time.append(f"{tool} ({elapsed_str})")
+                else:
+                    tools_with_time.append(tool)
+            tools_text = ", ".join(tools_with_time)
             if len(self.tools_in_progress) > 5:
                 tools_text += f" (+{len(self.tools_in_progress) - 5} more)"
         else:
@@ -255,6 +275,7 @@ class RichScanProgressTracker:
             self.tools_in_progress.clear()
             self.tool_status.clear()
             self._completed_base_tools.clear()
+            self._tool_start_times.clear()
             self.tool_progress.update(
                 self.tool_task,
                 completed=0,
@@ -266,7 +287,15 @@ class RichScanProgressTracker:
                 self._live.update(self._make_display())
 
     def update_tool(
-        self, tool_name: str, status: str, findings_count: int = 0  # noqa: ARG002
+        self,
+        tool_name: str,
+        status: str,
+        findings_count: int = 0,  # noqa: ARG002
+        *,
+        message: str = "",
+        attempt: int = 1,
+        max_attempts: int = 1,
+        **kwargs,  # noqa: ARG002 - Forward compatibility
     ) -> None:
         """Update progress when a tool starts or completes.
 
@@ -275,25 +304,51 @@ class RichScanProgressTracker:
 
         Args:
             tool_name: Name of the tool (may include phase suffix)
-            status: "start" when tool begins, "success"/"error" when done
+            status: "start"/"success"/"error"/"retrying"/"timeout"
             findings_count: Number of findings (for verbose mode)
+            message: Optional message (e.g., timeout reason)
+            attempt: Current attempt number (for retries)
+            max_attempts: Maximum attempts configured
+            **kwargs: Forward compatibility for future parameters
         """
         # Get the base tool name (strip phase suffixes like -init, -scan, -report)
         base_tool_name = self._get_base_tool_name(tool_name)
 
         with self._lock:
+            # Handle intermediate statuses (retrying/timeout)
+            if status == "retrying":
+                # Log retry through Rich console (below live display)
+                self.console.print(
+                    f"[yellow]WARN[/] {base_tool_name}: "
+                    f"Retry {attempt}/{max_attempts} - {message}"
+                )
+                return  # Don't update completion count
+
+            if status == "timeout":
+                self.console.print(
+                    f"[red]ERROR[/] {base_tool_name}: "
+                    f"Timed out after {max_attempts} attempts"
+                )
+                # Fall through to mark as failed
+
             if status == "start":
                 self.tools_in_progress.add(tool_name)
+                self._tool_start_times[tool_name] = time.time()
             else:
-                # Tool/phase completed
+                # Tool/phase completed (success, error, or timeout)
                 self.tools_in_progress.discard(tool_name)
+                # Clean up start time
+                self._tool_start_times.pop(tool_name, None)
 
                 # Only count as completed if base tool hasn't been counted yet
                 # This handles multi-phase tools correctly
                 if base_tool_name not in self._completed_base_tools:
                     self._completed_base_tools.add(base_tool_name)
                     self.tools_completed += 1
-                    self.tool_status[base_tool_name] = status
+                    # Map timeout to error for status tracking
+                    self.tool_status[base_tool_name] = (
+                        "error" if status == "timeout" else status
+                    )
 
                     # Update tool progress bar
                     self.tool_progress.update(

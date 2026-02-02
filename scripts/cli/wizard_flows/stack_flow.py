@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .base_flow import BaseWizardFlow
+from .profile_config import get_profile_warning
 
 
 class EntireStackFlow(BaseWizardFlow):
@@ -41,6 +42,12 @@ class EntireStackFlow(BaseWizardFlow):
             choices=["fast", "balanced", "deep"],
             default="balanced",
         )
+
+        # Show profile-specific warnings (e.g., deep profile first-run timing)
+        warning = get_profile_warning(profile)
+        if warning:
+            print()  # Add spacing
+            self.prompter.print_warning(warning)
 
         # Artifact generation option
         emit_artifacts = self.prompter.prompt_yes_no(

@@ -19,6 +19,7 @@ Examples:
 from __future__ import annotations
 
 import logging
+import os
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
@@ -196,6 +197,72 @@ _detect_iac_type = detect_iac_type
 _validate_k8s_context = validate_k8s_context
 
 
+def _apply_target_preset(
+    target_config: TargetConfig, target_type: str, target: str
+) -> None:
+    """Apply preset target values to a TargetConfig.
+
+    Maps the target_type and target CLI arguments to the appropriate
+    TargetConfig fields for non-interactive wizard runs.
+
+    Args:
+        target_config: TargetConfig instance to populate
+        target_type: One of 'repo', 'image', 'iac', 'url'
+        target: The target value (path, image name, or URL)
+    """
+    target_config.type = target_type
+
+    if target_type == "repo":
+        # Repo target: can be a single repo path or directory containing repos
+        path = Path(target).resolve()
+        if path.is_file():
+            # If it's a file, assume it's a targets file
+            target_config.repo_mode = "targets"
+            target_config.repo_path = str(path)
+        elif path.is_dir():
+            # Check if it's a git repo or a directory of repos
+            if (path / ".git").exists():
+                # Single repo
+                target_config.repo_mode = "repo"
+                target_config.repo_path = str(path)
+            else:
+                # Directory containing repos
+                target_config.repo_mode = "repos-dir"
+                target_config.repo_path = str(path)
+        else:
+            # Path doesn't exist yet - treat as repos-dir
+            target_config.repo_mode = "repos-dir"
+            target_config.repo_path = str(path)
+
+    elif target_type == "image":
+        # Container image: can be a single image or a file with image list
+        if Path(target).is_file():
+            target_config.images_file = target
+        else:
+            # Assume it's an image name (e.g., nginx:latest, bkimminich/juice-shop)
+            target_config.image_name = target
+
+    elif target_type == "iac":
+        # IaC target: path to IaC files
+        path = Path(target).resolve()
+        target_config.iac_path = str(path)
+        # Try to auto-detect IaC type
+        if path.exists():
+            target_config.iac_type = _detect_iac_type(path) or "terraform"
+        else:
+            target_config.iac_type = "terraform"  # Default
+
+    elif target_type == "url":
+        # URL target: can be a single URL or file with URLs
+        if Path(target).is_file():
+            target_config.urls_file = target
+        elif target.startswith(("http://", "https://")):
+            target_config.url = target
+        else:
+            # Assume it's a URL without protocol
+            target_config.url = f"https://{target}"
+
+
 def select_profile() -> str:
     """Step 1: Select scanning profile.
 
@@ -360,12 +427,17 @@ def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
     cpu_count = get_cpu_count()
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_tools = cast(list[str], profile_info["tools"])
+
+    # Use ToolManager for consistent tool counts (single source of truth)
+    from scripts.cli.tool_manager import ToolManager
+
+    tm = ToolManager()
+    summary = tm.get_tool_summary(profile)
 
     print("\nProfile defaults:")
     print(f"  Threads: {profile_threads}")
     print(f"  Timeout: {profile_timeout}s")
-    print(f"  Tools: {len(profile_tools)}")
+    print(f"  Tools: {summary.platform_applicable} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
@@ -448,6 +520,7 @@ def review_and_confirm(config: WizardConfig) -> bool:
     Step 6: Review configuration and confirm.
 
     Shows dynamic time estimate based on available tools (Fix 2.2 - Issue #10).
+    Uses ToolStatusSummary for consistent tool counts across wizard/scan.
 
     Returns:
         True if user confirms, False otherwise
@@ -458,26 +531,28 @@ def review_and_confirm(config: WizardConfig) -> bool:
     profile_name = cast(str, profile_info["name"])
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_tools = cast(list[str], profile_info["tools"])
 
-    # Get available tools for dynamic time estimate (Fix 2.2)
+    # Use ToolStatusSummary for consistent counts (single source of truth)
     try:
         from scripts.cli.tool_manager import ToolManager
 
         tm = ToolManager()
+        summary = tm.get_tool_summary(config.profile)
+
+        # Get execution-ready tools for time estimate
         tool_statuses = tm.check_profile(config.profile)
         available_tools = [
             name for name, status in tool_statuses.items() if status.execution_ready
         ]
-        available_count = len(available_tools)
 
         # Calculate dynamic estimate based on available tools
         min_time, max_time = calculate_time_estimate(available_tools)
         dynamic_estimate = format_time_range(min_time, max_time)
     except Exception:
         # Fallback to static estimate if tool check fails
+        summary = None
+        profile_tools = cast(list[str], profile_info["tools"])
         available_tools = profile_tools
-        available_count = len(profile_tools)
         dynamic_estimate = cast(str, profile_info["est_time"])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
@@ -498,10 +573,20 @@ def review_and_confirm(config: WizardConfig) -> bool:
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
-    # Show tools available vs total (Fix 2.2)
-    print(
-        f"\n  Tools: {_colorize(f'{available_count}/{len(profile_tools)}', 'green')} available"
-    )
+    # Show tools available vs platform-applicable (consistent denominator)
+    if summary:
+        print(
+            f"\n  Tools: {_colorize(f'{summary.execution_ready}/{summary.platform_applicable}', 'green')} ready"
+        )
+        # Show content-triggered tools info if any
+        if summary.content_triggered:
+            print(
+                f"         ({len(summary.content_triggered)} content-triggered: {', '.join(summary.content_triggered)})"
+            )
+    else:
+        # Fallback display
+        print(f"\n  Tools: {_colorize(str(len(available_tools)), 'green')} available")
+
     # Show first 3 available tools
     tools_preview = ", ".join(available_tools[:3])
     if len(available_tools) > 3:
@@ -569,10 +654,16 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     try:
         # Both Docker and native execution use subprocess for consistency and security
         command_list = generate_command_list(config)
+
+        # Prevent double telemetry banner: wizard shows it, subprocess shouldn't
+        env = os.environ.copy()
+        env["JMO_TELEMETRY_SHOWN"] = "1"
+
         result = subprocess.run(
             command_list,
             shell=False,  # IMPORTANT: shell=False prevents command injection
             check=False,
+            env=env,
         )
         # Print results guide after scan completes
         if result.returncode == 0 or result.returncode == 1:
@@ -620,13 +711,24 @@ def run_wizard(
     policies: list[str] | None = None,
     skip_policies: bool = False,
     db_path: str | None = None,
+    # Preset options for automation
+    profile: str | None = None,
+    target_type: str | None = None,
+    target: str | None = None,
+    use_docker: bool | None = None,
+    auto_fix: bool = False,
+    install_deps: bool = False,
+    threads: int | None = None,
+    timeout: int | None = None,
+    fail_on: str | None = None,
+    results_dir: str | None = None,
 ) -> int:
     """
     Run the interactive wizard.
 
     Args:
         yes: Skip prompts and use defaults
-        force_docker: Force Docker mode
+        force_docker: Force Docker mode (deprecated, use use_docker=True)
         emit_make: Generate Makefile target to this file
         emit_script: Generate shell script to this file
         emit_gha: Generate GitHub Actions workflow to this file
@@ -636,6 +738,16 @@ def run_wizard(
         policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
         skip_policies: Skip policy evaluation entirely
         db_path: Path to SQLite history database (default: ~/.jmo/history.db)
+        profile: Preset profile (fast/slim/balanced/deep)
+        target_type: Preset target type (repo/image/iac/url)
+        target: Preset target value (path, image name, or URL)
+        use_docker: Preset execution mode (True=Docker, False=native, None=prompt)
+        auto_fix: Automatically install missing tools without prompting
+        install_deps: Automatically install missing dependencies (Java, Node.js)
+        threads: Preset thread count for scanning
+        timeout: Preset per-tool timeout in seconds
+        fail_on: Preset severity threshold for CI failures
+        results_dir: Preset output directory for scan results
 
     Returns:
         Exit code
@@ -662,23 +774,56 @@ def run_wizard(
 
     config = WizardConfig()
 
+    # Check if we have enough presets to skip interactive mode
+    # Presets fully specify the wizard when: profile + target_type + target are all provided
+    has_full_presets = (
+        profile is not None and target_type is not None and target is not None
+    )
+
     try:
-        if yes:
-            # Non-interactive mode: use defaults (repo scanning)
-            print("\n" + _colorize("Non-interactive mode: using defaults", "yellow"))
-            config.profile = "balanced"
-            config.use_docker = (
-                force_docker and _detect_docker() and _check_docker_running()
-            )
-            # Default to repo scanning with current directory
-            config.target.type = "repo"
-            config.target.repo_mode = "repos-dir"
-            config.target.repo_path = str(Path.cwd())
-            config.results_dir = "results"
+        if yes or has_full_presets:
+            # Non-interactive mode: use presets or defaults
+            if has_full_presets:
+                print("\n" + _colorize("Using preset configuration", "blue"))
+            else:
+                print(
+                    "\n" + _colorize("Non-interactive mode: using defaults", "yellow")
+                )
+
+            # Profile: use preset, or default to balanced
+            config.profile = profile if profile else "balanced"
+
+            # Execution mode: preset > force_docker > auto-detect
+            if use_docker is not None:
+                config.use_docker = use_docker
+            elif force_docker:
+                config.use_docker = _detect_docker() and _check_docker_running()
+            else:
+                # Default to native mode for automation
+                config.use_docker = False
+
+            # Target configuration: use presets or defaults
+            if target_type and target:
+                _apply_target_preset(config.target, target_type, target)
+            else:
+                # Default to repo scanning with current directory
+                config.target.type = "repo"
+                config.target.repo_mode = "repos-dir"
+                config.target.repo_path = str(Path.cwd())
+
+            # Advanced settings: use presets or defaults
+            config.results_dir = results_dir if results_dir else "results"
+            config.threads = threads
+            config.timeout = timeout
+            config.fail_on = fail_on if fail_on else ""
 
             # Tool check for non-interactive mode
             should_continue, _ = check_tools_for_profile(
-                config.profile, yes=True, use_docker=config.use_docker
+                config.profile,
+                yes=True,
+                use_docker=config.use_docker,
+                auto_fix=auto_fix,
+                install_deps=install_deps,
             )
             if not should_continue:
                 return 0
@@ -787,7 +932,8 @@ def run_wizard(
             return 0
 
         # Execute scan
-        result = execute_scan(config, yes=yes)
+        # Skip confirmation when using presets (has_full_presets) or --yes flag
+        result = execute_scan(config, yes=yes or has_full_presets)
 
         # Handle trend analysis after successful scan (if ≥2 scans exist)
         if result == 0 or result == 1:  # Success (0 = clean, 1 = findings)
@@ -881,8 +1027,9 @@ def run_wizard(
                             _colorize(f"\n⚠ Trend analysis failed: {e}", "yellow")
                         )
                         logger.debug(f"Trend analysis error: {e}")
-            else:
+            elif not (yes or has_full_presets):
                 # Interactive offers (only if no non-interactive flags)
+                # Skip when using presets or --yes flag (automation mode)
                 # 1. Policy evaluation (Phase 2.5)
                 # Create args-like object with policy flags
                 import argparse
@@ -948,7 +1095,14 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
 
     try:
         findings_data = json.loads(findings_path.read_text())
-        findings = findings_data.get("findings", [])
+        # Handle both v1.0.0 wrapper format and legacy list format
+        if isinstance(findings_data, dict) and "findings" in findings_data:
+            findings = findings_data["findings"]
+        elif isinstance(findings_data, list):
+            findings = findings_data
+        else:
+            logger.warning(f"Unexpected findings format: {type(findings_data)}")
+            findings = []
 
         if not findings:
             logger.debug("No findings to evaluate, skipping policy evaluation")

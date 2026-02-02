@@ -14,7 +14,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_iac_file(
@@ -26,7 +26,7 @@ def scan_iac_file(
     retries: int,
     per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Callable[[str], bool] | None = None,
+    find_tool_func: Callable[[str], str | None] | None = None,
     write_stub_func: Callable[[str, Path], None] | None = None,
 ) -> tuple[str, dict[str, bool]]:
     """
@@ -41,7 +41,7 @@ def scan_iac_file(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
@@ -49,7 +49,7 @@ def scan_iac_file(
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
+    _find_tool = find_tool_func or find_tool
     _write_stub = write_stub_func or write_stub
 
     statuses: dict[str, bool] = {}
@@ -81,10 +81,11 @@ def scan_iac_file(
     # Checkov IaC scan
     if "checkov" in tools:
         checkov_out = out_dir / "checkov.json"
-        if _tool_exists("checkov"):
+        checkov_path = _find_tool("checkov")
+        if checkov_path:
             checkov_flags = get_tool_flags("checkov")
             checkov_cmd = [
-                "checkov",
+                checkov_path,
                 "-f",
                 str(iac_path),
                 "-o",
@@ -109,10 +110,11 @@ def scan_iac_file(
     # Trivy config scan for IaC files
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
-        if _tool_exists("trivy"):
+        trivy_path = _find_tool("trivy")
+        if trivy_path:
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-                "trivy",
+                trivy_path,
                 "config",
                 "-q",
                 "-f",

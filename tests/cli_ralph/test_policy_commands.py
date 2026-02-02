@@ -102,6 +102,7 @@ class TestPolicyTest:
         # If no findings file exists, create minimal one for the test
         if not findings_file.exists():
             import json
+
             findings_file.parent.mkdir(parents=True, exist_ok=True)
             findings_file.write_text(json.dumps({"findings": []}))
 
@@ -122,9 +123,19 @@ class TestPolicyTest:
 
         # Output should indicate test results or OPA not found
         output = (result.stdout + result.stderr).lower()
-        test_indicators = ["pass", "fail", "findings", "policy", "opa", "0", "violations"]
+        test_indicators = [
+            "pass",
+            "fail",
+            "findings",
+            "policy",
+            "opa",
+            "0",
+            "violations",
+        ]
         has_results = any(ind in output for ind in test_indicators)
-        assert has_results or result.returncode == 0, f"No test results: {result.stdout} {result.stderr}"
+        assert (
+            has_results or result.returncode == 0
+        ), f"No test results: {result.stdout} {result.stderr}"
 
 
 class TestPolicyShow:

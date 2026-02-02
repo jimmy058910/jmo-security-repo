@@ -463,10 +463,17 @@ def should_show_telemetry_banner() -> bool:
     """
     Check if telemetry banner should be shown (first scan/wizard run only).
 
+    Prevents double-display when wizard spawns scan subprocess by checking
+    JMO_TELEMETRY_SHOWN environment variable.
+
     Returns:
         True if banner should be shown, False otherwise
     """
     try:
+        # Skip if already shown in this process tree (e.g., wizard -> scan subprocess)
+        if os.environ.get("JMO_TELEMETRY_SHOWN") == "1":
+            return False
+
         if SCAN_COUNT_FILE.exists():
             count = int(SCAN_COUNT_FILE.read_text().strip())
         else:

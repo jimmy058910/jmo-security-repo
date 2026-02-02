@@ -1071,3 +1071,54 @@ def test_bucket_duration_ms_with_negative_value():
     # Should treat as <50ms (illogical but graceful)
     result = bucket_duration_ms(-10.5)
     assert result in ["<50ms", "50-100ms", "100-500ms", ">500ms"]
+
+
+# ========== Test Category 9: should_show_telemetry_banner ==========
+
+
+def test_should_show_telemetry_banner_env_var_skips(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns False when env var set.
+
+    This prevents double-display when wizard spawns scan subprocess.
+    """
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    # Simulate first scan (would normally show banner)
+    # But env var is set (wizard already showed it)
+    monkeypatch.setenv("JMO_TELEMETRY_SHOWN", "1")
+
+    result = should_show_telemetry_banner()
+
+    assert result is False
+
+
+def test_should_show_telemetry_banner_first_scan(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns True on first scan."""
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    monkeypatch.delenv("JMO_TELEMETRY_SHOWN", raising=False)
+
+    result = should_show_telemetry_banner()
+
+    assert result is True
+
+
+def test_should_show_telemetry_banner_subsequent_scan(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns False after first scan."""
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    monkeypatch.delenv("JMO_TELEMETRY_SHOWN", raising=False)
+
+    # Simulate that scan has run before
+    test_count_file.parent.mkdir(parents=True, exist_ok=True)
+    test_count_file.write_text("1")
+
+    result = should_show_telemetry_banner()
+
+    assert result is False

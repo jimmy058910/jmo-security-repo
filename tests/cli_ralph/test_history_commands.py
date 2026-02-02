@@ -129,10 +129,13 @@ class TestHistoryQuery:
     def test_hs_004_history_query_severity(self, run_jmo_with_history):
         """HS-004: jmo history query with SQL to filter by severity."""
         # Note: history query takes a SQL query, not --severity flag
-        result = run_jmo_with_history([
-            "history", "query",
-            "SELECT * FROM findings WHERE severity = 'CRITICAL' LIMIT 10"
-        ])
+        result = run_jmo_with_history(
+            [
+                "history",
+                "query",
+                "SELECT * FROM findings WHERE severity = 'CRITICAL' LIMIT 10",
+            ]
+        )
 
         # Command should work (may have no results)
         assert result.returncode in (0, 1), f"Query failed: {result.stderr}"

@@ -136,6 +136,7 @@ from .profile_config import TOOL_TIME_ESTIMATES as TOOL_TIME_ESTIMATES
 from .profile_config import WIZARD_TOTAL_STEPS as WIZARD_TOTAL_STEPS
 from .profile_config import calculate_time_estimate as calculate_time_estimate
 from .profile_config import format_time_range as format_time_range
+from .profile_config import get_profile_warning as get_profile_warning
 
 # ==============================================================================
 # Phase 1: UI Helpers

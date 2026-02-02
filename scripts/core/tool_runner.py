@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Protocol
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import subprocess
@@ -21,6 +21,37 @@ from scripts.core.exceptions import ToolExecutionException
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+class ProgressCallback(Protocol):
+    """Protocol for progress callback functions.
+
+    Callbacks receive tool status updates during scan execution.
+    """
+
+    def __call__(
+        self,
+        tool_name: str,
+        status: str,
+        findings_count: int = 0,
+        *,
+        message: str = "",
+        attempt: int = 1,
+        max_attempts: int = 1,
+        **kwargs: Any,
+    ) -> None:
+        """Called when tool status changes.
+
+        Args:
+            tool_name: Name of the tool
+            status: Status string ("start", "success", "error", "retrying", "timeout")
+            findings_count: Number of findings (optional)
+            message: Additional context (e.g., timeout reason)
+            attempt: Current attempt number
+            max_attempts: Total attempts configured
+            **kwargs: Forward compatibility for future parameters
+        """
+        ...
 
 
 @dataclass
@@ -136,7 +167,7 @@ class ToolRunner:
         self,
         tools: list[ToolDefinition],
         max_workers: int = 4,
-        progress_callback: Callable[[str, str, int], None] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ):
         """
         Initialize ToolRunner.
@@ -144,8 +175,9 @@ class ToolRunner:
         Args:
             tools: List of tool definitions to execute
             max_workers: Maximum number of parallel workers (default: 4)
-            progress_callback: Optional callback(tool_name, status, findings_count)
-                              Called when each tool starts ("start") and completes
+            progress_callback: Optional callback for tool status updates.
+                              Called with (tool_name, status, findings_count, **kwargs).
+                              Status values: "start", "success", "error", "retrying", "timeout"
         """
         self.tools = tools
         self.max_workers = max_workers
@@ -215,11 +247,22 @@ class ToolRunner:
                         continue
 
             except subprocess.TimeoutExpired:
-                # Tool timed out - log and retry if attempts remain
+                # Tool timed out - notify via callback and retry if attempts remain
                 last_error = f"Timeout after {tool.timeout}s"
-                logger.warning(
-                    f"{tool.name} timed out after {tool.timeout}s (attempt {attempt}/{attempts})"
-                )
+                if self.progress_callback:
+                    self.progress_callback(
+                        tool.name,
+                        "retrying" if attempt < attempts else "timeout",
+                        0,
+                        message=f"Timeout after {tool.timeout}s",
+                        attempt=attempt,
+                        max_attempts=attempts,
+                    )
+                else:
+                    logger.warning(
+                        f"{tool.name} timed out after {tool.timeout}s "
+                        f"(attempt {attempt}/{attempts})"
+                    )
                 if attempt < attempts:
                     time.sleep(2)  # Longer delay after timeout
                     continue

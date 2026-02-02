@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import find_tool, tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_url(
@@ -28,9 +28,8 @@ def scan_url(
     retries: int,
     per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Callable[[str], bool] | None = None,
-    write_stub_func: Callable[[str, Path], None] | None = None,
     find_tool_func: Callable[[str], str | None] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
 ) -> tuple[str, dict[str, bool]]:
     """
     Scan a live web URL with DAST tools (ZAP and Nuclei).
@@ -43,18 +42,16 @@ def scan_url(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
-        write_stub_func: Optional function to write stub files (for testing)
         find_tool_func: Optional function to find tool path (for testing)
+        write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
         Tuple of (url, statuses_dict)
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
-    _write_stub = write_stub_func or write_stub
     _find_tool = find_tool_func or find_tool
+    _write_stub = write_stub_func or write_stub
 
     statuses: dict[str, bool] = {}
     tool_defs = []
@@ -130,12 +127,13 @@ def scan_url(
     # Nuclei scan for web URLs (CVEs, misconfigurations, exposures)
     if "nuclei" in tools:
         nuclei_out = out_dir / "nuclei.json"
-        if _tool_exists("nuclei"):
+        nuclei_path = _find_tool("nuclei")
+        if nuclei_path:
             nuclei_flags = get_tool_flags("nuclei")
 
             # Nuclei command for URL scanning
             nuclei_cmd_list = [
-                "nuclei",
+                nuclei_path,
                 "-u",
                 url,
                 "-json",  # NDJSON output format
@@ -164,13 +162,14 @@ def scan_url(
     # v1.0.0 addition
     if "akto" in tools:
         akto_out = out_dir / "akto.json"
-        if _tool_exists("akto"):
+        akto_path = _find_tool("akto")
+        if akto_path:
             akto_flags = get_tool_flags("akto")
 
             # Akto requires API endpoint testing
             # Assumes Akto is running as a service and accessible via CLI
             akto_cmd_list = [
-                "akto",
+                akto_path,
                 "test",
                 "--url",
                 url,

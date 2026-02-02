@@ -14,7 +14,6 @@ from __future__ import annotations
 import pytest
 
 
-
 class TestSetupBasicFunctionality:
     """Test setup command basic functionality."""
 

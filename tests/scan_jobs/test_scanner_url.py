@@ -25,59 +25,64 @@ def test_scan_url_basic_success(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool, Nuclei uses tool_exists - mock both
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=30.0,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "zap.json",
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                    ToolResult(
-                        tool="nuclei",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=15.0,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "nuclei.json",
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    # Mock find_tool to return paths for both tools
+    def mock_find_tool(tool: str) -> str | None:
+        tool_paths = {
+            "zap.sh": "/usr/bin/zap.sh",
+            "zap": "/usr/bin/zap",
+            "nuclei": "/usr/bin/nuclei",
+        }
+        return tool_paths.get(tool)
 
-                url, statuses = scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap", "nuclei"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=30.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "zap.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+            ToolResult(
+                tool="nuclei",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=15.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "nuclei.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                assert url == "https://example.com"
-                assert statuses["zap"] is True
-                assert statuses["nuclei"] is True
-                # Verify both tools were actually added to ToolRunner
-                call_args = MockRunner.call_args
-                tools_passed = call_args[1]["tools"]
-                tool_names = [t.name for t in tools_passed]
-                assert "zap" in tool_names
-                assert "nuclei" in tool_names
+        url, statuses = scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap", "nuclei"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert url == "https://example.com"
+        assert statuses["zap"] is True
+        assert statuses["nuclei"] is True
+        # Verify both tools were actually added to ToolRunner
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        tool_names = [t.name for t in tools_passed]
+        assert "zap" in tool_names
+        assert "nuclei" in tool_names
 
 
 def test_scan_url_with_akto(tmp_path):
@@ -85,35 +90,38 @@ def test_scan_url_with_akto(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="akto",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=20.0,
-                    attempts=1,
-                    output_file=results_dir / "api.example.com" / "akto.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/akto" if tool == "akto" else None
 
-            url, statuses = scan_url(
-                url="https://api.example.com",
-                results_dir=results_dir,
-                tools=["akto"],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="akto",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=20.0,
+                attempts=1,
+                output_file=results_dir / "api.example.com" / "akto.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["akto"] is True
+        url, statuses = scan_url(
+            url="https://api.example.com",
+            results_dir=results_dir,
+            tools=["akto"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["akto"] is True
 
 
 def test_scan_url_scheme_validation_http(tmp_path):
@@ -121,25 +129,24 @@ def test_scan_url_scheme_validation_http(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool - mock it to ensure tool definition is created
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                url, statuses = scan_url(
-                    url="http://example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-                assert url == "http://example.com"
+        url, statuses = scan_url(
+            url="http://example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert url == "http://example.com"
 
 
 def test_scan_url_scheme_validation_https(tmp_path):
@@ -147,25 +154,24 @@ def test_scan_url_scheme_validation_https(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool - mock it to ensure tool definition is created
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                url, statuses = scan_url(
-                    url="https://secure.example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-                assert url == "https://secure.example.com"
+        url, statuses = scan_url(
+            url="https://secure.example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert url == "https://secure.example.com"
 
 
 def test_scan_url_scheme_validation_rejects_invalid(tmp_path):
@@ -203,41 +209,40 @@ def test_scan_url_sanitization(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool - mock it to ensure tool definition is created
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=30.0,
-                        attempts=1,
-                        output_file=results_dir / "api.example.com_8080" / "zap.json",
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                scan_url(
-                    url="https://api.example.com:8080/path",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=30.0,
+                attempts=1,
+                output_file=results_dir / "api.example.com_8080" / "zap.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                # Verify sanitized directory created
-                sanitized_dir = results_dir / "api.example.com_8080"
-                assert sanitized_dir.exists()
+        scan_url(
+            url="https://api.example.com:8080/path",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify sanitized directory created
+        sanitized_dir = results_dir / "api.example.com_8080"
+        assert sanitized_dir.exists()
 
 
 def test_scan_url_missing_tools_no_allow(tmp_path):
@@ -245,7 +250,36 @@ def test_scan_url_missing_tools_no_allow(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
+
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
+
+        url, statuses = scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap", "nuclei"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert "zap" not in statuses
+        assert "nuclei" not in statuses
+
+
+def test_scan_url_missing_tools_with_allow(tmp_path):
+    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
+    results_dir = tmp_path / "results"
+    results_dir.mkdir()
+
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
+
+    with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             MockRunner.return_value.run_all_parallel.return_value = []
 
@@ -256,40 +290,13 @@ def test_scan_url_missing_tools_no_allow(tmp_path):
                 timeout=300,
                 retries=0,
                 per_tool_config={},
-                allow_missing_tools=False,
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
             )
 
-            assert "zap" not in statuses
-            assert "nuclei" not in statuses
-
-
-def test_scan_url_missing_tools_with_allow(tmp_path):
-    """Test scan writes stubs when tools missing and allow_missing_tools=True."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
-        # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
-        with patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None):
-            with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
-                with patch(
-                    "scripts.cli.scan_jobs.url_scanner.ToolRunner"
-                ) as MockRunner:
-                    MockRunner.return_value.run_all_parallel.return_value = []
-
-                    url, statuses = scan_url(
-                        url="https://example.com",
-                        results_dir=results_dir,
-                        tools=["zap", "nuclei"],
-                        timeout=300,
-                        retries=0,
-                        per_tool_config={},
-                        allow_missing_tools=True,
-                    )
-
-                    assert statuses["zap"] is True
-                    assert statuses["nuclei"] is True
-                    assert mock_stub.call_count == 2
+            assert statuses["zap"] is True
+            assert statuses["nuclei"] is True
+            assert mock_stub.call_count == 2
 
 
 def test_scan_url_per_tool_timeout(tmp_path):
@@ -301,42 +308,41 @@ def test_scan_url_per_tool_timeout(tmp_path):
         "zap": {"timeout": 600},
     }
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        # ZAP requires find_tool to return a path (zap uses find_tool, not tool_exists)
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=30.0,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "zap.json",
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config=per_tool_config,
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=30.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "zap.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                call_args = MockRunner.call_args
-                tools_passed = call_args[1]["tools"]
-                zap_def = next(t for t in tools_passed if t.name == "zap")
-                assert zap_def.timeout == 600
+        scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        zap_def = next(t for t in tools_passed if t.name == "zap")
+        assert zap_def.timeout == 600
 
 
 def test_scan_url_per_tool_flags(tmp_path):
@@ -348,39 +354,42 @@ def test_scan_url_per_tool_flags(tmp_path):
         "nuclei": {"flags": ["-severity", "high,critical"]},
     }
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="nuclei",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=15.0,
-                    attempts=1,
-                    output_file=results_dir / "example.com" / "nuclei.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/nuclei" if tool == "nuclei" else None
 
-            scan_url(
-                url="https://example.com",
-                results_dir=results_dir,
-                tools=["nuclei"],
-                timeout=300,
-                retries=0,
-                per_tool_config=per_tool_config,
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="nuclei",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=15.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "nuclei.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            call_args = MockRunner.call_args
-            tools_passed = call_args[1]["tools"]
-            nuclei_def = next(t for t in tools_passed if t.name == "nuclei")
-            assert "-severity" in nuclei_def.command
-            assert "high,critical" in nuclei_def.command
+        scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["nuclei"],
+            timeout=300,
+            retries=0,
+            per_tool_config=per_tool_config,
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        nuclei_def = next(t for t in tools_passed if t.name == "nuclei")
+        assert "-severity" in nuclei_def.command
+        assert "high,critical" in nuclei_def.command
 
 
 def test_scan_url_tool_failure(tmp_path):
@@ -388,39 +397,38 @@ def test_scan_url_tool_failure(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool - mock it to ensure tool definition is created
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="error",
-                        stdout="",
-                        stderr="timeout",
-                        returncode=124,
-                        duration=300.0,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "zap.json",
-                        capture_stdout=False,
-                        error_message="Timeout after 300s",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                url, statuses = scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="error",
+                stdout="",
+                stderr="timeout",
+                returncode=124,
+                duration=300.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "zap.json",
+                capture_stdout=False,
+                error_message="Timeout after 300s",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                assert statuses["zap"] is False
+        url, statuses = scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["zap"] is False
 
 
 def test_scan_url_retry_tracking(tmp_path):
@@ -428,69 +436,78 @@ def test_scan_url_retry_tracking(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-            mock_results = [
-                ToolResult(
-                    tool="nuclei",
-                    status="success",
-                    stdout="",
-                    stderr="",
-                    returncode=0,
-                    duration=15.0,
-                    attempts=2,
-                    output_file=results_dir / "example.com" / "nuclei.json",
-                    capture_stdout=False,
-                    error_message="",
-                ),
-            ]
-            MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/nuclei" if tool == "nuclei" else None
 
-            url, statuses = scan_url(
-                url="https://example.com",
-                results_dir=results_dir,
-                tools=["nuclei"],
-                timeout=300,
-                retries=2,
-                per_tool_config={},
-                allow_missing_tools=False,
-            )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="nuclei",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=15.0,
+                attempts=2,
+                output_file=results_dir / "example.com" / "nuclei.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-            assert statuses["nuclei"] is True
-            assert "__attempts__" in statuses
-            assert statuses["__attempts__"]["nuclei"] == 2
+        url, statuses = scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["nuclei"],
+            timeout=300,
+            retries=2,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        assert statuses["nuclei"] is True
+        assert "__attempts__" in statuses
+        assert statuses["__attempts__"]["nuclei"] == 2
 
 
 def test_scan_url_output_dir_creation(tmp_path):
     """Test output directory created correctly for URL."""
     results_dir = tmp_path / "results"
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-            MockRunner.return_value.run_all_parallel.return_value = []
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
 
-            scan_url(
-                url="https://example.com",
-                results_dir=results_dir,
-                tools=[],
-                timeout=300,
-                retries=0,
-                per_tool_config={},
-                allow_missing_tools=True,
-            )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-            output_dir = results_dir / "example.com"
-            assert output_dir.exists()
-            assert output_dir.is_dir()
+        scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=[],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+        )
+
+        output_dir = results_dir / "example.com"
+        assert output_dir.exists()
+        assert output_dir.is_dir()
 
 
-def test_scan_url_custom_tool_exists_func(tmp_path):
-    """Test using custom tool_exists_func."""
+def test_scan_url_custom_find_tool_func(tmp_path):
+    """Test using custom find_tool_func."""
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    def mock_tool_exists(tool: str) -> bool:
-        return tool == "zap"
+    def mock_find_tool(tool: str) -> str | None:
+        # Only return path for zap
+        if tool in ("zap.sh", "zap"):
+            return "/custom/path/zap"
+        return None
 
     with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
         mock_results = [
@@ -517,7 +534,7 @@ def test_scan_url_custom_tool_exists_func(tmp_path):
             retries=0,
             per_tool_config={},
             allow_missing_tools=True,
-            tool_exists_func=mock_tool_exists,
+            find_tool_func=mock_find_tool,
         )
 
         assert "zap" in statuses
@@ -531,27 +548,28 @@ def test_scan_url_custom_write_stub_func(tmp_path):
 
     stub_calls = []
 
+    def mock_find_tool(tool: str) -> str | None:
+        return None  # No tools found
+
     def mock_write_stub(tool: str, path: Path) -> None:
         stub_calls.append((tool, path))
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=False):
-        # Also mock find_tool: ZAP uses find_tool() while nuclei uses tool_exists()
-        with patch("scripts.cli.scan_jobs.url_scanner.find_tool", return_value=None):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                MockRunner.return_value.run_all_parallel.return_value = []
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        MockRunner.return_value.run_all_parallel.return_value = []
 
-                scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap", "nuclei"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                    write_stub_func=mock_write_stub,
-                )
+        scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap", "nuclei"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+            write_stub_func=mock_write_stub,
+        )
 
-                assert len(stub_calls) == 2
+        assert len(stub_calls) == 2
 
 
 def test_scan_url_zap_command_selection(tmp_path):
@@ -559,44 +577,46 @@ def test_scan_url_zap_command_selection(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        # ZAP requires find_tool to return a path (zap uses find_tool, not tool_exists)
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="success",
-                        stdout="",
-                        stderr="",
-                        returncode=0,
-                        duration=30.0,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "zap.json",
-                        capture_stdout=False,
-                        error_message="",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        # Return path for zap.sh first, then zap as fallback
+        if tool == "zap.sh":
+            return "/usr/share/zap/zap.sh"
+        return None
 
-                scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=False,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="success",
+                stdout="",
+                stderr="",
+                returncode=0,
+                duration=30.0,
+                attempts=1,
+                output_file=results_dir / "example.com" / "zap.json",
+                capture_stdout=False,
+                error_message="",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                # Verify ZAP tool was invoked successfully
-                call_args = MockRunner.call_args
-                tools_passed = call_args[1]["tools"]
-                zap_def = next(t for t in tools_passed if t.name == "zap")
-                # Command should contain the mocked path
-                assert "/usr/bin/zap" in zap_def.command[0]
+        scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=False,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Verify ZAP tool was invoked successfully
+        call_args = MockRunner.call_args
+        tools_passed = call_args[1]["tools"]
+        zap_def = next(t for t in tools_passed if t.name == "zap")
+        # Command should contain the mocked path
+        assert "/usr/share/zap/zap.sh" in zap_def.command[0]
 
 
 def test_scan_url_akto_missing_tool_with_stub(tmp_path):
@@ -604,9 +624,9 @@ def test_scan_url_akto_missing_tool_with_stub(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    def mock_tool_exists(tool: str) -> bool:
+    def mock_find_tool(tool: str) -> str | None:
         # Akto doesn't exist
-        return tool != "akto"
+        return None if tool == "akto" else f"/usr/bin/{tool}"
 
     with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
@@ -620,7 +640,7 @@ def test_scan_url_akto_missing_tool_with_stub(tmp_path):
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             # Stub should be written for missing Akto
@@ -633,38 +653,37 @@ def test_scan_url_tool_not_found_error(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
 
-    # ZAP uses find_tool - mock it to ensure tool definition is created
-    with patch("scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True):
-        with patch(
-            "scripts.cli.scan_jobs.url_scanner.find_tool", return_value="/usr/bin/zap"
-        ):
-            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
-                # Mock "Tool not found" error
-                mock_results = [
-                    ToolResult(
-                        tool="zap",
-                        status="error",
-                        stdout="",
-                        stderr="",
-                        returncode=127,
-                        duration=0.1,
-                        attempts=1,
-                        output_file=results_dir / "example.com" / "zap.json",
-                        capture_stdout=False,
-                        error_message="Tool not found: zap",
-                    ),
-                ]
-                MockRunner.return_value.run_all_parallel.return_value = mock_results
+    def mock_find_tool(tool: str) -> str | None:
+        return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
 
-                url, statuses = scan_url(
-                    url="https://example.com",
-                    results_dir=results_dir,
-                    tools=["zap"],
-                    timeout=300,
-                    retries=0,
-                    per_tool_config={},
-                    allow_missing_tools=True,
-                )
+    with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+        # Mock "Tool not found" error
+        mock_results = [
+            ToolResult(
+                tool="zap",
+                status="error",
+                stdout="",
+                stderr="",
+                returncode=127,
+                duration=0.1,
+                attempts=1,
+                output_file=results_dir / "example.com" / "zap.json",
+                capture_stdout=False,
+                error_message="Tool not found: zap",
+            ),
+        ]
+        MockRunner.return_value.run_all_parallel.return_value = mock_results
 
-                # Should write stub for tool not found error
-                assert statuses["zap"] is True
+        url, statuses = scan_url(
+            url="https://example.com",
+            results_dir=results_dir,
+            tools=["zap"],
+            timeout=300,
+            retries=0,
+            per_tool_config={},
+            allow_missing_tools=True,
+            find_tool_func=mock_find_tool,
+        )
+
+        # Should write stub for tool not found error
+        assert statuses["zap"] is True

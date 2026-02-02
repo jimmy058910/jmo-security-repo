@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base_flow import BaseWizardFlow
+from .profile_config import get_profile_warning
 
 
 class RepoFlow(BaseWizardFlow):
@@ -42,6 +43,12 @@ class RepoFlow(BaseWizardFlow):
             choices=["fast", "balanced", "deep"],
             default="balanced",
         )
+
+        # Show profile-specific warnings (e.g., deep profile first-run timing)
+        warning = get_profile_warning(profile)
+        if warning:
+            print()  # Add spacing
+            self.prompter.print_warning(warning)
 
         # Ask about artifact generation
         self.prompter.print_info(

@@ -368,22 +368,40 @@ class TestGetSeverityDistribution:
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
-    def test_load_findings_invalid_structure(self, tmp_path: Path):
-        """Test loading findings.json with invalid structure (dict instead of list)."""
+    def test_load_findings_v100_wrapper_format(self, tmp_path: Path):
+        """Test loading findings.json with v1.0.0 wrapper format (dict with 'findings' key)."""
         results_dir = tmp_path / "results"
         summaries_dir = results_dir / "summaries"
         summaries_dir.mkdir(parents=True)
 
-        # Write dict instead of list
+        # Write v1.0.0 wrapper format
         findings_file = summaries_dir / "findings.json"
-        findings_file.write_text(json.dumps({"findings": []}))
+        findings_file.write_text(
+            json.dumps({"meta": {}, "findings": [{"id": "test-1"}]})
+        )
+
+        loader = FindingsLoader(results_dir)
+        findings = loader.load_findings()
+
+        assert len(findings) == 1
+        assert findings[0]["id"] == "test-1"
+
+    def test_load_findings_invalid_structure(self, tmp_path: Path):
+        """Test loading findings.json with invalid structure (dict without 'findings' key)."""
+        results_dir = tmp_path / "results"
+        summaries_dir = results_dir / "summaries"
+        summaries_dir.mkdir(parents=True)
+
+        # Write dict without 'findings' key
+        findings_file = summaries_dir / "findings.json"
+        findings_file.write_text(json.dumps({"invalid_key": []}))
 
         loader = FindingsLoader(results_dir)
 
         with pytest.raises(ValueError) as exc_info:
             loader.load_findings()
 
-        assert "must contain a list" in str(exc_info.value)
+        assert "must contain a list or v1.0.0 wrapper" in str(exc_info.value)
 
     def test_load_findings_file_permission_error(self, tmp_path: Path, monkeypatch):
         """Test loading findings.json with file permission error."""

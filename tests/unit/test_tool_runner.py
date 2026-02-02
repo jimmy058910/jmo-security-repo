@@ -761,5 +761,130 @@ class TestErrorHandling:
         assert summary["results_by_status"]["retry_exhausted"] == 1
 
 
+class TestProgressCallback:
+    """Test progress callback functionality for timeout/retry scenarios"""
+
+    def test_run_tool_timeout_calls_callback_with_retrying_status(self):
+        """Verify callback is called with 'retrying' status on timeout with retries remaining."""
+        callback_calls = []
+
+        def capture_callback(name, status, count=0, **kwargs):
+            callback_calls.append((name, status, kwargs))
+
+        tool = ToolDefinition(
+            name="slow-tool",
+            command=["sleep", "10"],
+            output_file=Path("/tmp/slow.json"),
+            timeout=1,  # Will timeout
+            retries=1,  # 2 attempts total
+        )
+
+        runner = ToolRunner([tool], progress_callback=capture_callback)
+        result = runner.run_tool(tool)
+
+        # Should have failed after retries exhausted
+        assert result.is_success() is False
+        assert result.attempts == 2
+
+        # Should have callback calls for retrying and timeout
+        assert len(callback_calls) >= 1
+
+        # First timeout should be 'retrying' (attempt 1, more retries available)
+        retrying_calls = [c for c in callback_calls if c[1] == "retrying"]
+        assert len(retrying_calls) >= 1
+        first_retry = retrying_calls[0]
+        assert first_retry[0] == "slow-tool"
+        assert "message" in first_retry[2]
+        assert "Timeout" in first_retry[2]["message"]
+        assert first_retry[2]["attempt"] == 1
+        assert first_retry[2]["max_attempts"] == 2
+
+    def test_run_tool_timeout_calls_callback_with_timeout_status_on_final_attempt(self):
+        """Verify callback is called with 'timeout' status on final attempt."""
+        callback_calls = []
+
+        def capture_callback(name, status, count=0, **kwargs):
+            callback_calls.append((name, status, kwargs))
+
+        tool = ToolDefinition(
+            name="timeout-tool",
+            command=["sleep", "10"],
+            output_file=Path("/tmp/timeout.json"),
+            timeout=1,  # Will timeout
+            retries=0,  # Only 1 attempt (no retries)
+        )
+
+        runner = ToolRunner([tool], progress_callback=capture_callback)
+        result = runner.run_tool(tool)
+
+        # Should have failed
+        assert result.is_success() is False
+        assert result.attempts == 1
+
+        # Should have exactly one callback with 'timeout' status (no retries)
+        timeout_calls = [c for c in callback_calls if c[1] == "timeout"]
+        assert len(timeout_calls) == 1
+        timeout_call = timeout_calls[0]
+        assert timeout_call[0] == "timeout-tool"
+        assert timeout_call[2]["attempt"] == 1
+        assert timeout_call[2]["max_attempts"] == 1
+
+    def test_run_tool_success_does_not_call_callback_with_retrying_status(self):
+        """Verify successful tools don't trigger retrying/timeout callbacks."""
+        callback_calls = []
+
+        def capture_callback(name, status, count=0, **kwargs):
+            callback_calls.append((name, status, kwargs))
+
+        tool = ToolDefinition(
+            name="fast-tool",
+            command=["echo", "done"],
+            output_file=Path("/tmp/fast.json"),
+            timeout=10,
+        )
+
+        runner = ToolRunner([tool], progress_callback=capture_callback)
+        result = runner.run_tool(tool)
+
+        assert result.is_success() is True
+
+        # Should have no retrying or timeout callbacks
+        retry_timeout_calls = [
+            c for c in callback_calls if c[1] in ("retrying", "timeout")
+        ]
+        assert len(retry_timeout_calls) == 0
+
+    def test_callback_receives_kwargs_for_timeout(self):
+        """Verify callback kwargs include message, attempt, max_attempts."""
+        callback_calls = []
+
+        def capture_callback(name, status, count=0, **kwargs):
+            callback_calls.append({"name": name, "status": status, "kwargs": kwargs})
+
+        tool = ToolDefinition(
+            name="kwargs-test",
+            command=["sleep", "10"],
+            output_file=Path("/tmp/kwargs.json"),
+            timeout=1,
+            retries=0,
+        )
+
+        runner = ToolRunner([tool], progress_callback=capture_callback)
+        runner.run_tool(tool)
+
+        # Find the timeout call
+        timeout_call = next(
+            (c for c in callback_calls if c["status"] == "timeout"), None
+        )
+        assert timeout_call is not None
+
+        kwargs = timeout_call["kwargs"]
+        assert "message" in kwargs
+        assert "attempt" in kwargs
+        assert "max_attempts" in kwargs
+        assert isinstance(kwargs["attempt"], int)
+        assert isinstance(kwargs["max_attempts"], int)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

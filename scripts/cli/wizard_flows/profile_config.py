@@ -14,22 +14,16 @@ making them safe to import from any module.
 
 from __future__ import annotations
 
+from scripts.core.tool_registry import PROFILE_TOOLS
+
 
 # Profile definitions with resource estimates (v1.0.0)
+# Tool lists are imported from tool_registry.py (single source of truth)
 PROFILES: dict[str, dict[str, str | int | list[str]]] = {
     "fast": {
         "name": "Fast",
-        "description": "Quick scans with 8 core tools (secrets, SAST, SCA, IaC)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "nuclei",
-            "shellcheck",
-        ],
+        "description": f"Quick scans with {len(PROFILE_TOOLS['fast'])} core tools (secrets, SAST, SCA, IaC)",
+        "tools": PROFILE_TOOLS["fast"],
         "timeout": 300,
         "threads": 8,
         "est_time": "5-10 minutes",
@@ -37,23 +31,8 @@ PROFILES: dict[str, dict[str, str | int | list[str]]] = {
     },
     "slim": {
         "name": "Slim",
-        "description": "Cloud/IaC focused scans with 14 tools (AWS, Azure, GCP, K8s)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "shellcheck",
-        ],
+        "description": f"Cloud/IaC focused scans with {len(PROFILE_TOOLS['slim'])} tools (AWS, Azure, GCP, K8s)",
+        "tools": PROFILE_TOOLS["slim"],
         "timeout": 500,
         "threads": 4,
         "est_time": "12-18 minutes",
@@ -61,27 +40,8 @@ PROFILES: dict[str, dict[str, str | int | list[str]]] = {
     },
     "balanced": {
         "name": "Balanced",
-        "description": "Production CI/CD with 18 tools (cloud, API, DAST, license)",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "scancode",
-            "cdxgen",
-            "gosec",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "shellcheck",
-        ],
+        "description": f"Production CI/CD with {len(PROFILE_TOOLS['balanced'])} tools (cloud, API, DAST, license)",
+        "tools": PROFILE_TOOLS["balanced"],
         "timeout": 600,
         "threads": 4,
         "est_time": "18-25 minutes",
@@ -89,41 +49,17 @@ PROFILES: dict[str, dict[str, str | int | list[str]]] = {
     },
     "deep": {
         "name": "Deep",
-        "description": "Comprehensive audits with all 28 tools (mobile, fuzzing, runtime)",
-        "tools": [
-            "trufflehog",
-            "noseyparker",
-            "semgrep",
-            "semgrep-secrets",
-            "bandit",
-            "syft",
-            "trivy",
-            "trivy-rbac",
-            "checkov",
-            "checkov-cicd",
-            "hadolint",
-            "zap",
-            "nuclei",
-            "prowler",
-            "kubescape",
-            "akto",
-            "scancode",
-            "cdxgen",
-            "gosec",
-            "yara",
-            "grype",
-            "bearer",
-            "horusec",
-            "dependency-check",
-            "falco",
-            "afl++",
-            "mobsf",
-            "lynis",
-        ],
+        "description": f"Comprehensive audits with all {len(PROFILE_TOOLS['deep'])} tools (mobile, fuzzing, runtime)",
+        "tools": PROFILE_TOOLS["deep"],
         "timeout": 900,
         "threads": 2,
         "est_time": "40-70 minutes",
         "use_case": "Security audits, compliance scans, pre-release validation",
+        "warning": (
+            "First run note: dependency-check downloads the NVD database (~2GB) "
+            "which can take 30-90 minutes. Subsequent runs use cached data (2-5 min). "
+            "For faster reruns, mount a persistent volume: -v dep-check-cache:/root/.dependency-check"
+        ),
     },
 }
 
@@ -154,7 +90,10 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     # Slow tools (2min+)
     "zap": 300,  # 5 min for DAST baseline
     "horusec": 180,
-    "dependency-check": 240,
+    # dependency-check: First run downloads NVD database (~2GB), taking 30-90 min.
+    # Subsequent runs with cached database: 2-5 min.
+    # Mount volume for cache persistence: -v dep-check-data:/root/.dependency-check
+    "dependency-check": 240,  # Assumes cached; first run can be 30-90 min
     "prowler": 120,
     "kubescape": 90,
     "scancode": 150,
@@ -213,3 +152,16 @@ def format_time_range(min_sec: int, max_sec: int) -> str:
             return f"{s // 3600}h {(s % 3600) // 60}m"
 
     return f"{fmt(min_sec)} - {fmt(max_sec)}"
+
+
+def get_profile_warning(profile: str) -> str | None:
+    """Get warning message for a profile, if any.
+
+    Args:
+        profile: Profile name (fast, slim, balanced, deep)
+
+    Returns:
+        Warning message string, or None if no warning
+    """
+    profile_data = PROFILES.get(profile, {})
+    return profile_data.get("warning")  # type: ignore[return-value]

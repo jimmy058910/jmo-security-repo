@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 
 
-
 class TestHelpVersion:
     """Test suite for help and version output (HV-001 to HV-008)."""
 
