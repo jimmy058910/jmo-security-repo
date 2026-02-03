@@ -66,7 +66,7 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 | Security | 0 | 0 | - | 0 |
 | **Total** | **2** | **9** | **1** | **12** |
 
-**Status:** 39 resolved, 1 open.
+**Status:** 40 resolved, 0 open.
 
 ---
 
@@ -329,7 +329,7 @@ Note: target_configurators.py not covered (separate task if needed). All 37 test
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/cli/wizard_flows/base_flow.py
 **Current Coverage:** 32% (189/292 lines uncovered)
 **Gap:**
@@ -342,10 +342,16 @@ TargetDetector.detect_* methods are tested indirectly via wizard tests, but have
 PromptHelper methods are simple input() wrappers - low value to test.
 ArtifactGenerator wraps wizard_generators which is tested separately.
 **Fix:** Create tests/cli/test_wizard_base_flow.py with:
-- [ ] TargetDetector.detect_repos() with git repos, non-git dirs
-- [ ] TargetDetector.detect_images() with docker-compose.yml, Dockerfiles
-- [ ] TargetDetector.detect_iac() with .tf, .tfstate, cloudformation, k8s files
-- [ ] TargetDetector.detect_package_files() for each language
+- [x] TargetDetector.detect_repos() with git repos, non-git dirs
+- [x] TargetDetector.detect_images() with docker-compose.yml, Dockerfiles
+- [x] TargetDetector.detect_iac() with .tf, .tfstate, cloudformation, k8s files
+- [x] TargetDetector.detect_package_files() for each language
+**Resolution:** (2026-02-03) Created tests/cli_ralph/test_wizard_base_flow.py with 64 tests covering:
+- TargetDetector: detect_repos (5 tests), detect_images (11 tests), detect_iac (6 tests), detect_web_apps (6 tests), detect_package_files (12 tests), detect_lock_files (8 tests)
+- PromptHelper: colorize (2 tests), print_header/step/success/info/warning/error/summary_box (7 tests)
+- ArtifactGenerator: generate_makefile/github_actions/shell_script (3 tests with mocks)
+- Terminal utilities: _get_terminal_width (2 tests), _supports_ansi (3 tests)
+All 64 tests pass.
 
 ### TASK-037: [Bug] 25 wizard test failures due to module imports and stale assertions
 **Type:** Bug
