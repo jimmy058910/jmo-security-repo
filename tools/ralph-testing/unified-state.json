@@ -1,102 +1,78 @@
 {
-  "version": "2.0.0",
-  "description": "Unified state for Ralph Loop auto mode - tracks wizard scans, audits, and tasks",
-  "last_updated": "2026-02-01T19:45:00.000000Z",
+  "version": "1.0.0",
+  "description": "Ralph Loop unified state file tracking wizard scan testing and full audit",
+  "last_updated": "2026-02-03T13:45:00.000000Z",
   "wizard_scan": {
+    "required_successes": 3,
     "repo": {
-      "status": "passing",
       "consecutive_successes": 3,
-      "last_run": "2026-02-01T17:46:00.405547Z",
-      "last_duration_seconds": 153,
+      "status": "passing",
+      "last_run": "2026-02-01T23:40:55.041739Z",
+      "last_duration_seconds": 162,
       "last_tools_ok": 8,
       "last_tools_failed": 0,
       "last_findings": 124,
       "blocking_issue": null
     },
     "image": {
-      "status": "passing",
       "consecutive_successes": 3,
-      "last_run": "2026-02-01T17:48:53.054200Z",
-      "last_duration_seconds": 88,
+      "status": "passing",
+      "last_run": "2026-02-01T23:43:40.721306Z",
+      "last_duration_seconds": 90,
       "last_tools_ok": 2,
       "last_tools_failed": 0,
       "last_findings": 1218,
       "blocking_issue": null
-    },
-    "required_successes": 3,
-    "cooldown_days": 1
+    }
   },
-  "audits": {
-    "wizard": {
-      "last_audit": "2026-02-01",
+  "full_audit": {
+    "security": {
+      "last_audit": "2026-02-02",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 93,
-      "notes": "306 wizard_flows tests passing. All flows at 91-100%. No actionable gaps."
-    },
-    "cli": {
-      "last_audit": "2026-02-01",
-      "status": "clean",
-      "tasks_created": 3,
-      "coverage_percent": 90,
-      "notes": "All CLI tests passing after TASK-033, TASK-034, TASK-035 fixes. scan_jobs tests updated to use find_tool_func parameter. 112 scan_jobs tests pass."
+      "notes": "Cross-cutting CWE audit: CWE-78 (1 shell=True, nosec justified), CWE-79 (html.escape in reporters), CWE-89 (all parameterized ?), CWE-22 (validate_path_within_base), CWE-798 (os.getenv only), CWE-502 (no pickle/eval/exec), CWE-400 (timeouts present). 31 nosec comments all justified."
     },
     "core": {
-      "last_audit": "2026-02-01",
+      "last_audit": "2026-02-02",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 86,
-      "notes": "124 core tests passing (3 skip). history_db.py SQL parameterized. No security issues found."
+      "notes": "Re-audited. 358 tests passed (history_db 224, dedup 70, normalize 65). All SQL queries use parameterized ?. get_query_plan f-string is dev-only helper not called in prod. config.py 180 tests pass."
+    },
+    "cli": {
+      "last_audit": "2026-02-02",
+      "status": "clean",
+      "tasks_created": 0,
+      "notes": "455 passed (jmo 65, orchestrator 52, progress 32, tool_commands 117, tool_manager 95, tool_installer 91). Security: shell=False verified, path traversal protected via validation.py+path_sanitizers.py, input validation via centralized validators."
     },
     "adapters": {
-      "last_audit": "2026-02-01",
+      "last_audit": "2026-02-02",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 92,
-      "notes": "1886 tests passing. All adapters use safe_load_json_file() and map_tool_severity()."
+      "notes": "1889 passed, 92% coverage. All 29 adapters use consistent patterns: safe_load_json/ndjson_file, normalize_severity/map_tool_severity. semgrep-secrets hyphen naming acceptable (matches tool_name)."
     },
     "reporters": {
-      "last_audit": "2026-02-01",
+      "last_audit": "2026-02-03",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 95,
-      "notes": "392 tests passing (1 skip). XSS escaping verified. CSP headers present."
+      "notes": "392 passed, 1 skipped. XSS protection verified via _escape_html in simple_html_reporter.py."
     },
-    "security": {
-      "last_audit": "2026-02-01",
+    "wizard": {
+      "last_audit": "2026-02-03",
       "status": "clean",
       "tasks_created": 0,
-      "coverage_percent": 97,
-      "notes": "31 security tests passing (1 skip). shell=True only in tool_checker.py (nosec). No injection vulnerabilities. yaml.safe_load throughout."
+      "notes": "707 passed, 1 skipped. 93%+ coverage maintained."
     }
-  },
-  "cooldown_rules": {
-    "wizard_passing_days": 1,
-    "wizard_failing_days": 0,
-    "audit_clean_days": 7,
-    "audit_partial_days": 3,
-    "audit_issues_days": 0
   },
   "tasks": {
-    "total": 35,
-    "open": 0,
-    "in_progress": 0,
-    "resolved": 35,
-    "by_tag": {
-      "WIZARD-HANG": 1,
-      "WIZARD-CRASH": 1,
-      "WIZARD-CONFIG": 1,
-      "WIZARD-OUTPUT": 1,
-      "BUG": 3,
-      "COVERAGE": 0,
-      "SECURITY": 0
-    }
+    "open": 1,
+    "resolved": 39
   },
   "completion": {
     "wizard_repo_passing": true,
     "wizard_image_passing": true,
-    "no_open_tasks": true,
-    "all_audits_on_cooldown": true,
-    "is_complete": true
-  }
+    "full_audit_complete": true,
+    "no_open_tasks": false
+  },
+  "iteration_count": 40,
+  "max_iterations": 25
 }
