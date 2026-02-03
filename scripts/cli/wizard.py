@@ -908,7 +908,12 @@ def run_wizard(
             command = generate_command(config)
             content = generate_shell_script(config, command)
             script_path = Path(emit_script)
-            script_path.write_text(content)
+            try:
+                script_path.parent.mkdir(parents=True, exist_ok=True)
+                script_path.write_text(content)
+            except (OSError, IOError) as e:
+                print(f"Error: Could not write to {emit_script}: {e}")
+                return 1
             # Set execute permission (no effect on Windows, which lacks Unix permission bits)
             try:
                 script_path.chmod(0o755)

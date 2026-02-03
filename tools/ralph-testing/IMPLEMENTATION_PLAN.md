@@ -61,16 +61,18 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 2 | 7 | 0 | 9 |
-| Coverage | 0 | 2 | 1 | 3 |
+| Bug | 2 | 8 | 0 | 10 |
+| Coverage | 0 | 2 | 2 | 4 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **2** | **9** | **1** | **12** |
+| **Total** | **2** | **10** | **2** | **14** |
 
-**Status:** 40 resolved, 0 open.
+**Status:** 41 resolved, 1 open.
 
 ---
 
-## Adapters Audit Summary (2026-02-02)
+## Adapters Audit Summary (2026-02-03)
+
+**Re-audited:** 2026-02-03 (previous audit: 2026-02-02)
 
 **Target Files:**
 - `scripts/core/adapters/` - 29 adapters (~7,152 LOC combined)
@@ -78,6 +80,12 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 **Test Results:**
 - tests/adapters/: 1889 passed, 0 failures
 - **Coverage: 92%** across all adapters
+
+**Changes Since Last Audit:**
+- `checkov_adapter.py` updated for Checkov v3.2+ array format output
+- Added `_parse_single_checkov_result()` helper function
+- 3 new tests added for array format handling
+- All tests pass
 
 **Consistency Analysis:**
 
@@ -87,8 +95,8 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
    - This is acceptable because tool_name is also "semgrep-secrets" (actual binary)
 
 2. **JSON Loading Helper Usage:** PASS
-   - 24/29 adapters use `safe_load_json_file()` or `safe_load_ndjson_file()`
-   - 5 adapters use NDJSON format: falco, nuclei, prowler, trufflehog (use `safe_load_ndjson_file()`)
+   - 28/29 adapters use `safe_load_json_file()` or `safe_load_ndjson_file()`
+   - 4 adapters use NDJSON format: falco, nuclei, prowler, trufflehog (use `safe_load_ndjson_file()`)
    - `base_adapter.py` uses raw `json.load()` but is abstract base class, not a tool adapter
 
 3. **Severity Mapping:** PASS
@@ -146,6 +154,68 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 - Minor coverage gaps exist in edge case branches (file not found, malformed input paths)
 - These are defensive code paths already protected by unit tests in test_adapter_malformed.py
 - 92% overall coverage exceeds the 85% CI requirement
+
+---
+
+## Cross-Cutting Security Audit Summary (2026-02-03)
+
+**Re-audited:** 2026-02-03 (previous audit: 2026-02-02)
+
+**Scope:** Entire `scripts/` directory (~25,000 LOC)
+
+**CWE-78 Command Injection (shell=True):**
+- **PASS** - Only 1 instance: `tool_checker.py:829` with `nosec B602`
+- Commands sourced from hardcoded `REMEDIATION_COMMANDS` dict in `tool_manager.py:220-391`
+- Not user-controlled - dict contains platform commands like `pip install`, `brew install`
+- No `os.system()` calls found
+
+**CWE-79 XSS (HTML Injection):**
+- **PASS** - `simple_html_reporter.py` uses `_escape_html()` for all user-derived fields
+- `trend_formatters.py:703` generates insights HTML, but insights are internally generated strings
+- `html_reporter.py` uses `json.dumps()` for data embedding (auto-escapes)
+- `diff_md_reporter.py:250` unescaped summary tag is low risk (MD processors escape)
+
+**CWE-89 SQL Injection:**
+- **PASS** - 46+ queries verified parameterized with `?` placeholders
+- `get_query_plan()` at `history_db.py:1919` uses f-string, but:
+  - Only called from tests (no production usage)
+  - EXPLAIN QUERY PLAN is read-only meta-query
+- 6 dynamic WHERE clauses (`history_db.py:1180-1191, 2452-2471, 3252`) use internal literals with `nosec B608`
+- `history_integrity.py:275,286` dynamic INSERT with column names from local schema dict
+
+**CWE-22 Path Traversal:**
+- **PASS** - 9 files implement path validation
+- `validation.py`: `validate_path_safe()`, `validate_path_within_base()` - centralized defense
+- `archive_security.py`: `_is_safe_path()` uses `Path.resolve().relative_to()` pattern
+- `path_sanitizers.py`: `_sanitize_path_component()` removes `../` and path separators
+
+**CWE-798 Hardcoded Credentials:**
+- **PASS** - No hardcoded secrets found
+- Only match: test fixture in `FindingsTable.test.tsx:269` (test data, not real secret)
+- All runtime credentials use `os.getenv()` or config files
+
+**CWE-502 Unsafe Deserialization:**
+- **PASS** - No dangerous deserialization patterns found
+- No `pickle.load`, `pickle.loads`, `eval()`, `exec()`
+- No `yaml.load()` without safe_load (grep returns no matches)
+
+**CWE-400 Resource Exhaustion (Timeouts):**
+- **PASS** - 165 `timeout=` occurrences across 39 files
+- Tool installer: 10s-300s timeouts for installs
+- HTTP requests: 10-30s timeouts
+- subprocess.run calls include timeout parameter
+
+**nosec Annotations Audit:**
+- 31 `nosec` comments found and verified:
+  - `B202` (archive extraction): 3 instances, paths validated before extraction
+  - `B310` (urlopen): 3 instances, URLs hardcoded (GitHub Gist) or validated
+  - `B404` (subprocess import): 5 instances, necessary for CLI tool
+  - `B602` (shell=True): 1 instance, commands from trusted dict
+  - `B603` (subprocess without shell): 6 instances, all use list args
+  - `B606` (os.startfile): 1 instance, file opener for user's own files
+  - `B608` (SQL injection): 12 instances, all use parameterized values
+
+**Conclusion:** No security vulnerabilities found. All nosec annotations are properly justified.
 
 ---
 
@@ -262,6 +332,62 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 ---
 
 ## Current Tasks
+
+### TASK-042: [Bug] wizard.py --emit-script shows traceback on write failure
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 7 (S:2, F:3, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** scripts/cli/wizard.py:911
+**Symptom:**
+```
+Traceback (most recent call last):
+  File "scripts/cli/wizard.py", line 911, in run_wizard
+    script_path.write_text(content)
+FileNotFoundError: [Errno 2] No such file or directory: 'Z:\\nonexistent_dir_xyz\\script.sh'
+```
+**Root Cause:**
+`emit_script` path write at line 911 is not wrapped in try/except, causing traceback leak to user.
+Compare with `emit_gha` at line 926 which at least creates parent dirs with `mkdir(parents=True, exist_ok=True)`.
+**Fix:**
+Wrap `script_path.write_text(content)` in try/except and print user-friendly error:
+```python
+try:
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text(content)
+except (OSError, IOError) as e:
+    print(f"Error: Could not write to {emit_script}: {e}")
+    return 1
+```
+**Blocking Test:** tests/cli_ralph/test_wizard_command.py::TestWizardEdgeCases::test_wizard_emit_to_readonly_location
+**Resolution:** (2026-02-03) Fixed wizard.py:907-917 by wrapping `script_path.write_text()` in try/except,
+adding `script_path.parent.mkdir(parents=True, exist_ok=True)` to auto-create parent directories (matching emit_gha behavior),
+and returning 1 with user-friendly error message on failure. All 20 test_wizard_command.py tests pass.
+
+### TASK-041: [Coverage] command_builder.py at 58% - target type builders untested
+**Type:** Coverage
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:2, F:2, C:1)
+**Confidence:** 100%
+**Status:** Open
+**Target:** scripts/cli/wizard_flows/command_builder.py
+**Current Coverage:** 58% (44/122 lines uncovered)
+**Gap:**
+- Lines 49-50: `build_image_args()` Docker images-file mounting
+- Lines 61-74: `build_iac_args()` IaC file mounting for Docker
+- Lines 83-90: `build_url_args()` URLs file mounting
+- Lines 97-108: `build_gitlab_args()` GitLab arguments
+- Lines 113-122: `build_k8s_args()` K8s context/namespace args
+**Analysis:**
+These functions build command arguments for non-repository target types. They're integration-tested
+indirectly via test_wizard.py but have no unit tests verifying the argument structure.
+**Fix:** Create tests/cli/test_wizard_command_builder.py with unit tests:
+- [ ] `build_image_args()` with single image, images_file, Docker mount
+- [ ] `build_iac_args()` with terraform, cloudformation, k8s manifest
+- [ ] `build_url_args()` with URL, urls_file, api_spec
+- [ ] `build_gitlab_args()` with gitlab_url, token, repo, group
+- [ ] `build_k8s_args()` with context, namespace, all_namespaces
 
 ### TASK-040: [Coverage] wizard_flows interactive modules at 8-17% coverage
 **Type:** Coverage
@@ -706,52 +832,59 @@ test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 
 
 ## Wizard Flows Audit Summary (2026-02-03)
 
+**Re-audited:** 2026-02-03 17:30 (previous audit: 2026-02-03 12:00)
+
 **Target Files:**
 - `scripts/cli/wizard_flows/` - 16 modules (~2,076 LOC combined)
 
-**Test Results:**
-- tests/cli/test_wizard*.py: 395 passed, 1 skipped
-- **Overall coverage: 56%** (838/2076 lines uncovered)
+**Test Results (with cli_ralph tests included):**
+- tests/cli/test_wizard*.py + tests/cli_ralph/test_wizard*.py: 564 passed, 1 failed, 1 skipped
+- **Overall coverage: 74%** (494/2076 lines uncovered)
 
-**Coverage by Module:**
+**Note:** Previous audit showed 58% coverage because it only ran `tests/cli/test_wizard*.py`.
+The `tests/cli_ralph/` directory contains 101 additional wizard tests that significantly improve coverage.
 
-| Module | Coverage | Notes |
-|--------|----------|-------|
-| `__init__.py` | 100% | Exports only |
-| `config_models.py` | 100% | Dataclass definitions |
-| `diff_flow.py` | 95% | Well-tested interactive flow |
-| `profile_config.py` | 93% | Profile definitions |
-| `ui_helpers.py` | 93% | UI utilities |
-| `trend_flow.py` | 92% | Trend analysis UI |
-| `tool_checker.py` | 89% | Tool installation logic |
-| `command_builder.py` | 58% | Command construction |
-| `validators.py` | **36%** | Path/URL/K8s validation |
-| `telemetry_helper.py` | 33% | Optional telemetry |
-| `base_flow.py` | **32%** | TargetDetector, PromptHelper |
-| `repo_flow.py` | 18% | Single repo workflow |
-| `stack_flow.py` | 17% | Full stack workflow |
-| `dependency_flow.py` | 14% | SBOM workflow |
-| `target_configurators.py` | **8%** | Target config UI |
-| `deployment_flow.py` | 8% | Pre-deployment workflow |
-| `cicd_flow.py` | 7% | CI/CD workflow |
+**Coverage by Module (Updated):**
+
+| Module | Previous | Current | Notes |
+|--------|----------|---------|-------|
+| `__init__.py` | 100% | 100% | Exports only |
+| `config_models.py` | 100% | 100% | Dataclass definitions |
+| `validators.py` | 36% | **100%** | TASK-039 resolved |
+| `diff_flow.py` | 95% | 95% | Well-tested |
+| `profile_config.py` | 93% | 93% | Profile definitions |
+| `ui_helpers.py` | 93% | 93% | UI utilities |
+| `trend_flow.py` | 92% | 92% | Trend analysis UI |
+| `tool_checker.py` | 89% | 89% | Tool installation |
+| `dependency_flow.py` | 14% | **89%** | cli_ralph tests |
+| `cicd_flow.py` | 7% | **80%** | cli_ralph tests |
+| `stack_flow.py` | 17% | **72%** | cli_ralph tests |
+| `repo_flow.py` | 18% | **69%** | cli_ralph tests |
+| `deployment_flow.py` | 8% | **68%** | cli_ralph tests |
+| `base_flow.py` | 32% | **67%** | cli_ralph tests |
+| `command_builder.py` | 58% | 58% | Target type builders |
+| `telemetry_helper.py` | 33% | 33% | Optional feature |
+| `target_configurators.py` | 8% | 8% | Interactive UI |
+
+**Failing Test:**
+- `tests/cli_ralph/test_wizard_command.py::TestWizardEdgeCases::test_wizard_emit_to_readonly_location`
+- **Root Cause:** wizard.py:911 shows traceback on write failure (TASK-042 created)
 
 **Analysis:**
 
 1. **High Coverage Modules (89-100%):** Well-tested, no action needed
-   - tool_checker.py, diff_flow.py, trend_flow.py, ui_helpers.py, profile_config.py
+   - validators.py, tool_checker.py, diff_flow.py, trend_flow.py, ui_helpers.py, profile_config.py, dependency_flow.py
 
-2. **Medium Coverage (32-58%):** Contains testable logic worth covering
-   - validators.py (36%): HTTP validation, path validation, K8s context checks
-   - base_flow.py (32%): TargetDetector methods are testable
-   - command_builder.py (58%): Some branches untested but functional
+2. **Medium Coverage (58-80%):** Mostly covered, minor gaps
+   - command_builder.py (58%): Target type builders need tests (TASK-041)
+   - cicd_flow.py (80%), stack_flow.py (72%), repo_flow.py (69%), deployment_flow.py (68%), base_flow.py (67%): Interactive prompt methods remain uncovered
 
-3. **Low Coverage (7-18%):** Interactive workflow classes
-   - These use `input()` for prompts and are orchestration-only
-   - Tested indirectly via test_wizard.py and test_wizard_automation.py
-   - Low value to unit test - the logic is in scan_jobs/ which is 92% covered
+3. **Low Coverage (8-33%):** Expected low coverage
+   - telemetry_helper.py (33%): Optional telemetry - deferred
+   - target_configurators.py (8%): Pure interactive UI - deferred
 
-**Conclusion:** 3 new coverage tasks created for actionable gaps (TASK-038, 039, 040).
-Interactive workflow classes (cicd_flow, deployment_flow, etc.) deferred as low-value.
+**Conclusion:** 2 new tasks created: TASK-042 (bug fix) and TASK-041 (coverage).
+TASK-038, 039, 040 are resolved. Coverage improved from 58% to 74% by including cli_ralph tests.
 
 ---
 
