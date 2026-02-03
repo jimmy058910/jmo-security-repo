@@ -159,7 +159,7 @@ class CICDFlow(BaseWizardFlow):
         # Scan pipeline images if requested
         if options.get("scan_images") and targets.get("pipeline_images"):
             images_file = Path("pipeline-images.txt")
-            images_file.write_text("\n".join(targets["pipeline_images"]))
+            images_file.write_text("\n".join(targets["pipeline_images"]), encoding="utf-8")
             cmd.extend(["--images-file", str(images_file)])
 
         return cmd

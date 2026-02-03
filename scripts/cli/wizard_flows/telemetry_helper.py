@@ -54,7 +54,7 @@ def save_telemetry_preference(config_path: Path, enabled: bool) -> None:
     # Load existing config or create new one
     if config_path.exists():
         try:
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 config_data = yaml.safe_load(f) or {}
         except Exception:
             config_data = {}
@@ -65,7 +65,7 @@ def save_telemetry_preference(config_path: Path, enabled: bool) -> None:
     config_data["telemetry"] = {"enabled": enabled}
 
     # Write back to file
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
 
     status = "enabled" if enabled else "disabled"

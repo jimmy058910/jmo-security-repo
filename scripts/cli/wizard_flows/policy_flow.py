@@ -641,7 +641,7 @@ def _show_all_violations_paginated(
 def _export_violations_json(policy_name: str, result: PolicyResult) -> None:
     """Export policy violations to JSON file."""
     output_file = Path(f"policy_violations_{policy_name}.json")
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "policy": policy_name,
@@ -660,7 +660,7 @@ def _export_violations_json(policy_name: str, result: PolicyResult) -> None:
 def _export_violations_markdown(policy_name: str, result: PolicyResult) -> None:
     """Export policy violations to Markdown file."""
     output_file = Path(f"policy_violations_{policy_name}.md")
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(f"# Policy Violations: {policy_name}\n\n")
         f.write(f"**Status:** {'✅ PASSED' if result.passed else '❌ FAILED'}\n")
         f.write(f"**Violations:** {result.violation_count}\n\n")

@@ -75,7 +75,7 @@ class DependencyFlow(BaseWizardFlow):
         # Add images for container dependencies
         if targets["images"]:
             images_file = Path("dependency-images.txt")
-            images_file.write_text("\n".join(targets["images"]))
+            images_file.write_text("\n".join(targets["images"]), encoding="utf-8")
             cmd.extend(["--images-file", str(images_file)])
 
         return cmd

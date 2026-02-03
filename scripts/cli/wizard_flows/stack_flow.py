@@ -85,7 +85,7 @@ class EntireStackFlow(BaseWizardFlow):
         # Add images
         if targets["images"]:
             images_file = Path("detected-images.txt")
-            images_file.write_text("\n".join(targets["images"]))
+            images_file.write_text("\n".join(targets["images"]), encoding="utf-8")
             cmd.extend(["--images-file", str(images_file)])
 
         # Add IaC files (limit to first 5 to avoid command-line length issues)
