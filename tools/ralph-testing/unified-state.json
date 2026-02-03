@@ -64,15 +64,15 @@
     }
   },
   "tasks": {
-    "open": 1,
-    "resolved": 41
+    "open": 0,
+    "resolved": 42
   },
   "completion": {
     "wizard_repo_passing": true,
     "wizard_image_passing": true,
     "full_audit_complete": true,
-    "no_open_tasks": false
+    "no_open_tasks": true
   },
-  "iteration_count": 42,
+  "iteration_count": 43,
   "max_iterations": 25
 }

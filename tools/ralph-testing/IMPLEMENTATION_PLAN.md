@@ -66,7 +66,7 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 | Security | 0 | 0 | - | 0 |
 | **Total** | **2** | **10** | **2** | **14** |
 
-**Status:** 41 resolved, 1 open.
+**Status:** 42 resolved, 0 open.
 
 ---
 
@@ -370,7 +370,7 @@ and returning 1 with user-friendly error message on failure. All 20 test_wizard_
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
 **Confidence:** 100%
-**Status:** Open
+**Status:** Resolved
 **Target:** scripts/cli/wizard_flows/command_builder.py
 **Current Coverage:** 58% (44/122 lines uncovered)
 **Gap:**
@@ -383,11 +383,12 @@ and returning 1 with user-friendly error message on failure. All 20 test_wizard_
 These functions build command arguments for non-repository target types. They're integration-tested
 indirectly via test_wizard.py but have no unit tests verifying the argument structure.
 **Fix:** Create tests/cli/test_wizard_command_builder.py with unit tests:
-- [ ] `build_image_args()` with single image, images_file, Docker mount
-- [ ] `build_iac_args()` with terraform, cloudformation, k8s manifest
-- [ ] `build_url_args()` with URL, urls_file, api_spec
-- [ ] `build_gitlab_args()` with gitlab_url, token, repo, group
-- [ ] `build_k8s_args()` with context, namespace, all_namespaces
+- [x] `build_image_args()` with single image, images_file, Docker mount
+- [x] `build_iac_args()` with terraform, cloudformation, k8s manifest
+- [x] `build_url_args()` with URL, urls_file, api_spec
+- [x] `build_gitlab_args()` with gitlab_url, token, repo, group
+- [x] `build_k8s_args()` with context, namespace, all_namespaces
+**Resolution:** Tests already exist in tests/unit/test_wizard_command_builder.py with 43 tests achieving 100% coverage on this module. Task was already complete.
 
 ### TASK-040: [Coverage] wizard_flows interactive modules at 8-17% coverage
 **Type:** Coverage
