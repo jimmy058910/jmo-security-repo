@@ -283,6 +283,12 @@ TOOL_PLATFORM_REQUIREMENTS: dict[str, dict] = {
         "workarounds": ["docker", "wsl2"],
     },
     # Linux/macOS only (no Windows binaries)
+    "shellcheck": {
+        "platforms": ["linux", "macos"],
+        "docker_image": "koalaman/shellcheck",
+        "reason": "No Windows build available from upstream (koalaman/shellcheck)",
+        "workarounds": ["wsl2", "docker"],
+    },
     "noseyparker": {
         "platforms": ["linux", "macos"],
         "docker_image": "ghcr.io/praetorian-inc/noseyparker",

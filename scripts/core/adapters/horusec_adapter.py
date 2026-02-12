@@ -141,15 +141,21 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
         if not isinstance(vuln, dict):
             continue
 
-        # Extract vulnerability metadata
-        vuln_id = str(vuln.get("vulnerabilityID", vuln.get("id", "")))
-        severity_raw = str(vuln.get("severity", "MEDIUM"))
-        file_path = str(vuln.get("file", ""))
-        line = int(vuln.get("line", 0))
-        details = str(vuln.get("details", ""))
-        security_tool = str(vuln.get("securityTool", ""))
-        vuln_type = str(vuln.get("type", ""))
-        code_snippet = str(vuln.get("code", ""))
+        # Horusec v2.8+ nests vulnerability data inside 'vulnerabilities' key
+        # Structure: {"vulnerabilityID": ..., "vulnerabilities": {actual data}}
+        vuln_data = vuln.get("vulnerabilities", vuln)
+        if not isinstance(vuln_data, dict):
+            continue
+
+        # Extract vulnerability metadata from nested structure
+        vuln_id = str(vuln_data.get("vulnerabilityID", vuln.get("vulnerabilityID", "")))
+        severity_raw = str(vuln_data.get("severity", "MEDIUM"))
+        file_path = str(vuln_data.get("file", ""))
+        line = int(vuln_data.get("line", 0))
+        details = str(vuln_data.get("details", ""))
+        security_tool = str(vuln_data.get("securityTool", ""))
+        vuln_type = str(vuln_data.get("type", ""))
+        code_snippet = str(vuln_data.get("code", ""))
 
         # Normalize severity
         severity = normalize_severity(severity_raw)

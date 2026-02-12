@@ -169,7 +169,7 @@ class PolicyEngine:
             # Evaluate policy using OPA eval
             result = subprocess.run(
                 [
-                    self._opa_path,
+                    self._opa_path,  # type: ignore[list-item]
                     "eval",
                     "-d",
                     str(policy_path),
@@ -267,7 +267,7 @@ class PolicyEngine:
             Tuple of (is_valid, error_message)
         """
         result = subprocess.run(
-            [self._opa_path, "check", str(policy_path)],
+            [self._opa_path, "check", str(policy_path)],  # type: ignore[list-item]
             capture_output=True,
             text=True,
             timeout=10,
@@ -352,7 +352,7 @@ class PolicyEngine:
             # Use OPA to evaluate just the metadata
             result = subprocess.run(
                 [
-                    self._opa_path,
+                    self._opa_path,  # type: ignore[list-item]
                     "eval",
                     "-d",
                     str(policy_path),

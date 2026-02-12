@@ -63,7 +63,7 @@ class FindingsLoader:
                 )
 
             logger.info(f"Loaded {len(findings)} findings from {self.findings_file}")
-            return findings
+            return findings  # type: ignore[no-any-return]
 
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in findings file: {e}")

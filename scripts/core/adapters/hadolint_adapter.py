@@ -62,6 +62,7 @@ from scripts.core.plugin_api import (
     PluginMetadata,
     adapter_plugin,
 )
+from scripts.core.tool_registry import ToolRegistry
 
 
 @adapter_plugin(
@@ -123,6 +124,18 @@ class HadolintAdapter(AdapterPlugin):
         return findings
 
 
+def _get_hadolint_version() -> str:
+    """Get hadolint version from versions.yaml via ToolRegistry."""
+    try:
+        registry = ToolRegistry()
+        tool_info = registry.get_tool("hadolint")
+        if tool_info:
+            return tool_info.version
+    except Exception:
+        pass  # Fall back to "unknown" if registry fails
+    return "unknown"
+
+
 def _load_hadolint_internal(path: str | Path) -> list[dict[str, Any]]:
     data = safe_load_json_file(path, default=None)
     if not isinstance(data, list):
@@ -145,7 +158,7 @@ def _load_hadolint_internal(path: str | Path) -> list[dict[str, Any]]:
             "message": msg,
             "description": msg,
             "severity": sev,
-            "tool": {"name": "hadolint", "version": "unknown"},
+            "tool": {"name": "hadolint", "version": _get_hadolint_version()},
             "location": {"path": file_path, "startLine": line},
             "remediation": str(it.get("reference") or "See rule documentation"),
             "tags": ["dockerfile", "lint"],

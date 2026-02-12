@@ -283,7 +283,7 @@ def scan_gitlab_repo(
 
                 for image in discovered_images:
                     try:
-                        _, image_statuses = scan_image(
+                        _, image_statuses = scan_image(  # type: ignore[call-arg]
                             image=image,
                             results_dir=temp_image_results,
                             tools=image_tools,

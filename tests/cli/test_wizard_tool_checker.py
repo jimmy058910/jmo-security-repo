@@ -178,6 +178,14 @@ class TestCheckToolsForProfile:
             "trivy": MockToolStatus("trivy", installed=True, execution_ready=True),
             "semgrep": MockToolStatus("semgrep", installed=True, execution_ready=True),
         }
+        # Mock get_tool_summary to return proper summary object
+        manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=2,
+            platform_applicable=2,
+            installed=2,
+            execution_ready=2,
+        )
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
@@ -241,6 +249,15 @@ class TestCheckToolsForProfile:
             "semgrep": MockToolStatus("semgrep", installed=True, execution_ready=True),
             "bandit": bandit_status,
         }
+        # Mock get_tool_summary to return proper summary object with missing tool
+        manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=3,
+            platform_applicable=3,
+            installed=2,
+            execution_ready=2,
+            not_installed=["bandit"],
+        )
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.print"):
@@ -1187,6 +1204,15 @@ class TestCrashDetection:
         manager_instance.check_profile.return_value = {
             "checkov": crash_status,
         }
+        # Mock get_tool_summary to return proper summary object with crashed tool
+        manager_instance.get_tool_summary.return_value = MockToolStatusSummary(
+            profile_name="fast",
+            profile_total=1,
+            platform_applicable=1,
+            installed=1,
+            execution_ready=0,
+            version_issues=["checkov"],
+        )
         mock_tool_manager.return_value = manager_instance
 
         with patch("builtins.input", return_value="2"):  # Continue with available

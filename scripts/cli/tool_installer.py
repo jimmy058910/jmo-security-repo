@@ -142,7 +142,7 @@ def install_dependency(
             print(msg)
 
     # Determine if running as root (for sudo handling)
-    is_root = os.getuid() == 0 if hasattr(os, "getuid") else False  # type: ignore[attr-defined]
+    is_root = os.getuid() == 0 if hasattr(os, "getuid") else False
     sudo_available = shutil.which("sudo") is not None
 
     # Try each package manager in order of preference
@@ -150,23 +150,35 @@ def install_dependency(
         # Special case: NodeSource for Node.js 20+ on Linux
         if pkg_manager == "nodesource" and command == "curl_script":
             if shutil.which("curl"):
-                _print(f"[*] Installing Node.js 20 via NodeSource...")
+                _print("[*] Installing Node.js 20 via NodeSource...")
                 try:
                     # Download and run NodeSource setup script
-                    curl_cmd = ["curl", "-fsSL", "https://deb.nodesource.com/setup_20.x", "-o", "/tmp/nodesource_setup.sh"]
-                    subprocess.run(curl_cmd, capture_output=True, timeout=60, check=True)
+                    curl_cmd = [
+                        "curl",
+                        "-fsSL",
+                        "https://deb.nodesource.com/setup_20.x",
+                        "-o",
+                        "/tmp/nodesource_setup.sh",  # nosec B108
+                    ]
+                    subprocess.run(
+                        curl_cmd, capture_output=True, timeout=60, check=True
+                    )
 
                     # Run the setup script
-                    setup_cmd = ["bash", "/tmp/nodesource_setup.sh"]
+                    setup_cmd = ["bash", "/tmp/nodesource_setup.sh"]  # nosec B108
                     if not is_root and sudo_available:
                         setup_cmd = ["sudo"] + setup_cmd
-                    subprocess.run(setup_cmd, capture_output=True, timeout=120, check=True)
+                    subprocess.run(
+                        setup_cmd, capture_output=True, timeout=120, check=True
+                    )
 
                     # Install nodejs
                     install_cmd = ["apt-get", "install", "-y", "nodejs"]
                     if not is_root and sudo_available:
                         install_cmd = ["sudo"] + install_cmd
-                    result = subprocess.run(install_cmd, capture_output=True, text=True, timeout=300)
+                    result = subprocess.run(
+                        install_cmd, capture_output=True, text=True, timeout=300
+                    )
 
                     if result.returncode == 0:
                         return True, "Installed Node.js 20 via NodeSource"
@@ -185,7 +197,7 @@ def install_dependency(
 
         # For apt: run apt-get update first (package lists may be stale/missing)
         if pkg_manager == "apt":
-            _print(f"[*] Updating package lists...")
+            _print("[*] Updating package lists...")
             update_cmd = ["apt-get", "update"]
             if not is_root and sudo_available:
                 update_cmd = ["sudo"] + update_cmd
@@ -2430,27 +2442,38 @@ class ToolInstaller:
 
                 # Scancode: Run ./configure to set up the Python venv
                 # The pre-built release requires this step to create venv/bin/scancode
+                # Note: Skip on Windows - pre-built Windows releases don't need configure
                 if tool_name == "scancode":
                     configure_script = app_dir / "configure"
                     if configure_script.exists():
-                        configure_script.chmod(0o755)
-                        logger.debug(f"Running scancode configure script in {app_dir}")
-                        try:
-                            configure_result = subprocess.run(
-                                ["./configure"],
-                                cwd=str(app_dir),
-                                capture_output=True,
-                                text=True,
-                                timeout=300,  # Configure can take a while
+                        if self.platform == "windows":
+                            # Windows pre-built release is already configured
+                            logger.debug(
+                                "Skipping scancode configure on Windows (pre-built release)"
                             )
-                            if configure_result.returncode != 0:
-                                logger.warning(
-                                    f"Scancode configure warning: {configure_result.stderr[:200]}"
+                        else:
+                            configure_script.chmod(0o755)
+                            logger.debug(
+                                f"Running scancode configure script in {app_dir}"
+                            )
+                            try:
+                                configure_result = subprocess.run(
+                                    ["./configure"],
+                                    cwd=str(app_dir),
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=300,  # Configure can take a while
                                 )
-                        except subprocess.TimeoutExpired:
-                            logger.warning("Scancode configure timed out after 300s")
-                        except Exception as e:
-                            logger.warning(f"Scancode configure failed: {e}")
+                                if configure_result.returncode != 0:
+                                    logger.warning(
+                                        f"Scancode configure warning: {configure_result.stderr[:200]}"
+                                    )
+                            except subprocess.TimeoutExpired:
+                                logger.warning(
+                                    "Scancode configure timed out after 300s"
+                                )
+                            except Exception as e:
+                                logger.warning(f"Scancode configure failed: {e}")
 
                 # Verify installation
                 status = self.manager.check_tool(tool_name)

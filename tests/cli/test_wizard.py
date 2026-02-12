@@ -250,7 +250,9 @@ def test_generate_github_actions_docker():
 @patch("scripts.cli.wizard._check_docker_running")
 @patch("scripts.cli.wizard._prompt_yes_no")
 @patch("scripts.cli.wizard._prompt_choice")
+@patch("scripts.cli.tool_manager.ToolManager")
 def test_run_wizard_non_interactive(
+    mock_tool_manager_class,
     mock_choice,
     mock_yes_no,
     mock_docker_running,
@@ -266,6 +268,21 @@ def test_run_wizard_non_interactive(
 
     # Mock subprocess.run to prevent actual scan execution
     mock_subprocess_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks during scan execution
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        profile_total=18,
+        platform_applicable=18,
+        profile_name="balanced",
+    )
+    mock_tm_instance.check_tool.return_value = MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     with patch("scripts.cli.wizard.Path.cwd", return_value=Path("/home/user/repos")):
         rc = run_wizard(yes=True)
@@ -786,11 +803,24 @@ def test_execute_scan_decline(mock_yes_no):
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
 @patch("scripts.cli.wizard.subprocess.run")
-def test_execute_scan_docker_mode(mock_run, mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_execute_scan_docker_mode(mock_tool_manager_class, mock_run, mock_yes_no):
     """Test execute_scan in Docker mode."""
     from scripts.cli.wizard import execute_scan
 
     mock_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        platform_applicable=18,
+        profile_name="balanced",
+        profile_total=18,
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     config = WizardConfig()
     config.profile = "balanced"
@@ -812,12 +842,25 @@ def test_execute_scan_docker_mode(mock_run, mock_yes_no):
 
 @patch("subprocess.run")
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_native_mode(mock_yes_no, mock_run):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_execute_scan_native_mode(mock_tool_manager_class, mock_yes_no, mock_run):
     """Test execute_scan in native mode."""
     from scripts.cli.wizard import execute_scan
 
     # Mock subprocess.run to prevent actual command execution
     mock_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        platform_applicable=18,
+        profile_name="balanced",
+        profile_total=18,
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     config = WizardConfig()
     config.profile = "balanced"

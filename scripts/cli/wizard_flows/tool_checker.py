@@ -11,18 +11,27 @@ Functions:
     _install_missing_tools_interactive: Interactive install with progress
     _check_policy_tools: OPA availability check
     _install_opa_tool: OPA installation helper
+    _print_status_legend: Display tool status icon meanings
+    _print_platform_summary: Show Windows/platform limitations with Docker recommendation
 """
 
 from __future__ import annotations
 
 import logging
 import subprocess  # nosec B404 - CLI needs subprocess
+import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+# Platform detection
+IS_WINDOWS = sys.platform == "win32"
+
+# Docker mode recommendation threshold (percentage of unavailable tools)
+DOCKER_RECOMMENDATION_THRESHOLD = 0.15  # 15%
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +72,175 @@ def _get_print_step():
     """Get print_step function, initializing if needed."""
     _init_ui_helpers()
     return _print_step
+
+
+# ---------------------------------------------------------------------------
+# Status Legend and Platform Summary (Windows UX Improvements)
+# ---------------------------------------------------------------------------
+
+
+def _print_status_legend() -> None:
+    """Print the tool status legend at the start of tool check.
+
+    Helps users understand what each status icon means.
+    """
+    colorize = _get_colorize()
+    FALLBACKS = _get_unicode_fallbacks()
+
+    print("\n" + colorize("Tool Status Legend:", "bold"))
+    print(f"  {FALLBACKS.get('✅', '[OK]')}  = Ready to run")
+    print(f"  {FALLBACKS.get('⚠', '[!]')}  = Needs attention (can be fixed)")
+    print("  ~   = Platform incompatible (cannot run natively)")
+    print(
+        f"  {FALLBACKS.get('○', 'o')}   = Content-triggered (runs only if relevant content found)"
+    )
+    print(f"  {FALLBACKS.get('✗', 'X')}   = Not installed")
+    print("  !!  = Startup crash (needs reinstall)")
+    print()
+
+
+def _print_platform_summary(
+    platform_skipped: list[str],
+    profile_total: int,
+    platform: str,
+) -> tuple[bool, bool]:
+    """Print a summary of platform-incompatible tools with Docker recommendation.
+
+    Args:
+        platform_skipped: List of tool names that are platform-incompatible
+        profile_total: Total tools in the profile
+        platform: Current platform (windows, linux, macos)
+
+    Returns:
+        Tuple of (should_recommend_docker, user_wants_docker)
+    """
+    colorize = _get_colorize()
+    FALLBACKS = _get_unicode_fallbacks()
+
+    if not platform_skipped:
+        return False, False
+
+    unavailable_ratio = (
+        len(platform_skipped) / profile_total if profile_total > 0 else 0
+    )
+
+    # Platform-specific messages
+    if platform == "windows":
+        platform_display = "Windows"
+        workaround_primary = "Docker Desktop"
+        workaround_secondary = "WSL2 (Windows Subsystem for Linux)"
+    elif platform == "macos":
+        platform_display = "macOS"
+        workaround_primary = "Docker Desktop"
+        workaround_secondary = "Homebrew (some tools)"
+    else:
+        platform_display = platform.capitalize()
+        workaround_primary = "Docker"
+        workaround_secondary = None
+
+    print()
+    print("═" * 54)
+    print(colorize(f"  {platform_display} Compatibility Summary", "bold"))
+    print("═" * 54)
+    print()
+    print(f"  {len(platform_skipped)} tool(s) unavailable on {platform_display}:")
+    print()
+
+    # Group by reason (simplified - actual reasons would come from tool registry)
+    for tool in platform_skipped:
+        reason = _get_platform_unavailable_reason(tool, platform)
+        print(f"    {FALLBACKS.get('~', '~')} {colorize(tool, 'yellow')}")
+        print(f"       Reason: {reason}")
+    print()
+
+    # Show workarounds
+    print(colorize("  Workarounds:", "blue"))
+    print(f"    - {workaround_primary}: Full tool support in container")
+    if workaround_secondary:
+        print(f"    - {workaround_secondary}")
+    print()
+
+    # Recommend Docker if significant number of tools unavailable
+    should_recommend = unavailable_ratio >= DOCKER_RECOMMENDATION_THRESHOLD
+    user_wants_docker = False
+
+    if should_recommend:
+        print(
+            colorize(
+                f"  {FALLBACKS.get('💡', '!')} Recommendation: Use Docker mode for full tool coverage",
+                "blue",
+            )
+        )
+        print(
+            f"     ({len(platform_skipped)}/{profile_total} = {unavailable_ratio*100:.0f}% tools unavailable)"
+        )
+        print()
+        print("     Command: jmo wizard --docker")
+        print()
+
+    print("═" * 54)
+
+    return should_recommend, user_wants_docker
+
+
+def _get_platform_unavailable_reason(tool: str, platform: str) -> str:
+    """Get the reason why a tool is unavailable on this platform.
+
+    Args:
+        tool: Tool name
+        platform: Current platform
+
+    Returns:
+        Human-readable reason string
+    """
+    # Platform-specific reasons for common tools
+    windows_reasons = {
+        "falco": "Linux kernel module required (eBPF)",
+        "shellcheck": "No Windows binary from upstream (use WSL2)",
+        "lynis": "Unix/Linux system auditing only",
+        "afl++": "Linux fuzzer with kernel dependencies",
+        "bearer": "No official Windows binary",
+        "noseyparker": "No Windows binary available",
+        "kubescape": "Binary distribution issues on Windows",
+        "scancode": "Complex dependency chain fails on Windows",
+    }
+
+    macos_reasons = {
+        "falco": "Linux kernel module required (eBPF)",
+        "lynis": "Reduced functionality on macOS",
+    }
+
+    if platform == "windows":
+        return windows_reasons.get(tool, "No Windows support")
+    elif platform == "macos":
+        return macos_reasons.get(tool, "Limited macOS support")
+    else:
+        return "Platform-specific limitation"
+
+
+# Windows-incompatible tools - cannot be auto-fixed on Windows
+WINDOWS_INCOMPATIBLE_TOOLS = {
+    "falco",
+    "shellcheck",
+    "lynis",
+    "afl++",
+    "bearer",
+    "noseyparker",
+    "kubescape",
+    "scancode",
+}
+
+
+def _is_windows_incompatible(tool_name: str) -> bool:
+    """Check if a tool is known to be Windows-incompatible.
+
+    Args:
+        tool_name: Name of the tool
+
+    Returns:
+        True if tool cannot run on Windows
+    """
+    return tool_name.lower() in WINDOWS_INCOMPATIBLE_TOOLS
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +287,9 @@ def check_tools_for_profile(
 
     print_step(2, WIZARD_TOTAL_STEPS, "Tool Pre-flight Check")
 
+    # Show status legend at the start (Windows UX improvement)
+    _print_status_legend()
+
     try:
         from scripts.cli.tool_manager import (
             ToolManager,
@@ -135,8 +316,30 @@ def check_tools_for_profile(
             )
         )
 
-        # Show platform-skipped tools if any
-        if summary.platform_skipped:
+        # Show platform summary with Docker recommendation (Windows UX improvement)
+        # This gives Windows users clear feedback about why tools are unavailable
+        if summary.platform_skipped and IS_WINDOWS:
+            should_recommend_docker, _ = _print_platform_summary(
+                summary.platform_skipped,
+                summary.profile_total,
+                platform,
+            )
+            if should_recommend_docker and not yes:
+                # Offer to switch to Docker mode interactively
+                print(
+                    colorize(
+                        "\nSwitch to Docker mode for full tool support? [y/N]: ",
+                        "blue",
+                    ),
+                    end="",
+                )
+                switch_choice = input().strip().lower()
+                if switch_choice == "y":
+                    print(colorize("\nSwitching to Docker mode...", "green"))
+                    print("Run: jmo wizard --docker")
+                    return False, []  # Cancel to let user restart with Docker
+        elif summary.platform_skipped:
+            # Non-Windows: just show the skipped tools
             platform_reason = f"{len(summary.platform_skipped)} {platform}-incompatible"
             print(
                 colorize(
@@ -343,9 +546,24 @@ def check_tools_for_profile(
             return True, available
 
         # Interactive: offer choices with auto-fix option
+        # Calculate fixable count (exclude platform-incompatible on Windows)
+        if IS_WINDOWS:
+            fixable_tools = [
+                t for t in fix_info if not _is_windows_incompatible(t["name"])
+            ]
+            platform_skipped_count = len(fix_info) - len(fixable_tools)
+        else:
+            fixable_tools = fix_info
+            platform_skipped_count = 0
+
         print("\n" + "─" * 50)
         print(colorize("Options:", "blue"))
-        print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
+        if platform_skipped_count > 0:
+            print(
+                f"  [1] Auto-fix {len(fixable_tools)} issues (skip {platform_skipped_count} platform-incompatible)"
+            )
+        else:
+            print(f"  [1] Auto-fix all issues ({len(tools_needing_attention)} tools)")
         print(
             f"  [2] Continue with {len(available)} working tools (skip: {', '.join(t['name'] for t in fix_info[:3])}{'...' if len(fix_info) > 3 else ''})"
         )
@@ -556,16 +774,41 @@ def _auto_fix_tools(
             return False, available
         # choice == "2" continues without installing deps (tools may fail)
 
-    # Phase 0: Separate manual-only tools from auto-fixable tools
+    # Phase 0: Separate tools by category
+    # - platform_incompatible: Cannot run on this platform (show but don't attempt fix)
+    # - manual_tools: Require manual installation
+    # - auto_fix_info: Can be auto-installed
+    platform_incompatible: list[dict] = []
     manual_tools: list[dict] = []
     auto_fix_info: list[dict] = []
 
     for info in fix_info:
         remediation = info["remediation"]
-        if remediation.get("is_manual"):
+        tool_name = info["name"]
+
+        # Check for platform incompatibility first
+        if remediation.get("platform_incompatible") or (
+            IS_WINDOWS and _is_windows_incompatible(tool_name)
+        ):
+            platform_incompatible.append(info)
+        elif remediation.get("is_manual"):
             manual_tools.append(info)
         else:
             auto_fix_info.append(info)
+
+    # Show platform-incompatible tools (Windows UX improvement)
+    if platform_incompatible:
+        colorize = _get_colorize()
+        FALLBACKS = _get_unicode_fallbacks()
+        print(
+            colorize(
+                f"\n{FALLBACKS.get('~', '~')} Skipping {len(platform_incompatible)} platform-incompatible tool(s):",
+                "dim",
+            )
+        )
+        skipped_names = [info["name"] for info in platform_incompatible]
+        print(f"  {', '.join(skipped_names)}")
+        print(colorize("  (Use Docker or WSL2 for these tools)", "dim"))
 
     # Show manual tools guidance upfront (don't attempt install)
     if manual_tools:

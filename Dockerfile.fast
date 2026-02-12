@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
+    xz-utils \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -66,6 +67,15 @@ RUN OPA_VERSION="1.12.0" && \
     -o /usr/local/bin/opa && \
     chmod +x /usr/local/bin/opa
 
+# Download ShellCheck (pinned version instead of apt)
+RUN SHELLCHECK_VERSION="0.10.0" && \
+    SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl -sSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
+    -o /tmp/shellcheck.tar.xz && \
+    tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
+    mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
+    chmod +x /usr/local/bin/shellcheck
+
 #
 # Stage 2: Runtime - Minimal CI/CD environment with 9 tools
 #
@@ -93,7 +103,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     jq \
-    shellcheck \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -118,6 +127,7 @@ COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
+COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 
 # Binary stripping
 RUN strip /usr/local/bin/trufflehog \
@@ -126,6 +136,7 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/hadolint \
     /usr/local/bin/nuclei \
     /usr/local/bin/opa \
+    /usr/local/bin/shellcheck \
     2>/dev/null || true
 
 VOLUME ["/root/.cache/trivy"]

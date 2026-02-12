@@ -138,6 +138,18 @@ def _load_cdxgen_internal(path: str | Path) -> list[dict[str, Any]]:
     # Extract spec version
     spec_version = data.get("specVersion", "unknown")
 
+    # Extract cdxgen version from metadata.tools.components (CycloneDX provenance)
+    cdxgen_version = "unknown"
+    tools_info = data.get("metadata", {}).get("tools", {})
+    # Handle both CycloneDX 1.4 (tools.components) and 1.5+ (tools.components[])
+    if isinstance(tools_info, dict):
+        tool_components = tools_info.get("components", [])
+        if isinstance(tool_components, list):
+            for tool in tool_components:
+                if isinstance(tool, dict) and tool.get("name") == "cdxgen":
+                    cdxgen_version = str(tool.get("version") or "unknown")
+                    break
+
     # Extract components array
     components = data.get("components", [])
     if not isinstance(components, list):
@@ -208,7 +220,7 @@ def _load_cdxgen_internal(path: str | Path) -> list[dict[str, Any]]:
             "severity": "INFO",  # SBOM components are informational
             "tool": {
                 "name": "cdxgen",
-                "version": "11.10.0",  # cdxgen v11.10.0+
+                "version": cdxgen_version,
             },
             "location": {
                 "path": str(path),

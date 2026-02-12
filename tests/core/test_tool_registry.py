@@ -123,13 +123,19 @@ class TestGetToolsForProfileFiltered:
         assert "falco" in linux_tools
         assert "afl++" in linux_tools
 
-    def test_fast_profile_not_affected(self):
-        """Fast profile has no platform-specific tools."""
-        # Fast profile uses widely available tools
+    def test_fast_profile_filters_platform_specific(self):
+        """Fast profile filters platform-specific tools like shellcheck on Windows."""
+        # Fast profile includes shellcheck which is linux/macos only
         windows_tools = get_tools_for_profile_filtered("fast", "windows")
         linux_tools = get_tools_for_profile_filtered("fast", "linux")
-        # Both should have same tools since fast profile has no platform-specific tools
-        assert set(windows_tools) == set(linux_tools)
+        # shellcheck is excluded on Windows (linux/macos only)
+        assert "shellcheck" not in windows_tools
+        assert "shellcheck" in linux_tools
+        # Universal tools should be in both
+        assert "trivy" in windows_tools
+        assert "trivy" in linux_tools
+        assert "semgrep" in windows_tools
+        assert "semgrep" in linux_tools
 
     def test_invalid_profile_returns_empty(self):
         """Invalid profile should return empty list."""

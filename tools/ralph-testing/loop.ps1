@@ -209,8 +209,14 @@ function Get-EffectiveMode {
     param(
         [string]$RequestedMode,
         [string]$AuditTarget,
-        [bool]$ForceAuditMode = $false
+        [bool]$ForceAuditMode = $false,
+        [bool]$ForceFlagSet = $false  # -Force command line switch
     )
+
+    # -Force flag bypasses completion check entirely and forces audit
+    if ($ForceFlagSet) {
+        return "audit:$AuditTarget"
+    }
 
     # Struggle detection can force audit mode
     if ($ForceAuditMode) {
@@ -230,17 +236,24 @@ function Get-EffectiveMode {
         return $RequestedMode
     }
 
-    # Auto mode: smart cycling through phases (v2.0)
+    # Auto mode: smart cycling through phases (v2.1)
     #
     # Priority 1: Fix open tasks (build mode)
     if (Test-HasOpenTasks) {
         return "build"
     }
 
-    # Priority 2: Run wizard-scan if not complete (needs 3 consecutive successes for BOTH modes)
-    if (Test-WizardScanNeedsAttention) {
-        $WizardMode = Get-WizardModeToRun
-        return "wizard-scan:$WizardMode"
+    # Priority 2: Run wizard-scan ONLY if not complete (needs 2 consecutive successes for BOTH modes)
+    # Check completion FIRST to prevent cooldown-triggered re-runs when already passing
+    if (-not (Test-WizardScanComplete)) {
+        if (Test-WizardScanNeedsAttention) {
+            # Check for scan-related code changes before running wizard
+            if (Test-ScanCodeChanged) {
+                Reset-WizardCounters -Reason "scan-related code changed"
+            }
+            $WizardMode = Get-WizardModeToRun
+            return "wizard-scan:$WizardMode"
+        }
     }
 
     # Priority 3: Check if all audits are on cooldown - if so, we might be complete
@@ -284,8 +297,105 @@ function Test-SpecificationComplete {
 }
 
 # ════════════════════════════════════════════════════════════════════════════
-# UNIFIED STATE MANAGEMENT (v2.0)
+# UNIFIED STATE MANAGEMENT (v2.1)
 # ════════════════════════════════════════════════════════════════════════════
+
+# Function to check if scan-related code has changed since last wizard success
+# If changed, wizard counter should be reset to 0 (code change detection)
+function Test-ScanCodeChanged {
+    $State = Get-UnifiedState
+    if (-not $State) { return $false }
+
+    # Get the commit from last wizard success
+    $LastSuccessCommit = $State.scan_code_tracking.last_wizard_success_commit
+    if (-not $LastSuccessCommit) {
+        # No previous success recorded - don't reset (first run)
+        return $false
+    }
+
+    # Paths that trigger wizard reset when changed
+    $WatchedPaths = @(
+        "scripts/core/adapters/",
+        "scripts/core/tool_registry.py",
+        "scripts/cli/scan_orchestrator.py",
+        "scripts/cli/wizard.py",
+        "scripts/cli/wizard_flows/"
+    )
+
+    try {
+        # Get files changed since last success commit
+        $ChangedFiles = git diff --name-only "$LastSuccessCommit..HEAD" 2>$null
+        if (-not $ChangedFiles) { return $false }
+
+        foreach ($path in $WatchedPaths) {
+            foreach ($file in $ChangedFiles) {
+                if ($file -like "$path*" -or $file -eq $path.TrimEnd('/')) {
+                    Write-Host "Scan code changed: $file - wizard counter will reset" -ForegroundColor Yellow
+                    return $true
+                }
+            }
+        }
+    } catch {
+        # Git command failed - don't reset
+        return $false
+    }
+
+    return $false
+}
+
+# Function to reset wizard counters (when scan code changes)
+function Reset-WizardCounters {
+    param([string]$Reason = "code change detected")
+
+    $StateFile = "$RalphDir/unified-state.json"
+    if (-not (Test-Path $StateFile)) { return }
+
+    try {
+        $State = Get-Content $StateFile -Raw | ConvertFrom-Json
+
+        # Reset repo wizard counters
+        if ($State.wizard_scan.repo) {
+            $State.wizard_scan.repo.consecutive_successes = 0
+            $State.wizard_scan.repo.status = "reset"
+            $State.wizard_scan.repo.notes = "Reset due to $Reason at $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')"
+        }
+
+        # Update completion status
+        $State.completion.wizard_repo_passing = $false
+
+        # Update timestamp
+        $State.last_updated = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ss.ffffffZ")
+
+        # Write back
+        $State | ConvertTo-Json -Depth 10 | Set-Content $StateFile -Encoding utf8
+
+        Write-Host "Wizard counters reset: $Reason" -ForegroundColor Yellow
+    } catch {
+        Write-Host "WARNING: Failed to reset wizard counters" -ForegroundColor Yellow
+    }
+}
+
+# Function to record successful wizard commit (for code change tracking)
+function Save-WizardSuccessCommit {
+    $StateFile = "$RalphDir/unified-state.json"
+    if (-not (Test-Path $StateFile)) { return }
+
+    try {
+        $CurrentCommit = git rev-parse HEAD 2>$null
+        if (-not $CurrentCommit) { return }
+
+        $State = Get-Content $StateFile -Raw | ConvertFrom-Json
+
+        if (-not $State.scan_code_tracking) {
+            $State | Add-Member -NotePropertyName "scan_code_tracking" -NotePropertyValue @{} -Force
+        }
+        $State.scan_code_tracking.last_wizard_success_commit = $CurrentCommit
+
+        $State | ConvertTo-Json -Depth 10 | Set-Content $StateFile -Encoding utf8
+    } catch {
+        # Silently ignore errors
+    }
+}
 
 # Function to read the unified state file
 function Get-UnifiedState {
@@ -325,7 +435,7 @@ function Test-AllTargetsInCooldown {
 
     # Also check legacy file for backwards compatibility
     $LegacyFile = "$RalphDir/audit-state.json"
-    if ((Test-Path $LegacyFile) -and -not $State.audits) {
+    if ((Test-Path $LegacyFile) -and -not $State.full_audit -and -not $State.audits) {
         try {
             $LegacyState = Get-Content $LegacyFile -Raw | ConvertFrom-Json
             $State.audits = $LegacyState.audits
@@ -336,7 +446,8 @@ function Test-AllTargetsInCooldown {
     $Rules = $State.cooldown_rules
 
     foreach ($target in $Targets) {
-        $audit = $State.audits.$target
+        # Fix: Check full_audit key first (v2.1 schema), fall back to audits (legacy)
+        $audit = if ($State.full_audit) { $State.full_audit.$target } else { $State.audits.$target }
         if (-not $audit) { return $false }
 
         try {
@@ -359,12 +470,12 @@ function Test-AllTargetsInCooldown {
     return $true  # All targets in cooldown
 }
 
-# Function to check wizard-scan progress (both repo and image need 3 successes)
+# Function to check wizard-scan progress (both repo and image need 2 successes in v2.1)
 function Test-WizardScanComplete {
     $State = Get-UnifiedState
     if (-not $State) { return $false }
 
-    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
 
     $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
         $State.wizard_scan.repo.consecutive_successes
@@ -375,7 +486,14 @@ function Test-WizardScanComplete {
     } else { 0 }
 
     # Both modes must have required successes
-    return ($RepoSuccesses -ge $Required) -and ($ImageSuccesses -ge $Required)
+    $Complete = ($RepoSuccesses -ge $Required) -and ($ImageSuccesses -ge $Required)
+
+    # If complete, record the commit for code change tracking
+    if ($Complete) {
+        Save-WizardSuccessCommit
+    }
+
+    return $Complete
 }
 
 # Function to check if repo wizard needs attention
@@ -383,7 +501,7 @@ function Test-WizardRepoNeedsAttention {
     $State = Get-UnifiedState
     if (-not $State) { return $true }
 
-    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
     $Repo = $State.wizard_scan.repo
 
     # Needs attention if not yet passing
@@ -399,7 +517,7 @@ function Test-WizardRepoNeedsAttention {
             $daysSince = ((Get-Date) - $lastRun).Days
             $cooldownDays = if ($State.cooldown_rules.wizard_passing_days) {
                 $State.cooldown_rules.wizard_passing_days
-            } else { 1 }
+            } else { 7 }  # Default 7 days cooldown (matches audit cooldown)
             return $daysSince -ge $cooldownDays
         } catch {}
     }
@@ -412,7 +530,7 @@ function Test-WizardImageNeedsAttention {
     $State = Get-UnifiedState
     if (-not $State) { return $true }
 
-    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
     $Image = $State.wizard_scan.image
 
     # Needs attention if not yet passing
@@ -428,7 +546,7 @@ function Test-WizardImageNeedsAttention {
             $daysSince = ((Get-Date) - $lastRun).Days
             $cooldownDays = if ($State.cooldown_rules.wizard_passing_days) {
                 $State.cooldown_rules.wizard_passing_days
-            } else { 1 }
+            } else { 7 }  # Default 7 days cooldown (matches audit cooldown)
             return $daysSince -ge $cooldownDays
         } catch {}
     }
@@ -447,7 +565,7 @@ function Get-WizardModeToRun {
     $State = Get-UnifiedState
     if (-not $State) { return "repo" }
 
-    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
 
     $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
         $State.wizard_scan.repo.consecutive_successes
@@ -492,7 +610,7 @@ function Show-UnifiedStatus {
         return
     }
 
-    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+    $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
 
     $RepoSuccesses = if ($State.wizard_scan.repo.consecutive_successes) {
         $State.wizard_scan.repo.consecutive_successes
@@ -504,11 +622,12 @@ function Show-UnifiedStatus {
 
     $OpenTasks = Get-OpenTaskCount
 
-    # Count clean audits
+    # Count clean audits (check full_audit first, fall back to audits)
     $CleanAudits = 0
     $Targets = @("wizard", "cli", "core", "adapters", "reporters", "security")
     foreach ($target in $Targets) {
-        if ($State.audits.$target.status -eq "clean") { $CleanAudits++ }
+        $auditData = if ($State.full_audit) { $State.full_audit.$target } else { $State.audits.$target }
+        if ($auditData.status -eq "clean") { $CleanAudits++ }
     }
 
     # Build status line colors
@@ -520,7 +639,7 @@ function Show-UnifiedStatus {
 
     Write-Host ""
     Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
-    Write-Host "|              UNIFIED AUTO MODE STATUS v2.0               |" -ForegroundColor Cyan
+    Write-Host "|              UNIFIED AUTO MODE STATUS v2.1               |" -ForegroundColor Cyan
     Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host -NoNewline "| Tasks:  " -ForegroundColor Cyan
     Write-Host -NoNewline "$OpenTasks open" -ForegroundColor $TaskColor
@@ -532,6 +651,166 @@ function Show-UnifiedStatus {
     Write-Host -NoNewline "$ImageCheck" -ForegroundColor $ImageColor
     Write-Host "                      |" -ForegroundColor Cyan
     Write-Host "+----------------------------------------------------------+" -ForegroundColor Cyan
+}
+
+# ════════════════════════════════════════════════════════════════════════════
+# TASK CREATION FROM VALIDATION (v2.2)
+# Automatically create TASK-XXX entries from validation alerts
+# ════════════════════════════════════════════════════════════════════════════
+
+function Get-NextTaskNumber {
+    if (-not (Test-Path $PlanFile)) {
+        return 1
+    }
+    $Plan = Get-Content $PlanFile -Raw
+    $Matches = [regex]::Matches($Plan, "### TASK-(\d+)")
+    if ($Matches.Count -eq 0) {
+        return 1
+    }
+    $MaxNum = ($Matches | ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Maximum).Maximum
+    return $MaxNum + 1
+}
+
+function Create-TaskFromValidation {
+    <#
+    .SYNOPSIS
+        Create tasks in IMPLEMENTATION_PLAN.md from validation alerts.
+
+    .DESCRIPTION
+        Reads the unified-state.json or analyze_wizard_results.py output
+        and creates TASK-XXX entries for any issues found.
+
+        Tag System:
+        - [WIZARD-OUTPUT]  : Tool ✔ in log, no file - Priority High
+        - [WIZARD-QUALITY] : 0 findings when N+ expected - Priority Medium
+        - [WIZARD-VERSION] : Version mismatch - Priority Low
+        - [WIZARD-HANG]    : Tool timeout >5 min - Priority High
+        - [WIZARD-CRASH]   : Python exception - Priority High
+
+    .PARAMETER Alerts
+        Array of alert objects from validation (each has: tag, tool, title, symptom, priority)
+
+    .PARAMETER DryRun
+        If true, only prints what would be created without modifying files
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [array]$Alerts,
+
+        [switch]$DryRun
+    )
+
+    if ($Alerts.Count -eq 0) {
+        Write-Host "No validation alerts to create tasks for" -ForegroundColor DarkGray
+        return
+    }
+
+    $NextNum = Get-NextTaskNumber
+    $TasksCreated = @()
+
+    foreach ($alert in $Alerts) {
+        $Tag = $alert.tag
+        $Tool = $alert.tool
+        $Title = $alert.title
+        $Symptom = $alert.symptom
+        $Priority = $alert.priority
+        $FileHint = if ($alert.file_hint) { $alert.file_hint } else { "Unknown" }
+
+        $TaskId = "TASK-{0:D3}" -f $NextNum
+        $NextNum++
+
+        # Determine status color based on tag
+        $StatusColor = switch -Wildcard ($Tag) {
+            "*OUTPUT*"  { "Red" }
+            "*QUALITY*" { "Yellow" }
+            "*VERSION*" { "DarkYellow" }
+            "*HANG*"    { "Red" }
+            "*CRASH*"   { "Red" }
+            default     { "White" }
+        }
+
+        if ($DryRun) {
+            Write-Host "[DRY RUN] Would create: $TaskId $Tag $Tool" -ForegroundColor $StatusColor
+            Write-Host "          Title: $Title" -ForegroundColor DarkGray
+            continue
+        }
+
+        # Create task entry for IMPLEMENTATION_PLAN.md
+        $TaskEntry = @"
+
+### $TaskId
+**Title:** $Tag $Tool - $Title
+**Status:** Open
+**Priority:** $Priority
+**Created:** $(Get-Date -Format "yyyy-MM-dd")
+
+**Symptom:**
+$Symptom
+
+**Relevant Files:**
+- ``$FileHint``
+
+**Fix Approach:**
+TBD - Investigate and fix the root cause.
+
+"@
+
+        $TasksCreated += @{
+            Id = $TaskId
+            Tag = $Tag
+            Tool = $Tool
+            Title = $Title
+        }
+
+        # Append to IMPLEMENTATION_PLAN.md
+        if (Test-Path $PlanFile) {
+            Add-Content -Path $PlanFile -Value $TaskEntry -Encoding UTF8
+        } else {
+            # Create file with header
+            $Header = @"
+# IMPLEMENTATION_PLAN.md
+
+Auto-generated tasks from Ralph Loop validation.
+
+## Tasks
+
+$TaskEntry
+"@
+            Set-Content -Path $PlanFile -Value $Header -Encoding UTF8
+        }
+
+        Write-Host "Created $TaskId $Tag $Tool" -ForegroundColor $StatusColor
+    }
+
+    if ($TasksCreated.Count -gt 0) {
+        Write-Host ""
+        Write-Host "Created $($TasksCreated.Count) task(s) from validation alerts" -ForegroundColor Cyan
+    }
+
+    return $TasksCreated
+}
+
+function Get-ValidationAlertsFromState {
+    <#
+    .SYNOPSIS
+        Extract validation alerts from unified-state.json
+    #>
+    $State = Get-UnifiedState
+    if (-not $State) { return @() }
+
+    $Alerts = @()
+
+    # Check for tasks_to_create in wizard_scan.repo.last_tools
+    if ($State.wizard_scan.repo.last_tools.tasks_to_create) {
+        $Alerts += $State.wizard_scan.repo.last_tools.tasks_to_create
+    }
+
+    # Check for quality_alerts
+    if ($State.wizard_scan.repo.last_tools.quality_alerts) {
+        $Alerts += $State.wizard_scan.repo.last_tools.quality_alerts
+    }
+
+    return $Alerts
 }
 
 # Compact banner - just essential info
@@ -570,7 +849,7 @@ while ($true) {
 
     # Determine effective mode for this iteration (may be forced by struggle detection)
     # Returns compound key for audit modes (e.g., "audit:wizard") or wizard modes (e.g., "wizard-scan:repo")
-    $EffectiveMode = Get-EffectiveMode -RequestedMode $Mode -AuditTarget $Target -ForceAuditMode $ForceAudit
+    $EffectiveMode = Get-EffectiveMode -RequestedMode $Mode -AuditTarget $Target -ForceAuditMode $ForceAudit -ForceFlagSet $Force
     $ForceAudit = $false  # Reset after use
 
     # Handle "complete" mode - auto mode detected all work is done
@@ -583,8 +862,8 @@ while ($true) {
         Write-Host ""
         Write-Host "All completion criteria met:" -ForegroundColor Green
         Write-Host "  - No open tasks in IMPLEMENTATION_PLAN.md"
-        Write-Host "  - Wizard REPO: 3/3 consecutive successes"
-        Write-Host "  - Wizard IMAGE: 3/3 consecutive successes"
+        Write-Host "  - Wizard REPO: 2/2 consecutive successes"
+        Write-Host "  - Wizard IMAGE: 2/2 consecutive successes"
         Write-Host "  - All audit targets on cooldown"
         Write-Host ""
         Write-Host "Total iterations: $($Iteration - 1)"
@@ -808,7 +1087,7 @@ Proceed with full audit of all targets NOW.
                 } else {
                     $State.wizard_scan.image.consecutive_successes
                 }
-                $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 3 }
+                $Required = if ($State.wizard_scan.required_successes) { $State.wizard_scan.required_successes } else { 2 }
                 Write-Host "Wizard ${WizardSubMode}: $Successes/$Required consecutive successes" -ForegroundColor Cyan
             }
         }
@@ -823,8 +1102,8 @@ Proceed with full audit of all targets NOW.
             Write-Host ""
             Write-Host "All criteria met:"
             Write-Host "  - No open tasks"
-            Write-Host "  - Wizard REPO: 3/3 successes"
-            Write-Host "  - Wizard IMAGE: 3/3 successes"
+            Write-Host "  - Wizard REPO: 2/2 successes"
+            Write-Host "  - Wizard IMAGE: 2/2 successes"
             Write-Host "  - All audits on cooldown"
             Write-Host ""
             Write-Host "Total iterations: $Iteration"

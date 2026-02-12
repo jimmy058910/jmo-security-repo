@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD037 -->
 # Implementation Plan - CLI Testing
 
 This file is shared state between Ralph Loop iterations. Claude reads it to find work and updates it to record progress.
@@ -7,8 +8,10 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 ## Task Templates
 
 ### BUG Task
-```
+
+```text
 ### TASK-XXX: [Bug] Description
+
 **Type:** Bug
 **Priority:** Critical | High | Medium
 **Score:** [S+F+C] = X (S:X, F:X, C:X)
@@ -23,8 +26,10 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 ```
 
 ### COVERAGE Task
-```
+
+```text
 ### TASK-XXX: [Coverage] Module needs tests
+
 **Type:** Coverage
 **Priority:** High | Medium
 **Score:** [S+F+C] = X
@@ -33,6 +38,7 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 **Target:** path/to/file.py::function_name
 **Current Coverage:** X%
 **Gap:**
+
 - [ ] Happy path test
 - [ ] Error path test
 - [ ] Edge cases
@@ -40,8 +46,10 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 ```
 
 ### SECURITY Task
-```
+
+```text
 ### TASK-XXX: [Security] Description
+
 **Type:** Security
 **Priority:** Critical | High
 **Score:** [S+F+C] = X
@@ -61,31 +69,193 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 | Type | Critical | High | Medium | Total |
 |------|----------|------|--------|-------|
-| Bug | 2 | 8 | 0 | 10 |
+| Bug | 2 | 14 | 0 | 16 |
 | Coverage | 0 | 2 | 2 | 4 |
 | Security | 0 | 0 | - | 0 |
-| **Total** | **2** | **10** | **2** | **14** |
+| **Total** | **2** | **16** | **2** | **20** |
 
-**Status:** 42 resolved, 0 open.
+**Status:** 48 resolved, 0 open.
 
 ---
 
-## Adapters Audit Summary (2026-02-03)
+## Force Mode Full Audit Summary (2026-02-04) - Session 3
 
-**Re-audited:** 2026-02-03 (previous audit: 2026-02-02)
+**Mode:** FORCE (all cooldowns ignored)
+
+**Test Results Summary:**
+
+- core: 124 passed, 3 skipped
+- cli: 1517 passed, 2 skipped, 2 fixed (missing MockToolStatusSummary mocks)
+- adapters: 1886 passed
+- reporters: 392 passed, 1 skipped
+- wizard (all test files): 755 passed, 1 skipped
+
+**Issues Found & Fixed This Session:**
+
+### TASK-048: [Bug] test_all_tools_ready missing get_tool_summary mock
+
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard_tool_checker.py:175
+**Symptom:**
+
+```text
+
+AssertionError: assert 'trivy' in []
+WARNING: Tool check failed: '>' not supported between instances of 'MagicMock' and 'int'
+```
+
+**Root Cause:**
+Test mocked `ToolManager` class but not `get_tool_summary()` return value. `summary.profile_total > 0` comparison fails when summary is a raw MagicMock.
+**Fix:**
+Added `manager_instance.get_tool_summary.return_value = MockToolStatusSummary(...)` with proper integer fields.
+**Resolution:** (2026-02-04) Fixed - test passes.
+
+### TASK-049: [Bug] test_yes_mode_continues_with_missing and test_tool_with_startup_crash missing summary mocks
+
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard_tool_checker.py:246,1203
+**Symptom:**
+Same as TASK-048 - `'>' not supported between instances of 'MagicMock' and 'int'`
+**Root Cause:**
+Same pattern - missing `get_tool_summary()` return value mock.
+**Fix:**
+Added `MockToolStatusSummary` return values for both tests with appropriate fields (`not_installed=["bandit"]` and `version_issues=["checkov"]`).
+**Resolution:** (2026-02-04) Fixed - all 52 tool_checker tests pass.
+
+---
+
+## Previous Session Summary (Session 2)
+
+**Test Results:**
+
+- core + adapters + reporters + history + dedup: 2622 passed, 4 skipped, 1 fixed
+- cli (excl automation): 1430 passed, 2 skipped, 3 fixed
+- scan_jobs: 112 passed
+- wizard_flows + unit wizard tests: 738 passed
+- adapters: 1886 passed
+- reporters: 392 passed, 1 skipped
+
+**Issues Found & Fixed (Session 2):**
+
+### TASK-044: [Bug] test_fast_profile_not_affected flawed assertion
+
+**Type:** Bug
+**Priority:** Medium
+**Score:** [S+F+C] = 5 (S:1, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/core/test_tool_registry.py:126
+**Symptom:**
+
+```text
+
+AssertionError: assert {'checkov', ...} == {'checkov', ..., 'shellcheck', ...}
+Extra items in the right set: 'shellcheck'
+```
+
+**Root Cause:**
+Test assumed fast profile has no platform-specific tools, but shellcheck is linux/macos only and is in fast profile.
+**Fix:**
+Renamed test to `test_fast_profile_filters_platform_specific` and updated assertions to verify shellcheck is filtered on Windows.
+**Resolution:** (2026-02-04) Fixed - test now correctly asserts platform-specific filtering behavior.
+
+### TASK-045: [Bug] test_run_wizard_non_interactive missing ToolManager mock
+
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard.py:248
+**Symptom:**
+
+```text
+
+TypeError: expected string or bytes-like object, got 'MagicMock'
+```
+
+**Root Cause:**
+Test mocked `subprocess.run` but not `ToolManager` - wizard's `execute_scan()` calls `ToolManager.get_tool_summary()` which returns MagicMock without proper return values.
+**Fix:**
+Added `@patch("scripts.cli.tool_manager.ToolManager")` with proper mock return values for `get_tool_summary()` including list fields.
+**Resolution:** (2026-02-04) Fixed - test passes with proper ToolManager mock.
+
+### TASK-046: [Bug] test_execute_scan_docker_mode missing ToolManager mock
+
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard.py:799
+**Symptom:**
+
+```text
+
+TypeError: can only join an iterable
+```
+
+**Root Cause:**
+`_print_scan_completion_summary()` calls `', '.join(tools_skipped_content)` but mock returned int instead of list.
+**Fix:**
+Added `@patch("scripts.cli.tool_manager.ToolManager")` with `platform_skipped=[]` and `content_triggered=[]` as lists.
+**Resolution:** (2026-02-04) Fixed - test passes.
+
+### TASK-047: [Bug] test_execute_scan_native_mode missing ToolManager mock
+
+**Type:** Bug
+**Priority:** High
+**Score:** [S+F+C] = 6 (S:2, F:2, C:2)
+**Confidence:** 100%
+**Status:** Resolved
+**File:** tests/cli/test_wizard.py:825
+**Symptom:**
+Same as TASK-046 - TypeError on list join.
+**Root Cause:**
+Same as TASK-046 - missing ToolManager mock.
+**Fix:**
+Added `@patch("scripts.cli.tool_manager.ToolManager")` with proper list return values.
+**Resolution:** (2026-02-04) Fixed - test passes.
+
+---
+
+## All 6 Targets Audited (Session 3):
+
+| Target | Tests | Status | Notes |
+|--------|-------|--------|-------|
+| security | N/A | clean | CWE-78/79/89/22/502/400 all pass |
+| core | 124 | clean | All pass |
+| cli | 1517 | issues→fixed | 2 tests fixed (MockToolStatusSummary mocks) |
+| adapters | 1886 | clean | 92% coverage, consistent patterns |
+| reporters | 392 | clean | XSS protected, 95% coverage |
+| wizard | 755 | clean | 93%+ coverage |
+
+---
+
+## Adapters Audit Summary (2026-02-04)
+
+**Force re-audit:** 2026-02-04 (previous: 2026-02-03)
 
 **Target Files:**
+
 - `scripts/core/adapters/` - 29 adapters (~7,152 LOC combined)
 
 **Test Results:**
-- tests/adapters/: 1889 passed, 0 failures
+
+- tests/adapters/: 1886 passed, 0 failures
 - **Coverage: 92%** across all adapters
 
 **Changes Since Last Audit:**
-- `checkov_adapter.py` updated for Checkov v3.2+ array format output
-- Added `_parse_single_checkov_result()` helper function
-- 3 new tests added for array format handling
-- All tests pass
+
+- No changes - audit confirms previous findings
 
 **Consistency Analysis:**
 
@@ -118,6 +288,7 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
    - All return empty list on parse failure
 
 **Per-Adapter Coverage:**
+
 | Adapter | Coverage | Notes |
 |---------|----------|-------|
 | bandit | 100% | Full coverage |
@@ -151,31 +322,35 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 | scancode | 84% | 7 lines |
 
 **Conclusion:** All adapters are consistent and well-tested. No new tasks required.
+
 - Minor coverage gaps exist in edge case branches (file not found, malformed input paths)
 - These are defensive code paths already protected by unit tests in test_adapter_malformed.py
 - 92% overall coverage exceeds the 85% CI requirement
 
 ---
 
-## Cross-Cutting Security Audit Summary (2026-02-03)
+## Cross-Cutting Security Audit Summary (2026-02-04)
 
-**Re-audited:** 2026-02-03 (previous audit: 2026-02-02)
+**Force re-audit:** 2026-02-04 (previous: 2026-02-03)
 
 **Scope:** Entire `scripts/` directory (~25,000 LOC)
 
 **CWE-78 Command Injection (shell=True):**
-- **PASS** - Only 1 instance: `tool_checker.py:829` with `nosec B602`
-- Commands sourced from hardcoded `REMEDIATION_COMMANDS` dict in `tool_manager.py:220-391`
+
+- **PASS** - Only 1 instance: `tool_checker.py:735` with `nosec B602`
+- Commands sourced from hardcoded `REMEDIATION_COMMANDS` dict in `tool_manager.py:184-391`
 - Not user-controlled - dict contains platform commands like `pip install`, `brew install`
 - No `os.system()` calls found
 
 **CWE-79 XSS (HTML Injection):**
+
 - **PASS** - `simple_html_reporter.py` uses `_escape_html()` for all user-derived fields
 - `trend_formatters.py:703` generates insights HTML, but insights are internally generated strings
-- `html_reporter.py` uses `json.dumps()` for data embedding (auto-escapes)
+- `html_reporter.py` uses `json.dumps()` for data embedding with tag escaping (lines 81-87)
 - `diff_md_reporter.py:250` unescaped summary tag is low risk (MD processors escape)
 
 **CWE-89 SQL Injection:**
+
 - **PASS** - 46+ queries verified parameterized with `?` placeholders
 - `get_query_plan()` at `history_db.py:1919` uses f-string, but:
   - Only called from tests (no production usage)
@@ -184,28 +359,33 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 - `history_integrity.py:275,286` dynamic INSERT with column names from local schema dict
 
 **CWE-22 Path Traversal:**
-- **PASS** - 9 files implement path validation
+
+- **PASS** - 10 files implement path validation
 - `validation.py`: `validate_path_safe()`, `validate_path_within_base()` - centralized defense
 - `archive_security.py`: `_is_safe_path()` uses `Path.resolve().relative_to()` pattern
 - `path_sanitizers.py`: `_sanitize_path_component()` removes `../` and path separators
 
 **CWE-798 Hardcoded Credentials:**
+
 - **PASS** - No hardcoded secrets found
 - Only match: test fixture in `FindingsTable.test.tsx:269` (test data, not real secret)
 - All runtime credentials use `os.getenv()` or config files
 
 **CWE-502 Unsafe Deserialization:**
+
 - **PASS** - No dangerous deserialization patterns found
 - No `pickle.load`, `pickle.loads`, `eval()`, `exec()`
 - No `yaml.load()` without safe_load (grep returns no matches)
 
 **CWE-400 Resource Exhaustion (Timeouts):**
-- **PASS** - 165 `timeout=` occurrences across 39 files
+
+- **PASS** - 443 `timeout=` occurrences across 53 files
 - Tool installer: 10s-300s timeouts for installs
 - HTTP requests: 10-30s timeouts
 - subprocess.run calls include timeout parameter
 
 **nosec Annotations Audit:**
+
 - 31 `nosec` comments found and verified:
   - `B202` (archive extraction): 3 instances, paths validated before extraction
   - `B310` (urlopen): 3 instances, URLs hardcoded (GitHub Gist) or validated
@@ -219,34 +399,31 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 
 ---
 
-## CLI Audit Summary (2026-02-02)
+## CLI Audit Summary (2026-02-04)
+
+**Force re-audit:** 2026-02-04 (previous: 2026-02-02)
 
 **Target Files:**
+
 - `scripts/cli/jmo.py` - Main CLI entry point (3,500+ lines)
 - `scripts/cli/scan_orchestrator.py` - Scan orchestration (~600 lines)
 - `scripts/cli/tool_installer.py` - Tool installation (~1,200 lines)
 - `scripts/cli/installers/*.py` - Strategy pattern installers
 
 **Test Results:**
-- tests/cli/test_jmo.py: 65 passed
-- tests/cli/test_jmotools_smoke.py: 3 passed
-- tests/cli/test_scan_orchestrator.py: 52 passed
-- tests/cli/test_scan_progress.py: 32 passed
-- tests/cli/test_tool_commands.py: 117 passed
-- tests/cli/test_tool_manager.py: 95 passed
-- tests/unit/test_tool_installer_*.py: 91 passed
-- **Total: 455 tests pass, 0 failures**
+
+- tests/cli/ (excl automation): 1492 passed, 2 skipped
+- tests/scan_jobs/: 112 passed
+- **Total: 1604 tests pass**
 
 **Security Analysis (Static):**
 
 1. **Subprocess Security (CWE-78 Check):** PASS
    - All `subprocess.run()` calls use `shell=False` (explicit or default)
-   - jmo.py:3250 - pip install uses list args
-   - jmo.py:3381 - opener uses list args with allowlist check
-   - tool_installer.py:103, 213 - explicit `shell=False` comments
-   - installers/base.py:95 - DefaultSubprocessRunner uses list args
-   - installers/npm_installer.py:335 - version check uses list args
-   - **1 exception:** wizard_flows/tool_checker.py:829 has `shell=True` but marked `# nosec B602` - user-initiated fix commands from trusted source (get_remediation_for_tool)
+   - jmo.py:3348-3381 - subprocess uses list args
+   - tool_installer.py:103, 201 - explicit `shell=False` comments
+   - installers/base.py:67 - documents "never use shell=True"
+   - **1 exception:** wizard_flows/tool_checker.py:735 has `shell=True` but marked `# nosec B602` - commands from hardcoded REMEDIATION_COMMANDS dict
 
 2. **Path Traversal (CWE-22 Check):** PASS
    - `scripts/cli/path_sanitizers.py` provides centralized defense:
@@ -255,65 +432,53 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
    - `scripts/core/validation.py` provides comprehensive validation:
      - `validate_path_safe()` detects traversal sequences
      - `validate_path_within_base()` ensures paths stay within allowed directories
-   - scan_orchestrator.py:276-291 checks for MSYS path mangling (Git Bash on Windows)
 
 3. **Input Validation (CWE-88 Argument Injection):** PASS
-   - `validate_url()` in scan_orchestrator.py:394, 407 - only allows http/https
-   - `validate_container_image()` in scan_orchestrator.py:327, 340 - validates image format
-   - `validate_tool_name()` in tool_installer.py:408 - validates tool names
-   - `validate_version()` in tool_installer.py - prevents URL injection in versions
+   - `validate_url()` in validators - only allows http/https
+   - `validate_container_image()` - validates image format
    - Profile names validated against `VALID_PROFILES` frozenset
 
 4. **Timeout Handling (CWE-400 Resource Exhaustion):** PASS
-   - tool_installer.py has timeouts: 10s (pkg manager check), 300s (install), 60/120s (NodeSource)
-   - npm_installer.py:339 has 10s timeout on version check
-   - ScanConfig.__post_init__ validates timeout > 0
-
-**Coverage Analysis:**
-- jmo.py argument parsing: Well tested via test_parse_args_* tests
-- scan_orchestrator.py target discovery: Covered by TestScanOrchestrator tests
-- tool_installer.py parallel install: Covered by test_tool_installer_parallel.py
+   - tool_installer.py has timeouts: 10s (pkg manager check), 300s (install)
+   - subprocess calls include timeout parameter
+   - 443 timeout= occurrences verified across codebase
 
 **Conclusion:** CLI modules are secure and well-tested. No new tasks required.
 
 ---
 
-## Core Audit Summary (2026-02-02)
+## Core Audit Summary (2026-02-04)
+
+**Force re-audit:** 2026-02-04 (previous: 2026-02-02)
 
 **Target Files:**
+
 - `scripts/core/history_db.py` (~3,574 LOC) - SQLite storage, 28+ queries
 - `scripts/core/normalize_and_report.py` (~649 LOC) - Central aggregation engine
 - `scripts/core/config.py` - Configuration loading/validation
 - `scripts/core/dedup_enhanced.py` (~1,100 LOC) - Similarity clustering
 
 **Test Results:**
-- tests/unit/test_history_db*.py: 224 passed, 2 skipped
+
+- tests/core/ + tests/adapters/ + tests/reporters/ + history + dedup: 2696 passed, 6 skipped
+- tests/unit/test_history_db.py: 151 passed
 - tests/unit/test_dedup_enhanced.py: 70 passed
-- tests/unit/test_normalize*.py: 65 passed
-- tests/unit/test_config*.py: 180 passed
-- tests/core/: 133 passed (email_service 32, telemetry 50, error_recovery 22, tool_registry 29)
-- **Total: 672 tests pass**
+- **Total: 2696 tests pass**
 
 **Security Analysis (CWE-89 SQL Injection):**
 
 1. **All cursor.execute() use parameterized queries:** PASS
-   - 28+ execute() calls verified using `?` placeholders
+   - 46+ execute() calls verified using `?` placeholders
    - Pattern: `cursor.execute("SELECT * FROM scans WHERE id = ?", (scan_id,))`
    - No f-string interpolation in user-facing queries
 
 2. **get_query_plan() f-string exception:** ACCEPTABLE
-   - Line 1919: `cursor.execute(f"EXPLAIN QUERY PLAN {query}")`
-   - **Risk Assessment:** LOW
-     - Developer-only debugging utility
-     - Not called anywhere in production code
-     - Only exported in module, not exposed via CLI/API
-     - Input `query` is developer-controlled, not user input
-   - **Recommendation:** No action needed (dev utility)
+   - Developer-only debugging utility
+   - Not called anywhere in production code
 
-3. **Input Validation:** PASS
-   - history_db.py validates profile against VALID_PROFILES
-   - Results directory existence checked before scan storage
-   - Finding schema validated via CommonFinding v1.2.0
+3. **Dynamic WHERE clauses:** PASS with nosec B608
+   - `history_db.py:1190, 2472, 2487, 3253` use internal literals only
+   - All have nosec B608 justification comments
 
 4. **Performance:** PASS
    - O(n) batch insert with executemany()
@@ -321,11 +486,9 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
    - LSH algorithm for dedup is O(n log n) average
 
 **Thread Safety:**
-- SQLite connections created per-operation via get_connection()
-- No shared mutable state between threads
 
-**Error Recovery:**
-- test_error_recovery.py: 22 tests covering corruption, locking, disk full, timeouts
+- SQLite connections created per-operation via get_connection()
+- WAL mode enabled for concurrency
 
 **Conclusion:** Core modules are secure and well-tested. No new tasks required.
 
@@ -334,6 +497,7 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 ## Current Tasks
 
 ### TASK-042: [Bug] wizard.py --emit-script shows traceback on write failure
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -341,17 +505,21 @@ This file is shared state between Ralph Loop iterations. Claude reads it to find
 **Status:** Resolved
 **File:** scripts/cli/wizard.py:911
 **Symptom:**
-```
+
+```text
+
 Traceback (most recent call last):
   File "scripts/cli/wizard.py", line 911, in run_wizard
     script_path.write_text(content)
 FileNotFoundError: [Errno 2] No such file or directory: 'Z:\\nonexistent_dir_xyz\\script.sh'
 ```
+
 **Root Cause:**
 `emit_script` path write at line 911 is not wrapped in try/except, causing traceback leak to user.
 Compare with `emit_gha` at line 926 which at least creates parent dirs with `mkdir(parents=True, exist_ok=True)`.
 **Fix:**
 Wrap `script_path.write_text(content)` in try/except and print user-friendly error:
+
 ```python
 try:
     script_path.parent.mkdir(parents=True, exist_ok=True)
@@ -360,12 +528,14 @@ except (OSError, IOError) as e:
     print(f"Error: Could not write to {emit_script}: {e}")
     return 1
 ```
+
 **Blocking Test:** tests/cli_ralph/test_wizard_command.py::TestWizardEdgeCases::test_wizard_emit_to_readonly_location
 **Resolution:** (2026-02-03) Fixed wizard.py:907-917 by wrapping `script_path.write_text()` in try/except,
 adding `script_path.parent.mkdir(parents=True, exist_ok=True)` to auto-create parent directories (matching emit_gha behavior),
 and returning 1 with user-friendly error message on failure. All 20 test_wizard_command.py tests pass.
 
 ### TASK-041: [Coverage] command_builder.py at 58% - target type builders untested
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -374,6 +544,7 @@ and returning 1 with user-friendly error message on failure. All 20 test_wizard_
 **Target:** scripts/cli/wizard_flows/command_builder.py
 **Current Coverage:** 58% (44/122 lines uncovered)
 **Gap:**
+
 - Lines 49-50: `build_image_args()` Docker images-file mounting
 - Lines 61-74: `build_iac_args()` IaC file mounting for Docker
 - Lines 83-90: `build_url_args()` URLs file mounting
@@ -383,6 +554,7 @@ and returning 1 with user-friendly error message on failure. All 20 test_wizard_
 These functions build command arguments for non-repository target types. They're integration-tested
 indirectly via test_wizard.py but have no unit tests verifying the argument structure.
 **Fix:** Create tests/cli/test_wizard_command_builder.py with unit tests:
+
 - [x] `build_image_args()` with single image, images_file, Docker mount
 - [x] `build_iac_args()` with terraform, cloudformation, k8s manifest
 - [x] `build_url_args()` with URL, urls_file, api_spec
@@ -391,6 +563,7 @@ indirectly via test_wizard.py but have no unit tests verifying the argument stru
 **Resolution:** Tests already exist in tests/unit/test_wizard_command_builder.py with 43 tests achieving 100% coverage on this module. Task was already complete.
 
 ### TASK-040: [Coverage] wizard_flows interactive modules at 8-17% coverage
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -398,6 +571,7 @@ indirectly via test_wizard.py but have no unit tests verifying the argument stru
 **Status:** Resolved
 **Target:** scripts/cli/wizard_flows/ (multiple modules)
 **Current Coverage:**
+
 - `cicd_flow.py`: 7% (85/95 lines uncovered)
 - `deployment_flow.py`: 8% (79/91 lines uncovered)
 - `dependency_flow.py`: 14% (36/45 lines uncovered)
@@ -408,15 +582,18 @@ indirectly via test_wizard.py but have no unit tests verifying the argument stru
 These are "workflow" classes that use interactive prompts (input()) for user interaction. They are not directly tested because tests mock at the wizard.py level, not at the individual flow level.
 **Analysis:**
 Low-priority because:
+
 1. These flows are integration-tested via test_wizard.py and test_wizard_automation.py
 2. The individual methods are simple orchestration code calling well-tested PromptHelper methods
 3. The build_command() methods in these flows ARE tested via command_builder tests
 4. The actual scanning logic lives in scan_jobs/ which is thoroughly tested (92% coverage)
 **Fix:** Create unit tests for each flow class that mock PromptHelper methods to test:
+
 - detect_targets() return values
 - build_command() output structures
 - _print_detected_* display methods (print output assertions)
 **Resolution:** (2026-02-03) Created tests/cli_ralph/test_wizard_flows.py with 37 tests covering:
+
 - CICDFlow: detect_targets, build_command, _detect_images_from_ci (handles GHA/GitLab/Jenkins, malformed YAML, non-dict YAML)
 - DeploymentFlow: _detect_environment (env vars, .env files, k8s namespaces), build_command
 - DependencyFlow: detect_targets, build_command (with/without images)
@@ -426,6 +603,7 @@ Low-priority because:
 Note: target_configurators.py not covered (separate task if needed). All 37 tests pass.
 
 ### TASK-039: [Coverage] validators.py at 36% coverage
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -434,16 +612,19 @@ Note: target_configurators.py not covered (separate task if needed). All 37 test
 **Target:** scripts/cli/wizard_flows/validators.py
 **Current Coverage:** 36% (55/87 lines uncovered)
 **Gap:**
+
 - Lines 31-39: `validate_path()` exception handling branches
 - Lines 53-72: `validate_url()` HTTP error handling (HTTPError, URLError, TimeoutError)
 - Lines 90-116: `detect_iac_type()` content-based detection branches
 - Lines 133-170: `validate_k8s_context()` kubectl execution paths
 **Fix:** Create tests/cli/test_wizard_validators.py with:
+
 - [x] validate_path() with OSError, ValueError, invalid paths
 - [x] validate_url() with HTTP 4xx/5xx, timeouts, connection refused
 - [x] detect_iac_type() with various .tfstate, .yaml, CloudFormation files
 - [x] validate_k8s_context() with kubectl not found, timeout, invalid context
 **Resolution:** (2026-02-03) Created tests/cli/test_wizard_validators.py with 49 tests covering:
+
 - TestValidatePath (10 tests): existing/nonexistent paths, must_exist flag, home expansion, OSError/ValueError/TypeError/RuntimeError exception handling
 - TestValidateUrl (9 tests): successful validation, non-200 responses, HTTP 404/500, URLError, TimeoutError, custom timeout
 - TestDetectIacType (12 tests): .tfstate files, cloudformation/cfn in name, YAML content detection (k8s apiVersion/kind, CloudFormation Resources), OSError/UnicodeDecodeError handling
@@ -452,6 +633,7 @@ Note: target_configurators.py not covered (separate task if needed). All 37 test
 - TestCheckDockerRunning (6 tests): daemon running/not running, timeout, FileNotFoundError, exceptions
 
 ### TASK-038: [Coverage] base_flow.py TargetDetector at 32% coverage
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -460,6 +642,7 @@ Note: target_configurators.py not covered (separate task if needed). All 37 test
 **Target:** scripts/cli/wizard_flows/base_flow.py
 **Current Coverage:** 32% (189/292 lines uncovered)
 **Gap:**
+
 - Lines 100-174: TargetDetector methods (detect_repos, detect_images, detect_iac, detect_web_apps)
 - Lines 210-287: detect_package_files, detect_lock_files
 - Lines 470-543: PromptHelper interactive methods (prompt_choice, prompt_yes_no, prompt_text)
@@ -469,11 +652,13 @@ TargetDetector.detect_* methods are tested indirectly via wizard tests, but have
 PromptHelper methods are simple input() wrappers - low value to test.
 ArtifactGenerator wraps wizard_generators which is tested separately.
 **Fix:** Create tests/cli/test_wizard_base_flow.py with:
+
 - [x] TargetDetector.detect_repos() with git repos, non-git dirs
 - [x] TargetDetector.detect_images() with docker-compose.yml, Dockerfiles
 - [x] TargetDetector.detect_iac() with .tf, .tfstate, cloudformation, k8s files
 - [x] TargetDetector.detect_package_files() for each language
 **Resolution:** (2026-02-03) Created tests/cli_ralph/test_wizard_base_flow.py with 64 tests covering:
+
 - TargetDetector: detect_repos (5 tests), detect_images (11 tests), detect_iac (6 tests), detect_web_apps (6 tests), detect_package_files (12 tests), detect_lock_files (8 tests)
 - PromptHelper: colorize (2 tests), print_header/step/success/info/warning/error/summary_box (7 tests)
 - ArtifactGenerator: generate_makefile/github_actions/shell_script (3 tests with mocks)
@@ -481,27 +666,34 @@ ArtifactGenerator wraps wizard_generators which is tested separately.
 All 64 tests pass.
 
 ### TASK-037: [Bug] 25 wizard test failures due to module imports and stale assertions
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - tests/cli/test_wizard_tool_installation.py - Missing `import scripts.cli.tool_installer`
 - tests/cli/test_wizard_tool_checker.py - Missing `import scripts.cli.tool_installer`
 - tests/cli/test_wizard_automation.py - Missing `import scripts.cli.tool_manager`, complex mock issues
 - tests/cli/test_wizard_security.py - Stale `cmd[0] == "jmo"` assertion
 - tests/cli/test_wizard_target_configs.py - Stale `cmd[0] == "jmo"` assertions (4 tests)
 **Symptom:**
-```
+
+```text
+
 AttributeError: module 'scripts.cli' has no attribute 'tool_installer'
 AssertionError: assert 'C:\\...\\python.exe' == 'jmo'
 ```
+
 **Root Cause:**
+
 1. Tests using `@patch("scripts.cli.tool_installer.ToolInstaller")` decorator fail because the module isn't imported before the patch is applied
 2. Tests asserting `cmd[0] == "jmo"` fail when running from source (cmd starts with python.exe)
 3. Complex mock integration tests in test_wizard_automation had MagicMock comparison issues
 **Fix:**
+
 1. Added `import scripts.cli.tool_installer # noqa: F401` to test files using tool_installer patches
 2. Added `import scripts.cli.tool_manager # noqa: F401` to test_wizard_automation.py
 3. Changed assertions from `cmd[0] == "jmo"` to `"scan" in cmd` (security-focused check)
@@ -509,6 +701,7 @@ AssertionError: assert 'C:\\...\\python.exe' == 'jmo'
 **Resolution:** (2026-02-03) Fixed all 25 failing tests. wizard tests: 707 passed, 1 skipped.
 
 ### TASK-036: [Bug] test_effective_scan_settings_merge expects stale behavior
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -516,40 +709,51 @@ AssertionError: assert 'C:\\...\\python.exe' == 'jmo'
 **Status:** Resolved
 **File:** tests/unit/test_cli_helpers.py:66
 **Symptom:**
-```
+
+```text
+
 AssertionError: assert ['trufflehog', 'semgrep', ...] == ['semgrep']
 ```
+
 **Root Cause:**
 Test expected profile tool lists to come from jmo.yml profiles, but architecture changed - tool lists now come from `PROFILE_TOOLS` in `tool_registry.py` (single source of truth, per jmo.py lines 97-98 comment). The test's `profiles.fast.tools: [semgrep]` config is ignored by the production code.
 **Fix:** Updated test to:
+
 1. Remove stale `tools: [semgrep]` from test config profile
 2. Assert against `PROFILE_TOOLS["fast"]` instead of hardcoded list
 3. Added comment explaining the architecture
 **Resolution:** (2026-02-02) Fixed test to match documented behavior. All 3 cli_helpers tests pass.
 
 ### TASK-035: [Bug] scan_jobs tests still use tool_exists instead of find_tool
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 8 (S:3, F:3, C:2)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - tests/scan_jobs/test_scanner_k8s.py (16 tests - FIXED)
 - tests/scan_jobs/test_scanner_iac.py (13 tests - FIXED)
 - tests/scan_jobs/test_scanner_gitlab.py (tests don't directly use tool_exists - OK)
 **Symptom:**
-```
+
+```text
+
 AttributeError: module 'scripts.cli.scan_jobs.k8s_scanner' has no attribute 'tool_exists'
 29 failed tests in tests/scan_jobs/
 ```
+
 **Root Cause:**
 When the scanner modules (url_scanner, iac_scanner, k8s_scanner, repository_scanner) were updated to use `find_tool` instead of `tool_exists` for TASK-029/TASK-031, the corresponding test files were not updated. Tests still patch `tool_exists` which no longer exists in the modules.
 **Fix:**
 Update all test files to:
+
 1. Replace `patch("...scanner.tool_exists", return_value=True/False)` with `find_tool_func` parameter
 2. Use pattern: `find_tool_func=lambda tool: f"/usr/bin/{tool}" if tool in ["trivy", ...] else None`
 3. Similar to the fixes applied to test_scanner_url.py and test_scanner_repository.py
 **Resolution:** (2026-02-01) Fixed test_scanner_k8s.py (16 tests) and test_scanner_iac.py (13 tests):
+
 - Removed all `patch("...tool_exists")` calls which were patching non-existent attributes
 - Added `_make_find_tool_func()` helper function to each test file
 - Updated all test functions to pass `find_tool_func` parameter instead of patching
@@ -557,6 +761,7 @@ Update all test files to:
 - All 112 scan_jobs tests pass
 
 ### TASK-034: [Bug] test_tr_004_trends_explain uses run_jmo_with_history incorrectly
+
 **Type:** Bug
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -564,15 +769,19 @@ Update all test files to:
 **Status:** Resolved
 **File:** tests/cli_ralph/test_trends_commands.py:96-98
 **Symptom:**
-```
+
+```text
+
 jmo trends explain: error: argument metric: invalid choice: 'C:\\...\\history.db'
 ```
+
 **Root Cause:**
 The `run_jmo_with_history` fixture adds `--db` flag at the END of args, but `trends explain` is a documentation command that takes a positional `metric` argument. The database path was being interpreted as the metric.
 **Fix:** Changed from `run_jmo_with_history` to `jmo_runner` since `trends explain` is a pure documentation command that doesn't need a database.
 **Resolution:** (2026-02-01) Fixed by using `jmo_runner` instead. Test passes.
 
 ### TASK-033: [Bug] test_profiles_complete fails - profile has 'warning' field
+
 **Type:** Bug
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -580,20 +789,26 @@ The `run_jmo_with_history` fixture adds `--db` flag at the END of args, but `tre
 **Status:** Resolved
 **File:** tests/cli/test_wizard.py:26-38
 **Symptom:**
-```
+
+```text
+
 AssertionError: Extra items in the left set: 'warning'
 ```
+
 **Root Cause:**
 The "deep" profile in profile_config.py includes an optional `warning` field for first-run notes about dependency-check. The test expected exact match of required fields only.
 **Fix:** Updated test to allow optional fields:
+
 ```python
 optional_fields = {"warning"}
 assert required_fields <= profile_keys  # All required present
 assert not (profile_keys - required_fields - optional_fields)  # No unexpected fields
 ```
+
 **Resolution:** (2026-02-01) Fixed test. All profile tests pass.
 
 ### TASK-032: [WIZARD-HANG] Wizard hangs at policy selection in automation mode
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 9 (S:3, F:3, C:3)
@@ -601,11 +816,14 @@ assert not (profile_keys - required_fields - optional_fields)  # No unexpected f
 **Status:** Resolved
 **File:** scripts/cli/wizard.py:1030
 **Symptom:**
-```
+
+```text
+
 Wizard completes scan successfully but then blocks at interactive policy selection prompt:
 "Enter choice [a/r/s/c/1-5]: "
 Timeout (exit code 143) after 600s despite --auto-fix flag
 ```
+
 **Root Cause:**
 The `offer_policy_evaluation_after_scan()` function is called unconditionally in the else block after scan completion (line 1030-1045). This function uses `input()` for interactive policy selection, ignoring the `has_full_presets` and `yes` flags that indicate automation mode.
 **Fix:**
@@ -613,28 +831,34 @@ Changed `else:` to `elif not (yes or has_full_presets):` on line 1030 to skip in
 **Resolution:** (2026-02-01) Fixed by adding automation mode check. Wizard now exits cleanly after scan in automation mode. IMAGE mode scan completes in 84s with 1218 findings from 2 tools (trivy: 81, syft: 1137).
 
 ### TASK-031: [WIZARD-OUTPUT] Scanner modules use bare tool names instead of full paths
+
 **Type:** Bug
 **Priority:** Critical
 **Score:** [S+F+C] = 12 (S:4, F:4, C:4)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - scripts/cli/scan_jobs/image_scanner.py - FIXED (2026-02-01)
 - scripts/cli/scan_jobs/iac_scanner.py - FIXED (2026-02-01)
 - scripts/cli/scan_jobs/k8s_scanner.py - FIXED (2026-02-01)
 - scripts/cli/scan_jobs/url_scanner.py - FIXED (2026-02-01)
 **Symptom:**
-```
+
+```text
+
 Image scan completes with 0 findings. Tools report success but output files contain empty arrays:
 {"Results": []} (trivy.json - 15 bytes)
 {"artifacts": []} (syft.json - 17 bytes)
 ```
+
 **Root Cause:**
 Same pattern as TASK-029. All scanner modules (`image_scanner.py`, `iac_scanner.py`, `k8s_scanner.py`, `url_scanner.py`) check `tool_exists()` but then use bare tool names in commands instead of the full path from `find_tool()`.
 
 When trivy is installed at `~/.jmo/bin/trivy.exe` (not in PATH), the command `["trivy", "image", ...]` fails with FileNotFoundError, which gets silently caught and results in empty stub files.
 
 **Fix:**
+
 1. Change import from `tool_exists` to `find_tool`
 2. Change parameter from `tool_exists_func` to `find_tool_func`
 3. Replace pattern `if _tool_exists("tool")` → `tool_path = _find_tool("tool"); if tool_path:`
@@ -642,12 +866,14 @@ When trivy is installed at `~/.jmo/bin/trivy.exe` (not in PATH), the command `["
 5. Update all test files to use new `find_tool_func` parameter
 
 **Resolution:** (2026-02-01) Fixed all scanner modules and their test files:
+
 - iac_scanner.py tests: Changed `tool_exists_func` → `find_tool_func`, mock functions now return full paths
 - k8s_scanner.py tests: Changed `tool_exists_func` → `find_tool_func`, mock functions now return full paths
 - url_scanner.py tests: Removed unnecessary `tool_exists` patches, added `find_tool_func` parameter
 All 49 scanner tests pass (9 image, 9 iac, 9 k8s, 10 url, 12 scan_jobs).
 
 ### TASK-029: [WIZARD-CRASH] repository_scanner.py uses tool names instead of full paths
+
 **Type:** Bug
 **Priority:** Critical
 **Score:** [S+F+C] = 12 (S:4, F:4, C:4)
@@ -655,20 +881,27 @@ All 49 scanner tests pass (9 image, 9 iac, 9 k8s, 10 url, 12 scan_jobs).
 **Status:** Resolved
 **File:** scripts/cli/scan_jobs/repository_scanner.py (25+ occurrences)
 **Symptom:**
-```
+
+```text
+
 All security tools return empty results (0 findings).
 FileNotFoundError: [WinError 2] The system cannot find the file specified
 ```
+
 **Root Cause:**
 The repository scanner checks `tool_exists()` (which calls `find_tool()` to locate tools in `~/.jmo/bin/`), but then creates commands with just the tool name instead of the full path. Example:
+
 ```python
 # Current (buggy):
+
 if _tool_exists("trivy"):
     trivy_cmd = ["trivy", "fs", ...]  # Uses bare name, not found in PATH!
 ```
+
 When `subprocess.run(["trivy", ...])` executes, it fails with FileNotFoundError because `~/.jmo/bin/` is not in the system PATH. The tool runner catches this error and writes a stub file, masking the failure.
 
 **Affected Tools (25+):**
+
 - trivy (line 232)
 - trufflehog (line 157)
 - semgrep (line 202)
@@ -686,20 +919,24 @@ When `subprocess.run(["trivy", ...])` executes, it fails with FileNotFoundError 
 
 **Fix:**
 Replace all occurrences of hardcoded tool names with `_find_tool(tool_name)`:
+
 ```python
 # Fixed:
+
 trivy_path = _find_tool("trivy")
 if trivy_path:
     trivy_cmd = [trivy_path, "fs", ...]
 ```
 
 Already correctly implemented for:
+
 - `dependency-check` (line 1118): `dc_path = _find_tool("dependency-check")`
 - `zap-baseline.py` (line 489): `zap_baseline_path = _find_tool("zap-baseline.py")`
 
 **Resolution:** (2026-02-01) Fixed all 25+ tool definitions in repository_scanner.py to use `_find_tool()` for full paths. Changed pattern from `if _tool_exists("tool")` with hardcoded name to `tool_path = _find_tool("tool"); if tool_path:` with path in command. Updated tests in test_repository_scanner.py to use `find_tool_func` instead of `tool_exists_func`. Wizard scan now finds 84 findings from 4 tools (syft: 41, cdxgen: 23, hadolint: 11, trivy: 9).
 
 ### TASK-030: [WIZARD-CONFIG] Semgrep HTTP 404 downloading rules
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -707,9 +944,11 @@ Already correctly implemented for:
 **Status:** Resolved
 **File:** scripts/cli/scan_jobs/repository_scanner.py:191-195
 **Symptom:**
+
 ```json
 {"code": 2, "level": "error", "type": "SemgrepError", "message": "Failed to download configuration from https://semgrep.dev/c/p/security HTTP 404."}
 ```
+
 **Root Cause:**
 Default semgrep configs included `["auto", "p/security"]`. The `p/security` registry ruleset was deprecated by Semgrep and returns HTTP 404.
 **Fix:**
@@ -717,56 +956,72 @@ Changed default to `["auto"]` only. The `auto` config uses Semgrep Registry auto
 **Resolution:** (2026-02-01) Changed default semgrep configs from `["auto", "p/security"]` to `["auto"]` in repository_scanner.py. Updated documentation in USER_GUIDE.md to show `configs` as a per_tool option. Updated USAGE_MATRIX.md to reference `--config auto` instead of deprecated `p/security-audit`. All 21 repository scanner tests pass.
 
 ### TASK-027: [Bug] Test files use `from tests.conftest` breaking imports
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - tests/core/test_error_recovery.py:27
 - tests/cli_ralph/conftest.py:23
 - tests/cli_ralph/test_schedule_command.py:17
 - tests/cli_ralph/test_tool_installation.py:19
 - tests/cli_ralph/test_wizard_command.py:16
 **Symptom:**
-```
+
+```text
+
 ModuleNotFoundError: No module named 'tests'
 ```
+
 **Root Cause:** Test files import from `tests.conftest` but `tests/` is not a proper package in PYTHONPATH. When running from repo root, pytest doesn't add `tests/` to sys.path automatically.
 **Fix:** Two-part fix:
+
 1. Add `pythonpath = ["."]` to pyproject.toml [tool.pytest.ini_options] for consistent imports
 2. Change imports to use relative path with sys.path.insert:
+
    ```python
    import sys
    from pathlib import Path
    sys.path.insert(0, str(Path(__file__).parent.parent))
    from conftest import IS_WINDOWS, skip_on_windows
    ```
+
 **Resolution:** (2026-01-29) Fixed all 5 files with sys.path.insert pattern. Added `pythonpath = ["."]` to pyproject.toml. Security and integration tests now pass (31 security, 34 integration).
 
 ### TASK-028: [Bug] CLI tests use wrong command arguments
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - tests/cli_ralph/test_history_commands.py:131 - uses `--severity` flag that doesn't exist
 - tests/cli_ralph/test_policy_commands.py:97-109 - passes results dir instead of --findings-file
 **Symptom:**
-```
+
+```text
+
 error: unrecognized arguments: --severity
 error: the following arguments are required: --findings-file
 ```
+
 **Root Cause:** Test assumptions don't match actual CLI API:
+
 - `jmo history query` takes SQL query, not `--severity` filter
 - `jmo policy test` requires `--findings-file` flag and policy name, not directory + `--policy`
 **Fix:**
+
 1. test_hs_004_history_query_severity: Use SQL query `SELECT * FROM findings WHERE severity = 'CRITICAL' LIMIT 10`
 2. test_pl_003_policy_test: Use `--findings-file` flag with findings.json path and built-in policy name "zero-secrets"
 **Resolution:** (2026-01-29) Fixed both tests. All 56 cli_ralph tests now passing.
 
 ### TASK-024: [Bug] cmd_setup fails on Windows - bash script path handling
+
 **Type:** Bug
 **Priority:** Critical
 **Score:** [S+F+C] = 9 (S:3, F:3, C:3)
@@ -774,39 +1029,50 @@ error: the following arguments are required: --findings-file
 **Status:** Resolved
 **File:** scripts/cli/jmo.py:2800-2827
 **Symptom:**
-```
+
+```text
+
 /bin/bash: C:Projectsjmo-security-reposcriptscorecheck_and_install_tools.sh: No such file or directory
 ERROR: Tool setup failed
 ```
+
 **Root Cause:** `cmd_setup()` invokes bash script with Windows path. The path is correctly constructed via `Path`, but subprocess passes it to bash which cannot interpret Windows paths. Additionally, this creates platform-specific behavior.
 **Fix:** Replaced bash script invocation with pure Python implementation using existing `cmd_tools_check` and `cmd_tools_install` from tool_commands.py.
 **Resolution:** (2026-01-29) Rewrote `cmd_setup()` to use the Python-based tool management infrastructure instead of bash script:
+
 - `--print-commands` → `cmd_tools_install(print_script=True)`
 - `--auto-install` → `cmd_tools_install(yes=True)`
 - Default → `cmd_tools_check()`
 Also fixed argparse SystemExit handling in `parse_args()` to only suppress exit(0) during pytest, allowing error exits to propagate correctly. Fixed test_adapters_commands.py to provide required file argument to `adapters validate`. All 24 setup tests + 4 adapter tests passing.
 
 ### TASK-025: [Bug] Untracked test files have broken imports and logic
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
 **Confidence:** 100%
 **Status:** Resolved
 **Files:**
+
 - tests/core/test_error_recovery.py - imports `JsonReporter` and `HistoryDB` which don't exist
 - tests/cli_ralph/test_setup_command.py - 6 failing tests due to TASK-024
 - tests/cli_ralph/test_schedule_command.py - 1 failing test (unknown subcommand returns 0 instead of error)
 **Symptom:**
-```
+
+```text
+
 ModuleNotFoundError: No module named 'scripts.core.reporters.json_reporter'
 ImportError: cannot import name 'HistoryDB' from 'scripts.core.history_db'
 ```
+
 **Root Cause:** Untracked test files reference classes/modules that don't exist or have incorrect API expectations.
 **Fix:**
+
 1. Remove or update `test_error_recovery.py` - fix imports to use actual module names
 2. Fix `test_schedule_command.py` - update test expectation for unknown subcommand behavior
 3. Block `test_setup_command.py` tests until TASK-024 is resolved
 **Resolution:** (2026-01-29) Fixed test_error_recovery.py:
+
 - Replaced `from scripts.core.reporters.json_reporter import JsonReporter` → `from scripts.core.reporters.basic_reporter import write_json`
 - Replaced `from scripts.core.history_db import HistoryDB` → `from scripts.core.history_db import init_database, get_connection` (5 occurrences)
 - Rewrote tests to use functional API instead of non-existent class-based API
@@ -816,6 +1082,7 @@ test_setup_command.py: All tests pass now that TASK-024 is resolved.
 test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 2 skip)
 
 ### TASK-026: Test Module Naming Conflict
+
 **Type:** Bug
 **Priority:** Medium
 **Score:** [S:2 + F:3 + C:1] = 6 (Test organization issue)
@@ -824,6 +1091,7 @@ test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 
 **Target:** tests/cli_ralph/
 **Gap/Symptom:** Test collection errors due to duplicate module names between `tests/cli/` and `tests/cli_ralph/` directories. Files with same basename (`test_diff_commands.py`, `test_history_commands.py`, `test_policy_commands.py`) exist in both directories, causing pytest import conflicts.
 **Fix:** Either:
+
 1. Rename cli_ralph test files to unique basenames (e.g., `test_ralph_diff_commands.py`)
 2. Or consolidate tests into single directory structure
 3. Or add `__init__.py` with proper namespace isolation
@@ -836,9 +1104,11 @@ test_schedule_command.py: test_schedule_unknown_subcommand now passes (48 pass, 
 **Re-audited:** 2026-02-03 17:30 (previous audit: 2026-02-03 12:00)
 
 **Target Files:**
+
 - `scripts/cli/wizard_flows/` - 16 modules (~2,076 LOC combined)
 
 **Test Results (with cli_ralph tests included):**
+
 - tests/cli/test_wizard*.py + tests/cli_ralph/test_wizard*.py: 564 passed, 1 failed, 1 skipped
 - **Overall coverage: 74%** (494/2076 lines uncovered)
 
@@ -868,6 +1138,7 @@ The `tests/cli_ralph/` directory contains 101 additional wizard tests that signi
 | `target_configurators.py` | 8% | 8% | Interactive UI |
 
 **Failing Test:**
+
 - `tests/cli_ralph/test_wizard_command.py::TestWizardEdgeCases::test_wizard_emit_to_readonly_location`
 - **Root Cause:** wizard.py:911 shows traceback on write failure (TASK-042 created)
 
@@ -920,6 +1191,7 @@ TASK-038, 039, 040 are resolved. Coverage improved from 58% to 74% by including 
 ## Resolved Tasks
 
 ### TASK-023: [Coverage] normalize_and_report.py at 79% coverage
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -928,12 +1200,14 @@ TASK-038, 039, 040 are resolved. Coverage improved from 58% to 74% by including 
 **Target:** scripts/core/normalize_and_report.py
 **Current Coverage:** 79% → 100%
 **Gap:**
+
 - [x] Lines 225-227, 232-242: Trivy-Syft enrichment exception paths
 - [x] Lines 247-252, 260-269, 274-276: Compliance/priority enrichment exceptions
 - [x] Lines 313-333: SBOM matching edge cases
 - [x] Lines 582-621: Report generation edge cases
 **Note:** Core aggregation module. Exception paths and edge cases need coverage.
 **Resolution:** Created tests/unit/test_normalize_enrichment_exceptions.py with 32 tests:
+
 - TestTrivySyftEnrichmentExceptions: 1 test for generic Exception handler
 - TestComplianceEnrichmentExceptions: 3 tests for FileNotFoundError, TypeError, and generic Exception
 - TestPriorityEnrichmentExceptions: 3 tests for KeyError, ValueError, and generic Exception
@@ -951,6 +1225,7 @@ TASK-038, 039, 040 are resolved. Coverage improved from 58% to 74% by including 
 All 65 normalize tests + 93 cli_ralph tests passing (2026-01-29).
 
 ### TASK-022: [Coverage] gitlab_ci workflow generator at 8% coverage
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -959,11 +1234,13 @@ All 65 normalize tests + 93 cli_ralph tests passing (2026-01-29).
 **Target:** scripts/core/workflow_generators/gitlab_ci.py
 **Current Coverage:** 8% → 99%
 **Gap:**
+
 - [x] GitLabCIGenerator class - nearly all methods untested
 - [x] Template generation functions
 - [x] CI/CD pipeline configuration builders
 **Note:** Initial audit incorrectly reported 8% - actual coverage was already 98% via integration tests.
 **Resolution:** Created tests/unit/test_workflow_generators_gitlab_ci.py with 6 unit tests for branch partials:
+
 - `test_generate_script_no_repositories_target` - targets without repositories key (branch 130->141)
 - `test_generate_script_repositories_without_repos_dir` - repos dict without repos_dir (branch 132->134)
 - `test_generate_notification_jobs_empty_channels` - empty channels list (branch 224->223)
@@ -974,6 +1251,7 @@ Remaining 1% uncovered: theoretical branches (25->29 when _generate_variables re
 All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 
 ### TASK-021: [Coverage] secure_temp.py at 77% coverage
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:2, C:1)
@@ -982,11 +1260,13 @@ All 14 gitlab_ci tests + 93 cli_ralph tests passing (2026-01-29).
 **Target:** scripts/core/secure_temp.py
 **Current Coverage:** 77% → 97%
 **Gap:**
+
 - [x] Cleanup failure exception paths (lines 104-106, 179-181)
 - [x] fd cleanup when still open (lines 169-172)
 - [x] is_secure_permissions() helper (lines 214-216)
 **Note:** Security-related temp file handling. Some exception paths untested.
 **Resolution:** Added 9 new tests to tests/unit/test_secure_temp.py:
+
 - TestCleanupFailurePaths: 4 tests for exception handling
   - `test_secure_temp_dir_cleanup_failure_logs_warning` - rmtree failure logs warning
   - `test_secure_temp_file_cleanup_failure_logs_warning` - unlink failure logs warning
@@ -1000,6 +1280,7 @@ Remaining 3% uncovered: branch partials for cleanup paths when temp doesn't exis
 All 33 secure_temp tests passing (2026-01-29).
 
 ### TASK-020: [Coverage] archive_security.py at 19% coverage
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 8 (S:3, F:3, C:2)
@@ -1008,11 +1289,13 @@ All 33 secure_temp tests passing (2026-01-29).
 **Target:** scripts/core/archive_security.py
 **Current Coverage:** 19% → 98%
 **Gap:**
+
 - [x] safe_tar_extract() function - lines 60-86 untested
 - [x] safe_zip_extract() function - lines 103-109 untested
 - [x] _is_safe_path() helper - lines 35-42 untested
 **Note:** Critical security module for path traversal prevention. Testing recommended.
 **Resolution:** Created tests/unit/test_archive_security.py with 22 tests:
+
 - TestIsSafePath: 7 tests (simple, nested, traversal, absolute, dots, nested-back)
 - TestSafeTarExtract: 9 tests (simple, nested, traversal, symlink warning, hardlink warning, safe symlink, empty linkname, Python 3.11 fallback, fallback symlink skip)
 - TestSafeZipExtract: 6 tests (simple, nested, traversal, deep traversal, multiple files, absolute path)
@@ -1020,6 +1303,7 @@ Note: Python 3.12+ `data` filter provides defense in depth - tests verify warnin
 All 22 tests + 93 cli_ralph tests passing (2026-01-29).
 
 ### TASK-019: [Bug] test_lynis_version_command failing
+
 **Type:** Bug
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -1032,6 +1316,7 @@ All 22 tests + 93 cli_ralph tests passing (2026-01-29).
 **Resolution:** Updated test to check dict structure. Now verifies: (1) lynis config is a dict, (2) `default` key contains `["lynis", "--version"]`, (3) `fallback` key contains `["lynis", "show", "version"]`. All 36 test_tool_installer_urls tests passing (2026-01-29).
 
 ### TASK-018: [Coverage] diff_flow.py at 92% - exception paths untested
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:2, F:1, C:2)
@@ -1040,16 +1325,19 @@ All 22 tests + 93 cli_ralph tests passing (2026-01-29).
 **Target:** scripts/cli/wizard_flows/diff_flow.py:348-351
 **Current Coverage:** 92% → 95%
 **Gap:**
+
 - [x] Exception handling in run_diff_wizard() - line 348-351
 - [x] Generic exception logging and error message display
 **Note:** Need to trigger non-KeyboardInterrupt exception in main flow
 **Resolution:** Added 3 tests to TestRunDiffWizardExceptionHandling class in tests/cli/test_wizard_diff.py:
+
 - `test_diff_wizard_generic_exception_in_flow` - RuntimeError from cmd_diff triggers exception handler, returns 1
 - `test_diff_wizard_exception_during_history_load` - Corrupted SQLite database triggers load error, returns 1
 - `test_diff_wizard_value_error_during_scan_selection` - Non-numeric input triggers ValueError→KeyboardInterrupt, returns 130
 All 24 wizard_diff tests + 93 cli_ralph tests + 330 wizard_flows tests passing (2026-01-20)
 
 ### TASK-016: [Coverage] tool_checker.py at 73% - dependency installation flow untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:2, C:3)
@@ -1058,6 +1346,7 @@ All 24 wizard_diff tests + 93 cli_ralph tests + 330 wizard_flows tests passing (
 **Target:** scripts/cli/wizard_flows/tool_checker.py:460-508
 **Current Coverage:** 73% → 77%
 **Gap:**
+
 - [x] `_prompt_and_install_dependencies()` - Lines 460-508: dependency installation menu display
 - [x] Choice "1" - auto install dependencies (success/failure paths)
 - [x] Choice "2" - skip tools requiring deps
@@ -1065,6 +1354,7 @@ All 24 wizard_diff tests + 93 cli_ralph tests + 330 wizard_flows tests passing (
 - [x] Manual command display when auto-install fails
 **Note:** Requires mocking `install_dependency`, `get_manual_dependency_command`, and `input()`
 **Resolution:** Added 7 tests to TestAutoFixToolsDependencies class in tests/cli/test_wizard_tool_checker.py:
+
 - `test_dependency_menu_displayed_with_missing_deps` - Verifies menu appears when deps missing
 - `test_choice_1_auto_install_success` - Installs java dependency successfully
 - `test_choice_1_auto_install_failure_shows_manual` - Shows manual command on failure
@@ -1075,6 +1365,7 @@ All 24 wizard_diff tests + 93 cli_ralph tests + 330 wizard_flows tests passing (
 All 40 tool_checker tests + 93 cli_ralph tests passing (2026-01-19)
 
 ### TASK-017: [Coverage] tool_checker.py platform command execution untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:2, C:3)
@@ -1083,6 +1374,7 @@ All 40 tool_checker tests + 93 cli_ralph tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/tool_checker.py:646-727
 **Current Coverage:** 73% → 80%
 **Gap:**
+
 - [x] Platform command execution loop (lines 655-727)
 - [x] TimeoutExpired exception path (lines 696-704)
 - [x] Generic exception path (lines 705-713)
@@ -1090,6 +1382,7 @@ All 40 tool_checker tests + 93 cli_ralph tests passing (2026-01-19)
 - [x] Success/failure tracking per platform command
 **Note:** Shell=True used (nosec B602) - test subprocess.run mocking
 **Resolution:** Added 12 tests to TestPlatformCommandExecution class in tests/cli/test_wizard_tool_checker.py:
+
 - `test_platform_command_success` - Successful command execution, tool marked as fixed
 - `test_platform_command_failure_with_error_stderr` - Error in stderr triggers failure tracking
 - `test_platform_command_nonzero_return_no_error_continues` - Non-zero without error/failed keywords continues
@@ -1105,6 +1398,7 @@ All 40 tool_checker tests + 93 cli_ralph tests passing (2026-01-19)
 All 52 tool_checker tests + 93 cli_ralph tests passing (2026-01-20)
 
 ### TASK-015: [Coverage] stack_flow.py recommendation logic untested
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -1113,11 +1407,13 @@ All 52 tool_checker tests + 93 cli_ralph tests passing (2026-01-20)
 **Target:** scripts/cli/wizard_flows/stack_flow.py
 **Current Coverage:** 17% → 99%
 **Gap:**
+
 - [x] `EntireStackFlow.prompt_user()` - Recommendations display, options
 - [x] `EntireStackFlow._generate_recommendations()` - Smart recommendation logic
 - [x] `EntireStackFlow._has_dockerfile()`, `_has_terraform_dir()`, `_has_k8s_dir()`, `_has_github_workflows()` - Helper methods
 **Implementation:** Extended `tests/wizard_flows/test_stack_flow.py`
 **Resolution:** Verified coverage was already 92% (not 17% as initially recorded). Added 7 tests for full branch coverage:
+
 - `test_entire_stack_flow_prompt_user_no_recommendations` - Empty recommendations list (false branch 35→39)
 - `test_entire_stack_flow_build_command_empty_targets` - All empty targets (false branches 75→79, 79→85, 85→90, 90→93)
 - `test_entire_stack_flow_recommendations_no_gitlab_ci` - Missing .gitlab-ci.yml
@@ -1128,6 +1424,7 @@ All 52 tool_checker tests + 93 cli_ralph tests passing (2026-01-20)
 All 20 stack_flow tests + 93 cli_ralph tests passing (2026-01-19)
 
 ### TASK-014: [Coverage] deployment_flow.py interactive methods untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:2, C:3)
@@ -1136,11 +1433,13 @@ All 20 stack_flow tests + 93 cli_ralph tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/deployment_flow.py
 **Current Coverage:** 8% → 100%
 **Gap:**
+
 - [x] `DeploymentFlow.prompt_user()` - Environment detection, profile/fail-on selection
 - [x] `DeploymentFlow._print_detected_deployment_targets()` - Summary display
 - [x] `DeploymentFlow.build_command()` - Command building with images/IaC/URLs
 **Implementation:** Extended `tests/unit/test_wizard_deployment_dependency_flows.py`
 **Resolution:** Verified coverage was already 96% (not 8% as initially recorded). Added 6 tests for full branch coverage:
+
 - `test_deployment_print_detected_targets_many_images_truncates` - Truncation when >3 images
 - `test_deployment_print_detected_targets_many_iac_truncates` - Truncation when >3 IaC files
 - `test_deployment_print_detected_targets_exactly_3_iac_no_truncation` - No truncation at boundary (false branch)
@@ -1150,6 +1449,7 @@ All 20 stack_flow tests + 93 cli_ralph tests passing (2026-01-19)
 All 34 deployment_flow tests + 93 cli_ralph tests passing (2026-01-19)
 
 ### TASK-013: [Coverage] cicd_flow.py interactive methods untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:2, C:3)
@@ -1158,11 +1458,13 @@ All 34 deployment_flow tests + 93 cli_ralph tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/cicd_flow.py
 **Current Coverage:** 7% → 100%
 **Gap:**
+
 - [x] `CICDFlow.prompt_user()` - Interactive profile/options selection
 - [x] `CICDFlow._print_detected_pipelines()` - Summary output
 - [x] `CICDFlow.build_command()` - Command building with pipeline_images.txt
 **Implementation:** Extended `tests/unit/test_wizard_cicd_flow.py`
 **Resolution:** Verified coverage was already 98% (not 7% as initially recorded). Added 3 tests for branch coverage edge cases:
+
 - `test_detect_images_gitlab_ci_non_dict_config` - GitLab CI config parsing to non-dict (branch 205→226)
 - `test_detect_images_gitlab_ci_global_image_list` - Global image as list instead of string/dict (branch 211→215)
 - `test_detect_images_gitlab_ci_job_image_list` - Job image as list instead of string/dict (branch 220→215)
@@ -1199,6 +1501,7 @@ All 30 cicd_flow tests + 93 cli_ralph tests passing (2026-01-19)
 ## Resolved Tasks
 
 ### TASK-012: [Coverage] telemetry_helper.py missing unit tests
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:2, C:3)
@@ -1207,17 +1510,20 @@ All 30 cicd_flow tests + 93 cli_ralph tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/telemetry_helper.py
 **Current Coverage:** 33% → 100%
 **Gap:**
+
 - [x] `prompt_telemetry_opt_in()` - Tests for user prompt flow (y, yes, YES, empty, n)
 - [x] `save_telemetry_preference()` - Tests for YAML update, new file, corrupted file
 - [x] `send_wizard_telemetry()` - Tests for event sending with mock send_event, no config, exception handling
 **Implementation:** Existing tests in `tests/wizard_flows/test_telemetry_helper.py`
 **Resolution:** Verified coverage was already 100% (not 33% as initially recorded). The test file contains 14 tests covering all 54 statements and 4 branches. Tests cover:
+
 - prompt_telemetry_opt_in: 5 tests (y, yes, YES, empty input defaults to no, explicit n)
 - save_telemetry_preference: 3 tests (exists check, new file creation, corrupted YAML handling)
 - send_wizard_telemetry: 4 tests (no config exists, with config + docker mode, exception handling)
 All 93 cli_ralph tests + 14 telemetry helper tests passing (2026-01-19)
 
 ### TASK-011: [Coverage] Low-coverage workflow classes (cicd, deployment, dependency, repo, stack flows)
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 5 (S:1, F:2, C:2)
@@ -1227,6 +1533,7 @@ All 93 cli_ralph tests + 14 telemetry helper tests passing (2026-01-19)
 **Current Coverage:** 7-19% → 97% (combined)
 **Gap:**
 These modules inherit from BaseWizardFlow and implement workflow-specific logic:
+
 - [x] `CICDFlow` - detect_targets(), prompt_user(), build_command() - 98% coverage
 - [x] `DeploymentFlow` - environment detection, targets with images+iac - 96% coverage
 - [x] `DependencyFlow` - lock file detection, package file handling - 100% coverage
@@ -1234,12 +1541,14 @@ These modules inherit from BaseWizardFlow and implement workflow-specific logic:
 - [x] `StackFlow` - full stack detection, recommendations - 92% coverage
 **Implementation:** Extended existing `tests/unit/test_wizard_cicd_flow.py` and `tests/unit/test_wizard_deployment_dependency_flows.py`
 **Resolution:** Verified existing coverage was actually 92-100% (not 7-19% as initially recorded). Added 7 new tests:
+
 - cicd_flow: `test_detect_images_gitlab_job_string_image` (job-level string images), `test_detect_images_jenkinsfile_unreadable` (read error handling)
 - deployment_flow: `test_deployment_detect_environment_from_env_var_staging`, `test_deployment_detect_environment_from_env_file_staging`, `test_deployment_detect_environment_from_k8s_manifest_staging`, `test_deployment_detect_environment_k8s_manifest_read_error`
 Remaining branch partials (205->226, 35->39, etc.) are false-branch paths for optional `if` blocks - not functional gaps.
 All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 
 ### TASK-010: [Coverage] command_builder.py Docker mode branches untested
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -1248,6 +1557,7 @@ All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/command_builder.py
 **Current Coverage:** 58% → 100%
 **Gap:**
+
 - [x] `build_repo_args()` - Docker mode with repo_path mount
 - [x] `build_image_args()` - Docker mode with images_file mount
 - [x] `build_iac_args()` - Docker mode with iac_path mount
@@ -1258,6 +1568,7 @@ All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 **Resolution:** Verified coverage was already 100% (not 58% as initially recorded). The test file contains 42 tests covering all 118 statements and 72 branches. All Docker mode tests already exist: `test_build_repo_args_docker_mode`, `test_build_image_args_batch_docker`, `test_build_iac_args_docker_mode`, `test_build_url_args_batch_docker`, and `test_build_command_parts_docker_*` tests. Native mode with optional flags covered by `test_build_command_parts_native_repo`. No additional tests needed (2026-01-18)
 
 ### TASK-009: [Coverage] base_flow.py BaseWizardFlow.execute() untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -1266,6 +1577,7 @@ All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 **Target:** scripts/cli/wizard_flows/base_flow.py
 **Current Coverage:** 32% -> 91%
 **Gap:**
+
 - [x] `BaseWizardFlow.execute()` - Full template method workflow with mocked subprocess
 - [x] `BaseWizardFlow.execute()` - User cancellation at confirmation step
 - [x] `BaseWizardFlow.execute()` - Subprocess exception handling
@@ -1276,6 +1588,7 @@ All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 - [x] `PromptHelper.print_summary_box()` - Title truncation on narrow terminals
 **Implementation:** Extend `tests/unit/test_wizard_base_flow.py` with execute() tests using mocked subprocess
 **Resolution:** Added 19 new tests to achieve 91% coverage (up from 82%). Key additions:
+
 - BaseWizardFlow.execute(): Tests for empty lists, success/failure/cancel/exception paths
 - PromptHelper: Text input choice, yes/no retry, NO_COLOR env, ANSI not supported
 - TargetDetector: Unreadable Dockerfile, non-string ports, cwd default behavior
@@ -1284,6 +1597,7 @@ All 93 cli_ralph tests + 78 flow tests passing (2026-01-19)
 Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platform-specific and impractical to unit test. All 72 base_flow tests + 94 cli_ralph tests passing (2026-01-18)
 
 ### TASK-008: [Coverage] validators.py functions need direct testing
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 7 (S:2, F:3, C:2)
@@ -1292,6 +1606,7 @@ Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platfo
 **Target:** scripts/cli/wizard_flows/validators.py
 **Current Coverage:** 25% -> 100%
 **Gap:**
+
 - [x] `validate_path()` - All exception types (OSError, ValueError, TypeError, RuntimeError)
 - [x] `validate_url()` - HTTPError with various codes
 - [x] `validate_url()` - URLError for DNS/connection failures
@@ -1304,6 +1619,7 @@ Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platfo
 **Resolution:** Verified coverage was already 100% (not 25% as initially recorded). The test file `tests/unit/test_wizard_validators.py` contains 43 tests covering all 87 statements and 20 branches. All code paths including exception handling for OSError, ValueError, TypeError, RuntimeError, HTTPError, URLError, TimeoutError, and FileNotFoundError are fully tested. No additional tests needed (2026-01-18)
 
 ### TASK-007: [Coverage] target_configurators.py interactive functions untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 8 (S:3, F:3, C:2)
@@ -1312,6 +1628,7 @@ Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platfo
 **Target:** scripts/cli/wizard_flows/target_configurators.py
 **Current Coverage:** 98% -> 100%
 **Gap:**
+
 - [x] `configure_repo_target()` - Happy path for each repo_mode (repo, repos-dir, targets, tsv)
 - [x] `configure_repo_target()` - Path validation failure and retry loop
 - [x] `configure_repo_target()` - Empty repos-dir warning prompt
@@ -1324,12 +1641,14 @@ Remaining uncovered lines (34-67) are Windows ctypes ANSI VT enablement - platfo
 - [x] Truncation display when >5 repos/images/URLs (lines 93, 150, 252)
 **Implementation:** Extended `tests/unit/test_wizard_target_configurators.py`
 **Resolution:** Coverage was already at 98% (not 8% as initially recorded). Added 3 tests for truncation branches to achieve 100% coverage:
+
 - `test_configure_repo_target_repos_dir_many_repos_truncates` - Tests "... and N more" display for repos
 - `test_configure_image_target_batch_many_images_truncates` - Tests "... and N more" display for images
 - `test_configure_url_target_batch_many_urls_truncates` - Tests "... and N more" display for URLs
 All 36 target_configurators tests passing (2026-01-18)
 
 ### TASK-006: [Coverage] policy_flow.py navigation edge cases
+
 **Type:** Coverage
 **Priority:** Medium
 **Score:** [S+F+C] = 6 (S:2, F:2, C:2)
@@ -1338,6 +1657,7 @@ All 36 target_configurators tests passing (2026-01-18)
 **Target:** scripts/cli/wizard_flows/policy_flow.py
 **Current Coverage:** ~85% -> ~92% (estimated)
 **Gap:**
+
 - [x] `_parse_policy_choice()` with invalid comma-separated numbers (e.g., "1,99,3")
 - [x] `_parse_policy_choice()` with non-numeric values (e.g., "1,abc,2")
 - [x] `_parse_policy_choice()` with empty custom input
@@ -1356,6 +1676,7 @@ All 36 target_configurators tests passing (2026-01-18)
 - [x] `_normalize_policy_name()` various formats
 **Implementation:** Added 27 new edge case tests to `tests/cli/test_wizard_policy_integration.py`
 **Resolution:** Comprehensive edge case coverage added (2026-01-18):
+
 - _parse_policy_choice: 3 tests (out-of-range, non-numeric, empty)
 - display_policy_violations_interactive: 4 tests (empty results, show all, navigation edges)
 - _show_all_violations_paginated: 4 tests (zero, single page, navigation, invalid)
@@ -1369,6 +1690,7 @@ All 36 target_configurators tests passing (2026-01-18)
 All 94 CLI Ralph tests + 58 policy integration tests passing (2026-01-18)
 
 ### TASK-005: [Coverage] trend_flow.py interactive functions untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 8 (S:2, F:3, C:3)
@@ -1377,6 +1699,7 @@ All 94 CLI Ralph tests + 58 policy integration tests passing (2026-01-18)
 **Target:** scripts/cli/wizard_flows/trend_flow.py
 **Current Coverage:** 67% -> ~85% (estimated)
 **Gap:**
+
 - [x] `explore_trends_interactive()` - menu loop options 2-5 (regressions, velocity, developers, score)
 - [x] `explore_trends_interactive()` - menu options 6 (compare) and 7 (export) dispatch
 - [x] `_run_trend_command_interactive()` - non-zero result handling (lines 310-314)
@@ -1386,6 +1709,7 @@ All 94 CLI Ralph tests + 58 policy integration tests passing (2026-01-18)
 - [x] `_export_trends_interactive()` - Exception path (lines 515-518)
 **Implementation:** Extended `tests/cli/test_wizard_trends.py` with 14 new tests
 **Resolution:** Added comprehensive test coverage for trend_flow.py interactive functions:
+
 - Menu options 2-7: 6 tests (regressions, velocity, developers, score, compare, export)
 - _run_trend_command_interactive: 2 tests (nonzero result, exception)
 - _export_trends_interactive: 2 tests (import error, exception)
@@ -1393,6 +1717,7 @@ All 94 CLI Ralph tests + 58 policy integration tests passing (2026-01-18)
 All 94 CLI Ralph tests + 36 wizard trends tests passing (2026-01-18)
 
 ### TASK-004: [Coverage] tool_checker.py critical functions untested
+
 **Type:** Coverage
 **Priority:** High
 **Score:** [S+F+C] = 9 (S:3, F:3, C:3)
@@ -1401,6 +1726,7 @@ All 94 CLI Ralph tests + 36 wizard trends tests passing (2026-01-18)
 **Target:** scripts/cli/wizard_flows/tool_checker.py
 **Current Coverage:** 46% -> ~75% (estimated)
 **Gap:**
+
 - [x] `check_tools_for_profile()` - main entry point, only tested indirectly
 - [x] `_check_policy_tools()` - OPA availability check, no direct tests
 - [x] `_install_opa_tool()` - OPA installation, no direct tests
@@ -1413,6 +1739,7 @@ All 94 CLI Ralph tests + 36 wizard trends tests passing (2026-01-18)
 - [ ] Lines 739-746: Post-fix re-check (covered by existing tests)
 **Implementation:** Created `tests/cli/test_wizard_tool_checker.py` with 33 new tests
 **Resolution:** Added comprehensive test coverage (33 tests) for tool_checker.py functions including:
+
 - check_tools_for_profile: 6 tests (docker mode, all ready, yes mode, import/generic error, skipped tools)
 - _check_policy_tools: 8 tests (no policies, skip, docker, OPA available/missing, interactive choices)
 - _install_opa_tool: 4 tests (success, failure, import error, exception)
@@ -1423,6 +1750,7 @@ All 94 CLI Ralph tests + 36 wizard trends tests passing (2026-01-18)
 All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 
 ### TASK-003: [Bug] ValueError crash in policy_flow custom selection
+
 **Type:** Bug
 **Priority:** Critical
 **Score:** [S+F+C] = 11 (S:4, F:3, C:4)
@@ -1434,6 +1762,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 **Resolution:** Fixed in policy_flow.py:321-330, added 2 regression tests in test_policy_flow.py (2026-01-17)
 
 ### TASK-002: Fix RALPH_FIXTURES_DIR path after directory move
+
 **Type:** Bug
 **Priority:** Critical
 **Status:** Resolved
@@ -1444,6 +1773,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 **Resolution:** All 94 tests passing after fix (2026-01-17)
 
 ### TASK-001: Validate test suite baseline
+
 **Type:** Bug
 **Priority:** High
 **Status:** Resolved
@@ -1511,6 +1841,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 **Targets Audited:** 6 (security, core, cli, adapters, reporters, wizard)
 
 **Test Results:**
+
 - security: 31 passed, 1 skipped
 - adapters: 1886 passed
 - reporters: 392 passed, 1 skipped
@@ -1526,6 +1857,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
    - test_policy_test: used results dir instead of `--findings-file`
 
 **Security Posture (Verified):**
+
 - All subprocess calls use `shell=False` (except 1 nosec B602 in tool_checker.py for platform commands)
 - os.system/popen: 5 findings, all are `platform.system()` calls for OS detection (false positives)
 - Path traversal prevention via archive_security._is_safe_path() - 98% covered
@@ -1537,6 +1869,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 ### Full Codebase Audit Summary (2026-02-02 -Force)
 
 **Test Results:**
+
 - security: 95 passed, 8 skipped (archive_security, secure_temp, normalize_enrichment)
 - core: 124 passed, 3 skipped (telemetry, tool_registry)
 - cli: 1468 passed, 2 skipped (wizard, tool_checker, etc.)
@@ -1551,6 +1884,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 1. **TASK-036 (High)**: `test_effective_scan_settings_merge` expected stale behavior where profile tool lists came from jmo.yml. Architecture changed - tool lists now come from `PROFILE_TOOLS` in `tool_registry.py`. Test updated to match documented behavior.
 
 **Security Posture (Re-verified):**
+
 - shell=True: 1 usage (tool_checker.py:735) with nosec B602 - user-initiated fix commands only
 - No os.system/popen/eval/exec/pickle usage in scripts/
 - No yaml.load or yaml.unsafe_load usage
@@ -1558,6 +1892,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 - XSS prevention confirmed in html_reporter.py (escape for script tag context) and simple_html_reporter.py (full HTML escape)
 
 **Known Test Infrastructure Issues (not code bugs):**
+
 - Integration tests (baseline_validation, scan_pipeline): Require real tools installed
 - Performance tests: Timeout due to real EPSS API calls
 - E2E tests: Windows PATH_MAX limit for long path test, timeouts for real scans
@@ -1565,6 +1900,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
 ### Full Codebase Audit Summary (2026-01-29 -Force #2)
 
 **Test Results:**
+
 - adapters: 1886 passed
 - reporters: 392 passed, 1 skipped
 - wizard: 987 passed, 1 skipped
@@ -1582,6 +1918,7 @@ All 94 CLI Ralph tests + 43 tool checker tests passing (2026-01-18)
    - 1 failing test in test_schedule_command.py
 
 ### Wizard Notes (Previous Audits)
+
 - All 676 wizard tests passing (1 skipped - history database locked test on Windows)
 - Overall wizard_flows coverage: 93%
 - High coverage (>95%): validators.py (100%), profile_config.py (100%), config_models.py (100%), telemetry_helper.py (100%), dependency_flow.py (100%), repo_flow.py (100%), stack_flow.py (99%), command_builder.py (97%), cicd_flow.py (96%), diff_flow.py (95%)

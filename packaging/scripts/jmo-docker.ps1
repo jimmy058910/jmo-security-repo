@@ -36,9 +36,24 @@ if (-not (Test-Path $JmoDir)) {
     New-Item -ItemType Directory -Path $JmoDir -Force | Out-Null
 }
 
+# Determine TTY flags based on terminal availability
+# Use -it for interactive terminals, -t only for non-interactive (CI, piped)
+try {
+    $isInteractive = [Environment]::UserInteractive -and
+                     -not [Console]::IsInputRedirected -and
+                     -not [Console]::IsOutputRedirected
+} catch {
+    $isInteractive = $false
+}
+
+if ($isInteractive) {
+    $TtyFlags = @("-it")
+} else {
+    $TtyFlags = @("-t")
+}
+
 # Run JMo in Docker with current directory mounted
-$dockerArgs = @(
-    "run", "--rm", "-it",
+$dockerArgs = @("run", "--rm") + $TtyFlags + @(
     "-v", "${PWD}:/scan",
     "-v", "${PWD}/.jmo:/scan/.jmo",
     "-w", "/scan",

@@ -352,7 +352,7 @@ Pre-build Validation:
     # VALIDATE subcommand
     build_subparsers.add_parser(
         "validate",
-        help="Validate tool versions exist upstream (GitHub, PyPI, npm)",
+        help="Validate tool versions exist upstream (GitHub, PyPI, npm). Set GITHUB_TOKEN env var to avoid API rate limiting",
     )
 
     # TEST subcommand

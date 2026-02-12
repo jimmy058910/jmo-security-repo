@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
+    xz-utils \
     ca-certificates \
     build-essential \
     clang \
@@ -164,6 +165,15 @@ RUN OPA_VERSION="1.12.0" && \
     -o /usr/local/bin/opa && \
     chmod +x /usr/local/bin/opa
 
+# Download ShellCheck (pinned version instead of apt)
+RUN SHELLCHECK_VERSION="0.10.0" && \
+    SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl -sSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
+    -o /tmp/shellcheck.tar.xz && \
+    tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
+    mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
+    chmod +x /usr/local/bin/shellcheck
+
 # NOTE: AFL++ removed from Docker image - requires LLVM/GCC dev headers for full build
 # AFL++ is a specialized fuzzing tool; install manually if needed: https://github.com/AFLplusplus/AFLplusplus
 
@@ -195,7 +205,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     jq \
-    shellcheck \
     yara \
     openjdk-17-jre-headless \
     curl \
@@ -289,6 +298,7 @@ COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
+COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=builder /opt/zaproxy /opt/zaproxy
 COPY --from=builder /opt/lynis /opt/lynis
 COPY --from=builder /opt/dependency-check-cli /opt/dependency-check-cli

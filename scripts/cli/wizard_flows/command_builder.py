@@ -21,15 +21,15 @@ def build_repo_args(target: TargetConfig, use_docker: bool = False) -> list[str]
             repo_abs = str(Path(target.repo_path).resolve())
             return ["-v", f"{repo_abs}:/scan", "--repos-dir", "/scan"]
     else:
-        # Native mode: use paths directly
+        # Native mode: normalize backslashes for cross-platform script compatibility
         if target.repo_mode == "repo":
-            args.extend(["--repo", target.repo_path])
+            args.extend(["--repo", target.repo_path.replace("\\", "/")])
         elif target.repo_mode == "repos-dir":
-            args.extend(["--repos-dir", target.repo_path])
+            args.extend(["--repos-dir", target.repo_path.replace("\\", "/")])
         elif target.repo_mode == "targets":
-            args.extend(["--targets", target.repo_path])
+            args.extend(["--targets", target.repo_path.replace("\\", "/")])
         elif target.repo_mode == "tsv":
-            args.extend(["--tsv", target.tsv_path])
+            args.extend(["--tsv", target.tsv_path.replace("\\", "/")])
             if hasattr(target, "tsv_dest") and target.tsv_dest:
                 args.extend(["--dest", target.tsv_dest])
 
@@ -168,9 +168,9 @@ def build_command_parts(config: WizardConfig) -> list[str]:
         # Add target-specific flags
         cmd_parts.extend(_get_target_args_with_volumes(config.target, use_docker=False))
 
-        # Results directory and profile
+        # Results directory and profile (normalize backslashes for script compatibility)
         if config.results_dir:
-            cmd_parts.extend(["--results-dir", config.results_dir])
+            cmd_parts.extend(["--results-dir", config.results_dir.replace("\\", "/")])
         cmd_parts.extend(["--profile-name", config.profile])
 
         # Advanced options

@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "description": "Cross-iteration learning for Ralph Loop - tracks recurring failures and flaky tools",
+  "recurring_failures": {},
+  "flaky_tools": {},
+  "known_windows_issues": [
+    "scancode",
+    "shellcheck",
+    "kubescape"
+  ],
+  "iteration_count": 0,
+  "last_success": null
+}

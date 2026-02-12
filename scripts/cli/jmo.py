@@ -426,6 +426,12 @@ def _add_wizard_args(subparsers):
         action="store_true",
         help="Non-interactive mode: use defaults for all prompts",
     )
+    wizard_parser.add_argument(
+        "--mode",
+        choices=["scan", "diff"],
+        default="scan",
+        help="Wizard mode: scan (default) or diff comparison",
+    )
 
     # Preset flags for automation (enables non-interactive wizard runs)
     preset_group = wizard_parser.add_argument_group(
@@ -435,7 +441,7 @@ def _add_wizard_args(subparsers):
     preset_group.add_argument(
         "--profile",
         choices=["fast", "slim", "balanced", "deep"],
-        help="Scan profile (fast=8 tools, slim=14, balanced=18, deep=28)",
+        help="Scan profile (fast=9 tools, slim=14, balanced=18, deep=29)",
     )
     preset_group.add_argument(
         "--target-type",
@@ -529,6 +535,23 @@ def _add_wizard_args(subparsers):
         const=".github/workflows/jmo-security.yml",
         type=str,
         help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
+    )
+
+    # Trend analysis (post-scan)
+    wizard_parser.add_argument(
+        "--analyze-trends",
+        action="store_true",
+        help="Automatically analyze trends after scan (non-interactive)",
+    )
+    wizard_parser.add_argument(
+        "--export-trends-html",
+        action="store_true",
+        help="Export trend report as HTML after scan",
+    )
+    wizard_parser.add_argument(
+        "--export-trends-json",
+        action="store_true",
+        help="Export trend report as JSON after scan",
     )
 
     # Policy evaluation
@@ -2728,6 +2751,7 @@ def cmd_scan(args) -> int:
     # Tool availability pre-flight check (skip in Docker mode)
     import os
 
+    missing_tools: list[str] = []
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
         if not tools:
@@ -2860,7 +2884,7 @@ def cmd_scan(args) -> int:
         from scripts.cli.tool_manager import ToolManager
 
         tm = ToolManager()
-        summary = tm.get_tool_summary(profile_name)
+        summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
         platform_applicable = summary.platform_applicable
     except Exception:
         platform_applicable = total_tools  # Fallback to actual tool count
@@ -3086,11 +3110,20 @@ def cmd_wizard(args):
     elif getattr(args, "native", False):
         use_docker = False
 
+    # Handle --mode diff: delegate to diff wizard
+    if getattr(args, "mode", "scan") == "diff":
+        from wizard import run_diff_wizard
+
+        return run_diff_wizard(use_docker=use_docker or False)
+
     return run_wizard(
         yes=args.yes,
         emit_script=args.emit_script,
         emit_make=args.emit_make_target,
         emit_gha=args.emit_gha,
+        analyze_trends=getattr(args, "analyze_trends", False),
+        export_trends_html=getattr(args, "export_trends_html", False),
+        export_trends_json=getattr(args, "export_trends_json", False),
         policies=getattr(args, "policies", None),
         skip_policies=getattr(args, "skip_policies", False),
         db_path=getattr(args, "db", None),

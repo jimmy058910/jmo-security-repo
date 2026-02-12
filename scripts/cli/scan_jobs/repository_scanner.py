@@ -1105,6 +1105,8 @@ def scan_repository(
             statuses["semgrep-secrets"] = True
 
     # Horusec: Multi-language SAST scanner (18+ languages)
+    # Uses --disable-docker (-D) flag to run native engines without Docker dependency
+    # This allows horusec to work on systems where Docker is unavailable or not running
     if "horusec" in tools:
         horusec_out = out_dir / "horusec.json"
         horusec_path = _find_tool("horusec")
@@ -1119,6 +1121,7 @@ def scan_repository(
                 "json",
                 "-O",
                 str(horusec_out),
+                "-D",  # Disable Docker - run native engines only
                 *horusec_flags,
             ]
             tool_defs.append(
@@ -1177,7 +1180,7 @@ def scan_repository(
     # This prevents overlapping output when Rich progress display is active
     runner = ToolRunner(
         tools=tool_defs,
-        progress_callback=progress_callback,
+        progress_callback=progress_callback,  # type: ignore[arg-type]
     )
     results = runner.run_all_parallel()
 

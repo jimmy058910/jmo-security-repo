@@ -229,6 +229,10 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
     )
 
     tools = getattr(args, "tools", None) or []
+    if getattr(args, "all", False) is True:
+        from scripts.core.tool_registry import PROFILE_TOOLS
+
+        tools = list(PROFILE_TOOLS.get("balanced", []))
     if not tools:
         print("Usage: jmo tools debug <tool_name>")
         print("Example: jmo tools debug shellcheck")
@@ -295,7 +299,9 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
                 if not cmd_template:
                     cmd_template = [binary_path, "--version"]
                 cmd = list(cmd_template)
-                print(f"Version command: {' '.join(cmd)} (platform: {current_platform})")
+                print(
+                    f"Version command: {' '.join(cmd)} (platform: {current_platform})"
+                )
             else:
                 cmd = list(version_cmd_config)
                 print(f"Version command: {' '.join(cmd)}")
@@ -433,19 +439,19 @@ def cmd_tools_install(args: argparse.Namespace) -> int:
         print("Mode: Sequential")
     print()
 
-    # Interactive confirmation
-    if not yes and sys.stdin.isatty():
-        response = input("Proceed with installation? [Y/n] ").strip().lower()
-        if response and response != "y":
-            print("Installation cancelled")
-            return 0
-
-    # Dry run mode
+    # Dry run mode - show preview and exit (no confirmation needed)
     if dry_run:
         print(colorize("\n[DRY RUN] Would install:", "cyan"))
         for status in missing:
             print(f"  {status.name}: {status.install_hint}")
         return 0
+
+    # Interactive confirmation (only for actual install)
+    if not yes and sys.stdin.isatty():
+        response = input("Proceed with installation? [Y/n] ").strip().lower()
+        if response and response != "y":
+            print("Installation cancelled")
+            return 0
 
     # Actually install
     # Import installer here to avoid circular imports

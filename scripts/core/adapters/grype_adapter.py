@@ -211,6 +211,9 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         return []
 
+    # Extract Grype version from descriptor (added in v0.74.0+)
+    grype_version = str(data.get("descriptor", {}).get("version") or "unknown")
+
     # Extract matches array
     matches = data.get("matches", [])
     if not isinstance(matches, list):
@@ -352,7 +355,7 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
             "severity": severity,
             "tool": {
                 "name": "grype",
-                "version": "0.74.0",  # Grype v0.74.0+
+                "version": grype_version,
             },
             "location": {
                 "path": location_path,

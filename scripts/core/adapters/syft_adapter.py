@@ -150,7 +150,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
                 "severity": "INFO",
                 "tool": {
                     "name": "syft",
-                    "version": str(data.get("artifactRelationships") and "unknown"),
+                    "version": "unknown",  # Syft doesn't embed version in JSON output
                 },
                 "location": {"path": location, "startLine": 0},
                 "remediation": "Track and scan dependencies.",
@@ -190,7 +190,7 @@ def _load_syft_internal(path: str | Path) -> list[dict[str, Any]]:
                 "severity": sev,
                 "tool": {
                     "name": "syft",
-                    "version": str(data.get("artifactRelationships") and "unknown"),
+                    "version": "unknown",  # Syft doesn't embed version in JSON output
                 },
                 "location": {"path": location, "startLine": 0},
                 "remediation": str(v.get("url") or "See advisory"),

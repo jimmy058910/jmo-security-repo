@@ -48,7 +48,7 @@ security-scan:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile
+\tjmo report ./results --profile {config.profile}
 
 .PHONY: security-clean
 security-clean:
@@ -86,7 +86,7 @@ security-scan-deep:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile
+\tjmo report ./results --profile {config.profile}
 
 .PHONY: security-clean
 security-clean:
@@ -128,7 +128,7 @@ security-check-images:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile
+\tjmo report ./results --profile {config.profile}
 
 .PHONY: security-clean
 security-clean:
@@ -168,7 +168,7 @@ security-full-check:
 
 .PHONY: security-report
 security-report:
-\tjmo report ./results --profile
+\tjmo report ./results --profile {config.profile}
 
 .PHONY: help
 help:
@@ -455,7 +455,7 @@ security-report:
   stage: report
   image: {JMO_DOCKER_IMAGE_FULL}
   script:
-    - jmo report ./results --profile
+    - jmo report ./results --profile {profile}
   dependencies:
     - security-scan-all
   artifacts:
@@ -571,7 +571,7 @@ services:
     image: {JMO_DOCKER_IMAGE_FULL}
     volumes:
       - ./results:/scan/results
-    command: report /scan/results --profile
+    command: report /scan/results --profile {profile}
     depends_on:
       - jmo-security
 """

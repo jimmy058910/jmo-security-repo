@@ -55,7 +55,7 @@ SEMGREP_TO_SEV = {
 
 @adapter_plugin(
     PluginMetadata(
-        name="semgrep-secrets",
+        name="semgrep_secrets",
         version="1.0.0",
         author="JMo Security",
         description="Adapter for Semgrep secrets detection (hardcoded credentials, API keys, tokens)",

@@ -94,13 +94,15 @@ CWE_CATEGORIES = {
 def clone_target(target: str, dest: Path) -> str:
     """Clone a known target repository and return its version."""
     if target not in KNOWN_TARGETS:
-        raise ValueError(f"Unknown target: {target}. Known: {list(KNOWN_TARGETS.keys())}")
+        raise ValueError(
+            f"Unknown target: {target}. Known: {list(KNOWN_TARGETS.keys())}"
+        )
 
     config = KNOWN_TARGETS[target]
     logger.info(f"Cloning {target} from {config['repo']}...")
 
     subprocess.run(
-        ["git", "clone", "--depth", "1", config["repo"], str(dest)],
+        ["git", "clone", "--depth", "1", config["repo"], str(dest)],  # type: ignore[list-item]
         check=True,
         capture_output=True,
     )
@@ -160,7 +162,7 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
     if isinstance(data, list):
         return data
     elif isinstance(data, dict) and "findings" in data:
-        return data["findings"]
+        return data["findings"]  # type: ignore[no-any-return]
     else:
         return []
 
@@ -253,7 +255,9 @@ def generate_baseline(
             logger.warning("No findings detected - baseline may be incomplete")
 
         # Determine tools used
-        tools_used = list(set(f.get("tool", {}).get("name", "unknown") for f in findings))
+        tools_used = list(
+            set(f.get("tool", {}).get("name", "unknown") for f in findings)
+        )
 
         return {
             "metadata": {

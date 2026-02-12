@@ -622,6 +622,83 @@ def generate_command_list(config: WizardConfig) -> list[str]:
     return _build_command_parts(config)
 
 
+def _print_scan_completion_summary(
+    config: WizardConfig,
+    exit_code: int,
+    tools_executed: int | None = None,
+    tools_skipped_platform: list[str] | None = None,
+    tools_skipped_content: list[str] | None = None,
+) -> None:
+    """Print a completion summary after scan finishes.
+
+    Shows what ran, what was skipped, and where results are.
+    Helps Windows users understand why some tools were skipped.
+
+    Args:
+        config: Wizard configuration
+        exit_code: Scan exit code (0=clean, 1=findings, other=error)
+        tools_executed: Number of tools that ran (if known)
+        tools_skipped_platform: Tools skipped due to platform incompatibility
+        tools_skipped_content: Tools skipped due to no relevant content
+    """
+    print()
+    print("═" * 54)
+    print(_colorize("  Scan Completion Summary", "bold"))
+    print("═" * 54)
+    print()
+    print(f"  Profile: {config.profile}")
+    print(f"  Target: {config.target.type} - {_get_target_display(config)}")
+    print(f"  Exit code: {exit_code}")
+    print()
+
+    # Show tool execution info if available
+    if tools_executed is not None:
+        try:
+            from scripts.cli.tool_manager import ToolManager
+
+            tm = ToolManager()
+            summary = tm.get_tool_summary(config.profile)
+            total = summary.platform_applicable
+            print(f"  Tools executed: {tools_executed}/{total}")
+        except ImportError:
+            print(f"  Tools executed: {tools_executed}")
+
+    if tools_skipped_platform:
+        print(f"  Skipped (platform): {', '.join(tools_skipped_platform)}")
+
+    if tools_skipped_content:
+        print(f"  Skipped (no content): {', '.join(tools_skipped_content)}")
+
+    print()
+    print(f"  Results: {config.results_dir}/")
+    print()
+
+    # Status message based on exit code
+    if exit_code == 0:
+        print(_colorize("  Scan completed - no findings", "green"))
+    elif exit_code == 1:
+        print(_colorize("  Scan completed - findings detected", "yellow"))
+    else:
+        print(_colorize(f"  Scan completed with errors (code: {exit_code})", "red"))
+
+    print("═" * 54)
+
+
+def _get_target_display(config: WizardConfig) -> str:
+    """Get a display string for the target configuration."""
+    target = config.target
+    if target.type == "repo":
+        return target.repo_path or "."
+    elif target.type == "image":
+        return target.image_name or target.images_file or "N/A"
+    elif target.type == "iac":
+        return target.iac_path or "N/A"
+    elif target.type == "url":
+        return target.url or target.urls_file or "N/A"
+    else:
+        return "N/A"
+
+
 def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     """
     Step 7: Execute the scan.
@@ -665,6 +742,31 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
             check=False,
             env=env,
         )
+
+        # Get tool execution info for summary
+        tools_executed = None
+        tools_skipped_platform = None
+        tools_skipped_content = None
+        try:
+            from scripts.cli.tool_manager import ToolManager
+
+            tm = ToolManager()
+            summary = tm.get_tool_summary(config.profile)
+            tools_executed = summary.execution_ready
+            tools_skipped_platform = summary.platform_skipped
+            tools_skipped_content = summary.content_triggered
+        except ImportError:
+            pass
+
+        # Print completion summary (Windows UX improvement)
+        _print_scan_completion_summary(
+            config,
+            result.returncode,
+            tools_executed,
+            tools_skipped_platform,
+            tools_skipped_content,
+        )
+
         # Print results guide after scan completes
         if result.returncode == 0 or result.returncode == 1:
             print(
