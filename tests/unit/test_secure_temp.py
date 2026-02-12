@@ -307,7 +307,10 @@ class TestCleanupFailurePaths:
                 assert temp_path.exists()
             # Exception should NOT propagate - cleanup failure is logged not raised
             # Check warning was logged
-            assert any("Failed to clean up temp directory" in record.message for record in caplog.records)
+            assert any(
+                "Failed to clean up temp directory" in record.message
+                for record in caplog.records
+            )
             assert any("PermissionError" in record.message for record in caplog.records)
         # rmtree was called
         assert call_count[0] >= 1
@@ -335,15 +338,16 @@ class TestCleanupFailurePaths:
                 saved_path = temp_path
                 assert temp_path.exists()
             # Exception should NOT propagate
-            assert any("Failed to clean up temp file" in record.message for record in caplog.records)
+            assert any(
+                "Failed to clean up temp file" in record.message
+                for record in caplog.records
+            )
             assert any("PermissionError" in record.message for record in caplog.records)
         # Cleanup manually
         if saved_path.exists():
             original_unlink(saved_path)
 
-    def test_secure_temp_file_fd_still_open_on_exception(
-        self, tmp_path: Path
-    ) -> None:
+    def test_secure_temp_file_fd_still_open_on_exception(self, tmp_path: Path) -> None:
         """Test that fd is closed if still open when exception occurs (lines 169-172)."""
         from unittest.mock import patch
 
@@ -379,9 +383,7 @@ class TestCleanupFailurePaths:
         # The fd was created by mkstemp and should be closed
         assert len(close_calls) >= 1
 
-    def test_secure_temp_file_fd_close_oserror_handled(
-        self, tmp_path: Path
-    ) -> None:
+    def test_secure_temp_file_fd_close_oserror_handled(self, tmp_path: Path) -> None:
         """Test that OSError from closing fd is silently caught (line 171-172)."""
         from unittest.mock import patch
 
@@ -396,7 +398,7 @@ class TestCleanupFailurePaths:
             close_calls.append(fd)
             raise OSError("Bad file descriptor")
 
-        original_chmod = os.chmod
+        _original_chmod = os.chmod  # noqa: F841
 
         def failing_chmod(path, mode):
             # Fail on first call (the temp file chmod)
@@ -463,11 +465,17 @@ class TestIsSecurePermissionsHelper:
         test_file.write_text("test")
 
         # When is_directory=True, should compare against DIR_PERMISSIONS (0o700)
-        with patch("scripts.core.secure_temp.get_temp_dir_permissions", return_value=DIR_PERMISSIONS):
+        with patch(
+            "scripts.core.secure_temp.get_temp_dir_permissions",
+            return_value=DIR_PERMISSIONS,
+        ):
             assert is_secure_permissions(test_file, is_directory=True) is True
             assert is_secure_permissions(test_file, is_directory=False) is False
 
         # When is_directory=False, should compare against FILE_PERMISSIONS (0o600)
-        with patch("scripts.core.secure_temp.get_temp_dir_permissions", return_value=FILE_PERMISSIONS):
+        with patch(
+            "scripts.core.secure_temp.get_temp_dir_permissions",
+            return_value=FILE_PERMISSIONS,
+        ):
             assert is_secure_permissions(test_file, is_directory=False) is True
             assert is_secure_permissions(test_file, is_directory=True) is False

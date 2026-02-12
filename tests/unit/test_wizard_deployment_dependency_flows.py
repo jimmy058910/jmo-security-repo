@@ -277,7 +277,13 @@ def test_deployment_print_detected_targets_many_iac_truncates(capsys):
     flow = DeploymentFlow()
     targets = {
         "images": [],
-        "iac": [Path("main.tf"), Path("vars.tf"), Path("out.tf"), Path("prov.tf"), Path("data.tf")],
+        "iac": [
+            Path("main.tf"),
+            Path("vars.tf"),
+            Path("out.tf"),
+            Path("prov.tf"),
+            Path("data.tf"),
+        ],
         "web": [],
     }
 

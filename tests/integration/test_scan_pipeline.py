@@ -163,7 +163,7 @@ class TestScanPipeline:
         """Scan should produce valid JSON output with findings."""
         results_dir = tmp_path / "results"
 
-        result = run_scan(sample_vulnerable_repo, results_dir, profile="fast")
+        run_scan(sample_vulnerable_repo, results_dir, profile="fast")
 
         # Scan should complete (may have non-zero exit for findings)
         assert results_dir.exists(), "Results directory not created"
@@ -174,7 +174,9 @@ class TestScanPipeline:
             # Validate each finding has required fields
             for finding in findings:
                 assert "severity" in finding, "Finding missing severity"
-                assert "message" in finding or "title" in finding, "Finding missing message/title"
+                assert (
+                    "message" in finding or "title" in finding
+                ), "Finding missing message/title"
 
     def test_scan_with_different_profiles(
         self, sample_vulnerable_repo: Path, tmp_path: Path

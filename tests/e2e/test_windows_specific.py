@@ -12,7 +12,6 @@ Usage:
 from __future__ import annotations
 
 
-
 from tests.conftest import windows_only
 
 
@@ -294,7 +293,11 @@ class TestWindowsOutputFormatting:
         # Should produce output without garbled escape codes
         combined = result.stdout + result.stderr
         # Either has clean output or ANSI codes but shouldn't have broken escape sequences
-        assert "\x1b[" not in combined or "\x1b[0m" in combined or result.returncode in (0, 1)
+        assert (
+            "\x1b[" not in combined
+            or "\x1b[0m" in combined
+            or result.returncode in (0, 1)
+        )
 
 
 @windows_only

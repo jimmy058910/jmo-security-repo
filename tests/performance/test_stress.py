@@ -59,7 +59,8 @@ def generate_finding(index: int) -> dict[str, Any]:
             "startLine": random.randint(1, 500),
             "endLine": random.randint(1, 500),
         },
-        "message": f"Finding {index}: " + "".join(random.choices(string.ascii_letters, k=50)),
+        "message": f"Finding {index}: "
+        + "".join(random.choices(string.ascii_letters, k=50)),
         "title": f"Issue {index}",
     }
 
@@ -105,12 +106,14 @@ class TestExtremeLoad:
         for tool in tools:
             tool_findings = []
             for i in range(findings_per_tool):
-                tool_findings.append({
-                    "check_id": f"rule-{i}",
-                    "path": f"file_{i % 100}.py",
-                    "start": {"line": i % 1000},
-                    "extra": {"message": f"Finding {i}", "severity": "LOW"},
-                })
+                tool_findings.append(
+                    {
+                        "check_id": f"rule-{i}",
+                        "path": f"file_{i % 100}.py",
+                        "start": {"line": i % 1000},
+                        "extra": {"message": f"Finding {i}", "severity": "LOW"},
+                    }
+                )
 
             if tool == "semgrep":
                 content = {"results": tool_findings, "version": "1.0.0"}
@@ -174,9 +177,7 @@ class TestExtremeLoad:
                     }
                 }
 
-            (indiv / f"{tool}.json").write_text(
-                json.dumps(content), encoding="utf-8"
-            )
+            (indiv / f"{tool}.json").write_text(json.dumps(content), encoding="utf-8")
 
         # Process all findings
         start_time = time.time()
@@ -184,7 +185,9 @@ class TestExtremeLoad:
         elapsed = time.time() - start_time
 
         # Should complete in reasonable time (<60s)
-        assert elapsed < 60, f"Processing 100k findings took {elapsed:.1f}s (target: <60s)"
+        assert (
+            elapsed < 60
+        ), f"Processing 100k findings took {elapsed:.1f}s (target: <60s)"
         assert isinstance(findings, list)
         assert len(findings) > 0
 
@@ -208,15 +211,16 @@ class TestExtremeLoad:
                     "check_id": f"rule-{i}",
                     "path": f"file_{i % 100}.py",
                     "start": {"line": i % 1000},
-                    "extra": {"message": f"Finding {i} " + "x" * 100, "severity": "LOW"},
+                    "extra": {
+                        "message": f"Finding {i} " + "x" * 100,
+                        "severity": "LOW",
+                    },
                 }
                 for i in range(100000)
             ],
             "version": "1.0.0",
         }
-        (indiv / "semgrep.json").write_text(
-            json.dumps(findings_data), encoding="utf-8"
-        )
+        (indiv / "semgrep.json").write_text(json.dumps(findings_data), encoding="utf-8")
 
         process = psutil.Process()
         memory_before = process.memory_info().rss
@@ -226,7 +230,9 @@ class TestExtremeLoad:
         memory_after = process.memory_info().rss
         memory_used_mb = (memory_after - memory_before) / (1024 * 1024)
 
-        assert memory_used_mb < 500, f"Memory usage {memory_used_mb:.1f}MB exceeded 500MB limit"
+        assert (
+            memory_used_mb < 500
+        ), f"Memory usage {memory_used_mb:.1f}MB exceeded 500MB limit"
         assert len(findings) > 0
 
 
@@ -254,7 +260,7 @@ class TestConcurrentOperations:
                 # Simulate scan insert
                 conn.execute(
                     """
-                    INSERT INTO scans 
+                    INSERT INTO scans
                     (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -264,7 +270,7 @@ class TestConcurrentOperations:
                         "2024-01-01T00:00:00",
                         "fast",
                         "[]",
-                        f"[\"/repo-{scan_id}\"]",
+                        f'["/repo-{scan_id}"]',
                         "repo",
                         "1.0.0",
                     ),
@@ -275,7 +281,7 @@ class TestConcurrentOperations:
                 for i in range(10):
                     conn.execute(
                         """
-                        INSERT INTO findings 
+                        INSERT INTO findings
                         (scan_id, fingerprint, severity, tool, rule_id, path, line_start, message)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
@@ -309,7 +315,9 @@ class TestConcurrentOperations:
                     errors.append(("executor", str(e)))
 
         # All should succeed (SQLite WAL mode should handle this)
-        assert success_count == 10, f"Only {success_count}/10 succeeded. Errors: {errors}"
+        assert (
+            success_count == 10
+        ), f"Only {success_count}/10 succeeded. Errors: {errors}"
 
     @pytest.mark.timeout(120)
     def test_concurrent_file_writes(self, tmp_path: Path):
@@ -361,7 +369,9 @@ class TestConcurrentOperations:
                 except Exception as e:
                     errors.append(("executor", str(e)))
 
-        assert success_count == 20, f"Only {success_count}/20 succeeded. Errors: {errors}"
+        assert (
+            success_count == 20
+        ), f"Only {success_count}/20 succeeded. Errors: {errors}"
 
 
 class TestDatabaseStress:
@@ -383,7 +393,7 @@ class TestDatabaseStress:
         for i in range(10000):
             conn.execute(
                 """
-                INSERT INTO scans 
+                INSERT INTO scans
                 (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -393,7 +403,7 @@ class TestDatabaseStress:
                     f"2024-01-{(i % 28) + 1:02d}T00:00:00",
                     ["fast", "balanced", "deep"][i % 3],
                     "[]",
-                    f"[\"/repo-{i % 100}\"]",
+                    f'["/repo-{i % 100}"]',
                     "repo",
                     "1.0.0",
                 ),
@@ -407,7 +417,7 @@ class TestDatabaseStress:
             for j in range(10):
                 conn.execute(
                     """
-                    INSERT INTO findings 
+                    INSERT INTO findings
                     (scan_id, fingerprint, severity, tool, rule_id, path, line_start, message)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -441,9 +451,7 @@ class TestDatabaseStress:
 
         # Severity distribution query
         start_severity = time.time()
-        conn.execute(
-            "SELECT severity, COUNT(*) FROM findings GROUP BY severity"
-        )
+        conn.execute("SELECT severity, COUNT(*) FROM findings GROUP BY severity")
         severity_time = time.time() - start_severity
 
         conn.close()
@@ -451,8 +459,12 @@ class TestDatabaseStress:
         # Performance assertions
         assert count == 10000, f"Expected 10000 scans, got {count}"
         assert count_time < 0.1, f"Count query took {count_time:.3f}s (target: <0.1s)"
-        assert recent_time < 0.5, f"Recent query took {recent_time:.3f}s (target: <0.5s)"
-        assert severity_time < 1.0, f"Severity query took {severity_time:.3f}s (target: <1s)"
+        assert (
+            recent_time < 0.5
+        ), f"Recent query took {recent_time:.3f}s (target: <0.5s)"
+        assert (
+            severity_time < 1.0
+        ), f"Severity query took {severity_time:.3f}s (target: <1s)"
 
     @pytest.mark.timeout(120)
     def test_database_vacuum_under_load(self, tmp_path: Path):
@@ -468,11 +480,20 @@ class TestDatabaseStress:
         for i in range(1000):
             conn.execute(
                 """
-                INSERT INTO scans 
+                INSERT INTO scans
                 (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (f"scan-{i}", 1704067200, "2024-01-01", "fast", "[]", "[]", "repo", "1.0.0"),
+                (
+                    f"scan-{i}",
+                    1704067200,
+                    "2024-01-01",
+                    "fast",
+                    "[]",
+                    "[]",
+                    "repo",
+                    "1.0.0",
+                ),
             )
         conn.commit()
 
@@ -506,15 +527,23 @@ class TestReportGenerationStress:
 
         findings = []
         for i in range(10000):
-            findings.append({
-                "id": f"fp-{i:05d}",
-                "ruleId": f"CWE-{i % 100}",
-                "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW"][i % 4],
-                "tool": {"name": ["semgrep", "trivy", "bandit"][i % 3], "version": "1.0.0"},
-                "location": {"path": f"src/file_{i % 100}.py", "startLine": i % 500},
-                "message": f"Finding {i}: " + "x" * 100,
-                "title": f"Issue {i}",
-            })
+            findings.append(
+                {
+                    "id": f"fp-{i:05d}",
+                    "ruleId": f"CWE-{i % 100}",
+                    "severity": ["CRITICAL", "HIGH", "MEDIUM", "LOW"][i % 4],
+                    "tool": {
+                        "name": ["semgrep", "trivy", "bandit"][i % 3],
+                        "version": "1.0.0",
+                    },
+                    "location": {
+                        "path": f"src/file_{i % 100}.py",
+                        "startLine": i % 500,
+                    },
+                    "message": f"Finding {i}: " + "x" * 100,
+                    "title": f"Issue {i}",
+                }
+            )
 
         meta = {
             "schema_version": "1.2.0",

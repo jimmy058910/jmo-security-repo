@@ -238,7 +238,7 @@ def sample_vulnerable_code(tmp_path: Path) -> Path:
 
     # JavaScript with SQL injection and XSS
     (src_dir / "app.js").write_text(
-        '''
+        """
 const express = require('express');
 const app = express();
 
@@ -254,21 +254,21 @@ app.get('/search', (req, res) => {
     // XSS vulnerability
     res.send("<h1>Results for: " + term + "</h1>");
 });
-'''
+"""
     )
 
     # Python with hardcoded secret
     (src_dir / "config.py").write_text(
-        '''
+        """
 # Hardcoded credentials
 API_KEY = "sk-1234567890abcdef1234567890abcdef"
 DATABASE_PASSWORD = "admin123"
-'''
+"""
     )
 
     # package.json for npm detection
     (tmp_path / "package.json").write_text(
-        '''
+        """
 {
   "name": "test-app",
   "version": "1.0.0",
@@ -276,7 +276,7 @@ DATABASE_PASSWORD = "admin123"
     "lodash": "4.17.20"
   }
 }
-'''
+"""
     )
 
     return tmp_path

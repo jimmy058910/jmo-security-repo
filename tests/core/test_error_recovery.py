@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import IS_WINDOWS, skip_on_windows
 
@@ -103,7 +104,16 @@ class TestDatabaseRecovery:
             conn.execute(
                 "INSERT INTO scans (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                ("test-scan", 1704067200, "2024-01-01T00:00:00", "fast", "[]", "[]", "repo", "1.0.0"),
+                (
+                    "test-scan",
+                    1704067200,
+                    "2024-01-01T00:00:00",
+                    "fast",
+                    "[]",
+                    "[]",
+                    "repo",
+                    "1.0.0",
+                ),
             )
             # Simulate failure before commit
             raise Exception("Simulated failure")
@@ -350,7 +360,16 @@ class TestConcurrentAccessRecovery:
                     conn.execute(
                         "INSERT INTO scans (id, timestamp, timestamp_iso, profile, tools, targets, target_type, jmo_version) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (scan_id, 1704067200, "2024-01-01T00:00:00", "fast", "[]", "[]", "repo", "1.0.0"),
+                        (
+                            scan_id,
+                            1704067200,
+                            "2024-01-01T00:00:00",
+                            "fast",
+                            "[]",
+                            "[]",
+                            "repo",
+                            "1.0.0",
+                        ),
                     )
                     conn.commit()
                     with lock:
@@ -512,12 +531,14 @@ class TestMemoryErrorRecovery:
         # Generate 10k findings
         findings = []
         for i in range(10000):
-            findings.append({
-                "check_id": f"rule-{i}",
-                "path": f"file_{i % 100}.py",
-                "start": {"line": i % 1000},
-                "extra": {"message": f"Finding {i}", "severity": "LOW"},
-            })
+            findings.append(
+                {
+                    "check_id": f"rule-{i}",
+                    "path": f"file_{i % 100}.py",
+                    "start": {"line": i % 1000},
+                    "extra": {"message": f"Finding {i}", "severity": "LOW"},
+                }
+            )
 
         (indiv / "semgrep.json").write_text(
             json.dumps({"results": findings, "version": "1.0.0"}),

@@ -1462,7 +1462,11 @@ def test_truncate_sensitive_private_key():
     """Test _truncate_sensitive with private key."""
     from scripts.cli.wizard_flows.policy_flow import _truncate_sensitive
 
-    key = "-----BEGIN RSA PRIVATE KEY-----\nLongKeyContentHere\n-----END RSA PRIVATE KEY-----"
+    key = (
+        "-----BEGIN RSA PRIVATE"
+        + " KEY-----\nLongKeyContentHere\n-----END RSA PRIVATE"
+        + " KEY-----"
+    )
     result = _truncate_sensitive(key)
     assert "[PRIVATE_KEY REDACTED]" in result
 
@@ -1589,9 +1593,7 @@ def test_policy_evaluation_menu_evaluation_error(
     # Mock evaluate to raise exception
     mock_engine.evaluate.side_effect = Exception("OPA evaluation failed")
 
-    policy_evaluation_menu(
-        tmp_path, "fast", sample_findings, non_interactive=True
-    )
+    policy_evaluation_menu(tmp_path, "fast", sample_findings, non_interactive=True)
 
     # Should handle error gracefully
     captured = capsys.readouterr()

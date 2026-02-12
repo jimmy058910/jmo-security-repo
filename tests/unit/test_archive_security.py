@@ -226,9 +226,13 @@ class TestSafeTarExtract:
             # Mock extractall to raise TypeError as Python <3.12 would
             original_extractall = tar.extractall
 
-            def mock_extractall_no_filter(path, members=None, *, numeric_owner=False, filter=None):
+            def mock_extractall_no_filter(
+                path, members=None, *, numeric_owner=False, filter=None
+            ):
                 if filter is not None:
-                    raise TypeError("extractall() got an unexpected keyword argument 'filter'")
+                    raise TypeError(
+                        "extractall() got an unexpected keyword argument 'filter'"
+                    )
                 # Don't actually extract - we just want to trigger the fallback
                 return original_extractall(path, members, numeric_owner=numeric_owner)
 
@@ -237,7 +241,9 @@ class TestSafeTarExtract:
 
         assert (tmp_path / "fallback.txt").exists()
 
-    def test_python_311_fallback_skips_unsafe_symlinks(self, tmp_path: Path, caplog) -> None:
+    def test_python_311_fallback_skips_unsafe_symlinks(
+        self, tmp_path: Path, caplog
+    ) -> None:
         """Tests that fallback path also skips unsafe symlinks."""
         tar_buffer = io.BytesIO()
         with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
@@ -258,7 +264,9 @@ class TestSafeTarExtract:
             # Mock extractall to raise TypeError (simulate Python <3.12)
             def mock_extractall(*args, **kwargs):
                 if "filter" in kwargs:
-                    raise TypeError("extractall() got an unexpected keyword argument 'filter'")
+                    raise TypeError(
+                        "extractall() got an unexpected keyword argument 'filter'"
+                    )
 
             with patch.object(tar, "extractall", side_effect=mock_extractall):
                 safe_tar_extract(tar, tmp_path)

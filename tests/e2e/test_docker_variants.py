@@ -106,9 +106,9 @@ class TestDockerVariants:
         # Count installed tools
         installed = sum(1 for t in tools if t.get("installed", False))
 
-        assert installed >= expected_tools, (
-            f"{variant} variant has {installed} tools, expected at least {expected_tools}"
-        )
+        assert (
+            installed >= expected_tools
+        ), f"{variant} variant has {installed} tools, expected at least {expected_tools}"
 
     @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
     def test_docker_variant_scan(
@@ -439,8 +439,9 @@ class TestDockerNonRootExecution:
 
         # Get current user ID
         import os
-        uid = os.getuid() if hasattr(os, 'getuid') else 1000
-        gid = os.getgid() if hasattr(os, 'getgid') else 1000
+
+        uid = os.getuid() if hasattr(os, "getuid") else 1000
+        gid = os.getgid() if hasattr(os, "getgid") else 1000
 
         result = subprocess.run(
             [
@@ -574,7 +575,7 @@ class TestDockerHistoryPersistence:
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         # Run first scan
-        result1 = subprocess.run(
+        subprocess.run(
             [
                 "docker",
                 "run",
@@ -599,7 +600,7 @@ class TestDockerHistoryPersistence:
         )
 
         # Run second scan
-        result2 = subprocess.run(
+        subprocess.run(
             [
                 "docker",
                 "run",

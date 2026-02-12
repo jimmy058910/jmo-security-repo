@@ -103,7 +103,9 @@ class TestDeduplicationLogic:
         # For now, just verify the structure is correct
         assert len(findings) == 2
         assert findings[0]["location"]["path"] == findings[1]["location"]["path"]
-        assert findings[0]["location"]["startLine"] == findings[1]["location"]["startLine"]
+        assert (
+            findings[0]["location"]["startLine"] == findings[1]["location"]["startLine"]
+        )
 
     def test_different_findings_stay_separate(self):
         """Distinct findings should not be merged."""

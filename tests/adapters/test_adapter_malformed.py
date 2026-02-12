@@ -48,8 +48,6 @@ from scripts.core.adapters.yara_adapter import YaraAdapter
 from scripts.core.adapters.zap_adapter import ZapAdapter
 
 
-
-
 # ============================================================================
 # Adapter Registry
 # ============================================================================
@@ -347,7 +345,9 @@ class TestAdapterLargeInputs:
 
         assert isinstance(result, list)
 
-    @pytest.mark.parametrize("adapter_name,adapter_class", ALL_ADAPTERS[:5])  # Subset for performance
+    @pytest.mark.parametrize(
+        "adapter_name,adapter_class", ALL_ADAPTERS[:5]
+    )  # Subset for performance
     def test_adapter_handles_many_findings(
         self,
         tmp_path: Path,
@@ -356,7 +356,9 @@ class TestAdapterLargeInputs:
     ):
         """Adapter should handle many findings."""
         # Generate 1000 items
-        items = [{"id": i, "message": f"Finding {i}", "severity": "LOW"} for i in range(1000)]
+        items = [
+            {"id": i, "message": f"Finding {i}", "severity": "LOW"} for i in range(1000)
+        ]
         content = json.dumps(items)
 
         many_file = tmp_path / f"{adapter_name}_many.json"
@@ -401,12 +403,18 @@ class TestSemgrepMalformed:
 
     def test_semgrep_result_missing_check_id(self, tmp_path: Path):
         """Semgrep should handle result missing check_id."""
-        content = json.dumps({
-            "results": [
-                {"path": "test.py", "start": {"line": 1}, "extra": {"message": "test"}}
-            ],
-            "version": "1.0.0"
-        })
+        content = json.dumps(
+            {
+                "results": [
+                    {
+                        "path": "test.py",
+                        "start": {"line": 1},
+                        "extra": {"message": "test"},
+                    }
+                ],
+                "version": "1.0.0",
+            }
+        )
         test_file = tmp_path / "semgrep.json"
         test_file.write_text(content, encoding="utf-8")
 
@@ -432,10 +440,12 @@ class TestTrivyMalformed:
 
     def test_trivy_null_vulnerabilities(self, tmp_path: Path):
         """Trivy should handle null Vulnerabilities."""
-        content = json.dumps({
-            "SchemaVersion": 2,
-            "Results": [{"Target": "test", "Vulnerabilities": None}]
-        })
+        content = json.dumps(
+            {
+                "SchemaVersion": 2,
+                "Results": [{"Target": "test", "Vulnerabilities": None}],
+            }
+        )
         test_file = tmp_path / "trivy.json"
         test_file.write_text(content, encoding="utf-8")
 
@@ -487,10 +497,12 @@ class TestCheckovMalformed:
 
     def test_checkov_array_format(self, tmp_path: Path):
         """Checkov should handle array format (multi-framework)."""
-        content = json.dumps([
-            {"check_type": "terraform", "results": {"failed_checks": []}},
-            {"check_type": "kubernetes", "results": {"failed_checks": []}}
-        ])
+        content = json.dumps(
+            [
+                {"check_type": "terraform", "results": {"failed_checks": []}},
+                {"check_type": "kubernetes", "results": {"failed_checks": []}},
+            ]
+        )
         test_file = tmp_path / "checkov.json"
         test_file.write_text(content, encoding="utf-8")
 

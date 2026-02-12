@@ -146,7 +146,9 @@ def compare_to_baseline(
         found_count = found_rules.get(rule_id, 0)
 
         if found_count < min_count:
-            missing_rules.append(f"{rule_id} (expected {min_count}, found {found_count})")
+            missing_rules.append(
+                f"{rule_id} (expected {min_count}, found {found_count})"
+            )
 
             if severity == "CRITICAL":
                 missing_critical += 1
@@ -267,7 +269,9 @@ class TestBaselineSchemaValidation:
 
             # Check required top-level keys
             assert "metadata" in data, f"{baseline_file.name} missing metadata"
-            assert "expected_findings" in data, f"{baseline_file.name} missing expected_findings"
+            assert (
+                "expected_findings" in data
+            ), f"{baseline_file.name} missing expected_findings"
             assert "tolerance" in data, f"{baseline_file.name} missing tolerance"
 
     def test_baseline_metadata_complete(self):
@@ -277,8 +281,12 @@ class TestBaselineSchemaValidation:
             metadata = baseline["metadata"]
 
             assert "target" in metadata, f"{baseline_file.name} metadata missing target"
-            assert "version" in metadata, f"{baseline_file.name} metadata missing version"
-            assert "profile" in metadata, f"{baseline_file.name} metadata missing profile"
+            assert (
+                "version" in metadata
+            ), f"{baseline_file.name} metadata missing version"
+            assert (
+                "profile" in metadata
+            ), f"{baseline_file.name} metadata missing profile"
 
     def test_expected_findings_have_required_fields(self):
         """Each expected finding should have required fields."""
@@ -286,6 +294,12 @@ class TestBaselineSchemaValidation:
             baseline = load_baseline(baseline_file)
 
             for i, finding in enumerate(baseline["expected_findings"]):
-                assert "rule_id" in finding, f"{baseline_file.name} finding {i} missing rule_id"
-                assert "severity" in finding, f"{baseline_file.name} finding {i} missing severity"
-                assert "category" in finding, f"{baseline_file.name} finding {i} missing category"
+                assert (
+                    "rule_id" in finding
+                ), f"{baseline_file.name} finding {i} missing rule_id"
+                assert (
+                    "severity" in finding
+                ), f"{baseline_file.name} finding {i} missing severity"
+                assert (
+                    "category" in finding
+                ), f"{baseline_file.name} finding {i} missing category"

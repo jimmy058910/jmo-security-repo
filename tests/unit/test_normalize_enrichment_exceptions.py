@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 import scripts.core.normalize_and_report as nr
 
@@ -354,7 +353,9 @@ class TestDedupThresholdValidation:
         def raise_clustering_error(_findings, similarity_threshold=0.65):
             raise RuntimeError("Clustering failed")
 
-        monkeypatch.setattr(nr, "_cluster_cross_tool_duplicates", raise_clustering_error)
+        monkeypatch.setattr(
+            nr, "_cluster_cross_tool_duplicates", raise_clustering_error
+        )
 
         out = nr.gather_results(root)
         assert isinstance(out, list)
@@ -496,7 +497,11 @@ class TestSbomIndexEdgeCases:
             "location": {"path": "/app/test.txt"},
             "raw": ["not", "a", "dict"],  # Should be replaced with {}
         }
-        by_path = {"/app/test.txt": [{"name": "pkg", "version": "1.0", "path": "/app/test.txt"}]}
+        by_path = {
+            "/app/test.txt": [
+                {"name": "pkg", "version": "1.0", "path": "/app/test.txt"}
+            ]
+        }
         by_name = {}
 
         match = nr._find_sbom_match(trivy_finding, by_path, by_name)
@@ -578,7 +583,9 @@ class TestClusterCrossToolDuplicates:
         # Patch FindingClusterer at the module import level in dedup_enhanced
         with patch("scripts.core.dedup_enhanced.FindingClusterer", MockClusterer):
             # Import happens inside _cluster_cross_tool_duplicates, need to patch there
-            result = nr._cluster_cross_tool_duplicates(findings, similarity_threshold=0.65)
+            result = nr._cluster_cross_tool_duplicates(
+                findings, similarity_threshold=0.65
+            )
             # Should have created consensus finding
             assert len(result) <= 2
 
@@ -639,7 +646,7 @@ class TestAflPlusPlusHandling:
             return None  # No adapter found (will be logged as warning)
 
         # Mock registry.get
-        original_registry = nr.get_plugin_registry()
+        nr.get_plugin_registry()  # Verify accessible before mocking
         mock_registry = MagicMock()
         mock_registry.get = mock_get
         monkeypatch.setattr(nr, "get_plugin_registry", lambda: mock_registry)
@@ -684,14 +691,16 @@ class TestPriorityEnrichmentLoop:
         class MockCalculator:
             def calculate_priorities_bulk(self, findings_list):
                 # Return scores only for f1, not f2
-                return {"f1": MagicMock(
-                    priority=50.0,
-                    epss=0.5,
-                    epss_percentile=0.6,
-                    is_kev=False,
-                    kev_due_date=None,
-                    components={}
-                )}
+                return {
+                    "f1": MagicMock(
+                        priority=50.0,
+                        epss=0.5,
+                        epss_percentile=0.6,
+                        is_kev=False,
+                        kev_due_date=None,
+                        components={},
+                    )
+                }
 
         monkeypatch.setattr(nr, "PriorityCalculator", MockCalculator)
         nr._enrich_with_priority(findings)
