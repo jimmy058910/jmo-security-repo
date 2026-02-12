@@ -102,14 +102,6 @@ docs/archive/merged/*
 # Claude Code user-specific configuration (open-source project)
 .claude/
 
-# Ralph Testing Loop runtime artifacts (keep setup files, ignore logs/results)
-tools/ralph-testing/iteration-logs/
-tools/ralph-testing/test-results.json
-tools/ralph-testing/fixtures/results-*/
-tools/ralph-testing/fixtures/juice-shop*/
-tools/ralph-testing/wizard-results/
-tools/ralph-testing/test-trivy.json
-
 # Test scan result directories (local testing artifacts)
 test-juice-results/
 samples/fixtures/infra-demo/docker-test-results/
