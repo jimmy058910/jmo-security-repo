@@ -1393,7 +1393,7 @@ We use Codecov via GitHub Actions with tokenless uploads (OIDC) on public repos.
 ## Documentation
 
 - User docs are in `docs/`.
-- Screenshots: see `docs/screenshots/README.md`; use `make screenshots-demo` for quick updates.
+- Screenshots: see `docs/internal/screenshots/README.md`; use `make screenshots-demo` for quick updates.
 - Keep `README.md`, `QUICKSTART.md`, and `SAMPLE_OUTPUTS.md` aligned with fixtures.
 
 ## Building and Releasing

@@ -518,8 +518,8 @@ jmo scan --image node:14      # EOL, has CVEs
 
 ---
 
-**Checklist Version:** 2.5.0
-**Last Updated:** 2026-02-13
+**Checklist Version:** 2.6.0
+**Last Updated:** 2026-02-15
 **Test Platform:** Windows 11, Python 3.12.11, Docker 29.1.5; WSL Ubuntu 24.04, Python 3.12.3, Docker 28.2.2
 **Tester:** Claude Code (automated + manual + pexpect interactive + Docker scan + WSL cross-platform verification)
 **Maintainer:** See [CONTRIBUTING.md](../CONTRIBUTING.md)

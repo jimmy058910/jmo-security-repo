@@ -4,7 +4,7 @@ This folder documents how to generate the HTML dashboard and capture screenshots
 
 ## What you'll produce
 
-Saved under `docs/screenshots/` by default:
+Saved under `docs/internal/screenshots/` by default:
 
 - dashboard.png — static capture of the dashboard
 - (optional) repo-comparison.gif — a short animated recording
@@ -30,7 +30,7 @@ make screenshots-demo
 Outputs:
 
 - Results under `/tmp/jmo-infra-demo-results/summaries/`
-- Screenshot saved to `docs/screenshots/dashboard.png`
+- Screenshot saved to `docs/internal/screenshots/dashboard.png`
 
 Notes:
 
@@ -48,14 +48,14 @@ make capture-screenshot RESULTS_DIR=/path/to/results
 Optional variables:
 
 - `OUT=/custom/summaries` — where to write the HTML summary (defaults to `RESULTS_DIR/summaries`)
-- `OUTDIR=/custom/screenshots` — where to save PNGs (defaults to `docs/screenshots`)
+- `OUTDIR=/custom/screenshots` — where to save PNGs (defaults to `docs/internal/screenshots`)
 - `CONFIG=jmo.yml` — custom config if needed
 
 Behind the scenes, the target runs:
 
 1) `python3 scripts/cli/jmo.py report ...` to ensure `dashboard.html` exists
 
-2) `docs/screenshots/capture.sh` to run `chromium --headless --screenshot`
+2) `docs/internal/screenshots/capture.sh` to run `chromium --headless --screenshot`
 
 ## Manual quick capture (interactive)
 
@@ -71,7 +71,7 @@ xdg-open /path/to/results/summaries/dashboard.html  # mac: open
 - Linux: `peek`, `vokoscreenNG`, or `kazam`
 - macOS: QuickTime screen recording
 
-1) Save outputs into `docs/screenshots/` (filenames are suggestions):
+1) Save outputs into `docs/internal/screenshots/` (filenames are suggestions):
 
 - dashboard-overview.png
 - severity-breakdown.png
@@ -82,13 +82,13 @@ xdg-open /path/to/results/summaries/dashboard.html  # mac: open
 The helper script prefers `chromium`, falling back to `google-chrome`:
 
 ```bash
-bash docs/screenshots/capture.sh results/summaries/dashboard.html docs/screenshots
+bash docs/internal/screenshots/capture.sh results/summaries/dashboard.html docs/internal/screenshots
 ```
 
 Equivalent raw command:
 
 ```bash
-chromium --headless --disable-gpu --screenshot=docs/screenshots/dashboard.png file:///$(pwd)/results/summaries/dashboard.html
+chromium --headless --disable-gpu --screenshot=docs/internal/screenshots/dashboard.png file:///$(pwd)/results/summaries/dashboard.html
 ```
 
 Note: headless capture is static; animated GIFs require a live screen recorder.
@@ -102,4 +102,4 @@ Note: headless capture is static; animated GIFs require a live screen recorder.
 ## Commit hygiene
 
 - Do not commit `/tmp/...` demo artifacts.
-- Committing `docs/screenshots/dashboard.png` is fine when updating the README visuals; keep it reasonably fresh with UI changes.
+- Committing `docs/internal/screenshots/dashboard.png` is fine when updating the README visuals; keep it reasonably fresh with UI changes.

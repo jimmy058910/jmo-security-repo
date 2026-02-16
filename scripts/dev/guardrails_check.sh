@@ -90,7 +90,7 @@ MAX_BYTES=$((MAX_MB * 1024 * 1024))
 
 # Exclusions: allow large artifacts under well-known paths if ever present in the tree,
 # and anything allowlisted above
-EXCLUDE_REGEX='^(results/|build/|dist/|\.git/|\.venv/|\.mypy_cache/|\.ruff_cache/|\.pytest_cache/|__pycache__/|docs/screenshots/)'
+EXCLUDE_REGEX='^(results/|build/|dist/|\.git/|\.venv/|\.mypy_cache/|\.ruff_cache/|\.pytest_cache/|__pycache__/|docs/internal/screenshots/)'
 
 large_violations=()
 

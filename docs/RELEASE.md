@@ -82,7 +82,7 @@ Remember to update CHANGELOG.md with user-facing changes.
 
 ## Pre-Release Checklist
 
-> **📋 Comprehensive Testing:** For full manual verification across all platforms (Windows, WSL, Linux, macOS, Docker), see the [Manual Testing Checklist](MANUAL_TESTING_CHECKLIST.md).
+> **📋 Comprehensive Testing:** For full manual verification across all platforms (Windows, WSL, Linux, macOS, Docker), see the [Manual Testing Checklist](internal/MANUAL_TESTING_CHECKLIST.md).
 
 **🔴 CRITICAL FIRST STEP: Update ALL security tools to latest versions**
 

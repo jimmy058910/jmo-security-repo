@@ -12,7 +12,7 @@ Architecture Note (v0.6.1+):
 
 Related:
 - COVERAGE_GAP_ANALYSIS.md Gap #4
-- TESTING_MATRIX.md Matrix 3.1
+- docs/internal/TESTING_MATRIX.md Matrix 3.1
 """
 
 import json

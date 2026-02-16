@@ -513,7 +513,7 @@ The `deps-compile` hook includes automatic Python version detection:
 
 - **Pre-commit Documentation:** <https://pre-commit.com/>
 - **Hook Configuration:** [.pre-commit-config.yaml](../.pre-commit-config.yaml)
-- **Dependency Management:** [docs/DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
+- **Dependency Management:** [DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
 - **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)
 
 ---

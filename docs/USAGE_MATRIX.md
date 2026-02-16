@@ -391,7 +391,7 @@ outputs: [json, md, html, sarif]
 ## See Also
 
 - [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md) - Canonical tool lists, **tool selection philosophy**, **content-triggered execution**, and **scan type matrices**
-- [TESTING_MATRIX.md](TESTING_MATRIX.md) - Test coverage analysis
+- [TESTING_MATRIX.md](internal/TESTING_MATRIX.md) - Test coverage analysis
 - [USER_GUIDE.md](USER_GUIDE.md) - Complete usage reference
 - [docs/examples/](examples/) - CI/CD workflow examples
 

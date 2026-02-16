@@ -12,7 +12,7 @@ Coverage:
 - Matrix 3.1: Docker (slim) and Docker (alpine) for all tools
 
 Related:
-- TESTING_MATRIX.md Matrix 2, Matrix 3
+- docs/internal/TESTING_MATRIX.md Matrix 2, Matrix 3
 - COVERAGE_GAP_ANALYSIS.md Gap #1
 """
 
