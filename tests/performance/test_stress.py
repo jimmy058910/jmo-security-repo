@@ -26,6 +26,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -91,8 +92,14 @@ class TestExtremeLoad:
     """Test system behavior under extreme load."""
 
     @pytest.mark.timeout(300)
-    def test_100k_findings_processing(self, tmp_path: Path):
-        """Process 100,000 findings without memory issues."""
+    @patch("scripts.core.normalize_and_report._enrich_with_priority")
+    def test_100k_findings_processing(self, _mock_enrich, tmp_path: Path):
+        """Process 100,000 findings without memory issues.
+
+        Note: EPSS/KEV enrichment is patched out because this test measures
+        parsing/dedup throughput, not API connectivity. Enrichment performance
+        is tested separately in test_prioritization_performance.py.
+        """
         from scripts.core.normalize_and_report import gather_results
 
         # Create results directory structure
@@ -192,8 +199,13 @@ class TestExtremeLoad:
         assert len(findings) > 0
 
     @pytest.mark.timeout(300)
-    def test_100k_findings_memory_usage(self, tmp_path: Path):
-        """Verify memory usage stays under 500MB for 100k findings."""
+    @patch("scripts.core.normalize_and_report._enrich_with_priority")
+    def test_100k_findings_memory_usage(self, _mock_enrich, tmp_path: Path):
+        """Verify memory usage stays under 500MB for 100k findings.
+
+        Note: EPSS/KEV enrichment is patched out — same rationale as
+        test_100k_findings_processing above.
+        """
         try:
             import psutil
         except ImportError:

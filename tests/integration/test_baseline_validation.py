@@ -55,9 +55,23 @@ def load_baseline(baseline_file: Path) -> dict[str, Any]:
 
 
 def clone_target(repo_url: str, dest: Path, depth: int = 1) -> None:
-    """Clone a target repository."""
+    """Clone a target repository.
+
+    Uses core.longpaths=true to support Windows extended-length paths,
+    preventing failures when repos have deep directory structures
+    (e.g., juice-shop's node_modules).
+    """
     subprocess.run(
-        ["git", "clone", "--depth", str(depth), repo_url, str(dest)],
+        [
+            "git",
+            "clone",
+            "--depth",
+            str(depth),
+            "--config",
+            "core.longpaths=true",
+            repo_url,
+            str(dest),
+        ],
         check=True,
         capture_output=True,
     )
@@ -197,7 +211,7 @@ class TestBaselineValidation:
             pytest.param("webgoat.baseline.json", id="webgoat"),
         ],
     )
-    def test_scan_matches_baseline(self, baseline_file: str, tmp_path: Path):
+    def test_scan_matches_baseline(self, baseline_file: str, short_tmp_path: Path):
         """Scan results should match expected baseline within tolerance."""
         baseline_path = BASELINES_DIR / baseline_file
 
@@ -216,8 +230,9 @@ class TestBaselineValidation:
         else:
             pytest.skip(f"Unknown target repository: {target}")
 
-        target_path = tmp_path / "target"
-        results_dir = tmp_path / "results"
+        # Use short_tmp_path to avoid Windows MAX_PATH (260 chars) with deep repos
+        target_path = short_tmp_path / "target"
+        results_dir = short_tmp_path / "results"
 
         # Clone target
         clone_target(repo_url, target_path)

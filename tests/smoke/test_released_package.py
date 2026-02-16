@@ -17,6 +17,12 @@ from pathlib import Path
 
 import pytest
 
+# Tests that invoke `jmo` directly require it on PATH (only after PyPI install)
+_JMO_ON_PATH = shutil.which("jmo") is not None
+_skip_no_jmo = pytest.mark.skipif(
+    not _JMO_ON_PATH, reason="jmo not on PATH (requires PyPI installation)"
+)
+
 
 @pytest.mark.smoke
 class TestPyPIPackage:
@@ -48,6 +54,7 @@ class TestPyPIPackage:
             )
             assert result.returncode == 0, f"Failed to install: {result.stderr}"
 
+    @_skip_no_jmo
     def test_cli_help_works(self):
         """Test CLI --help command works."""
         result = subprocess.run(
@@ -62,6 +69,7 @@ class TestPyPIPackage:
         assert "scan" in result.stdout.lower()
         assert "report" in result.stdout.lower()
 
+    @_skip_no_jmo
     def test_cli_version_command(self):
         """Test CLI version can be retrieved."""
         # jmo doesn't have --version, so we use help to verify it works
@@ -72,6 +80,7 @@ class TestPyPIPackage:
         assert result.returncode == 0, f"jmo scan --help failed: {result.stderr}"
         assert "usage" in result.stdout.lower()
 
+    @_skip_no_jmo
     def test_basic_scan_command(self, tmp_path):
         """Test basic scan command executes (dry-run mode)."""
         # Create minimal test repository

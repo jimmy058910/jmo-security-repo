@@ -138,13 +138,30 @@ class TestWindowsPathHandling:
         assert "traceback" not in combined
 
     def test_long_paths(self, jmo_runner, tmp_path):
-        """Verify long paths work on Windows (260+ chars)."""
+        """Verify long paths work on Windows (260+ chars).
+
+        Uses the \\\\?\\ extended-length path prefix on Windows to bypass
+        the 260-char MAX_PATH limitation. This prefix is the standard way
+        to handle long paths without requiring registry changes.
+        """
+        import os
+        import sys
+
         # Create a deeply nested path
         deep_path = tmp_path
         for i in range(10):
             deep_path = deep_path / f"nested_directory_{i:03d}"
-        deep_path.mkdir(parents=True)
-        (deep_path / "test.py").write_text("x = 1", encoding="utf-8")
+
+        # On Windows, use \\?\ prefix to bypass MAX_PATH (260 chars)
+        if sys.platform == "win32":
+            extended = f"\\\\?\\{deep_path}"
+            os.makedirs(extended, exist_ok=True)
+            test_file = os.path.join(extended, "test.py")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write("x = 1")
+        else:
+            deep_path.mkdir(parents=True)
+            (deep_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         result = jmo_runner(
             [
