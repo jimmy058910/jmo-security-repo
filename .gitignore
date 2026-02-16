@@ -149,6 +149,7 @@ test-*.html
 !tests/fixtures/dashboard/*.html
 # Test artifacts (image lists from scans)
 *-images.txt
+diff-data.json
 
 # Playwright screenshots
 .playwright-mcp/

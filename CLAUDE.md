@@ -107,6 +107,7 @@ a custom timeout value for their scans. I'll also need to update the configurati
      - Priority (P0-P3)
 
 4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
+5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
 
 **Example - Performance Test Thresholds (Simple Fix):**
 
@@ -499,5 +500,6 @@ with patch("module.tool_exists", return_value=True):
 - CommonFinding v1.2.0 includes compliance mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
 - Cross-tool dedup uses similarity clustering (configurable via `deduplication.similarity_threshold`, default: 0.65)
 - Only create documentation with long-term value; use `.claude/` for temporary work
+- **Scope Discipline:** When given a bounded task (e.g., "root directory files only", "just these 13 bugs"), stay strictly within that scope — do not expand to adjacent directories, related systems, or broader reorganizations unless explicitly asked
 
 For detailed information on any topic, refer to the documentation links above.

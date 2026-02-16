@@ -266,21 +266,21 @@ profile:
 .PHONY: capture-screenshot
 capture-screenshot:
 	@if [ -z "$(RESULTS_DIR)" ]; then \
-		echo 'Usage: make capture-screenshot RESULTS_DIR=/path/to/results [OUTDIR=docs/screenshots] [CONFIG=jmo.yml]'; exit 1; \
+		echo 'Usage: make capture-screenshot RESULTS_DIR=/path/to/results [OUTDIR=docs/internal/screenshots] [CONFIG=jmo.yml]'; exit 1; \
 	fi
 	# Ensure the dashboard exists, then capture a PNG using our helper script (chromium/google-chrome required)
 	python3 scripts/cli/jmo.py report $(RESULTS_DIR) --out $${OUT:-$(RESULTS_DIR)/summaries} --config $${CONFIG:-jmo.yml}
-	bash docs/screenshots/capture.sh $${OUT:-$(RESULTS_DIR)/summaries}/dashboard.html $${OUTDIR:-docs/screenshots}
-	@echo "[capture-screenshot] Wrote PNG(s) under $${OUTDIR:-docs/screenshots}"
+	bash docs/internal/screenshots/capture.sh $${OUT:-$(RESULTS_DIR)/summaries}/dashboard.html $${OUTDIR:-docs/internal/screenshots}
+	@echo "[capture-screenshot] Wrote PNG(s) under $${OUTDIR:-docs/internal/screenshots}"
 
 .PHONY: screenshots-demo
 screenshots-demo:
 	@echo "[screenshots-demo] Creating demo results under /tmp/jmo-infra-demo-results (tools may be missing: using stubs if needed)"
 	PYTHONPATH=. python3 scripts/cli/jmo.py scan --repo samples/fixtures/infra-demo --results /tmp/jmo-infra-demo-results --allow-missing-tools || true
 	PYTHONPATH=. python3 scripts/cli/jmo.py report /tmp/jmo-infra-demo-results --out /tmp/jmo-infra-demo-results/summaries || true
-	bash docs/screenshots/capture.sh /tmp/jmo-infra-demo-results/summaries/dashboard.html $${OUTDIR:-docs/screenshots}
+	bash docs/internal/screenshots/capture.sh /tmp/jmo-infra-demo-results/summaries/dashboard.html $${OUTDIR:-docs/internal/screenshots}
 	@echo "[screenshots-demo] Dashboard: /tmp/jmo-infra-demo-results/summaries/dashboard.html"
-	@echo "[screenshots-demo] Screenshot(s) saved under $${OUTDIR:-docs/screenshots}"
+	@echo "[screenshots-demo] Screenshot(s) saved under $${OUTDIR:-docs/internal/screenshots}"
 
 .PHONY: smoke-ai
 smoke-ai:
