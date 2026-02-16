@@ -285,6 +285,10 @@ class TestPermissionRecovery:
     @skip_on_windows
     def test_read_only_results_dir(self, tmp_path: Path):
         """Verify handling of read-only results directory."""
+        # Root user (e.g. Docker CI) bypasses Unix file permissions
+        if os.getuid() == 0:
+            pytest.skip("root bypasses filesystem permissions")
+
         results_dir = tmp_path / "readonly_results"
         results_dir.mkdir()
 

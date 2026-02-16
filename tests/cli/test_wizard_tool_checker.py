@@ -1394,6 +1394,8 @@ class TestAutoFixToolsDependencies:
         mock_fallbacks,
     ):
         """Choice 2 skips dependency installation and continues."""
+        from unittest.mock import MagicMock
+
         from scripts.cli.wizard_flows.tool_checker import _auto_fix_tools
 
         mock_colorize.return_value = lambda text, color: text
@@ -1412,15 +1414,38 @@ class TestAutoFixToolsDependencies:
             }
         ]
 
+        # Mock ToolInstaller (Phase 1) and ToolManager (re-check) since
+        # no real tools are installed in CI
+        mock_progress = MagicMock()
+        mock_progress.results = []
+
+        mock_status = MagicMock()
+        mock_status.execution_ready = True
+        mock_summary = MagicMock()
+        mock_summary.execution_ready = 1
+        mock_summary.platform_applicable = 1
+
         # Choice 2: skip deps
-        with patch("builtins.print"):
-            with patch("builtins.input", return_value="2"):
-                should_continue, available = _auto_fix_tools(
-                    fix_info=fix_info,
-                    platform="linux",
-                    profile="fast",
-                    available=["trivy"],
-                )
+        with (
+            patch("builtins.print"),
+            patch("builtins.input", return_value="2"),
+            patch("scripts.cli.tool_installer.ToolInstaller") as mock_installer_cls,
+            patch("scripts.cli.tool_manager.ToolManager") as mock_manager_cls,
+        ):
+            mock_installer_cls.return_value.install_tools_parallel.return_value = (
+                mock_progress
+            )
+            mock_manager_cls.return_value.check_profile.return_value = {
+                "trivy": mock_status
+            }
+            mock_manager_cls.return_value.get_tool_summary.return_value = mock_summary
+
+            should_continue, available = _auto_fix_tools(
+                fix_info=fix_info,
+                platform="linux",
+                profile="fast",
+                available=["trivy"],
+            )
 
         # Should continue (didn't call cancel)
         assert should_continue is True

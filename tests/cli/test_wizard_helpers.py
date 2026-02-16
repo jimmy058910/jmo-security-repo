@@ -233,11 +233,18 @@ class TestColorize:
 
     def test_colorize_invalid_color(self):
         """Test colorize with invalid color name."""
-        prompter = PromptHelper()
-        result = prompter.colorize("test", "invalid_color")
-        assert "test" in result  # Should still return the text
-        # With invalid color, should have reset code at end
-        assert result.endswith(prompter.COLORS["reset"])
+        import scripts.cli.wizard_flows.base_flow as bf
+
+        orig = bf._ANSI_SUPPORTED
+        bf._ANSI_SUPPORTED = True
+        try:
+            prompter = PromptHelper()
+            result = prompter.colorize("test", "invalid_color")
+            assert "test" in result  # Should still return the text
+            # With invalid color, should have reset code at end
+            assert result.endswith(prompter.COLORS["reset"])
+        finally:
+            bf._ANSI_SUPPORTED = orig
 
     def test_colorize_empty_text(self):
         """Test colorize with empty text."""
