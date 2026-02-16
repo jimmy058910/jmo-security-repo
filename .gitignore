@@ -166,6 +166,9 @@ diff-data.json
 # Claude Code temporary working directories
 tmpclaude-*/
 
+# Nightshift automation config (symlink to dev-only/infrastructure/nightshift.yaml)
+.nightshift.yaml
+
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/

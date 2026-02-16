@@ -369,16 +369,30 @@ def test_detect_lock_files_ruby(tmp_path):
 
 def test_prompter_colorize():
     """Test PromptHelper colorize applies ANSI codes."""
-    prompter = PromptHelper()
-    result = prompter.colorize("test", "green")
-    assert "\x1b[32mtest\x1b[0m" == result
+    import scripts.cli.wizard_flows.base_flow as bf
+
+    orig = bf._ANSI_SUPPORTED
+    bf._ANSI_SUPPORTED = True
+    try:
+        prompter = PromptHelper()
+        result = prompter.colorize("test", "green")
+        assert "\x1b[32mtest\x1b[0m" == result
+    finally:
+        bf._ANSI_SUPPORTED = orig
 
 
 def test_prompter_colorize_invalid_color():
     """Test PromptHelper colorize with invalid color (fallback to reset)."""
-    prompter = PromptHelper()
-    result = prompter.colorize("test", "invalid")
-    assert "test\x1b[0m" == result
+    import scripts.cli.wizard_flows.base_flow as bf
+
+    orig = bf._ANSI_SUPPORTED
+    bf._ANSI_SUPPORTED = True
+    try:
+        prompter = PromptHelper()
+        result = prompter.colorize("test", "invalid")
+        assert "test\x1b[0m" == result
+    finally:
+        bf._ANSI_SUPPORTED = orig
 
 
 def test_prompter_print_header(capsys):

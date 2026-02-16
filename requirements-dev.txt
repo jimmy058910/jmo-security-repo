@@ -161,12 +161,18 @@ pytest==8.4.2
     # via
     #   -r requirements-dev.in
     #   pytest-cov
+    #   pytest-json-report
+    #   pytest-metadata
     #   pytest-rerunfailures
     #   pytest-split
     #   pytest-timeout
     #   pytest-xdist
 pytest-cov==7.0.0
     # via -r requirements-dev.in
+pytest-json-report==1.5.0
+    # via -r requirements-dev.in
+pytest-metadata==3.1.1
+    # via pytest-json-report
 pytest-rerunfailures==16.1
     # via -r requirements-dev.in
 pytest-split==0.10.0
@@ -187,8 +193,6 @@ pytokens==0.2.0
     # via black
 pytz==2025.2
     # via croniter
-pywin32==311 ; sys_platform == "win32"
-    # via mcp
 pyyaml==6.0.3
     # via
     #   -r requirements-dev.in

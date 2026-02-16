@@ -85,6 +85,9 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
+    # Mock _check_scan_tools to skip tool availability checks
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+
     # Mock shutil.which to simulate semgrep being installed
     import shutil
 
@@ -136,7 +139,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # Ensure one of the commands contains our flags
     found = False
     for c in calls:
-        if isinstance(c, list) and c and c[0] == "semgrep":
+        if isinstance(c, list) and c and "semgrep" in Path(c[0]).name:
             # flags must be present in the argument list
             if "--exclude" in c and "node_modules" in c:
                 found = True

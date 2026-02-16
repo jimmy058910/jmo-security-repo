@@ -673,6 +673,15 @@ class TestDetectGitContext:
         from scripts.cli.diff_commands import detect_git_context
         from unittest.mock import Mock
 
+        # Clear CI environment variables that would make is_pr=True
+        for var in [
+            "GITHUB_REF",
+            "GITHUB_BASE_REF",
+            "CI_MERGE_REQUEST_IID",
+            "CI_MERGE_REQUEST_TARGET_BRANCH_NAME",
+        ]:
+            monkeypatch.delenv(var, raising=False)
+
         # Mock subprocess.run to simulate git commands
         call_count = {"count": 0}
 

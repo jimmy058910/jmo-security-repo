@@ -385,16 +385,24 @@ def test_cpu_count_fallback():
 
 def test_colorize():
     """Test ANSI color code application."""
-    from scripts.cli.wizard import _colorize
+    import scripts.cli.wizard_flows.base_flow as bf
 
-    colored = _colorize("test", "blue")
-    assert "\x1b[36m" in colored  # blue ANSI code
-    assert "test" in colored
-    assert "\x1b[0m" in colored  # reset code
+    # Force ANSI support (CI has no TTY)
+    orig = bf._ANSI_SUPPORTED
+    bf._ANSI_SUPPORTED = True
+    try:
+        from scripts.cli.wizard import _colorize
 
-    # Test unknown color returns reset
-    colored_unknown = _colorize("test", "unknown_color")
-    assert "test" in colored_unknown
+        colored = _colorize("test", "blue")
+        assert "\x1b[36m" in colored  # blue ANSI code
+        assert "test" in colored
+        assert "\x1b[0m" in colored  # reset code
+
+        # Test unknown color returns reset
+        colored_unknown = _colorize("test", "unknown_color")
+        assert "test" in colored_unknown
+    finally:
+        bf._ANSI_SUPPORTED = orig
 
 
 def test_print_header(capsys):

@@ -41,6 +41,8 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", fake_eff)
+    # Mock _check_scan_tools to skip tool availability checks
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
     # Note: _tool_exists removed in v0.9.0 refactoring - tools handled by scanners now
     # allow_missing_tools=True handles missing tools gracefully
 

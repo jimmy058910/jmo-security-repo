@@ -535,7 +535,7 @@ class TestReportGenerationStress:
     @pytest.mark.timeout(120)
     def test_html_dashboard_10k_findings(self, tmp_path: Path):
         """Verify HTML dashboard generation with 10k findings."""
-        from scripts.core.reporters.html_reporter import HtmlReporter
+        from scripts.core.reporters.html_reporter import write_html
 
         findings = []
         for i in range(10000):
@@ -557,17 +557,10 @@ class TestReportGenerationStress:
                 }
             )
 
-        meta = {
-            "schema_version": "1.2.0",
-            "finding_count": len(findings),
-            "scan_duration": 120.5,
-        }
-
         output_path = tmp_path / "dashboard.html"
 
         start_time = time.time()
-        reporter = HtmlReporter()
-        reporter.write(findings, meta, output_path)
+        write_html(findings, output_path)
         elapsed = time.time() - start_time
 
         # Should complete in reasonable time

@@ -367,21 +367,35 @@ class TestPromptHelper:
 
     def test_colorize(self):
         """Test colorizing text."""
-        helper = PromptHelper()
-        colored = helper.colorize("test", "blue")
+        import scripts.cli.wizard_flows.base_flow as bf
 
-        assert "\x1b[36m" in colored  # Blue color code
-        assert "\x1b[0m" in colored  # Reset code
-        assert "test" in colored
+        orig = bf._ANSI_SUPPORTED
+        bf._ANSI_SUPPORTED = True
+        try:
+            helper = PromptHelper()
+            colored = helper.colorize("test", "blue")
+
+            assert "\x1b[36m" in colored  # Blue color code
+            assert "\x1b[0m" in colored  # Reset code
+            assert "test" in colored
+        finally:
+            bf._ANSI_SUPPORTED = orig
 
     def test_colorize_invalid_color(self):
         """Test colorizing with invalid color."""
-        helper = PromptHelper()
-        colored = helper.colorize("test", "invalid_color")
+        import scripts.cli.wizard_flows.base_flow as bf
 
-        # Should still reset
-        assert "\x1b[0m" in colored
-        assert "test" in colored
+        orig = bf._ANSI_SUPPORTED
+        bf._ANSI_SUPPORTED = True
+        try:
+            helper = PromptHelper()
+            colored = helper.colorize("test", "invalid_color")
+
+            # Should still reset
+            assert "\x1b[0m" in colored
+            assert "test" in colored
+        finally:
+            bf._ANSI_SUPPORTED = orig
 
     def test_print_header(self, capsys):
         """Test printing header."""

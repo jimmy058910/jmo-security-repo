@@ -1,2 +1,0 @@
-nginx:latest
-python:3.10
