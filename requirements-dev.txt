@@ -187,7 +187,7 @@ pytokens==0.2.0
     # via black
 pytz==2025.2
     # via croniter
-pywin32==311
+pywin32==311 ; sys_platform == "win32"
     # via mcp
 pyyaml==6.0.3
     # via

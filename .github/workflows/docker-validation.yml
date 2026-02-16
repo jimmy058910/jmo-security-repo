@@ -56,19 +56,30 @@ jobs:
           - variant: fast
             expected_tools: 8
             profile: fast
-    # Run on schedule OR manual dispatch matching variant/all
+    # Run on schedule OR manual dispatch (variant filtering handled in steps)
     if: |
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' && (
-        github.event.inputs.variant == 'all' ||
-        github.event.inputs.variant == matrix.variant
-      )
+      github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Check variant filter
+        id: filter
+        run: |
+          # Skip this matrix entry if a specific variant was requested and doesn't match
+          if [[ "${{ github.event.inputs.variant }}" != "" && \
+                "${{ github.event.inputs.variant }}" != "all" && \
+                "${{ github.event.inputs.variant }}" != "${{ matrix.variant }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v5
 
       - name: Log in to Container Registry
+        if: steps.filter.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -76,10 +87,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull Docker image
+        if: steps.filter.outputs.skip != 'true'
         run: |
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }}
 
       - name: Verify tool installation
+        if: steps.filter.outputs.skip != 'true'
         id: tools
         run: |
           echo "Checking tools in ${{ matrix.variant }} variant..."
@@ -99,6 +112,7 @@ jobs:
           fi
 
       - name: Test scan capability
+        if: steps.filter.outputs.skip != 'true'
         run: |
           # Create sample vulnerable code
           mkdir -p /tmp/test-repo/src
@@ -123,6 +137,7 @@ jobs:
           fi
 
       - name: Test help command
+        if: steps.filter.outputs.skip != 'true'
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --help
 
