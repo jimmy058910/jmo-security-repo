@@ -168,3 +168,4 @@ tmpclaude-*/
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/
+venv-*
