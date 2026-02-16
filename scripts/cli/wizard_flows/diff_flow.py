@@ -93,7 +93,12 @@ def _get_db_path() -> Path:
     return WizardConfig.get_db_path()
 
 
-def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
+def run_diff_wizard_impl(
+    use_docker: bool = False,  # noqa: ARG001
+    yes: bool = False,
+    baseline: str | None = None,
+    current: str | None = None,
+) -> int:
     """Run the interactive diff wizard workflow.
 
     Guides user through:
@@ -105,6 +110,9 @@ def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
     Args:
         use_docker: Whether to use Docker for diff commands (currently unused,
                    reserved for future Docker-based diff support)
+        yes: Non-interactive mode (use defaults, skip prompts)
+        baseline: Baseline results directory (for non-interactive diff)
+        current: Current results directory (for non-interactive diff)
 
     Returns:
         Exit code (0 = success, 1 = error, 130 = cancelled)
@@ -115,6 +123,66 @@ def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
 
     try:
         print(_colorize("\n=== JMo Security Diff Wizard ===\n", "bold"))
+
+        # Non-interactive mode: require --baseline and --current
+        if yes:
+            if not baseline or not current:
+                print(
+                    _colorize(
+                        "Error: --yes requires --baseline DIR and --current DIR",
+                        "red",
+                    )
+                )
+                print(
+                    "Usage: jmo wizard --mode diff --yes --baseline results-v1/ --current results-v2/"
+                )
+                return 1
+
+            if not Path(baseline).exists():
+                print(
+                    _colorize(f"Error: Baseline directory not found: {baseline}", "red")
+                )
+                return 1
+            if not Path(current).exists():
+                print(
+                    _colorize(f"Error: Current directory not found: {current}", "red")
+                )
+                return 1
+
+            # Non-interactive defaults
+            output_format = "json"
+            output_file = "diff-report.json"
+
+            print(f"  Baseline: {baseline}")
+            print(f"  Current: {current}")
+            print(f"  Format: {output_format}")
+            print(f"  Output: {output_file}")
+
+            # Build DiffArgs and execute
+            args = DiffArgs(
+                directories=[str(baseline), str(current)],
+                db=str(_get_db_path()),
+                severity=None,
+                tool=None,
+                only=None,
+                no_modifications=False,
+                format=output_format,
+                output=output_file,
+            )
+
+            print(_colorize("\n=== Generating Diff Report ===\n", "bold"))
+            result = cmd_diff(args)
+
+            if result == 0:
+                safe_print(
+                    _colorize(f"\n  Diff report generated: {output_file}", "green")
+                )
+            else:
+                safe_print(_colorize("\n  Diff generation failed", "red"))
+
+            return result
+
+        # Interactive mode
         print("This wizard helps you compare two security scan results.\n")
 
         # Step 1: Select comparison mode
@@ -124,10 +192,14 @@ def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
             ("directory", "Compare two result directories"),
         ]
 
-        mode = select_mode("Comparison modes", modes, default="history")
+        # If baseline/current provided without --yes, use directory mode
+        if baseline and current:
+            mode = "directory"
+        else:
+            mode = select_mode("Comparison modes", modes, default="history")
 
-        baseline_path: str | None = None
-        current_path: str | None = None
+        baseline_path: str | None = baseline
+        current_path: str | None = current
         baseline_id: str | None = None
         current_id: str | None = None
 
@@ -204,16 +276,18 @@ def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
             # Directory mode
             _print_step(2, DIFF_WIZARD_TOTAL_STEPS, "Select Directories")
 
-            baseline_path = input(
-                _colorize("Baseline results directory: ", "bold")
-            ).strip()
+            if not baseline_path:
+                baseline_path = input(
+                    _colorize("Baseline results directory: ", "bold")
+                ).strip()
             if not Path(baseline_path).exists():
                 print(_colorize(f"Error: Directory not found: {baseline_path}", "red"))
                 return 1
 
-            current_path = input(
-                _colorize("Current results directory: ", "bold")
-            ).strip()
+            if not current_path:
+                current_path = input(
+                    _colorize("Current results directory: ", "bold")
+                ).strip()
             if not Path(current_path).exists():
                 print(_colorize(f"Error: Directory not found: {current_path}", "red"))
                 return 1
@@ -331,14 +405,14 @@ def run_diff_wizard_impl(use_docker: bool = False) -> int:  # noqa: ARG001
         result = cmd_diff(args)
 
         if result == 0:
-            safe_print(_colorize(f"\n✓ Diff report generated: {output_file}", "green"))
+            safe_print(_colorize(f"\n  Diff report generated: {output_file}", "green"))
 
             # Auto-open HTML reports
             if output_format == "html" and Path(output_file).exists():
                 if _prompt_yes_no("\nOpen report in browser?", default=True):
                     webbrowser.open(f"file://{Path(output_file).resolve()}")
         else:
-            safe_print(_colorize("\n✗ Diff generation failed", "red"))
+            safe_print(_colorize("\n  Diff generation failed", "red"))
 
         return result
 

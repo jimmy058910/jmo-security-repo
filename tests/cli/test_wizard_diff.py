@@ -858,3 +858,104 @@ class TestRunDiffWizardExceptionHandling:
 
         # ValueError in scan selection re-raises KeyboardInterrupt -> 130
         assert result == 130
+
+
+class TestRunDiffWizardNonInteractive:
+    """Test cases for run_diff_wizard --yes non-interactive mode."""
+
+    @pytest.fixture
+    def valid_dirs(self, tmp_path):
+        """Create valid baseline and current directories."""
+        baseline = tmp_path / "baseline"
+        current = tmp_path / "current"
+        baseline.mkdir()
+        current.mkdir()
+        return baseline, current
+
+    def test_yes_with_baseline_and_current(self, valid_dirs):
+        """Test --yes mode with both --baseline and --current provided."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        baseline, current = valid_dirs
+
+        with patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard(
+                yes=True, baseline=str(baseline), current=str(current)
+            )
+
+        assert result == 0
+        assert mock_cmd_diff.called
+        args = mock_cmd_diff.call_args[0][0]
+        assert args.directories == [str(baseline), str(current)]
+        assert args.format == "json"  # Default for non-interactive
+
+    def test_yes_missing_baseline(self):
+        """Test --yes mode errors when --baseline is missing."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        result = run_diff_wizard(yes=True, baseline=None, current="/some/dir")
+
+        assert result == 1
+
+    def test_yes_missing_current(self, tmp_path):
+        """Test --yes mode errors when --current is missing."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        baseline = tmp_path / "baseline"
+        baseline.mkdir()
+
+        result = run_diff_wizard(yes=True, baseline=str(baseline), current=None)
+
+        assert result == 1
+
+    def test_yes_missing_both(self):
+        """Test --yes mode errors when both --baseline and --current are missing."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        result = run_diff_wizard(yes=True)
+
+        assert result == 1
+
+    def test_yes_nonexistent_baseline(self, tmp_path):
+        """Test --yes mode errors when baseline directory doesn't exist."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        current = tmp_path / "current"
+        current.mkdir()
+
+        result = run_diff_wizard(
+            yes=True,
+            baseline=str(tmp_path / "nonexistent"),
+            current=str(current),
+        )
+
+        assert result == 1
+
+    def test_yes_nonexistent_current(self, tmp_path):
+        """Test --yes mode errors when current directory doesn't exist."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        baseline = tmp_path / "baseline"
+        baseline.mkdir()
+
+        result = run_diff_wizard(
+            yes=True,
+            baseline=str(baseline),
+            current=str(tmp_path / "nonexistent"),
+        )
+
+        assert result == 1
+
+    def test_yes_does_not_prompt(self, valid_dirs):
+        """Test --yes mode never calls input()."""
+        from scripts.cli.wizard import run_diff_wizard
+
+        baseline, current = valid_dirs
+
+        with patch("builtins.input") as mock_input:
+            with patch("scripts.cli.diff_commands.cmd_diff", return_value=0):
+                run_diff_wizard(yes=True, baseline=str(baseline), current=str(current))
+
+        mock_input.assert_not_called()

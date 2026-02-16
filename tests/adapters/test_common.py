@@ -75,12 +75,12 @@ class TestSafeLoadJsonFile:
             mock_logger.debug.assert_not_called()
 
     def test_load_with_logging_enabled(self, tmp_path: Path) -> None:
-        """Test that log_errors=True logs debug messages."""
+        """Test that log_errors=True logs warning messages for missing files."""
         missing = tmp_path / "missing.json"
 
         with patch("scripts.core.adapters.common.logger") as mock_logger:
             safe_load_json_file(missing, log_errors=True)
-            mock_logger.debug.assert_called()
+            mock_logger.warning.assert_called()
 
     def test_handles_utf8_with_bom(self, tmp_path: Path) -> None:
         """Test handling of UTF-8 files with BOM."""

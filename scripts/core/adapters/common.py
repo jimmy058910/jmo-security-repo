@@ -58,7 +58,7 @@ def safe_load_json_file(
 
     if not p.exists():
         if log_errors:
-            logger.debug("JSON file does not exist: %s", p)
+            logger.warning("JSON file does not exist: %s", p)
         return cast(result_type, default)
 
     try:
@@ -70,7 +70,7 @@ def safe_load_json_file(
 
     if not raw:
         if log_errors:
-            logger.debug("JSON file is empty: %s", p)
+            logger.warning("JSON file is empty: %s", p)
         return cast(result_type, default)
 
     try:

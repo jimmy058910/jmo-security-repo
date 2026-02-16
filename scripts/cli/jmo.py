@@ -433,6 +433,22 @@ def _add_wizard_args(subparsers):
         help="Wizard mode: scan (default) or diff comparison",
     )
 
+    # Diff mode arguments (use with --mode diff --yes)
+    diff_group = wizard_parser.add_argument_group(
+        "diff options",
+        "Options for diff mode (use with --mode diff --yes for non-interactive)",
+    )
+    diff_group.add_argument(
+        "--baseline",
+        metavar="DIR",
+        help="Baseline results directory for diff comparison",
+    )
+    diff_group.add_argument(
+        "--current",
+        metavar="DIR",
+        help="Current results directory for diff comparison",
+    )
+
     # Preset flags for automation (enables non-interactive wizard runs)
     preset_group = wizard_parser.add_argument_group(
         "preset options",
@@ -2944,7 +2960,7 @@ def cmd_scan(args) -> int:
 
         # Create tool-level progress callback
         def tool_progress_callback(
-            tool_name: str, status: str, findings_count: int = 0
+            tool_name: str, status: str, findings_count: int = 0, **kwargs
         ):
             """Update progress tracker when individual tool starts/completes."""
             progress.update_tool(tool_name, status, findings_count)
@@ -3114,7 +3130,12 @@ def cmd_wizard(args):
     if getattr(args, "mode", "scan") == "diff":
         from wizard import run_diff_wizard
 
-        return run_diff_wizard(use_docker=use_docker or False)
+        return run_diff_wizard(
+            use_docker=use_docker or False,
+            yes=getattr(args, "yes", False),
+            baseline=getattr(args, "baseline", None),
+            current=getattr(args, "current", None),
+        )
 
     return run_wizard(
         yes=args.yes,

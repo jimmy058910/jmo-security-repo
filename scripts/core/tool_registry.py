@@ -194,7 +194,7 @@ TOOL_SCAN_TYPES: dict[str, set[str]] = {
         "falco",
         "mobsf",
         "afl++",
-        "nuclei",
+        # Note: nuclei is a DAST URL scanner, only valid for "url" scan type
     },
     # Tools that work on container images
     "image": {"trivy", "syft"},

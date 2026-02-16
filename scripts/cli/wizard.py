@@ -673,11 +673,24 @@ def _print_scan_completion_summary(
     print(f"  Results: {config.results_dir}/")
     print()
 
-    # Status message based on exit code
-    if exit_code == 0:
+    # Status message based on actual finding count (not just exit code)
+    finding_count = 0
+    findings_file = Path(config.results_dir) / "summaries" / "findings.json"
+    if findings_file.exists():
+        import json as _json
+
+        try:
+            data = _json.loads(findings_file.read_text(encoding="utf-8"))
+            finding_count = len(data.get("findings", []))
+        except (OSError, ValueError):
+            pass
+
+    if finding_count > 0:
+        print(
+            _colorize(f"  Scan completed - {finding_count} findings detected", "yellow")
+        )
+    elif exit_code == 0:
         print(_colorize("  Scan completed - no findings", "green"))
-    elif exit_code == 1:
-        print(_colorize("  Scan completed - findings detected", "yellow"))
     else:
         print(_colorize(f"  Scan completed with errors (code: {exit_code})", "red"))
 
@@ -1243,7 +1256,12 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
 # Trend analysis functions moved to wizard_flows/trend_flow.py (Phase 3 refactor)
 
 
-def run_diff_wizard(use_docker: bool = False) -> int:
+def run_diff_wizard(
+    use_docker: bool = False,
+    yes: bool = False,
+    baseline: str | None = None,
+    current: str | None = None,
+) -> int:
     """Run the diff wizard for comparing scans.
 
     This is a thin wrapper that delegates to the implementation
@@ -1257,11 +1275,16 @@ def run_diff_wizard(use_docker: bool = False) -> int:
 
     Args:
         use_docker: Whether to use Docker mode
+        yes: Non-interactive mode (use defaults, skip prompts)
+        baseline: Baseline results directory (for non-interactive diff)
+        current: Current results directory (for non-interactive diff)
 
     Returns:
         Exit code (0 = success, 1 = error, 130 = cancelled)
     """
-    return run_diff_wizard_impl(use_docker=use_docker)
+    return run_diff_wizard_impl(
+        use_docker=use_docker, yes=yes, baseline=baseline, current=current
+    )
 
 
 def main() -> int:
@@ -1342,10 +1365,27 @@ def main() -> int:
         help="Skip policy evaluation entirely (overrides config defaults)",
     )
 
+    # Diff mode arguments
+    parser.add_argument(
+        "--baseline",
+        metavar="DIR",
+        help="Baseline results directory for diff comparison (use with --mode diff --yes)",
+    )
+    parser.add_argument(
+        "--current",
+        metavar="DIR",
+        help="Current results directory for diff comparison (use with --mode diff --yes)",
+    )
+
     args = parser.parse_args()
 
     if args.mode == "diff":
-        return run_diff_wizard(use_docker=args.docker)
+        return run_diff_wizard(
+            use_docker=args.docker,
+            yes=args.yes,
+            baseline=getattr(args, "baseline", None),
+            current=getattr(args, "current", None),
+        )
     else:
         return run_wizard(
             yes=args.yes,
