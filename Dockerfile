@@ -129,7 +129,7 @@ RUN OSV_VERSION="2.3.1" && \
     chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
-RUN BEARER_VERSION="1.51.1" && \
+RUN BEARER_VERSION="2.0.0" && \
     BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
     -o /tmp/bearer.tar.gz && \
@@ -241,18 +241,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python security tools one by one for better error visibility
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
-RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.3 && \
     echo "✓ bandit installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.146.0 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.151.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.495 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.501 && \
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.14.6 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.1 && \
     echo "✓ ruff installed"
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.2 && \

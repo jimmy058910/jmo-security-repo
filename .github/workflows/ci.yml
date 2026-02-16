@@ -151,7 +151,7 @@ jobs:
               sys.exit(1)
           "
 
-  # Test matrix for cross-platform compatibility (excludes Ubuntu/3.11 which uses sharding)
+  # Test matrix for cross-platform compatibility (excludes Ubuntu/3.12 which uses sharding)
   test-matrix:
     name: Test ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -205,10 +205,10 @@ jobs:
         run: |
           python -m pytest -q --maxfail=1 --disable-warnings -m "not smoke and not requires_tools"
 
-  # Sharded test execution for Ubuntu/Python 3.11 (primary CI target)
+  # Sharded test execution for Ubuntu/Python 3.12 (primary CI target)
   # Distributes 5000+ tests across 4 parallel shards for ~60% faster execution
   test-sharded:
-    name: Test Shard ${{ matrix.shard }}/4 (Ubuntu/3.11)
+    name: Test Shard ${{ matrix.shard }}/4 (Ubuntu/3.12)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -221,7 +221,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -288,7 +288,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -425,7 +425,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -486,7 +486,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -528,7 +528,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'

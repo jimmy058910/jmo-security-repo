@@ -1,31 +1,31 @@
 schema_version: '1.0'
 python_tools:
   bandit:
-    version: 1.9.2
+    version: 1.9.3
     pypi_package: bandit
     description: Python security linter
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.146.0
+    version: 1.151.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.495
+    version: 3.2.501
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.14.6
+    version: 0.15.1
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
     critical: false
   scancode:
-    version: 32.4.1
+    version: 32.5.0
     pypi_package: scancode-toolkit
     description: License and copyright scanner
     update_check: pip index versions scancode-toolkit
@@ -46,19 +46,24 @@ python_tools:
     update_check: gh api repos/CISOfy/lynis/releases/latest
     github_repo: CISOfy/lynis
     critical: false
-    notes: |
-      v1.0.0 - Shell script based, no PyPI package.
+    notes: 'v1.0.0 - Shell script based, no PyPI package.
+
       Installation method: git clone to ~/.jmo/bin/lynis/ at pinned version tag.
+
       The lynis script at ~/.jmo/bin/lynis/lynis is detected for version check.
+
       System apt-installed lynis may be older and will be shadowed.
+
+      '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.16.0
+    version: 5.18.2
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
     critical: true
-    notes: v1.0.0 - 400+ security checks across compliance frameworks (pip package since v4.x)
+    notes: v1.0.0 - 400+ security checks across compliance frameworks (pip package
+      since v4.x)
 binary_tools:
   trufflehog:
     version: 3.91.1
@@ -219,9 +224,11 @@ special_tools:
     update_check: gh api repos/AFLplusplus/AFLplusplus/releases/latest
     critical: false
     installation: Source build required (manual)
-    notes: |
-      MANUAL INSTALLATION REQUIRED - must be built from source.
+    notes: 'MANUAL INSTALLATION REQUIRED - must be built from source.
+
       See docs/PROFILES_AND_TOOLS.md for installation guide.
+
+      '
   mobsf:
     version: 4.4.2
     github_repo: MobSF/Mobile-Security-Framework-MobSF
@@ -258,11 +265,15 @@ special_tools:
     update_check: gh api repos/VirusTotal/yara/releases/latest
     critical: false
     installation: yara-python pip package (Python library, not CLI)
-    notes: |
-      v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules).
+    notes: 'v1.0.0 - Web shells, backdoors, cryptominers (200-500 curated rules).
+
       NOTE: yara-python is a Python library, NOT a CLI binary. Version check
-      uses 'import yara' instead of 'yara --version'. The native yara CLI
+
+      uses ''import yara'' instead of ''yara --version''. The native yara CLI
+
       is a separate package from the VirusTotal/yara repo.
+
+      '
   dependency-check:
     version: 12.1.0
     github_repo: jeremylong/DependencyCheck
@@ -315,10 +326,13 @@ special_tools:
     update_check: null
     critical: false
     installation: Manual - requires kernel module installation
-    notes: |
-      Falco requires kernel module or eBPF probe installation.
+    notes: 'Falco requires kernel module or eBPF probe installation.
+
       Not available via automatic installation.
+
       See: https://falco.org/docs/getting-started/installation/
+
+      '
 docker_images:
   ubuntu:
     version: '22.04'
@@ -370,6 +384,84 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.16.0
+    new_version: 5.18.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated scancode
+  tools_updated:
+  - tool: scancode
+    old_version: 32.4.1
+    new_version: 32.5.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.14.6
+    new_version: 0.15.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.495
+    new_version: 3.2.501
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.146.0
+    new_version: 1.151.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-02-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-02-16'
+  action: Updated bandit
+  tools_updated:
+  - tool: bandit
+    old_version: 1.9.2
+    new_version: 1.9.3
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2025-12-19'
   action: Automated version update
   tools_updated: []
