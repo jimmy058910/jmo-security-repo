@@ -294,7 +294,7 @@ class TestConcurrentOperations:
                     conn.execute(
                         """
                         INSERT INTO findings
-                        (scan_id, fingerprint, severity, tool, rule_id, path, line_start, message)
+                        (scan_id, fingerprint, severity, tool, rule_id, path, start_line, message)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (

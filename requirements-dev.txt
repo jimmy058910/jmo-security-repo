@@ -37,11 +37,6 @@ click==8.3.0
     #   black
     #   typer
     #   uvicorn
-colorama==0.4.6
-    # via
-    #   bandit
-    #   click
-    #   pytest
 coverage[toml]==7.11.0
     # via pytest-cov
 croniter==6.0.0
