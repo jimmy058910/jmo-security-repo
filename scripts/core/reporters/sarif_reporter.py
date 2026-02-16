@@ -150,18 +150,18 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
     # Read version from pyproject.toml if possible
     version = "0.4.0"  # Default
     try:
-        import tomli
+        import tomllib
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
         if pyproject_path.exists():
             with open(pyproject_path, "rb") as fp:
-                pyproject = tomli.load(fp)
+                pyproject = tomllib.load(fp)
                 version = pyproject.get("project", {}).get("version", version)
     except FileNotFoundError:
         # pyproject.toml missing - use default version
         logger.debug(f"pyproject.toml not found at {pyproject_path}")
-    except (ImportError, KeyError, ValueError) as e:
-        # tomli not available, or pyproject.toml invalid/missing version field
+    except (KeyError, ValueError) as e:
+        # pyproject.toml invalid/missing version field
         logger.debug(f"Failed to parse version from pyproject.toml: {e}")
 
     tool = {

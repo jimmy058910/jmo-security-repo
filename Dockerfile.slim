@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download 15 cloud-focused tools
 #
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
 
@@ -117,7 +117,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Cloud-optimized with 15 tools
 #
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
 LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.0)"
@@ -154,13 +154,13 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 
 # Install Python tools
 # Note: checkov and prowler have conflicting dependencies - install separately
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir \
+# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.146.0 \
     checkov==3.2.495 \
     ruff==0.14.6 \
     yara-python==4.5.2 && \
-    python3 -m pip install --no-cache-dir prowler==5.13.1 && \
+    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -214,7 +214,7 @@ RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
 # Install JMo (minimal, no reporting extras for slim variant)
 RUN cd /opt/jmo-security && \
-    python3 -m pip install --no-cache-dir -e . && \
+    python3 -m pip install --no-cache-dir --break-system-packages -e . && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -239,8 +239,9 @@ RUN echo "=== Verifying 15 cloud-focused tools ===" && \
     echo "=== All 15 slim tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
-# Note: /root/.local may not exist if pip installed to /usr/local instead
-RUN useradd -m -u 1000 -s /bin/bash jmo && \
+# Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd -m -u 1000 -s /bin/bash jmo && \
     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security

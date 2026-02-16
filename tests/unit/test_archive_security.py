@@ -6,7 +6,6 @@ import io
 import tarfile
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -210,71 +209,6 @@ class TestSafeTarExtract:
             safe_tar_extract(tar, tmp_path)
 
         assert (tmp_path / "safe.txt").exists()
-
-    def test_python_311_fallback_path(self, tmp_path: Path) -> None:
-        """Tests fallback path for Python <3.12 (no filter parameter)."""
-        # Create a tar with a simple file
-        tar_buffer = io.BytesIO()
-        with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
-            content = b"fallback test"
-            info = tarfile.TarInfo(name="fallback.txt")
-            info.size = len(content)
-            tar.addfile(info, io.BytesIO(content))
-
-        tar_buffer.seek(0)
-        with tarfile.open(fileobj=tar_buffer, mode="r:gz") as tar:
-            # Mock extractall to raise TypeError as Python <3.12 would
-            original_extractall = tar.extractall
-
-            def mock_extractall_no_filter(
-                path, members=None, *, numeric_owner=False, filter=None
-            ):
-                if filter is not None:
-                    raise TypeError(
-                        "extractall() got an unexpected keyword argument 'filter'"
-                    )
-                # Don't actually extract - we just want to trigger the fallback
-                return original_extractall(path, members, numeric_owner=numeric_owner)
-
-            with patch.object(tar, "extractall", side_effect=mock_extractall_no_filter):
-                safe_tar_extract(tar, tmp_path)
-
-        assert (tmp_path / "fallback.txt").exists()
-
-    def test_python_311_fallback_skips_unsafe_symlinks(
-        self, tmp_path: Path, caplog
-    ) -> None:
-        """Tests that fallback path also skips unsafe symlinks."""
-        tar_buffer = io.BytesIO()
-        with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
-            # Add an unsafe symlink
-            info = tarfile.TarInfo(name="unsafe_link")
-            info.type = tarfile.SYMTYPE
-            info.linkname = "../../../etc/passwd"
-            tar.addfile(info)
-
-            # Add a safe file
-            content = b"safe"
-            safe_info = tarfile.TarInfo(name="safe.txt")
-            safe_info.size = len(content)
-            tar.addfile(safe_info, io.BytesIO(content))
-
-        tar_buffer.seek(0)
-        with tarfile.open(fileobj=tar_buffer, mode="r:gz") as tar:
-            # Mock extractall to raise TypeError (simulate Python <3.12)
-            def mock_extractall(*args, **kwargs):
-                if "filter" in kwargs:
-                    raise TypeError(
-                        "extractall() got an unexpected keyword argument 'filter'"
-                    )
-
-            with patch.object(tar, "extractall", side_effect=mock_extractall):
-                safe_tar_extract(tar, tmp_path)
-
-        # Safe file extracted, unsafe link skipped
-        assert (tmp_path / "safe.txt").exists()
-        assert not (tmp_path / "unsafe_link").exists()
-        assert "Skipping potentially unsafe symlink" in caplog.text
 
 
 class TestSafeZipExtract:

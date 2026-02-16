@@ -194,5 +194,5 @@ class TestGitLabCIGeneratorBranchCoverage:
 
         # Should not have "Description:" in header when annotation is missing
         lines = workflow_yaml.split("\n")
-        description_lines = [l for l in lines if "Description:" in l]
+        description_lines = [line for line in lines if "Description:" in line]
         assert len(description_lines) == 0

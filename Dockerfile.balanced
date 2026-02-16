@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download and extract 19 tools
 #
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
 
@@ -136,7 +136,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Production-ready runtime with 19 tools
 #
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
 LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 19 scanners optimized for CI/CD pipelines (v1.0.0)"
@@ -183,14 +183,14 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Install Python tools (Phase 1: 40 MB bytecode cleanup)
 # Note: horusec binary is copied from builder stage, no pip package needed
 # Note: checkov and prowler have conflicting dependencies - install separately
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir \
+# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.146.0 \
     checkov==3.2.495 \
     ruff==0.14.6 \
     yara-python==4.5.2 && \
-    python3 -m pip install --no-cache-dir prowler==5.13.1 && \
-    python3 -m pip install --no-cache-dir scancode-toolkit==32.3.0 && \
+    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
+    python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.3.0 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -248,7 +248,7 @@ RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
 # Install JMo with reporting dependencies
 RUN cd /opt/jmo-security && \
-    python3 -m pip install --no-cache-dir -e ".[reporting]" && \
+    python3 -m pip install --no-cache-dir --break-system-packages -e ".[reporting]" && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -277,8 +277,9 @@ RUN echo "=== Verifying 19 balanced tools ===" && \
     echo "=== All 19 balanced tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
-# Note: /root/.local may not exist if pip installed to /usr/local instead
-RUN useradd -m -u 1000 -s /bin/bash jmo &&     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local &&     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo &&     chmod -R 755 /opt/jmo-security
+# Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd -m -u 1000 -s /bin/bash jmo &&     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local &&     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo &&     chmod -R 755 /opt/jmo-security
 
 # Update PATH environment variable for non-root user
 # Set DOCKER_CONTAINER=1 to enable Docker-specific behaviors (skip first-run prompts)

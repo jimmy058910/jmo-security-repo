@@ -28,12 +28,7 @@ def _get_jmo_version() -> str:
 
     """
     try:
-        # Try tomllib first (Python 3.11+)
-        try:
-            import tomllib
-        except ImportError:
-            # Fallback to tomli for Python 3.10
-            import tomli as tomllib
+        import tomllib
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
         with open(pyproject_path, "rb") as f:

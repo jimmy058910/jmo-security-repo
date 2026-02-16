@@ -78,10 +78,7 @@ from scripts.core.diff_engine import DiffResult
 
 def _get_jmo_version() -> str:
     """Get JMo Security version from pyproject.toml."""
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib
+    import tomllib
 
     project_root = Path(__file__).parent.parent.parent.parent
     pyproject_path = project_root / "pyproject.toml"

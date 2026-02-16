@@ -53,12 +53,7 @@ class ProvenanceGenerator:
         Returns:
             Version string (e.g., "1.0.0")
         """
-        try:
-            # Python 3.11+ has built-in tomllib
-            import tomllib
-        except ImportError:
-            # Python 3.10 needs tomli
-            import tomli as tomllib
+        import tomllib
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
 

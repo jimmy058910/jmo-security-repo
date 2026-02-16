@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download and extract tools
 #
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 ARG TARGETARCH
 
@@ -180,7 +180,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
 LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 27 pre-installed scanners + OPA policy engine + plugin system (v1.0.0)"
@@ -239,32 +239,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip first
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
-
 # Install Python security tools one by one for better error visibility
-RUN python3 -m pip install --no-cache-dir bandit==1.9.2 && \
+# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
+RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.2 && \
     echo "✓ bandit installed"
 
-RUN python3 -m pip install --no-cache-dir semgrep==1.146.0 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.146.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir checkov==3.2.495 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.495 && \
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir ruff==0.14.6 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.14.6 && \
     echo "✓ ruff installed"
 
-RUN python3 -m pip install --no-cache-dir yara-python==4.5.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.2 && \
     echo "✓ yara-python installed"
 
-RUN python3 -m pip install --no-cache-dir scancode-toolkit==32.4.1 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.4.1 && \
     scancode --version && \
     echo "✓ scancode-toolkit installed"
 
-RUN python3 -m pip install --no-cache-dir prowler==5.13.1 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
     prowler --version && \
     echo "✓ prowler installed"
 
@@ -352,7 +350,7 @@ RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 # Install JMo Security Suite with optional reporting dependencies
 # Clean up pip cache and bytecode immediately after install (Phase 1: 40 MB savings)
 RUN cd /opt/jmo-security && \
-    python3 -m pip install --no-cache-dir -e ".[reporting]" && \
+    python3 -m pip install --no-cache-dir --break-system-packages -e ".[reporting]" && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -390,8 +388,9 @@ RUN echo "=== Verifying all 27 tools ===" && \
     echo "=== All 27 tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
-# Note: /root/.local may not exist if pip installed to /usr/local instead
-RUN useradd -m -u 1000 -s /bin/bash jmo && \
+# Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd -m -u 1000 -s /bin/bash jmo && \
     mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
     chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
     chmod -R 755 /opt/jmo-security

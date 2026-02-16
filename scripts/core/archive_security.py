@@ -71,19 +71,8 @@ def safe_tar_extract(tar: tarfile.TarFile, extract_dir: Path) -> None:
         if not _is_safe_path(extract_dir, member.name):
             raise ValueError(f"Archive contains path traversal attempt: {member.name}")
 
-    # All members validated above, extract using filter (Python 3.12+) or manual extraction
-    # Security: All member paths validated above via _is_safe_path()
-    try:
-        # Python 3.12+ supports data filter which is the safest option
-        tar.extractall(extract_dir, filter="data")  # nosec B202 - paths validated above
-    except TypeError:
-        # Python < 3.12 doesn't support filter parameter
-        # Extract members one by one after validation (already done above)
-        for member in tar.getmembers():
-            if member.islnk() or member.issym():
-                if member.linkname and not _is_safe_path(extract_dir, member.linkname):
-                    continue
-            tar.extract(member, extract_dir)  # nosec B202 - paths validated above
+    # All members validated above, extract with data filter (safest option)
+    tar.extractall(extract_dir, filter="data")  # nosec B202 - paths validated above
 
 
 def safe_zip_extract(zip_ref: zipfile.ZipFile, extract_dir: Path) -> None:

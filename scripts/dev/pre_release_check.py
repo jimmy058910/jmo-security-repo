@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Callable, List, Tuple
 
-import tomli  # Use tomli for TOML parsing (pyproject.toml)
+import tomllib  # Built-in TOML parsing (Python 3.11+)
 
 
 def check_version_consistency() -> None:
@@ -30,7 +30,7 @@ def check_version_consistency() -> None:
         raise AssertionError("pyproject.toml not found")
 
     with open(pyproject_path, "rb") as f:
-        pyproject = tomli.load(f)
+        pyproject = tomllib.load(f)
 
     version = pyproject["project"]["version"]
     print(f"   Version from pyproject.toml: {version}")
