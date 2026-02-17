@@ -306,6 +306,10 @@ class TestPermissionRecovery:
     @skip_on_windows
     def test_unreadable_source_file(self, tmp_path: Path):
         """Verify handling of unreadable source files."""
+        # Root user (e.g. Docker CI) bypasses Unix file permissions
+        if os.getuid() == 0:
+            pytest.skip("root bypasses filesystem permissions")
+
         source_file = tmp_path / "secret.py"
         source_file.write_text("SECRET = 'password'", encoding="utf-8")
         os.chmod(source_file, 0o000)
@@ -319,6 +323,10 @@ class TestPermissionRecovery:
 
     def test_jmo_dir_permission_denied(self, tmp_path: Path, monkeypatch):
         """Verify handling when .jmo directory is not accessible."""
+        # Root user (e.g. Docker CI) bypasses Unix file permissions
+        if not IS_WINDOWS and hasattr(os, "getuid") and os.getuid() == 0:
+            pytest.skip("root bypasses filesystem permissions")
+
         # Mock Path.home() to point to tmp_path
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 

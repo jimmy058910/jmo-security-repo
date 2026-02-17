@@ -20,6 +20,7 @@ Related:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -677,6 +678,10 @@ def test_infer_scan_frequency_creates_parent_directory(tmp_path: Path, monkeypat
 )
 def test_infer_scan_frequency_returns_none_on_error(tmp_path: Path, monkeypatch):
     """Test infer_scan_frequency() returns None on file operation errors."""
+    # Root user (e.g. Docker CI) bypasses Unix file permissions
+    if hasattr(os, "getuid") and os.getuid() == 0:
+        pytest.skip("root bypasses filesystem permissions")
+
     # Use a path that will cause permission error (read-only directory)
     test_count_file = tmp_path / "readonly" / "scan-count"
     test_count_file.parent.mkdir(parents=True, exist_ok=True)

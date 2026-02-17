@@ -2,6 +2,8 @@ import json
 import types
 from pathlib import Path
 
+import pytest
+
 from scripts.cli import jmo
 
 
@@ -13,6 +15,7 @@ def _repo(tmp_path: Path) -> Path:
     return r
 
 
+@pytest.mark.requires_tools
 def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
     repo = _repo(tmp_path)
     out_base = tmp_path / "results"

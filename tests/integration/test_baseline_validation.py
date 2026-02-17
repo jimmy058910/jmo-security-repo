@@ -201,6 +201,7 @@ def compare_to_baseline(
 @pytest.mark.integration
 @pytest.mark.baseline
 @pytest.mark.slow
+@pytest.mark.requires_tools
 class TestBaselineValidation:
     """Validate scan results against known vulnerability baselines."""
 

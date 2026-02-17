@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,9 @@ def test_write_sarif(tmp_path: Path):
 )
 def test_write_sarif_with_file_error(tmp_path: Path):
     """Test SARIF writer handles file write errors gracefully."""
+    # Root user (e.g. Docker CI) bypasses Unix file permissions
+    if hasattr(os, "getuid") and os.getuid() == 0:
+        pytest.skip("root bypasses filesystem permissions")
     findings = [
         {
             "tool": {"name": "test"},
