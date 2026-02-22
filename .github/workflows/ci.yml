@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -29,7 +29,7 @@ jobs:
           python-version: '3.11'
 
       - name: Validate GitHub workflows (actionlint)
-        uses: reviewdog/action-actionlint@v1.68.0
+        uses: reviewdog/action-actionlint@v1.69.1
         with:
           actionlint_flags: -color
           level: error
@@ -155,7 +155,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -229,7 +229,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -242,7 +242,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -285,7 +285,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v6
@@ -303,7 +303,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
