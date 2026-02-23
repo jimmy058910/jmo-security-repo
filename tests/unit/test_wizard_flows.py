@@ -478,12 +478,18 @@ class TestPromptHelper:
 
     def test_colorize(self):
         """Test text colorization."""
-        helper = PromptHelper()
-        colored = helper.colorize("test", "blue")
+        import scripts.cli.wizard_flows.base_flow as bf
 
-        assert "\x1b[36m" in colored  # Blue color code
-        assert "test" in colored
-        assert "\x1b[0m" in colored  # Reset code
+        orig = bf._ANSI_SUPPORTED
+        bf._ANSI_SUPPORTED = True
+        try:
+            helper = PromptHelper()
+            colored = helper.colorize("test", "blue")
+            assert "\x1b[36m" in colored
+            assert "test" in colored
+            assert "\x1b[0m" in colored
+        finally:
+            bf._ANSI_SUPPORTED = orig
 
     def test_prompt_choice_with_default(self, monkeypatch):
         """Test choice prompt with default."""

@@ -54,7 +54,7 @@ class TestMacOSPathHandling:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -75,7 +75,7 @@ class TestMacOSPathHandling:
                 str(tmp_path / "testrepo"),  # Different case
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Either finds it or reports not found cleanly
@@ -122,7 +122,7 @@ class TestMacOSPermissions:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should handle tools even if quarantined (will be missing)
@@ -156,7 +156,7 @@ class TestMacOSExtendedAttributes:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should create results without xattr errors

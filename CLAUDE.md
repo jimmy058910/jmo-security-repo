@@ -206,6 +206,30 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 
 **Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (14 skills, 7 agents)
 
+### Parallel Work: Agent Teams vs Subagents
+
+Choose the right parallelism strategy based on task characteristics:
+
+| Use **Agent Teams** when | Use **Subagents** when |
+|--------------------------|------------------------|
+| Multi-file refactors spanning 3+ modules | Focused research or single-file tasks |
+| Cross-layer changes (CLI + core + adapters + tests) | Quick searches, file reads, code exploration |
+| Competing hypotheses during debugging | Tasks where only the result matters |
+| Parallel code review (security + perf + coverage) | Sequential work with dependencies |
+| New feature implementation across multiple packages | One-off verification or validation |
+
+**Decision rule:** If teammates need to communicate findings with each other or coordinate across file boundaries, use agent teams. If work can be fire-and-forget with results reported back, use subagents.
+
+**Agent team best practices for this codebase:**
+
+- Assign file ownership: one teammate per module (e.g., `scripts/cli/`, `scripts/core/`, `tests/`)
+- Avoid two teammates editing the same file (overwrites silently)
+- Use delegate mode when the lead should only coordinate, not implement
+- Size tasks to produce a clear deliverable (a function, a test file, a review)
+- For adapter work: one teammate per adapter + its test file
+
+> **Note:** Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental feature).
+
 ## Architecture Overview
 
 ### Two-Phase Workflow

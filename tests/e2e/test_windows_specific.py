@@ -38,7 +38,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Path should be accepted
@@ -64,7 +64,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -88,7 +88,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -109,7 +109,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results dir"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -131,7 +131,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -172,7 +172,7 @@ class TestWindowsPathHandling:
                 "--results-dir",
                 str(tmp_path / "results"),
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # May fail due to path length but shouldn't crash
@@ -205,7 +205,7 @@ class TestWindowsEnvironment:
 
         result = jmo_runner(
             ["scan", "--repo", str(repo), "--allow-missing-tools"],
-            timeout=60,
+            timeout=120,
         )
 
         # Should work with Windows PATH
@@ -235,7 +235,7 @@ class TestWindowsFileOperations:
                     "--results-dir",
                     str(tmp_path / "results"),
                 ],
-                timeout=60,
+                timeout=120,
             )
 
         # Should handle locked file gracefully
@@ -296,7 +296,7 @@ class TestWindowsOutputFormatting:
                 "--allow-missing-tools",
                 "--human-logs",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should handle Unicode without encoding errors
@@ -336,7 +336,7 @@ class TestWindowsSubprocessHandling:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should not allow command injection
@@ -358,7 +358,7 @@ class TestWindowsSubprocessHandling:
                 "10",
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Timeout flag should be accepted

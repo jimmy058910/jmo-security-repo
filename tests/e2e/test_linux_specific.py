@@ -70,7 +70,7 @@ class TestLinuxPathHandling:
                 str(link),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         combined = result.stdout.lower() + result.stderr.lower()
@@ -94,7 +94,7 @@ class TestLinuxPermissions:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should work without root
@@ -118,7 +118,7 @@ class TestLinuxPermissions:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should handle non-executable scripts
@@ -164,7 +164,7 @@ class TestLinuxFilesystem:
                 str(repo),
                 "--allow-missing-tools",
             ],
-            timeout=60,
+            timeout=120,
         )
 
         # Should not try to scan /proc

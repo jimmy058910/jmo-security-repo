@@ -26,6 +26,7 @@ from scripts.core.history_db import get_connection, list_scans
 class TestMultiTargetHistoryIntegration:
     """Test history storage for all 6 target types."""
 
+    @pytest.mark.requires_tools
     def test_scan_all_target_types_single_history(self, tmp_path):
         """
         Test scanning all target types stores in single history entry.
@@ -222,6 +223,7 @@ class TestMultiTargetHistoryIntegration:
         assert new_findings[0]["id"] == "iac-finding-1"
         assert "infra.tf" in new_findings[0]["location"]["path"]
 
+    @pytest.mark.requires_tools
     def test_repository_scanning_with_history(self, tmp_path):
         """
         Test repository scanning stores correctly in history.
@@ -295,6 +297,7 @@ class TestMultiTargetHistoryIntegration:
                 assert scan["profile"] == "balanced"
                 assert "trufflehog" in scan["tools"]
 
+    @pytest.mark.requires_tools
     def test_iac_scanning_with_history(self, tmp_path):
         """
         Test IaC scanning stores correctly in history.

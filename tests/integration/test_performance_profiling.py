@@ -17,6 +17,7 @@ import sys
 import pytest
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_profile_flag_generates_timings(tmp_path):
     """Test --profile flag generates timings.json."""
@@ -63,6 +64,7 @@ def test_profile_flag_generates_timings(tmp_path):
     assert len(timings) > 0, "timings.json should not be empty"
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_timings_data_structure(tmp_path):
     """Test timings.json has expected data structure."""
@@ -118,6 +120,7 @@ def test_timings_data_structure(tmp_path):
         assert isinstance(timings["meta"], dict)
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_ci_command_with_profile_generates_timings(tmp_path):
     """Test ci command with --profile generates timings.json."""
@@ -156,6 +159,7 @@ def test_ci_command_with_profile_generates_timings(tmp_path):
     assert len(timings) > 0
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_profile_without_flag_no_timings(tmp_path):
     """Test report without --profile flag does not generate timings.json."""
@@ -200,6 +204,7 @@ def test_profile_without_flag_no_timings(tmp_path):
         pass
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_timings_thread_recommendation(tmp_path):
     """Test timings.json may include thread recommendation."""
@@ -244,6 +249,7 @@ def test_timings_thread_recommendation(tmp_path):
             assert timings["recommended_threads"] > 0
 
 
+@pytest.mark.requires_tools
 @pytest.mark.slow
 def test_timings_json_is_valid_json(tmp_path):
     """Test timings.json is always valid JSON (no syntax errors)."""

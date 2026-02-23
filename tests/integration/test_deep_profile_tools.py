@@ -19,7 +19,10 @@ import json
 import subprocess
 import sys
 
+import pytest
 
+
+@pytest.mark.requires_tools
 def test_deep_profile_includes_all_tools(tmp_path):
     """Verify deep profile invokes all 12 tools."""
     # Create minimal test repo
@@ -69,6 +72,7 @@ def test_deep_profile_includes_all_tools(tmp_path):
     assert has_common_tool, f"No common tools found. Found: {found_tools}"
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_falco_output(tmp_path):
     """Test falco output is generated (if tool installed)."""
     test_repo = tmp_path / "test-repo"
@@ -104,6 +108,7 @@ def test_deep_profile_falco_output(tmp_path):
         assert isinstance(data, (dict, list))
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_aflplusplus_output(tmp_path):
     """Test afl++ output is generated (if tool installed)."""
     test_repo = tmp_path / "test-repo"
@@ -134,6 +139,7 @@ def test_deep_profile_aflplusplus_output(tmp_path):
         assert isinstance(data, (dict, list))
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_graceful_degradation(tmp_path):
     """Test deep profile continues when some tools missing."""
     test_repo = tmp_path / "test-repo"
@@ -164,6 +170,7 @@ def test_deep_profile_graceful_degradation(tmp_path):
     assert (tmp_path / "results" / "individual-repos").exists()
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_report_aggregation(tmp_path):
     """Test report phase aggregates deep profile findings."""
     test_repo = tmp_path / "test-repo"

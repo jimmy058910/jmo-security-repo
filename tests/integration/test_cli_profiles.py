@@ -4,6 +4,8 @@ from pathlib import Path
 
 import types
 
+import pytest
+
 from scripts.cli import jmo
 
 
@@ -219,6 +221,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 # ========== Expanded Per-Tool Override Tests (Added Oct 19 2025) ==========
 
 
+@pytest.mark.requires_tools
 def test_per_tool_timeout_override(tmp_path: Path):
     """Test per-tool timeout override in profile."""
     import subprocess
@@ -376,6 +379,7 @@ profiles:
     assert result.returncode in [0, 1]
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_fast(tmp_path: Path):
     """Test fast profile invokes correct tool subset."""
     import subprocess
@@ -419,6 +423,7 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         ), f"Fast profile should invoke {tool} (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_balanced(tmp_path: Path):
     """Test balanced profile invokes correct tool subset."""
     import subprocess
@@ -480,6 +485,7 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         ), f"{tool} should run when applicable files exist (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_deep(tmp_path: Path):
     """Test deep profile invokes correct tool subset."""
     import subprocess
@@ -542,6 +548,7 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         ), f"{tool} should run when applicable files exist (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
     """Test profile inherits global per_tool config and merges correctly."""
     import subprocess

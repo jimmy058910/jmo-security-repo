@@ -167,7 +167,7 @@ diff-data.json
 tmpclaude-*/
 
 # Nightshift automation config (symlink to dev-only/infrastructure/nightshift.yaml)
-.nightshift.yaml
+nightshift.yaml
 
 # Conductor orchestration files (local development artifacts)
 /conductor/

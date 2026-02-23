@@ -522,6 +522,66 @@ def generate_report() -> None:
     print("\n" + "=" * 80 + "\n")
 
 
+def _close_superseded_version_issues(tool_names: list[str]) -> None:
+    """
+    Close existing open version update issues for the given tools.
+
+    Prevents weekly duplicate accumulation by closing old issues before
+    creating new ones. Matches issues by title pattern and 'dependencies' label.
+    """
+    import json as _json
+
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--state",
+                "open",
+                "--label",
+                "dependencies",
+                "--limit",
+                "200",
+                "--json",
+                "number,title",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        existing_issues = _json.loads(result.stdout)
+    except (subprocess.CalledProcessError, _json.JSONDecodeError):
+        warn("Could not query existing issues; skipping dedup")
+        return
+
+    for tool in tool_names:
+        # Match both "Update <tool> to v..." and "[CRITICAL] Update <tool> to v..."
+        matching = [
+            issue for issue in existing_issues if f"Update {tool} to " in issue["title"]
+        ]
+        if not matching:
+            continue
+
+        for issue in matching:
+            try:
+                subprocess.run(
+                    [
+                        "gh",
+                        "issue",
+                        "close",
+                        str(issue["number"]),
+                        "--comment",
+                        "Superseded by newer version check. Closing stale issue.",
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+                log(f"  Closed superseded issue #{issue['number']}: {issue['title']}")
+            except subprocess.CalledProcessError:
+                warn(f"  Failed to close issue #{issue['number']}")
+
+
 def check_outdated_and_create_issues(create_issues: bool = False) -> int:
     """
     Check for outdated tools and optionally create GitHub issues.
@@ -565,6 +625,10 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
 
     # Create GitHub issues if requested
     if create_issues and (outdated_critical or outdated_normal):
+        log("Closing superseded version update issues before creating new ones...")
+        _close_superseded_version_issues(
+            [t for t, _, _ in outdated_critical] + [t for t, _, _ in outdated_normal]
+        )
         log("Creating GitHub issues for outdated tools...")
 
         for tool, current, latest in outdated_critical:
