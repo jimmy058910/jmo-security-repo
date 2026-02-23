@@ -168,7 +168,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Configure AWS credentials for ECR Public
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::786980363770:role/GitHubActionsECRPublicRole
           aws-region: ${{ env.AWS_REGION }}
