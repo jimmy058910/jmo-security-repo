@@ -233,8 +233,7 @@ def test_per_tool_timeout_override(tmp_path: Path):
 
     # Create custom config with per-tool override
     config_file = tmp_path / "custom-jmo.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [semgrep]
 outputs: [json]
 
@@ -246,8 +245,7 @@ profiles:
       semgrep:
         timeout: 600  # Override global timeout
         flags: ["--exclude", "tests"]
-"""
-    )
+""")
 
     # Run scan with custom profile
     cmd = [
@@ -296,8 +294,7 @@ def test_per_tool_flags_override(tmp_path: Path):
 
     # Create config with exclude flags
     config_file = tmp_path / "exclude-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [semgrep]
 outputs: [json]
 
@@ -307,8 +304,7 @@ profiles:
     per_tool:
       semgrep:
         flags: ["--exclude", "tests"]
-"""
-    )
+""")
 
     # Run scan
     cmd = [
@@ -344,8 +340,7 @@ def test_per_tool_retries_override(tmp_path: Path):
 
     # Create config with retry override
     config_file = tmp_path / "retry-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trivy]
 outputs: [json]
 
@@ -356,8 +351,7 @@ profiles:
     per_tool:
       trivy:
         retries: 2  # Override: 2 retries for trivy
-"""
-    )
+""")
 
     # Run scan
     cmd = [
@@ -560,8 +554,7 @@ def test_profile_inherits_global_per_tool_config(tmp_path: Path):
 
     # Create config with global per_tool and profile per_tool
     config_file = tmp_path / "inherit-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trivy, semgrep]
 outputs: [json]
 
@@ -579,8 +572,7 @@ profiles:
         timeout: 600  # Profile adds timeout (merges with global flags)
       semgrep:
         flags: ["--exclude", "node_modules"]  # Profile overrides global flags
-"""
-    )
+""")
 
     # Run scan
     cmd = [
@@ -624,8 +616,7 @@ def test_profile_thread_override(tmp_path: Path):
 
     # Create config with profile thread override
     config_file = tmp_path / "thread-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trufflehog, semgrep]
 outputs: [json]
 threads: 2  # Global default
@@ -634,8 +625,7 @@ profiles:
   high-thread:
     tools: [trufflehog, semgrep]
     threads: 8  # Profile overrides to 8
-"""
-    )
+""")
 
     # Run scan with profile
     cmd = [

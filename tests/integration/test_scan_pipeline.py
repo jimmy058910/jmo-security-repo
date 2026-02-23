@@ -98,8 +98,7 @@ def sample_vulnerable_repo(tmp_path: Path) -> Path:
     src_dir.mkdir()
 
     # JavaScript with SQL injection
-    (src_dir / "app.js").write_text(
-        """
+    (src_dir / "app.js").write_text("""
 const express = require('express');
 const app = express();
 const db = require('./db');
@@ -120,24 +119,20 @@ app.get('/search', (req, res) => {
 });
 
 module.exports = app;
-"""
-    )
+""")
 
     # Python with hardcoded secret
-    (src_dir / "config.py").write_text(
-        """
+    (src_dir / "config.py").write_text("""
 # Configuration file
 API_KEY = "sk-1234567890abcdef1234567890abcdef"
 DATABASE_PASSWORD = "admin123"
 
 def get_connection_string():
     return f"postgresql://admin:{DATABASE_PASSWORD}@localhost/db"
-"""
-    )
+""")
 
     # Create package.json for npm detection
-    (tmp_path / "package.json").write_text(
-        """
+    (tmp_path / "package.json").write_text("""
 {
   "name": "vulnerable-app",
   "version": "1.0.0",
@@ -146,8 +141,7 @@ def get_connection_string():
     "lodash": "4.17.20"
   }
 }
-"""
-    )
+""")
 
     return tmp_path
 

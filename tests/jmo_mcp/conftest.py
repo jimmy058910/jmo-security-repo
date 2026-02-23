@@ -256,8 +256,7 @@ def repo_root_with_files(tmp_path: Path) -> Path:
     src_dir.mkdir()
 
     # Python file
-    (src_dir / "app.py").write_text(
-        """#!/usr/bin/env python3
+    (src_dir / "app.py").write_text("""#!/usr/bin/env python3
 import os
 
 def hello(name):
@@ -269,12 +268,10 @@ def vulnerable_function(user_input):
 
 if __name__ == "__main__":
     hello("World")
-"""
-    )
+""")
 
     # JavaScript file
-    (src_dir / "app.js").write_text(
-        """const express = require('express');
+    (src_dir / "app.js").write_text("""const express = require('express');
 const app = express();
 
 app.get('/user', (req, res) => {
@@ -284,14 +281,12 @@ app.get('/user', (req, res) => {
 });
 
 app.listen(3000);
-"""
-    )
+""")
 
     # Config file
     config_dir = repo_root / "config"
     config_dir.mkdir()
-    (config_dir / "settings.py").write_text(
-        """import os
+    (config_dir / "settings.py").write_text("""import os
 
 # Database configuration
 DB_HOST = os.getenv('DB_HOST', 'localhost')
@@ -300,12 +295,10 @@ DB_PORT = int(os.getenv('DB_PORT', 5432))
 # AWS Configuration (VULNERABLE - line 8)
 AWS_ACCESS_KEY = 'AKIAIOSFODNN7EXAMPLE'  # CWE-798: Hardcoded credentials
 AWS_SECRET_KEY = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
-"""
-    )
+""")
 
     # Dockerfile
-    (repo_root / "Dockerfile").write_text(
-        """FROM python:3.11-slim
+    (repo_root / "Dockerfile").write_text("""FROM python:3.11-slim
 
 WORKDIR /app
 COPY . /app
@@ -313,8 +306,7 @@ COPY . /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 CMD ["python", "src/app.py"]
-"""
-    )
+""")
 
     # Binary file (should not be readable as text)
     binary_file = repo_root / "binary.bin"

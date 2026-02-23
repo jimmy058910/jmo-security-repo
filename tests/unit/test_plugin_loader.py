@@ -154,8 +154,7 @@ class TestPluginLoader:
 
         # Create test plugin file
         plugin_file = tmp_path / "test_adapter.py"
-        plugin_file.write_text(
-            """
+        plugin_file.write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, Finding, adapter_plugin
 
@@ -167,8 +166,7 @@ class TestAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return [Finding(id="test-001", ruleId="TEST", severity="HIGH", message="Test")]
-"""
-        )
+""")
 
         # Load plugin
         loader._load_plugin(plugin_file)
@@ -187,8 +185,7 @@ class TestAdapter(AdapterPlugin):
         plugin_dir.mkdir()
 
         # Create multiple plugin files
-        (plugin_dir / "plugin1_adapter.py").write_text(
-            """
+        (plugin_dir / "plugin1_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, Finding, adapter_plugin
 
@@ -200,11 +197,9 @@ class Plugin1(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
-        (plugin_dir / "plugin2_adapter.py").write_text(
-            """
+        (plugin_dir / "plugin2_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, Finding, adapter_plugin
 
@@ -216,8 +211,7 @@ class Plugin2(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         # Override search paths
         loader.search_paths = [plugin_dir]
@@ -245,16 +239,14 @@ class Plugin2(AdapterPlugin):
 
         # Create plugin file without metadata
         plugin_file = tmp_path / "bad_adapter.py"
-        plugin_file.write_text(
-            """
+        plugin_file.write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin
 
 class BadAdapter(AdapterPlugin):
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         # Load plugin (should fail gracefully)
         loader._load_plugin(plugin_file)
@@ -268,8 +260,7 @@ class BadAdapter(AdapterPlugin):
 
         # Create plugin file with property metadata
         plugin_file = tmp_path / "property_adapter.py"
-        plugin_file.write_text(
-            """
+        plugin_file.write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, Finding
 
@@ -280,8 +271,7 @@ class PropertyAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         # Load plugin
         loader._load_plugin(plugin_file)
@@ -304,8 +294,7 @@ class PropertyAdapter(AdapterPlugin):
         plugin_dir.mkdir()
         plugin_file = plugin_dir / "reload_adapter.py"
 
-        plugin_file.write_text(
-            """
+        plugin_file.write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, Finding, adapter_plugin
 
@@ -317,8 +306,7 @@ class ReloadAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         # Override search paths
         loader.search_paths = [plugin_dir]
@@ -358,8 +346,7 @@ class TestLazyLoading:
         plugin_dir = tmp_path / "adapters"
         plugin_dir.mkdir()
 
-        (plugin_dir / "lazy1_adapter.py").write_text(
-            """
+        (plugin_dir / "lazy1_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -371,11 +358,9 @@ class Lazy1Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
-        (plugin_dir / "lazy2_adapter.py").write_text(
-            """
+        (plugin_dir / "lazy2_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -387,8 +372,7 @@ class Lazy2Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -409,8 +393,7 @@ class Lazy2Adapter(AdapterPlugin):
         plugin_dir = tmp_path / "adapters"
         plugin_dir.mkdir()
 
-        (plugin_dir / "ondemand_adapter.py").write_text(
-            """
+        (plugin_dir / "ondemand_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -422,8 +405,7 @@ class OnDemandAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -454,8 +436,7 @@ class OnDemandAdapter(AdapterPlugin):
         plugin_dir = tmp_path / "adapters"
         plugin_dir.mkdir()
 
-        (plugin_dir / "cached_adapter.py").write_text(
-            """
+        (plugin_dir / "cached_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -467,8 +448,7 @@ class CachedAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -519,8 +499,7 @@ class TestLazyPluginRegistry:
         plugin_dir = tmp_path / "adapters"
         plugin_dir.mkdir()
 
-        (plugin_dir / "lazytest_adapter.py").write_text(
-            """
+        (plugin_dir / "lazytest_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -532,8 +511,7 @@ class LazyTestAdapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -552,8 +530,7 @@ class LazyTestAdapter(AdapterPlugin):
         plugin_dir = tmp_path / "adapters"
         plugin_dir.mkdir()
 
-        (plugin_dir / "available1_adapter.py").write_text(
-            """
+        (plugin_dir / "available1_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -565,11 +542,9 @@ class Available1Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
-        (plugin_dir / "available2_adapter.py").write_text(
-            """
+        (plugin_dir / "available2_adapter.py").write_text("""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -581,8 +556,7 @@ class Available2Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-        )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -618,8 +592,7 @@ class TestPreloadProfile:
 
         # Create some adapters that match the fast profile
         for tool_name in ["trivy", "semgrep", "syft"]:
-            (plugin_dir / f"{tool_name}_adapter.py").write_text(
-                f"""
+            (plugin_dir / f"{tool_name}_adapter.py").write_text(f"""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -631,8 +604,7 @@ class {tool_name.title()}Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-            )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -691,8 +663,7 @@ class TestLazyLoadingPerformance:
         plugin_dir.mkdir()
 
         for i in range(10):
-            (plugin_dir / f"perf{i}_adapter.py").write_text(
-                f"""
+            (plugin_dir / f"perf{i}_adapter.py").write_text(f"""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -704,8 +675,7 @@ class Perf{i}Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-            )
+""")
 
         loader.search_paths = [plugin_dir]
 
@@ -731,8 +701,7 @@ class Perf{i}Adapter(AdapterPlugin):
         plugin_dir.mkdir()
 
         for name in ["first", "second", "third"]:
-            (plugin_dir / f"{name}_adapter.py").write_text(
-                f"""
+            (plugin_dir / f"{name}_adapter.py").write_text(f"""
 from pathlib import Path
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 
@@ -744,8 +713,7 @@ class {name.title()}Adapter(AdapterPlugin):
 
     def parse(self, output_path: Path):
         return []
-"""
-            )
+""")
 
         loader.search_paths = [plugin_dir]
 

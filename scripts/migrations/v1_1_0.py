@@ -36,32 +36,26 @@ class Migration_1_0_0_to_1_1_0(Migration):
             row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()
         ]
         if "scan_notes" not in scans_columns:
-            conn.execute(
-                """
+            conn.execute("""
                 ALTER TABLE scans
                 ADD COLUMN scan_notes TEXT DEFAULT NULL
-                """
-            )
+                """)
 
         # Check if finding_status column already exists
         findings_columns = [
             row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
         ]
         if "finding_status" not in findings_columns:
-            conn.execute(
-                """
+            conn.execute("""
                 ALTER TABLE findings
                 ADD COLUMN finding_status TEXT DEFAULT 'open'
-                """
-            )
+                """)
 
         # Create index on finding_status for efficient filtering (IF NOT EXISTS is safe)
-        conn.execute(
-            """
+        conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_findings_status
             ON findings(finding_status)
-            """
-        )
+            """)
 
     def migrate_down(self, conn: sqlite3.Connection) -> None:
         """

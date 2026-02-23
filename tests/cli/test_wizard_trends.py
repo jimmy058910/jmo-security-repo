@@ -30,8 +30,7 @@ def mock_db(tmp_path):
     cursor = conn.cursor()
 
     # Create scans table
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
@@ -39,12 +38,10 @@ def mock_db(tmp_path):
             branch TEXT,
             total_findings INTEGER
         )
-    """
-    )
+    """)
 
     # Create findings table
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE findings (
             id INTEGER PRIMARY KEY,
             scan_id TEXT,
@@ -59,8 +56,7 @@ def mock_db(tmp_path):
             raw_finding TEXT,
             FOREIGN KEY(scan_id) REFERENCES scans(id)
         )
-    """
-    )
+    """)
 
     # Insert test scans
     test_scans = [

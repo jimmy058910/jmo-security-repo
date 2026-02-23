@@ -198,14 +198,12 @@ class TestDetectIacType:
     def test_detect_k8s_from_content(self, tmp_path):
         """Test detecting Kubernetes from content."""
         k8s_file = tmp_path / "deployment.yaml"
-        k8s_file.write_text(
-            """
+        k8s_file.write_text("""
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: my-app
-"""
-        )
+""")
 
         result = detect_iac_type(k8s_file)
 
@@ -214,15 +212,13 @@ metadata:
     def test_detect_cloudformation_from_content(self, tmp_path):
         """Test detecting CloudFormation from content."""
         cfn_file = tmp_path / "template.yml"
-        cfn_file.write_text(
-            """
+        cfn_file.write_text("""
 AWSTemplateFormatVersion: '2010-09-09'
 Description: My template
 Resources:
   MyBucket:
     Type: AWS::S3::Bucket
-"""
-        )
+""")
 
         result = detect_iac_type(cfn_file)
 
@@ -231,13 +227,11 @@ Resources:
     def test_detect_cloudformation_from_resources_only(self, tmp_path):
         """Test detecting CloudFormation from Resources key only."""
         cfn_file = tmp_path / "template.yaml"
-        cfn_file.write_text(
-            """
+        cfn_file.write_text("""
 Resources:
   MyBucket:
     Type: AWS::S3::Bucket
-"""
-        )
+""")
 
         result = detect_iac_type(cfn_file)
 

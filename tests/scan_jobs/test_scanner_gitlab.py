@@ -40,14 +40,12 @@ def mock_repo_with_dockerfile(tmp_path):
     repo_dir.mkdir()
 
     dockerfile = repo_dir / "Dockerfile"
-    dockerfile.write_text(
-        """
+    dockerfile.write_text("""
 FROM nginx:latest
 FROM python:3.11-slim
 FROM scratch
 RUN echo "test"
-"""
-    )
+""")
 
     return repo_dir
 
@@ -59,8 +57,7 @@ def mock_repo_with_compose(tmp_path):
     repo_dir.mkdir()
 
     compose_file = repo_dir / "docker-compose.yml"
-    compose_file.write_text(
-        """
+    compose_file.write_text("""
 version: '3.8'
 services:
   web:
@@ -68,8 +65,7 @@ services:
   db:
     image: postgres:14
     build: ./db
-"""
-    )
+""")
 
     return repo_dir
 
@@ -81,8 +77,7 @@ def mock_repo_with_k8s(tmp_path):
     repo_dir.mkdir()
 
     k8s_file = repo_dir / "deployment.k8s.yaml"
-    k8s_file.write_text(
-        """
+    k8s_file.write_text("""
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -93,8 +88,7 @@ spec:
     image: nginx:1.21
   - name: sidecar
     image: busybox:latest
-"""
-    )
+""")
 
     return repo_dir
 
@@ -514,8 +508,7 @@ def test_discover_container_images_k8s_invalid_document(tmp_path):
     repo_dir.mkdir()
 
     k8s_file = repo_dir / "deployment.k8s.yaml"
-    k8s_file.write_text(
-        """
+    k8s_file.write_text("""
 ---
 # String document (invalid)
 "invalid"
@@ -527,8 +520,7 @@ spec:
   containers:
   - name: web
     image: nginx:1.21
-"""
-    )
+""")
 
     images = _discover_container_images(repo_dir)
 

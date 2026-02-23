@@ -126,12 +126,10 @@ class TestDockerVariants:
         src_dir = tmp_path / "src"
         src_dir.mkdir()
 
-        (src_dir / "app.js").write_text(
-            """
+        (src_dir / "app.js").write_text("""
 const userId = req.query.id;
 const query = "SELECT * FROM users WHERE id = " + userId;
-"""
-        )
+""")
 
         # Determine profile based on variant
         profile = "fast" if variant in ["fast", "slim"] else variant

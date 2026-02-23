@@ -368,15 +368,13 @@ class TestRepositoryScanner:
         """Test Falco validates rule files when present"""
         repo = tmp_path / "falco-repo"
         repo.mkdir()
-        (repo / "custom-falco-rules.yaml").write_text(
-            """
+        (repo / "custom-falco-rules.yaml").write_text("""
 - rule: Detect Shell in Container
   desc: Alert on shell execution
   condition: spawned_process and container
   output: "Shell spawned in container"
   priority: WARNING
-"""
-        )
+""")
 
         def mock_find_tool(tool_name):
             if tool_name == "falco":

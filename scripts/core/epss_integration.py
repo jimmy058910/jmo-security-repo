@@ -71,8 +71,7 @@ class EPSSClient:
         conn = sqlite3.connect(self.cache_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS epss_scores (
                 cve TEXT PRIMARY KEY,
                 epss REAL,
@@ -80,8 +79,7 @@ class EPSSClient:
                 date TEXT,
                 cached_at TEXT
             )
-        """
-        )
+        """)
 
         conn.commit()
         conn.close()

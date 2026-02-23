@@ -498,16 +498,14 @@ class TestExtractCodeSnippet:
         """Test basic code snippet extraction."""
         # Create test file
         test_file = tmp_path / "test.py"
-        test_file.write_text(
-            """line 1
+        test_file.write_text("""line 1
 line 2
 line 3
 line 4
 line 5
 line 6
 line 7
-"""
-        )
+""")
 
         result = extract_code_snippet(str(test_file), start_line=4, context_lines=2)
 

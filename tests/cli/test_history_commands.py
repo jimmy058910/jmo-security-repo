@@ -69,8 +69,7 @@ def sample_database(tmp_path):
     conn.row_factory = sqlite3.Row
 
     # Create schema
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS scans (
             id TEXT PRIMARY KEY,
             timestamp INTEGER NOT NULL,
@@ -91,11 +90,9 @@ def sample_database(tmp_path):
             jmo_version TEXT DEFAULT '1.0.0',
             duration_seconds REAL
         )
-        """
-    )
+        """)
 
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS findings (
             scan_id TEXT NOT NULL,
             fingerprint TEXT NOT NULL,
@@ -109,8 +106,7 @@ def sample_database(tmp_path):
             PRIMARY KEY (scan_id, fingerprint),
             FOREIGN KEY (scan_id) REFERENCES scans(id)
         )
-        """
-    )
+        """)
 
     # Insert test scans
     timestamp1 = int(time.time()) - 86400  # 1 day ago
@@ -495,8 +491,7 @@ class TestCmdHistoryList:
         # Create database with proper schema but no data
         db_path = tmp_path / "empty.db"
         conn = sqlite3.connect(db_path)
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
@@ -517,8 +512,7 @@ class TestCmdHistoryList:
                 jmo_version TEXT DEFAULT '1.0.0',
                 duration_seconds REAL
             )
-            """
-        )
+            """)
         conn.close()
 
         class Args:

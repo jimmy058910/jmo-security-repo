@@ -292,14 +292,12 @@ def test_semgrep_v110_code_context_integration(tmp_path: Path):
     """Test v1.1.0 code context extraction."""
     # Create a test file to extract context from
     test_file = tmp_path / "vulnerable.py"
-    test_file.write_text(
-        """import random
+    test_file.write_text("""import random
 
 def generate_token():
     # INSECURE: Using random instead of secrets
     return random.randint(1000, 9999)
-"""
-    )
+""")
 
     sample = {
         "results": [

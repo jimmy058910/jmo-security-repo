@@ -233,26 +233,22 @@ def generate_github_actions(config: Any, profiles: dict[str, Any]) -> str:
     env_vars = []
 
     if config.target.type == "gitlab":
-        setup_steps.append(
-            """
+        setup_steps.append("""
       - name: Configure GitLab Access
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: echo "GITLAB_TOKEN configured for GitLab scanning"
-"""
-        )
+""")
         env_vars.append("GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}")
 
     elif config.target.type == "k8s":
-        setup_steps.append(
-            """
+        setup_steps.append("""
       - name: Configure kubectl
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
           kubectl config view
-"""
-        )
+""")
 
     setup_steps_str = "".join(setup_steps)
     env_section = (

@@ -230,8 +230,7 @@ def test_cicd_flow_detect_images_github_actions(mock_base_init, tmp_path):
     # Create mock workflow file with image reference
     # Regex expects "image: value" or "container: value" on same line
     workflow = tmp_path / "ci.yml"
-    workflow.write_text(
-        """
+    workflow.write_text("""
 name: CI
 jobs:
   test:
@@ -243,8 +242,7 @@ jobs:
       - run: echo "test"
         # Using image: in a comment to test extraction
         image: postgres:14
-"""
-    )
+""")
 
     images = flow._detect_images_from_ci([workflow], None, None)
 
@@ -261,16 +259,14 @@ def test_cicd_flow_detect_images_gitlab_ci(mock_base_init, tmp_path):
 
     # Create mock GitLab CI file
     gitlab_ci = tmp_path / ".gitlab-ci.yml"
-    gitlab_ci.write_text(
-        """
+    gitlab_ci.write_text("""
 image: ruby:3.0
 
 test:
   image: node:16
   script:
     - npm test
-"""
-    )
+""")
 
     images = flow._detect_images_from_ci([], gitlab_ci, None)
 
@@ -286,8 +282,7 @@ def test_cicd_flow_detect_images_gitlab_ci_dict_format(mock_base_init, tmp_path)
     flow = CICDFlow()
 
     gitlab_ci = tmp_path / ".gitlab-ci.yml"
-    gitlab_ci.write_text(
-        """
+    gitlab_ci.write_text("""
 image:
   name: docker:latest
   entrypoint: [""]
@@ -297,8 +292,7 @@ build:
     name: python:3.10
   script:
     - python setup.py build
-"""
-    )
+""")
 
     images = flow._detect_images_from_ci([], gitlab_ci, None)
 
@@ -314,8 +308,7 @@ def test_cicd_flow_detect_images_jenkinsfile(mock_base_init, tmp_path):
     flow = CICDFlow()
 
     jenkinsfile = tmp_path / "Jenkinsfile"
-    jenkinsfile.write_text(
-        """
+    jenkinsfile.write_text("""
 pipeline {
     agent {
         docker.image('maven:3.8-jdk-11')
@@ -328,8 +321,7 @@ pipeline {
         }
     }
 }
-"""
-    )
+""")
 
     images = flow._detect_images_from_ci([], None, jenkinsfile)
 

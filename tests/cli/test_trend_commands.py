@@ -46,8 +46,7 @@ def sample_database(tmp_path):
     conn.row_factory = sqlite3.Row
 
     # Create scans table with full schema
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS scans (
             id TEXT PRIMARY KEY,
             timestamp INTEGER NOT NULL,
@@ -68,12 +67,10 @@ def sample_database(tmp_path):
             jmo_version TEXT DEFAULT '1.0.0',
             duration_seconds REAL
         )
-        """
-    )
+        """)
 
     # Create findings table
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS findings (
             scan_id TEXT NOT NULL,
             fingerprint TEXT NOT NULL,
@@ -88,8 +85,7 @@ def sample_database(tmp_path):
             PRIMARY KEY (scan_id, fingerprint),
             FOREIGN KEY (scan_id) REFERENCES scans(id)
         )
-        """
-    )
+        """)
 
     # Insert 5 test scans with different timestamps (simulating trend over time)
     base_time = int(time.time()) - (86400 * 30)  # 30 days ago

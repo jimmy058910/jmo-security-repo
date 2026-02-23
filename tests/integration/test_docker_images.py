@@ -144,8 +144,7 @@ def test_repo(tmp_path_factory) -> Path:
 
     # Create simple Python file with a potential issue
     test_py = repo_dir / "test.py"
-    test_py.write_text(
-        """
+    test_py.write_text("""
 # Test file for security scanning
 import os
 
@@ -158,19 +157,16 @@ def insecure_function():
 
 if __name__ == "__main__":
     print("Test file")
-"""
-    )
+""")
 
     # Create a Dockerfile
     dockerfile = repo_dir / "Dockerfile"
-    dockerfile.write_text(
-        """
+    dockerfile.write_text("""
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y curl
 USER root
 WORKDIR /app
-"""
-    )
+""")
 
     return repo_dir
 

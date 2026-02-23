@@ -529,8 +529,7 @@ def _explain_metrics_interactive() -> None:
     safe_print(colorize("📖 Trend Analysis Metrics Explained", "bold"))
     print(colorize("=" * 60, "bold"))
 
-    safe_print(
-        """
+    safe_print("""
 1. OVERALL SECURITY TREND
    • Shows direction: improving, worsening, stable
    • Mann-Kendall test validates statistical significance
@@ -567,7 +566,6 @@ Examples:
   • Score: "85/100" = mostly clean, some medium issues
 
 For more details, see: docs/USER_GUIDE.md#trend-analysis
-"""
-    )
+""")
 
     input(colorize("\nPress Enter to continue...", "blue"))

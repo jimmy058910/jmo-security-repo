@@ -1456,34 +1456,29 @@ def get_database_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
     max_date = date_range[1]
 
     # Scans by branch
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT branch, COUNT(*) as count
         FROM scans
         WHERE branch IS NOT NULL
         GROUP BY branch
         ORDER BY count DESC
         LIMIT 10
-        """
-    )
+        """)
     scans_by_branch = [{"branch": row[0], "count": row[1]} for row in cursor.fetchall()]
 
     # Scans by profile
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT profile, COUNT(*) as count
         FROM scans
         GROUP BY profile
         ORDER BY count DESC
-        """
-    )
+        """)
     scans_by_profile = [
         {"profile": row[0], "count": row[1]} for row in cursor.fetchall()
     ]
 
     # Findings by severity
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT severity, COUNT(*) as count
         FROM findings
         GROUP BY severity
@@ -1495,22 +1490,19 @@ def get_database_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
                 WHEN 'LOW' THEN 4
                 WHEN 'INFO' THEN 5
             END
-        """
-    )
+        """)
     findings_by_severity = [
         {"severity": row[0], "count": row[1]} for row in cursor.fetchall()
     ]
 
     # Top tools
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT tool, COUNT(*) as count
         FROM findings
         GROUP BY tool
         ORDER BY count DESC
         LIMIT 10
-        """
-    )
+        """)
     top_tools = [{"tool": row[0], "count": row[1]} for row in cursor.fetchall()]
 
     # Database file size
@@ -3368,12 +3360,10 @@ def migrate_add_attestations_table():
     cursor = conn.cursor()
 
     # Check if attestations table exists
-    cursor.execute(
-        """
+    cursor.execute("""
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='attestations'
-    """
-    )
+    """)
 
     if cursor.fetchone():
         logger.info("Attestations table already exists, skipping migration")

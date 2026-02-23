@@ -58,15 +58,13 @@ class TestTargetDetector:
     def test_detect_images_from_docker_compose(self, tmp_path):
         """Test detecting images from docker-compose.yml."""
         compose_file = tmp_path / "docker-compose.yml"
-        compose_file.write_text(
-            """
+        compose_file.write_text("""
 services:
   web:
     image: nginx:latest
   db:
     image: postgres:14
-"""
-        )
+""")
 
         detector = TargetDetector()
         images = detector.detect_images(tmp_path)
@@ -78,12 +76,10 @@ services:
     def test_detect_images_from_dockerfile(self, tmp_path):
         """Test detecting images from Dockerfile."""
         dockerfile = tmp_path / "Dockerfile"
-        dockerfile.write_text(
-            """
+        dockerfile.write_text("""
 FROM python:3.11-slim
 FROM alpine:latest AS builder
-"""
-        )
+""")
 
         detector = TargetDetector()
         images = detector.detect_images(tmp_path)
@@ -94,15 +90,13 @@ FROM alpine:latest AS builder
     def test_detect_images_deduplication(self, tmp_path):
         """Test that duplicate images are deduplicated."""
         compose_file = tmp_path / "docker-compose.yml"
-        compose_file.write_text(
-            """
+        compose_file.write_text("""
 services:
   web1:
     image: nginx:latest
   web2:
     image: nginx:latest
-"""
-        )
+""")
 
         detector = TargetDetector()
         images = detector.detect_images(tmp_path)
@@ -162,15 +156,13 @@ services:
     def test_detect_web_apps_from_docker_compose_ports(self, tmp_path):
         """Test detecting web apps from docker-compose.yml ports."""
         compose_file = tmp_path / "docker-compose.yml"
-        compose_file.write_text(
-            """
+        compose_file.write_text("""
 services:
   web:
     ports:
       - "8080:80"
       - "443:443"
-"""
-        )
+""")
 
         detector = TargetDetector()
         urls = detector.detect_web_apps(tmp_path)
@@ -190,8 +182,7 @@ services:
     def test_detect_web_apps_deduplication(self, tmp_path):
         """Test that duplicate URLs are deduplicated."""
         compose_file = tmp_path / "docker-compose.yml"
-        compose_file.write_text(
-            """
+        compose_file.write_text("""
 services:
   web1:
     ports:
@@ -199,8 +190,7 @@ services:
   web2:
     ports:
       - "3000:80"
-"""
-        )
+""")
 
         detector = TargetDetector()
         urls = detector.detect_web_apps(tmp_path)

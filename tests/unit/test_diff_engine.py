@@ -561,18 +561,15 @@ def test_invalid_scan_id(tmp_path):
     conn = sqlite3.connect(db_path)
 
     # Create complete schema (matching history_db.py)
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
             profile TEXT,
             total_findings INTEGER
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE findings (
             scan_id TEXT,
             fingerprint TEXT PRIMARY KEY,
@@ -585,8 +582,7 @@ def test_invalid_scan_id(tmp_path):
             raw_finding TEXT,
             FOREIGN KEY (scan_id) REFERENCES scans(id)
         )
-        """
-    )
+        """)
     conn.commit()
     conn.close()
 
@@ -879,18 +875,15 @@ class TestSQLiteLoading:
         conn.row_factory = sqlite3.Row  # Enable dict-like access
 
         # Create schema
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
                 profile TEXT,
                 total_findings INTEGER
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE findings (
                 scan_id TEXT NOT NULL,
                 fingerprint TEXT NOT NULL,
@@ -903,30 +896,23 @@ class TestSQLiteLoading:
                 raw_finding TEXT,
                 PRIMARY KEY (scan_id, fingerprint)
             )
-            """
-        )
+            """)
 
         # Insert test data
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO scans VALUES
             ('scan1', '2025-11-05T10:00:00Z', 'balanced', 2)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('scan1', 'fp1', 'HIGH', 'semgrep', 'G101', 'src/auth.py', 42,
              'Hardcoded secret', '{"cvss": {"baseScore": 7.5}}')
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('scan1', 'fp2', 'MEDIUM', 'trivy', 'CVE-2024-1234', 'package.json', 0,
              'Vulnerable dependency', '{}')
-            """
-        )
+            """)
         conn.commit()
 
         engine = DiffEngine()
@@ -951,8 +937,7 @@ class TestSQLiteLoading:
         conn.row_factory = sqlite3.Row  # Enable dict-like access
 
         # Create schema
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE findings (
                 scan_id TEXT NOT NULL,
                 fingerprint TEXT NOT NULL,
@@ -965,17 +950,14 @@ class TestSQLiteLoading:
                 raw_finding TEXT,
                 PRIMARY KEY (scan_id, fingerprint)
             )
-            """
-        )
+            """)
 
         # Insert with invalid JSON
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO findings VALUES
             ('scan1', 'fp1', 'HIGH', 'semgrep', 'G101', 'src/auth.py', 42,
              'Secret', '{invalid json}')
-            """
-        )
+            """)
         conn.commit()
 
         engine = DiffEngine()
@@ -994,18 +976,15 @@ class TestSQLiteLoading:
         conn = sqlite3.connect(db_path)
 
         # Create schema
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
                 profile TEXT,
                 total_findings INTEGER
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE findings (
                 scan_id TEXT NOT NULL,
                 fingerprint TEXT NOT NULL,
@@ -1018,52 +997,39 @@ class TestSQLiteLoading:
                 raw_finding TEXT,
                 PRIMARY KEY (scan_id, fingerprint)
             )
-            """
-        )
+            """)
 
         # Insert baseline scan
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO scans VALUES
             ('baseline', '2025-11-01T10:00:00Z', 'balanced', 2)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('baseline', 'fp1', 'HIGH', 'semgrep', 'G101', 'src/auth.py', 42,
              'Hardcoded secret', '{}')
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('baseline', 'fp2', 'MEDIUM', 'trivy', 'CVE-2024-1234', 'package.json', 0,
              'Vulnerable dependency', '{}')
-            """
-        )
+            """)
 
         # Insert current scan
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO scans VALUES
             ('current', '2025-11-05T10:00:00Z', 'balanced', 2)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('current', 'fp2', 'MEDIUM', 'trivy', 'CVE-2024-1234', 'package.json', 0,
              'Vulnerable dependency', '{}')
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('current', 'fp3', 'CRITICAL', 'semgrep', 'CWE-79', 'src/web.py', 89,
              'XSS vulnerability', '{}')
-            """
-        )
+            """)
         conn.commit()
         conn.close()
 
@@ -1091,18 +1057,15 @@ class TestSQLiteLoading:
         db_path = tmp_path / "history.db"
         conn = sqlite3.connect(db_path)
 
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
                 profile TEXT,
                 total_findings INTEGER
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE findings (
                 scan_id TEXT NOT NULL,
                 fingerprint TEXT NOT NULL,
@@ -1115,16 +1078,13 @@ class TestSQLiteLoading:
                 raw_finding TEXT,
                 PRIMARY KEY (scan_id, fingerprint)
             )
-            """
-        )
+            """)
 
         # Insert only baseline scan
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO scans VALUES
             ('baseline', '2025-11-01T10:00:00Z', 'balanced', 0)
-            """
-        )
+            """)
         conn.commit()
         conn.close()
 
@@ -1540,18 +1500,15 @@ class TestTrendIntegration:
         conn.row_factory = sqlite3.Row
 
         # Create schema
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
                 profile TEXT,
                 total_findings INTEGER
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE TABLE findings (
                 scan_id TEXT NOT NULL,
                 fingerprint TEXT NOT NULL,
@@ -1564,36 +1521,27 @@ class TestTrendIntegration:
                 raw_finding TEXT,
                 PRIMARY KEY (scan_id, fingerprint)
             )
-            """
-        )
+            """)
 
         # Insert baseline and current scans
-        conn.execute(
-            """
+        conn.execute("""
             INSERT INTO scans VALUES
             ('baseline', '2025-11-01T10:00:00Z', 'balanced', 1)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('baseline', 'fp1', 'HIGH', 'semgrep', 'G101', 'src/auth.py', 42,
              'Hardcoded secret', '{}')
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO scans VALUES
             ('current', '2025-11-05T10:00:00Z', 'balanced', 1)
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             INSERT INTO findings VALUES
             ('current', 'fp1', 'HIGH', 'semgrep', 'G101', 'src/auth.py', 42,
              'Hardcoded secret', '{}')
-            """
-        )
+            """)
         conn.commit()
         conn.close()
 

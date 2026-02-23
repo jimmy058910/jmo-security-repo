@@ -86,14 +86,12 @@ def test_iac_file_scan_creates_output(tmp_path: Path):
     """Test scanning an IaC file creates the correct output structure."""
     # Create a minimal Terraform file
     tf_file = tmp_path / "test.tf"
-    tf_file.write_text(
-        """
+    tf_file.write_text("""
 resource "aws_s3_bucket" "test" {
   bucket = "my-test-bucket"
   acl    = "public-read"
 }
-"""
-    )
+""")
 
     class Args:
         repo = None
@@ -157,13 +155,11 @@ def test_multi_target_combined_scan(tmp_path: Path):
 
     # Create IaC file
     tf_file = tmp_path / "test.tf"
-    tf_file.write_text(
-        """
+    tf_file.write_text("""
 resource "aws_s3_bucket" "test" {
   bucket = "my-test-bucket"
 }
-"""
-    )
+""")
 
     repo_str = str(repo)
     tf_file_str = str(tf_file)
@@ -286,15 +282,13 @@ def test_ci_multi_target_with_fail_on(tmp_path: Path):
 def test_images_file_batch_scanning(tmp_path: Path):
     """Test scanning multiple images from a file."""
     images_file = tmp_path / "images.txt"
-    images_file.write_text(
-        """
+    images_file.write_text("""
 # Comment line
 alpine:latest
 busybox:latest
 
 # Another comment
-"""
-    )
+""")
 
     images_file_str = str(images_file)
 
@@ -469,13 +463,11 @@ def test_triple_target_scan(tmp_path: Path):
 
     # Create minimal IaC file
     iac_file = tmp_path / "test.tf"
-    iac_file.write_text(
-        """
+    iac_file.write_text("""
 resource "aws_s3_bucket" "test" {
   bucket = "test-bucket"
 }
-"""
-    )
+""")
 
     # Scan all 3 target types
     cmd = [

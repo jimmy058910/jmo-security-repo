@@ -247,15 +247,13 @@ def test_detect_iac_type_cloudformation_name(tmp_path):
 def test_detect_iac_type_cloudformation_content(tmp_path):
     """Test detect_iac_type recognizes CloudFormation by content."""
     iac_file = tmp_path / "template.yaml"
-    iac_file.write_text(
-        """
+    iac_file.write_text("""
 AWSTemplateFormatVersion: '2010-09-09'
 Description: My CloudFormation template
 Resources:
   MyBucket:
     Type: AWS::S3::Bucket
-"""
-    )
+""")
 
     result = detect_iac_type(iac_file)
 
@@ -265,16 +263,14 @@ Resources:
 def test_detect_iac_type_k8s_manifest_content(tmp_path):
     """Test detect_iac_type recognizes K8s manifest by content."""
     iac_file = tmp_path / "deployment.yaml"
-    iac_file.write_text(
-        """
+    iac_file.write_text("""
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx
 spec:
   replicas: 3
-"""
-    )
+""")
 
     result = detect_iac_type(iac_file)
 

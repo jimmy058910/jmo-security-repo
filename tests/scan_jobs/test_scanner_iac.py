@@ -44,13 +44,11 @@ def _make_find_tool_func(available_tools: list[str] | None = None):
 def terraform_file(tmp_path):
     """Create a mock Terraform file."""
     tf_file = tmp_path / "main.tf"
-    tf_file.write_text(
-        """
+    tf_file.write_text("""
 resource "aws_s3_bucket" "example" {
   bucket = "my-bucket"
 }
-"""
-    )
+""")
     return tf_file
 
 
@@ -108,14 +106,12 @@ def test_scan_iac_file_basic_success(tmp_path, terraform_file):
 def test_scan_iac_file_cloudformation(tmp_path):
     """Test CloudFormation file scanning."""
     cf_file = tmp_path / "template.yaml"
-    cf_file.write_text(
-        """
+    cf_file.write_text("""
 AWSTemplateFormatVersion: "2010-09-09"
 Resources:
   MyBucket:
     Type: AWS::S3::Bucket
-"""
-    )
+""")
 
     results_dir = tmp_path / "results"
     results_dir.mkdir()
@@ -156,16 +152,14 @@ Resources:
 def test_scan_iac_file_k8s_manifest(tmp_path):
     """Test Kubernetes manifest scanning."""
     k8s_file = tmp_path / "deployment.yaml"
-    k8s_file.write_text(
-        """
+    k8s_file.write_text("""
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx
 spec:
   replicas: 3
-"""
-    )
+""")
 
     results_dir = tmp_path / "results"
     results_dir.mkdir()

@@ -166,16 +166,14 @@ class TestLoadSuppressions:
     def test_load_suppressions_with_suppressions_key(self, tmp_path: Path):
         """Test loading from file with 'suppressions' key (preferred)."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-123
     reason: False positive
   - id: fp-456
     reason: Accepted risk
     expires: 2025-12-31
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -197,13 +195,11 @@ suppressions:
     def test_load_suppressions_with_suppress_key_legacy(self, tmp_path: Path):
         """Test loading from file with 'suppress' key (backward compat)."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppress:
   - id: fp-legacy
     reason: Old format
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -214,16 +210,14 @@ suppress:
     def test_load_suppressions_prefers_suppressions_over_suppress(self, tmp_path: Path):
         """Test that 'suppressions' key takes precedence over 'suppress'."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-new
     reason: New format
 suppress:
   - id: fp-old
     reason: Old format
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -235,16 +229,14 @@ suppress:
     def test_load_suppressions_missing_id_field(self, tmp_path: Path):
         """Test that entries without id are skipped."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - reason: No ID provided
   - id: fp-valid
     reason: Valid entry
   - id: ""
     reason: Empty ID
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -255,13 +247,11 @@ suppressions:
     def test_load_suppressions_whitespace_in_id(self, tmp_path: Path):
         """Test that ID whitespace is stripped."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: "  fp-trimmed  "
     reason: ID has whitespace
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -272,12 +262,10 @@ suppressions:
     def test_load_suppressions_missing_reason_field(self, tmp_path: Path):
         """Test that missing reason defaults to empty string."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-no-reason
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -287,13 +275,11 @@ suppressions:
     def test_load_suppressions_with_yaml_date_parsing(self, tmp_path: Path):
         """Test that YAML auto-parses date strings to date objects."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-date
     expires: 2025-12-31
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -305,8 +291,7 @@ suppressions:
     def test_load_suppressions_multiple_entries(self, tmp_path: Path):
         """Test loading multiple suppression entries."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-001
     reason: Test 1
@@ -315,8 +300,7 @@ suppressions:
   - id: fp-003
     reason: Test 3
     expires: 2025-12-31
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -326,15 +310,13 @@ suppressions:
     def test_load_suppressions_yaml_with_comments(self, tmp_path: Path):
         """Test loading YAML file with comments."""
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 # Suppression rules for false positives
 suppressions:
   # First rule
   - id: fp-123
     reason: False positive  # Verified by security team
-"""
-        )
+""")
 
         result = load_suppressions(str(suppress_file))
 
@@ -538,16 +520,14 @@ class TestFilterSuppressed:
         """Integration test: load suppressions and filter findings."""
         # Create suppression file
         suppress_file = tmp_path / "jmo.suppress.yml"
-        suppress_file.write_text(
-            """
+        suppress_file.write_text("""
 suppressions:
   - id: fp-123
     reason: False positive
   - id: fp-456
     reason: Accepted risk
     expires: 2999-12-31
-"""
-        )
+""")
 
         # Load suppressions
         suppressions = load_suppressions(str(suppress_file))

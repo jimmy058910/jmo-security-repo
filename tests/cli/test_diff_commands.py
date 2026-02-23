@@ -179,18 +179,15 @@ def sample_sqlite_db(tmp_path):
     conn = sqlite3.connect(db_path)
 
     # Create schema
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE scans (
             id TEXT PRIMARY KEY,
             timestamp_iso TEXT,
             profile TEXT,
             total_findings INTEGER
         )
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         CREATE TABLE findings (
             scan_id TEXT,
             fingerprint TEXT,
@@ -203,40 +200,31 @@ def sample_sqlite_db(tmp_path):
             raw_finding TEXT,
             FOREIGN KEY (scan_id) REFERENCES scans(id)
         )
-        """
-    )
+        """)
 
     # Insert baseline scan
-    conn.execute(
-        """
+    conn.execute("""
         INSERT INTO scans (id, timestamp_iso, profile, total_findings)
         VALUES ('baseline123', '2025-11-04T10:00:00Z', 'balanced', 2)
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, path, start_line, message, raw_finding)
         VALUES
         ('baseline123', 'fp1', 'HIGH', 'semgrep', 'CWE-79', 'src/views.py', 120, 'XSS vulnerability', '{}'),
         ('baseline123', 'fp2', 'MEDIUM', 'trivy', 'CWE-200', 'src/info.py', 15, 'Information disclosure', '{}')
-        """
-    )
+        """)
 
     # Insert current scan
-    conn.execute(
-        """
+    conn.execute("""
         INSERT INTO scans (id, timestamp_iso, profile, total_findings)
         VALUES ('current456', '2025-11-05T10:00:00Z', 'balanced', 2)
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         INSERT INTO findings (scan_id, fingerprint, severity, tool, rule_id, path, start_line, message, raw_finding)
         VALUES
         ('current456', 'fp2', 'MEDIUM', 'trivy', 'CWE-200', 'src/info.py', 15, 'Information disclosure', '{}'),
         ('current456', 'fp3', 'CRITICAL', 'semgrep', 'CWE-89', 'src/db.py', 89, 'SQL injection', '{}')
-        """
-    )
+        """)
 
     conn.commit()
     conn.close()

@@ -262,8 +262,7 @@ class TestRunDiffWizardHistoryMode:
         cursor = conn.cursor()
 
         # Create scans table matching the real schema
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
@@ -275,8 +274,7 @@ class TestRunDiffWizardHistoryMode:
                 targets TEXT NOT NULL,
                 target_type TEXT NOT NULL
             )
-        """
-        )
+        """)
 
         # Insert test scans with all required fields
         test_scans = [
@@ -381,8 +379,7 @@ class TestRunDiffWizardHistoryMode:
 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp_iso TEXT,
@@ -390,8 +387,7 @@ class TestRunDiffWizardHistoryMode:
                 branch TEXT,
                 total_findings INTEGER
             )
-        """
-        )
+        """)
         cursor.execute(
             "INSERT INTO scans VALUES (?, ?, ?, ?, ?)",
             ("scan-001", "2025-11-01T10:00:00", "balanced", "main", 10),
@@ -459,8 +455,7 @@ class TestRunDiffWizardErrorHandling:
 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
@@ -472,8 +467,7 @@ class TestRunDiffWizardErrorHandling:
                 targets TEXT NOT NULL,
                 target_type TEXT NOT NULL
             )
-        """
-        )
+        """)
         cursor.executemany(
             """INSERT INTO scans
             (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
@@ -798,8 +792,7 @@ class TestRunDiffWizardExceptionHandling:
 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE scans (
                 id TEXT PRIMARY KEY,
                 timestamp INTEGER NOT NULL,
@@ -811,8 +804,7 @@ class TestRunDiffWizardExceptionHandling:
                 targets TEXT NOT NULL,
                 target_type TEXT NOT NULL
             )
-        """
-        )
+        """)
         cursor.executemany(
             """INSERT INTO scans
             (id, timestamp, timestamp_iso, profile, branch, total_findings, tools, targets, target_type)
