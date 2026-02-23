@@ -4,6 +4,7 @@ Integration test for cross-tool deduplication in normalize_and_report.py
 
 Tests the end-to-end flow of Phase 1 (fingerprint) + Phase 2 (clustering) deduplication.
 """
+
 import json
 from pathlib import Path
 

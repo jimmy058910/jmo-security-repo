@@ -17,7 +17,6 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 # ========== Category 1: VERSION_PATTERNS Constants ==========
 
 

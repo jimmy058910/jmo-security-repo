@@ -53,7 +53,6 @@ from scripts.core.developer_attribution import (
     load_team_mapping,
 )
 
-
 # Windows-safe Unicode fallback mappings
 UNICODE_FALLBACKS = {
     "─": "-",

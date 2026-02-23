@@ -29,7 +29,6 @@ from scripts.cli.wizard_flows.target_configurators import (
     configure_url_target,
 )
 
-
 # ========== Category 1: Repository Target Configuration ==========
 
 

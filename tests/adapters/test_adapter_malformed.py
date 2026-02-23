@@ -47,7 +47,6 @@ from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 from scripts.core.adapters.yara_adapter import YaraAdapter
 from scripts.core.adapters.zap_adapter import ZapAdapter
 
-
 # ============================================================================
 # Adapter Registry
 # ============================================================================

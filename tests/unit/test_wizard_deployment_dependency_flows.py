@@ -17,7 +17,6 @@ from unittest.mock import patch
 from scripts.cli.wizard_flows.dependency_flow import DependencyFlow
 from scripts.cli.wizard_flows.deployment_flow import DeploymentFlow
 
-
 # ========== Category 1: DeploymentFlow - Target Detection ==========
 
 

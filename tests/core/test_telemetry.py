@@ -43,7 +43,6 @@ from scripts.core.telemetry import (
     _get_gist_content,
 )
 
-
 # ========== Fixtures ==========
 
 

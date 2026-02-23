@@ -18,7 +18,6 @@ import pytest
 
 from scripts.core.schema_utils import load_schema, validate_findings
 
-
 # ============================================================================
 # load_schema() Tests
 # ============================================================================

@@ -29,7 +29,6 @@ from scripts.cli.wizard_flows.validators import (
     check_docker_running,
 )
 
-
 # ========== Category 1: Path Validation ==========
 
 

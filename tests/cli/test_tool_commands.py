@@ -18,7 +18,6 @@ import json
 import sys
 from unittest.mock import MagicMock, patch
 
-
 # ========== Category 1: Colors Class ==========
 
 

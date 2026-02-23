@@ -14,7 +14,6 @@ from unittest import mock
 
 import pytest
 
-
 # Windows-specific skip for tests that require Unix HOME semantics
 skip_on_windows = pytest.mark.skipif(
     sys.platform == "win32",

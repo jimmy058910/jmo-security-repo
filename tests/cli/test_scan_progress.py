@@ -14,7 +14,6 @@ Target Coverage: >= 85%
 import time
 from unittest.mock import patch
 
-
 # ========== Category 1: ScanProgressReporter Initialization ==========
 
 

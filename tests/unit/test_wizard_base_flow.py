@@ -22,7 +22,6 @@ from scripts.cli.wizard_flows.base_flow import (
     TargetDetector,
 )
 
-
 # ========== Category 1: TargetDetector ==========
 
 

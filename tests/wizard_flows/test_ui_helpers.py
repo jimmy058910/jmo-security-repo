@@ -21,7 +21,6 @@ from scripts.cli.wizard_flows.ui_helpers import (
     select_mode,
 )
 
-
 # ========== Category 1: UNICODE_FALLBACKS ==========
 
 

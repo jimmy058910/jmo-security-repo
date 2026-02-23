@@ -31,7 +31,6 @@ from scripts.core.trend_analyzer import TrendAnalyzer
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
 
-
 # ============================================================================
 # Test Fixtures and Helper Functions
 # ============================================================================

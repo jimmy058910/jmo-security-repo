@@ -29,7 +29,6 @@ from scripts.cli.wizard_flows.trend_flow import (
     _explain_metrics_interactive,
 )
 
-
 # ========== Helpers ==========
 
 

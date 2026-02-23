@@ -26,7 +26,6 @@ import pytest
 
 from scripts.cli.report_orchestrator import fail_code, cmd_report
 
-
 # =============================================================================
 # fail_code() tests
 # =============================================================================

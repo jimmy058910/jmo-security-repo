@@ -115,7 +115,6 @@ from scripts.cli.wizard_flows.diff_flow import (
 # Re-exported for backward compatibility with tests
 from scripts.cli.wizard_flows.diff_flow import DiffArgs  # noqa: F401
 
-
 # Configure logging
 logger = logging.getLogger(__name__)
 

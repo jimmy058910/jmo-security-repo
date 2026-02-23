@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 from typing import Dict, List, Any
 import argparse
 
-
 # Tool configurations (all 28 tools from JMo Security)
 TOOLS = {
     # Secrets scanners

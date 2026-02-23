@@ -19,7 +19,6 @@ from unittest.mock import patch
 
 from scripts.cli.wizard_flows.cicd_flow import CICDFlow
 
-
 # ========== Category 1: Target Detection ==========
 
 

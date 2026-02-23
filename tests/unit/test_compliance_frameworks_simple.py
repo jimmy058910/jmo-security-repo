@@ -18,7 +18,6 @@ from scripts.core.compliance_frameworks import (
     CWE_TO_MITRE_ATTACK,
 )
 
-
 # ========== Category 1: CWE Top 25 2024 Validation ==========
 
 

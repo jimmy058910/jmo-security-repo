@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from scripts.core.tool_registry import PROFILE_TOOLS
 
-
 # Profile definitions with resource estimates (v1.0.0)
 # Tool lists are imported from tool_registry.py (single source of truth)
 PROFILES: dict[str, dict[str, str | int | list[str]]] = {

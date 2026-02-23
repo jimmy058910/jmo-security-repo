@@ -16,7 +16,6 @@ from typing import Dict, List, Any, Tuple
 
 from scripts.core.policy_engine import PolicyEngine, PolicyResult
 
-
 # Patterns for sensitive data truncation (Fix 3.3 - Issue #12)
 SENSITIVE_PATTERNS = [
     (

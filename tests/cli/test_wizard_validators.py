@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
-
 # Suppress Pyright import warning - module exists at runtime
 # pyright: reportMissingImports=false
 

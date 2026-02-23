@@ -7,7 +7,6 @@ from typing import Dict, List
 
 from scripts.core.diff_engine import DiffResult
 
-
 # Emoji mapping for severities
 SEVERITY_EMOJIS = {
     "CRITICAL": "🔴",

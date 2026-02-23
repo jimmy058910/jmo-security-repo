@@ -18,7 +18,6 @@ from unittest.mock import patch, MagicMock
 
 from scripts.cli.scan_utils import tool_exists, write_stub, run_cmd, TOOL_INSTALL_HINTS
 
-
 # ========== Category 1: tool_exists() Tests ==========
 
 

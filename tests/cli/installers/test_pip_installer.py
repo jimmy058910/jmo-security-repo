@@ -17,7 +17,6 @@ from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstal
 from scripts.cli.installers.base import InstallMethod
 from scripts.cli.installers.models import InstallResult
 
-
 # ========== Helpers ==========
 
 

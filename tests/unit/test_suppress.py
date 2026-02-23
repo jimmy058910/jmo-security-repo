@@ -18,7 +18,6 @@ from pathlib import Path
 
 from scripts.core.suppress import Suppression, filter_suppressed, load_suppressions
 
-
 # ============================================================================
 # 1. Suppression Dataclass Tests
 # ============================================================================

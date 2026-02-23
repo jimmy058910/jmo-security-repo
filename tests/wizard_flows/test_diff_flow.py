@@ -21,7 +21,6 @@ from scripts.cli.wizard_flows.diff_flow import (
     run_diff_wizard_impl,
 )
 
-
 # ========== Helpers ==========
 
 

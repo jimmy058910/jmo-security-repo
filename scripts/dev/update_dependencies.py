@@ -25,6 +25,7 @@ Features:
     - Provides upgrade preview before applying
     - CI-compatible (exit codes for automation)
 """
+
 from __future__ import annotations
 
 import argparse

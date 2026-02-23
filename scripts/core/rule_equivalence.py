@@ -20,7 +20,6 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-
 # Mapping of equivalent rules across tools
 # Format: {canonical_id: [(tool, rule_id), ...]}
 # Canonical IDs use lowercase-with-dashes format

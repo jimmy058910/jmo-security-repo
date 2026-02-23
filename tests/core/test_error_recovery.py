@@ -29,7 +29,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from conftest import IS_WINDOWS, skip_on_windows
 
-
 # ============================================================================
 # Database Recovery Tests
 # ============================================================================

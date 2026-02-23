@@ -20,7 +20,6 @@ from scripts.cli.wizard_flows.telemetry_helper import (
     save_telemetry_preference,
 )
 
-
 # ========== Category 1: RepoFlow - Target Detection ==========
 
 

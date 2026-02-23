@@ -31,7 +31,6 @@ from scripts.cli.installers.binary_installer import (
 )
 from scripts.cli.installers.base import InstallMethod
 
-
 # ========== Helpers ==========
 
 

@@ -17,7 +17,6 @@ from scripts.cli.installers.npm_installer import NpmInstaller
 from scripts.cli.installers.base import InstallMethod
 from scripts.cli.installers.models import InstallResult
 
-
 # ========== Helpers ==========
 
 

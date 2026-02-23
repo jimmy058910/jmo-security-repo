@@ -20,7 +20,6 @@ from unittest.mock import patch, Mock
 
 from scripts.core.attestation.tamper_detector import TamperSeverity
 
-
 # ============================================================================
 # Test Class 1: Multi-Hash Digest Verification (6 tests)
 # ============================================================================

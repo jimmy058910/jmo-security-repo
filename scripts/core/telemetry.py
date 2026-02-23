@@ -21,7 +21,6 @@ import sys
 from urllib import request
 from urllib.error import URLError, HTTPError
 
-
 # Windows-safe Unicode fallback mappings for cp1252 compatibility
 _UNICODE_FALLBACKS = {
     "📊": "[*]",  # Chart (U+1F4CA)

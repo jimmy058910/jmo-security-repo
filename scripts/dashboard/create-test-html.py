@@ -2,6 +2,7 @@
 """
 Create a test HTML file with embedded sample findings for dashboard testing.
 """
+
 import json
 from pathlib import Path
 

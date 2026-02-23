@@ -3,6 +3,7 @@
 Quick test script to verify React dashboard integration.
 Tests both inline mode (≤1000 findings) and external mode (>1000 findings).
 """
+
 import json
 from pathlib import Path
 from scripts.core.reporters.html_reporter import (

@@ -35,7 +35,6 @@ from scripts.core.history_db import (
 from scripts.core.history_migrations import run_migrations, get_current_version
 from scripts.core.history_integrity import verify_database_integrity, recover_database
 
-
 # Windows-safe Unicode fallback mappings
 # Maps Unicode characters to ASCII alternatives for cp1252 compatibility
 UNICODE_FALLBACKS = {

@@ -22,7 +22,6 @@ from typing import Any, Dict, List
 
 from rich.console import Console
 
-
 console = Console()
 
 

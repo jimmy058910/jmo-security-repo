@@ -30,7 +30,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # Mark all tests in this module as stress tests
 pytestmark = [
     pytest.mark.stress,
