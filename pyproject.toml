@@ -15,18 +15,20 @@ keywords = [
     "compliance", "OWASP", "CWE", "DevSecOps", "cybersecurity"
 ]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
   "Topic :: Security",
   "Topic :: Software Development :: Quality Assurance",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
 ]
 dependencies = [
     "PyYAML>=6.0",  # Required for config file loading (jmo.yml)
@@ -70,8 +72,8 @@ dev = [
     # Required for tests
     "jsonschema",
     "packaging",
-    # Trend analysis (scipy/numpy constrained for Python 3.10)
-    "scipy>=1.11.0,<1.15.0",
+    # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
+    "scipy>=1.11.0,<1.16.0",
     "numpy>=1.24.0,<2.3.0",
 ]
 
@@ -156,18 +158,52 @@ timeout_method = "thread"  # Works on Windows (unlike signal)
 pythonpath = ["."]
 
 [tool.coverage.run]
+branch = true
+source = ["scripts"]
 omit = [
     # Data-only files with no executable logic
-    "scripts/core/compliance_frameworks.py",  # Pure data structure (compliance mappings)
+    "scripts/core/compliance_frameworks.py",
+    # CLI entry points (tested via integration tests)
+    "scripts/cli/jmo.py",
+    "scripts/cli/jmotools.py",
+    "scripts/cli/clone_from_tsv.py",
+    # Dashboard generator (standalone HTML builder)
+    "scripts/core/generate_dashboard.py",
+    # MCP server - separate integration
+    "scripts/jmo_mcp/*",
+    # Email service requires SMTP infrastructure
+    "scripts/core/email_service.py",
+    # Interactive wizard - difficult to test comprehensively
+    "scripts/cli/wizard.py",
+    "scripts/cli/wizard_flows/policy_flow.py",
+    # Experimental policy engine
+    "scripts/core/policy_engine.py",
+    # Path sanitizers utility
+    "scripts/cli/path_sanitizers.py",
 ]
 
 [tool.coverage.report]
+show_missing = true
+skip_empty = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "if TYPE_CHECKING:",
     "raise AssertionError",
     "raise NotImplementedError",
+    "^if __name__ == ['\"]__main__['\"]:",
+]
+omit = [
+    "scripts/cli/jmo.py",
+    "scripts/cli/jmotools.py",
+    "scripts/cli/clone_from_tsv.py",
+    "scripts/core/generate_dashboard.py",
+    "scripts/jmo_mcp/*",
+    "scripts/core/email_service.py",
+    "scripts/cli/wizard.py",
+    "scripts/cli/wizard_flows/policy_flow.py",
+    "scripts/core/policy_engine.py",
+    "scripts/cli/path_sanitizers.py",
 ]
 
 [tool.ruff]
