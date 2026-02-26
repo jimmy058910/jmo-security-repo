@@ -24,7 +24,6 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .coverage
-.coveragerc
 .tox/
 htmlcov/
 .hypothesis/
@@ -71,10 +70,8 @@ CODE_OF_CONDUCT.md
 .ruff_cache/
 .mypy_cache/
 .bandit
-bandit.yaml
 codecov.yml
 .readthedocs.yaml
-.markdownlint.json
 .markdownlint-cli2.jsonc
 .markdownlintignore
 .guardrails-allowlist

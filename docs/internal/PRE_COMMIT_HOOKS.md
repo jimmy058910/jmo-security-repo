@@ -127,7 +127,7 @@ The hook automatically uses the correct Python version, preventing these issues.
 
 ### bandit (Security)
 
-**Configuration:** `bandit.yaml`
+**Configuration:** `pyproject.toml` under `[tool.bandit]`
 
 - **Strict mode:** All security checks enabled
 - **Skipped in tests:** B101 (assert usage), B404 (import subprocess)

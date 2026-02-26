@@ -37,7 +37,7 @@ pytest tests/ -m "slow"      # Only slow tests
 - `make test-fast` is recommended for development (~5 min vs ~15-20 min sequential)
 - `make test` excludes `smoke` and `requires_tools` markers by default (matches CI behavior)
 - Outputs show a coverage summary (threshold in CI is 85%)
-- Coverage config is defined in `.coveragerc`
+- Coverage config is defined in `pyproject.toml` under `[tool.coverage]`
 
 ### Test Configuration
 
@@ -300,7 +300,7 @@ pytest tests/ --store-durations --durations-path=.test_durations
 
 - Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
-- Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
+- Coverage too low: add tests or temporarily adjust `pyproject.toml [tool.coverage]` (prefer adding tests).
 - Different Python version: tests target 3.12 in CI; using older versions may cause minor differences.
 
 ### Import errors like `ModuleNotFoundError: No module named 'scripts'`

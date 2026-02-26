@@ -171,7 +171,7 @@ def check_no_known_security_issues() -> None:
 
     # Run Bandit on codebase
     bandit_result = subprocess.run(
-        ["bandit", "-r", "scripts/", "-c", "bandit.yaml"],
+        ["bandit", "-r", "scripts/", "-c", "pyproject.toml"],
         capture_output=True,
         text=True,
     )

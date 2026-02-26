@@ -62,7 +62,7 @@ class ReleaseReadinessVerifier:
         # Check 3: No security vulnerabilities
         print("\n[3/5] Running security audit...")
         result = subprocess.run(
-            ["bandit", "-r", "scripts/", "-c", "bandit.yaml"],
+            ["bandit", "-r", "scripts/", "-c", "pyproject.toml"],
             capture_output=True,
             text=True,
         )
