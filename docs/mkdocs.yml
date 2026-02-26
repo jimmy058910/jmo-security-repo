@@ -1,4 +1,6 @@
 # MkDocs configuration for JMo Security documentation
+# docs_dir: . is required because this file lives inside docs/ (MkDocs defaults to docs/ relative to config)
+docs_dir: .
 site_name: JMo Security Documentation
 site_url: https://docs.jmotools.com
 site_description: Unified security scanning platform - SAST, DAST, SCA, secrets detection, compliance automation

@@ -18,7 +18,7 @@ repos:
             samples/iac-files/.*\.yaml|
             docker-compose\.yml|
             docs/examples/github-actions-docker\.yml|
-            mkdocs\.yml
+            (docs/)?mkdocs\.yml
           )$
       - id: check-json
       - id: check-toml
@@ -57,11 +57,11 @@ repos:
         # Enable colorized output in local runs; CI may ignore colors
         args: ["-color"]
 
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.47.0
+  # Markdown linting (cli2 shares .markdownlint-cli2.jsonc config with CI)
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.21.0
     hooks:
-      - id: markdownlint
+      - id: markdownlint-cli2
 
   # Python format/lint (Black MUST run before Ruff per jmo-ci-debugger #15)
   - repo: https://github.com/psf/black
