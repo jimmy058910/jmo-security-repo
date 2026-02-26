@@ -104,8 +104,8 @@ lint:
 	else echo 'shellcheck not found'; fi
 	@if command -v ruff >/dev/null 2>&1; then ruff check . || true; else echo 'ruff not found'; fi
 	@if command -v bandit >/dev/null 2>&1; then \
-		# Strict source scan (configured via bandit.yaml); focus on Python under scripts/ to avoid scanning tests or external dirs \
-		bandit -q -r scripts -c bandit.yaml || true ; \
+		# Strict source scan (configured via pyproject.toml [tool.bandit]); focus on Python under scripts/ \
+		bandit -q -r scripts -c pyproject.toml || true ; \
 		# Quiet tests-only scan: if issues are found, re-run without -q to print them \
 		if ! bandit -q -r tests -s B101,B404 >/dev/null 2>&1; then \
 			echo "Bandit found issues in tests/ (printing):" ; \
