@@ -130,7 +130,7 @@ def _get_db_path() -> Path:
 
 
 # Version (from pyproject.toml)
-__version__ = "0.7.1"
+__version__ = "1.0.0"
 
 # Standardized error message templates for tool issues
 # These provide consistent, actionable guidance for different failure scenarios
@@ -842,7 +842,7 @@ def run_wizard(
 
     Args:
         yes: Skip prompts and use defaults
-        force_docker: Force Docker mode (deprecated, use use_docker=True)
+        force_docker: Force Docker mode (convenience alias for use_docker=True)
         emit_make: Generate Makefile target to this file
         emit_script: Generate shell script to this file
         emit_gha: Generate GitHub Actions workflow to this file

@@ -282,7 +282,7 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 | **Deep** | `:deep`, `:latest` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
 | **Balanced** | `:balanced` | ~1.41 GB | 18 | 18-25 min | Production CI/CD, regular audits |
 | **Slim** | `:slim` | ~557 MB | 14 | 12-18 min | Cloud-focused, IaC, container security |
-| **Fast** | `:fast` | ~502 MB | 8 | 5-10 min | CI/CD gates, pre-commit hooks |
+| **Fast** | `:fast` | ~502 MB | 9 | 5-10 min | CI/CD gates, pre-commit hooks |
 
 **Notes:**
 
@@ -1380,7 +1380,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 **Solution 2:** Use smaller variants for testing
 
 ```bash
-# Use fast variant (8 tools, 5-10 min build) instead of deep
+# Use fast variant (9 tools, 5-10 min build) instead of deep
 docker build -f Dockerfile.fast -t jmo-security:fast .
 ```
 
@@ -1535,4 +1535,4 @@ docker run --rm aquasec/trivy image ghcr.io/jimmy058910/jmo-security:latest
 
 Happy Scanning!
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

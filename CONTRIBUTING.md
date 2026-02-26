@@ -14,8 +14,8 @@ Be respectful and constructive. We expect contributors to follow a standard code
 
 ## Development setup
 
-- Python 3.10+ (CI validates on 3.10, 3.11, 3.12 across Ubuntu and macOS)
-- **v1.0.0:** 2,981 tests, 87% coverage (CI requires ≥85%)
+- Python 3.12+ (CI validates on 3.12 across Ubuntu and macOS)
+- **v1.0.0:** 8,000+ tests, 87% coverage (CI requires ≥85%)
 - Recommended commands:
 
 ```bash
@@ -32,7 +32,7 @@ CLI profiles and Docker variants are unified - same 4 profiles, same tools:
 
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
-| `fast` | 8 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
+| `fast` | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
 | `slim` | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
 | `balanced` | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
 | `deep` | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
@@ -250,7 +250,7 @@ These checks run automatically on commit and are also enforced in CI (note: the 
 ### Basic workflow (v1.0.0)
 
 ```bash
-# Quick scan with fast profile (8 tools, 5-10 min)
+# Quick scan with fast profile (9 tools, 5-10 min)
 jmo scan --repo . --profile fast --human-logs
 
 # Production scan with balanced profile (18 tools, 18-25 min)
@@ -407,7 +407,7 @@ Docker tags now match CLI profiles:
 
 | Tag | Profile | Tools | Dockerfile |
 |-----|---------|-------|------------|
-| `fast` | fast | 8 | `Dockerfile.fast` |
+| `fast` | fast | 9 | `Dockerfile.fast` |
 | `slim` | slim | 14 | `Dockerfile.slim` |
 | `balanced` | balanced | 18 | `Dockerfile.balanced` |
 | `deep` / `latest` | deep | 28* | `Dockerfile` |
@@ -509,13 +509,13 @@ brew uninstall jmo-security
 
 ```powershell
 # Build installer
-python packaging/windows/build_installer.py --version 0.9.0
+python packaging/windows/build_installer.py --version 1.0.0
 
 # Validate manifest
-wingetcreate validate packaging/winget/manifests/j/jmo/jmo-security/0.9.0
+wingetcreate validate packaging/winget/manifests/j/jmo/jmo-security/1.0.0
 
 # Install from local manifest
-winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/0.9.0
+winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/1.0.0
 
 # Verify installation
 jmo --help
@@ -1457,7 +1457,7 @@ Note: Virtual environments (`.venv/`) are preserved by `clean-all`. To remove st
 
 ## About the Maintainer
 
-This project was built by **James (Jimmy) Moceri** as a capstone for the **Institute of Data × Michigan Tech University Cybersecurity Bootcamp** (graduated October 2025). The project evolved from a 1-week learning exercise into a production-grade security platform with 2,981 tests, 87% coverage, multi-target scanning, and 6-framework compliance automation.
+This project was built by **James (Jimmy) Moceri** as a capstone for the **Institute of Data × Michigan Tech University Cybersecurity Bootcamp** (graduated October 2025). The project evolved from a 1-week learning exercise into a production-grade security platform with 8,000+ tests, 87% coverage, multi-target scanning, and 6-framework compliance automation.
 
 **v1.0.0 Highlights:**
 
@@ -1481,4 +1481,4 @@ Thanks again for contributing!
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

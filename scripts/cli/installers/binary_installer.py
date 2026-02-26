@@ -21,13 +21,14 @@ import platform
 import shutil
 import subprocess
 import tarfile
-import tempfile
 import time
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
+
+from scripts.core.secure_temp import secure_temp_dir
 
 from scripts.cli.installers.base import (
     BaseInstaller,
@@ -546,16 +547,13 @@ class BinaryInstaller(BaseInstaller):
         Yields:
             Path to the temporary directory
         """
-        tmpdir = tempfile.mkdtemp()
-        tmppath = Path(tmpdir)
-        try:
-            yield tmppath
-        finally:
-            # Use safe cleanup with retry on Windows
-            self._safe_cleanup_tempdir(tmppath)
-            # Final cleanup attempt (ignore errors on Windows)
-            if tmppath.exists():
-                shutil.rmtree(tmppath, ignore_errors=True)
+        with secure_temp_dir(prefix="jmo_binary_") as tmppath:
+            try:
+                yield tmppath
+            finally:
+                # Use safe cleanup with retry on Windows (in addition to
+                # secure_temp_dir's own cleanup, handles WinError 32 retries)
+                self._safe_cleanup_tempdir(tmppath)
 
     def _safe_cleanup_tempdir(self, tmpdir: Path) -> None:
         """Safely clean up temp directory with retry for Windows file locking.

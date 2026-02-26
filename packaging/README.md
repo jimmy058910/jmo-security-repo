@@ -52,7 +52,7 @@ brew install --build-from-source packaging/homebrew/jmo-security.rb
 
 # Verify installation
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 # Run formula tests
 brew test jmo-security
@@ -75,7 +75,7 @@ brew install --build-from-source packaging/homebrew/jmo-security.rb
 
 # Verify installation
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 # Run formula tests
 brew test jmo-security
@@ -91,7 +91,7 @@ brew install --build-from-source packaging/homebrew/jmo-security.rb
 ## Verify installation
 
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 ## Run formula tests
 
@@ -155,7 +155,7 @@ GitHub Actions workflow automatically updates formula on new releases:
 ### Prerequisites
 
 - **Windows 10+** or **Windows Server 2019+**
-- **Python 3.10+** (for build script)
+- **Python 3.12+** (for build script)
 - **PyInstaller:** `pip install pyinstaller`
 - **NSIS:** <https://nsis.sourceforge.io/Download> (add to PATH)
 
@@ -223,7 +223,7 @@ GitHub Actions workflow automatically updates formula on new releases:
 ### Prerequisites
 
 - **Windows 10+** or **Windows Server 2019+**
-- **Python 3.10+** (for build script)
+- **Python 3.12+** (for build script)
 - **PyInstaller:** `pip install pyinstaller`
 - **NSIS:** <https://nsis.sourceforge.io/Download> (add to PATH)
 
@@ -262,7 +262,7 @@ winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/$VERSION
 
 # Verify installation
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 # Uninstall
 winget uninstall jmo.jmo-security
@@ -280,7 +280,7 @@ winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/$VERSION
 
 # Verify installation
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 # Uninstall
 winget uninstall jmo.jmo-security
@@ -298,7 +298,7 @@ winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/$VERSION
 ## Verify installation
 
 jmo --help
-jmotools wizard --help
+jmo wizard --help
 
 ## Uninstall
 
@@ -760,4 +760,4 @@ See [LICENSE](../LICENSE) for details.
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

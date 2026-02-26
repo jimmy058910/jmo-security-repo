@@ -113,7 +113,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 
 #### 1. `scan.started`
 
-**When:** User runs `jmo scan` or `jmotools {fast,balanced,full}`
+**When:** User runs `jmo scan` or `jmo {fast,balanced,full}`
 
 **Metadata:**
 
@@ -1120,4 +1120,4 @@ JMo Security's telemetry system is designed with **privacy first**, **user contr
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

@@ -14,7 +14,7 @@ This document outlines planned optimizations to reduce Docker build times and CL
 
 | Variant | Tools | Docker Build | CLI Install |
 |---------|-------|--------------|-------------|
-| fast | 8 | 5-10 min | 5-10 min |
+| fast | 9 | 5-10 min | 5-10 min |
 | slim | 14 | 12-18 min | 12-18 min |
 | balanced | 18 | 18-25 min | 18-25 min |
 | deep | 28 | 40-70 min | 40-70 min |
@@ -1011,7 +1011,7 @@ def _install_tool_threadsafe(self, tool_name: str, cancelled: threading.Event) -
 
 | Profile | Tools | Sequential | Parallel (est.) | Speedup |
 |---------|-------|------------|-----------------|---------|
-| fast | 8 | ~5-8 min | ~2-3 min | ~2.5x |
+| fast | 9 | ~5-8 min | ~2-3 min | ~2.5x |
 | balanced | 18 | ~12-18 min | ~4-6 min | ~3x |
 | deep | 28 | ~20-30 min | ~6-10 min | ~3x |
 

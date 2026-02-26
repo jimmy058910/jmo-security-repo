@@ -1907,6 +1907,13 @@ def get_query_plan(conn: sqlite3.Connection, query: str) -> str:
         >>> print(plan)
         SEARCH TABLE scans USING INDEX idx_scans_branch (branch=?)
     """
+    # Validate query is SELECT-only (prevent injection in diagnostic tool)
+    query_stripped = query.strip().upper()
+    if not query_stripped.startswith("SELECT") and not query_stripped.startswith(
+        "EXPLAIN"
+    ):
+        raise ValueError("get_query_plan() only supports SELECT queries")
+
     cursor = conn.cursor()
     cursor.execute(f"EXPLAIN QUERY PLAN {query}")
     rows = cursor.fetchall()

@@ -10,11 +10,11 @@ Integrates with ToolRunner for execution management.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
+from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
 
 
@@ -54,10 +54,11 @@ def scan_image(
     statuses: dict[str, bool] = {}
     tool_defs = []
 
-    # Sanitize image name for directory (replace special chars with underscores)
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
+    # Sanitize image name for directory (prevent path traversal)
+    safe_name = _sanitize_path_component(image)
     out_dir = results_dir / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _validate_output_path(results_dir, out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
         """Get timeout override for specific tool."""

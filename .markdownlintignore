@@ -8,6 +8,9 @@ dev-only/**/*.md
 # Archived documentation - historical reference only
 docs/archive/*.md
 
+# Internal plan documents - developer scratch notes
+docs/plans/*.md
+
 # Test results and scan output directories (not committed to repo)
 results-*/**/*.md
 .playwright-mcp/**/*.md

@@ -143,7 +143,14 @@ def _write_html_diff_react(diff: DiffResult, out_path: Path) -> None:
         ],
     }
 
-    diff_json = json.dumps(diff_data)
+    # Escape dangerous characters that could break the <script> tag (XSS prevention)
+    diff_json = (
+        json.dumps(diff_data)
+        .replace("</script>", "<\\/script>")
+        .replace("<script", "<\\script")
+        .replace("<!--", "<\\!--")
+        .replace("`", "\\`")
+    )
 
     # Replace placeholder (React dashboard expects window.__DIFF_DATA__)
     injected_html = template_html.replace(

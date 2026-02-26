@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **Docker** (recommended) OR **Python 3.10+**
+- **Docker** (recommended) OR **Python 3.12+**
 - **Git** (for repository scanning)
 
 ---
@@ -15,14 +15,16 @@
 
 ### Option 1: Package Managers (30 seconds)
 
-**macOS / Linux:**
+> **Note:** Homebrew and WinGet packages are planned for a future release. See [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) for current installation methods, or use pip/Docker below.
+
+**macOS / Linux (coming soon):**
 
 ```bash
 brew install jmo-security
 jmo wizard
 ```
 
-**Windows:**
+**Windows (coming soon):**
 
 ```powershell
 winget install jmo.jmo-security
@@ -56,7 +58,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 | Variant | Tools | Size | Use Case |
 |---------|-------|------|----------|
-| `fast` | 8 | 502 MB | CI/CD gates, pre-commit |
+| `fast` | 9 | 502 MB | CI/CD gates, pre-commit |
 | `slim` | 14 | 557 MB | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | 1.4 GB | Production pipelines |
 | `deep` | 28 | 2.0 GB | Complete audits |
@@ -140,7 +142,7 @@ jmo ci --repo . --fail-on HIGH --profile balanced
 
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
-| `fast` | 8 | 5-10 min | Pre-commit, PR validation |
+| `fast` | 9 | 5-10 min | Pre-commit, PR validation |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | 18-25 min | CI/CD pipelines |
 | `deep` | 28 | 40-70 min | Full security audits |
@@ -296,4 +298,4 @@ find scripts -type f -name "*.sh" -exec chmod +x {} +
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

@@ -60,8 +60,10 @@
 | Document | Purpose |
 |----------|---------|
 | [User Guide](USER_GUIDE.md) | Comprehensive reference (CLI, configuration, features) |
+| [CLI Reference](CLI_REFERENCE.md) | Full CLI reference for all commands and flags |
 | [Profiles and Tools](PROFILES_AND_TOOLS.md) | Canonical tool lists by profile, dependencies |
 | [Scan Optimization](SCAN_OPTIMIZATION.md) | Speed optimization strategies (threads, caching, tool config) |
+| [Usage Matrix](USAGE_MATRIX.md) | Tool-target-profile usage matrix |
 | [Command Reference](QUICK_REFERENCE.md) | Quick command cheat sheet |
 | [API Reference](API_REFERENCE.md) | Python API documentation |
 
@@ -70,6 +72,7 @@
 | Document | Purpose |
 |----------|---------|
 | [Results Guide](RESULTS_GUIDE.md) | Understanding findings, output formats, triage workflow |
+| [Results Quick Reference](RESULTS_QUICK_REFERENCE.md) | At-a-glance results reference card |
 | [Sample Outputs](../SAMPLE_OUTPUTS.md) | Example scan outputs |
 
 ### Features
@@ -123,6 +126,7 @@
 |----------|---------|
 | [Contributing](../CONTRIBUTING.md) | Development setup, git workflow, standards |
 | [Testing Guide](../TEST.md) | Test suite documentation |
+| [Completeness Analyzer](COMPLETENESS_ANALYZER.md) | CI/CD integration for documentation-code drift detection |
 | [Platform Notes](PLATFORM_NOTES.md) | Cross-platform compatibility |
 
 ### Project
@@ -180,4 +184,4 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

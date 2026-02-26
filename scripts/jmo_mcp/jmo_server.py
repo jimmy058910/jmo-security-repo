@@ -330,13 +330,17 @@ def apply_fix(
             logger.info(f"apply_fix: dry-run preview for {finding_id}")
             return {"success": True, "dry_run_preview": patch}
 
-        # TODO: Implement patch application
-        # This will be implemented in Phase 2 with:
-        # 1. Patch validation (no shell commands, path traversal)
-        # 2. Backup creation
-        # 3. Patch application via subprocess
-        # 4. Rollback mechanism if tests fail
-        # 5. Update .jmo/fix-history.json
+        # TODO(future): Implement full patch application - see
+        # https://github.com/jimmy058910/jmo-security-repo/issues
+        # Required steps for Phase 2:
+        # 1. Validate patch content: reject shell commands, directory traversal
+        #    (e.g., ../), and symlink targets outside repo root
+        # 2. Create timestamped backup of target file(s) in .jmo/backups/
+        # 3. Apply unified diff via subprocess (shell=False) using GNU patch
+        #    or Python difflib as fallback
+        # 4. Run project test suite; auto-rollback from backup if tests fail
+        # 5. Record applied patch metadata in .jmo/fix-history.json
+        #    (finding_id, timestamp, patch hash, confidence, rollback status)
 
         logger.warning(
             f"apply_fix: patch application not yet implemented (finding: {finding_id})"
@@ -409,12 +413,18 @@ def mark_resolved(
         if not finding:
             raise ValueError(f"Finding not found: {finding_id}")
 
-        # TODO: Implement resolution tracking
-        # This will be implemented in Phase 2 with:
-        # 1. Create .jmo/resolutions.json
-        # 2. Append resolution entry with timestamp
-        # 3. Update dashboard to show resolution status
-        # 4. Filter resolved findings from future scans
+        # TODO(future): Implement persistent resolution tracking - see
+        # https://github.com/jimmy058910/jmo-security-repo/issues
+        # Required steps for Phase 2:
+        # 1. Create .jmo/resolutions.json (or SQLite table in history.db)
+        #    to persist resolution decisions across scans
+        # 2. Append resolution entry: finding_id, resolution type, comment,
+        #    timestamp, user identity (from git config or env)
+        # 3. Update HTML dashboard to render resolution badges (fixed,
+        #    false_positive, wont_fix, risk_accepted) with filter support
+        # 4. Filter resolved findings from future scan reports (configurable
+        #    via jmo.yml: show_resolved: true/false)
+        # 5. Support bulk resolution import/export for team workflows
 
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 

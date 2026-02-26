@@ -12,7 +12,7 @@ This matrix provides prescriptive guidance for selecting the right tools, profil
 - **12 Use Cases:** Pre-commit, PR gate, nightly audit, container release, IaC validation, web app scan, compliance audit, secret scanning, CVE monitoring, fuzzing, incident response, third-party audit
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
 - **28 Tools:** Organized across 4 profiles
-- **4 Profiles:** fast (8 tools, 5-10 min), slim (14 tools, 12-18 min), balanced (18 tools, 18-25 min), deep (28 tools, 40-70 min)
+- **4 Profiles:** fast (9 tools, 5-10 min), slim (14 tools, 12-18 min), balanced (18 tools, 18-25 min), deep (28 tools, 40-70 min)
 - **6 Compliance Frameworks:** OWASP Top 10, CWE Top 25, CIS Controls, NIST CSF, PCI DSS, MITRE ATT&CK
 
 > **Canonical tool reference:** [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md)

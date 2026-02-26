@@ -16,7 +16,6 @@ import shutil
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
@@ -26,6 +25,8 @@ from typing import Callable, Iterator
 import requests
 import tarfile
 import zipfile
+
+from scripts.core.secure_temp import secure_temp_dir
 
 from rich.console import Console
 from rich.progress import (
@@ -343,16 +344,13 @@ class ToolInstaller:
         Yields:
             Path to the temporary directory
         """
-        tmpdir = tempfile.mkdtemp()
-        tmppath = Path(tmpdir)
-        try:
-            yield tmppath
-        finally:
-            # Use safe cleanup with retry on Windows
-            self._safe_cleanup_tempdir(tmppath)
-            # Final cleanup attempt (ignore errors on Windows)
-            if tmppath.exists():
-                shutil.rmtree(tmppath, ignore_errors=True)
+        with secure_temp_dir(prefix="jmo_install_") as tmppath:
+            try:
+                yield tmppath
+            finally:
+                # Use safe cleanup with retry on Windows (in addition to
+                # secure_temp_dir's own cleanup, handles WinError 32 retries)
+                self._safe_cleanup_tempdir(tmppath)
 
     def _validate_installed_version(
         self, result: InstallResult, expected_version: str
@@ -500,7 +498,6 @@ class ToolInstaller:
         self,
         profile: str,
         skip_installed: bool = True,
-        _parallel: bool = False,  # TODO: Not implemented yet
     ) -> InstallProgress:
         """
         Install all tools for a scan profile.
@@ -508,7 +505,6 @@ class ToolInstaller:
         Args:
             profile: Profile name (fast, slim, balanced, deep)
             skip_installed: Skip tools that are already installed
-            _parallel: Install tools in parallel (not implemented yet)
 
         Returns:
             InstallProgress with results for all tools
@@ -840,9 +836,7 @@ class ToolInstaller:
                         pkg = ISOLATED_TOOLS[tool_name].get("package", tool_name)
                         package_spec = pkg if isinstance(pkg, str) else tool_name
 
-                    result = self._isolated_pip_install(
-                        tool_name, package_spec, progress
-                    )
+                    result = self._isolated_pip_install(tool_name, package_spec)
                     progress.on_complete(tool_name, result)
                     rich_progress.advance(main_task)
                     status = "[green]✓[/]" if result.success else "[red]✗[/]"
@@ -955,7 +949,7 @@ class ToolInstaller:
                 else:
                     pkg = ISOLATED_TOOLS[tool_name].get("package", tool_name)
                     package_spec = pkg if isinstance(pkg, str) else tool_name
-                result = self._isolated_pip_install(tool_name, package_spec, progress)
+                result = self._isolated_pip_install(tool_name, package_spec)
                 progress.on_complete(tool_name, result)
 
         # Stage 1: Batch pip installs (regular tools only)
@@ -1005,7 +999,6 @@ class ToolInstaller:
         self,
         tool_name: str,
         package_spec: str,
-        _progress: ParallelInstallProgress | None = None,  # TODO: Not used yet
     ) -> InstallResult:
         """Install a tool in an isolated virtual environment.
 
@@ -1017,7 +1010,6 @@ class ToolInstaller:
         Args:
             tool_name: Name of the tool
             package_spec: Pip package specification (e.g., "prowler==5.16.0")
-            _progress: Optional progress tracker for status updates (not used yet)
 
         Returns:
             InstallResult with success status and details

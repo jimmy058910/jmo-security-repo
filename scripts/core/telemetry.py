@@ -21,31 +21,7 @@ import sys
 from urllib import request
 from urllib.error import URLError, HTTPError
 
-# Windows-safe Unicode fallback mappings for cp1252 compatibility
-_UNICODE_FALLBACKS = {
-    "📊": "[*]",  # Chart (U+1F4CA)
-    "✅": "[v]",  # Check mark
-    "❌": "[x]",  # Cross mark
-    "🔒": "[L]",  # Lock
-    "🌐": "[W]",  # Globe
-    "💡": "[i]",  # Light bulb
-    "•": "*",  # Bullet
-}
-
-
-def _safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-
+from scripts.core.unicode_utils import safe_print as _safe_print
 
 # Telemetry endpoint (GitHub Gist API for MVP)
 GIST_ID = os.environ.get("JMO_TELEMETRY_GIST_ID", "")
@@ -146,7 +122,7 @@ def send_event(
     event_type: str,
     metadata: dict[str, Any],
     config: dict[str, Any],
-    version: str = "0.7.0",
+    version: str = "1.0.0",
 ) -> None:
     """
     Send telemetry event (non-blocking, fire-and-forget).
@@ -502,7 +478,7 @@ def show_telemetry_banner(mode: str = "cli") -> None:
     _safe_print("   • Scan duration (bucketed: <5min, 5-15min, etc.)")
     _safe_print("   • Execution mode (CLI/Docker/Wizard)")
     _safe_print("   • Platform (Linux/macOS/Windows)")
-    _safe_print("   • JMo version (e.g., 0.9.0)")
+    _safe_print("   • JMo version (e.g., 1.0.0)")
     print()
     _safe_print("❌ What we DON'T collect:")
     _safe_print("   • Repository names, file paths, or URLs")
@@ -576,7 +552,7 @@ if __name__ == "__main__":
             "test.event",
             {"message": "Test telemetry event from CLI"},
             config,
-            version="0.7.0-dev",
+            version="1.0.0",
         )
         _safe_print("✅ Event sent (check Gist in a few seconds)")
 

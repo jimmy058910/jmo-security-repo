@@ -1666,7 +1666,9 @@ class TestPlatformCommandExecution:
         # Command should have been run
         mock_run.assert_called_once()
         call_args = mock_run.call_args
-        assert "pip install bandit" in call_args[0][0]
+        # After shell=True refactor, commands are list-based via shlex.split()
+        cmd_list = call_args[0][0]
+        assert "pip" in cmd_list and "install" in cmd_list and "bandit" in cmd_list
 
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.wizard_flows.tool_checker.subprocess.run")
@@ -1966,9 +1968,10 @@ class TestPlatformCommandExecution:
         captured = capsys.readouterr()
         # Command should be truncated with ...
         assert "..." in captured.out
-        # But the full command is still executed
-        call_args = mock_run.call_args[0][0]
-        assert long_cmd in call_args
+        # But the full command is still executed (as list via shlex.split())
+        cmd_list = mock_run.call_args[0][0]
+        assert "pip" in cmd_list and "install" in cmd_list
+        assert "some-very-long-package-name-that-exceeds-sixty-characters" in cmd_list
 
     @patch("scripts.cli.tool_manager.ToolManager")
     @patch("scripts.cli.wizard_flows.tool_checker.subprocess.run")

@@ -43,18 +43,18 @@ which jmo
 #           /opt/homebrew/bin/jmo (macOS Apple Silicon)
 #           /home/linuxbrew/.linuxbrew/bin/jmo (Linux)
 
-which jmotools
-# Expected: Same directory as jmo
+# Verify wizard subcommand works
+jmo wizard --help
 
 # Step 3: Test CLI commands
 jmo --help
 # Expected: Help text with scan/report/ci commands
 
-jmotools --help
+jmo wizard --help
 # Expected: Help text with wizard/fast/balanced/full commands
 
 # Step 4: Test wizard
-jmotools wizard --help
+jmo wizard --help
 # Expected: Wizard help text with --yes, --emit-* flags
 
 # Step 5: Test scan command
@@ -79,7 +79,7 @@ rm -rf test-repo
 
 # PASS CRITERIA:
 # ✅ All commands execute without errors
-# ✅ jmo and jmotools binaries available in PATH
+# ✅ jmo binary available in PATH
 # ✅ Python dependencies installed correctly
 # ✅ Plugin system works
 # ✅ Scan workflow completes
@@ -126,9 +126,6 @@ brew uninstall jmo-security
 # Step 2: Verify removal
 which jmo
 # Expected: No output (jmo not found)
-
-which jmotools
-# Expected: No output (jmotools not found)
 
 # Step 3: Verify config files preserved (user data)
 ls ~/.jmo/
@@ -210,18 +207,15 @@ winget install --manifest packaging/winget/manifests/j/jmo/jmo-security/$VERSION
 Get-Command jmo
 # Expected: Path to jmo.exe in $env:LOCALAPPDATA\JMo Security\
 
-Get-Command jmotools
-# Expected: Path to jmotools.exe in same directory
-
 # Step 3: Test CLI commands
 jmo --help
 # Expected: Help text with scan/report/ci commands
 
-jmotools --help
+jmo wizard --help
 # Expected: Help text with wizard/fast/balanced/full commands
 
 # Step 4: Test wizard
-jmotools wizard --help
+jmo wizard --help
 # Expected: Wizard help text
 
 # Step 5: Test scan command
@@ -246,7 +240,7 @@ Remove-Item -Recurse -Force test-repo
 
 # PASS CRITERIA:
 # ✅ Installer runs without errors
-# ✅ jmo and jmotools available in PATH
+# ✅ jmo available in PATH
 # ✅ Start Menu shortcuts created
 # ✅ Plugin system works
 # ✅ Scan workflow completes
@@ -295,9 +289,6 @@ winget uninstall jmo.jmo-security
 # Step 2: Verify removal
 Get-Command jmo -ErrorAction SilentlyContinue
 # Expected: No output (jmo not found)
-
-Get-Command jmotools -ErrorAction SilentlyContinue
-# Expected: No output (jmotools not found)
 
 # Step 3: Verify Start Menu shortcuts removed
 Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\JMo Security"
@@ -353,7 +344,7 @@ Test that Homebrew and Winget installations produce consistent behavior.
 | Feature | Homebrew (macOS) | Homebrew (Linux) | Winget (Windows) | Status |
 |---------|------------------|------------------|------------------|--------|
 | `jmo --help` | ⬜ | ⬜ | ⬜ | 📋 |
-| `jmotools wizard` | ⬜ | ⬜ | ⬜ | 📋 |
+| `jmo wizard` | ⬜ | ⬜ | ⬜ | 📋 |
 | `jmo scan --repo` | ⬜ | ⬜ | ⬜ | 📋 |
 | `jmo adapters list` | ⬜ | ⬜ | ⬜ | 📋 |
 | Plugin hot-reload | ⬜ | ⬜ | ⬜ | 📋 |
@@ -446,5 +437,5 @@ Before submitting to homebrew-core or winget-pkgs:
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026
 **Maintainer:** Jimmy Moceri (@jimmy058910)

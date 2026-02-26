@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,40 +37,16 @@ from scripts.core.telemetry import (
     detect_ci_environment,
     infer_scan_frequency,
 )
+from scripts.core.unicode_utils import (
+    safe_print as _safe_print,
+    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
 __version__ = "1.0.0"
-
-
-# Windows-safe Unicode fallback mappings for cp1252 compatibility
-_UNICODE_FALLBACKS = {
-    "🎉": "[*]",  # Party (U+1F389)
-    "📧": "[@]",  # Email (U+1F4E7)
-    "💚": "<3",  # Green heart (U+1F49A)
-    "👍": "[+1]",  # Thumbs up (U+1F44D)
-    "✅": "[OK]",  # Check mark
-    "❌": "[X]",  # Cross mark
-    "⚠️": "[!]",  # Warning
-    "→": "->",  # Right arrow
-    "•": "*",  # Bullet
-}
-
-
-def _safe_print(text: str) -> None:
-    """Print with Unicode fallback for Windows cp1252 compatibility."""
-    try:
-        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
-        if encoding.lower() in ("cp1252", "ascii", "latin-1", "iso-8859-1"):
-            for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-                text = text.replace(unicode_char, ascii_fallback)
-        print(text)
-    except UnicodeEncodeError:
-        for unicode_char, ascii_fallback in _UNICODE_FALLBACKS.items():
-            text = text.replace(unicode_char, ascii_fallback)
-        print(text)
 
 
 def _merge_dict(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -1835,8 +1812,6 @@ Documentation: https://docs.jmotools.com
     try:
         return ap.parse_args()
     except SystemExit as e:
-        import os
-
         # Only suppress exit(0) for help/version during pytest
         # Let errors (exit code != 0) propagate naturally
         if os.getenv("PYTEST_CURRENT_TEST") and e.code == 0:
@@ -1929,8 +1904,6 @@ def _iter_urls(args) -> list[str]:
 
 def _iter_gitlab_repos(args) -> list[dict[str, str]]:
     """Collect GitLab repos to scan. Returns list of repo metadata dicts."""
-    import os
-
     gitlab_repos: list[dict[str, str]] = []
     gitlab_url = getattr(args, "gitlab_url", None) or "https://gitlab.com"
     gitlab_token = getattr(args, "gitlab_token", None) or os.getenv("GITLAB_TOKEN")
@@ -2003,8 +1976,6 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         Tuple of (available_tools, missing_tool_names)
         If user cancels, returns ([], []) to signal abort
     """
-    import sys
-
     try:
         from scripts.cli.tool_manager import get_missing_tools_for_scan
 
@@ -2135,8 +2106,6 @@ def _warn_critical_updates() -> None:
     This is called at the start of scans to remind users about important updates.
     It does not block execution, just prints a warning.
     """
-    import os
-
     # Skip in Docker (tools bundled in image)
     if os.environ.get("DOCKER_CONTAINER"):
         return
@@ -2190,9 +2159,6 @@ def _check_first_run() -> bool:
 
 def _collect_email_opt_in(args) -> None:
     """Non-intrusive email collection on first run."""
-    import os
-    import sys
-
     # Skip if not interactive (Docker, CI/CD, etc.)
     if not sys.stdin.isatty():
         return
@@ -2369,8 +2335,6 @@ def _get_max_workers(args, eff: dict, cfg) -> int | None:
         int: Number of worker threads, or None to let ThreadPoolExecutor decide
 
     """
-    import os
-
     # Check effective settings (from CLI or profile)
     threads_val = eff.get("threads")
     if threads_val is not None:
@@ -2529,7 +2493,6 @@ class ProgressTracker:
         Called by background thread to keep display updated during long-running tools.
         Must be called with self._lock held.
         """
-        import sys
         import time
 
         if not self.tools_in_progress or self.total_tools <= 0:
@@ -2609,8 +2572,6 @@ class ProgressTracker:
             level: Log level (INFO, WARN, ERROR)
             message: Log message
         """
-        import sys
-
         with self._lock:
             # Clear current \r line, print on new line
             print("\r" + " " * 70 + "\r", end="", file=sys.stderr, flush=True)
@@ -2642,8 +2603,6 @@ class ProgressTracker:
             max_attempts: Maximum attempts configured
             **kwargs: Forward compatibility for future parameters
         """
-        import sys
-
         # Get the base tool name (strip phase suffixes like -init, -scan, -report)
         base_tool_name = self._get_base_tool_name(tool_name)
 
@@ -2765,8 +2724,6 @@ def cmd_scan(args) -> int:
             return 1  # Return non-zero exit code for security rejection
 
     # Tool availability pre-flight check (skip in Docker mode)
-    import os
-
     missing_tools: list[str] = []
     if not os.environ.get("DOCKER_CONTAINER"):
         tools, missing_tools = _check_scan_tools(args, tools)
@@ -2809,8 +2766,6 @@ def cmd_scan(args) -> int:
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
 
     # Send scan.started telemetry event
-    import os
-
     mode = "wizard" if getattr(args, "from_wizard", False) else "cli"
     if os.environ.get("DOCKER_CONTAINER") == "1":
         mode = "docker"
@@ -2902,7 +2857,7 @@ def cmd_scan(args) -> int:
         tm = ToolManager()
         summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
         platform_applicable = summary.platform_applicable
-    except Exception:
+    except (ImportError, OSError, ValueError, KeyError, AttributeError):
         platform_applicable = total_tools  # Fallback to actual tool count
 
     skipped_count = len(missing_tools) if missing_tools else 0
@@ -3168,8 +3123,6 @@ def cmd_setup(args):
     This is a wrapper around `jmo tools` commands for backwards compatibility.
     Replaces the previous bash script implementation to work cross-platform.
     """
-    import argparse
-
     from scripts.cli.tool_commands import cmd_tools_check, cmd_tools_install
 
     # --print-commands: Show what would be installed without installing
@@ -3324,9 +3277,6 @@ def _prompt_install_dependency(dep_type: str) -> bool:
 
 def cmd_mcp_server(args):
     """Start MCP server for AI-powered remediation."""
-    import os
-    from pathlib import Path
-
     # Check MCP dependencies before attempting import
     is_ok, dep_issue = _check_mcp_dependencies()
     if not is_ok and dep_issue:
@@ -3397,7 +3347,6 @@ def cmd_mcp_server(args):
 
 def _open_results(args):
     """Open scan results in browser/editor."""
-    import os
     import shutil
     import subprocess  # nosec B404
 
@@ -3437,7 +3386,7 @@ def _open_results(args):
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-            except Exception:
+            except OSError:
                 pass
 
 
@@ -3451,8 +3400,6 @@ def cmd_attest(args) -> int:
         0 on success, non-zero on error
 
     """
-    import json
-
     subject_path = Path(args.subject)
     if not subject_path.exists():
         _log(args, "ERROR", f"Subject file not found: {args.subject}")
@@ -3635,9 +3582,6 @@ def main():
 
 
 def _log(args, level: str, message: str) -> None:
-    import json
-    from datetime import datetime, timezone
-
     level = level.upper()
     cfg_level = None
     try:

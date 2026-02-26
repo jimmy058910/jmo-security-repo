@@ -18,6 +18,7 @@ Functions:
 from __future__ import annotations
 
 import logging
+import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from typing import TYPE_CHECKING
@@ -970,52 +971,65 @@ def _auto_fix_tools(
                 if cmd.startswith("jmo tools install") and "--yes" not in cmd:
                     cmd = cmd + " --yes"
 
-                print(f"   Running: {cmd[:60]}{'...' if len(cmd) > 60 else ''}")
+                # Split chained commands (e.g., "cmd1 && cmd2") into individual calls
+                # to avoid shell=True (CWE-78 / project policy)
+                sub_commands = [c.strip() for c in cmd.split("&&")]
 
-                try:
-                    proc_result = subprocess.run(
-                        cmd,
-                        shell=True,  # nosec B602 - User-initiated fix commands
-                        capture_output=True,
-                        text=True,
-                        timeout=300,  # 5 minute timeout per command
+                for sub_cmd in sub_commands:
+                    if not sub_cmd:
+                        continue
+
+                    print(
+                        f"   Running: {sub_cmd[:60]}{'...' if len(sub_cmd) > 60 else ''}"
                     )
 
-                    if proc_result.returncode != 0:
-                        if (
-                            "error" in proc_result.stderr.lower()
-                            or "failed" in proc_result.stderr.lower()
-                        ):
-                            print(
-                                colorize(
-                                    f"   {FALLBACKS.get('❌', '[X]')} Failed: {proc_result.stderr[:100]}",
-                                    "red",
+                    try:
+                        proc_result = subprocess.run(
+                            shlex.split(sub_cmd),
+                            capture_output=True,
+                            text=True,
+                            timeout=300,  # 5 minute timeout per command
+                        )
+
+                        if proc_result.returncode != 0:
+                            if (
+                                "error" in proc_result.stderr.lower()
+                                or "failed" in proc_result.stderr.lower()
+                            ):
+                                print(
+                                    colorize(
+                                        f"   {FALLBACKS.get('❌', '[X]')} Failed: {proc_result.stderr[:100]}",
+                                        "red",
+                                    )
                                 )
-                            )
-                            success = False
-                            break
-                        else:
-                            logger.debug(
-                                f"Command returned {proc_result.returncode} but continuing"
-                            )
+                                success = False
+                                break
+                            else:
+                                logger.debug(
+                                    f"Command returned {proc_result.returncode} but continuing"
+                                )
 
-                except subprocess.TimeoutExpired:
-                    print(
-                        colorize(
-                            f"   {FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes",
-                            "red",
+                    except subprocess.TimeoutExpired:
+                        print(
+                            colorize(
+                                f"   {FALLBACKS.get('❌', '[X]')} Timeout after 5 minutes",
+                                "red",
+                            )
                         )
-                    )
-                    success = False
-                    break
-                except Exception as e:
-                    print(
-                        colorize(
-                            f"   {FALLBACKS.get('❌', '[X]')} Error: {e}",
-                            "red",
+                        success = False
+                        break
+                    except Exception as e:
+                        print(
+                            colorize(
+                                f"   {FALLBACKS.get('❌', '[X]')} Error: {e}",
+                                "red",
+                            )
                         )
-                    )
-                    success = False
+                        success = False
+                        break
+
+                # If a sub-command failed, stop processing remaining commands
+                if not success:
                     break
 
             if success:

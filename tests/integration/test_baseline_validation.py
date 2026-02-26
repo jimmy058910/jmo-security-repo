@@ -114,22 +114,38 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
 
 
 def extract_rule_ids(findings: list[dict[str, Any]]) -> Counter[str]:
-    """Extract and count rule IDs from findings."""
+    """Extract and count rule IDs from findings.
+
+    Extracts both tool-specific ruleIds and CWE identifiers. CWE data is
+    sourced from ``risk.cwe`` (CommonFinding v1.2.0 schema) with a fallback
+    to ``metadata.cwe`` for legacy tools.
+    """
     rule_counts: Counter[str] = Counter()
 
     for finding in findings:
         rule_id = finding.get("ruleId", finding.get("rule_id", ""))
-
-        # Normalize CWE IDs
         if rule_id:
             rule_counts[rule_id] += 1
 
-        # Also check for CWE in metadata
-        metadata = finding.get("metadata", {})
-        if isinstance(metadata, dict):
-            cwe = metadata.get("cwe", metadata.get("CWE"))
-            if cwe:
-                rule_counts[f"CWE-{cwe}"] += 1
+        cwe_found = False
+
+        # Primary: CWE in risk.cwe (CommonFinding v1.2.0 schema)
+        risk = finding.get("risk", {})
+        if isinstance(risk, dict):
+            cwe_list = risk.get("cwe", [])
+            if isinstance(cwe_list, list):
+                for cwe in cwe_list:
+                    normalized = cwe if cwe.startswith("CWE-") else f"CWE-{cwe}"
+                    rule_counts[normalized] += 1
+                    cwe_found = True
+
+        # Fallback: CWE in metadata.cwe (legacy/other tools)
+        if not cwe_found:
+            metadata = finding.get("metadata", {})
+            if isinstance(metadata, dict):
+                cwe = metadata.get("cwe", metadata.get("CWE"))
+                if cwe:
+                    rule_counts[f"CWE-{cwe}"] += 1
 
     return rule_counts
 
@@ -319,3 +335,69 @@ class TestBaselineSchemaValidation:
                 assert (
                     "category" in finding
                 ), f"{baseline_file.name} finding {i} missing category"
+
+
+class TestExtractRuleIds:
+    """Unit tests for extract_rule_ids() CWE extraction logic."""
+
+    def test_extracts_rule_id(self):
+        """Should count tool-specific ruleIds."""
+        findings = [{"ruleId": "semgrep.xss.rule"}]
+        counts = extract_rule_ids(findings)
+        assert counts["semgrep.xss.rule"] == 1
+
+    def test_extracts_cwe_from_risk_field(self):
+        """Should extract CWE from risk.cwe (CommonFinding v1.2.0 schema)."""
+        findings = [{"ruleId": "semgrep.rule", "risk": {"cwe": ["CWE-79", "CWE-89"]}}]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-79"] == 1
+        assert counts["CWE-89"] == 1
+        assert counts["semgrep.rule"] == 1
+
+    def test_normalizes_cwe_without_prefix(self):
+        """Should add CWE- prefix if missing in risk.cwe entries."""
+        findings = [{"ruleId": "rule-1", "risk": {"cwe": ["79"]}}]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-79"] == 1
+
+    def test_extracts_cwe_from_metadata_fallback(self):
+        """Should fall back to metadata.cwe when risk.cwe is absent."""
+        findings = [{"ruleId": "some-rule", "metadata": {"cwe": "79"}}]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-79"] == 1
+
+    def test_risk_cwe_takes_priority_over_metadata(self):
+        """When risk.cwe exists, metadata.cwe should be ignored (no double-counting)."""
+        findings = [
+            {
+                "ruleId": "rule-1",
+                "risk": {"cwe": ["CWE-79"]},
+                "metadata": {"cwe": "79"},
+            }
+        ]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-79"] == 1
+
+    def test_handles_empty_risk_dict(self):
+        """Should handle risk dict with no cwe key gracefully."""
+        findings = [{"ruleId": "rule-1", "risk": {"owasp": ["A03:2021"]}}]
+        counts = extract_rule_ids(findings)
+        assert counts["rule-1"] == 1
+        assert "CWE-" not in "".join(counts.keys())
+
+    def test_handles_missing_rule_id(self):
+        """Should extract CWE even when ruleId is missing."""
+        findings = [{"risk": {"cwe": ["CWE-502"]}}]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-502"] == 1
+
+    def test_multiple_findings_aggregate(self):
+        """Should correctly aggregate counts across multiple findings."""
+        findings = [
+            {"ruleId": "rule-a", "risk": {"cwe": ["CWE-79"]}},
+            {"ruleId": "rule-b", "risk": {"cwe": ["CWE-79", "CWE-89"]}},
+            {"ruleId": "rule-c", "metadata": {"cwe": "79"}},
+        ]
+        counts = extract_rule_ids(findings)
+        assert counts["CWE-79"] == 3  # 2 from risk + 1 from metadata fallback
+        assert counts["CWE-89"] == 1

@@ -57,6 +57,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
+from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
 
 # Per-tool timeout defaults (seconds) for tools that typically run longer
@@ -112,9 +113,10 @@ def scan_repository(
     _write_stub = write_stub_func or write_stub
     _find_tool = find_tool_func or find_tool
 
-    name = repo.name
+    name = _sanitize_path_component(repo.name)
     out_dir = results_dir / name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _validate_output_path(results_dir, out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
         """Get timeout for tool, respecting per-tool defaults for slow tools.

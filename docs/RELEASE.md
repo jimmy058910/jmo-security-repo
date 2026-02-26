@@ -677,7 +677,6 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
    pip install --upgrade jmo-security==0.4.0
    jmo --version
    jmo --help
-   jmotools --help
    ```
 
 ## Troubleshooting
@@ -689,7 +688,7 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
 **Problem:** Tests fail in CI but pass locally
 
-- **Solution:** Check matrix differences (Ubuntu vs macOS, Python 3.10 vs 3.11 vs 3.12)
+- **Solution:** Check matrix differences (Ubuntu vs macOS, Python 3.12 vs 3.13)
 - **Check:** Run `make test` with different Python versions locally
 
 **Problem:** Coverage below 85%
@@ -699,7 +698,7 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
 ## Notes
 
-- The package exposes the `jmo` and `jmotools` console scripts.
+- The package exposes the `jmo` console script.
 - Coverage reports are uploaded to Codecov as part of the tests workflow (tokenless OIDC).
 - License is defined via SPDX string in `pyproject.toml` and the `LICENSE` file is included in the distribution.
 - CI enforces: tests passing, coverage ≥85%, pre-commit checks, reproducible dev deps.
@@ -720,4 +719,4 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

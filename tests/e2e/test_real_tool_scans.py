@@ -217,7 +217,11 @@ def safe_process(user_input):
 '''
 
         (repo / "app.py").write_text(vulnerable_code)
-        (repo / ".git").mkdir()  # Mark as git repo
+        # Real git init required — semgrep uses `git ls-files` to enumerate targets
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "app.py"], cwd=str(repo), capture_output=True, check=True
+        )
 
         results_dir = tmp_path / "results"
 
@@ -321,7 +325,14 @@ def main():
 '''
 
         (repo / "secrets.py").write_text(secret_file)
-        (repo / ".git").mkdir()  # Mark as git repo
+        # Real git init required — tools use `git ls-files` to enumerate targets
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "add", "secrets.py"],
+            cwd=str(repo),
+            capture_output=True,
+            check=True,
+        )
 
         results_dir = tmp_path / "results"
 

@@ -4,7 +4,7 @@
 
 JMo Security uses [pre-commit](https://pre-commit.com/) to enforce code quality, security, and consistency before commits reach the repository.
 
-**Key Feature:** The `deps-compile` hook automatically re-executes with Python 3.10+ if run with an older Python version, preventing dependency version mismatches.
+**Key Feature:** The `deps-compile` hook automatically re-executes with Python 3.12+ if run with an older Python version, preventing dependency version mismatches.
 
 ---
 
@@ -76,7 +76,7 @@ Once installed, hooks run automatically:
 
 #### Dependency Management
 
-1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.10+
+1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.12+
 
 ---
 
@@ -84,35 +84,35 @@ Once installed, hooks run automatically:
 
 ### deps-compile (Critical)
 
-**Purpose:** Ensures `requirements-dev.txt` is always compiled with Python 3.10+ to match CI/CD environments.
+**Purpose:** Ensures `requirements-dev.txt` is always compiled with Python 3.12+ to match CI/CD environments.
 
 **Behavior:**
 
 1. Triggers when `requirements-dev.in` is modified
 2. Detects active Python version
-3. If Python <3.10, **automatically re-executes with Python 3.11/3.10/3.12**
+3. If Python <3.12, **automatically re-executes with Python 3.12**
 4. Compiles dependencies with correct Python version
-5. Fails if no Python 3.10+ found on system
+5. Fails if no Python 3.12+ found on system
 
 **Example Output (Auto-Reexec):**
 
 ```bash
 $ git commit -m "deps: update pytest"
-[warn] Python 3.8 detected, re-executing with python3.11...
-[ok] Python 3.11 (meets requirement ≥3.10)
+[warn] Python 3.8 detected, re-executing with python3.12...
+[ok] Python 3.12 (meets requirement ≥3.12)
 [info] Running pip-compile (will preserve existing versions if compatible)
 [ok] requirements-dev.txt compiled successfully
 [ok] No dependency conflicts detected
 ```
 
-**Example Output (No Python 3.10+):**
+**Example Output (No Python 3.12+):**
 
 ```bash
 $ git commit -m "deps: update pytest"
-[error] Python 3.10+ required (detected 3.8)
-[hint] No Python 3.10+ found on system
-[hint] Install: sudo apt install python3.11  # Ubuntu/Debian
-[hint] Or: brew install python@3.11  # macOS
+[error] Python 3.12+ required (detected 3.8)
+[hint] No Python 3.12+ found on system
+[hint] Install: sudo apt install python3.12  # Ubuntu/Debian
+[hint] Or: brew install python@3.12  # macOS
 ```
 
 **Why This Matters:**
@@ -121,7 +121,7 @@ Running `make deps-compile` with Python 3.8 can cause:
 
 - Dependency conflicts
 - Package downgrades
-- CI incompatibility (CI uses Python 3.10/3.11/3.12)
+- CI incompatibility (CI uses Python 3.12)
 
 The hook automatically uses the correct Python version, preventing these issues.
 
@@ -226,7 +226,7 @@ SKIP=deps-compile,mypy git commit -m "WIP: draft changes"
 **Never skip:**
 
 - Security hooks (detect-private-key, bandit)
-- Dependency compilation (unless you manually verified Python 3.10+)
+- Dependency compilation (unless you manually verified Python 3.12+)
 
 ### Updating Hooks
 
@@ -249,22 +249,22 @@ git commit -m "deps(pre-commit): update hooks"
 
 ## Troubleshooting
 
-### Error: "deps-compile requires Python 3.10+"
+### Error: "deps-compile requires Python 3.12+"
 
-**Cause:** No Python 3.10+ interpreter found on system.
+**Cause:** No Python 3.12+ interpreter found on system.
 
 **Fix:**
 
 ```bash
 # Ubuntu/Debian
 sudo apt update
-sudo apt install python3.11
+sudo apt install python3.12
 
 # macOS (Homebrew)
-brew install python@3.11
+brew install python@3.12
 
 # Verify installation
-python3.11 --version
+python3.12 --version
 ```
 
 ### Error: "hook id 'deps-compile' is unknown"
@@ -284,11 +284,11 @@ make pre-commit-install
 **Fix:**
 
 ```bash
-# Install for Python 3.11
-python3.11 -m pip install --user pip-tools
+# Install for Python 3.12
+python3.12 -m pip install --user pip-tools
 
 # Verify
-python3.11 -m piptools --version
+python3.12 -m piptools --version
 ```
 
 ### Error: "Cannot install package because of conflicting dependencies"
@@ -300,7 +300,7 @@ python3.11 -m piptools --version
 1. Check conflicts:
 
    ```bash
-   python3.11 scripts/dev/update_dependencies.py --validate
+   python3.12 scripts/dev/update_dependencies.py --validate
    ```
 
 2. Review error messages for conflicting packages
@@ -385,7 +385,7 @@ env:
 - ✅ **Run `make pre-commit-run` before pushing** to catch all issues
 - ✅ **Update hooks monthly** with `pre-commit autoupdate`
 - ✅ **Fix hook failures** instead of skipping
-- ✅ **Use Python 3.10+ for development** to avoid auto-reexec overhead
+- ✅ **Use Python 3.12+ for development** to avoid auto-reexec overhead
 
 ### ❌ DON'T
 
@@ -490,7 +490,7 @@ repos:
 
 The `deps-compile` hook includes automatic Python version detection:
 
-- Hook auto-detects and re-executes with Python 3.10+
+- Hook auto-detects and re-executes with Python 3.12+
 - Prevents dependency mismatches automatically
 - Zero manual intervention required
 
@@ -503,7 +503,7 @@ The `deps-compile` hook includes automatic Python version detection:
 ### Prevention Mechanisms
 
 1. **Auto-reexec:** Script detects Python version and re-runs with correct version
-2. **Clear errors:** If no Python 3.10+ found, provides installation instructions
+2. **Clear errors:** If no Python 3.12+ found, provides installation instructions
 3. **CI validation:** GitHub Actions validates Python version independently
 4. **Documentation:** This guide prevents future confusion
 
@@ -518,5 +518,5 @@ The `deps-compile` hook includes automatic Python version detection:
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026
 **Maintainer:** JMo Security Team

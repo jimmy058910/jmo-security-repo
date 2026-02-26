@@ -333,51 +333,6 @@ def _safe_load_plugin(
         return []
 
 
-def _safe_load(loader, path: Path, profiling: bool = False) -> list[dict[str, Any]]:
-    """DEPRECATED: Legacy loader function for backward compatibility.
-
-    This function will be removed in v1.0.0.
-    Use _safe_load_plugin instead.
-    """
-    try:
-        if profiling:
-            t0 = time.perf_counter()
-            res: list[dict[str, Any]] = loader(path)
-            dt = time.perf_counter() - t0
-            try:
-                PROFILE_TIMINGS["jobs"].append(
-                    {
-                        "tool": getattr(loader, "__name__", "unknown"),
-                        "path": str(path),
-                        "seconds": round(dt, 6),
-                        "count": len(res) if isinstance(res, list) else 0,
-                    }
-                )
-            except (KeyError, TypeError, AttributeError) as e:
-                # Profiling dict mutation or attribute access failed
-                logger.debug(f"Failed to record profiling timing: {e}")
-            return res
-        else:
-            result: list[dict[str, Any]] = loader(path)
-            return result
-    except FileNotFoundError:
-        # Tool output file missing (expected with --allow-missing-tools)
-        logger.debug(f"Tool output not found: {path}")
-        return []
-    except AdapterParseException as e:
-        # Adapter explicitly raised parse exception with context
-        logger.debug(f"Adapter parse failed: {e}")
-        return []
-    except (OSError, PermissionError) as e:
-        # File system errors (permissions, I/O errors, etc.)
-        logger.debug(f"Failed to read tool output {path}: {e}")
-        return []
-    except Exception as e:
-        # Unexpected adapter error - log with traceback
-        logger.error(f"Unexpected error loading {path}: {e}", exc_info=True)
-        return []
-
-
 def _build_syft_indexes(
     findings: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, str]]], dict[str, list[dict[str, str]]]]:

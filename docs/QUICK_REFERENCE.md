@@ -175,4 +175,4 @@ jmo scan --repo . --threads 2
 
 **Full Documentation:** [USER_GUIDE.md](USER_GUIDE.md) | [DOCKER_README.md](DOCKER_README.md) | [RESULTS_GUIDE.md](RESULTS_GUIDE.md)
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

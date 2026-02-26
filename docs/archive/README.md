@@ -56,4 +56,4 @@ For current documentation, see [docs/index.md](../index.md).
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

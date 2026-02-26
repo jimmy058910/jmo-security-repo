@@ -136,7 +136,7 @@ Clear profile comparison before selection:
 
 ```text
 ┌─ 📊 Profile Options ───────────────────────────────────────────────
-│ • fast: 8 tools, 5-10 minutes (pre-commit, quick checks)
+│ • fast: 9 tools, 5-10 minutes (pre-commit, quick checks)
 │ • slim: 14 tools, 12-18 minutes (cloud/IaC, AWS/Azure/GCP/K8s)
 │ • balanced: 18 tools, 18-25 minutes (CI/CD, regular audits)
 │ • deep: 28 tools, 40-70 minutes (security audits, compliance)
@@ -492,7 +492,7 @@ jmo wizard
 
 | Workflow | Best For | Time | Tools |
 |----------|----------|------|-------|
-| **Single Repository** | Individual repos, quick checks | 5-10 min (fast) | 8 tools |
+| **Single Repository** | Individual repos, quick checks | 5-10 min (fast) | 9 tools |
 | **Entire Stack** | Full development environment | 18-25 min | 18 tools |
 | **CI/CD Audit** | Pipeline security validation | 5-10 min | 2-3 tools |
 | **Pre-Deployment** | Production deployment gates | 15-30 min | 8-12 tools |
@@ -518,7 +518,7 @@ jmo wizard
 
 Choose from four profiles based on your needs:
 
-- **fast** (5-10 min, 8 tools): Quick scan with core tools
+- **fast** (5-10 min, 9 tools): Quick scan with core tools
 - **slim** (12-18 min, 14 tools): Cloud/IaC focused (AWS/Azure/GCP/K8s)
 - **balanced** (18-25 min, 18 tools): Comprehensive scan with all recommended tools
 - **deep** (40-70 min, 28 tools): Exhaustive scan with all tools
@@ -2263,7 +2263,7 @@ make -f Makefile.security security-scan
 
 ### 4. Profile Selection Guide
 
-- **fast**: Pre-commit hooks, quick validation (5-10 min, 8 tools)
+- **fast**: Pre-commit hooks, quick validation (5-10 min, 9 tools)
 - **slim**: Cloud/IaC, AWS/Azure/GCP/K8s (12-18 min, 14 tools)
 - **balanced**: CI/CD pipelines, regular audits (18-25 min, 18 tools)
 - **deep**: Weekly/monthly deep audits, compliance (40-70 min, 28 tools)

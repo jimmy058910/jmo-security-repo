@@ -11,6 +11,8 @@ Tests cover:
 - Actionlint validation (if actionlint available)
 """
 
+import shutil
+
 import pytest
 import yaml
 
@@ -288,7 +290,9 @@ def test_yaml_formatting(basic_schedule):
     assert "jobs" in workflow
 
 
-@pytest.mark.skipif(True, reason="Requires actionlint installed")
+@pytest.mark.skipif(
+    not shutil.which("actionlint"), reason="Requires actionlint installed"
+)
 def test_actionlint_validation(basic_schedule):
     """Test that workflow passes actionlint validation.
 

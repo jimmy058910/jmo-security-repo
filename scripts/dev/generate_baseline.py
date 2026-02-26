@@ -168,7 +168,12 @@ def load_findings(results_dir: Path) -> list[dict[str, Any]]:
 
 
 def categorize_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Categorize findings into expected baseline format."""
+    """Categorize findings into expected baseline format.
+
+    Extracts CWE identifiers from ``risk.cwe`` (CommonFinding v1.2.0 schema)
+    with a fallback to ``metadata.cwe`` for legacy tools. Non-CWE findings
+    are recorded by their tool-specific ruleId.
+    """
     # Count by rule_id and severity
     rule_counts: Counter[tuple[str, str]] = Counter()
 
@@ -176,19 +181,29 @@ def categorize_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rule_id = finding.get("ruleId", finding.get("rule_id", "unknown"))
         severity = finding.get("severity", "MEDIUM")
 
-        # Normalize CWE IDs
-        if rule_id.startswith("CWE-"):
-            rule_counts[(rule_id, severity)] += 1
-        elif "cwe" in str(finding.get("metadata", {})).lower():
-            # Try to extract CWE from metadata
+        cwe_found = False
+
+        # Primary: Extract CWE from risk.cwe (CommonFinding v1.2.0)
+        risk = finding.get("risk", {})
+        if isinstance(risk, dict):
+            cwe_list = risk.get("cwe", [])
+            if isinstance(cwe_list, list):
+                for cwe in cwe_list:
+                    normalized = cwe if cwe.startswith("CWE-") else f"CWE-{cwe}"
+                    rule_counts[(normalized, severity)] += 1
+                    cwe_found = True
+
+        # Fallback: CWE in metadata.cwe (legacy/other tools)
+        if not cwe_found:
             metadata = finding.get("metadata", {})
             if isinstance(metadata, dict):
                 cwe = metadata.get("cwe", metadata.get("CWE"))
                 if cwe:
                     rule_counts[(f"CWE-{cwe}", severity)] += 1
-                else:
-                    rule_counts[(rule_id, severity)] += 1
-        else:
+                    cwe_found = True
+
+        # No CWE found — use ruleId as-is
+        if not cwe_found:
             rule_counts[(rule_id, severity)] += 1
 
     # Convert to baseline format

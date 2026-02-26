@@ -4,66 +4,61 @@
 .tmp-venv-pypi/
 .post-release-venv/
 venv*/
+venv-*
 
 # Claude Code temp directories (created during sessions)
-tmpclaude-*
+tmpclaude-*/
 nul
 
 # Coverage artifacts
 .coverage*
 coverage.xml
 coverage.json
+htmlcov/
+coverage/
 
 # VS Code and editor junk
-.vscode/
-*.swp
-*.swo
-
-# Python caches
-__pycache__/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-build/
-dist/
-*.egg-info/
-
-# Python distribution artifacts (wheel files should not be committed)
-*.whl
-*.egg
-# Review tracking artifacts
-REVIEW.md
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.pyc
-
-# Backup files
-*.bak
-*.old
-*_old.*
-*_backup.*
-
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+*.whl
+*.egg
+
+# Backup files
+*.bak
+*.old
+*_old.*
+*_backup.*
+*.backup
+*.new
+*.orig
+
 # OS files
 .DS_Store
 Thumbs.db
 
+# Review tracking artifacts
+REVIEW.md
+
 # Test results and temporary files
 /tmp/
 *.log
-.coverage
-htmlcov/
-.pytest_cache/
 
 # Security scan results (don't commit actual scan results)
 security-results-*/
@@ -75,8 +70,6 @@ samples/fixtures/*/sample-results/
 
 # Test reports and documentation (comprehensive testing artifacts)
 docs/comprehensive-test-report.md
-
-# (formerly) Local roadmap file removed; keep repo docs public
 
 # Private planning documents (developer-specific, not for public repo)
 DEVELOPER_ROADMAP.md
@@ -138,7 +131,6 @@ scripts/api/.vercel/
 
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
-coverage/
 
 # Additional generated artifacts
 *.sarif
@@ -158,18 +150,9 @@ diff-data.json
 # Serena MCP auto-generated project config
 .serena/
 
-# Backup files (additional patterns)
-*.backup
-*.new
-*.orig
-
-# Claude Code temporary working directories
-tmpclaude-*/
-
 # Nightshift automation config (symlink to dev-only/infrastructure/nightshift.yaml)
 nightshift.yaml
 
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/
-venv-*

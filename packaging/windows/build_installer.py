@@ -122,17 +122,22 @@ def install_chocolatey():
     print("📦 Chocolatey not found. Installing Chocolatey...")
     print("   This requires administrator privileges.\n")
 
-    # Chocolatey installation command
-    install_cmd = (
-        'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
-        "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
-        "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
-        '"'
-    )
+    # Chocolatey installation command (list-based to avoid shell=True)
+    install_cmd = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "[System.Net.ServicePointManager]::SecurityProtocol = "
+        "[System.Net.ServicePointManager]::SecurityProtocol -bor 3072; "
+        "iex ((New-Object System.Net.WebClient).DownloadString("
+        "'https://community.chocolatey.org/install.ps1'))",
+    ]
 
     try:
         result = subprocess.run(
-            install_cmd, shell=True, capture_output=True, text=True, timeout=300
+            install_cmd, capture_output=True, text=True, timeout=300
         )
 
         if result.returncode != 0:

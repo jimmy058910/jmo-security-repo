@@ -901,7 +901,7 @@ security_scan:
 ## Performance Benchmarks
 
 **Validated:** November 2025
-**Test Environment:** Linux (WSL2), Python 3.11, SQLite 3.x
+**Test Environment:** Linux (WSL2), Python 3.12, SQLite 3.x
 
 The historical storage database is **production-ready** with performance exceeding all targets by 9-117x:
 

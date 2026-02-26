@@ -3,7 +3,7 @@
 Complete reference for all CLI commands and flags. Run `jmo <command> --help` for the latest options.
 
 **Version:** 1.0.0
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 
 ---
 
@@ -12,7 +12,8 @@ Complete reference for all CLI commands and flags. Run `jmo <command> --help` fo
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
-| `jmo fast` | Quick scan (8 tools, 5-10 min) |
+| `jmo fast` | Quick scan (9 tools, 5-10 min) |
+| `jmo slim` | Cloud/IaC scan (14 tools, 12-18 min) |
 | `jmo balanced` | Production scan (18 tools, 18-25 min) |
 | `jmo full` | Comprehensive audit (28 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
@@ -39,14 +40,14 @@ These flags are shared across multiple commands:
 
 | Flag | Description | Used By |
 |------|-------------|---------|
-| `--config FILE` | Config file (default: `jmo.yml`) | scan, report, ci, fast, balanced, full |
+| `--config FILE` | Config file (default: `jmo.yml`) | scan, report, ci, fast, slim, balanced, full |
 | `--human-logs` | Human-friendly colored logs instead of JSON | all commands |
 | `--log-level LEVEL` | Log level: `DEBUG`, `INFO`, `WARN`, `ERROR` | all commands |
 | `--results-dir DIR` | Results directory | scan, ci, report, fast, balanced, full |
 | `--db PATH` | SQLite database path (default: `.jmo/history.db`) | history, trends, diff, wizard |
 | `--profile-name NAME` | Scan profile from config | scan, ci |
 | `--threads N` | Worker thread count | scan, report, ci |
-| `--timeout SECS` | Per-tool timeout | scan, ci, fast, balanced, full |
+| `--timeout SECS` | Per-tool timeout | scan, ci, fast, slim, balanced, full |
 | `--tools TOOL...` | Override tool list | scan, ci |
 | `--fail-on SEV` | Severity threshold for exit code | report, ci, fast, balanced, full |
 | `--allow-missing-tools` | Skip missing tools instead of failing | scan, ci |
@@ -162,13 +163,14 @@ Combined scan + report for CI/CD pipelines. Supports all `jmo scan` flags plus:
 
 ---
 
-### jmo fast / balanced / full
+### jmo fast / slim / balanced / full
 
 Beginner-friendly shortcut commands with sensible defaults.
 
 | Command | Tools | Time | Description |
 |---------|-------|------|-------------|
-| `jmo fast` | 8 | 5-10 min | Quick pre-commit/PR validation |
+| `jmo fast` | 9 | 5-10 min | Quick pre-commit/PR validation |
+| `jmo slim` | 14 | 12-18 min | Cloud/IaC scanning (AWS, Azure, GCP, K8s) |
 | `jmo balanced` | 18 | 18-25 min | Production scans |
 | `jmo full` | 28 | 40-70 min | Comprehensive audits |
 
@@ -783,7 +785,7 @@ Build Docker images for JMo Security.
 
 | Variant | Tools | Size | Use Case |
 |---------|-------|------|----------|
-| `fast` | 8 | ~502 MB | CI/CD, pre-commit hooks |
+| `fast` | 9 | ~502 MB | CI/CD, pre-commit hooks |
 | `slim` | 14 | ~557 MB | Cloud/IaC focused |
 | `balanced` | 18 | ~1.4 GB | Production scans (default) |
 | `deep` | 28 | ~2.0 GB | Comprehensive audits |

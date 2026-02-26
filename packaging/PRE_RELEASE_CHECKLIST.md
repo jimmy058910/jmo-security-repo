@@ -44,7 +44,7 @@
 **Platform:** Windows 10+ or Windows 11
 **Prerequisites:**
 
-- Python 3.10+ installed
+- Python 3.12+ installed
 - PyInstaller: `pip install pyinstaller`
 - NSIS 3.x: https://nsis.sourceforge.io/Download (add to PATH)
 

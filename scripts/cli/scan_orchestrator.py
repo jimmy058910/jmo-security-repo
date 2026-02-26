@@ -556,23 +556,24 @@ class ScanOrchestrator:
         base = self.config.results_dir
 
         # Always create repos directory (legacy compatibility)
-        (base / "individual-repos").mkdir(parents=True, exist_ok=True)
+        # mode=0o700: restrictive permissions for security scan results
+        (base / "individual-repos").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         # Create directories for other target types (only if targets present)
         if targets.images:
-            (base / "individual-images").mkdir(parents=True, exist_ok=True)
+            (base / "individual-images").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.iac_files:
-            (base / "individual-iac").mkdir(parents=True, exist_ok=True)
+            (base / "individual-iac").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.urls:
-            (base / "individual-web").mkdir(parents=True, exist_ok=True)
+            (base / "individual-web").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.gitlab_repos:
-            (base / "individual-gitlab").mkdir(parents=True, exist_ok=True)
+            (base / "individual-gitlab").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.k8s_resources:
-            (base / "individual-k8s").mkdir(parents=True, exist_ok=True)
+            (base / "individual-k8s").mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def validate_targets(self, targets: ScanTargets) -> bool:
         """

@@ -316,7 +316,7 @@ jmo tools install dependency-check
 **Prerequisites:**
 
 - macOS 10.15+ (11.0 Big Sur recommended)
-- Python 3.10+ (3.11 recommended)
+- Python 3.12+
 - Homebrew
 
 **Installation:**
@@ -325,8 +325,8 @@ jmo tools install dependency-check
 # Install Homebrew
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install Python 3.11
-brew install python@3.11
+# Install Python 3.12
+brew install python@3.12
 
 # Install JMo Security
 pip3 install jmo-security
@@ -349,7 +349,7 @@ Use Docker for: Semgrep, OWASP ZAP on M1/M2
 ```bash
 # Add to ~/.zshrc
 export PATH="/opt/homebrew/bin:$PATH"
-export PATH="/opt/homebrew/opt/python@3.11/libexec/bin:$PATH"
+export PATH="/opt/homebrew/opt/python@3.12/libexec/bin:$PATH"
 ```
 
 ### Windows (Native)
@@ -363,8 +363,8 @@ export PATH="/opt/homebrew/opt/python@3.11/libexec/bin:$PATH"
 **Installation:**
 
 ```powershell
-# Install Python 3.11
-winget install Python.Python.3.11
+# Install Python 3.12
+winget install Python.Python.3.12
 
 # Install JMo Security
 pip install jmo-security
@@ -635,7 +635,7 @@ afl-fuzz -i input/ -o findings/ -- ./target_binary @@
 
 ### MobSF Installation
 
-**Prerequisites:** Python 3.10+, JDK 8+, 2 GB storage
+**Prerequisites:** Python 3.12+, JDK 8+, 2 GB storage
 
 ```bash
 # Install MobSF
@@ -787,4 +787,4 @@ docker run --rm -v "${PWD}:/scan" ghcr.io/jimmy058910/jmo-security:balanced scan
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026

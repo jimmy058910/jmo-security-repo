@@ -8,13 +8,13 @@
 **Dimensions:**
 
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
-- **28 Tools:** Organized across 4 profiles (fast: 8, slim: 14, balanced: 18, deep: 28)
+- **28 Tools:** Organized across 4 profiles (fast: 9, slim: 14, balanced: 18, deep: 28)
 - **3 OS Platforms:** Linux, macOS, WSL (Windows Subsystem for Linux)
 - **5 Execution Modes:** CLI (native), Docker (fast), Docker (slim), Docker (balanced), Docker (deep)
 - **6 Compliance Frameworks:** OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK v16.1
 
 **Total Possible Combinations:** 6 x 28 x 3 x 5 x 6 = **15,120 test scenarios**
-**Current Test Suite:** 2,981 tests across unit/adapters/reporters/integration
+**Current Test Suite:** 8,000+ tests across unit/adapters/reporters/integration
 **Coverage:** 87% (CI enforced minimum: 85%)
 
 ---
@@ -23,9 +23,9 @@
 
 > **Canonical source:** [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md)
 
-### Fast Profile (8 tools, 5-10 min)
+### Fast Profile (9 tools, 5-10 min)
 
-trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck
+trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa
 
 ### Slim Profile (14 tools, 12-18 min)
 
@@ -350,7 +350,7 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Current State:**
 
-- **Total Tests:** 2,981
+- **Total Tests:** 8,000+
 - **Coverage:** 87% (CI enforced minimum: 85%)
 - **CI Platforms:** 2 OS (Linux, macOS) x 3 Python versions (3.10, 3.11, 3.12) = 6 matrix jobs
 - **Test Categories:**

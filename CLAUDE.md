@@ -8,7 +8,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 
 **Version:** v1.0.0 (Production Release)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 5,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
+**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
 
 **Key v1.0 Features:**
 
@@ -68,7 +68,7 @@ a custom timeout value for their scans. I'll also need to update the configurati
 
 - No `venv/`, `__pycache__/`, `build/`, `dist/` in git
 - No files >10MB (`check-added-large-files` hook)
-- No secrets (TruffleHog + detect-private-key hooks)
+- No secrets (detect-private-key pre-commit hook + TruffleHog CI scan)
 
 ### Proactive Issue Resolution
 
@@ -277,7 +277,7 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
-| `fast` | 8 | 5-10 min | Pre-commit, PR validation | `:fast` |
+| `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
 | `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
 | `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |

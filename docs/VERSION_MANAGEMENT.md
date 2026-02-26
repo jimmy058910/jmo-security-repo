@@ -632,7 +632,7 @@ gh pr create --title "deps(tools): monthly tool updates (Jan 2025)"
 Wait for:
 
 - ✅ version-check.yml validates consistency
-- ✅ ci.yml tests pass (Ubuntu/macOS × Python 3.10/3.11/3.12)
+- ✅ ci.yml tests pass (Ubuntu/macOS/Windows × Python 3.12/3.13)
 - ✅ Docker builds succeed (multi-arch: amd64, arm64)
 
 ---
@@ -747,7 +747,7 @@ python3 scripts/dev/update_versions.py --check-outdated --create-issues  # Auto-
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026
 **Maintainer:** jimmy058910
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

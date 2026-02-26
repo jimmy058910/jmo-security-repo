@@ -4,8 +4,6 @@ This guide walks you through everything from a 2‑minute quick start to advance
 
 Note: The CLI is available as the console command `jmo` (via PyPI) and also as a script at `scripts/cli/jmo.py` in this repo. The examples below use the `jmo` command, but you can replace it with `python3 scripts/cli/jmo.py` if running from source.
 
-If you're brand new, you can also use the beginner‑friendly wrapper `jmotools` described below.
-
 ## Package Manager Installation
 
 ### Homebrew (macOS/Linux)
@@ -44,7 +42,7 @@ jmo --help
 
 ## Quick start (2 minutes)
 
-Prereqs: Linux, WSL, or macOS with Python 3.10+ recommended (3.8+ supported).
+Prereqs: Linux, WSL, or macOS with Python 3.12+.
 
 1. Install the CLI
 
@@ -219,7 +217,7 @@ jmo tools install --profile balanced --print-script > install-tools.sh
 
 | Profile | Sequential | Parallel | Speedup |
 |---------|------------|----------|---------|
-| fast (8 tools) | ~5-8 min | ~2-3 min | ~2.5x |
+| fast (9 tools) | ~5-8 min | ~2-3 min | ~2.5x |
 | balanced (18 tools) | ~12-18 min | ~4-6 min | ~3x |
 | deep (28 tools) | ~20-30 min | ~6-10 min | ~3x |
 
@@ -360,7 +358,7 @@ The `jmo scan` and `jmo wizard` commands automatically check for missing tools:
 
 | Profile | Tools | Description |
 |---------|-------|-------------|
-| `fast` | 8 | Pre-commit, PR validation |
+| `fast` | 9 | Pre-commit, PR validation |
 | `slim` | 14 | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | Production CI/CD |
 | `deep` | 28 | Comprehensive audits |
@@ -1432,7 +1430,7 @@ jmo schedule delete nightly-deep --force
 # Export to GitLab CI
 jmo schedule export nightly-deep --backend gitlab-ci > .gitlab-ci.yml
 
-# Suspend/resume (coming soon)
+# Suspend/resume
 jmo schedule suspend nightly-deep
 jmo schedule resume nightly-deep
 ```
@@ -2401,7 +2399,7 @@ repos:
 
 **Goal:** Quick validation for CI/CD gates using **fast profile**
 
-**Profile:** `fast` (8 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck)
+**Profile:** `fast` (9 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa)
 
 **Configuration:**
 
@@ -2721,7 +2719,7 @@ jobs:
 | Stage | Profile | Tools | Runtime | Trigger | Fail On |
 |-------|---------|-------|---------|---------|------------|
 | **Pre-commit** | N/A | TruffleHog, Semgrep IDE | < 30s | Local commit | Any finding |
-| **Commit/PR** | fast | 8 tools | 5-10 min | Push, PR | HIGH+ |
+| **Commit/PR** | fast | 9 tools | 5-10 min | Push, PR | HIGH+ |
 | **Build** | balanced | 18 tools | 18-25 min | Main branch, PR | HIGH+ |
 | **Deep Audit** | deep | 28 tools | 40-70 min | Weekly, manual | MEDIUM+ |
 | **Runtime** | N/A | Falco, Trivy | Continuous | Always | CRITICAL |
@@ -2921,7 +2919,7 @@ For complete CLI documentation with all flags and options, see **[CLI_REFERENCE.
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
-| `jmo fast` | Quick scan (8 tools, 5-10 min) |
+| `jmo fast` | Quick scan (9 tools, 5-10 min) |
 | `jmo balanced` | Production scan (18 tools, 18-25 min) |
 | `jmo full` | Comprehensive audit (28 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
@@ -2966,4 +2964,4 @@ jmo tools check --profile balanced
 
 Happy scanning!
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026

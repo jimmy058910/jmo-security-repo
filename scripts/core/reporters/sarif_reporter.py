@@ -33,7 +33,7 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
     for idx, f in enumerate(findings):
         # Skip None or invalid findings (can happen with filtering)
         if not f or not isinstance(f, dict):
-            print(f"Warning: Skipping invalid finding at index {idx}: {type(f)}")
+            logger.warning("Skipping invalid finding at index %d: %s", idx, type(f))
             continue
         rule_id = f.get("ruleId", "rule")
 

@@ -4,7 +4,7 @@
 
 JMo Security uses a **Python version-locked dependency system** to ensure consistent builds across development, CI, and production environments.
 
-**Critical Rule:** `requirements-dev.txt` MUST be compiled with **Python 3.10+** to match CI/CD environments.
+**Critical Rule:** `requirements-dev.txt` MUST be compiled with **Python 3.12+** to match CI/CD environments.
 
 ---
 
@@ -24,7 +24,7 @@ JMo Security uses a **Python version-locked dependency system** to ensure consis
 
 ### What Can Happen
 
-If `requirements-dev.txt` is compiled with Python 3.8 while CI uses Python 3.10/3.11/3.12, this can cause:
+If `requirements-dev.txt` is compiled with an older Python while CI uses Python 3.12, this can cause:
 
 1. **4 Unintended Downgrades:**
    - bandit: 1.8.6 → 1.7.10 ❌
@@ -38,12 +38,12 @@ If `requirements-dev.txt` is compiled with Python 3.8 while CI uses Python 3.10/
    - `langchain` mismatches on `langsmith` versions
 
 3. **CI Incompatibility:**
-   - Tests on Python 3.10+ used different dependency versions
+   - Tests on Python 3.12+ used different dependency versions
    - Non-deterministic behavior across environments
 
 ### Root Cause
 
-`pip-compile` uses the **active Python version** to resolve dependencies. Python 3.8 has different available versions than Python 3.10+, leading to downgrades.
+`pip-compile` uses the **active Python version** to resolve dependencies. Older Python versions have different available versions than Python 3.12+, leading to downgrades.
 
 ---
 
@@ -55,7 +55,7 @@ We built [scripts/dev/update_dependencies.py](../scripts/dev/update_dependencies
 
 **Features:**
 
-- ✅ Enforces Python 3.10+ for compilation
+- ✅ Enforces Python 3.12+ for compilation
 - ✅ Detects dependency conflicts (`pip check`)
 - ✅ Prevents accidental downgrades
 - ✅ Provides upgrade preview before applying
@@ -201,17 +201,13 @@ make deps-validate
 
 # Expected output:
 
-# [ok] requirements-dev.txt compiled with Python 3.10 (or higher)
+# [ok] requirements-dev.txt compiled with Python 3.12 (or higher)
 
 # [ok] No dependency conflicts detected
 
 # 2. If validation fails:
 
-python3.10 scripts/dev/update_dependencies.py --compile
-
-# OR
-
-python3.11 scripts/dev/update_dependencies.py --compile
+python3.12 scripts/dev/update_dependencies.py --compile
 
 # 3. Verify no downgrades
 
@@ -226,13 +222,13 @@ make test
 # 5. Commit if changed
 
 git add requirements-dev.txt
-git commit -m "deps: recompile with Python 3.10+ for v0.X.Y release"
+git commit -m "deps: recompile with Python 3.12+ for v0.X.Y release"
 ```text
 ---
 
 ## Troubleshooting
 
-### Error: "Python 3.10+ required (detected 3.8)"
+### Error: "Python 3.12+ required"
 
 **Cause:** Using wrong Python version to compile dependencies.
 
@@ -240,17 +236,7 @@ git commit -m "deps: recompile with Python 3.10+ for v0.X.Y release"
 
 ```bash
 
-# Option 1: Use Python 3.10
-
-python3.10 -m pip install pip-tools
-python3.10 scripts/dev/update_dependencies.py --compile
-
-# Option 2: Use Python 3.11
-
-python3.11 -m pip install pip-tools
-python3.11 scripts/dev/update_dependencies.py --compile
-
-# Option 3: Use Python 3.12
+# Use Python 3.12
 
 python3.12 -m pip install pip-tools
 python3.12 scripts/dev/update_dependencies.py --compile
@@ -332,8 +318,7 @@ python3 -m pip install pip-tools
 
 # Or specify Python version
 
-python3.10 -m pip install pip-tools
-python3.11 -m pip install pip-tools
+python3.12 -m pip install pip-tools
 ```text
 ---
 
@@ -458,7 +443,7 @@ The CI workflow **blocks releases** if dependencies are invalid:
 
 1. Dependabot creates PR with version bump
 2. CI validates Python version and conflicts
-3. Tests run on Python 3.10/3.11/3.12
+3. Tests run on Python 3.12
 4. If all pass, merge PR
 
 ---
@@ -467,7 +452,7 @@ The CI workflow **blocks releases** if dependencies are invalid:
 
 ### ✅ DO
 
-- ✅ **Always use Python 3.10+ for `deps-compile`**
+- ✅ **Always use Python 3.12+ for `deps-compile`**
 - ✅ **Run `deps-validate` before every release**
 - ✅ **Commit both `requirements-dev.in` AND `requirements-dev.txt`**
 - ✅ **Review diff after `deps-compile` (check for downgrades)**
@@ -477,7 +462,7 @@ The CI workflow **blocks releases** if dependencies are invalid:
 
 ### ❌ DON'T
 
-- ❌ **Never compile with Python 3.8 or 3.9** (CI uses 3.10+)
+- ❌ **Never compile with Python < 3.12** (CI uses 3.12+)
 - ❌ **Never commit only `requirements-dev.txt` without `.in`** (loses dependency rationale)
 - ❌ **Never ignore `pip check` conflicts** (will break at runtime)
 - ❌ **Never blindly accept Dependabot PRs** (always review changes and test)
@@ -487,35 +472,35 @@ The CI workflow **blocks releases** if dependencies are invalid:
 
 ## Migration Guide (For Contributors)
 
-If you previously compiled dependencies with Python 3.8/3.9:
+If you previously compiled dependencies with an older Python version:
 
-### Step 1: Install Python 3.10+
+### Step 1: Install Python 3.12+
 
 **Ubuntu/Debian:**
 ```bash
 sudo apt update
-sudo apt install python3.10 python3.10-venv
+sudo apt install python3.12 python3.12-venv
 ```text
 **macOS (Homebrew):**
 ```bash
-brew install python@3.10
+brew install python@3.12
 ```text
 **Windows (WSL):**
 ```bash
-sudo apt install python3.10
+sudo apt install python3.12
 ```text
 
 ### Step 2: Update Your Workflow
 
-**Old workflow (Python 3.8):**
+**Old workflow (pre-3.12):**
 ```bash
 python3 -m pip install pip-tools
 python3 -m piptools compile -o requirements-dev.txt requirements-dev.in
 ```text
-**New workflow (Python 3.10+):**
+**New workflow (Python 3.12+):**
 ```bash
-python3.10 -m pip install pip-tools
-python3.10 scripts/dev/update_dependencies.py --compile
+python3.12 -m pip install pip-tools
+python3.12 scripts/dev/update_dependencies.py --compile
 
 # OR use Makefile
 
@@ -529,8 +514,8 @@ make deps-validate
 ```text
 **Expected output:**
 ```text
-[ok] Python 3.10 (meets requirement ≥3.10)
-[ok] requirements-dev.txt compiled with Python 3.10
+[ok] Python 3.12 (meets requirement ≥3.12)
+[ok] requirements-dev.txt compiled with Python 3.12
 [ok] No dependency conflicts detected
 ```text
 ---
@@ -604,5 +589,5 @@ make deps-validate
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** February 2026
 **Maintainer:** JMo Security Team

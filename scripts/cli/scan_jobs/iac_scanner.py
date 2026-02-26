@@ -14,6 +14,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from ...core.tool_runner import ToolRunner, ToolDefinition
+from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
 
 
@@ -55,10 +56,11 @@ def scan_iac_file(
     statuses: dict[str, bool] = {}
     tool_defs = []
 
-    # Use filename as directory name
-    safe_name = iac_path.stem
+    # Use filename as directory name (sanitized to prevent path traversal)
+    safe_name = _sanitize_path_component(iac_path.stem)
     out_dir = results_dir / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _validate_output_path(results_dir, out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
         """Get timeout override for specific tool."""

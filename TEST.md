@@ -4,7 +4,7 @@ This document explains how to run tests, coverage, linting, and selected end-to-
 
 ## Prerequisites
 
-- Python 3.11 recommended (project venv is configured automatically by the editor)
+- Python 3.12+ required (project venv is configured automatically by the editor)
 - Install dev dependencies:
 
 ```bash
@@ -125,7 +125,7 @@ The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
 **Execution Methods:**
 
 - Native CLI (`jmo` command)
-- Wizard (`jmotools wizard`)
+- Wizard (`jmo wizard`)
 - Docker containers (deep/balanced/slim/fast variants)
 
 ### Test Suites
@@ -282,7 +282,7 @@ For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST
 
 CI uses **pytest-split** to distribute 5,000+ tests across 4 parallel shards for ~60% faster execution:
 
-- **Sharded tests**: Ubuntu/Python 3.11 (primary CI target) runs tests in 4 parallel jobs
+- **Sharded tests**: Ubuntu/Python 3.12 (primary CI target) runs tests in 4 parallel jobs
 - **Matrix tests**: Other OS/Python combinations run full test suite sequentially
 - **Coverage aggregation**: Coverage from all shards is merged before upload to Codecov
 
@@ -301,7 +301,7 @@ pytest tests/ --store-durations --durations-path=.test_durations
 - Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
 - Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
-- Different Python version: tests target 3.11 in CI; using older versions may cause minor differences.
+- Different Python version: tests target 3.12 in CI; using older versions may cause minor differences.
 
 ### Import errors like `ModuleNotFoundError: No module named 'scripts'`
 

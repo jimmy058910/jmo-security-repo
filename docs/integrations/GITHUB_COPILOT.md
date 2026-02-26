@@ -61,7 +61,7 @@ security scan results, enabling:
 
 ### Optional (depending on installation method)
 
-- **Python 3.10+**: For local installation
+- **Python 3.12+**: For local installation
 - **Docker**: For containerized deployment
 - **WinGet (Windows)** or **Homebrew (macOS/Linux)**: For package manager
   installation

@@ -335,11 +335,11 @@ special_tools:
       '
 docker_images:
   ubuntu:
-    version: '22.04'
+    version: '24.04'
     registry: docker.io
     image: ubuntu
     description: Base image for Dockerfile and Dockerfile.slim
-    update_check: docker pull ubuntu:22.04 && docker inspect ubuntu:22.04 | jq -r
+    update_check: docker pull ubuntu:24.04 && docker inspect ubuntu:24.04 | jq -r
       '.[0].Created'
   alpine:
     version: '3.18'

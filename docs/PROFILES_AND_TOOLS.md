@@ -25,7 +25,7 @@ This document is the authoritative reference for which tools are included in eac
 
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
-| **fast** | 8 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
+| **fast** | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
 | **slim** | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
 | **balanced** | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
 | **deep** | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
@@ -80,6 +80,7 @@ jmo tools install --profile balanced
 > **First-Run Warning:** The `dependency-check` tool downloads the NIST NVD database (~2GB) on its first run, which can take **30-90 minutes** depending on network speed and NIST API rate limits. Subsequent runs use the cached database and complete in **2-5 minutes**.
 >
 > For faster repeat scans in Docker, mount a persistent volume:
+>
 > ```bash
 > docker run -v dep-check-cache:/root/.dependency-check -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:deep scan
 > ```
@@ -724,10 +725,10 @@ All sources MUST match. This table tracks current status:
 
 | Source | Fast | Slim | Balanced | Deep | Status |
 |--------|------|------|----------|------|--------|
-| **jmo.yml** | 8 | 14 | 18 | 28 | Canonical |
-| **tool_registry.py** | 8 | 14 | 18 | 28 | Must match |
-| **wizard_flows/profile_config.py** | 8 | 14 | 18 | 28 | Must match |
-| **Dockerfile.fast** | 8 | - | - | - | Must match |
+| **jmo.yml** | 9 | 14 | 18 | 28 | Canonical |
+| **tool_registry.py** | 9 | 14 | 18 | 28 | Must match |
+| **wizard_flows/profile_config.py** | 9 | 14 | 18 | 28 | Must match |
+| **Dockerfile.fast** | 9 | - | - | - | Must match |
 | **Dockerfile.slim** | - | 14 | - | - | Must match |
 | **Dockerfile.balanced** | - | - | 18 | - | Must match |
 | **Dockerfile (deep)** | - | - | - | 25* | *3 manual tools |
@@ -746,7 +747,7 @@ for profile in ['fast', 'slim', 'balanced', 'deep']:
 "
 
 # Expected output:
-# fast: 8 tools
+# fast: 9 tools
 # slim: 14 tools
 # balanced: 18 tools
 # deep: 28 tools
