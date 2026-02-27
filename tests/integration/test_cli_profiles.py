@@ -605,6 +605,7 @@ profiles:
         ), f"{tool} should run (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_thread_override(tmp_path: Path):
     """Test profile-specific thread count override."""
     import subprocess
