@@ -118,7 +118,9 @@ def _generate_html_template(
 
         # Tool info (handle consensus findings)
         if "detected_by" in f:
-            tool_names = [t.get("name", "unknown") for t in f.get("detected_by", [])]
+            tool_names = [
+                _escape_html(t.get("name", "unknown")) for t in f.get("detected_by", [])
+            ]
             tool_display = ", ".join(tool_names[:3])  # Show up to 3 tools
             if len(tool_names) > 3:
                 tool_display += f" +{len(tool_names) - 3} more"

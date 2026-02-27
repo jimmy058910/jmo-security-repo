@@ -54,6 +54,34 @@ class SourceContextExtractor:
         """
         full_path = self.repo_root / file_path
 
+        # Security: Prevent path traversal (CWE-22) - resolved path must stay
+        # within repo_root to prevent reading arbitrary files like /etc/passwd
+        try:
+            resolved = full_path.resolve()
+            repo_resolved = self.repo_root.resolve()
+            if (
+                not str(resolved).startswith(str(repo_resolved) + "/")
+                and resolved != repo_resolved
+            ):
+                logger.warning(f"Path traversal attempt blocked: {file_path}")
+                return {
+                    "path": file_path,
+                    "lines": "",
+                    "language": "unknown",
+                    "start_line": start_line,
+                    "end_line": end_line or start_line,
+                    "error": "Path traversal blocked",
+                }
+        except (OSError, ValueError):
+            return {
+                "path": file_path,
+                "lines": "",
+                "language": "unknown",
+                "start_line": start_line,
+                "end_line": end_line or start_line,
+                "error": "Invalid path",
+            }
+
         if not full_path.exists():
             logger.error(f"File not found: {full_path}")
             return {
@@ -225,6 +253,29 @@ class SourceContextExtractor:
             Dictionary with full file content
         """
         full_path = self.repo_root / file_path
+
+        # Security: Prevent path traversal (CWE-22)
+        try:
+            resolved = full_path.resolve()
+            repo_resolved = self.repo_root.resolve()
+            if (
+                not str(resolved).startswith(str(repo_resolved) + "/")
+                and resolved != repo_resolved
+            ):
+                logger.warning(f"Path traversal attempt blocked: {file_path}")
+                return {
+                    "path": file_path,
+                    "content": "",
+                    "language": "unknown",
+                    "error": "Path traversal blocked",
+                }
+        except (OSError, ValueError):
+            return {
+                "path": file_path,
+                "content": "",
+                "language": "unknown",
+                "error": "Invalid path",
+            }
 
         if not full_path.exists():
             return {

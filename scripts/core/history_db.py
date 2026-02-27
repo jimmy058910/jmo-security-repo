@@ -1914,8 +1914,16 @@ def get_query_plan(conn: sqlite3.Connection, query: str) -> str:
     ):
         raise ValueError("get_query_plan() only supports SELECT queries")
 
+    # Security: Reject semicolons and compound statements to prevent SQL injection
+    # via f-string interpolation into EXPLAIN QUERY PLAN. Even though SQLite's
+    # execute() only runs the first statement, defense-in-depth matters.
+    if ";" in query:
+        raise ValueError(
+            "get_query_plan() does not allow semicolons (compound statements)"
+        )
+
     cursor = conn.cursor()
-    cursor.execute(f"EXPLAIN QUERY PLAN {query}")
+    cursor.execute(f"EXPLAIN QUERY PLAN {query}")  # nosec B608 - query validated above
     rows = cursor.fetchall()
     # Convert rows to strings (handle both Row objects and tuples)
     lines = []

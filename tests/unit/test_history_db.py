@@ -2310,6 +2310,43 @@ class TestDatabaseOptimization:
 
         conn.close()
 
+    def test_get_query_plan_rejects_semicolons(self, tmp_path):
+        """Test that get_query_plan() rejects queries with semicolons (SQL injection prevention)."""
+        from scripts.core.history_db import get_query_plan, init_database
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+        conn = get_connection(db_path)
+
+        # Semicolons in queries should be rejected to prevent compound statements
+        with pytest.raises(ValueError, match="semicolons"):
+            get_query_plan(conn, "SELECT 1; DROP TABLE scans")
+
+        with pytest.raises(ValueError, match="semicolons"):
+            get_query_plan(conn, "SELECT * FROM scans WHERE id=1; DELETE FROM scans")
+
+        # Clean queries without semicolons should still work
+        plan = get_query_plan(conn, "SELECT * FROM scans")
+        assert isinstance(plan, str)
+
+        conn.close()
+
+    def test_get_query_plan_rejects_non_select(self, tmp_path):
+        """Test that get_query_plan() rejects non-SELECT queries."""
+        from scripts.core.history_db import get_query_plan, init_database
+
+        db_path = tmp_path / "test.db"
+        init_database(db_path)
+        conn = get_connection(db_path)
+
+        with pytest.raises(ValueError, match="only supports SELECT"):
+            get_query_plan(conn, "DROP TABLE scans")
+
+        with pytest.raises(ValueError, match="only supports SELECT"):
+            get_query_plan(conn, "DELETE FROM scans WHERE id=1")
+
+        conn.close()
+
     def test_optimize_database(self, tmp_path):
         """Test database optimization (VACUUM, ANALYZE)."""
         from scripts.core.history_db import init_database, optimize_database, store_scan

@@ -10,6 +10,7 @@ before inclusion in crontab entries to prevent command injection.
 from __future__ import annotations
 
 import platform
+import shlex
 import subprocess
 
 from scripts.core.schedule_manager import ScanSchedule
@@ -297,19 +298,19 @@ class CronInstaller:
                 repo_path = repos["repo"]
                 if not validate_path_safe(repo_path, "repo"):
                     raise CronValidationError(f"Invalid repo path: '{repo_path}'")
-                jmo_cmd += f" --repo {repo_path}"
+                jmo_cmd += f" --repo {shlex.quote(repo_path)}"
             if "repos_dir" in repos:
                 repos_dir = repos["repos_dir"]
                 if not validate_path_safe(repos_dir, "repos_dir"):
                     raise CronValidationError(f"Invalid repos_dir path: '{repos_dir}'")
-                jmo_cmd += f" --repos-dir {repos_dir}"
+                jmo_cmd += f" --repos-dir {shlex.quote(repos_dir)}"
 
         # 2. Container Images
         if "images" in targets:
             for image in targets["images"]:
                 if not validate_container_image(image):
                     raise CronValidationError(f"Invalid container image: '{image}'")
-                jmo_cmd += f" --image {image}"
+                jmo_cmd += f" --image {shlex.quote(image)}"
 
         # 3. IaC Files
         if "iac" in targets:
@@ -320,21 +321,21 @@ class CronInstaller:
                     raise CronValidationError(
                         f"Invalid terraform_state path: '{tf_path}'"
                     )
-                jmo_cmd += f" --terraform-state {tf_path}"
+                jmo_cmd += f" --terraform-state {shlex.quote(tf_path)}"
             if "cloudformation" in iac:
                 cf_path = iac["cloudformation"]
                 if not validate_path_safe(cf_path, "cloudformation"):
                     raise CronValidationError(
                         f"Invalid cloudformation path: '{cf_path}'"
                     )
-                jmo_cmd += f" --cloudformation {cf_path}"
+                jmo_cmd += f" --cloudformation {shlex.quote(cf_path)}"
             if "k8s_manifest" in iac:
                 k8s_path = iac["k8s_manifest"]
                 if not validate_path_safe(k8s_path, "k8s_manifest"):
                     raise CronValidationError(
                         f"Invalid k8s_manifest path: '{k8s_path}'"
                     )
-                jmo_cmd += f" --k8s-manifest {k8s_path}"
+                jmo_cmd += f" --k8s-manifest {shlex.quote(k8s_path)}"
 
         # 4. Web URLs
         if "web" in targets:
@@ -343,12 +344,12 @@ class CronInstaller:
                 for url in web["urls"]:
                     if not validate_url(url):
                         raise CronValidationError(f"Invalid URL: '{url}'")
-                    jmo_cmd += f" --url {url}"
+                    jmo_cmd += f" --url {shlex.quote(url)}"
             if "api_spec" in web:
                 api_path = web["api_spec"]
                 if not validate_path_safe(api_path, "api_spec"):
                     raise CronValidationError(f"Invalid api_spec path: '{api_path}'")
-                jmo_cmd += f" --api-spec {api_path}"
+                jmo_cmd += f" --api-spec {shlex.quote(api_path)}"
 
         # 5. GitLab Repos (requires token from environment)
         if "gitlab" in targets:
@@ -358,12 +359,12 @@ class CronInstaller:
                 # GitLab repo format: group/project - validate no injection
                 if not validate_path_safe(gitlab_repo, "gitlab_repo"):
                     raise CronValidationError(f"Invalid GitLab repo: '{gitlab_repo}'")
-                jmo_cmd += f" --gitlab-repo {gitlab_repo}"
+                jmo_cmd += f" --gitlab-repo {shlex.quote(gitlab_repo)}"
             if "group" in gitlab:
                 gitlab_group = gitlab["group"]
                 if not validate_schedule_name(gitlab_group):
                     raise CronValidationError(f"Invalid GitLab group: '{gitlab_group}'")
-                jmo_cmd += f" --gitlab-group {gitlab_group}"
+                jmo_cmd += f" --gitlab-group {shlex.quote(gitlab_group)}"
             # Token expected in environment variable GITLAB_TOKEN
 
         # 6. Kubernetes Clusters (requires kubectl config)
@@ -373,12 +374,12 @@ class CronInstaller:
                 k8s_context = k8s["context"]
                 if not validate_schedule_name(k8s_context):
                     raise CronValidationError(f"Invalid K8s context: '{k8s_context}'")
-                jmo_cmd += f" --k8s-context {k8s_context}"
+                jmo_cmd += f" --k8s-context {shlex.quote(k8s_context)}"
             if "namespace" in k8s:
                 k8s_ns = k8s["namespace"]
                 if not validate_schedule_name(k8s_ns):
                     raise CronValidationError(f"Invalid K8s namespace: '{k8s_ns}'")
-                jmo_cmd += f" --k8s-namespace {k8s_ns}"
+                jmo_cmd += f" --k8s-namespace {shlex.quote(k8s_ns)}"
             elif k8s.get("all_namespaces"):
                 jmo_cmd += " --k8s-all-namespaces"
 
@@ -386,7 +387,7 @@ class CronInstaller:
         results_base = spec.results.get("base_dir", "~/jmo-results")
         if not validate_path_safe(results_base, "results_base"):
             raise CronValidationError(f"Invalid results base path: '{results_base}'")
-        jmo_cmd += f" --results-dir {results_base}/$(date +%Y-%m-%d)"
+        jmo_cmd += f" --results-dir {shlex.quote(results_base)}/$(date +%Y-%m-%d)"
 
         # Add options with validation
         opts = spec.options
@@ -405,7 +406,7 @@ class CronInstaller:
                     f"Invalid fail_on value: '{fail_on}'. "
                     f"Valid: {', '.join(valid_severities)}"
                 )
-            jmo_cmd += f" --fail-on {fail_on}"
+            jmo_cmd += f" --fail-on {shlex.quote(fail_on)}"
 
         # Multi-line entry with markers
         entry = f"""

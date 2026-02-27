@@ -467,3 +467,60 @@ class TestEdgeCases:
         except OSError:
             # Symlinks might not be supported (Windows without admin)
             pytest.skip("Symlinks not supported on this system")
+
+
+class TestPathTraversalPrevention:
+    """Tests for CWE-22 path traversal prevention."""
+
+    def test_get_context_blocks_parent_traversal(self, tmp_path: Path):
+        """Test that ../../ path traversal is blocked in get_context()."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+
+        # Create a file outside repo root
+        outside_file = tmp_path / "secret.txt"
+        outside_file.write_text("secret data\n")
+
+        extractor = SourceContextExtractor(repo_root)
+        result = extractor.get_context("../secret.txt", 1)
+
+        assert result["error"] == "Path traversal blocked"
+        assert result["lines"] == ""
+
+    def test_get_context_blocks_absolute_traversal(self, tmp_path: Path):
+        """Test that deeply nested traversal is blocked."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+
+        extractor = SourceContextExtractor(repo_root)
+        result = extractor.get_context("subdir/../../secret.txt", 1)
+
+        assert result["error"] == "Path traversal blocked"
+        assert result["lines"] == ""
+
+    def test_get_full_file_content_blocks_traversal(self, tmp_path: Path):
+        """Test that path traversal is blocked in get_full_file_content()."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+
+        outside_file = tmp_path / "secret.txt"
+        outside_file.write_text("secret data\n")
+
+        extractor = SourceContextExtractor(repo_root)
+        result = extractor.get_full_file_content("../secret.txt")
+
+        assert result["error"] == "Path traversal blocked"
+        assert result["content"] == ""
+
+    def test_legitimate_paths_still_work(self, tmp_path: Path):
+        """Test that normal paths within repo_root are not blocked."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / "src").mkdir()
+        (repo_root / "src" / "main.py").write_text("print('hello')\n")
+
+        extractor = SourceContextExtractor(repo_root)
+        result = extractor.get_context("src/main.py", 1)
+
+        assert "error" not in result
+        assert "hello" in result["lines"]

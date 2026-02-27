@@ -232,6 +232,33 @@ def test_write_simple_html_xss_protection(tmp_path):
     assert "&lt;img src" in html
 
 
+def test_write_simple_html_consensus_tool_names_escaped(tmp_path):
+    """Test that consensus finding tool names are HTML-escaped (XSS prevention)."""
+    findings = [
+        {
+            "severity": "HIGH",
+            "ruleId": "CWE-79",
+            "location": {"path": "app.js", "startLine": 10},
+            "message": "XSS vulnerability",
+            "detected_by": [
+                {"name": "<script>alert('xss')</script>", "version": "1.0.0"},
+                {"name": "legit-tool", "version": "2.0.0"},
+            ],
+        }
+    ]
+
+    out_path = tmp_path / "simple-report.html"
+    write_simple_html(findings, out_path)
+
+    html = out_path.read_text(encoding="utf-8")
+
+    # Malicious tool name should be escaped
+    assert "&lt;script&gt;" in html
+    assert "<script>alert('xss')</script>" not in html
+    # Legitimate tool name should still appear
+    assert "legit-tool" in html
+
+
 def test_write_simple_html_email_client_compatibility(tmp_path):
     """Test email client compatibility features."""
     findings = [
