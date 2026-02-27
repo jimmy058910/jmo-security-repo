@@ -76,7 +76,7 @@ jobs:
 
       - name: Checkout repository
         if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Log in to Container Registry
         if: steps.filter.outputs.skip != 'true'
@@ -146,7 +146,7 @@ jobs:
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --version
 
       - name: Upload tools check results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tools-check-${{ matrix.variant }}
           path: tools-check.json
@@ -171,7 +171,7 @@ jobs:
           echo "All Docker variants validated successfully"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: tools-check-*
           path: artifacts

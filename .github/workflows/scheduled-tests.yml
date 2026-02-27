@@ -47,7 +47,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -132,7 +132,7 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -169,7 +169,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -205,7 +205,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -246,7 +246,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -391,7 +391,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -481,7 +481,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -531,7 +531,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -602,7 +602,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -737,7 +737,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'performance' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
