@@ -60,7 +60,7 @@ RUN SHFMT_VERSION="3.12.0" && \
     chmod +x /usr/local/bin/shfmt
 
 # Download Falcoctl (Runtime Security)
-RUN FALCOCTL_VERSION="0.11.4" && \
+RUN FALCOCTL_VERSION="0.12.2" && \
     FALCOCTL_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_${FALCOCTL_ARCH}.tar.gz" \
     -o /tmp/falcoctl.tar.gz && \
@@ -84,7 +84,7 @@ RUN ZAP_VERSION="2.16.1" && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
 # Download Nuclei (DAST + API Security)
-RUN NUCLEI_VERSION="3.5.1" && \
+RUN NUCLEI_VERSION="3.7.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -252,7 +252,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.5
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.1 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.2 && \
     echo "✓ ruff installed"
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.2 && \

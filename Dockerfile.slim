@@ -50,7 +50,7 @@ RUN HADOLINT_VERSION="2.14.0" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download Nuclei (DAST + API)
-RUN NUCLEI_VERSION="3.5.1" && \
+RUN NUCLEI_VERSION="3.7.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -158,7 +158,7 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.151.0 \
     checkov==3.2.501 \
-    ruff==0.15.1 \
+    ruff==0.15.2 \
     yara-python==4.5.2 && \
     python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \

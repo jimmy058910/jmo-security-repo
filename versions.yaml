@@ -19,7 +19,7 @@ python_tools:
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.1
+    version: 0.15.2
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -121,7 +121,7 @@ binary_tools:
     critical: false
     brew_package: hadolint
   falcoctl:
-    version: 0.11.4
+    version: 0.12.2
     github_repo: falcosecurity/falcoctl
     description: Falco CLI for static analysis
     release_pattern: falcoctl_{version}_linux_{arch}.tar.gz
@@ -141,7 +141,7 @@ binary_tools:
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
   nuclei:
-    version: 3.5.1
+    version: 3.7.0
     github_repo: projectdiscovery/nuclei
     description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
     release_pattern: nuclei_{version}_linux_{arch}.zip
@@ -217,7 +217,7 @@ special_tools:
     critical: true
     installation: tar.gz with Java dependency
   afl++:
-    version: 4.34c
+    version: 4.35c
     github_repo: AFLplusplus/AFLplusplus
     description: Coverage-guided fuzzing (optional, deep profile)
     release_pattern: v{version}.tar.gz

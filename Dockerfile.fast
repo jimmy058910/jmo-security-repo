@@ -50,7 +50,7 @@ RUN HADOLINT_VERSION="2.14.0" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download Nuclei (minimal templates for fast scans)
-RUN NUCLEI_VERSION="3.5.1" && \
+RUN NUCLEI_VERSION="3.7.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -111,7 +111,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.151.0 \
     checkov==3.2.501 \
-    ruff==0.15.1 \
+    ruff==0.15.2 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
