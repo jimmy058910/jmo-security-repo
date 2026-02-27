@@ -56,6 +56,7 @@ from __future__ import annotations
 from pathlib import Path
 from collections.abc import Callable
 
+from ...core.config import RetryConfig
 from ...core.tool_runner import ToolRunner, ToolDefinition
 from ..path_sanitizers import _sanitize_path_component, _validate_output_path
 from ..scan_utils import find_tool, write_stub
@@ -77,7 +78,7 @@ def scan_repository(
     results_dir: Path,
     tools: list[str],
     timeout: int,
-    retries: int,
+    retries: int | RetryConfig,
     per_tool_config: dict,
     allow_missing_tools: bool,
     tool_exists_func: Callable[[str], bool] | None = None,

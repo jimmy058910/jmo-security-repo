@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scripts.core.config import RetryConfig
 from scripts.core.validation import validate_url, validate_container_image
 from scripts.core.tool_registry import filter_tools_for_scan_type
 
@@ -174,7 +175,7 @@ class ScanConfig:
     tools: list[str]
     results_dir: Path
     timeout: int = 600
-    retries: int = 0
+    retries: int | RetryConfig = 0
     max_workers: int | None = None
     include_patterns: list[str] = field(default_factory=list)
     exclude_patterns: list[str] = field(default_factory=list)
@@ -186,7 +187,7 @@ class ScanConfig:
             raise ValueError("At least one tool must be specified")
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive, got {self.timeout}")
-        if self.retries < 0:
+        if isinstance(self.retries, int) and self.retries < 0:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
@@ -645,6 +646,8 @@ class ScanOrchestrator:
         per_tool_config: dict,
         progress_callback=None,
         tool_progress_callback=None,
+        session=None,
+        session_path=None,
     ) -> list[tuple[str, dict[str, bool]]]:
         """
         Execute scans on all discovered targets in parallel.
@@ -658,6 +661,8 @@ class ScanOrchestrator:
             progress_callback: Optional callback for target-level progress updates (callable)
             tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
                                    Called when each tool starts and completes
+            session: Optional ScanSession for checkpointing (skip completed targets)
+            session_path: Optional Path to session file for checkpoint writes
 
         Returns:
             List of (target_name, statuses_dict) tuples for all scanned targets
@@ -676,6 +681,20 @@ class ScanOrchestrator:
         futures = []
         max_workers = self.get_effective_max_workers()
 
+        # Helper to check if a target was already completed in a previous session
+        def _is_completed(target_id: str) -> bool:
+            if session is not None:
+                return bool(session.is_target_completed(target_id))
+            return False
+
+        # Helper to checkpoint after each target completes
+        def _checkpoint(target_id: str, statuses: dict[str, bool]) -> None:
+            if session is not None and session_path is not None:
+                session.mark_target_complete(target_id, statuses)
+                from scripts.cli.scan_session import save_session as _save
+
+                _save(session, session_path)
+
         # Filter tools by scan type for smarter tool selection
         # This avoids running URL-only tools on repos, repo-only tools on images, etc.
         repo_tools = filter_tools_for_scan_type(self.config.tools, "repo")
@@ -685,9 +704,14 @@ class ScanOrchestrator:
         gitlab_tools = filter_tools_for_scan_type(self.config.tools, "gitlab")
         k8s_tools = filter_tools_for_scan_type(self.config.tools, "k8s")
 
+        skipped_count = 0
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit repositories - use repo-filtered tools
             for repo in targets.repos:
+                if _is_completed(repo.name):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_repository,
                     repo,
@@ -703,6 +727,9 @@ class ScanOrchestrator:
 
             # Submit images - use image-filtered tools (trivy, syft only)
             for image in targets.images:
+                if _is_completed(image):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_image,
                     image,
@@ -717,6 +744,10 @@ class ScanOrchestrator:
 
             # Submit IaC files - use IaC-filtered tools
             for iac_type, iac_path in targets.iac_files:
+                iac_id = str(iac_path)
+                if _is_completed(iac_id):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_iac_file,
                     iac_type,
@@ -728,10 +759,13 @@ class ScanOrchestrator:
                     per_tool_config,
                     self.config.allow_missing_tools,
                 )
-                futures.append(("iac", str(iac_path), future))
+                futures.append(("iac", iac_id, future))
 
             # Submit URLs - use URL-filtered tools (nuclei, zap, akto only)
             for url in targets.urls:
+                if _is_completed(url):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_url,
                     url,
@@ -746,6 +780,10 @@ class ScanOrchestrator:
 
             # Submit GitLab repos - use gitlab-filtered tools
             for gitlab_repo_info in targets.gitlab_repos:
+                gl_id = gitlab_repo_info.get("full_path", "unknown")
+                if _is_completed(gl_id):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_gitlab_repo,
                     gitlab_repo_info,
@@ -756,11 +794,16 @@ class ScanOrchestrator:
                     per_tool_config,
                     self.config.allow_missing_tools,
                 )
-                repo_id = f"{gitlab_repo_info.get('group', '')}_{gitlab_repo_info.get('name', '')}"
-                futures.append(("gitlab", repo_id, future))
+                futures.append(("gitlab", gl_id, future))
 
             # Submit K8s resources - use k8s-filtered tools (trivy only)
             for k8s_resource_info in targets.k8s_resources:
+                ctx = k8s_resource_info.get("context", "unknown")
+                ns = k8s_resource_info.get("namespace", "unknown")
+                k8s_id = f"{ctx}:{ns}"
+                if _is_completed(k8s_id):
+                    skipped_count += 1
+                    continue
                 future = executor.submit(
                     scan_k8s_resource,
                     k8s_resource_info,
@@ -771,8 +814,12 @@ class ScanOrchestrator:
                     per_tool_config,
                     self.config.allow_missing_tools,
                 )
-                res_id = f"{k8s_resource_info.get('context', '')}_{k8s_resource_info.get('namespace', '')}"
-                futures.append(("k8s", res_id, future))
+                futures.append(("k8s", k8s_id, future))
+
+            if skipped_count > 0:
+                logger.info(
+                    f"Resuming scan: skipped {skipped_count} previously completed target(s)"
+                )
 
             # Collect results as they complete
             for target_type, target_id, future in futures:
@@ -780,15 +827,15 @@ class ScanOrchestrator:
                     name, statuses = future.result()
                     all_results.append((name, statuses))
 
+                    # Checkpoint after each completed target
+                    _checkpoint(target_id, statuses)
+
                     # Call progress callback if provided
                     if progress_callback:
                         progress_callback(target_type, target_id, statuses)
 
                 except Exception as e:
                     # Log error but continue with other targets
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.error(
                         f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
                     )

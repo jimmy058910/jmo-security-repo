@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,6 +72,73 @@ class PolicyConfig:
 
 
 @dataclass
+class RetryConfig:
+    """Typed retry configuration with per-failure-type retry budgets.
+
+    Different failure types get different retry strategies:
+    - timeout: max_attempts + timeout_retries (transient, worth retrying)
+    - crash: max_attempts (may be transient)
+    - missing_tool: 1 (never retry, tool won't appear)
+    - system_error: max_attempts (permissions, OS errors)
+    """
+
+    max_attempts: int = 2  # Total base attempts (1 = no retry)
+    timeout_retries: int = 1  # Extra retries specifically for timeouts
+    backoff_base: float = 1.0  # Base backoff in seconds
+    backoff_max: float = 5.0  # Max backoff cap
+    retry_on_timeout: bool = True
+    retry_on_crash: bool = True
+    retry_on_parse_error: bool = False  # Reserved for future
+
+    def __post_init__(self) -> None:
+        if self.max_attempts < 1:
+            raise ValueError(f"max_attempts must be >= 1, got {self.max_attempts}")
+        if self.timeout_retries < 0:
+            raise ValueError(
+                f"timeout_retries must be >= 0, got {self.timeout_retries}"
+            )
+        if self.backoff_base < 0:
+            raise ValueError(f"backoff_base must be >= 0, got {self.backoff_base}")
+        if self.backoff_max < 0:
+            raise ValueError(f"backoff_max must be >= 0, got {self.backoff_max}")
+
+    def attempts_for_failure(self, failure_type: str) -> int:
+        """Return total attempts allowed for a failure type."""
+        if failure_type == "timeout":
+            if not self.retry_on_timeout:
+                return 1
+            return self.max_attempts + self.timeout_retries
+        if failure_type == "missing_tool":
+            return 1  # Never retry
+        if failure_type == "crash":
+            if not self.retry_on_crash:
+                return 1
+            return self.max_attempts
+        # system_error, unknown
+        return self.max_attempts
+
+    def backoff_delay(self, attempt: int) -> float:
+        """Exponential backoff capped at backoff_max.
+
+        attempt is 1-based (attempt 1 = first try, attempt 2 = first retry).
+        """
+        if attempt <= 1:
+            return 0.0
+        delay = self.backoff_base * math.pow(2, attempt - 2)
+        return min(delay, self.backoff_max)
+
+    @classmethod
+    def from_flat_retries(cls, retries: int) -> RetryConfig:
+        """Backward compat: convert flat int retries to RetryConfig.
+
+        retries=0 -> max_attempts=1, timeout_retries=0 (no retries)
+        retries=1 -> max_attempts=2, timeout_retries=0
+        retries=2 -> max_attempts=3, timeout_retries=0
+        """
+        return cls(max_attempts=retries + 1, timeout_retries=0)
+
+
+@dataclass
 class Config:
     tools: list[str] = field(
         default_factory=lambda: [
@@ -94,7 +162,7 @@ class Config:
     default_profile: str | None = None
     profiles: dict[str, dict[str, Any]] = field(default_factory=dict)
     per_tool: dict[str, dict[str, Any]] = field(default_factory=dict)
-    retries: int = 0
+    retries: int | RetryConfig = 0
     # Profiling thread recommendations (used when --profile flag set)
     profiling_min_threads: int = 2
     profiling_max_threads: int = 8
@@ -103,6 +171,13 @@ class Config:
     deduplication: DeduplicationConfig = field(default_factory=DeduplicationConfig)
     # Policy-as-Code configuration (Feature #5, v1.0.0)
     policy: PolicyConfig = field(default_factory=PolicyConfig)
+
+    @property
+    def retry_config(self) -> RetryConfig:
+        """Get retries as a RetryConfig, converting flat int if needed."""
+        if isinstance(self.retries, RetryConfig):
+            return self.retries
+        return RetryConfig.from_flat_retries(self.retries)
 
 
 def load_config(path: str | None) -> Config:
@@ -184,10 +259,20 @@ def load_config(path: str | None) -> Config:
     # per_tool overrides
     if isinstance(data.get("per_tool"), dict):
         cfg.per_tool = data["per_tool"]
-    # retries
+    # retries (int for backward compat, or dict for typed config)
     rv = data.get("retries")
     if isinstance(rv, int) and rv >= 0:
         cfg.retries = rv
+    elif isinstance(rv, dict):
+        cfg.retries = RetryConfig(
+            max_attempts=rv.get("max_attempts", 2),
+            timeout_retries=rv.get("timeout_retries", 1),
+            backoff_base=float(rv.get("backoff_base", 1.0)),
+            backoff_max=float(rv.get("backoff_max", 5.0)),
+            retry_on_timeout=rv.get("retry_on_timeout", True),
+            retry_on_crash=rv.get("retry_on_crash", True),
+            retry_on_parse_error=rv.get("retry_on_parse_error", False),
+        )
     # profiling thread recommendations
     if "profiling" in data and isinstance(data["profiling"], dict):
         prof = data["profiling"]

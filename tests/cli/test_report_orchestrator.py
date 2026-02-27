@@ -338,8 +338,15 @@ def test_cmd_report_gathers_findings_and_applies_suppressions(
                 return_value=sample_suppressions,
             ):
                 with patch(
-                    "scripts.cli.report_orchestrator.filter_suppressed",
-                    return_value=[{"id": "f2", "severity": "MEDIUM"}],
+                    "scripts.cli.report_orchestrator.filter_suppressed_with_summary",
+                    return_value=(
+                        [{"id": "f2", "severity": "MEDIUM"}],
+                        MagicMock(
+                            suppressed_ids=["f1"],
+                            total_suppressed=1,
+                            debt_label="Suppression debt: 1 findings (1 HIGH)",
+                        ),
+                    ),
                 ):
                     with patch("scripts.cli.report_orchestrator.write_json"):
                         with patch("scripts.cli.report_orchestrator.write_markdown"):

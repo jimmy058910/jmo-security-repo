@@ -19,7 +19,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from scripts.cli.scan_utils import find_tool
+from scripts.core.tool_utils import find_tool
 from scripts.core.exceptions import OPANotFoundException
 from scripts.core.secure_temp import secure_temp_file
 from typing import Any, Dict, List, Optional, cast

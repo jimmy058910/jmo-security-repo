@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from scripts.core.reporters.suppression_reporter import write_suppression_report
-from scripts.core.suppress import Suppression
+from scripts.core.suppress import Suppression, SuppressionSummary
 
 
 @pytest.fixture
@@ -315,3 +315,90 @@ def test_write_suppression_report_utf8_encoding(tmp_path):
     assert "©" in content
     assert "€" in content
     assert "¥" in content
+
+
+# ============================================================================
+# SuppressionSummary integration tests
+# ============================================================================
+
+
+def test_report_with_summary(tmp_path):
+    """Test report includes debt section when summary is provided."""
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    suppressions = {
+        "fp-123": Suppression(
+            id="fp-123", reason="False positive", expires="2999-12-31"
+        ),
+        "fp-456": Suppression(
+            id="fp-456", reason="Accepted risk", expires="2999-12-31"
+        ),
+    }
+    suppressed_ids = ["fp-123", "fp-456"]
+    summary = SuppressionSummary(
+        total_suppressed=2,
+        total_before_suppression=10,
+        by_severity={"HIGH": 1, "MEDIUM": 1},
+        by_rule={"fp-123": 1, "fp-456": 1},
+        suppressed_ids=suppressed_ids,
+    )
+
+    write_suppression_report(suppressed_ids, suppressions, output_path, summary=summary)
+
+    content = output_path.read_text(encoding="utf-8")
+
+    # Verify debt label is present
+    assert "Suppression debt: 2 findings (1 HIGH, 1 MEDIUM)" in content
+    # Verify suppression rate
+    assert "Suppression rate: 20.0%" in content
+    assert "2/10 findings" in content
+    # Verify severity breakdown table
+    assert "### Severity Breakdown" in content
+    assert "| HIGH | 1 |" in content
+    assert "| MEDIUM | 1 |" in content
+    # Verify the standard table is also present
+    assert "| Fingerprint | Reason | Expires | Active |" in content
+    assert "fp-123" in content
+    assert "fp-456" in content
+
+
+def test_report_without_summary(tmp_path):
+    """Test backward compat: report without summary has no debt section."""
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    suppressions = {
+        "fp-123": Suppression(id="fp-123", reason="Test", expires="2999-12-31"),
+    }
+    suppressed_ids = ["fp-123"]
+
+    # Call without summary parameter (backward compatible)
+    write_suppression_report(suppressed_ids, suppressions, output_path)
+
+    content = output_path.read_text(encoding="utf-8")
+
+    # Debt section should NOT be present
+    assert "Suppression debt:" not in content
+    assert "Suppression rate:" not in content
+    assert "### Severity Breakdown" not in content
+    # Standard content should still work
+    assert "# Suppressions Applied" in content
+    assert "fp-123" in content
+
+
+def test_report_with_summary_zero_suppressed(tmp_path):
+    """Test that summary with zero suppressions does not add debt section."""
+    output_path = tmp_path / "SUPPRESSIONS.md"
+    suppressions = {
+        "fp-123": Suppression(id="fp-123", reason="Test"),
+    }
+    suppressed_ids = []
+    summary = SuppressionSummary(
+        total_suppressed=0,
+        total_before_suppression=5,
+    )
+
+    write_suppression_report(suppressed_ids, suppressions, output_path, summary=summary)
+
+    content = output_path.read_text(encoding="utf-8")
+
+    # Debt section should NOT appear when total_suppressed == 0
+    assert "Suppression debt:" not in content
+    assert "No suppressions matched any findings." in content

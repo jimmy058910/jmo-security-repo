@@ -449,6 +449,83 @@ def mark_resolved(
         raise
 
 
+@mcp.tool()
+@require_auth_and_rate_limit
+def query_findings_db(
+    query: str,
+    params: list[str] | None = None,
+) -> dict:
+    """Execute a read-only SQL query against the JMo Security history database.
+
+    Use this tool for ad-hoc analysis of historical scan data stored in SQLite.
+    Only SELECT, EXPLAIN, WITH, and safe PRAGMA queries are allowed.
+
+    Tables: scans, findings, scan_metadata, schema_version, attestations
+    Views: latest_scan_by_branch, finding_history
+
+    Args:
+        query: Read-only SQL query string.
+        params: Optional list of bind-parameter values for ``?`` placeholders.
+
+    Returns:
+        Dictionary with:
+        - columns: List of column names
+        - rows: List of row tuples
+        - row_count: Number of rows returned
+        - truncated: True if results were capped at 500 rows
+
+    Examples:
+        - "SELECT * FROM scans ORDER BY timestamp DESC LIMIT 5"
+        - "SELECT severity, COUNT(*) FROM findings WHERE scan_id = ? GROUP BY severity"
+        - "SELECT sql FROM sqlite_master WHERE type='table'"
+        - "PRAGMA table_info(findings)"
+    """
+    from scripts.core.history_db import (
+        DEFAULT_DB_PATH,
+        QuerySecurityError,
+        QueryTimeoutError,
+        execute_readonly_query,
+    )
+
+    # Resolve database path: env var > .jmo/history.db relative to repo root > default
+    db_path_env = os.getenv("JMO_HISTORY_DB")
+    if db_path_env:
+        db_path = Path(db_path_env)
+    else:
+        repo_db = REPO_ROOT / ".jmo" / "history.db"
+        if repo_db.exists():
+            db_path = repo_db
+        else:
+            db_path = DEFAULT_DB_PATH
+
+    try:
+        result = execute_readonly_query(
+            db_path=db_path,
+            query=query,
+            params=params,
+        )
+
+        logger.info(
+            f"query_findings_db: returned {result['row_count']} rows "
+            f"(truncated={result['truncated']})"
+        )
+
+        return result
+
+    except QuerySecurityError as e:
+        logger.warning(f"query_findings_db: security violation: {e}")
+        raise ValueError(f"Query rejected: {e}")
+    except QueryTimeoutError as e:
+        logger.warning(f"query_findings_db: timeout: {e}")
+        raise ValueError(f"Query timeout: {e}")
+    except ValueError as e:
+        logger.error(f"query_findings_db: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"query_findings_db error: {e}", exc_info=True)
+        raise
+
+
 # ============================================================================
 # MCP Resources (Data access via URIs)
 # ============================================================================

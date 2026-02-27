@@ -68,6 +68,12 @@ jobs:
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
 
+      - name: "Check import direction (core/cli layering)"
+        run: python scripts/dev/check_import_direction.py
+
+      - name: "Check documentation link freshness"
+        run: python scripts/dev/check_doc_links.py
+
       - name: "Verify PyPI badge version matches pyproject.toml"
         run: |
           # Ensure badges auto-update correctly after releases

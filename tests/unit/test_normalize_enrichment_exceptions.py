@@ -590,33 +590,6 @@ class TestClusterCrossToolDuplicates:
             assert len(result) <= 2
 
 
-class TestDeprecatedSafeLoad:
-    """Tests for deprecated _safe_load function exception paths."""
-
-    def test_safe_load_profiling_timing_failure(self, monkeypatch):
-        """Test _safe_load profiling timing append failure (lines 356-358)."""
-        orig_jobs = nr.PROFILE_TIMINGS["jobs"]
-        nr.PROFILE_TIMINGS["jobs"] = tuple()  # Make non-appendable
-
-        def mock_loader(_path):
-            return []
-
-        try:
-            result = nr._safe_load(mock_loader, Path("/fake"), profiling=True)
-            assert result == []
-        finally:
-            nr.PROFILE_TIMINGS["jobs"] = orig_jobs
-
-    def test_safe_load_non_profiling_path(self):
-        """Test _safe_load non-profiling path (line 362)."""
-
-        def mock_loader(_path):
-            return [{"id": "test"}]
-
-        result = nr._safe_load(mock_loader, Path("/fake"), profiling=False)
-        assert result == [{"id": "test"}]
-
-
 class TestAflPlusPlusHandling:
     """Tests for afl++ special case handling (line 182)."""
 

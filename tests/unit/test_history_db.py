@@ -27,9 +27,13 @@ import pytest
 
 from scripts.core.history_db import (
     SCHEMA_VERSION,
+    QuerySecurityError,
+    QueryTimeoutError,
+    _validate_readonly_query,
     collect_targets,
     delete_scan,
     detect_target_type,
+    execute_readonly_query,
     get_connection,
     get_database_stats,
     get_findings_for_scan,
@@ -6962,6 +6966,113 @@ class TestComplianceTrend:
         assert trend["data_points"][0]["total_findings_with_framework"] == 0
         assert trend["data_points"][1]["total_findings_with_framework"] == 0
         assert trend["summary_stats"]["change_percentage"] == 0.0
+
+
+class TestExecuteReadonlyQuery:
+    """Tests for execute_readonly_query and _validate_readonly_query."""
+
+    @pytest.fixture()
+    def readonly_db(self, tmp_path):
+        """Create a small SQLite database for read-only query tests."""
+        db_path = tmp_path / "readonly_test.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            "CREATE TABLE scans (id TEXT PRIMARY KEY, profile TEXT, total INTEGER)"
+        )
+        cursor.execute("CREATE TABLE findings (scan_id TEXT, severity TEXT, tool TEXT)")
+        for i in range(10):
+            cursor.execute(
+                "INSERT INTO scans VALUES (?, ?, ?)",
+                (f"s-{i}", "balanced", i * 10),
+            )
+            cursor.execute(
+                "INSERT INTO findings VALUES (?, ?, ?)",
+                (f"s-{i}", "HIGH", "semgrep"),
+            )
+        conn.commit()
+        conn.close()
+        return db_path
+
+    def test_execute_readonly_query_basic(self, readonly_db):
+        """Basic SELECT query returns expected structure."""
+        result = execute_readonly_query(
+            readonly_db, "SELECT id, profile FROM scans LIMIT 3"
+        )
+        assert result["columns"] == ["id", "profile"]
+        assert result["row_count"] == 3
+        assert result["truncated"] is False
+        assert isinstance(result["rows"], list)
+        assert isinstance(result["rows"][0], list)
+
+    def test_validate_readonly_query_rejects_insert(self):
+        """_validate_readonly_query raises on INSERT (prefix check)."""
+        with pytest.raises(QuerySecurityError):
+            _validate_readonly_query("INSERT INTO scans VALUES ('x')")
+
+    def test_execute_readonly_query_timeout(self, readonly_db):
+        """A query that runs too long triggers QueryTimeoutError.
+
+        We use a recursive CTE that generates a large cross-join to
+        simulate a long-running query while keeping the DB tiny.
+        """
+        # Insert more data to make cross-join slower
+        conn = sqlite3.connect(str(readonly_db))
+        cursor = conn.cursor()
+        for i in range(200):
+            cursor.execute(
+                "INSERT INTO findings VALUES (?, ?, ?)",
+                ("s-0", f"sev-{i}", "bulk"),
+            )
+        conn.commit()
+        conn.close()
+
+        # Recursive CTE generating millions of rows should time out
+        slow_query = """
+        WITH RECURSIVE cnt(x) AS (
+            SELECT 1
+            UNION ALL
+            SELECT x+1 FROM cnt WHERE x < 100000000
+        )
+        SELECT COUNT(*) FROM cnt
+        """
+        with pytest.raises(QueryTimeoutError, match="timeout"):
+            execute_readonly_query(readonly_db, slow_query, timeout_seconds=0.1)
+
+    def test_execute_readonly_query_max_rows(self, readonly_db):
+        """Row limit truncates results and sets truncated flag."""
+        result = execute_readonly_query(readonly_db, "SELECT * FROM scans", max_rows=3)
+        assert result["row_count"] == 3
+        assert result["truncated"] is True
+
+    def test_execute_readonly_query_no_truncation(self, readonly_db):
+        """When rows fit within limit, truncated is False."""
+        result = execute_readonly_query(
+            readonly_db, "SELECT * FROM scans", max_rows=100
+        )
+        assert result["row_count"] == 10
+        assert result["truncated"] is False
+
+    def test_execute_readonly_query_with_params(self, readonly_db):
+        """Parameterized queries bind correctly."""
+        result = execute_readonly_query(
+            readonly_db,
+            "SELECT id FROM scans WHERE profile = ? AND total >= ?",
+            params=["balanced", 50],
+        )
+        assert result["row_count"] == 5  # s-5 through s-9
+        for row in result["rows"]:
+            assert row[0].startswith("s-")
+
+    def test_execute_readonly_query_missing_db(self, tmp_path):
+        """Missing database raises ValueError."""
+        with pytest.raises(ValueError, match="Database not found"):
+            execute_readonly_query(tmp_path / "nope.db", "SELECT 1")
+
+    def test_execute_readonly_query_empty_query(self, readonly_db):
+        """Empty query raises ValueError."""
+        with pytest.raises(ValueError, match="must not be empty"):
+            execute_readonly_query(readonly_db, "")
 
 
 if __name__ == "__main__":

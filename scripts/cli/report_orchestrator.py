@@ -24,7 +24,11 @@ from scripts.core.reporters.sarif_reporter import write_sarif
 from scripts.core.reporters.simple_html_reporter import write_simple_html
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
-from scripts.core.suppress import filter_suppressed, load_suppressions
+from scripts.core.suppress import (
+    filter_suppressed_with_summary,
+    load_suppressions,
+    SuppressionSummary,
+)
 from scripts.core.telemetry import (
     send_event,
     bucket_findings,
@@ -112,12 +116,15 @@ def cmd_report(args, _log_fn) -> int:
         else (Path.cwd() / "jmo.suppress.yml")
     )
     suppressions = load_suppressions(str(sup_file) if sup_file.exists() else None)
-    suppressed_ids = []
+    suppressed_ids: list[str] = []
+    suppression_summary: SuppressionSummary | None = None
     if suppressions:
-        before = {f.get("id") for f in findings}
-        findings = filter_suppressed(findings, suppressions)
-        after = {f.get("id") for f in findings}
-        suppressed_ids = list(before - after)
+        findings, suppression_summary = filter_suppressed_with_summary(
+            findings, suppressions
+        )
+        suppressed_ids = suppression_summary.suppressed_ids
+        if suppression_summary.total_suppressed > 0:
+            _log_fn(args, "INFO", suppression_summary.debt_label)
 
     # Generate metadata for v1.0.0 output format
     from scripts.core.reporters.basic_reporter import _generate_metadata
@@ -202,7 +209,10 @@ def cmd_report(args, _log_fn) -> int:
         )
     if suppressions:
         write_suppression_report(
-            [str(x) for x in suppressed_ids], suppressions, out_dir / "SUPPRESSIONS.md"
+            [str(x) for x in suppressed_ids],
+            suppressions,
+            out_dir / "SUPPRESSIONS.md",
+            summary=suppression_summary,
         )
 
     # Write compliance framework reports (v1.2.0)

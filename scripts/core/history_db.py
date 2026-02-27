@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import time
@@ -31,6 +32,20 @@ from typing import Any, Dict, List, Optional
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Custom Exceptions
+# ---------------------------------------------------------------------------
+
+
+class QuerySecurityError(Exception):
+    """Raised when a query violates security constraints."""
+
+
+class QueryTimeoutError(Exception):
+    """Raised when a query exceeds the timeout limit."""
+
 
 # Schema version for migrations
 SCHEMA_VERSION = "1.0.0"
@@ -3577,3 +3592,201 @@ def get_attestation_coverage(days: int = 30) -> Dict[str, Any]:
         ),
         "missing_scan_ids": missing_scan_ids,
     }
+
+
+# ---------------------------------------------------------------------------
+# Read-Only Query Execution (MCP query_findings_db support)
+# ---------------------------------------------------------------------------
+
+# Safe PRAGMAs that only read metadata (no side-effects)
+_SAFE_PRAGMAS = frozenset(
+    {
+        "table_info",
+        "table_list",
+        "index_list",
+        "index_info",
+        "foreign_key_list",
+        "database_list",
+        "compile_options",
+    }
+)
+
+# SQL keywords that must never appear as standalone words in a read-only query
+_FORBIDDEN_KEYWORDS = [
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "DROP",
+    "CREATE",
+    "ALTER",
+    "ATTACH",
+    "DETACH",
+    "LOAD_EXTENSION",
+    "REPLACE",
+]
+
+# Pre-compiled regex for forbidden keyword detection (word-boundary matching)
+_FORBIDDEN_RE = re.compile(
+    r"\b(?:" + "|".join(_FORBIDDEN_KEYWORDS) + r")\b", re.IGNORECASE
+)
+
+
+def _validate_readonly_query(query: str) -> None:
+    """Validate that a query is safe for read-only execution.
+
+    Security layers:
+    1. Prefix check - only SELECT / EXPLAIN / WITH / safe PRAGMA
+    2. Forbidden keyword scan (word-boundary regex)
+    3. Multi-statement rejection (semicolon followed by non-whitespace)
+    4. Unsafe PRAGMA blocking
+
+    Raises:
+        QuerySecurityError: If the query violates any constraint.
+    """
+    stripped = query.strip()
+    if not stripped:
+        raise QuerySecurityError("Empty query")
+
+    # Strip SQL comments for analysis
+    clean = re.sub(r"--[^\n]*", "", stripped)
+    clean = re.sub(r"/\*.*?\*/", "", clean, flags=re.DOTALL)
+    clean = clean.strip()
+
+    if not clean:
+        raise QuerySecurityError("Query contains only comments")
+
+    # 1. Allowed prefix check
+    upper = clean.upper()
+    allowed_prefixes = ("SELECT", "EXPLAIN", "WITH", "PRAGMA")
+    if not any(upper.startswith(prefix) for prefix in allowed_prefixes):
+        raise QuerySecurityError(
+            "Only SELECT, EXPLAIN, WITH, and safe PRAGMA queries are allowed"
+        )
+
+    # 2. Forbidden keyword scan (uses word-boundary regex to avoid false
+    #    positives on column names like ``created_at`` containing "CREATE")
+    match = _FORBIDDEN_RE.search(upper)
+    if match:
+        raise QuerySecurityError(f"Forbidden keyword: {match.group(0)}")
+
+    # 3. Multi-statement rejection
+    #    Remove string literals first so semicolons inside strings don't
+    #    trigger a false positive.
+    no_strings = re.sub(r"'[^']*'", "", clean)
+    parts = [p.strip() for p in no_strings.split(";") if p.strip()]
+    if len(parts) > 1:
+        raise QuerySecurityError("Multiple statements not allowed")
+
+    # 4. Unsafe PRAGMA blocking
+    if upper.startswith("PRAGMA"):
+        pragma_match = re.match(r"PRAGMA\s+(\w+)", clean, re.IGNORECASE)
+        if pragma_match:
+            pragma_name = pragma_match.group(1).lower()
+            if pragma_name not in _SAFE_PRAGMAS:
+                raise QuerySecurityError(f"Unsafe PRAGMA: {pragma_name}")
+
+
+def _make_progress_handler(timeout_seconds: float):
+    """Create a SQLite progress handler that cancels after *timeout_seconds*.
+
+    SQLite calls the progress handler every ~1000 VM instructions.  Returning
+    a non-zero value from the handler cancels the running statement.
+    """
+    start = time.monotonic()
+
+    def handler():
+        if time.monotonic() - start > timeout_seconds:
+            return 1  # non-zero → cancel
+        return 0
+
+    return handler
+
+
+def execute_readonly_query(
+    db_path: str | Path,
+    query: str,
+    params: list | None = None,
+    max_rows: int = 500,
+    timeout_seconds: float = 5.0,
+) -> dict:
+    """Execute a read-only SQL query against the history database.
+
+    The function opens a **read-only** SQLite connection, validates the
+    query against a strict security policy, and returns results with
+    automatic row-limit enforcement.
+
+    Args:
+        db_path: Path to the SQLite database file.
+        query: SQL query string (SELECT / EXPLAIN / WITH / safe PRAGMA only).
+        params: Optional list of bind parameters for the query.
+        max_rows: Maximum rows to return (default 500). The function fetches
+            ``max_rows + 1`` to detect truncation.
+        timeout_seconds: Maximum wall-clock seconds for query execution
+            (default 5). Uses ``sqlite3.Connection.set_progress_handler``.
+
+    Returns:
+        ``{"columns": [...], "rows": [[...], ...], "row_count": N, "truncated": bool}``
+
+    Raises:
+        QuerySecurityError: If the query violates the security policy.
+        QueryTimeoutError: If the query exceeds *timeout_seconds*.
+        ValueError: If *db_path* does not exist or *query* is empty.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        raise ValueError(f"Database not found: {db_path}")
+
+    if not query or not query.strip():
+        raise ValueError("Query must not be empty")
+
+    # Security validation
+    _validate_readonly_query(query)
+
+    # Normalise path for the URI (forward-slash, absolute)
+    # On Windows sqlite3 URI mode requires forward slashes and an extra
+    # leading slash for the drive letter, e.g. file:///C:/path/to/db
+    abs_path = db_path.resolve()
+    uri_path = abs_path.as_posix()
+    if not uri_path.startswith("/"):
+        # Windows drive-letter path like "C:/..." → "/C:/..."
+        uri_path = "/" + uri_path
+
+    conn = sqlite3.connect(f"file://{uri_path}?mode=ro", uri=True)
+    try:
+        conn.row_factory = None  # tuples for compact output
+
+        # Install progress handler for timeout enforcement
+        # Callback fires every ~1000 SQLite VM instructions
+        conn.set_progress_handler(_make_progress_handler(timeout_seconds), 1000)
+
+        cursor = conn.cursor()
+        try:
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "interrupt" in msg:
+                raise QueryTimeoutError(
+                    f"Query exceeded timeout of {timeout_seconds}s"
+                ) from exc
+            raise
+
+        # Column names from the cursor description
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+
+        # Fetch max_rows + 1 to detect truncation
+        rows = cursor.fetchmany(max_rows + 1)
+        truncated = len(rows) > max_rows
+        if truncated:
+            rows = rows[:max_rows]
+
+        return {
+            "columns": columns,
+            "rows": [list(row) for row in rows],
+            "row_count": len(rows),
+            "truncated": truncated,
+        }
+    finally:
+        conn.close()

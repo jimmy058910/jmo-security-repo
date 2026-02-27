@@ -4,7 +4,9 @@ Unit tests for scripts/core/tool_runner.py
 Tests the ToolRunner class extracted from cmd_scan() as part of PHASE 1 refactoring.
 """
 
+import subprocess
 import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pathlib import Path
@@ -884,6 +886,139 @@ class TestProgressCallback:
         assert "max_attempts" in kwargs
         assert isinstance(kwargs["attempt"], int)
         assert isinstance(kwargs["max_attempts"], int)
+
+
+# ========== Typed Retry Logic (RetryConfig) Tests ==========
+
+
+class TestRetryConfigIntegration:
+    """Tests for typed retry logic with per-failure-type budgets."""
+
+    def test_run_tool_timeout_gets_extra_retries(self):
+        """Timeout budget = max_attempts + timeout_retries."""
+        from scripts.core.config import RetryConfig
+
+        rc = RetryConfig(
+            max_attempts=2, timeout_retries=2, backoff_base=0, backoff_max=0
+        )
+        tool = ToolDefinition(
+            name="slow_tool",
+            command=["sleep", "999"],
+            output_file=None,
+            timeout=1,
+            retries=rc,
+        )
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+            result = runner.run_tool(tool)
+        assert result.status == "retry_exhausted"
+        assert result.attempts == 4  # 2 base + 2 timeout = 4
+
+    def test_run_tool_crash_limited_to_max_attempts(self):
+        """Crash uses base budget only (no timeout_retries)."""
+        from scripts.core.config import RetryConfig
+
+        rc = RetryConfig(
+            max_attempts=2, timeout_retries=3, backoff_base=0, backoff_max=0
+        )
+        tool = ToolDefinition(
+            name="crashy",
+            command=["false"],
+            output_file=None,
+            retries=rc,
+            ok_return_codes=(0,),
+        )
+        mock_result = MagicMock()
+        mock_result.returncode = 2
+        mock_result.stderr = "error"
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=mock_result):
+            result = runner.run_tool(tool)
+        assert result.status == "retry_exhausted"
+        assert result.attempts == 2  # Only max_attempts, not +timeout_retries
+
+    def test_run_tool_missing_tool_never_retries(self):
+        """Missing tool causes immediate failure, no retries."""
+        from scripts.core.config import RetryConfig
+
+        rc = RetryConfig(max_attempts=5, timeout_retries=5)
+        tool = ToolDefinition(
+            name="ghost",
+            command=["nonexistent_tool"],
+            output_file=None,
+            retries=rc,
+        )
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", side_effect=FileNotFoundError("not found")):
+            result = runner.run_tool(tool)
+        assert result.status == "error"
+        assert result.attempts == 1
+
+    def test_run_tool_retry_disabled_for_crash(self):
+        """retry_on_crash=False disables crash retries."""
+        from scripts.core.config import RetryConfig
+
+        rc = RetryConfig(
+            max_attempts=3, retry_on_crash=False, backoff_base=0, backoff_max=0
+        )
+        tool = ToolDefinition(
+            name="crashy",
+            command=["false"],
+            output_file=None,
+            retries=rc,
+            ok_return_codes=(0,),
+        )
+        mock_result = MagicMock()
+        mock_result.returncode = 2
+        mock_result.stderr = "error"
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=mock_result):
+            result = runner.run_tool(tool)
+        assert result.attempts == 1  # No retries when disabled
+
+    def test_run_tool_retry_disabled_for_timeout(self):
+        """retry_on_timeout=False disables timeout retries."""
+        from scripts.core.config import RetryConfig
+
+        rc = RetryConfig(
+            max_attempts=3,
+            timeout_retries=2,
+            retry_on_timeout=False,
+            backoff_base=0,
+            backoff_max=0,
+        )
+        tool = ToolDefinition(
+            name="slow",
+            command=["sleep", "999"],
+            output_file=None,
+            timeout=1,
+            retries=rc,
+        )
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("cmd", 1)):
+            result = runner.run_tool(tool)
+        assert result.attempts == 1  # No retries when disabled
+
+    def test_run_tool_backward_compat_flat_int(self):
+        """Flat int retries still works as before."""
+        tool = ToolDefinition(
+            name="basic",
+            command=["echo", "hi"],
+            output_file=None,
+            retries=1,  # flat int
+            ok_return_codes=(0,),
+        )
+        mock_result = MagicMock()
+        mock_result.returncode = 2
+        mock_result.stderr = "error"
+
+        runner = ToolRunner([tool])
+        with patch("subprocess.run", return_value=mock_result):
+            result = runner.run_tool(tool)
+        assert result.status == "retry_exhausted"
+        assert result.attempts == 2  # retries=1 -> max_attempts=2
 
 
 if __name__ == "__main__":

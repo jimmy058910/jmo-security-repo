@@ -247,7 +247,7 @@ def _generate_vanilla_template(data_injection: str, use_inline: bool) -> str:
 <head>
 <meta charset="utf-8" />
 <!-- CSP: 'unsafe-inline' required because this is a self-contained HTML file
-     with embedded <script> and <style> tags. No external server to provide
+     with embedded script and style tags. No external server to provide
      nonces, and hash-based CSP would break on any template change. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none';" />
 <meta http-equiv="X-Frame-Options" content="DENY" />

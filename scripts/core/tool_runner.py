@@ -17,6 +17,7 @@ import logging
 import subprocess
 import time
 
+from scripts.core.config import RetryConfig
 from scripts.core.exceptions import ToolExecutionException
 
 # Configure logging
@@ -73,9 +74,16 @@ class ToolDefinition:
     command: list[str]
     output_file: Path | None
     timeout: int = 600
-    retries: int = 0
+    retries: int | RetryConfig = 0
     ok_return_codes: tuple[int, ...] = (0, 1)
     capture_stdout: bool = False
+
+    @property
+    def retry_config(self) -> RetryConfig:
+        """Get retries as a RetryConfig, converting flat int if needed."""
+        if isinstance(self.retries, RetryConfig):
+            return self.retries
+        return RetryConfig.from_flat_retries(self.retries)
 
     def __post_init__(self):
         """Validate tool definition after initialization."""
@@ -85,7 +93,7 @@ class ToolDefinition:
             raise ValueError("Tool command cannot be empty")
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive, got {self.timeout}")
-        if self.retries < 0:
+        if isinstance(self.retries, int) and self.retries < 0:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
 
 
@@ -183,15 +191,31 @@ class ToolRunner:
         self.max_workers = max_workers
         self.progress_callback = progress_callback
 
+    @staticmethod
+    def _classify_failure(exc: Exception | None, returncode: int | None) -> str:
+        """Classify a failure into a type for retry budget lookup."""
+        if isinstance(exc, subprocess.TimeoutExpired):
+            return "timeout"
+        if isinstance(exc, FileNotFoundError):
+            return "missing_tool"
+        if isinstance(exc, (OSError, PermissionError)):
+            return "system_error"
+        if exc is not None:
+            return "unknown"
+        # Non-exception failure (bad return code)
+        return "crash"
+
     def run_tool(self, tool: ToolDefinition) -> ToolResult:
         """
-        Run a single tool with timeout and retry support.
+        Run a single tool with timeout and typed retry support.
 
-        This method wraps the tool execution with:
-        - Timeout enforcement
-        - Retry logic for transient failures
-        - Return code validation
-        - Error handling
+        Different failure types get different retry budgets:
+        - timeout: max_attempts + timeout_retries (transient, worth retrying)
+        - crash: max_attempts (bad exit code, may be transient)
+        - missing_tool: 1 (never retry, tool won't appear)
+        - system_error: max_attempts (OS/permission errors)
+
+        Uses exponential backoff between retries, capped at backoff_max.
 
         Args:
             tool: Tool definition to execute
@@ -200,10 +224,16 @@ class ToolRunner:
             ToolResult with execution status and metadata
         """
         start_time = time.time()
-        attempts = tool.retries + 1
+        rc = tool.retry_config
+        attempt = 0
         last_error = ""
 
-        for attempt in range(1, attempts + 1):
+        # Track attempts per failure type
+        attempts_by_type: dict[str, int] = {}
+
+        while True:
+            attempt += 1
+
             try:
                 result = subprocess.run(
                     tool.command,
@@ -230,45 +260,53 @@ class ToolRunner:
                         output_file=tool.output_file,
                         capture_stdout=tool.capture_stdout,
                     )
-                else:
-                    # Unacceptable return code
-                    last_error = (
-                        f"Return code {result.returncode} not in {tool.ok_return_codes}"
-                    )
 
-                    # Don't retry for findings exit codes (1 usually means findings found)
-                    if result.returncode == 1 and 1 in tool.ok_return_codes:
-                        # This shouldn't happen (already checked above), but be defensive
-                        break
-
-                    # Retry for other error codes if retries available
-                    if attempt < attempts:
-                        time.sleep(1)  # Brief delay before retry
-                        continue
+                # Unacceptable return code -> classify as crash
+                last_error = (
+                    f"Return code {result.returncode} not in {tool.ok_return_codes}"
+                )
+                attempts_by_type["crash"] = attempts_by_type.get("crash", 0) + 1
+                budget = rc.attempts_for_failure("crash")
+                if attempts_by_type["crash"] < budget:
+                    delay = rc.backoff_delay(attempts_by_type["crash"])
+                    if delay > 0:
+                        time.sleep(delay)
+                    continue
+                break  # Budget exhausted
 
             except subprocess.TimeoutExpired:
-                # Tool timed out - notify via callback and retry if attempts remain
                 last_error = f"Timeout after {tool.timeout}s"
+                attempts_by_type["timeout"] = attempts_by_type.get("timeout", 0) + 1
+                budget = rc.attempts_for_failure("timeout")
+
                 if self.progress_callback:
                     self.progress_callback(
                         tool.name,
-                        "retrying" if attempt < attempts else "timeout",
+                        (
+                            "retrying"
+                            if attempts_by_type["timeout"] < budget
+                            else "timeout"
+                        ),
                         0,
                         message=f"Timeout after {tool.timeout}s",
                         attempt=attempt,
-                        max_attempts=attempts,
+                        max_attempts=budget,
                     )
                 else:
                     logger.warning(
                         f"{tool.name} timed out after {tool.timeout}s "
-                        f"(attempt {attempt}/{attempts})"
+                        f"(attempt {attempts_by_type['timeout']}/{budget})"
                     )
-                if attempt < attempts:
-                    time.sleep(2)  # Longer delay after timeout
+
+                if attempts_by_type["timeout"] < budget:
+                    delay = rc.backoff_delay(attempts_by_type["timeout"])
+                    if delay > 0:
+                        time.sleep(delay)
                     continue
+                break  # Budget exhausted
 
             except FileNotFoundError:
-                # Tool not found - no point retrying
+                # Tool not found - never retry
                 duration = time.time() - start_time
                 return ToolResult(
                     tool=tool.name,
@@ -278,30 +316,42 @@ class ToolRunner:
                     duration=duration,
                     error_message=f"Tool not found: {tool.command[0]}",
                 )
+
             except (OSError, PermissionError) as e:
-                # System errors (file not found, permissions, etc.)
                 last_error = str(e)
+                attempts_by_type["system_error"] = (
+                    attempts_by_type.get("system_error", 0) + 1
+                )
+                budget = rc.attempts_for_failure("system_error")
                 logger.debug(f"{tool.name} execution failed: {e}")
-                if attempt < attempts:
-                    time.sleep(1)
+                if attempts_by_type["system_error"] < budget:
+                    delay = rc.backoff_delay(attempts_by_type["system_error"])
+                    if delay > 0:
+                        time.sleep(delay)
                     continue
+                break
+
             except Exception as e:
-                # Unexpected errors - log with traceback
                 last_error = str(e)
+                attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
+                budget = rc.attempts_for_failure("unknown")
                 logger.error(
                     f"Unexpected error running {tool.name}: {e}", exc_info=True
                 )
-                if attempt < attempts:
-                    time.sleep(1)
+                if attempts_by_type["unknown"] < budget:
+                    delay = rc.backoff_delay(attempts_by_type["unknown"])
+                    if delay > 0:
+                        time.sleep(delay)
                     continue
+                break
 
-        # All retries exhausted
+        # All retries exhausted for the last failure type
         duration = time.time() - start_time
         return ToolResult(
             tool=tool.name,
-            status="retry_exhausted" if attempts > 1 else "error",
+            status="retry_exhausted" if attempt > 1 else "error",
             returncode=-1,
-            attempts=attempts,
+            attempts=attempt,
             duration=duration,
             error_message=last_error,
         )

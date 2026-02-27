@@ -59,10 +59,7 @@ class SourceContextExtractor:
         try:
             resolved = full_path.resolve()
             repo_resolved = self.repo_root.resolve()
-            if (
-                not str(resolved).startswith(str(repo_resolved) + "/")
-                and resolved != repo_resolved
-            ):
+            if not resolved.is_relative_to(repo_resolved):
                 logger.warning(f"Path traversal attempt blocked: {file_path}")
                 return {
                     "path": file_path,
@@ -258,10 +255,7 @@ class SourceContextExtractor:
         try:
             resolved = full_path.resolve()
             repo_resolved = self.repo_root.resolve()
-            if (
-                not str(resolved).startswith(str(repo_resolved) + "/")
-                and resolved != repo_resolved
-            ):
+            if not resolved.is_relative_to(repo_resolved):
                 logger.warning(f"Path traversal attempt blocked: {file_path}")
                 return {
                     "path": file_path,

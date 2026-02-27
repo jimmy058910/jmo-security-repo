@@ -44,6 +44,7 @@ from pathlib import Path
 
 from .repository_scanner import scan_repository
 from .image_scanner import scan_image
+from scripts.core.config import RetryConfig
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.validation import sanitize_subprocess_output
 
@@ -152,7 +153,7 @@ def scan_gitlab_repo(
     results_dir: Path,
     tools: list[str],
     timeout: int,
-    retries: int,
+    retries: int | RetryConfig,
     per_tool_config: dict,
     allow_missing_tools: bool,
     tool_exists_func=None,

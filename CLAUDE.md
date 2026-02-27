@@ -206,6 +206,8 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 
 **Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (14 skills, 7 agents)
 
+**Persona guidelines:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
+
 ### Parallel Work: Agent Teams vs Subagents
 
 Choose the right parallelism strategy based on task characteristics:
@@ -516,6 +518,8 @@ with patch("module.tool_exists", return_value=True):
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
 
 **Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
+
+**Plans:** [docs/plans/README.md](docs/plans/README.md)
 
 ## Notes
 

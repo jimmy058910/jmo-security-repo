@@ -647,6 +647,130 @@ retries: -1
     assert cfg.retries == 0  # Should use default
 
 
+# ========== Category 12b: RetryConfig Typed Retry Logic ==========
+
+
+def test_retry_config_from_flat_int():
+    """Test backward compat: flat int converts to RetryConfig."""
+    from scripts.core.config import RetryConfig
+
+    rc = RetryConfig.from_flat_retries(0)
+    assert rc.max_attempts == 1
+    assert rc.timeout_retries == 0
+
+    rc = RetryConfig.from_flat_retries(2)
+    assert rc.max_attempts == 3
+    assert rc.timeout_retries == 0
+
+
+def test_retry_config_from_dict_yaml(tmp_path: Path):
+    """Test typed dict parsing from YAML."""
+    from scripts.core.config import RetryConfig, load_config
+
+    yaml_content = """
+retries:
+  max_attempts: 3
+  timeout_retries: 2
+  retry_on_timeout: true
+  retry_on_crash: true
+  backoff_base: 1.5
+  backoff_max: 10.0
+"""
+    yaml_file = write_yaml_file(tmp_path, "retries_dict.yml", yaml_content)
+    cfg = load_config(str(yaml_file))
+
+    assert isinstance(cfg.retries, RetryConfig)
+    assert cfg.retries.max_attempts == 3
+    assert cfg.retries.timeout_retries == 2
+    assert cfg.retries.retry_on_timeout is True
+    assert cfg.retries.backoff_base == 1.5
+    assert cfg.retries.backoff_max == 10.0
+
+
+def test_retry_config_validation_errors():
+    """Test RetryConfig raises on invalid values."""
+    from scripts.core.config import RetryConfig
+
+    with pytest.raises(ValueError, match="max_attempts"):
+        RetryConfig(max_attempts=0)
+
+    with pytest.raises(ValueError, match="timeout_retries"):
+        RetryConfig(timeout_retries=-1)
+
+    with pytest.raises(ValueError, match="backoff_base"):
+        RetryConfig(backoff_base=-1.0)
+
+
+def test_retry_config_attempts_for_failure():
+    """Test each failure type returns correct retry budget."""
+    from scripts.core.config import RetryConfig
+
+    rc = RetryConfig(max_attempts=2, timeout_retries=1)
+    assert rc.attempts_for_failure("timeout") == 3  # 2 + 1
+    assert rc.attempts_for_failure("crash") == 2
+    assert rc.attempts_for_failure("missing_tool") == 1  # Never retry
+    assert rc.attempts_for_failure("system_error") == 2
+    assert rc.attempts_for_failure("unknown") == 2
+
+
+def test_retry_config_attempts_disabled():
+    """Test disabled retry flags."""
+    from scripts.core.config import RetryConfig
+
+    rc = RetryConfig(
+        max_attempts=3, timeout_retries=2, retry_on_timeout=False, retry_on_crash=False
+    )
+    assert rc.attempts_for_failure("timeout") == 1
+    assert rc.attempts_for_failure("crash") == 1
+    assert rc.attempts_for_failure("system_error") == 3  # Not affected
+
+
+def test_retry_config_backoff_delay():
+    """Test delay calculation with cap."""
+    from scripts.core.config import RetryConfig
+
+    rc = RetryConfig(backoff_base=1.0, backoff_max=5.0)
+    assert rc.backoff_delay(1) == 0.0  # First attempt, no delay
+    assert rc.backoff_delay(2) == 1.0  # 1.0 * 2^0
+    assert rc.backoff_delay(3) == 2.0  # 1.0 * 2^1
+    assert rc.backoff_delay(4) == 4.0  # 1.0 * 2^2
+    assert rc.backoff_delay(5) == 5.0  # 1.0 * 2^3 = 8.0, capped at 5.0
+
+
+def test_load_config_retries_dict(tmp_path: Path):
+    """Test YAML dict format parses correctly."""
+    from scripts.core.config import RetryConfig, load_config
+
+    yaml_content = """
+retries:
+  max_attempts: 4
+  timeout_retries: 3
+"""
+    yaml_file = write_yaml_file(tmp_path, "retries_dict2.yml", yaml_content)
+    cfg = load_config(str(yaml_file))
+
+    assert isinstance(cfg.retries, RetryConfig)
+    assert cfg.retries.max_attempts == 4
+    assert cfg.retries.timeout_retries == 3
+
+
+def test_load_config_retries_int_still_works(tmp_path: Path):
+    """Test flat int format still works (no regression)."""
+    from scripts.core.config import load_config
+
+    yaml_content = """
+retries: 1
+"""
+    yaml_file = write_yaml_file(tmp_path, "retries_int.yml", yaml_content)
+    cfg = load_config(str(yaml_file))
+
+    assert cfg.retries == 1
+    # retry_config property should convert
+    rc = cfg.retry_config
+    assert rc.max_attempts == 2
+    assert rc.timeout_retries == 0
+
+
 # ========== Category 13: Profiling Configuration ==========
 
 

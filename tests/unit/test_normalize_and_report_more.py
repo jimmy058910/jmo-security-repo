@@ -190,25 +190,6 @@ def test_threads_exception_path(tmp_path: Path, monkeypatch):
     assert nr.PROFILE_TIMINGS.get("meta", {}).get("max_workers") == 8
 
 
-def test_as_completed_exception_is_caught(tmp_path: Path, monkeypatch):
-    root = tmp_path / "results"
-    repo = root / "individual-repos" / "r"
-    repo.mkdir(parents=True, exist_ok=True)
-    _write(repo / "gitleaks.json", "[]")
-
-    calls = {"n": 0}
-
-    def flaky(loader, path, profiling=False):  # noqa: ARG001
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("boom")
-        return []
-
-    monkeypatch.setattr(nr, "_safe_load", flaky)
-    out = nr.gather_results(root)
-    assert isinstance(out, list)
-
-
 def test_env_threads_override(tmp_path: Path, monkeypatch):
     root = tmp_path / "results"
     repo = root / "individual-repos" / "r"
@@ -238,28 +219,6 @@ def test_profiling_meta_update_failure(tmp_path: Path, monkeypatch):
     assert isinstance(out, list)
     # restore meta dict for subsequent tests
     nr.PROFILE_TIMINGS["meta"] = {}
-
-
-def test_safe_load_exception_paths(monkeypatch):
-    # loader that raises
-    def raiser(_):
-        raise ValueError("nope")
-
-    # profiling False path
-    assert nr._safe_load(raiser, Path("/dev/null"), profiling=False) == []
-
-    # profiling True path with append failure
-    def empty_ok(_):
-        return []
-
-    # make jobs non-appendable
-    orig_jobs = nr.PROFILE_TIMINGS["jobs"]
-    nr.PROFILE_TIMINGS["jobs"] = tuple()
-    try:
-        out = nr._safe_load(empty_ok, Path("/dev/null"), profiling=True)
-        assert out == []
-    finally:
-        nr.PROFILE_TIMINGS["jobs"] = orig_jobs
 
 
 def test_enrich_no_syft_noop():

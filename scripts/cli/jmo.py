@@ -84,8 +84,8 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     )
     include = profile.get("include", cfg.include) or cfg.include
     exclude = profile.get("exclude", cfg.exclude) or cfg.exclude
-    retries = cfg.retries
-    if isinstance(profile.get("retries"), int):
+    retries = cfg.retries  # May be int or RetryConfig
+    if isinstance(profile.get("retries"), (int, dict)):
         retries = profile["retries"]
     per_tool = _merge_dict(cfg.per_tool, profile.get("per_tool", {}))
 
@@ -100,7 +100,9 @@ def _effective_scan_settings(args) -> dict[str, Any]:
         "timeout": timeout,
         "include": include,
         "exclude": exclude,
-        "retries": max(0, int(retries or 0)),
+        "retries": (
+            retries if not isinstance(retries, int) else max(0, int(retries or 0))
+        ),
         "per_tool": per_tool,
         "skip_tools": skip_tools,
     }
@@ -222,6 +224,20 @@ def _add_scan_config_args(parser):
         "--collect-metadata",
         action="store_true",
         help="Collect hostname/username metadata (default: disabled for privacy)",
+    )
+    # Session checkpointing flags
+    resume_group = parser.add_mutually_exclusive_group()
+    resume_group.add_argument(
+        "--resume",
+        action="store_true",
+        default=False,
+        help="Resume previous scan session without prompting",
+    )
+    resume_group.add_argument(
+        "--no-resume",
+        action="store_true",
+        default=False,
+        help="Start fresh scan, discard existing session",
     )
 
 
@@ -2742,7 +2758,11 @@ def cmd_scan(args) -> int:
         tools=tools,
         results_dir=results_dir,
         timeout=int(eff["timeout"] or 600),
-        retries=int(eff["retries"] or 0),
+        retries=(
+            eff["retries"]
+            if not isinstance(eff["retries"], int)
+            else int(eff["retries"] or 0)
+        ),
         max_workers=_get_max_workers(args, eff, cfg),
         include_patterns=eff.get("include", []) or [],
         exclude_patterns=eff.get("exclude", []) or [],
@@ -2823,15 +2843,111 @@ def cmd_scan(args) -> int:
     # Prepare per-tool config
     per_tool_config = eff.get("per_tool", {}) or {}
 
+    # --- Session checkpointing ---
+    from scripts.cli.scan_session import (
+        ScanSession,
+        compute_config_hash,
+        load_session,
+        save_session,
+        delete_session,
+        validate_session_results,
+        format_session_summary,
+    )
+
+    session_path = Path(args.results_dir).parent / ".jmo" / "scan-session.json"
+    config_path = Path(getattr(args, "config", "jmo.yml"))
+    config_hash = compute_config_hash(config_path)
+    scan_session: ScanSession | None = None
+
+    # Check for existing session
+    explicit_resume = getattr(args, "resume", False)
+    explicit_no_resume = getattr(args, "no_resume", False)
+
+    if not explicit_no_resume:
+        existing = load_session(session_path)
+        if existing is not None:
+            # Validate config hash matches
+            if existing.config_hash != config_hash:
+                _log(
+                    args,
+                    "WARN",
+                    "Config changed since last session, starting fresh scan.",
+                )
+                delete_session(session_path)
+            elif not validate_session_results(existing, results_dir):
+                _log(
+                    args,
+                    "WARN",
+                    "Previous session results missing, starting fresh scan.",
+                )
+                delete_session(session_path)
+            elif existing.completed_count > 0:
+                summary = format_session_summary(existing)
+                if explicit_resume:
+                    _log(args, "INFO", f"Resuming: {summary}")
+                    scan_session = existing
+                elif sys.stdin.isatty() and sys.stdout.isatty():
+                    # Interactive: prompt user
+                    _log(args, "INFO", summary)
+                    try:
+                        answer = input("Resume previous scan? [Y/n] ").strip().lower()
+                        if answer in ("", "y", "yes"):
+                            scan_session = existing
+                            _log(
+                                args,
+                                "INFO",
+                                f"Resuming: skipping {existing.completed_count} completed target(s)",
+                            )
+                        else:
+                            delete_session(session_path)
+                    except (EOFError, KeyboardInterrupt):
+                        delete_session(session_path)
+                else:
+                    # Non-interactive (CI): default to fresh
+                    delete_session(session_path)
+
+    # Create new session if not resuming
+    if scan_session is None:
+        import uuid
+
+        scan_session = ScanSession(
+            session_id=str(uuid.uuid4()),
+            profile=profile_name or "custom",
+            config_hash=config_hash,
+            started_at=time.time(),
+            pid=os.getpid(),
+        )
+        # Register all targets
+        for repo in targets.repos:
+            scan_session.register_target("repo", repo.name, tools)
+        for image in targets.images:
+            scan_session.register_target("image", image, tools)
+        for iac_type, iac_path in targets.iac_files:
+            scan_session.register_target("iac", str(iac_path), tools)
+        for url in targets.urls:
+            scan_session.register_target("url", url, tools)
+        for gl_info in targets.gitlab_repos:
+            scan_session.register_target(
+                "gitlab", gl_info.get("full_path", "unknown"), tools
+            )
+        for k8s_info in targets.k8s_resources:
+            ctx = k8s_info.get("context", "unknown")
+            ns = k8s_info.get("namespace", "unknown")
+            scan_session.register_target("k8s", f"{ctx}:{ns}", tools)
+        save_session(scan_session, session_path)
+
     # Setup signal handling for graceful shutdown
     stop_flag = {"stop": False}
 
     def _handle_stop(signum, frame):
         stop_flag["stop"] = True
+        # Save checkpoint before exiting
+        if scan_session is not None:
+            save_session(scan_session, session_path)
         _log(
             args,
             "WARN",
-            "Received stop signal. Finishing current scans, then exiting...",
+            "Received stop signal. Saving checkpoint, then exiting...",
         )
 
     import signal
@@ -2855,8 +2971,8 @@ def cmd_scan(args) -> int:
         from scripts.cli.tool_manager import ToolManager
 
         tm = ToolManager()
-        summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
-        platform_applicable = summary.platform_applicable
+        tool_summary = tm.get_tool_summary(profile_name)  # type: ignore[arg-type]
+        platform_applicable = tool_summary.platform_applicable
     except (ImportError, OSError, ValueError, KeyError, AttributeError):
         platform_applicable = total_tools  # Fallback to actual tool count
 
@@ -2894,6 +3010,8 @@ def cmd_scan(args) -> int:
                     per_tool_config,
                     progress_callback=rich_progress.update,
                     tool_progress_callback=rich_progress.update_tool,
+                    session=scan_session,
+                    session_path=session_path,
                 )
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
@@ -2927,6 +3045,8 @@ def cmd_scan(args) -> int:
                 per_tool_config,
                 progress_callback,
                 tool_progress_callback=tool_progress_callback,
+                session=scan_session,
+                session_path=session_path,
             )
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
@@ -2962,6 +3082,9 @@ def cmd_scan(args) -> int:
     )
 
     _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
+
+    # Clean exit: delete session file (no crash recovery needed)
+    delete_session(session_path)
 
     # Write scan metadata for report phase (Bug #3 fix: preserve profile name)
     scan_metadata_path = results_dir / ".scan_metadata.json"
