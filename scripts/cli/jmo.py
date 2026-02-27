@@ -615,6 +615,54 @@ def _add_setup_args(subparsers):
     return setup_parser
 
 
+def _add_validate_args(subparsers):
+    """Add 'validate' subcommand for pre-release validation."""
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Run pre-release validation checks",
+        description="""
+Run comprehensive validation checks across 4 categories:
+  cli        CLI flag and subcommand completeness
+  scans      Adapter parsing, deduplication, normalization
+  platform   Cross-platform behavior and security
+  release    Version consistency, docs, tool versions
+
+Two tiers:
+  quick      Fixture-based checks, no external tools needed (default)
+  full       Real tools, real scans, Docker builds
+
+Examples:
+  jmo validate                     # Quick validation (176 checks)
+  jmo validate --tier full         # Full validation (207 checks)
+  jmo validate --category cli      # CLI checks only
+  jmo validate -v                  # Verbose per-check details
+  jmo validate --json              # Machine-readable output
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    validate_parser.add_argument(
+        "--tier",
+        choices=["quick", "full"],
+        default="quick",
+        help="Validation tier (default: quick)",
+    )
+    validate_parser.add_argument(
+        "--category",
+        metavar="CAT",
+        help="Run specific categories (comma-separated: cli,scans,platform,release)",
+    )
+    validate_parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show per-check details"
+    )
+    validate_parser.add_argument(
+        "--fail-fast", action="store_true", help="Stop on first category failure"
+    )
+    validate_parser.add_argument(
+        "--json", action="store_true", help="Machine-readable JSON output"
+    )
+    return validate_parser
+
+
 def _add_tools_args(subparsers):
     """Add 'tools' subcommand for tool management."""
     tools_parser = subparsers.add_parser(
@@ -1823,6 +1871,7 @@ Documentation: https://docs.jmotools.com
     _add_trends_args(sub)
     _add_policy_args(sub)  # Policy-as-Code commands
     _add_tools_args(sub)  # Tool management commands
+    _add_validate_args(sub)  # Pre-release validation
     add_build_args(sub)  # Docker build commands
 
     try:
@@ -3697,6 +3746,10 @@ def main():
         from scripts.cli.tool_commands import cmd_tools
 
         return cmd_tools(args)
+    elif args.cmd == "validate":
+        from scripts.cli.validate_commands import cmd_validate
+
+        return cmd_validate(args)
     elif args.cmd == "build":
         return cmd_build(args)
     else:
