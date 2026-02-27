@@ -159,7 +159,7 @@ TOOL_CONFIGS: dict[str, dict[str, Any]] = {
         "adapter_class": "CheckovAdapter",
     },
     "trufflehog": {
-        "sample_dir": "secrets-exposed",
+        "sample_dir": "credential-patterns",
         "output_file": "trufflehog.json",
         "command": [
             "trufflehog",

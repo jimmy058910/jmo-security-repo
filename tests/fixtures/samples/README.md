@@ -21,7 +21,7 @@ samples/
 │   └── Dockerfile         # Missing healthcheck, running as root, etc.
 ├── terraform-misconfig/   # IaC misconfigurations (Checkov, Trivy)
 │   └── main.tf           # S3 public access, open security groups, etc.
-├── secrets-exposed/       # Secret detection (TruffleHog, Semgrep secrets)
+├── credential-patterns/       # Secret detection (TruffleHog, Semgrep secrets)
 │   └── config.py         # Fake AWS keys, tokens, passwords
 └── shell-issues/          # Shell script issues (ShellCheck)
     └── vulnerable_script.sh  # Quoting, word splitting, unsafe patterns
@@ -40,7 +40,7 @@ All code in this directory contains deliberate security vulnerabilities, misconf
 | python-vulnerable/ | Bandit, Semgrep, Trivy (CVEs), Grype |
 | dockerfile-issues/ | Hadolint, Trivy (misconfig) |
 | terraform-misconfig/ | Checkov, Trivy (config) |
-| secrets-exposed/ | TruffleHog, Semgrep secrets, Trivy (secrets) |
+| credential-patterns/ | TruffleHog, Semgrep secrets, Trivy (secrets) |
 | shell-issues/ | ShellCheck |
 
 ## Usage

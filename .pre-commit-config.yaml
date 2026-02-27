@@ -28,7 +28,8 @@ repos:
         exclude: |
           (?x)^(
             tests/unit/test_validation\.py|
-            tests/adapters/test_noseyparker_adapter\.py
+            tests/adapters/test_noseyparker_adapter\.py|
+            tests/fixtures/samples/credential-patterns/config\.py
           )$
       # Prevent committing very large files by mistake (limit also enforced by guardrails in CI)
       - id: check-added-large-files

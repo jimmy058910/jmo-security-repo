@@ -83,7 +83,7 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
     "trufflehog": {
         "required_keys": [],  # Trufflehog uses NDJSON (one object per line)
         "result_item_keys": ["SourceMetadata", "Raw", "Verified"],
-        "sample_target": "secrets-exposed",
+        "sample_target": "credential-patterns",
         "command": ["trufflehog", "filesystem", "{target}", "--json"],
         "is_ndjson": True,
         "description": "Secrets scanner with NDJSON output",
