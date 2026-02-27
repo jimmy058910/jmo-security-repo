@@ -2,6 +2,7 @@ name: Automated Release
 
 on:
   workflow_dispatch:
+    # checkov:skip=CKV_GHA_7: Manual release workflow requires version bump type and changelog entry for maintainer control
     inputs:
       version_bump:
         description: 'Version bump type'
@@ -34,10 +35,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -55,10 +56,10 @@ jobs:
             echo "Updating all tools to latest versions..."
             python3 scripts/dev/update_versions.py --update-all
             python3 scripts/dev/update_versions.py --sync
-            echo "tools_updated=true" >> $GITHUB_OUTPUT
+            echo "tools_updated=true" >> "$GITHUB_OUTPUT"
           else
             echo "All tools already up-to-date"
-            echo "tools_updated=false" >> $GITHUB_OUTPUT
+            echo "tools_updated=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Bump version in pyproject.toml
@@ -68,7 +69,7 @@ jobs:
           echo "Current version: $CURRENT_VERSION"
 
           # Parse version components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION" || true
 
           # Bump version based on input
           case "${{ inputs.version_bump }}" in
@@ -92,7 +93,7 @@ jobs:
           # Update pyproject.toml
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
 
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update CHANGELOG.md
         run: |
@@ -134,7 +135,7 @@ jobs:
           BRANCH="release-v${NEW_VERSION}"
 
           git checkout -b "$BRANCH"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Commit release changes
         run: |
@@ -144,7 +145,7 @@ jobs:
 
           # Add tool updates if any
           if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
-            git add versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
+            git add versions.yaml Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast
           fi
 
           # Create commit

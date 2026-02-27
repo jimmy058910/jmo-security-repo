@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""
-Basic reporters for CommonFindings: JSON dump and Markdown summary
-"""
+"""Basic reporters for CommonFindings: JSON dump and Markdown summary"""
 
 from __future__ import annotations
 
 import json
+import platform
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 SEV_EMOJI = {
@@ -20,11 +20,84 @@ SEV_EMOJI = {
 }
 
 
-def write_json(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def _get_jmo_version() -> str:
+    """Read version from pyproject.toml.
+
+    Returns:
+        Version string (e.g., "1.0.0")
+
+    """
+    try:
+        import tomllib
+
+        pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            pyproject = tomllib.load(f)
+            return str(pyproject["project"]["version"])
+    except Exception:
+        # Fallback if pyproject.toml can't be read
+        return "1.0.0"
+
+
+def _generate_metadata(
+    findings: list[dict[str, Any]],
+    scan_id: str | None = None,
+    profile: str | None = None,
+    tools: list[str] | None = None,
+    target_count: int | None = None,
+) -> dict[str, Any]:
+    """Generate metadata block for findings output.
+
+    Args:
+        findings: List of CommonFinding dictionaries
+        scan_id: UUID of the scan (optional)
+        profile: Profile name used (e.g., "balanced")
+        tools: List of tool names used in scan
+        target_count: Number of targets scanned
+
+    Returns:
+        Metadata dictionary with output version, jmo version, timestamp, etc.
+
+    """
+    return {
+        "output_version": "1.0.0",
+        "jmo_version": _get_jmo_version(),
+        "schema_version": "1.2.0",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "scan_id": scan_id or "",
+        "profile": profile or "",
+        "tools": tools or [],
+        "target_count": target_count or 0,
+        "finding_count": len(findings),
+        "platform": platform.system(),
+    }
+
+
+def write_json(
+    findings: list[dict[str, Any]],
+    out_path: str | Path,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Write findings to JSON file with metadata wrapper.
+
+    Args:
+        findings: List of CommonFinding dictionaries
+        out_path: Output file path
+        metadata: Optional metadata dict (will be auto-generated if not provided)
+
+    """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
+
+    # Generate default metadata if not provided
+    if metadata is None:
+        metadata = _generate_metadata(findings)
+
+    # Wrap findings in metadata structure (v1.0.0 format)
+    output = {"meta": metadata, "findings": findings}
+
     p.write_text(
-        json.dumps(findings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(output, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
 
@@ -42,7 +115,7 @@ def _truncate_path(path: str, max_len: int = 50) -> str:
     return f"{path[:keep]}...{path[-keep:]}"
 
 
-def _get_top_issue_summary(findings_for_file: List[Dict[str, Any]]) -> str:
+def _get_top_issue_summary(findings_for_file: list[dict[str, Any]]) -> str:
     """Generate a summary of top issue for a file."""
     if not findings_for_file:
         return "N/A"
@@ -59,7 +132,7 @@ def _get_top_issue_summary(findings_for_file: List[Dict[str, Any]]) -> str:
     return display_rule
 
 
-def _get_remediation_priorities(findings: List[Dict[str, Any]]) -> List[str]:
+def _get_remediation_priorities(findings: list[dict[str, Any]]) -> list[str]:
     """Generate top 3-5 actionable remediation priorities."""
     priorities = []
 
@@ -157,9 +230,9 @@ def _get_remediation_priorities(findings: List[Dict[str, Any]]) -> List[str]:
     return priorities[:5]  # Limit to top 5
 
 
-def _get_category_summary(findings: List[Dict[str, Any]]) -> Dict[str, int]:
+def _get_category_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
     """Group findings by category based on tags."""
-    categories: Dict[str, int] = defaultdict(int)
+    categories: dict[str, int] = defaultdict(int)
 
     for f in findings:
         tags = f.get("tags", [])
@@ -203,7 +276,7 @@ def _get_category_summary(findings: List[Dict[str, Any]]) -> Dict[str, int]:
     return dict(sorted(categories.items(), key=lambda x: x[1], reverse=True))
 
 
-def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
+def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
     """Generate enhanced markdown summary with actionable insights."""
     total = len(findings)
     sev_counts = Counter(f.get("severity", "INFO") for f in findings)
@@ -230,13 +303,35 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         lines.append("")
 
         # Group by file
-        file_findings: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        file_findings: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for f in findings:
             path = f.get("location", {}).get("path", "unknown")
             file_findings[path].append(f)
 
         # Sort files by: 1) highest severity, 2) count
         def file_sort_key(item):
+            """Generate sort key for consistent file path ordering in reports.
+
+            Creates tuple for sorting files by severity (highest first) and
+            finding count (most findings first). Ensures consistent file ordering.
+
+            Args:
+                item (tuple): (file_path, list of findings) tuple
+
+            Returns:
+                tuple: (severity_index, -finding_count) for natural sorting
+
+            Example:
+                >>> item1 = ('src/main.py', [{'severity': 'CRITICAL'}])
+                >>> item2 = ('src/utils.py', [{'severity': 'LOW'}, {'severity': 'LOW'}])
+                >>> file_sort_key(item1) < file_sort_key(item2)
+                True  # CRITICAL sorts before LOW
+
+            Note:
+                Severity ordering: CRITICAL < HIGH < MEDIUM < LOW < INFO.
+                Negative count ensures higher counts sort first.
+
+            """
             path, file_finds = item
             max_sev_idx = min(
                 SEV_ORDER.index(f.get("severity", "INFO")) for f in file_finds
@@ -276,16 +371,158 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
         lines.append(f"- {emoji} {sev}: {count}")
     lines.append("")
 
+    # Priority Analysis (EPSS/KEV) - Feature #5
+    priority_findings = [f for f in findings if "priority" in f and f["priority"]]
+    if priority_findings:
+        lines.append("## Priority Analysis (EPSS/KEV)")
+        lines.append("")
+        lines.append("Real-world exploit intelligence to focus on actual threats:")
+        lines.append("")
+
+        # KEV findings (actively exploited)
+        kev_findings = [
+            f for f in priority_findings if f.get("priority", {}).get("is_kev", False)
+        ]
+        if kev_findings:
+            lines.append(f"### ⚠️ CISA KEV: {len(kev_findings)} Actively Exploited")
+            lines.append("")
+            lines.append("These CVEs are being exploited in the wild **right now**:")
+            lines.append("")
+
+            # Sort KEV findings by priority score
+            kev_findings.sort(
+                key=lambda f: f.get("priority", {}).get("priority", 0), reverse=True
+            )
+
+            for f in kev_findings[:10]:  # Top 10 KEV findings
+                priority_data = f.get("priority", {})
+                rule_id = f.get("ruleId", "unknown")
+                severity = f.get("severity", "HIGH")
+                priority_score = priority_data.get("priority", 0)
+                due_date = priority_data.get("kev_due_date", "N/A")
+                path = f.get("location", {}).get("path", "unknown")
+
+                emoji = _get_severity_emoji(severity)
+                lines.append(
+                    f"- {emoji} **{rule_id}** (Priority: {priority_score:.0f}/100, Due: {due_date})"
+                )
+                lines.append(f"  - File: `{_truncate_path(path)}`")
+
+            lines.append("")
+
+        # High EPSS findings (likely to be exploited)
+        high_epss_findings = [
+            f
+            for f in priority_findings
+            if (f.get("priority", {}).get("epss") or 0)
+            > 0.5  # >50% exploit probability
+            and not f.get("priority", {}).get(
+                "is_kev", False
+            )  # Exclude KEV (already shown)
+        ]
+
+        if high_epss_findings:
+            lines.append(
+                f"### 📊 High Exploit Probability: {len(high_epss_findings)} CVEs"
+            )
+            lines.append("")
+            lines.append(
+                "CVEs with >50% probability of being exploited in the next 30 days:"
+            )
+            lines.append("")
+
+            # Sort by EPSS score
+            high_epss_findings.sort(
+                key=lambda f: f.get("priority", {}).get("epss", 0), reverse=True
+            )
+
+            for f in high_epss_findings[:10]:  # Top 10 high EPSS
+                priority_data = f.get("priority", {})
+                rule_id = f.get("ruleId", "unknown")
+                severity = f.get("severity", "HIGH")
+                epss = priority_data.get("epss", 0)
+                percentile = priority_data.get("epss_percentile", 0)
+                path = f.get("location", {}).get("path", "unknown")
+
+                emoji = _get_severity_emoji(severity)
+                lines.append(
+                    f"- {emoji} **{rule_id}** (EPSS: {epss*100:.1f}%, {percentile*100:.0f}th percentile)"
+                )
+                lines.append(f"  - File: `{_truncate_path(path)}`")
+
+            lines.append("")
+
+        # Priority distribution
+        priority_scores = [
+            f.get("priority", {}).get("priority", 0) for f in priority_findings
+        ]
+        critical_priority = len([p for p in priority_scores if p >= 80])
+        high_priority = len([p for p in priority_scores if 60 <= p < 80])
+        medium_priority = len([p for p in priority_scores if 40 <= p < 60])
+        low_priority = len([p for p in priority_scores if p < 40])
+
+        lines.append("### Priority Distribution")
+        lines.append("")
+        lines.append(f"- 🔴 Critical Priority (≥80): {critical_priority}")
+        lines.append(f"- 🟠 High Priority (60-79): {high_priority}")
+        lines.append(f"- 🟡 Medium Priority (40-59): {medium_priority}")
+        lines.append(f"- ⚪ Low Priority (<40): {low_priority}")
+        lines.append("")
+
+    # Cross-Tool Consensus (Phase 2 deduplication - v1.0.0)
+    consensus_findings = [
+        f for f in findings if "detected_by" in f and len(f.get("detected_by", [])) > 1
+    ]
+    if consensus_findings:
+        lines.append("## Cross-Tool Consensus")
+        lines.append("")
+        lines.append(
+            f"Found {len(consensus_findings)} issue{'s' if len(consensus_findings) > 1 else ''} "
+            f"confirmed by multiple tools (Phase 2 deduplication):"
+        )
+        lines.append("")
+
+        # Sort by number of tools detecting (most consensus first), then severity
+        consensus_findings.sort(
+            key=lambda f: (
+                -len(f.get("detected_by", [])),
+                SEV_ORDER.index(f.get("severity", "INFO")),
+            )
+        )
+
+        for f in consensus_findings[:10]:  # Show top 10 consensus findings
+            detected_by = f.get("detected_by", [])
+            tool_names = [t.get("name", "unknown") for t in detected_by]
+            count = len(tool_names)
+            severity = f.get("severity", "INFO")
+            emoji = _get_severity_emoji(severity)
+            rule_id = f.get("ruleId", "unknown")
+            path = f.get("location", {}).get("path", "unknown")
+
+            lines.append(
+                f"- {emoji} **{rule_id}** ({severity}) - detected by {count} tools: {', '.join(tool_names)}"
+            )
+            lines.append(f"  - File: `{_truncate_path(path)}`")
+
+        lines.append("")
+
     # By Tool (with severity breakdown)
     if findings:
         lines.append("## By Tool")
         lines.append("")
 
-        tool_severity: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        tool_severity: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for f in findings:
-            tool_name = f.get("tool", {}).get("name", "unknown")
-            severity = f.get("severity", "INFO")
-            tool_severity[tool_name][severity] += 1
+            # For consensus findings, count once per detecting tool
+            if "detected_by" in f:
+                for tool_info in f.get("detected_by", []):
+                    tool_name = tool_info.get("name", "unknown")
+                    severity = f.get("severity", "INFO")
+                    tool_severity[tool_name][severity] += 1
+            else:
+                tool_name = f.get("tool", {}).get("name", "unknown")
+                severity = f.get("severity", "INFO")
+                tool_severity[tool_name][severity] += 1
 
         # Sort tools by total findings
         sorted_tools = sorted(
@@ -346,7 +583,35 @@ def to_markdown_summary(findings: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def write_markdown(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_markdown(findings: list[dict[str, Any]], out_path: str | Path) -> None:
+    """Write findings to Markdown SUMMARY.md file.
+
+    Generates human-readable Markdown summary with severity counts,
+    top rules, and grouped findings by severity and file.
+
+    Args:
+        findings (list[dict[str, Any]]): List of CommonFinding dictionaries
+        out_path (str | Path): Path to write SUMMARY.md (e.g., results/summaries/SUMMARY.md)
+
+    Returns:
+        None (writes file to disk)
+
+    Raises:
+        IOError: If output_path directory creation fails or not writable
+
+    Example:
+        >>> findings = [{'severity': 'HIGH', 'ruleId': 'G101', ...}]
+        >>> write_markdown(findings, 'results/summaries/SUMMARY.md')
+        # Creates SUMMARY.md with severity breakdown and grouped findings
+
+    Note:
+        Output includes:
+        - Severity distribution (CRITICAL/HIGH/MEDIUM/LOW/INFO counts)
+        - Top 10 most common rules
+        - Findings grouped by severity, then by file
+        - Automatically creates parent directories if needed
+
+    """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(to_markdown_summary(findings), encoding="utf-8")

@@ -116,13 +116,11 @@ def test_severity_string_representation():
 def test_extract_code_snippet_basic(tmp_path):
     """Test basic code snippet extraction."""
     test_file = tmp_path / "test.py"
-    test_file.write_text(
-        """line 1
+    test_file.write_text("""line 1
 line 2
 line 3 - target
 line 4
-line 5"""
-    )
+line 5""")
 
     result = extract_code_snippet(str(test_file), start_line=3, context_lines=1)
     assert result is not None
@@ -275,7 +273,8 @@ def test_extract_code_snippet_unicode_content(tmp_path):
     """Test snippet extraction with unicode content."""
     test_file = tmp_path / "test.py"
     test_file.write_text(
-        "# -*- coding: utf-8 -*-\nprint('Hello 世界')\n# Comment 日本語"
+        "# -*- coding: utf-8 -*-\nprint('Hello 世界')\n# Comment 日本語",
+        encoding="utf-8",
     )
 
     result = extract_code_snippet(str(test_file), start_line=2, context_lines=1)

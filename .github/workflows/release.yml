@@ -23,54 +23,74 @@ permissions:
   security-events: write  # For uploading SARIF files to GitHub Security
 
 jobs:
-  # PRE-RELEASE GATE: Verify all tools are up-to-date before releasing
+  # PRE-RELEASE GATE: Comprehensive release validation (v1.0.0+)
   pre-release-check:
-    name: Verify tools up-to-date
+    name: Pre-Release Validation
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    timeout-minutes: 5
+    timeout-minutes: 10  # Increased from 5 to accommodate full test suite
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          pip install -e .
+          pip install -r requirements-dev.txt
 
-      - name: Check for outdated tools
+      - name: Install security tools (for pre-release checks)
         run: |
-          echo "🔍 Checking for outdated tools before release..."
+          # Install TruffleHog for secrets scanning
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+          # Install Bandit for security audit
+          pip install bandit
+
+      - name: Install GitHub CLI (for CI status checks)
+        run: |
+          type -p curl >/dev/null || sudo apt install curl -y
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
+            sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+          ARCH=$(dpkg --print-architecture)
+          KEYRING=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$ARCH signed-by=$KEYRING] https://cli.github.com/packages stable main" | \
+            sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+
+      - name: Run comprehensive pre-release checks
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🚀 Running comprehensive pre-release validation..."
           echo ""
-          python3 scripts/dev/update_versions.py --check-latest || {
+          python3 scripts/dev/pre_release_check.py || {
             echo ""
-            echo "❌ ERROR: Cannot release with outdated tools!"
-            echo ""
-            echo "Found outdated tools. Update before releasing:"
-            echo "  python3 scripts/dev/update_versions.py --update-all"
-            echo "  python3 scripts/dev/update_versions.py --sync"
-            echo "  git add versions.yaml Dockerfile*"
-            echo "  git commit -m 'deps(tools): update all to latest before ${GITHUB_REF##*/}'"
-            echo "  git tag ${GITHUB_REF##*/} --force"
-            echo "  git push origin ${GITHUB_REF##*/} --force"
-            echo ""
-            echo "Alternatively, run the pre-release update workflow:"
-            echo "  gh workflow run pre-release-update.yml -f version=${GITHUB_REF##*/v}"
+            echo "❌ PRE-RELEASE CHECKS FAILED!"
+            echo "   Fix issues above before releasing."
             echo ""
             exit 1
           }
 
-      - name: Report current tool versions
+      - name: Generate release notes preview
         run: |
           echo ""
-          echo "✅ All tools are up-to-date! Proceeding with release."
+          echo "📝 Release notes preview:"
           echo ""
-          python3 scripts/dev/update_versions.py --report
+          python3 scripts/dev/generate_release_notes.py "${GITHUB_REF##*/}" || {
+            echo ""
+            echo "⚠️  WARNING: Failed to generate release notes"
+            echo "   Verify CHANGELOG.md has entry for ${GITHUB_REF##*/}"
+          }
 
   # Build and publish Python package to PyPI
   pypi-publish:
@@ -85,10 +105,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
@@ -133,7 +153,7 @@ jobs:
         with:
           skip-existing: true  # Allow re-running releases if PyPI already has the version
 
-  # Build and push multi-arch Docker images
+  # Build and push multi-arch Docker images (v1.0.0: 4 variants)
   docker-build:
     name: Build Docker ${{ matrix.variant }}
     runs-on: ubuntu-latest
@@ -141,7 +161,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [full, slim, alpine]
+        variant: [full, balanced, slim, fast]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -263,13 +283,13 @@ jobs:
       - name: Pull and measure all variants
         run: |
           {
-            echo "## Docker Image Size Comparison (v0.6.1 Optimizations)"
+            echo "## Docker Image Size Comparison (v1.0.0 - 4 Variants)"
             echo ""
             echo "| Variant | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
             echo "|---------|--------------|--------------|---------------------|"
           } > size-comparison.md
 
-          for VARIANT in full slim alpine; do
+          for VARIANT in full balanced slim fast; do
             TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
             IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TAG}"
 
@@ -290,15 +310,18 @@ jobs:
 
           {
             echo ""
-            echo "**Optimization Goals (ROADMAP #1):**"
-            echo "- Full: 1.5GB → 900MB (40% reduction)"
-            echo "- Slim: 700MB → 400MB (43% reduction)"
-            echo "- Alpine: 500MB → 300MB (40% reduction)"
+            echo "**v1.0.0 Target Sizes (Phase 1 Optimizations):**"
+            echo "- Full: ~1.97 GB (26 Docker-ready tools, 155 MB savings)"
+            echo "- Balanced: ~1.41 GB (21 tools, production CI/CD)"
+            echo "- Slim: ~557 MB (15 tools, cloud-focused)"
+            echo "- Fast: ~502 MB (8 tools, CI/CD gate)"
             echo ""
-            echo "**Optimizations Applied:**"
-            echo "- Multi-stage builds (separate builder and runtime stages)"
-            echo "- Layer caching cleanup (apt cache, pip cache, Python bytecode)"
-            echo "- Trivy DB pre-download (eliminates 30-60s scan delay)"
+            echo "**Phase 1 Optimizations Applied (155 MB savings):**"
+            echo "- Nuclei template filtering (65 MB)"
+            echo "- Python bytecode cleanup (40 MB)"
+            echo "- Binary stripping (15 MB)"
+            echo "- Java runtime cleanup (30 MB)"
+            echo "- .dockerignore exclusions (5 MB)"
           } >> size-comparison.md
 
           cat size-comparison.md
@@ -316,7 +339,7 @@ jobs:
     needs: docker-build
     strategy:
       matrix:
-        variant: [full, slim, alpine]
+        variant: [full, balanced, slim, fast]
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -452,3 +475,94 @@ jobs:
 
           echo ""
           echo "✅ Badge verification successful!"
+
+  # Submit Homebrew formula PR (automated) - inlined from homebrew-bump-formula.yml
+  homebrew-bump:
+    name: Submit Homebrew Formula PR
+    runs-on: ubuntu-latest
+    needs: pypi-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 10
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Submitting Homebrew formula PR for version $VERSION"
+
+      - name: Wait for PyPI release
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "⏳ Waiting for PyPI release to be available..."
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if curl -fsSL "https://pypi.org/pypi/jmo-security/$VERSION/json" > /dev/null 2>&1; then
+              echo "✅ PyPI release $VERSION confirmed!"
+              exit 0
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: waiting 10s..."
+            sleep 10
+          done
+          echo "❌ PyPI release not available after 5 minutes"
+          exit 1
+
+      - name: Bump Homebrew formula
+        uses: dawidd6/action-homebrew-bump-formula@v4
+        with:
+          # Required: Personal Access Token with repo + workflow scopes
+          # Store as repository secret: HOMEBREW_BUMP_TOKEN
+          token: ${{ secrets.HOMEBREW_BUMP_TOKEN }}
+          formula: jmo-security
+          tag: v${{ steps.version.outputs.version }}
+          force: false
+
+      - name: Success notification
+        if: success()
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "✅ Successfully submitted PR to homebrew-core for version $VERSION"
+          echo ""
+          echo "📋 Next steps:"
+          echo "  1. Monitor PR at: https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security"
+          echo "  2. Homebrew maintainers will review (typically 1-2 weeks)"
+          echo "  3. After merge, users can install with: brew install jmo-security"
+
+  # Submit WinGet manifest PR (automated) - inlined from winget-releaser.yml
+  winget-bump:
+    name: Submit WinGet Manifest PR
+    runs-on: windows-latest  # Required for WinGet releaser
+    needs: docker-build  # Wait for release assets to be available
+    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 15
+    steps:
+      - name: Extract version
+        id: version
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          Write-Output "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Output "📦 Creating WinGet manifest for version: $version"
+
+      - name: Submit manifest to microsoft/winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          # Required: Personal Access Token with public_repo scope
+          # Store as repository secret: WINGET_RELEASER_TOKEN
+          token: ${{ secrets.WINGET_RELEASER_TOKEN }}
+          identifier: jmo.jmo-security
+
+      - name: Success notification
+        if: success()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Output "✅ Successfully submitted PR to microsoft/winget-pkgs for version $version"
+          Write-Output ""
+          Write-Output "📋 Next steps:"
+          Write-Output "  1. Monitor PR at: https://github.com/microsoft/winget-pkgs/pulls?q=is%3Apr+jmo-security"
+          Write-Output "  2. Microsoft maintainers will review (typically 1-2 weeks)"
+          Write-Output "  3. After merge, users can install with: winget install jmo.jmo-security"

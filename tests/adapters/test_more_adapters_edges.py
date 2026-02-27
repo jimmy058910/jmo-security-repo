@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from scripts.core.adapters.hadolint_adapter import load_hadolint
-from scripts.core.adapters.noseyparker_adapter import load_noseyparker
-from scripts.core.adapters.checkov_adapter import load_checkov
+from scripts.core.adapters.hadolint_adapter import HadolintAdapter
+from scripts.core.adapters.noseyparker_adapter import NoseyParkerAdapter
+from scripts.core.adapters.checkov_adapter import CheckovAdapter
 
 
 def _write(p: Path, obj):
@@ -21,9 +21,11 @@ def test_hadolint_missing_fields_and_levels(tmp_path: Path):
     ]
     f = tmp_path / "hadolint.json"
     _write(f, data)
-    out = load_hadolint(f)
-    assert len(out) == 4
-    sevs = {o["ruleId"]: o["severity"] for o in out}
+    adapter = HadolintAdapter()
+    adapter = HadolintAdapter()
+    findings = adapter.parse(f)
+    assert len(findings) == 4
+    sevs = {o.ruleId: o.severity for o in findings}
     # warning -> MEDIUM, error -> HIGH, info -> INFO per normalize_severity
     assert sevs["DL1"] == "MEDIUM"
     assert sevs["DL2"] == "HIGH"
@@ -44,13 +46,17 @@ def test_hadolint_reference_and_non_list_payload(tmp_path: Path):
     ]
     f1 = tmp_path / "hadolint1.json"
     _write(f1, with_ref)
-    out1 = load_hadolint(f1)
-    assert out1 and out1[0]["remediation"].startswith("https://")
+    adapter = HadolintAdapter()
+    adapter = HadolintAdapter()
+    out1 = adapter.parse(f1)
+    assert out1 and out1[0].remediation.startswith("https://")
 
     not_list = {"code": "x"}
     f2 = tmp_path / "hadolint2.json"
     _write(f2, not_list)
-    out2 = load_hadolint(f2)
+    adapter = HadolintAdapter()
+    adapter = HadolintAdapter()
+    out2 = adapter.parse(f2)
     assert out2 == []
 
 
@@ -58,9 +64,11 @@ def test_hadolint_unrecognized_level_maps_info_and_tags(tmp_path: Path):
     data = [{"code": "DLX", "message": "m", "level": "unknown"}]
     f = tmp_path / "hadolint3.json"
     _write(f, data)
-    out = load_hadolint(f)
-    assert out and out[0]["severity"] == "INFO"
-    assert set(out[0].get("tags", [])) >= {"dockerfile", "lint"}
+    adapter = HadolintAdapter()
+    adapter = HadolintAdapter()
+    findings = adapter.parse(f)
+    assert findings and findings[0].severity == "INFO"
+    assert set(getattr(findings[0], "tags", [])) >= {"dockerfile", "lint"}
 
 
 def test_noseyparker_alt_keys(tmp_path: Path):
@@ -77,11 +85,13 @@ def test_noseyparker_alt_keys(tmp_path: Path):
     }
     f = tmp_path / "np.json"
     _write(f, data)
-    out = load_noseyparker(f)
+    adapter = NoseyParkerAdapter()
+    adapter = NoseyParkerAdapter()
+    findings = adapter.parse(f)
     assert (
-        out
-        and out[0]["ruleId"] == "Slack Token"
-        and out[0]["location"]["startLine"] == 42
+        findings
+        and findings[0].ruleId == "Slack Token"
+        and findings[0].location["startLine"] == 42
     )
 
 
@@ -102,9 +112,13 @@ def test_checkov_alt_keys(tmp_path: Path):
     }
     f = tmp_path / "checkov.json"
     _write(f, data)
-    out = load_checkov(f)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    findings = adapter.parse(f)
     assert (
-        out and out[0]["ruleId"] == "CKV_K8S_1" and out[0]["location"]["startLine"] == 0
+        findings
+        and findings[0].ruleId == "CKV_K8S_1"
+        and findings[0].location["startLine"] == 0
     )
 
 
@@ -124,11 +138,13 @@ def test_checkov_scalar_line_range_and_version(tmp_path: Path):
     }
     f = tmp_path / "checkov2.json"
     _write(f, data)
-    out = load_checkov(f)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    findings = adapter.parse(f)
     assert (
-        out
-        and out[0]["tool"]["version"] == "3.0.0"
-        and out[0]["location"]["startLine"] == 10
+        findings
+        and findings[0].tool["version"] == "3.0.0"
+        and findings[0].location["startLine"] == 10
     )
 
 
@@ -147,7 +163,11 @@ def test_checkov_check_name_only_and_invalid_line_range(tmp_path: Path):
     }
     f = tmp_path / "checkov3.json"
     _write(f, data)
-    out = load_checkov(f)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    findings = adapter.parse(f)
     assert (
-        out and out[0]["ruleId"] == "OnlyName" and out[0]["location"]["startLine"] == 0
+        findings
+        and findings[0].ruleId == "OnlyName"
+        and findings[0].location["startLine"] == 0
     )

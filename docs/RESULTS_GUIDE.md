@@ -14,6 +14,10 @@
 8. [Suppressing False Positives](#suppressing-false-positives)
 9. [Integrating with Your Workflow](#integrating-with-your-workflow)
 10. [Advanced: SARIF and CI/CD Integration](#advanced-sarif-and-cicd-integration)
+11. [EPSS/KEV Risk Prioritization](#epsskev-risk-prioritization)
+12. [Cross-Tool Deduplication](#cross-tool-deduplication)
+13. [Output Format Reference](#output-format-reference)
+14. [Related Documentation](#related-documentation)
 
 ---
 
@@ -704,7 +708,7 @@ docs/archive/
 After adding suppressions, re-run the scan:
 
 ```bash
-jmotools balanced --repos-dir .
+jmo balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
 ```text
 **Example output:**
@@ -738,12 +742,12 @@ cat results/summaries/SUPPRESSIONS.md
 
     - id: jmo-security-scan
 
-      entry: bash -c 'jmotools fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
+      entry: bash -c 'jmo fast --repos-dir . && [ $(jq "[.[] | select(.severity == \"HIGH\" or .severity == \"CRITICAL\")] | length" results/summaries/findings.json) -eq 0 ]'
       language: system
       pass_filenames: false
       always_run: true
 ```text
-2. Install: `pre-commit install`
+1. Install: `pre-commit install`
 
 **Result:** Commits are blocked if HIGH/CRITICAL findings exist.
 
@@ -999,6 +1003,7 @@ security-scan:
    ```
 
    **Example finding:**
+
    ```json
    {
      "ruleId": "CVE-2023-12345",
@@ -1008,16 +1013,16 @@ security-scan:
    }
    ```
 
-3. **Check if exploitable:**
+1. **Check if exploitable:**
    - Is the vulnerable function actually used in our code?
    - Use `grep -r "vulnerable_function" src/` to check
 
-4. **Fix strategy:**
+2. **Fix strategy:**
    - **Immediate:** Upgrade dependencies with known exploits
    - **Short-term:** Add suppressions for unused vulnerable code paths
    - **Long-term:** Remove unused dependencies
 
-5. **Result:**
+3. **Result:**
    - 40 CVEs → 8 actually exploitable
    - Fixed with 2 `pip install --upgrade` commands
    - Took 1 hour
@@ -1040,6 +1045,7 @@ security-scan:
 4. **Provide scan schedule** - Show evidence of weekly/monthly scans
 
 **Pro Tip:** Create a "SOC 2 Evidence" folder:
+
 ```bash
 mkdir -p compliance/soc2/
 cp results/summaries/SUMMARY.md compliance/soc2/scan-$(date +%Y-%m-%d).md
@@ -1058,13 +1064,14 @@ cp results/summaries/COMPLIANCE_SUMMARY.md compliance/soc2/
    jq '[.[] | select(.location.path | contains("tests/") | not)]' findings.json > production-findings.json
    ```
 
-3. **Document remediation:**
+1. **Document remediation:**
    - HIGH findings fixed within 30 days
    - MEDIUM findings fixed within 90 days
 
 **Pro Tip:** Use `--fail-on HIGH` in CI to prevent merging code with HIGH findings:
+
 ```bash
-jmotools ci --repo . --fail-on HIGH
+jmo ci --repo . --fail-on HIGH
 ```text
 ---
 
@@ -1114,7 +1121,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
    # Open http://localhost:8000/dashboard.html
    ```
 
-2. **Or use `file://` with Chrome flag:**
+1. **Or use `file://` with Chrome flag:**
 
    ```bash
    google-chrome --allow-file-access-from-files dashboard.html
@@ -1125,6 +1132,7 @@ jq 'group_by(.ruleId) | map({rule: .[0].ruleId, count: length, severity: .[0].se
 **Cause:** Using an old version of JMo Security (pre-v0.5.1)
 
 **Solution:** Upgrade to v0.6.2+:
+
 ```bash
 pip install --upgrade jmo-security-audit
 ```text
@@ -1177,6 +1185,326 @@ jq '[.[] | select(.location.path | contains("tests/") or contains(".venv/") | no
 
 ---
 
+## EPSS/KEV Risk Prioritization
+
+JMo Security automatically enriches CVE findings with EPSS (Exploit Prediction Scoring System) and CISA KEV (Known Exploited Vulnerabilities) data to help you prioritize remediation efforts based on real-world exploit activity.
+
+### How It Works
+
+When findings contain CVE identifiers, the system:
+
+1. **Queries EPSS API** (FIRST.org) - Gets exploit probability (0.0-1.0) and percentile ranking
+2. **Checks CISA KEV Catalog** - Identifies CVEs actively exploited in the wild
+3. **Calculates Priority Score** (0-100) - Combines severity, EPSS, KEV status, and reachability
+
+### Priority Formula
+
+```text
+severity_score = {CRITICAL: 10, HIGH: 7, MEDIUM: 4, LOW: 2, INFO: 1}
+epss_multiplier = 1.0 + (epss_score * 4.0)  # Scale 0.0-1.0 -> 1.0-5.0
+kev_multiplier = 3.0 if is_kev else 1.0
+reachability_multiplier = 1.0  # Placeholder for future enhancement
+
+priority = (severity_score * epss_multiplier * kev_multiplier * reachability_multiplier) / 1.5
+# Normalized to 0-100 scale, capped at 100
+```
+
+### Priority Thresholds
+
+| Priority Range | Classification | Action |
+|----------------|----------------|--------|
+| **>=80** | Critical | Immediate action required (KEV findings, high EPSS + CRITICAL severity) |
+| **60-79** | High | Prioritize in next sprint (high EPSS or HIGH severity) |
+| **40-59** | Medium | Address in upcoming release (moderate risk) |
+| **<40** | Low | Backlog (low exploitability) |
+
+### Where You'll See It
+
+1. **HTML Dashboard** - Priority column with color-coded badges, KEV indicator badges, sortable by priority
+2. **SUMMARY.md** - Dedicated "Priority Analysis (EPSS/KEV)" section showing:
+   - KEV findings (actively exploited CVEs)
+   - High EPSS findings (>50% exploit probability in next 30 days)
+   - Priority distribution (Critical/High/Medium/Low)
+   - Top priority findings with score breakdown
+3. **findings.json** - `priority` object with:
+   - `priority`: float (0-100)
+   - `epss`: float (0.0-1.0, probability of exploitation)
+   - `epss_percentile`: float (0.0-1.0, ranking against all CVEs)
+   - `is_kev`: boolean (true if CISA KEV)
+   - `kev_due_date`: string (YYYY-MM-DD, federal agency deadline if KEV)
+   - `components`: dict (severity_score, epss_multiplier, kev_multiplier, breakdown)
+
+### Example SUMMARY.md Output
+
+```markdown
+## Priority Analysis (EPSS/KEV)
+
+### CISA KEV: Actively Exploited (Immediate Action Required)
+
+1. **CVE-2024-1234** (lodash@4.17.19)
+   - Priority: 100/100 (CRITICAL + KEV)
+   - EPSS: 0.95 (95% exploit probability, 99.9th percentile)
+   - KEV Due Date: 2024-10-15
+   - Location: package.json:12
+
+### High EPSS (>50% Exploit Probability in Next 30 Days)
+
+1. **CVE-2024-5678** (express@4.17.1)
+   - Priority: 68/100 (HIGH)
+   - EPSS: 0.76 (76% exploit probability, 92nd percentile)
+   - Location: package.json:15
+```
+
+### Caching for Performance
+
+- **EPSS**: SQLite cache with 7-day TTL (~/.jmo/cache/epss.db)
+- **KEV**: JSON cache with 1-day TTL (~/.jmo/cache/kev_catalog.json)
+- **Bulk API optimization**: Fetches all CVEs in single API call for speed
+
+### Graceful Degradation
+
+- If EPSS/KEV APIs unavailable, prioritization falls back to severity-only scoring
+- Non-CVE findings (secrets, code quality) still receive priority scores based on severity
+- No configuration required - automatic enrichment when CVEs detected
+
+### Recommendations
+
+- **Triage**: Sort dashboard by priority to focus on highest-risk findings first
+- **SLA Management**: Use KEV due dates for federal compliance or internal SLAs
+- **Metrics**: Track "Critical Priority" count over time as a security KPI
+- **Communication**: Share KEV count with executives ("3 actively exploited CVEs found")
+
+---
+
+## Cross-Tool Deduplication
+
+JMo Security automatically clusters duplicate findings detected by multiple tools, reducing noise by 30-40%.
+
+### How It Works
+
+When multiple tools detect the same underlying issue, JMo clusters them into a single "consensus finding":
+
+**Before (3 separate findings):**
+
+- Trivy: HIGH - SQL Injection in app.py:42
+- Semgrep: HIGH - SQL injection detected in app.py:42
+- Bandit: MEDIUM - Possible SQL injection in app.py:43
+
+**After (1 consensus finding):**
+
+- Detected by 3 tools | HIGH CONFIDENCE
+- Tools: trivy, semgrep, bandit
+- SQL Injection vulnerability in query construction
+- app.py:42-43
+
+### Confidence Levels
+
+| Level | Tool Count | Interpretation |
+|-------|------------|----------------|
+| **HIGH** | 4+ tools | Very likely true positive |
+| **MEDIUM** | 2-3 tools | Likely true positive |
+| **LOW** | 1 tool | Requires validation |
+
+### Configuration
+
+```yaml
+# jmo.yml
+deduplication:
+  cross_tool_clustering: true  # Enable/disable
+  similarity_threshold: 0.65   # Strictness (0.5-1.0, default: 0.65)
+```
+
+### The Algorithm
+
+Cross-tool deduplication uses a multi-dimensional similarity algorithm combining:
+
+- **Location (50%):** Path + line range overlap (primary signal for same-issue detection)
+- **Message (25%):** Fuzzy + token matching (e.g., "SQL injection" vs "SQL Injection vulnerability")
+- **Metadata (25%):** CWE/CVE/Rule ID matching + rule equivalence mapping
+
+Findings with >=65% similarity are clustered together. The highest-severity finding becomes the representative, and others are attached as duplicates in `context.duplicates`.
+
+**Algorithm Selection:**
+
+- **<500 findings:** Greedy algorithm (O(n×k), simpler overhead)
+- **≥500 findings:** LSH algorithm (O(n log n), uses locality-sensitive hashing for scalability)
+
+### Example Consensus Finding
+
+```json
+{
+  "id": "cluster-abc123",
+  "severity": "HIGH",
+  "message": "SQL Injection vulnerability in query construction",
+  "detected_by": [
+    {"name": "trivy", "version": "0.50.0"},
+    {"name": "semgrep", "version": "1.60.0"},
+    {"name": "bandit", "version": "1.7.0"}
+  ],
+  "confidence": {
+    "level": "HIGH",
+    "tool_count": 3,
+    "avg_similarity": 0.87
+  },
+  "context": {
+    "duplicates": [
+      {
+        "id": "fp2",
+        "tool": {"name": "semgrep"},
+        "similarity_score": 0.90
+      },
+      {
+        "id": "fp3",
+        "tool": {"name": "bandit"},
+        "similarity_score": 0.85
+      }
+    ]
+  }
+}
+```
+
+### Disabling Clustering
+
+If you prefer to see all findings from all tools separately:
+
+```yaml
+# jmo.yml
+deduplication:
+  cross_tool_clustering: false
+```
+
+This reverts to Phase 1 deduplication only (same tool, same location).
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Time | <2 seconds for 1000 findings, <10 seconds for 10000 findings |
+| Scalability | LSH algorithm enables O(n log n) clustering for large scans |
+| Reduction | 30-40% fewer reported findings (noise elimination) |
+| Accuracy | >=85% clustering accuracy (validated on 200+ finding sample) |
+
+### Best Practices
+
+1. **Trust HIGH confidence findings first** - Multiple tools agreeing is strong signal
+2. **Validate MEDIUM confidence** - 2 tools may still have false positives
+3. **Review LOW confidence carefully** - Single tool detections need scrutiny
+4. **Check duplicate findings** - Expand duplicates in dashboard to see all detections
+
+---
+
+## Output Format Reference
+
+JMo Security supports 7 output formats, all with a standardized metadata wrapper:
+
+### Metadata Envelope
+
+All formats include consistent metadata:
+
+```json
+{
+  "meta": {
+    "output_version": "1.0.0",
+    "jmo_version": "0.9.0",
+    "schema_version": "1.2.0",
+    "timestamp": "2025-11-04T12:34:56Z",
+    "scan_id": "scan-abc123",
+    "profile": "balanced",
+    "tools": ["trivy", "semgrep", "trufflehog"],
+    "target_count": 5,
+    "finding_count": 42,
+    "platform": "Linux"
+  },
+  "findings": [...]
+}
+```
+
+### Format Summary
+
+| Format | File | Use Case | Size (1000 findings) |
+|--------|------|----------|---------------------|
+| **JSON** | `findings.json` | Machine parsing, CI/CD automation | ~500 KB |
+| **YAML** | `findings.yaml` | Configuration management, human review | ~600 KB |
+| **CSV** | `findings.csv` | Excel/Sheets analysis, stakeholder reports | ~200 KB |
+| **Markdown** | `SUMMARY.md` | Documentation, quick review | ~100 KB |
+| **HTML** | `dashboard.html` | Interactive exploration | ~1.6 MB (inline) |
+| **Simple HTML** | `simple-report.html` | Email reports, offline viewing | ~50 KB |
+| **SARIF** | `findings.sarif` | GitHub/GitLab Security, code scanning | ~700 KB |
+
+### HTML Dashboard Modes
+
+The HTML dashboard automatically selects the optimal mode:
+
+- **Inline Mode (≤1000 findings):** JSON embedded in HTML, self-contained
+- **External Mode (>1000 findings):** JSON loaded via fetch(), prevents browser freeze
+
+**Inline Mode Features:**
+
+- Self-contained single file
+- No external dependencies
+- Instant loading (<500ms)
+- Easy to share (drag-and-drop)
+
+**External Mode Features:**
+
+- React app + separate findings.json
+- Prevents 50-100 MB files
+- Loading spinner with error handling
+- Tested up to 10,000+ findings
+
+**Troubleshooting External Mode:**
+
+If "Failed to load findings.json" appears:
+
+```bash
+# Serve via HTTP server
+cd results/summaries
+python3 -m http.server 8000
+# Open http://localhost:8000/dashboard.html
+```
+
+### Simple HTML for Email
+
+The simple HTML reporter (`simple-report.html`) generates static HTML compatible with email clients:
+
+- No JavaScript required
+- Inline CSS (Gmail, Outlook, Apple Mail compatible)
+- Severity color-coding
+- Summary statistics
+
+### SARIF for Code Scanning
+
+SARIF 2.1.0 format for CI/CD integration:
+
+```yaml
+# GitHub Actions
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results/summaries/findings.sarif
+
+# GitLab CI
+artifacts:
+  reports:
+    sast: results/summaries/findings.sarif
+```
+
+### Configuration
+
+Enable/disable formats in `jmo.yml`:
+
+```yaml
+outputs:
+  - json       # Always included (primary format)
+  - md         # Summary markdown
+  - yaml       # Optional (requires PyYAML)
+  - html       # Interactive dashboard
+  - sarif      # Code scanning platforms
+  - csv        # Spreadsheet analysis
+  - simple-html  # Email-compatible report
+```
+
+---
+
 ## Next Steps
 
 1. **Start with SUMMARY.md** - Get the big picture
@@ -1194,4 +1522,33 @@ jq '[.[] | select(.location.path | contains("tests/") or contains(".venv/") | no
 
 ---
 
-*Generated by JMo Security content-generator skill | Last updated: 2025-10-23*
+## Related Documentation
+
+**Core Guides:**
+
+- [User Guide](USER_GUIDE.md) - Complete reference documentation
+- [Quick Start](../QUICKSTART.md) - 5-minute setup
+- [Profiles and Tools](PROFILES_AND_TOOLS.md) - Tool lists and dependencies
+
+**Historical and Comparison:**
+
+- [Historical Storage Guide](HISTORY_GUIDE.md) - SQLite database for scan persistence
+- [Trend Analysis Guide](TRENDS_GUIDE.md) - Statistical trend analysis over time
+- [Machine-Readable Diffs Guide](DIFF_GUIDE.md) - Compare two scans
+
+**Supply Chain and Compliance:**
+
+- [SLSA Attestation Guide](SLSA_GUIDE.md) - Provenance and tamper detection
+- [Policy as Code](POLICY_AS_CODE.md) - Compliance framework mappings
+
+**Integration:**
+
+- [MCP Setup Guide](MCP_SETUP.md) - AI remediation orchestration
+- [CI/CD Integration](USER_GUIDE.md#cicd-pipeline-integration-strategy) - CI/CD integration help
+- [Docker Guide](DOCKER_README.md) - Container deployment
+
+---
+
+**Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
+
+**Last Updated:** February 2026

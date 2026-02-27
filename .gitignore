@@ -3,80 +3,87 @@
 .venv-pypi/
 .tmp-venv-pypi/
 .post-release-venv/
+venv*/
+venv-*
+
+# Claude Code temp directories (created during sessions)
+tmpclaude-*/
+nul
 
 # Coverage artifacts
 .coverage*
 coverage.xml
 coverage.json
+htmlcov/
+coverage/
 
 # VS Code and editor junk
-.vscode/
-*.swp
-*.swo
-
-# Python caches
-__pycache__/
-.pytest_cache/
-.ruff_cache/
-build/
-dist/
-*.egg-info/
-
-# Python distribution artifacts (wheel files should not be committed)
-*.whl
-*.egg
-# Review tracking artifacts
-REVIEW.md
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.pyc
-
-# Backup files
-*.bak
-*.old
-*_old.*
-*_backup.*
-
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+*.whl
+*.egg
+
+# Backup files
+*.bak
+*.old
+*_old.*
+*_backup.*
+*.backup
+*.new
+*.orig
+
 # OS files
 .DS_Store
 Thumbs.db
 
+# Review tracking artifacts
+REVIEW.md
+
 # Test results and temporary files
 /tmp/
 *.log
-.coverage
-htmlcov/
-.pytest_cache/
 
 # Security scan results (don't commit actual scan results)
 security-results-*/
 results/
+results-*/
+
+# Sample fixture scan outputs (regenerated via `make regenerate-samples`)
+samples/fixtures/*/sample-results/
 
 # Test reports and documentation (comprehensive testing artifacts)
 docs/comprehensive-test-report.md
-
-# (formerly) Local roadmap file removed; keep repo docs public
 
 # Private planning documents (developer-specific, not for public repo)
 DEVELOPER_ROADMAP.md
 BUSINESS_MODEL.md
 docs/VERSION_TAG.md
 BUSINESS_PLAN.md
+PRODUCT_DEFINITION.md
+docs/COMPLETENESS_ANALYZER.md
 
 # Archived documentation (historical reference)
-# v0.6.0 archive is included for historical reference
-docs/archive/*
+# Archive structure is tracked (README.md, v0.6.0/)
+# Individual archived files are gitignored
+docs/archive/merged/*
+!docs/archive/README.md
 !docs/archive/v0.6.0/
 
 # Private local scripts and outputs (developer-only workspace)
@@ -87,15 +94,22 @@ docs/archive/*
 
 # Claude Code user-specific configuration (open-source project)
 .claude/
+
+# Test scan result directories (local testing artifacts)
+test-juice-results/
 samples/fixtures/infra-demo/docker-test-results/
+
+# Skill Seekers analysis artifacts (local development, not for public repo)
+skill_seekers/
 
 # Hypothesis property-based testing cache (test artifacts, not source)
 .hypothesis/
 
-# JMo local workspace (developer-specific, not for version control)
+# JMo local workspace (scan history database with findings, potentially secrets)
 # This is the REPOSITORY .jmo/ directory, not the user's HOME ~/.jmo/
-# - Repository .jmo/: Developer scratch space, memory system, local analysis
-# - User HOME ~/.jmo/: User config (schedules.json, telemetry-id) - lives outside repo
+# - Repository .jmo/: SQLite scan history (history.db) - contains findings, should NOT be committed
+# - User HOME ~/.jmo/: User config (schedules.json, config.yml, policies) - lives outside repo
+# Note: Use --history-db flag to store database elsewhere if needed
 .jmo/
 
 # Node.js dependencies (API)
@@ -109,6 +123,36 @@ scripts/api/.vercel/
 .env.local
 .env.*.local
 
+# Cryptographic keys and certificates (security-critical files)
+*.pem
+*.key
+*secret*
+*credentials*
+
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
-venv-*
+
+# Additional generated artifacts
+*.sarif
+*_report.html
+test-*.html
+*-dashboard.html
+# Exception: Keep test fixtures for CI (must come AFTER ignore patterns)
+!tests/fixtures/dashboard/*.html
+# Test artifacts (image lists from scans)
+*-images.txt
+diff-data.json
+
+# Playwright screenshots
+.playwright-mcp/
+*.playwright.png
+
+# Serena MCP auto-generated project config
+.serena/
+
+# Nightshift automation config (symlink to dev-only/infrastructure/nightshift.yaml)
+nightshift.yaml
+
+# Conductor orchestration files (local development artifacts)
+/conductor/
+tests/integration/juice_shop_fixture/

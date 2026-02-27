@@ -31,7 +31,7 @@ class Severity(str, Enum):
     INFO = "INFO"
 
     @classmethod
-    def from_string(cls, value: str | None) -> "Severity":
+    def from_string(cls, value: str | None) -> Severity:
         """Parse severity from string with fallback to INFO.
 
         Args:
@@ -58,6 +58,11 @@ class Severity(str, Enum):
             "WARNING": cls.MEDIUM,
             "CRIT": cls.CRITICAL,
             "MED": cls.MEDIUM,
+            # Common aliases used by various tools
+            "INFORMATIONAL": cls.INFO,
+            "INFORMATION": cls.INFO,
+            "NOTE": cls.LOW,
+            "STYLE": cls.INFO,
         }
         return mapping.get(v, cls.INFO)
 
@@ -88,6 +93,87 @@ class Severity(str, Enum):
 
 # Backward compatibility: expose severity order as list of strings
 SEVERITY_ORDER = [s.value for s in Severity]
+
+
+# Tool-specific severity mappings for centralized normalization
+# Each key is a tool name, value is a dict mapping tool-specific severity -> CommonFinding severity
+TOOL_SEVERITY_MAPPINGS: dict[str, dict[str, str]] = {
+    "zap": {
+        "informational": "INFO",
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+        "critical": "CRITICAL",
+    },
+    "semgrep": {
+        "error": "HIGH",
+        "warning": "MEDIUM",
+        "info": "LOW",
+    },
+    "nuclei": {
+        "info": "INFO",
+        "low": "LOW",
+        "medium": "MEDIUM",
+        "high": "HIGH",
+        "critical": "CRITICAL",
+        "unknown": "INFO",
+    },
+    "falco": {
+        "emergency": "CRITICAL",
+        "alert": "CRITICAL",
+        "critical": "CRITICAL",
+        "error": "HIGH",
+        "warning": "MEDIUM",
+        "notice": "LOW",
+        "informational": "INFO",
+        "debug": "INFO",
+    },
+    "shellcheck": {
+        "error": "HIGH",
+        "warning": "MEDIUM",
+        "info": "LOW",
+        "style": "INFO",
+    },
+}
+
+
+def map_tool_severity(tool_name: str, severity: str) -> str:
+    """Map tool-specific severity to CommonFinding severity.
+
+    This function provides centralized severity mapping for all security tools,
+    eliminating duplicated mapping logic across adapters.
+
+    Args:
+        tool_name: Name of the security tool (e.g., "zap", "semgrep", "nuclei")
+        severity: Tool-specific severity string
+
+    Returns:
+        Normalized severity string: CRITICAL, HIGH, MEDIUM, LOW, or INFO
+
+    Examples:
+        >>> map_tool_severity("zap", "informational")
+        'INFO'
+        >>> map_tool_severity("semgrep", "ERROR")
+        'HIGH'
+        >>> map_tool_severity("nuclei", "critical")
+        'CRITICAL'
+        >>> map_tool_severity("unknown_tool", "high")
+        'HIGH'
+    """
+    if not severity:
+        return "INFO"
+
+    severity_lower = str(severity).strip().lower()
+
+    # Look up tool-specific mapping first
+    tool_map = TOOL_SEVERITY_MAPPINGS.get(tool_name.lower(), {})
+    if tool_map:
+        normalized = tool_map.get(severity_lower)
+        if normalized:
+            return normalized
+
+    # Fall back to generic normalize_severity for unmapped values
+    return normalize_severity(severity)
 
 
 def normalize_severity(value: str | None) -> str:

@@ -4,29 +4,47 @@ This document explains how to run tests, coverage, linting, and selected end-to-
 
 ## Prerequisites
 
-- Python 3.11 recommended (project venv is configured automatically by the editor)
+- Python 3.12+ required (project venv is configured automatically by the editor)
 - Install dev dependencies:
 
 ```bash
 make dev-deps
 ```
 
-- Optional linters/tools for full local CI:
+- Optional security tools for full local CI:
 
 ```bash
-make tools  # installs shellcheck, shfmt, ruff, bandit, and curated scanners
+jmo tools install --profile balanced  # Install security scanners
 ```
 
 ## Unit & Integration Tests
 
-Run the full test suite with coverage:
+Run the test suite with coverage:
 
 ```bash
-make test
+# Recommended: Parallel execution (3-5x faster)
+make test-fast               # Parallel, no coverage, skip slow (fastest dev loop)
+make test-parallel           # Parallel with coverage (CI-like)
+pytest -n auto tests/        # Direct pytest with auto-detected workers
+
+# Sequential execution
+make test                    # Sequential with coverage (original)
+pytest tests/                # ALL tests including slow e2e
+pytest tests/ -m "slow"      # Only slow tests
 ```
 
-- Outputs show a coverage summary (threshold in CI is 85%).
-- Coverage config is defined in `.coveragerc`.
+- **Parallel tests** use `pytest-xdist` (`-n auto`) to utilize all CPU cores
+- `make test-fast` is recommended for development (~5 min vs ~15-20 min sequential)
+- `make test` excludes `smoke` and `requires_tools` markers by default (matches CI behavior)
+- Outputs show a coverage summary (threshold in CI is 85%)
+- Coverage config is defined in `pyproject.toml` under `[tool.coverage]`
+
+### Test Configuration
+
+- **pytest-xdist**: Parallel test execution using `-n auto` (auto-detects CPU cores). Install: `pip install pytest-xdist`.
+- **pytest-timeout**: All tests have a 120-second timeout (configurable in `pyproject.toml`). Use `@pytest.mark.timeout(300)` for legitimately slow tests.
+- **Slow tests**: Tests marked with `@pytest.mark.slow` can be excluded with `-m "not slow"`.
+- **Cross-platform**: Tests must pass on Windows, Linux, and macOS. See `CLAUDE.md` for cross-platform testing guidelines.
 
 ## Linting & Security Checks
 
@@ -37,7 +55,18 @@ make lint    # lint (shellcheck, ruff, bandit)
 
 Notes:
 
-- If ruff/bandit/shellcheck are missing, install via `make tools`.
+- If ruff/bandit/shellcheck are missing, install via `pip install ruff bandit` or `jmo tools install`.
+
+## Optional Test Dependencies
+
+Some test modules require optional dependencies and will be **automatically skipped** if not installed:
+
+| Test Module | Required Package | Install Command |
+|-------------|------------------|-----------------|
+| `tests/jmo_mcp/` | MCP SDK + pydantic v2 | `pip install "jmo-security[mcp]"` or `pip install "mcp[cli]>=1.0.0" "pydantic>=2.11.0"` |
+| `tests/adapters/test_adapter_fuzzing.py` | Hypothesis | `pip install hypothesis` |
+
+**Note:** If you see collection errors like `cannot import name 'TypeAdapter' from 'pydantic'`, upgrade pydantic: `pip install "pydantic>=2.11.0"`
 
 ## End-to-End Smoke (optional)
 
@@ -96,8 +125,8 @@ The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
 **Execution Methods:**
 
 - Native CLI (`jmo` command)
-- Wizard (`jmotools wizard`)
-- Docker containers (full/slim variants)
+- Wizard (`jmo wizard`)
+- Docker containers (deep/balanced/slim/fast variants)
 
 ### Test Suites
 
@@ -130,7 +159,7 @@ bash tests/e2e/run_comprehensive_tests.sh --test A1
 # Kubernetes scanning (requires kubectl + cluster)
 bash tests/e2e/run_comprehensive_tests.sh --test A2
 
-# Deep profile with all 11 tools
+# Deep profile with all 28 tools
 bash tests/e2e/run_comprehensive_tests.sh --test A3
 ```
 
@@ -213,8 +242,8 @@ cat /tmp/jmo-e2e-results-*/U1/test.log
 bash tests/e2e/run_comprehensive_tests.sh --test U1
 
 # Verify tool installations
-make verify-env
-make tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 ```
 
 **Docker tests failing:**
@@ -246,15 +275,33 @@ For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST
 
 ## CI
 
-- GitHub Actions workflow `.github/workflows/tests.yml` enforces coverage ≥85%.
+- GitHub Actions workflow `.github/workflows/ci.yml` enforces coverage ≥85%.
 - The workflow installs dev dependencies and runs `pytest` with coverage.
+
+### Test Sharding
+
+CI uses **pytest-split** to distribute 5,000+ tests across 4 parallel shards for ~60% faster execution:
+
+- **Sharded tests**: Ubuntu/Python 3.12 (primary CI target) runs tests in 4 parallel jobs
+- **Matrix tests**: Other OS/Python combinations run full test suite sequentially
+- **Coverage aggregation**: Coverage from all shards is merged before upload to Codecov
+
+To run tests locally with sharding (for debugging CI issues):
+
+```bash
+# Run specific shard (1-4)
+pytest tests/ --splits 4 --group 1 -m "not smoke and not requires_tools"
+
+# Generate test durations for optimal splitting
+pytest tests/ --store-durations --durations-path=.test_durations
+```
 
 ## General Troubleshooting
 
-- Missing tools: run `make verify-env` and `make tools`.
+- Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
-- Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
-- Different Python version: tests target 3.11 in CI; using older versions may cause minor differences.
+- Coverage too low: add tests or temporarily adjust `pyproject.toml [tool.coverage]` (prefer adding tests).
+- Different Python version: tests target 3.12 in CI; using older versions may cause minor differences.
 
 ### Import errors like `ModuleNotFoundError: No module named 'scripts'`
 

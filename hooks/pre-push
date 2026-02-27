@@ -73,9 +73,9 @@ if [ -n "$changed_md" ]; then
   if command -v markdownlint >/dev/null 2>&1 || command -v npx >/dev/null 2>&1; then
     # Try markdownlint-cli2 first (more configurable)
     if npx markdownlint-cli2 $changed_md 2>/dev/null; then
-      :  # Success
+      : # Success
     elif markdownlint $changed_md 2>/dev/null; then
-      :  # Fallback to markdownlint-cli
+      : # Fallback to markdownlint-cli
     else
       echo "⚠️  WARNING: Markdownlint found issues in:"
       echo "$changed_md"

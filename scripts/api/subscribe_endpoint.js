@@ -274,11 +274,11 @@ app.post('/api/subscribe', async (req, res) => {
         <ul class="benefits">
             <li><strong>Zero installation:</strong> Scan in 60 seconds with Docker (or install locally)</li>
             <li><strong>For everyone:</strong> Interactive wizard guides beginners; CLI power for pros</li>
-            <li><strong>Always current:</strong> Auto-updated security tools (11+ scanners, weekly checks)</li>
+            <li><strong>Always current:</strong> Auto-updated security tools (28 scanners, weekly checks)</li>
             <li><strong>Compliance ready:</strong> Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK</li>
             <li><strong>Actionable results:</strong> Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs</li>
         </ul>
-        <p style="margin-bottom: 0;">Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.</p>
+        <p style="margin-bottom: 0;">Replace 28 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.</p>
     </div>
 
     <h2>🚀 Quick Start (Choose Your Path)</h2>
@@ -346,11 +346,11 @@ JMo Security finds vulnerabilities in code, containers, cloud configs, and live 
 
 ✅ Zero installation: Scan in 60 seconds with Docker (or install locally)
 ✅ For everyone: Interactive wizard guides beginners; CLI power for pros
-✅ Always current: Auto-updated security tools (11+ scanners, weekly checks)
+✅ Always current: Auto-updated security tools (28 scanners, weekly checks)
 ✅ Compliance ready: Auto-tags findings with OWASP, CWE, NIST, PCI DSS, CIS, MITRE ATT&CK
 ✅ Actionable results: Interactive HTML dashboard with copy-paste fixes, not 100-page PDFs
 
-Replace 11 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.
+Replace 28 separate security tools with one unified scanner that catches hardcoded secrets, vulnerable dependencies, cloud misconfigurations, and web security flaws—then exports compliance-ready reports for audits.
 
 Quick Start (Choose Your Path)
 -------------------------------

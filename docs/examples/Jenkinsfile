@@ -78,6 +78,116 @@ pipeline {
                 """
             }
         }
+
+        stage('Security Diff') {
+            when {
+                changeRequest()  // Only run on PRs
+            }
+            agent {
+                docker {
+                    image "${JMO_IMAGE_SLIM}"
+                    args '-v $WORKSPACE:/workspace -w /workspace'
+                }
+            }
+            steps {
+                script {
+                    // Download baseline from main branch
+                    // Note: Requires Jenkins "Copy Artifact" plugin
+                    try {
+                        copyArtifacts(
+                            projectName: env.JOB_NAME,
+                            selector: specific(env.CHANGE_TARGET ?: 'main'),
+                            filter: "${RESULTS_DIR}/**/*",
+                            target: 'baseline-results',
+                            flatten: false
+                        )
+                    } catch (Exception e) {
+                        echo "Warning: Could not fetch baseline results: ${e.message}"
+                        echo "Skipping diff analysis"
+                        return
+                    }
+
+                    // Run current scan
+                    sh """
+                        jmo scan \
+                            --repo . \
+                            --profile-name fast \
+                            --results-dir current-results \
+                            --human-logs
+                    """
+
+                    // Generate diff reports (HTML + JSON)
+                    sh """
+                        jmo diff \
+                            baseline-results \
+                            current-results \
+                            --format html \
+                            --output security-diff.html
+                    """
+
+                    sh """
+                        jmo diff \
+                            baseline-results \
+                            current-results \
+                            --format json \
+                            --output security-diff.json
+                    """
+
+                    // Check for new HIGH/CRITICAL findings
+                    def newCritical = sh(
+                        script: """
+                            jq -r '.statistics.new.CRITICAL // 0' security-diff.json
+                        """,
+                        returnStdout: true
+                    ).trim().toInteger()
+
+                    def newHigh = sh(
+                        script: """
+                            jq -r '.statistics.new.HIGH // 0' security-diff.json
+                        """,
+                        returnStdout: true
+                    ).trim().toInteger()
+
+                    def totalNew = newCritical + newHigh
+
+                    // Log summary
+                    echo "Security Diff Summary:"
+                    echo "  New CRITICAL findings: ${newCritical}"
+                    echo "  New HIGH findings: ${newHigh}"
+                    echo "  Total new HIGH+ findings: ${totalNew}"
+
+                    // Gate PR based on new findings
+                    if (newCritical > 0) {
+                        unstable(message: "⚠️  PR introduces ${newCritical} new CRITICAL findings")
+                    }
+
+                    if (newHigh > 5) {
+                        unstable(message: "⚠️  PR introduces ${newHigh} new HIGH findings (threshold: 5)")
+                    }
+
+                    // Optional: Fail build on critical findings (strict mode)
+                    // if (totalNew > 0) {
+                    //     error("❌ PR introduces ${totalNew} new HIGH/CRITICAL findings")
+                    // }
+                }
+            }
+            post {
+                always {
+                    // Publish HTML diff report
+                    publishHTML([
+                        reportDir: '.',
+                        reportFiles: 'security-diff.html',
+                        reportName: 'Security Diff Report',
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true
+                    ])
+
+                    // Archive diff artifacts
+                    archiveArtifacts artifacts: 'security-diff.*', allowEmptyArchive: true
+                }
+            }
+        }
     }
 
     post {

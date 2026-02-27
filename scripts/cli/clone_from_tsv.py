@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Clone repositories listed in a TSV and emit a targets file for jmo scan.
+"""Clone repositories listed in a TSV and emit a targets file for jmo scan.
 
 Inputs
 - --tsv: Path to a TSV file with a header containing either 'url' or 'full_name' columns.
@@ -24,7 +23,6 @@ import csv
 import subprocess  # nosec B404 - this CLI intentionally shells out to git
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
 def log(msg: str, level: str = "INFO", human: bool = True) -> None:
@@ -40,10 +38,10 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
         sys.stderr.write(f"{color}{level:5}{reset} {msg}\n")
     else:
         import json
-        import datetime
+        from datetime import datetime, timezone
 
         rec = {
-            "ts": datetime.datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": level,
             "msg": msg,
         }
@@ -51,14 +49,13 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
 
 
 def run(
-    cmd: List[str], cwd: Optional[Path] = None, ok_rcs: Tuple[int, ...] = (0,)
-) -> Tuple[int, str, str]:
+    cmd: list[str], cwd: Path | None = None, ok_rcs: tuple[int, ...] = (0,)
+) -> tuple[int, str, str]:
     try:
         cp = subprocess.run(  # nosec B603 - command is list-based, constructed by this tool; shell=False
             cmd,
             cwd=str(cwd) if cwd else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             check=False,
         )
@@ -71,6 +68,32 @@ def run(
 
 
 def ensure_unshallowed(repo_dir: Path) -> None:
+    """Ensure git repository is fully cloned (not shallow) with all history.
+
+    Checks if repository is shallow-cloned and converts to full clone if needed.
+    Also fetches all tags and prunes deleted remote branches for completeness.
+    Used after cloning/updating repos to ensure security tools can analyze full history.
+
+    Args:
+        repo_dir (Path): Path to local git repository directory
+
+    Returns:
+        None (modifies repository in-place)
+
+    Raises:
+        None (logs warnings on failures but does not raise)
+
+    Example:
+        >>> repo = Path("repos-tsv/owner/myrepo")
+        >>> ensure_unshallowed(repo)
+        # Checks if shallow, runs `git fetch --unshallow`, fetches all tags
+
+    Note:
+        Some git configurations require specifying remote explicitly (origin).
+        Falls back to `git fetch origin --unshallow` if standard unshallow fails.
+        Logs warnings if unshallow fails but does not abort (allows partial results).
+
+    """
     # Determine if shallow and unshallow if needed
     rc, out, err = run(["git", "rev-parse", "--is-shallow-repository"], cwd=repo_dir)
     if rc != 0:
@@ -92,7 +115,36 @@ def ensure_unshallowed(repo_dir: Path) -> None:
     run(["git", "fetch", "--all", "--tags", "--prune"], cwd=repo_dir)
 
 
-def clone_or_update(url: str, dest_root: Path) -> Optional[Path]:
+def clone_or_update(url: str, dest_root: Path) -> Path | None:
+    """Clone new repository or update existing repository from remote URL.
+
+    Derives stable local path <dest_root>/<owner>/<repo> from URL, clones if new,
+    or updates (fetch + unshallow) if already exists. Ensures full git history
+    is available for security scanning.
+
+    Args:
+        url (str): Git repository URL (e.g., https://github.com/owner/repo.git)
+        dest_root (Path): Root directory for cloned repositories
+
+    Returns:
+        Path | None: Path to cloned/updated repository, or None if clone/update failed
+
+    Raises:
+        None (logs errors on failures but returns None instead of raising)
+
+    Example:
+        >>> url = "https://github.com/owner/myrepo.git"
+        >>> dest = Path("repos-tsv")
+        >>> repo_path = clone_or_update(url, dest)
+        >>> print(repo_path)
+        repos-tsv/owner/myrepo
+
+    Note:
+        Local path derived by parsing owner/repo from URL (strips .git suffix).
+        If repository exists, runs `git fetch --all --tags --prune` before unshallowing.
+        Returns None if clone fails or existing path is not a valid git repository.
+
+    """
     # Derive a stable folder path like <dest_root>/<owner>/<repo>
     try:
         # Strip trailing .git for folder naming
@@ -124,8 +176,37 @@ def clone_or_update(url: str, dest_root: Path) -> Optional[Path]:
     return target
 
 
-def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
-    urls: List[str] = []
+def parse_tsv(tsv_path: Path, max_count: int | None) -> list[str]:
+    """Parse TSV file to extract repository URLs from 'url' or 'full_name' columns.
+
+    Reads TSV file with CSV sniffer to auto-detect delimiter (tab/comma/semicolon),
+    extracts repository URLs from 'url' column, or constructs URLs from 'full_name'
+    column if 'url' not present. Supports limiting results via max_count parameter.
+
+    Args:
+        tsv_path (Path): Path to TSV/CSV file with header row
+        max_count (int | None): Optional limit on number of URLs to extract, or None for all
+
+    Returns:
+        list[str]: List of repository URLs (e.g., ["https://github.com/owner/repo.git", ...])
+
+    Raises:
+        RuntimeError: If TSV has no header row or missing both 'url' and 'full_name' columns
+
+    Example:
+        >>> tsv = Path("candidates.tsv")
+        >>> urls = parse_tsv(tsv, max_count=10)
+        >>> print(urls[0])
+        https://github.com/owner/myrepo.git
+
+    Note:
+        TSV header must contain 'url' OR 'full_name' column (case-insensitive).
+        If 'url' present, uses it directly; if only 'full_name', constructs GitHub URL.
+        Auto-detects delimiter by sniffing first 4KB of file (supports tab, comma, semicolon).
+        Skips rows with blank url/full_name values.
+
+    """
+    urls: list[str] = []
     with tsv_path.open("r", encoding="utf-8") as f:
         # Sniff delimiter; default to tab
         sample = f.read(4096)
@@ -154,7 +235,7 @@ def parse_tsv(tsv_path: Path, max_count: Optional[int]) -> List[str]:
     return urls
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Clone repos listed in a TSV and emit a jmo targets file"
     )
@@ -193,7 +274,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         log("No repository URLs found in TSV", "ERROR")
         return 2
 
-    paths: List[Path] = []
+    paths: list[Path] = []
     for url in urls:
         p = clone_or_update(url, dest)
         if p:

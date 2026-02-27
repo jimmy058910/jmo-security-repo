@@ -14,6 +14,7 @@ from scripts.cli.wizard import (
     run_wizard,
 )
 from scripts.cli.wizard_generators import (
+    JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
@@ -31,10 +32,19 @@ def test_profiles_complete():
         "est_time",
         "use_case",
     }
+    # Optional fields that may be present in some profiles
+    optional_fields = {"warning"}
 
     for profile_name, profile in PROFILES.items():
         assert isinstance(profile_name, str)
-        assert set(profile.keys()) == required_fields
+        profile_keys = set(profile.keys())
+        # All required fields must be present
+        assert (
+            required_fields <= profile_keys
+        ), f"Missing required fields in {profile_name}"
+        # Only required or optional fields are allowed
+        extra_fields = profile_keys - required_fields - optional_fields
+        assert not extra_fields, f"Unexpected fields {extra_fields} in {profile_name}"
         assert isinstance(profile["tools"], list)
         assert len(profile["tools"]) > 0
         assert isinstance(profile["timeout"], int)
@@ -80,7 +90,8 @@ def test_generate_command_native_repos_dir():
 
     cmd = generate_command(config)
 
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--repos-dir /home/user/repos" in cmd
     assert "--results-dir results" in cmd
     assert "--threads 4" in cmd
@@ -101,7 +112,8 @@ def test_generate_command_native_with_fail_on():
 
     cmd = generate_command(config)
 
-    assert "jmotools fast" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name fast" in cmd
     assert "--repo /home/user/myrepo" in cmd
     assert "--fail-on HIGH" in cmd
 
@@ -121,7 +133,7 @@ def test_generate_command_docker_mode():
     cmd = generate_command(config)
 
     assert "docker run" in cmd
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in cmd
+    assert JMO_DOCKER_IMAGE_FULL in cmd
     assert "--profile deep" in cmd
     assert "/scan" in cmd
     assert "/results" in cmd
@@ -140,7 +152,8 @@ def test_generate_command_tsv_mode():
 
     cmd = generate_command(config)
 
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--tsv ./repos.tsv" in cmd
     assert "--dest repos-tsv" in cmd
 
@@ -158,7 +171,8 @@ def test_generate_makefile_target():
 
     assert ".PHONY: security-scan" in makefile
     assert "security-scan:" in makefile
-    assert "jmotools balanced" in makefile
+    assert "jmo scan" in makefile
+    assert "--profile-name balanced" in makefile
     assert "/home/user/repos" in makefile
 
 
@@ -175,7 +189,8 @@ def test_generate_shell_script():
 
     assert "#!/usr/bin/env bash" in script
     assert "set -euo pipefail" in script
-    assert "jmotools fast" in script
+    assert "jmo scan" in script
+    assert "--profile-name fast" in script
     assert "/home/user/myrepo" in script
 
 
@@ -198,7 +213,8 @@ def test_generate_github_actions_native():
     assert "runs-on: ubuntu-latest" in workflow
     assert "actions/checkout@v4" in workflow
     assert "actions/setup-python@v5" in workflow
-    assert "jmotools balanced" in workflow
+    assert "jmo scan" in workflow
+    assert "--profile-name balanced" in workflow
     assert "--fail-on HIGH" in workflow
     assert "upload-artifact@v4" in workflow
     assert "upload-sarif@v3" in workflow
@@ -219,7 +235,7 @@ def test_generate_github_actions_docker():
 
     assert "name: Security Scan" in workflow
     assert "container:" in workflow
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in workflow
+    assert JMO_DOCKER_IMAGE_FULL in workflow
     assert "jmo scan" in workflow
     assert "--profile deep" in workflow
     assert "actions/checkout@v4" in workflow
@@ -229,17 +245,19 @@ def test_generate_github_actions_docker():
     assert "actions/setup-python" not in workflow
 
 
+@patch("scripts.cli.wizard.subprocess.run")
 @patch("scripts.cli.wizard._detect_docker")
 @patch("scripts.cli.wizard._check_docker_running")
 @patch("scripts.cli.wizard._prompt_yes_no")
 @patch("scripts.cli.wizard._prompt_choice")
-@patch("scripts.cli.wizard._prompt_text")
+@patch("scripts.cli.tool_manager.ToolManager")
 def test_run_wizard_non_interactive(
-    mock_text,
+    mock_tool_manager_class,
     mock_choice,
     mock_yes_no,
     mock_docker_running,
     mock_detect,
+    mock_subprocess_run,
 ):
     """Test wizard in non-interactive (--yes) mode."""
     mock_detect.return_value = False
@@ -248,18 +266,31 @@ def test_run_wizard_non_interactive(
     # Mock yes/no for "Execute now?" prompt
     mock_yes_no.return_value = True
 
-    # Mock the dynamic import of jmotools.main
-    mock_jmotools_main = MagicMock(return_value=0)
+    # Mock subprocess.run to prevent actual scan execution
+    mock_subprocess_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks during scan execution
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        profile_total=18,
+        platform_applicable=18,
+        profile_name="balanced",
+    )
+    mock_tm_instance.check_tool.return_value = MagicMock(
+        installed=True, version="1.0.0", startup_ok=True
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     with patch("scripts.cli.wizard.Path.cwd", return_value=Path("/home/user/repos")):
-        with patch.dict(
-            "sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}
-        ):
-            rc = run_wizard(yes=True)
+        rc = run_wizard(yes=True)
 
     # Should not have prompted for profile/target selection
     mock_choice.assert_not_called()
-    mock_text.assert_not_called()
+    # Note: _prompt_text is no longer mocked since it's only used by configure_advanced
+    # which is skipped in --yes mode
 
     # Should have reasonable exit code
     assert rc == 0
@@ -316,7 +347,7 @@ def test_run_wizard_emit_gha_docker():
 
     # Docker-specific assertions
     assert "container:" in workflow
-    assert "image: ghcr.io/jimmy058910/jmo-security:latest" in workflow
+    assert f"image: {JMO_DOCKER_IMAGE_FULL}" in workflow
     assert "jmo scan" in workflow  # Docker uses `jmo` directly
     assert "--profile balanced" in workflow
     assert "--fail-on HIGH" in workflow
@@ -344,36 +375,45 @@ def test_profile_resource_estimates():
 
 def test_cpu_count_fallback():
     """Test CPU count detection with fallback."""
-    from scripts.cli.wizard import _get_cpu_count
+    from scripts.cli.cpu_utils import get_cpu_count
 
     # Should return fallback if detection fails
-    with patch("scripts.cli.wizard.os.cpu_count", return_value=None):
-        count = _get_cpu_count()
+    with patch("scripts.cli.cpu_utils.os.cpu_count", return_value=None):
+        count = get_cpu_count()
         assert count == 4  # Default fallback
 
 
 def test_colorize():
     """Test ANSI color code application."""
-    from scripts.cli.wizard import _colorize
+    import scripts.cli.wizard_flows.base_flow as bf
 
-    colored = _colorize("test", "blue")
-    assert "\x1b[36m" in colored  # blue ANSI code
-    assert "test" in colored
-    assert "\x1b[0m" in colored  # reset code
+    # Force ANSI support (CI has no TTY)
+    orig = bf._ANSI_SUPPORTED
+    bf._ANSI_SUPPORTED = True
+    try:
+        from scripts.cli.wizard import _colorize
 
-    # Test unknown color returns reset
-    colored_unknown = _colorize("test", "unknown_color")
-    assert "test" in colored_unknown
+        colored = _colorize("test", "blue")
+        assert "\x1b[36m" in colored  # blue ANSI code
+        assert "test" in colored
+        assert "\x1b[0m" in colored  # reset code
+
+        # Test unknown color returns reset
+        colored_unknown = _colorize("test", "unknown_color")
+        assert "test" in colored_unknown
+    finally:
+        bf._ANSI_SUPPORTED = orig
 
 
 def test_print_header(capsys):
-    """Test header printing."""
+    """Test header printing (v0.9.0 uses box-drawing characters)."""
     from scripts.cli.wizard import _print_header
 
     _print_header("Test Header")
     captured = capsys.readouterr()
     assert "Test Header" in captured.out
-    assert "=" in captured.out
+    # v0.9.0 uses Unicode box-drawing characters (╔═╗ instead of ==)
+    assert "═" in captured.out or "=" in captured.out  # Support both old and new style
 
 
 def test_print_step(capsys):
@@ -410,7 +450,7 @@ def test_prompt_choice_default(mock_input):
 @patch("builtins.input", return_value="custom text")
 def test_prompt_text_custom(mock_input):
     """Test prompt_text with custom input."""
-    from scripts.cli.wizard import _prompt_text
+    from scripts.cli.wizard_flows.target_configurators import _prompt_text
 
     result = _prompt_text("Enter value:", default="default")
     assert result == "custom text"
@@ -419,7 +459,7 @@ def test_prompt_text_custom(mock_input):
 @patch("builtins.input", return_value="")
 def test_prompt_text_default(mock_input):
     """Test prompt_text with default."""
-    from scripts.cli.wizard import _prompt_text
+    from scripts.cli.wizard_flows.target_configurators import _prompt_text
 
     result = _prompt_text("Enter value:", default="default_value")
     assert result == "default_value"
@@ -585,19 +625,19 @@ def test_select_execution_mode_force_docker_success(mock_running, mock_detect):
 
 @patch("scripts.cli.wizard._detect_docker", return_value=True)
 @patch("scripts.cli.wizard._check_docker_running", return_value=True)
-@patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
+@patch("builtins.input", return_value="1")  # Select Docker mode (choice "1")
 def test_select_execution_mode_interactive_docker(
-    mock_prompt, mock_running, mock_detect
+    mock_input, mock_running, mock_detect
 ):
     """Test interactive Docker mode selection."""
     from scripts.cli.wizard import select_execution_mode
 
     result = select_execution_mode(force_docker=False)
     assert result is True
-    mock_prompt.assert_called_once()
+    mock_input.assert_called_once()
 
 
-@patch("scripts.cli.wizard._prompt_choice", return_value="balanced")
+@patch("scripts.cli.wizard_flows.ui_helpers.prompt_choice", return_value="balanced")
 def test_select_profile(mock_choice):
     """Test profile selection."""
     from scripts.cli.wizard import select_profile
@@ -627,10 +667,10 @@ def test_configure_advanced_no_customize(mock_yes_no):
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch("scripts.cli.wizard._prompt_text", side_effect=["8", "1200", ""])
+@patch("builtins.input", side_effect=["8", "1200", ""])
 @patch("scripts.cli.wizard._prompt_choice", return_value="high")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
-def test_configure_advanced_customize(mock_cpu, mock_choice, mock_text, mock_yes_no):
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
+def test_configure_advanced_customize(mock_cpu, mock_choice, mock_input, mock_yes_no):
     """Test configure_advanced with customization."""
     from scripts.cli.wizard import configure_advanced
 
@@ -641,11 +681,11 @@ def test_configure_advanced_customize(mock_cpu, mock_choice, mock_text, mock_yes
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch("scripts.cli.wizard._prompt_text", side_effect=["invalid", "30"])
+@patch("builtins.input", side_effect=["invalid", "30"])
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
 def test_configure_advanced_invalid_inputs(
-    mock_cpu, mock_choice, mock_text, mock_yes_no
+    mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced with invalid numeric inputs."""
     from scripts.cli.wizard import configure_advanced
@@ -658,13 +698,11 @@ def test_configure_advanced_invalid_inputs(
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-@patch(
-    "scripts.cli.wizard._prompt_text", side_effect=["1000", "30"]
-)  # threads > cpu*2, timeout < 60
+@patch("builtins.input", side_effect=["1000", "30"])  # threads > cpu*2, timeout < 60
 @patch("scripts.cli.wizard._prompt_choice", return_value="")
-@patch("scripts.cli.wizard._get_cpu_count", return_value=4)
+@patch("scripts.cli.wizard.get_cpu_count", return_value=4)
 def test_configure_advanced_boundary_clamping(
-    mock_cpu, mock_choice, mock_text, mock_yes_no
+    mock_cpu, mock_choice, mock_input, mock_yes_no
 ):
     """Test configure_advanced clamping values to boundaries."""
     from scripts.cli.wizard import configure_advanced
@@ -736,7 +774,8 @@ def test_generate_command_targets_mode():
     config.results_dir = "results"
 
     cmd = generate_command(config)
-    assert "jmotools balanced" in cmd
+    assert "jmo scan" in cmd
+    assert "--profile-name balanced" in cmd
     assert "--targets /path/to/targets.txt" in cmd
 
 
@@ -772,11 +811,24 @@ def test_execute_scan_decline(mock_yes_no):
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
 @patch("scripts.cli.wizard.subprocess.run")
-def test_execute_scan_docker_mode(mock_run, mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_execute_scan_docker_mode(mock_tool_manager_class, mock_run, mock_yes_no):
     """Test execute_scan in Docker mode."""
     from scripts.cli.wizard import execute_scan
 
     mock_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        platform_applicable=18,
+        profile_name="balanced",
+        profile_total=18,
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     config = WizardConfig()
     config.profile = "balanced"
@@ -796,10 +848,27 @@ def test_execute_scan_docker_mode(mock_run, mock_yes_no):
     assert command[0] == "docker"
 
 
+@patch("subprocess.run")
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_native_mode(mock_yes_no):
+@patch("scripts.cli.tool_manager.ToolManager")
+def test_execute_scan_native_mode(mock_tool_manager_class, mock_yes_no, mock_run):
     """Test execute_scan in native mode."""
     from scripts.cli.wizard import execute_scan
+
+    # Mock subprocess.run to prevent actual command execution
+    mock_run.return_value = MagicMock(returncode=0)
+
+    # Mock ToolManager to prevent real tool checks
+    mock_tm_instance = MagicMock()
+    mock_tm_instance.get_tool_summary.return_value = MagicMock(
+        execution_ready=10,
+        platform_skipped=[],
+        content_triggered=[],
+        platform_applicable=18,
+        profile_name="balanced",
+        profile_total=18,
+    )
+    mock_tool_manager_class.return_value = mock_tm_instance
 
     config = WizardConfig()
     config.profile = "balanced"
@@ -808,40 +877,47 @@ def test_execute_scan_native_mode(mock_yes_no):
     config.target.repo_mode = "repos-dir"
     config.target.repo_path = "."
 
-    # Mock jmotools.main
-    mock_jmotools_main = MagicMock(return_value=0)
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    exit_code = execute_scan(config)
 
     assert exit_code == 0
+    mock_run.assert_called_once()
+    # Verify shell=False for security (prevents command injection)
+    assert mock_run.call_args[1]["shell"] is False
+    # Verify command is passed as list (secure)
+    command = mock_run.call_args[0][0]
+    assert isinstance(command, list)
+    # Native mode should use python directly, not docker
+    assert command[0] != "docker"
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_keyboard_interrupt(mock_yes_no):
+@patch("subprocess.run")
+def test_execute_scan_keyboard_interrupt(mock_run, mock_yes_no):
     """Test execute_scan with keyboard interrupt."""
     from scripts.cli.wizard import execute_scan
 
     config = WizardConfig()
     config.use_docker = False
 
-    mock_jmotools_main = MagicMock(side_effect=KeyboardInterrupt())
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    # Mock subprocess.run to raise KeyboardInterrupt
+    mock_run.side_effect = KeyboardInterrupt()
+    exit_code = execute_scan(config)
 
     assert exit_code == 130
 
 
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=True)
-def test_execute_scan_exception(mock_yes_no):
+@patch("subprocess.run")
+def test_execute_scan_exception(mock_run, mock_yes_no):
     """Test execute_scan with exception."""
     from scripts.cli.wizard import execute_scan
 
     config = WizardConfig()
     config.use_docker = False
 
-    mock_jmotools_main = MagicMock(side_effect=Exception("Test error"))
-    with patch.dict("sys.modules", {"jmotools": MagicMock(main=mock_jmotools_main)}):
-        exit_code = execute_scan(config)
+    # Mock subprocess.run to raise OSError (a system error)
+    mock_run.side_effect = OSError("Test error")
+    exit_code = execute_scan(config)
 
     assert exit_code == 1
 
@@ -871,15 +947,103 @@ def test_run_wizard_exception():
 @patch("scripts.cli.wizard._detect_docker", return_value=True)
 @patch("scripts.cli.wizard._check_docker_running", return_value=True)
 @patch("scripts.cli.wizard._prompt_yes_no", return_value=False)
-def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect):
+def test_run_wizard_yes_with_docker(mock_yes_no, mock_running, mock_detect, tmp_path):
     """Test non-interactive mode with Docker available."""
     from scripts.cli.wizard import run_wizard
 
     # Non-interactive mode with force_docker and emit artifact to avoid execution
-    exit_code = run_wizard(yes=True, force_docker=True, emit_make="/tmp/test-make.txt")
+    # Use tmp_path for cross-platform compatibility (Windows/Linux/macOS)
+    make_file = tmp_path / "test-make.txt"
+    exit_code = run_wizard(yes=True, force_docker=True, emit_make=str(make_file))
 
     # Should complete successfully without errors
     assert exit_code == 0
+
+
+# ===== Issue #1 Fix: --emit-script default filename tests =====
+
+
+def test_emit_script_argparse_default():
+    """Test that --emit-script uses default filename when no value provided.
+
+    This verifies the fix for Issue #1 where --emit-script without a filename
+    caused a TypeError because Path() received a non-string value.
+    """
+    import argparse
+
+    # Replicate the argparse configuration
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-script",
+        metavar="FILE",
+        nargs="?",
+        const="jmo-scan.sh",
+        type=str,
+    )
+
+    # Test with no value (uses const default)
+    args = parser.parse_args(["--emit-script"])
+    assert args.emit_script == "jmo-scan.sh"
+
+    # Test with explicit value
+    args = parser.parse_args(["--emit-script", "custom.sh"])
+    assert args.emit_script == "custom.sh"
+
+    # Test without flag (None)
+    args = parser.parse_args([])
+    assert args.emit_script is None
+
+
+def test_emit_make_target_argparse_default():
+    """Test that --emit-make-target uses default filename when no value provided."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-make-target",
+        metavar="FILE",
+        nargs="?",
+        const="Makefile.jmo",
+        type=str,
+    )
+
+    args = parser.parse_args(["--emit-make-target"])
+    assert args.emit_make_target == "Makefile.jmo"
+
+
+def test_emit_gha_argparse_default():
+    """Test that --emit-gha uses default filename when no value provided."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--emit-gha",
+        metavar="FILE",
+        nargs="?",
+        const=".github/workflows/jmo-security.yml",
+        type=str,
+    )
+
+    args = parser.parse_args(["--emit-gha"])
+    assert args.emit_gha == ".github/workflows/jmo-security.yml"
+
+
+@patch("scripts.cli.wizard.Path.write_text")
+@patch("scripts.cli.wizard.Path.chmod")
+def test_run_wizard_emit_script_default_filename(mock_chmod, mock_write):
+    """Test wizard with --emit-script using default filename.
+
+    This is an integration test verifying the full flow works with default filename.
+    """
+    # Note: We pass the default filename directly to simulate argparse behavior
+    # The actual argparse integration is tested in test_emit_script_argparse_default
+    rc = run_wizard(yes=True, emit_script="jmo-scan.sh")
+
+    mock_write.assert_called_once()
+    content = mock_write.call_args[0][0]
+    assert "#!/usr/bin/env bash" in content
+    mock_chmod.assert_called_once_with(0o755)
+    assert rc == 0
 
 
 if __name__ == "__main__":

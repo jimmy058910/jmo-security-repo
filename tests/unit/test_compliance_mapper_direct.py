@@ -13,19 +13,19 @@ This test suite achieves 100% coverage by testing:
 10. Edge cases and empty inputs
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def create_finding(
     tool_name: str = "test-tool",
     rule_id: str = "test-rule",
     severity: str = "HIGH",
-    cwes: Optional[List[str]] = None,
-    tags: Optional[List[str]] = None,
+    cwes: list[str] | None = None,
+    tags: list[str] | None = None,
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Helper to create a test finding."""
-    finding: Dict[str, Any] = {
+    finding: dict[str, Any] = {
         "schemaVersion": "1.1.0",
         "id": f"test-{rule_id}",
         "ruleId": rule_id,

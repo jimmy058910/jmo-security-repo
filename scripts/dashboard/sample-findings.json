@@ -1,0 +1,155 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-abc123",
+    "ruleId": "CWE-79",
+    "severity": "CRITICAL",
+    "tool": {
+      "name": "semgrep",
+      "version": "1.54.0"
+    },
+    "location": {
+      "path": "src/app.js",
+      "startLine": 42,
+      "endLine": 45
+    },
+    "message": "Cross-site Scripting (XSS) vulnerability detected",
+    "title": "XSS via innerHTML",
+    "description": "User input is directly assigned to innerHTML without sanitization, allowing arbitrary JavaScript execution.",
+    "remediation": {
+      "summary": "Use textContent instead of innerHTML, or sanitize input with DOMPurify",
+      "fix": "element.textContent = userInput; // Safe",
+      "steps": [
+        "Replace innerHTML with textContent for plain text",
+        "If HTML is needed, use DOMPurify.sanitize()",
+        "Consider Content Security Policy (CSP) headers"
+      ]
+    },
+    "references": [
+      "https://owasp.org/www-community/attacks/xss/",
+      "https://cwe.mitre.org/data/definitions/79.html"
+    ],
+    "compliance": {
+      "owaspTop10_2021": ["A03:2021"],
+      "cweTop25_2024": [{"rank": 2, "id": "CWE-79", "category": "Insecure Interaction Between Components"}]
+    },
+    "priority": {
+      "priority": 95,
+      "is_kev": false,
+      "epss": null,
+      "epss_percentile": null,
+      "kev_due_date": null
+    },
+    "context": {
+      "snippet": "const div = document.getElementById('output');\ndiv.innerHTML = req.query.name; // Vulnerable"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-def456",
+    "ruleId": "CVE-2023-12345",
+    "severity": "HIGH",
+    "tool": {
+      "name": "trivy",
+      "version": "0.48.0"
+    },
+    "location": {
+      "path": "package-lock.json",
+      "startLine": 1234
+    },
+    "message": "lodash 4.17.20 has a known security vulnerability",
+    "title": "Prototype Pollution in lodash",
+    "description": "The lodash library is vulnerable to prototype pollution attacks via the merge() and mergeWith() functions.",
+    "remediation": "Upgrade lodash to version 4.17.21 or later",
+    "references": [
+      "https://nvd.nist.gov/vuln/detail/CVE-2023-12345",
+      "https://github.com/advisories/GHSA-xxxx-yyyy-zzzz"
+    ],
+    "epss": 0.85,
+    "epss_percentile": 92.5,
+    "kev": true,
+    "kev_due_date": "2024-03-15",
+    "priority": {
+      "priority": 88,
+      "is_kev": true,
+      "epss": 0.85,
+      "epss_percentile": 92.5,
+      "kev_due_date": "2024-03-15"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-ghi789",
+    "ruleId": "SQL-001",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "bandit",
+      "version": "1.7.5"
+    },
+    "location": {
+      "path": "backend/database.py",
+      "startLine": 78
+    },
+    "message": "SQL injection risk: string concatenation in query",
+    "title": "SQL Injection via String Concatenation",
+    "description": "Query parameters are concatenated directly into SQL string, allowing SQL injection attacks.",
+    "remediation": "Use parameterized queries or ORM methods",
+    "priority": {
+      "priority": 65,
+      "is_kev": false,
+      "epss": null,
+      "epss_percentile": null,
+      "kev_due_date": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-jkl012",
+    "ruleId": "CHECKOV-001",
+    "severity": "LOW",
+    "tool": {
+      "name": "checkov",
+      "version": "3.1.0"
+    },
+    "location": {
+      "path": "infrastructure/main.tf",
+      "startLine": 15
+    },
+    "message": "S3 bucket versioning is not enabled",
+    "title": "S3 Bucket Versioning Disabled",
+    "description": "Versioning is disabled on S3 bucket, preventing recovery from accidental deletion or overwrites.",
+    "remediation": "Enable versioning in Terraform configuration",
+    "priority": {
+      "priority": 25,
+      "is_kev": false,
+      "epss": null,
+      "epss_percentile": null,
+      "kev_due_date": null
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-mno345",
+    "ruleId": "HARDCODED-SECRET",
+    "severity": "INFO",
+    "tool": {
+      "name": "trufflehog",
+      "version": "3.63.0"
+    },
+    "location": {
+      "path": "config/test.yaml",
+      "startLine": 5
+    },
+    "message": "Potential AWS access key detected",
+    "title": "Hardcoded AWS Credentials",
+    "description": "File contains what appears to be an AWS access key. If this is a real credential, rotate immediately.",
+    "remediation": "Use environment variables or AWS Secrets Manager",
+    "priority": {
+      "priority": 10,
+      "is_kev": false,
+      "epss": null,
+      "epss_percentile": null,
+      "kev_due_date": null
+    }
+  }
+]

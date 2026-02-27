@@ -7,6 +7,8 @@ Privacy-first, opt-in anonymous usage telemetry using GitHub Gist backend.
 Reference: docs/TELEMETRY_IMPLEMENTATION_GUIDE.md
 """
 
+from __future__ import annotations
+
 import json
 import os
 import platform
@@ -14,14 +16,40 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
+import sys
 from urllib import request
 from urllib.error import URLError, HTTPError
 
+from scripts.core.unicode_utils import safe_print as _safe_print
+
 # Telemetry endpoint (GitHub Gist API for MVP)
 GIST_ID = os.environ.get("JMO_TELEMETRY_GIST_ID", "")
-GITHUB_TOKEN = os.environ.get("JMO_TELEMETRY_GITHUB_TOKEN", "")
 TELEMETRY_ENDPOINT = f"https://api.github.com/gists/{GIST_ID}" if GIST_ID else ""
+
+# Token lazy-loading: Avoid loading credentials at module import time
+# This prevents token exposure when telemetry is disabled and reduces memory footprint
+_github_token_cache: str | None = None
+
+
+def _get_github_token() -> str:
+    """
+    Lazy-load GitHub token only when needed.
+
+    Security improvement: Token is not loaded at module import time.
+    This means:
+    - Token not loaded if telemetry is disabled
+    - Token not sitting in memory for entire program lifetime
+    - Reduced attack surface for credential exposure
+
+    Returns:
+        GitHub token string, or empty string if not configured
+    """
+    global _github_token_cache
+    if _github_token_cache is None:
+        _github_token_cache = os.environ.get("JMO_TELEMETRY_GITHUB_TOKEN", "")
+    return _github_token_cache
+
 
 # Telemetry file (JSONL format)
 TELEMETRY_FILE = "jmo-telemetry-events.jsonl"
@@ -50,17 +78,19 @@ def get_anonymous_id() -> str:
     return anon_id
 
 
-def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
+def is_telemetry_enabled(config: dict[str, Any]) -> bool:
     """
     Check if telemetry is enabled in config or environment variable.
+
+    OPT-OUT MODEL (v0.7.1+): Telemetry enabled by default, users can disable.
 
     Environment variable override (for CI/CD):
         JMO_TELEMETRY_DISABLE=1 → Force disable
 
     Config check:
-        telemetry.enabled: true → Enable
-        telemetry.enabled: false → Disable
-        (missing) → Default: false (opt-in only)
+        telemetry.enabled: false → Disable (user opted out)
+        telemetry.enabled: true → Enable (explicit)
+        (missing) → Default: TRUE (opt-out model)
 
     Args:
         config: JMo configuration dict (from jmo.yml)
@@ -68,20 +98,31 @@ def is_telemetry_enabled(config: Dict[str, Any]) -> bool:
     Returns:
         True if telemetry is enabled, False otherwise
     """
-    # Environment variable override (CI/CD)
+    # Environment variable override (CI/CD and user opt-out)
     if os.environ.get("JMO_TELEMETRY_DISABLE") == "1":
         return False
 
-    # Config check (default: False, opt-in only)
-    enabled: bool = bool(config.get("telemetry", {}).get("enabled", False))
+    # Auto-disable in CI/CD environments
+    if detect_ci_environment():
+        return False
+
+    # Config check (default: True, opt-out model)
+    # If config explicitly sets enabled: false, respect user choice
+    telemetry_config = config.get("telemetry", {})
+    if "enabled" in telemetry_config:
+        enabled: bool = bool(telemetry_config["enabled"])
+    else:
+        # No config = default enabled (opt-out)
+        enabled = True
+
     return enabled
 
 
 def send_event(
     event_type: str,
-    metadata: Dict[str, Any],
-    config: Dict[str, Any],
-    version: str = "0.7.0",
+    metadata: dict[str, Any],
+    config: dict[str, Any],
+    version: str = "1.0.0",
 ) -> None:
     """
     Send telemetry event (non-blocking, fire-and-forget).
@@ -99,7 +140,7 @@ def send_event(
         return
 
     # Validate Gist endpoint is configured
-    if not TELEMETRY_ENDPOINT or not GITHUB_TOKEN:
+    if not TELEMETRY_ENDPOINT or not _get_github_token():
         # Silently skip if endpoint not configured (don't break user workflow)
         return
 
@@ -109,7 +150,7 @@ def send_event(
     ).start()
 
 
-def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -> None:
+def _send_event_async(event_type: str, metadata: dict[str, Any], version: str) -> None:
     """
     Send event to telemetry endpoint (background thread).
 
@@ -148,7 +189,7 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
             TELEMETRY_ENDPOINT,
             data=data,
             headers={
-                "Authorization": f"token {GITHUB_TOKEN}",
+                "Authorization": f"token {_get_github_token()}",
                 "Content-Type": "application/json",
                 "User-Agent": f"JMo-Security/{version}",
             },
@@ -180,7 +221,7 @@ def _get_gist_content() -> str:
         req = request.Request(
             TELEMETRY_ENDPOINT,
             headers={
-                "Authorization": f"token {GITHUB_TOKEN}",
+                "Authorization": f"token {_get_github_token()}",
                 "User-Agent": "JMo-Security",
             },
         )
@@ -263,6 +304,104 @@ def bucket_targets(count: int) -> str:
         return ">50"
 
 
+def bucket_violations(count: int) -> str:
+    """
+    Bucket policy violation count for privacy (prevents fingerprinting).
+
+    Args:
+        count: Number of policy violations
+
+    Returns:
+        Bucketed count string: "0", "1-5", "5-20", "20-100", ">100"
+    """
+    if count == 0:
+        return "0"
+    elif count <= 5:
+        return "1-5"
+    elif count <= 20:
+        return "5-20"
+    elif count <= 100:
+        return "20-100"
+    else:
+        return ">100"
+
+
+def bucket_duration_ms(ms: float) -> str:
+    """
+    Bucket policy evaluation duration for privacy (prevents fingerprinting).
+
+    Args:
+        ms: Evaluation duration in milliseconds
+
+    Returns:
+        Bucketed duration string: "<50ms", "50-100ms", "100-500ms", ">500ms"
+    """
+    if ms < 50:
+        return "<50ms"
+    elif ms < 100:
+        return "50-100ms"
+    elif ms < 500:
+        return "100-500ms"
+    else:
+        return ">500ms"
+
+
+def send_policy_evaluation_event(
+    policy_names: list[str],
+    results: dict[str, Any],
+    duration_ms: float,
+    config: dict[str, Any],
+    version: str,
+) -> None:
+    """
+    Send policy evaluation telemetry event (privacy-preserving).
+
+    Collects anonymous metrics about policy evaluation to improve policy features.
+
+    Privacy Guarantees:
+    - ❌ No PII (no policy content, no finding details)
+    - ❌ No exact counts (bucketed: 0, 1-5, 5-20, 20-100, >100)
+    - ❌ No exact durations (bucketed: <50ms, 50-100ms, etc.)
+    - ✅ Only aggregated metrics for product analytics
+
+    Args:
+        policy_names: List of policy names evaluated
+        results: Dict of policy results (PolicyResult objects)
+        duration_ms: Total evaluation duration in milliseconds
+        config: JMo configuration dict (to check if telemetry enabled)
+        version: JMo Security version string
+
+    Example:
+        >>> send_policy_evaluation_event(
+        ...     ["zero-secrets", "owasp-top-10"],
+        ...     {"zero-secrets": PolicyResult(...), "owasp-top-10": PolicyResult(...)},
+        ...     21.81,
+        ...     config,
+        ...     "1.0.0"
+        ... )
+    """
+    # Calculate total violations (sum across all policies)
+    total_violations = sum(
+        len(r.violations) if hasattr(r, "violations") else 0 for r in results.values()
+    )
+
+    # Count passed/failed policies
+    passed_count = sum(1 for r in results.values() if hasattr(r, "passed") and r.passed)
+    failed_count = len(results) - passed_count
+
+    # Build privacy-preserving metadata
+    metadata = {
+        "policy_count": len(policy_names),  # Exact count OK (low cardinality)
+        "violations_bucket": bucket_violations(total_violations),  # Bucketed
+        "evaluation_time_bucket": bucket_duration_ms(duration_ms),  # Bucketed
+        "policies": sorted(policy_names),  # Policy names OK (built-in policies)
+        "passed_count": passed_count,  # Exact count OK (low cardinality)
+        "failed_count": failed_count,  # Exact count OK (low cardinality)
+    }
+
+    send_event("policy.evaluated", metadata, config, version)
+
+
 def detect_ci_environment() -> bool:
     """
     Detect if running in CI/CD environment.
@@ -295,7 +434,70 @@ def detect_ci_environment() -> bool:
     return any(os.environ.get(var) for var in ci_vars)
 
 
-def infer_scan_frequency() -> Optional[str]:
+def should_show_telemetry_banner() -> bool:
+    """
+    Check if telemetry banner should be shown (first scan/wizard run only).
+
+    Prevents double-display when wizard spawns scan subprocess by checking
+    JMO_TELEMETRY_SHOWN environment variable.
+
+    Returns:
+        True if banner should be shown, False otherwise
+    """
+    try:
+        # Skip if already shown in this process tree (e.g., wizard -> scan subprocess)
+        if os.environ.get("JMO_TELEMETRY_SHOWN") == "1":
+            return False
+
+        if SCAN_COUNT_FILE.exists():
+            count = int(SCAN_COUNT_FILE.read_text().strip())
+        else:
+            count = 0
+
+        # Show banner on first scan only
+        return count == 0
+    except Exception:
+        return False
+
+
+def show_telemetry_banner(mode: str = "cli") -> None:
+    """
+    Display telemetry opt-out banner on first CLI scan or wizard run only.
+
+    Args:
+        mode: "cli" or "wizard" to customize messaging
+    """
+    print()
+    print("=" * 70)
+    _safe_print("📊 Anonymous Usage Analytics")
+    print("=" * 70)
+    print("JMo Security collects anonymous usage data to improve the tool.")
+    print()
+    _safe_print("✅ What we collect:")
+    _safe_print("   • Tool usage (which scanners ran)")
+    _safe_print("   • Scan duration (bucketed: <5min, 5-15min, etc.)")
+    _safe_print("   • Execution mode (CLI/Docker/Wizard)")
+    _safe_print("   • Platform (Linux/macOS/Windows)")
+    _safe_print("   • JMo version (e.g., 1.0.0)")
+    print()
+    _safe_print("❌ What we DON'T collect:")
+    _safe_print("   • Repository names, file paths, or URLs")
+    _safe_print("   • Finding details, secrets, or vulnerabilities")
+    _safe_print("   • IP addresses or personally identifiable information")
+    print()
+    _safe_print("🔒 Privacy: 100% anonymous (random UUID, no PII)")
+    _safe_print("🌐 Policy: https://jmotools.com/privacy")
+    print()
+    _safe_print("💡 Opt-out anytime:")
+    _safe_print("   • Set: export JMO_TELEMETRY_DISABLE=1")
+    _safe_print("   • Edit jmo.yml: telemetry.enabled: false")
+    print()
+    print("This notice shows once only.")
+    print("=" * 70)
+    print()
+
+
+def infer_scan_frequency() -> str | None:
     """
     Infer scan frequency based on local scan count.
 
@@ -350,16 +552,15 @@ if __name__ == "__main__":
             "test.event",
             {"message": "Test telemetry event from CLI"},
             config,
-            version="0.7.0-dev",
+            version="1.0.0",
         )
-        print("✅ Event sent (check Gist in a few seconds)")
+        _safe_print("✅ Event sent (check Gist in a few seconds)")
 
     elif command == "check":
         # Check telemetry configuration
+        token = _get_github_token()
         print(f"GIST_ID: {GIST_ID or '(not set)'}")
-        print(
-            f"GITHUB_TOKEN: {'***' + GITHUB_TOKEN[-4:] if GITHUB_TOKEN else '(not set)'}"
-        )
+        print(f"GITHUB_TOKEN: {'***' + token[-4:] if token else '(not set)'}")
         print(f"TELEMETRY_ENDPOINT: {TELEMETRY_ENDPOINT or '(not configured)'}")
         print(f"Anonymous ID: {get_anonymous_id()}")
         print(f"CI Detected: {detect_ci_environment()}")

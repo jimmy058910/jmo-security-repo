@@ -1,0 +1,22 @@
+# Sample requirements with KNOWN VULNERABILITIES for testing
+# These packages have documented CVEs and will be detected by Trivy/Grype
+#
+# DO NOT use these versions in production - they exist only for testing
+
+# CVE-2021-28363: urllib3 < 1.26.5 - SSRF via proxy authentication
+urllib3==1.25.0
+
+# CVE-2022-21699: ipython < 7.31.1 - Code execution via input transformation
+ipython==7.16.0
+
+# CVE-2023-25577: werkzeug < 2.2.3 - High CPU usage via multipart parsing
+werkzeug==2.0.0
+
+# CVE-2023-30861: flask < 2.2.5 - Cookie security bypass
+flask==2.0.0
+
+# CVE-2021-32677: fastapi < 0.65.2 - Path traversal
+fastapi==0.60.0
+
+# CVE-2021-23336: python < 3.10 affected web cache poisoning (urllib.parse)
+# Testing dependency vulnerability detection, not Python version

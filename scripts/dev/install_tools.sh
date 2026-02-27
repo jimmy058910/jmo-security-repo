@@ -159,6 +159,10 @@ Darwin)
   if ! command -v afl-fuzz >/dev/null 2>&1; then
     warn "AFL++ not found (optional for deep profile); install via: brew install afl++"
   fi
+  # OPA (Policy-as-Code engine)
+  if ! command -v opa >/dev/null 2>&1; then
+    brew install opa || warn "OPA installation failed; install manually from https://www.openpolicyagent.org/docs/latest/#running-opa"
+  else ok "opa installed"; fi
   ;;
 Linux)
   # Linux/WSL
@@ -250,6 +254,18 @@ Linux)
     if ! command -v afl-fuzz >/dev/null 2>&1; then
       warn "AFL++ not found (optional for deep profile); install via: sudo apt-get install afl++ or build from source"
     fi
+    # OPA (Policy-as-Code engine)
+    if ! command -v opa >/dev/null 2>&1; then
+      case "$(uname -m)" in
+      x86_64 | amd64) OPA_ARCH=amd64 ;;
+      aarch64 | arm64) OPA_ARCH=arm64 ;;
+      *) OPA_ARCH=amd64 ;;
+      esac
+      bg bash -c "OPA_VERSION=\$(curl -s https://api.github.com/repos/open-policy-agent/opa/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
+        curl -sSL \"https://github.com/open-policy-agent/opa/releases/latest/download/opa_linux_${OPA_ARCH}_static\" -o /tmp/opa && \
+        sudo install -m 0755 /tmp/opa /usr/local/bin/opa && \
+        rm /tmp/opa"
+    else ok "opa installed"; fi
     # Wait for background installers to finish
     bg_wait
   else

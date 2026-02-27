@@ -4,30 +4,34 @@ Web URL Scanner (DAST)
 Scans live web applications and APIs using:
 - OWASP ZAP: Dynamic Application Security Testing (DAST)
 - Nuclei: Fast vulnerability scanner with 4000+ templates (CVEs, misconfigs, exposures)
+- Akto: API Security testing for OWASP Top 10 API vulnerabilities (v1.0.0)
 
 Integrates with ToolRunner for execution management.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import Dict, List, Tuple, Callable, Optional
+from collections.abc import Callable
 
+from ...core.config import RetryConfig
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_url(
     url: str,
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
-    retries: int,
-    per_tool_config: Dict,
+    retries: int | RetryConfig,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    find_tool_func: Callable[[str], str | None] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a live web URL with DAST tools (ZAP and Nuclei).
 
@@ -39,7 +43,7 @@ def scan_url(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
@@ -47,10 +51,10 @@ def scan_url(
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
+    _find_tool = find_tool_func or find_tool
     _write_stub = write_stub_func or write_stub
 
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
     # Validate URL scheme - only HTTP(S) allowed for DAST scanning
@@ -66,7 +70,7 @@ def scan_url(
     # Sanitize URL for directory name (extract domain)
     safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", parsed.netloc or "unknown")
 
-    out_dir = results_dir / "individual-web" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:
@@ -78,7 +82,7 @@ def scan_url(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -90,16 +94,14 @@ def scan_url(
     # ZAP scan for web URLs
     if "zap" in tools:
         zap_out = out_dir / "zap.json"
-        if _tool_exists("zap"):
+        # Find ZAP binary (zap.sh on Linux/macOS, zap on Windows)
+        # find_tool checks PATH and ~/.jmo/bin/zap/zap.sh
+        zap_path = _find_tool("zap.sh") or _find_tool("zap")
+        if zap_path:
             zap_flags = get_tool_flags("zap")
 
-            # Determine ZAP command (zap.sh on Linux/macOS, zap on Windows)
-            import shutil
-
-            zap_cmd = "zap.sh" if shutil.which("zap.sh") else "zap"
-
             zap_cmd_list = [
-                zap_cmd,
+                zap_path,  # Use full path from find_tool
                 "-cmd",
                 "-quickurl",
                 url,
@@ -126,12 +128,13 @@ def scan_url(
     # Nuclei scan for web URLs (CVEs, misconfigurations, exposures)
     if "nuclei" in tools:
         nuclei_out = out_dir / "nuclei.json"
-        if _tool_exists("nuclei"):
+        nuclei_path = _find_tool("nuclei")
+        if nuclei_path:
             nuclei_flags = get_tool_flags("nuclei")
 
             # Nuclei command for URL scanning
             nuclei_cmd_list = [
-                "nuclei",
+                nuclei_path,
                 "-u",
                 url,
                 "-json",  # NDJSON output format
@@ -156,6 +159,42 @@ def scan_url(
             _write_stub("nuclei", nuclei_out)
             statuses["nuclei"] = True
 
+    # Akto: API Security testing (OWASP Top 10 API vulnerabilities)
+    # v1.0.0 addition
+    if "akto" in tools:
+        akto_out = out_dir / "akto.json"
+        akto_path = _find_tool("akto")
+        if akto_path:
+            akto_flags = get_tool_flags("akto")
+
+            # Akto requires API endpoint testing
+            # Assumes Akto is running as a service and accessible via CLI
+            akto_cmd_list = [
+                akto_path,
+                "test",
+                "--url",
+                url,
+                "--output",
+                str(akto_out),
+                "--format",
+                "json",
+                *akto_flags,
+            ]
+            tool_defs.append(
+                ToolDefinition(
+                    name="akto",
+                    command=akto_cmd_list,
+                    output_file=akto_out,
+                    timeout=get_tool_timeout("akto", timeout),
+                    retries=retries,
+                    ok_return_codes=(0, 1),  # 0=clean, 1=vulnerabilities found
+                    capture_stdout=False,
+                )
+            )
+        elif allow_missing_tools:
+            _write_stub("akto", akto_out)
+            statuses["akto"] = True
+
     # Execute all tools with ToolRunner
     runner = ToolRunner(
         tools=tool_defs,
@@ -163,7 +202,7 @@ def scan_url(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     for result in results:
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)
@@ -188,6 +227,6 @@ def scan_url(
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        statuses["__attempts__"] = attempts_map  # type: ignore[assignment]  # Store retry metadata alongside bool statuses
 
     return url, statuses

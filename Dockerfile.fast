@@ -1,0 +1,196 @@
+# JMo Security Suite - Fast Docker Image (v1.0.0)
+# Base: Ubuntu 22.04 with 8 CI/CD gate tools + OPA for policy-as-code
+# Size: ~502 MB (optimized) | Tools: 9 (8 scanners + OPA) | Multi-arch: amd64, arm64
+# v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
+
+#
+# Stage 1: Builder - Download 9 fast tools (8 scanners + OPA)
+#
+FROM ubuntu:24.04 AS builder
+
+ARG TARGETARCH
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    unzip \
+    xz-utils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download TruffleHog
+RUN TRUFFLEHOG_VERSION="3.91.1" && \
+    TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
+    -o /tmp/trufflehog.tar.gz && \
+    tar -xzf /tmp/trufflehog.tar.gz -C /tmp && \
+    mv /tmp/trufflehog /usr/local/bin/trufflehog && \
+    chmod +x /usr/local/bin/trufflehog
+
+# Download Syft
+RUN SYFT_VERSION="1.38.0" && \
+    SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
+    -o /tmp/syft.tar.gz && \
+    tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
+
+# Download Trivy
+RUN TRIVY_VERSION="0.67.2" && \
+    TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
+    curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    -o /tmp/trivy.tar.gz && \
+    tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
+
+# Download Hadolint
+RUN HADOLINT_VERSION="2.14.0" && \
+    HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
+    curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
+    -o /usr/local/bin/hadolint && \
+    chmod +x /usr/local/bin/hadolint
+
+# Download Nuclei (minimal templates for fast scans)
+RUN NUCLEI_VERSION="3.7.0" && \
+    TARGETARCH=$(dpkg --print-architecture) && \
+    NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
+    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -O /tmp/nuclei.zip && \
+    unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm /tmp/nuclei.zip && \
+    nuclei -update-templates -tl cves,exposures -silent
+
+# Download OPA (Policy-as-Code engine)
+RUN OPA_VERSION="1.12.0" && \
+    OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
+    -o /usr/local/bin/opa && \
+    chmod +x /usr/local/bin/opa
+
+# Download ShellCheck (pinned version instead of apt)
+RUN SHELLCHECK_VERSION="0.10.0" && \
+    SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl -sSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
+    -o /tmp/shellcheck.tar.xz && \
+    tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
+    mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
+    chmod +x /usr/local/bin/shellcheck
+
+#
+# Stage 2: Runtime - Minimal CI/CD environment with 9 tools
+#
+FROM ubuntu:24.04 AS runtime
+
+LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
+LABEL org.opencontainers.image.url="https://jmotools.com"
+LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
+
+# Install runtime dependencies and build tools for Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
+    ca-certificates \
+    jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install Python tools (minimal for fast variant)
+# Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    semgrep==1.151.0 \
+    checkov==3.2.501 \
+    ruff==0.15.2 \
+    && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+
+# Remove build dependencies to reduce image size (keep python3-dev for potential runtime needs)
+RUN apt-get purge -y build-essential && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy binaries from builder
+COPY --from=builder /usr/local/bin/trufflehog /usr/local/bin/trufflehog
+COPY --from=builder /usr/local/bin/syft /usr/local/bin/syft
+COPY --from=builder /usr/local/bin/trivy /usr/local/bin/trivy
+COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
+COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
+COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
+COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
+
+# Binary stripping
+RUN strip /usr/local/bin/trufflehog \
+    /usr/local/bin/syft \
+    /usr/local/bin/trivy \
+    /usr/local/bin/hadolint \
+    /usr/local/bin/nuclei \
+    /usr/local/bin/opa \
+    /usr/local/bin/shellcheck \
+    2>/dev/null || true
+
+VOLUME ["/root/.cache/trivy"]
+
+WORKDIR /scan
+
+# =============================================================================
+# CACHE OPTIMIZATION: Use .dockerignore to minimize context (Phase 2)
+# This reduces context transfer time and improves cache efficiency
+# Combined with GitHub Actions cache-from/cache-to for layer caching
+# =============================================================================
+COPY . /opt/jmo-security/
+RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
+
+# Install JMo (minimal, no reporting extras)
+RUN cd /opt/jmo-security && \
+    python3 -m pip install --no-cache-dir --break-system-packages -e . && \
+    find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+    find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
+
+# Verify 9 fast tools (8 scanners + OPA for policy-as-code)
+RUN echo "=== Verifying 9 fast CI/CD tools ===" && \
+    jmo --help > /dev/null && \
+    trufflehog --version && \
+    semgrep --version && \
+    syft version && \
+    trivy --version && \
+    checkov --version && \
+    hadolint --version && \
+    nuclei -version && \
+    shellcheck --version && \
+    opa version && \
+    echo "=== All 9 fast tools verified ==="
+
+# Create non-root user and set ownership (Security best practice)
+# Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    useradd -m -u 1000 -s /bin/bash jmo && \
+    mkdir -p /root/.local /home/jmo/.cache /home/jmo/.local && \
+    chown -R jmo:jmo /opt/jmo-security /scan /root/.cache /root/.local /home/jmo && \
+    chmod -R 755 /opt/jmo-security
+
+# Update PATH environment variable for non-root user
+# Set DOCKER_CONTAINER=1 to enable Docker-specific behaviors (skip first-run prompts)
+ENV PATH="/home/jmo/.local/bin:${PATH}" \
+    DOCKER_CONTAINER=1
+
+# Switch to non-root user
+USER jmo
+
+ENTRYPOINT ["jmo"]
+CMD ["--help"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD jmo --help > /dev/null || exit 1
+
+# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-fast scan --repo /scan --profile fast --fail-on HIGH

@@ -1,6 +1,6 @@
 # Schedule Management Guide
 
-**Complete guide to automated scan scheduling with JMo Security (v0.8.0+)**
+**Complete guide to automated scan scheduling with JMo Security**
 
 ## Table of Contents
 
@@ -545,7 +545,7 @@ notifications={
 ### Generate GitHub Actions Workflow
 
 ```python
-# Coming soon - GitHub Actions generator planned for v0.9.0
+# Coming soon - GitHub Actions generator planned for future release
 # Current workaround: Manually create .github/workflows/security-scan.yml
 ```
 
@@ -630,7 +630,7 @@ jobs:
 ### Export Schedule as Shell Script
 
 ```python
-# Coming soon - Shell script generator planned for v0.9.0
+# Coming soon - Shell script generator planned for future release
 # Current workaround: Manually create scan script
 ```
 

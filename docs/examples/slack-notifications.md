@@ -598,6 +598,7 @@ notify-business-hours:
 ### Webhook Not Receiving Messages
 
 **Check webhook URL:**
+
 ```bash
 # Test webhook directly
 curl -v -X POST 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL' \
@@ -629,6 +630,7 @@ curl -v -X POST 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL' \
 Slack rate limits: 1 message per second per webhook
 
 **Solution: Batch notifications:**
+
 ```bash
 # Instead of sending 10 separate messages
 for repo in repo1 repo2 repo3; do
@@ -664,6 +666,7 @@ GitHub:
 3. Secrets are automatically masked in logs
 
 **Never hardcode webhook URLs in YAML:**
+
 ```yaml
 # ❌ BAD
 script:

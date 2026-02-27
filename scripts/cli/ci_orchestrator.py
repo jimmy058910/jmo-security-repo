@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 
@@ -17,6 +18,50 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
     Returns:
         Exit code from report command (respects --fail-on threshold)
     """
+    # v1.0.0: Strict version check for reproducible CI builds
+    if getattr(args, "strict_versions", False):
+        from scripts.cli.tool_manager import ToolManager
+
+        profile = getattr(args, "profile_name", None) or "balanced"
+        manager = ToolManager()
+        drift = manager.get_version_drift(profile)
+
+        if drift:
+            # Categorize by direction
+            ahead = [d for d in drift if d.get("direction") == "ahead"]
+            behind = [d for d in drift if d.get("direction") == "behind"]
+            unknown = [d for d in drift if d.get("direction") == "unknown"]
+
+            # Only fail on behind or unknown (ahead is generally OK)
+            problematic = behind + unknown
+            if problematic:
+                sys.stderr.write(
+                    f"ERROR: --strict-versions: {len(problematic)} tool(s) require attention\n"
+                )
+                if behind:
+                    sys.stderr.write(f"\n{len(behind)} tool(s) BEHIND expected:\n")
+                    for d in behind:
+                        marker = " [CRITICAL]" if d["critical"] else ""
+                        sys.stderr.write(
+                            f"  {d['tool']}: {d['installed']} < {d['expected']}{marker}\n"
+                        )
+                if unknown:
+                    sys.stderr.write(
+                        f"\n{len(unknown)} tool(s) with unknown version:\n"
+                    )
+                    for d in unknown:
+                        marker = " [CRITICAL]" if d["critical"] else ""
+                        sys.stderr.write(
+                            f"  {d['tool']}: installed={d['installed']} "
+                            f"expected={d['expected']}{marker}\n"
+                        )
+                sys.stderr.write("\nRun 'jmo tools update' to synchronize versions.\n")
+                return 1
+            elif ahead:
+                # Only ahead - info message, don't fail
+                sys.stderr.write(
+                    f"INFO: {len(ahead)} tool(s) ahead of versions.yaml (OK)\n"
+                )
 
     class ScanArgs:
         """Arguments adapter for scan command."""
@@ -55,6 +100,9 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.profile_name = getattr(a, "profile_name", None)
             self.log_level = getattr(a, "log_level", None)
             self.human_logs = getattr(a, "human_logs", False)
+            # History database flags
+            self.store_history = getattr(a, "store_history", False)
+            self.history_db = getattr(a, "history_db", None)
 
     # Run scan phase
     cmd_scan_fn(ScanArgs(args))
@@ -81,6 +129,15 @@ def cmd_ci(args, cmd_scan_fn, cmd_report_fn) -> int:
             self.html = getattr(a, "html", False)
             self.sarif = getattr(a, "sarif", False)
             self.yaml = getattr(a, "yaml", False)
+            # History database flags
+            self.store_history = getattr(a, "store_history", False)
+            self.history_db = getattr(a, "history_db", None)
+            self.profile_name = getattr(a, "profile_name", None)
+            # Policy flags (Phase 5.1)
+            self.policies = getattr(a, "policies", None)
+            self.fail_on_policy_violation = getattr(
+                a, "fail_on_policy_violation", False
+            )
 
     # Import _log here to avoid circular dependency
     from scripts.cli.jmo import _log

@@ -1,8 +1,9 @@
+import argparse
 import json
 import os
 from pathlib import Path
 
-from scripts.cli.jmo import cmd_report, parse_args
+from scripts.cli.jmo import cmd_report
 
 
 def _mk_results(tmp_path: Path):
@@ -14,7 +15,7 @@ def test_profile_writes_timings(tmp_path: Path, monkeypatch):
     root = tmp_path / "results"
     _mk_results(root)
     out = root / "summaries"
-    args = parse_args().__class__(
+    args = argparse.Namespace(
         cmd="report",
         results_dir=str(root),
         out=str(out),
@@ -42,7 +43,7 @@ def test_threads_env_and_config_precedence(tmp_path: Path, monkeypatch):
 
     # Case 1: No CLI flag, no env -> config should apply
     os.environ.pop("JMO_THREADS", None)
-    args = parse_args().__class__(
+    args = argparse.Namespace(
         cmd="report",
         results_dir=str(root),
         out=str(out),
@@ -57,7 +58,7 @@ def test_threads_env_and_config_precedence(tmp_path: Path, monkeypatch):
 
     # Case 2: Env set should be preserved when no CLI flag
     os.environ["JMO_THREADS"] = "5"
-    args2 = parse_args().__class__(
+    args2 = argparse.Namespace(
         cmd="report",
         results_dir=str(root),
         out=str(out),
@@ -70,7 +71,7 @@ def test_threads_env_and_config_precedence(tmp_path: Path, monkeypatch):
     assert rc2 in (0, 1)
 
     # Case 3: CLI flag overrides env and config
-    args3 = parse_args().__class__(
+    args3 = argparse.Namespace(
         cmd="report",
         results_dir=str(root),
         out=str(out),

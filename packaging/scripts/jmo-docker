@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# JMo Security Docker Wrapper
+# Cross-platform script that handles Git Bash MSYS path conversion issues on Windows
+#
+# Usage: jmo-docker scan --repo /scan --profile fast
+#        jmo-docker wizard
+#        jmo-docker --help
+#
+# This wrapper:
+#   1. Sets MSYS_NO_PATHCONV=1 to prevent path mangling (Windows Git Bash)
+#   2. Mounts current directory to /scan in container
+#   3. Passes all arguments to the JMo Docker container
+
+set -e
+
+# Prevent MSYS path conversion (fixes Git Bash issues on Windows)
+export MSYS_NO_PATHCONV=1
+
+# Default image (can be overridden with JMO_DOCKER_IMAGE env var)
+JMO_DOCKER_IMAGE="${JMO_DOCKER_IMAGE:-ghcr.io/jimmy058910/jmo-security:latest}"
+
+# Check if Docker is running
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: Docker is not running or not installed."
+  echo "Please start Docker and try again."
+  exit 1
+fi
+
+# Create .jmo directory if it doesn't exist (for history persistence)
+mkdir -p "$(pwd)/.jmo"
+
+# Determine TTY flags based on terminal availability
+# Use -it for interactive terminals, -t only for non-interactive (CI, mintty)
+if [ -t 0 ] && [ -t 1 ]; then
+  TTY_FLAGS="-it"
+else
+  TTY_FLAGS="-t"
+fi
+
+# Run JMo in Docker with current directory mounted
+docker run --rm $TTY_FLAGS \
+  -v "$(pwd):/scan" \
+  -v "$(pwd)/.jmo:/scan/.jmo" \
+  -w /scan \
+  "$JMO_DOCKER_IMAGE" "$@"

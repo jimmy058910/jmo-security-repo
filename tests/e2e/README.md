@@ -1,6 +1,6 @@
 # E2E Comprehensive Test Suite
 
-End-to-end test suite for validating JMo Security v0.6.0 across all target types, operating systems, and execution methods.
+End-to-end test suite for validating JMo Security across all target types, operating systems, and execution methods.
 
 ## Quick Start
 
@@ -92,7 +92,7 @@ tests/e2e/
 
 - A1: GitLab repo scan (requires GITLAB_TOKEN)
 - A2: K8s cluster scan (requires kubectl + cluster)
-- A3: Deep profile (all 11 tools, 30-60 min)
+- A3: Deep profile (all 28 tools, 40-70 min)
 
 ## Usage Examples
 
@@ -196,13 +196,14 @@ Each test validates:
 
 ### GitHub Actions
 
-See [.github/workflows/e2e-comprehensive-tests.yml](../../.github/workflows/e2e-comprehensive-tests.yml)
+See [.github/workflows/scheduled-tests.yml](../../.github/workflows/scheduled-tests.yml)
+
+E2E tests run as part of the consolidated `scheduled-tests.yml` workflow.
 
 **Triggers:**
 
-- Pull requests (fast profile only)
-- Nightly schedule (full suite)
-- Manual workflow dispatch
+- Schedule: 4AM UTC weekdays (e2e-ubuntu, e2e-macos jobs)
+- Manual workflow dispatch with `task: e2e` or `task: all`
 
 **Jobs:**
 
@@ -248,8 +249,8 @@ bash tests/e2e/run_comprehensive_tests.sh --test U1
 
 ```bash
 # Verify tool installations
-make verify-env
-make tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 
 # Check specific tool
 which trufflehog
@@ -361,10 +362,9 @@ run_test "TEST_ID" "Test Description" \
 - [Comprehensive Test Plan](../../docs/COMPREHENSIVE_TEST_PLAN.md) - Full test design
 - [Testing Guide](../../TEST.md) - General testing instructions
 - [User Guide](../../docs/USER_GUIDE.md) - Multi-target scanning documentation
-- [CI Workflow](../../.github/workflows/e2e-comprehensive-tests.yml) - GitHub Actions config
+- [CI Workflow](../../.github/workflows/scheduled-tests.yml) - GitHub Actions config (E2E jobs)
 
 ---
 
-**Version:** 1.0 (v0.6.0)
 **Maintainer:** JMo Security Team
-**Last Updated:** 2025-10-16
+**Last Updated:** December 2025

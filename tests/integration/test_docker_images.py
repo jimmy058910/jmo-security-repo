@@ -13,11 +13,19 @@ These tests require Docker to be installed and running.
 
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+# Skip all tests in this module if Docker is not available
+# Also mark as requires_tools since they build/test Docker images with security tools
+pytestmark = [
+    pytest.mark.skipif(not shutil.which("docker"), reason="Docker not installed"),
+    pytest.mark.requires_tools,
+]
 
 # Docker image configuration
 DOCKER_REGISTRY = "ghcr.io"
@@ -25,54 +33,59 @@ DOCKER_ORG = "jimmy058910"
 DOCKER_IMAGE = "jmo-security"
 DOCKER_TAG = "test"
 
-VARIANTS = ["full", "slim", "alpine"]
+# v1.0.0 Docker variants: fast, slim, balanced, deep
+# See docs/PROFILES_AND_TOOLS.md for tool counts per profile
+VARIANTS = ["fast", "slim", "balanced", "deep"]
 
-# Tools expected in each variant (v0.6.0)
-# Active tools (11): trufflehog, semgrep, trivy, syft, checkov, hadolint, zap,
-#                    noseyparker, bandit, falco, afl++
-# Legacy tools (3): gitleaks, tfsec, osv-scanner (adapters remain for backward compatibility)
+# Tools expected in each variant (v1.0.0)
+# Dockerfile = deep, Dockerfile.fast = fast, Dockerfile.slim = slim, Dockerfile.balanced = balanced
 EXPECTED_TOOLS = {
-    "full": [
-        # Secrets scanning (2)
-        "trufflehog",  # Verified secrets, 95% false positive reduction
-        "noseyparker",  # Deep secrets scanning, Docker fallback
-        # SAST (2)
+    "fast": [
+        # Fast profile (7 tools) - essential security checks
+        "trufflehog",  # Verified secrets
         "semgrep",  # Multi-language SAST
-        "bandit",  # Python-specific SAST
-        # SBOM + Vulnerability (2)
-        "syft",  # SBOM generation
-        "trivy",  # Vuln/misconfig/secrets scanning
-        # IaC (1)
-        "checkov",  # Policy-as-code
-        # Dockerfile (1)
-        "hadolint",  # Dockerfile best practices
-        # DAST (1)
-        "zap",  # OWASP ZAP web security
-        # Runtime Security (1)
-        "falcoctl",  # Falco CLI (full falco requires kernel modules)
-        # Fuzzing (1)
-        "afl-fuzz",  # AFL++ coverage-guided fuzzing
-        # Formatting/Linting (2)
+        "trivy",  # Vuln/misconfig scanning
+        "bandit",  # Python SAST
         "shellcheck",  # Shell script linting
-        "shfmt",  # Shell script formatting
+        "ruff",  # Python linting
+        "hadolint",  # Dockerfile best practices
     ],
     "slim": [
+        # Slim profile (14 tools) - Cloud/IaC focus
+        # Note: bandit is in balanced+, not slim
         "trufflehog",  # Verified secrets
         "semgrep",  # Multi-language SAST
         "syft",  # SBOM generation
         "trivy",  # Vuln/misconfig scanning
         "hadolint",  # Dockerfile best practices
         "checkov",  # IaC policy-as-code
-        "zap",  # DAST web security
     ],
-    # Alpine: semgrep/checkov skipped when TARGETARCH is not set (defaults to ARM64 path)
-    # This is a known limitation - buildx would fix it, but we use standard docker build
-    "alpine": [
+    "balanced": [
+        # Balanced profile (18 tools) - production scans
         "trufflehog",  # Verified secrets
+        "semgrep",  # Multi-language SAST
         "syft",  # SBOM generation
         "trivy",  # Vuln/misconfig scanning
         "hadolint",  # Dockerfile best practices
-        "zap",  # DAST web security
+        "checkov",  # IaC policy-as-code
+        "bandit",  # Python SAST
+        "zap",  # OWASP ZAP DAST
+    ],
+    "deep": [
+        # Deep profile (28 tools) - full security audit
+        "trufflehog",  # Verified secrets
+        "noseyparker",  # Deep secrets scanning
+        "semgrep",  # Multi-language SAST
+        "bandit",  # Python SAST
+        "syft",  # SBOM generation
+        "trivy",  # Vuln/misconfig/secrets scanning
+        "checkov",  # Policy-as-code
+        "hadolint",  # Dockerfile best practices
+        "zap",  # OWASP ZAP DAST
+        "falcoctl",  # Falco CLI
+        "afl-fuzz",  # AFL++ fuzzing
+        "shellcheck",  # Shell script linting
+        "shfmt",  # Shell script formatting
     ],
 }
 
@@ -92,8 +105,16 @@ def is_docker_available() -> bool:
 
 
 def get_image_name(variant: str) -> str:
-    """Get full Docker image name for variant."""
-    suffix = f"-{variant}" if variant != "full" else ""
+    """Get full Docker image name for variant.
+
+    Dockerfile mapping:
+    - deep -> Dockerfile (main, no suffix)
+    - fast -> Dockerfile.fast
+    - slim -> Dockerfile.slim
+    - balanced -> Dockerfile.balanced
+    """
+    # deep is the main Dockerfile (no suffix in tag)
+    suffix = f"-{variant}" if variant != "deep" else ""
     return f"{DOCKER_REGISTRY}/{DOCKER_ORG}/{DOCKER_IMAGE}:{DOCKER_TAG}{suffix}"
 
 
@@ -123,8 +144,7 @@ def test_repo(tmp_path_factory) -> Path:
 
     # Create simple Python file with a potential issue
     test_py = repo_dir / "test.py"
-    test_py.write_text(
-        """
+    test_py.write_text("""
 # Test file for security scanning
 import os
 
@@ -137,19 +157,16 @@ def insecure_function():
 
 if __name__ == "__main__":
     print("Test file")
-"""
-    )
+""")
 
     # Create a Dockerfile
     dockerfile = repo_dir / "Dockerfile"
-    dockerfile.write_text(
-        """
+    dockerfile.write_text("""
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y curl
 USER root
 WORKDIR /app
-"""
-    )
+""")
 
     return repo_dir
 
@@ -311,7 +328,19 @@ class TestDockerBuild:
     @pytest.mark.parametrize("variant", ["slim"])  # Only test slim for speed
     def test_build_slim_image(self, docker_check, variant: str):
         """Test building the slim Docker image."""
-        dockerfile = "Dockerfile" if variant == "full" else f"Dockerfile.{variant}"
+        # Check if Docker buildx is available (WSL2 requirement)
+        buildx_check = subprocess.run(
+            ["docker", "buildx", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if buildx_check.returncode != 0:
+            pytest.skip(
+                "Docker buildx not available (required for multi-platform builds)"
+            )
+
+        dockerfile = "Dockerfile" if variant == "deep" else f"Dockerfile.{variant}"
         dockerfile_path = Path(__file__).parent.parent.parent / dockerfile
 
         if not dockerfile_path.exists():
@@ -332,7 +361,7 @@ class TestDockerBuild:
             ],
             capture_output=True,
             text=True,
-            timeout=600,  # 10 minutes max
+            timeout=1200,  # 20 minutes max (WSL2 can be slow)
             check=False,
         )
 

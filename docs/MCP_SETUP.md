@@ -2,13 +2,437 @@
 
 This guide explains how to set up and use Model Context Protocol (MCP) servers with Claude Code in the jmo-security-repo project.
 
+## Quick Reference
+
+### 3-Step Setup
+
+```bash
+# 1. Run a scan
+jmo scan --repo . --profile-name fast
+
+# 2. Add config file
+cp .mcp.json.example .claude/mcp.json
+
+# 3. Reload AI assistant
+# Claude Code: Restart / VS Code: Ctrl+Shift+P → "Developer: Reload Window"
+```
+
+### Common AI Queries
+
+```text
+@jmo-security What are the CRITICAL and HIGH severity findings?
+@jmo-security Show me all semgrep findings
+@jmo-security What findings are in src/api/auth.py?
+@jmo-security Suggest fix for XSS in src/app.js line 42
+@jmo-security Mark fingerprint-abc123 as false_positive "Test code"
+```
+
+### MCP Tools Summary
+
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `get_security_findings` | Query with filters | `Show HIGH in src/` |
+| `get_finding_context` | Get code context | `Get context for abc123` |
+| `apply_fix` | Apply AI patches | `Fix CWE-79 in app.js:42` |
+| `mark_resolved` | Track remediation | `Mark as false_positive` |
+| `get_server_info` | Server status | `Server status?` |
+
+---
+
 ## Overview
 
-MCP servers extend Claude Code's capabilities by providing additional context and tools. This project uses three MCP servers:
+MCP servers extend Claude Code's capabilities by providing additional context and tools. This guide covers two types of MCP servers:
+
+**JMo Security MCP Server** (provided by this project):
+
+- **AI Remediation Orchestration** - Query security findings, apply fixes, track resolutions
+
+**Third-Party MCP Servers** (optional integrations):
 
 1. **Context7** - Up-to-date code documentation for libraries and frameworks
 2. **GitHub** - GitHub API integration for repos, issues, PRs, and more
 3. **Chrome DevTools** - Browser automation and debugging capabilities
+
+## JMo Security MCP Server (AI Remediation)
+
+The JMo Security MCP server enables AI-powered security remediation workflows. It provides tools for querying findings, applying fixes, and tracking resolutions.
+
+### Features
+
+- 🔍 **Query Security Findings** - Filter and paginate scan results
+- 🔧 **Apply Fixes** - AI-suggested patches with dry-run preview
+- ✅ **Track Resolutions** - Mark findings as resolved with reason
+- 🛡️ **Rate Limiting** - Token bucket algorithm (100 req/min default)
+- 🔐 **Authentication** - API key validation (optional, for production)
+
+### Quick Start
+
+**Development Mode (No Authentication):**
+
+```bash
+# Run MCP server with default settings
+uv run mcp dev scripts/jmo_mcp/server.py
+
+# Or via environment variables
+export MCP_RESULTS_DIR=./results
+export MCP_REPO_ROOT=.
+uv run mcp dev scripts/jmo_mcp/server.py
+```
+
+**Production Mode (With Authentication + Rate Limiting):**
+
+```bash
+# Set API keys (comma-separated)
+export JMO_MCP_API_KEYS="key1,key2,key3"
+
+# Enable rate limiting (default: enabled)
+export JMO_MCP_RATE_LIMIT_ENABLED="true"
+export JMO_MCP_RATE_LIMIT_CAPACITY="100"        # Burst capacity
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="1.67"    # Tokens/sec (100 req/min)
+
+# Run server
+export MCP_RESULTS_DIR=./results
+export MCP_REPO_ROOT=.
+uv run mcp dev scripts/jmo_mcp/server.py
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_RESULTS_DIR` | `./results` | Path to JMo Security scan results |
+| `MCP_REPO_ROOT` | `.` | Path to repository root (for source context) |
+| `JMO_MCP_API_KEYS` | *(empty)* | Comma-separated API keys for authentication |
+| `JMO_MCP_RATE_LIMIT_ENABLED` | `true` | Enable rate limiting |
+| `JMO_MCP_RATE_LIMIT_CAPACITY` | `100` | Burst capacity (max requests before throttling) |
+| `JMO_MCP_RATE_LIMIT_REFILL_RATE` | `1.67` | Tokens per second (1.67 = 100 req/min) |
+
+### Available Tools
+
+#### 1. `get_security_findings`
+
+Query security findings with filters and pagination.
+
+**Parameters:**
+
+- `severity`: Filter by severity levels (e.g., `["HIGH", "CRITICAL"]`)
+- `tool`: Filter by tool name (e.g., `"semgrep"`, `"trivy"`)
+- `rule_id`: Filter by rule ID (e.g., `"CWE-79"`)
+- `path`: Filter by file path (substring match)
+- `limit`: Maximum findings to return (default: 100, max: 1000)
+- `offset`: Pagination offset (default: 0)
+
+**Example:**
+
+```python
+# Get all HIGH and CRITICAL findings
+get_security_findings(severity=["HIGH", "CRITICAL"], limit=10)
+
+# Get findings from semgrep in src/api
+get_security_findings(tool="semgrep", path="src/api")
+```
+
+#### 2. `apply_fix`
+
+Apply AI-suggested fix patch to resolve a security finding.
+
+**Parameters:**
+
+- `finding_id`: Fingerprint ID of the finding
+- `patch`: Unified diff patch (git diff format)
+- `confidence`: AI confidence score (0.0-1.0)
+- `explanation`: Human-readable explanation of the fix
+- `dry_run`: Preview patch without applying (default: False)
+
+**Example:**
+
+```python
+# Step 1: Preview patch
+apply_fix(
+    finding_id="fingerprint-abc123",
+    patch="diff --git a/src/app.js...\n-  res.send(userInput)\n+  res.send(sanitize(userInput))",
+    confidence=0.95,
+    explanation="Added sanitization to prevent XSS",
+    dry_run=True
+)
+
+# Step 2: Apply if preview looks good
+apply_fix(..., dry_run=False)
+```
+
+#### 3. `mark_resolved`
+
+Mark a security finding as resolved without applying a patch.
+
+**Parameters:**
+
+- `finding_id`: Fingerprint ID of the finding
+- `resolution`: Resolution type (`fixed`, `false_positive`, `wont_fix`, `risk_accepted`)
+- `comment`: Optional comment explaining the resolution
+
+**Example:**
+
+```python
+mark_resolved(
+    finding_id="fingerprint-abc123",
+    resolution="false_positive",
+    comment="This is a test file, not production code"
+)
+```
+
+#### 4. `get_server_info`
+
+Get server configuration and status.
+
+**Returns:**
+
+- Server name, version, MCP version
+- Rate limiting configuration
+- Total findings count
+- Findings file status
+
+### Rate Limiting
+
+Rate limiting uses a **token bucket algorithm** with burst capacity and sustained rate:
+
+- **Burst Capacity:** Maximum requests allowed in a burst (default: 100)
+- **Refill Rate:** Tokens added per second (default: 1.67 = 100 req/min)
+- **Per-Client:** Separate buckets for each client (by API key or IP)
+
+**Examples:**
+
+```bash
+# High-traffic production (1000 req/min)
+export JMO_MCP_RATE_LIMIT_CAPACITY="1000"
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="16.67"
+
+# Low-traffic development (10 req/min)
+export JMO_MCP_RATE_LIMIT_CAPACITY="10"
+export JMO_MCP_RATE_LIMIT_REFILL_RATE="0.167"
+
+# Disable rate limiting (development only)
+export JMO_MCP_RATE_LIMIT_ENABLED="false"
+```
+
+### Authentication
+
+**Note:** Full authentication enforcement awaits FastMCP middleware support. Currently, only rate limiting is enforced.
+
+**Infrastructure Ready:**
+
+- API keys are SHA-256 hashed on server startup
+- Decorator pattern applied to all MCP tools
+- Authentication checks will be enabled when FastMCP adds middleware hooks
+
+**Setting API Keys:**
+
+```bash
+# Generate secure keys (example)
+export JMO_MCP_API_KEYS="$(openssl rand -hex 32),$(openssl rand -hex 32)"
+
+# Or use static keys
+export JMO_MCP_API_KEYS="prod-key-1,prod-key-2,prod-key-3"
+```
+
+**Security Best Practices:**
+
+- ✅ Use long, random keys (≥32 bytes)
+- ✅ Rotate keys regularly (quarterly minimum)
+- ✅ Store keys in environment variables, not files
+- ✅ Use different keys per environment (dev/staging/prod)
+- ❌ Never commit keys to version control
+
+### Client Configuration
+
+To use the JMo Security MCP server in Claude Code, add to `.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jmo-security": {
+      "command": "uv",
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
+      "env": {
+        "MCP_RESULTS_DIR": "./results",
+        "MCP_REPO_ROOT": ".",
+        "JMO_MCP_RATE_LIMIT_ENABLED": "true",
+        "JMO_MCP_RATE_LIMIT_CAPACITY": "100",
+        "JMO_MCP_RATE_LIMIT_REFILL_RATE": "1.67"
+      },
+      "description": "JMo Security AI remediation orchestration"
+    }
+  }
+}
+```
+
+### Troubleshooting
+
+**Error:** `MCP SDK not installed` or `cannot import name 'TypeAdapter' from 'pydantic'`
+
+**Automatic Detection:** When you run `jmo mcp-server`, it automatically detects missing dependencies and offers to install them:
+
+```text
+$ jmo mcp-server
+
+⚠️  MCP requires pydantic v2+, but you have pydantic v1 installed.
+   This is a common issue when other packages pin pydantic to v1.
+
+Install pydantic>=2.11.0? [Y/n]: y
+
+Installing pydantic>=2.11.0...
+✓ pydantic>=2.11.0 installed successfully!
+
+Starting JMo Security MCP Server...
+```
+
+**Manual Installation (if auto-install fails):**
+
+```bash
+# Install MCP SDK
+pip install 'mcp[cli]>=1.0.0'
+
+# Upgrade pydantic to v2+ (required by MCP)
+pip install 'pydantic>=2.11.0'
+
+# Verify no conflicts
+pip check | grep pydantic
+```
+
+**Note:** Some older packages may pin pydantic to v1. If you encounter conflicts, consider using a virtual environment specifically for MCP features.
+
+**Error:** `No scan results found`
+
+**Solution:** Run a scan first to generate `results/summaries/findings.json`:
+
+```bash
+jmo scan --repo . --profile balanced
+```
+
+**Error:** `Rate limit exceeded`
+
+**Solution:** Increase capacity or wait for tokens to refill:
+
+```bash
+# Option 1: Increase capacity
+export JMO_MCP_RATE_LIMIT_CAPACITY="200"
+
+# Option 2: Disable temporarily (dev only)
+export JMO_MCP_RATE_LIMIT_ENABLED="false"
+```
+
+### MCP Resource
+
+JMo Security also exposes a resource for full finding context:
+
+**`finding://{fingerprint}`** - Returns:
+
+- Full CommonFinding object with all metadata
+- Source code snippet (20 lines of context around the vulnerability)
+- Compliance framework mappings (OWASP, CWE, NIST, PCI DSS, CIS, ATT&CK)
+- Remediation guidance and references
+- Tool-specific metadata (CVSS scores, confidence ratings)
+
+**Example Usage:**
+
+```text
+@jmo-security Show context for finding fp-abc123
+```
+
+Returns structured data for AI-assisted triage.
+
+### GitHub Copilot Integration
+
+For VS Code users with GitHub Copilot, add JMo Security as an MCP server:
+
+**VS Code settings.json:**
+
+```json
+{
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.mcp.servers": {
+    "jmo-security": {
+      "command": "uv",
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/server.py"],
+      "env": {
+        "MCP_RESULTS_DIR": "./results",
+        "MCP_REPO_ROOT": "."
+      }
+    }
+  }
+}
+```
+
+**Usage in Copilot Chat:**
+
+```text
+"What are the CRITICAL findings?"
+"Fix the SQL injection in src/api/db.py"
+"Show compliance mappings for finding abc123"
+```
+
+### Security & Privacy
+
+**Read-Only by Default:**
+
+- MCP server starts in read-only mode
+- `get_security_findings`, `get_server_info` are always safe
+- `apply_fix` requires careful review (dry_run recommended)
+
+**Local Execution:**
+
+- All data stays on your machine
+- No external API calls (except AI assistant communication)
+- Works offline after initial scan
+
+**Results Directory Scoping:**
+
+- MCP server only accesses specified `MCP_RESULTS_DIR`
+- Cannot read files outside results directory
+- Repository root (`MCP_REPO_ROOT`) used only for code context display
+
+### AI Triage Workflow
+
+**Example: Batch Triage with AI Assistance**
+
+```text
+# 1. Query high-priority findings
+@jmo-security Show HIGH and CRITICAL findings in src/api/
+
+# 2. Get context for specific finding
+@jmo-security Get context for fingerprint abc123
+
+# 3. Generate fix suggestion
+@jmo-security Suggest a fix for the SQL injection in db.py:42
+
+# 4. Preview fix (dry_run)
+@jmo-security Apply fix with dry_run=true for finding abc123
+
+# 5. Mark as resolved
+@jmo-security Mark abc123 as fixed with comment "Applied parameterized query"
+```
+
+**CI/CD Integration Example:**
+
+```yaml
+# .github/workflows/security-triage.yml
+- name: Run security scan
+  run: |
+    jmo scan --repo . --results-dir ./results --profile balanced
+
+- name: Start MCP server for AI triage
+  run: |
+    uv run mcp dev scripts/jmo_mcp/server.py &
+    sleep 5  # Wait for server to start
+
+- name: Generate triage summary
+  run: |
+    # Use Claude Code or similar to query findings
+    claude "Summarize CRITICAL findings and suggest fixes"
+```
+
+---
+
+## Third-Party MCP Servers
 
 ## Configuration Method
 
@@ -587,7 +1011,28 @@ For issues or questions:
 
 ---
 
-**Last Updated:** October 14, 2025
-**Related Docs:** [CLAUDE.md](../CLAUDE.md), [CONTRIBUTING.md](../CONTRIBUTING.md)
+## Related Documentation
+
+**Core Guides:**
+
+- [User Guide](USER_GUIDE.md) - Complete reference documentation
+- [Results Guide](RESULTS_GUIDE.md) - Understanding scan output formats
+- [Quick Start](../QUICKSTART.md) - 5-minute setup
+
+**Historical and Analysis:**
+
+- [Historical Storage Guide](HISTORY_GUIDE.md) - SQLite database for scan persistence
+- [Trend Analysis Guide](TRENDS_GUIDE.md) - Statistical trend analysis over time
+- [Machine-Readable Diffs Guide](DIFF_GUIDE.md) - Compare two scans
+
+**Integration:**
+
+- [CI/CD Integration](USER_GUIDE.md#cicd-pipeline-integration-strategy) - CI/CD integration help
+- [Docker Guide](DOCKER_README.md) - Container deployment
+- [SLSA Attestation Guide](SLSA_GUIDE.md) - Supply chain attestation
+
+---
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
+
+**Last Updated:** February 2026

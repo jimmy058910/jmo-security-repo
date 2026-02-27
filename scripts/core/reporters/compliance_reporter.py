@@ -1,11 +1,53 @@
 #!/usr/bin/env python3
-"""
-Compliance-specific reporters for JMo Security Audit Tool Suite.
+"""Compliance-specific reporters for JMo Security Audit Tool Suite.
 
-Generates compliance framework-specific reports:
-- PCI DSS 4.0 Compliance Report
-- MITRE ATT&CK Navigator JSON
-- Compliance Summary Report (all frameworks)
+Generates compliance framework-specific reports mapping security findings to
+industry-standard compliance frameworks and security standards.
+
+Output Formats:
+    - **PCI_DSS_COMPLIANCE.md**: PCI DSS 4.0 Markdown report with requirements mapping,
+      severity breakdown, and remediation recommendations
+    - **attack-navigator.json**: MITRE ATT&CK Navigator v17 JSON layer for interactive
+      visualization of detected techniques and tactics
+    - **COMPLIANCE_SUMMARY.md**: Cross-framework summary covering OWASP Top 10 2021,
+      CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, and MITRE ATT&CK
+
+v1.0.0 Metadata Wrapper:
+    All reports include JMo Security metadata:
+    - schema_version: "1.2.0" (CommonFinding schema version)
+    - Scan summary statistics (total findings, framework coverage)
+    - Generated timestamp and tool attribution
+
+Supported Compliance Frameworks:
+    - OWASP Top 10 2021 (web application security)
+    - CWE Top 25 2024 (software weakness enumeration)
+    - CIS Controls v8.1 (cybersecurity best practices)
+    - NIST CSF 2.0 (cybersecurity framework functions)
+    - PCI DSS 4.0 (payment card industry data security)
+    - MITRE ATT&CK Enterprise v17 (adversary tactics and techniques)
+
+Usage:
+    >>> from scripts.core.reporters.compliance_reporter import (
+    ...     write_pci_dss_report,
+    ...     write_attack_navigator_json,
+    ...     write_compliance_summary,
+    ... )
+    >>> # Generate PCI DSS report
+    >>> write_pci_dss_report(findings, Path("results/summaries/PCI_DSS_COMPLIANCE.md"))
+    >>> # Generate ATT&CK Navigator JSON
+    >>> write_attack_navigator_json(findings, Path("results/summaries/attack-navigator.json"))
+    >>> # Generate cross-framework summary
+    >>> write_compliance_summary(findings, Path("results/summaries/COMPLIANCE_SUMMARY.md"))
+
+Functions:
+    write_pci_dss_report: Generate PCI DSS 4.0 compliance report (Markdown)
+    write_attack_navigator_json: Generate MITRE ATT&CK Navigator layer (JSON)
+    write_compliance_summary: Generate cross-framework compliance summary (Markdown)
+
+See Also:
+    - docs/POLICY_AS_CODE.md for compliance mapping configuration
+    - scripts/core/compliance_mapper.py for mapping logic
+    - CommonFinding v1.2.0 schema for compliance field structure
 """
 
 from __future__ import annotations
@@ -13,10 +55,10 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
-def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> None:
+def write_pci_dss_report(findings: list[dict[str, Any]], output_path: Path) -> None:
     """Generate PCI DSS 4.0 compliance report in Markdown format.
 
     Args:
@@ -187,7 +229,7 @@ def write_pci_dss_report(findings: List[Dict[str, Any]], output_path: Path) -> N
 
 
 def write_attack_navigator_json(
-    findings: List[Dict[str, Any]], output_path: Path
+    findings: list[dict[str, Any]], output_path: Path
 ) -> None:
     """Generate MITRE ATT&CK Navigator JSON for visualization.
 
@@ -201,8 +243,8 @@ def write_attack_navigator_json(
     ]
 
     # Count techniques
-    technique_counts: Dict[str, int] = defaultdict(int)
-    technique_metadata: Dict[str, Dict[str, Any]] = {}
+    technique_counts: dict[str, int] = defaultdict(int)
+    technique_metadata: dict[str, dict[str, Any]] = {}
 
     for f in attack_findings:
         attack_mappings = f.get("compliance", {}).get("mitreAttack", [])
@@ -303,7 +345,7 @@ def write_attack_navigator_json(
     output_path.write_text(json.dumps(navigator_layer, indent=2), encoding="utf-8")
 
 
-def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) -> None:
+def write_compliance_summary(findings: list[dict[str, Any]], output_path: Path) -> None:
     """Generate comprehensive compliance summary covering all frameworks.
 
     Args:
@@ -315,14 +357,14 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
     findings_with_compliance = sum(1 for f in findings if f.get("compliance"))
 
     # OWASP Top 10 2021 counts
-    owasp_counts: Dict[str, int] = defaultdict(int)
+    owasp_counts: dict[str, int] = defaultdict(int)
     for f in findings:
         owasp_list = f.get("compliance", {}).get("owaspTop10_2021", [])
         for owasp_cat in owasp_list:
             owasp_counts[owasp_cat] += 1
 
     # CWE Top 25 2024 counts
-    cwe_top25_counts: Dict[str, int] = defaultdict(int)
+    cwe_top25_counts: dict[str, int] = defaultdict(int)
     for f in findings:
         cwe_list = f.get("compliance", {}).get("cweTop25_2024", [])
         for cwe_entry in cwe_list:
@@ -340,7 +382,7 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
                 cis_controls.add(control)
 
     # NIST CSF 2.0 counts by function
-    nist_csf_functions: Dict[str, int] = defaultdict(int)
+    nist_csf_functions: dict[str, int] = defaultdict(int)
     for f in findings:
         nist_list = f.get("compliance", {}).get("nistCsf2_0", [])
         for nist_entry in nist_list:
@@ -471,8 +513,8 @@ def write_compliance_summary(findings: List[Dict[str, Any]], output_path: Path) 
         )
 
         # Count techniques across all findings
-        tech_counts: Dict[str, int] = defaultdict(int)
-        tech_names: Dict[str, str] = {}
+        tech_counts: dict[str, int] = defaultdict(int)
+        tech_names: dict[str, str] = {}
         for f in findings:
             mitre_list = f.get("compliance", {}).get("mitreAttack", [])
             for mitre_entry in mitre_list:

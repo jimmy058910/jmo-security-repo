@@ -82,6 +82,8 @@ Remember to update CHANGELOG.md with user-facing changes.
 
 ## Pre-Release Checklist
 
+> **📋 Comprehensive Testing:** For full manual verification across all platforms (Windows, WSL, Linux, macOS, Docker), see the [Manual Testing Checklist](internal/MANUAL_TESTING_CHECKLIST.md).
+
 **🔴 CRITICAL FIRST STEP: Update ALL security tools to latest versions**
 
 1. **Update ALL security tools (MANDATORY - enforced by CI):**
@@ -109,6 +111,7 @@ Remember to update CHANGELOG.md with user-facing changes.
    ```
 
    **Why this matters:**
+
    - Outdated tools miss security vulnerabilities (semgrep 41 versions behind = 200+ missing rules)
    - Users expect latest security tools in fresh releases
    - CI will BLOCK release if tools are outdated (pre-release-check job)
@@ -142,17 +145,19 @@ Remember to update CHANGELOG.md with user-facing changes.
    ```
 
    **Why:** PyPI and Docker Hub render READMEs from uploaded packages/API, not from GitHub. This check detects:
+
    - **PyPI:** Missing/outdated badges, Docker namespace mismatches, stale content
    - **Docker Hub:** Old namespace in DOCKER_HUB_README.md, outdated versions, sync configuration issues
    - **GHCR:** Auto-syncs from GitHub (no check needed)
 
    **Fix:** If inconsistencies found:
+
    - **PyPI issues:** Resolved automatically when you publish the new release (uses current README.md)
    - **Docker Hub issues:** Update DOCKER_HUB_README.md before release, ensure DOCKERHUB_ENABLED=true
 
    **Documentation:** See [dev-only/README_CONSISTENCY.md](../dev-only/README_CONSISTENCY.md) for complete guide.
 
-5. **Verify CI is green:**
+6. **Verify CI is green:**
    - Check GitHub Actions: all tests passing on ubuntu-latest and macos-latest
    - Coverage uploaded to Codecov successfully
 
@@ -200,16 +205,16 @@ cd jmo-security-repo
 make dev-deps
 
 # Install external tools
-make tools
+jmo tools install --profile balanced
 
-# Verify environment
-make verify-env
+# Verify tools installed
+jmo tools check --profile balanced
 ```
 
 **Success Criteria:**
 
 - [ ] All dependencies install without errors
-- [ ] `make verify-env` shows all tools detected
+- [ ] `jmo tools check` shows all tools installed
 - [ ] No path-related errors (e.g., "cannot find /mnt/c/...")
 
 **Known Issues:**
@@ -224,7 +229,7 @@ make verify-env
 
 ```bash
 # Run fast profile scan
-jmotools fast --repo .
+jmo fast --repo .
 
 # Verify results generated
 ls -lh results/summaries/
@@ -310,7 +315,7 @@ file scripts/cli/jmo.py
 
 ```bash
 # Generate dashboard
-jmotools fast --repo .
+jmo fast --repo .
 
 # Open dashboard in Windows browser
 # Option 1: Use WSL path in Windows browser
@@ -355,10 +360,10 @@ ls results-symlink-test/
 
 ```bash
 # Time a fast scan
-time jmotools fast --repo .
+time jmo fast --repo .
 
 # Expected: Within 20% of native Linux performance
-# Fast profile: 5-8 minutes (WSL should be 6-10 minutes)
+# Fast profile: 5-10 minutes (WSL should be 6-12 minutes)
 ```
 
 **Success Criteria:**
@@ -558,19 +563,22 @@ time docker run --rm \
 **Goal:** Verify all Docker image variants work on macOS
 
 ```bash
-# Test full variant
+# Test deep variant (default/latest)
 docker run --rm jmogaming/jmo-security:latest --help
+
+# Test balanced variant
+docker run --rm jmogaming/jmo-security:balanced --help
 
 # Test slim variant
 docker run --rm jmogaming/jmo-security:slim --help
 
-# Test alpine variant
-docker run --rm jmogaming/jmo-security:alpine --help
+# Test fast variant
+docker run --rm jmogaming/jmo-security:fast --help
 ```
 
 **Success Criteria:**
 
-- [ ] All 3 variants work
+- [ ] All 4 variants work
 - [ ] No platform-specific errors
 - [ ] Help commands succeed for all variants
 
@@ -669,7 +677,6 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
    pip install --upgrade jmo-security==0.4.0
    jmo --version
    jmo --help
-   jmotools --help
    ```
 
 ## Troubleshooting
@@ -681,7 +688,7 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
 **Problem:** Tests fail in CI but pass locally
 
-- **Solution:** Check matrix differences (Ubuntu vs macOS, Python 3.10 vs 3.11 vs 3.12)
+- **Solution:** Check matrix differences (Ubuntu vs macOS, Python 3.12 vs 3.13)
 - **Check:** Run `make test` with different Python versions locally
 
 **Problem:** Coverage below 85%
@@ -691,7 +698,7 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
 ## Notes
 
-- The package exposes the `jmo` and `jmotools` console scripts.
+- The package exposes the `jmo` console script.
 - Coverage reports are uploaded to Codecov as part of the tests workflow (tokenless OIDC).
 - License is defined via SPDX string in `pyproject.toml` and the `LICENSE` file is included in the distribution.
 - CI enforces: tests passing, coverage ≥85%, pre-commit checks, reproducible dev deps.
@@ -711,3 +718,5 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 ---
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)
+
+**Last Updated:** February 2026

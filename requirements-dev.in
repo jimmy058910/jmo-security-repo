@@ -1,7 +1,11 @@
 pytest
 pytest-cov
+pytest-split>=0.9.0  # Test sharding for CI parallelization
+pytest-timeout>=2.3.0  # Safety net to prevent infinite test hangs
 hypothesis
 pytest-rerunfailures
+pytest-xdist>=3.5.0  # Parallel test execution with -n auto
+pytest-json-report>=1.5.0  # Machine-readable test output for Ralph Loop
 ruff
 bandit
 black
@@ -10,5 +14,23 @@ jsonschema
 pre-commit
 mypy
 types-PyYAML
+types-tabulate
+types-requests
 croniter
 types-croniter
+
+# MCP Server dependencies (Feature #2: AI Remediation)
+mcp[cli]>=1.0.0  # Official Anthropic MCP SDK with FastMCP framework
+
+# Policy-as-Code dependencies (Feature #5: Policy-as-Code)
+# Note: OPA binary installed separately via scripts/dev/install_tools.sh
+# Python dependencies for policy integration
+packaging  # For version comparison in OPA version checks
+
+# Trend Analysis dependencies (Feature #4: Trend Analysis - v1.0.0)
+scipy>=1.11.0,<1.15.0  # Mann-Kendall test; constrained for Python 3.10 compatibility
+numpy>=1.24.0,<2.3.0  # Explicitly constrain numpy for Python 3.10 support
+
+# SLSA Attestation dependencies (Feature #6: Supply Chain Attestation - v1.0.0)
+sigstore>=2.0.0  # Sigstore Python SDK for keyless signing (Fulcio + Rekor)
+cryptography>=41.0.0  # Cryptographic primitives for hashing and signing

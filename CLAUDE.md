@@ -1,1777 +1,533 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working with the JMo Security Audit Tool Suite repository.
 
 ## Project Overview
 
-JMo Security Audit Tool Suite is a terminal-first, cross-platform security audit toolkit that orchestrates multiple scanners with a unified Python CLI, normalized outputs, and an HTML dashboard. The project scans repositories for secrets, vulnerabilities, misconfigurations, and security issues using industry-standard tools.
+JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Key Philosophy:**
+**Version:** v1.0.0 (Production Release)
+**Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
+**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
 
-- Two-phase architecture: **scan** (invoke tools, write raw JSON) → **report** (normalize, dedupe, emit unified outputs)
-- Unified CommonFinding schema with stable fingerprinting for deduplication
-- Profile-based configuration for different scan depths (fast/balanced/deep)
-- Resilient to missing tools with fallback mechanisms
+**Key v1.0 Features:**
 
-## Core Commands
+- SQLite historical storage for scan persistence and trend analysis
+- Machine-readable diffs for comparing scans and detecting regressions
+- Trend analysis with Mann-Kendall statistical significance testing
+- CSV export and dual-mode HTML dashboard for reporting
+- Cross-tool deduplication with 30-40% noise reduction
+
+## AI Assistant Quality Standards
+
+**CRITICAL:** Quality and correctness take precedence over speed. Always verify changes before proposing them.
+
+### Mandatory Guardrails
+
+1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
+2. **Test Coverage:** CI requires ≥85% (`pytest --cov-fail-under=85`)
+3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls
+4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
+5. **Path Security:** Validate all user paths against directory traversal
+
+### Before Every Commit
+
+```bash
+make fmt && make lint && make test
+```
+
+### Plan Mode Format Rules
+
+When creating plans (via `/plan` or plan mode), follow these rules for scannable, actionable output:
+
+1. **Be extremely concise** - Sacrifice grammar for brevity. Use fragments, not sentences.
+2. **Single approach only** - Present your recommended solution, not all alternatives.
+3. **Include file paths** - List exact files to modify: `scripts/core/adapters/foo.py:45`
+4. **End with unresolved questions** - If any ambiguity remains, list questions at the end.
+
+**Good plan format:**
+
+```text
+## Changes
+- `scripts/cli/jmo.py:234` - add --timeout flag to scan command
+- `scripts/core/config.py:89` - add timeout to ScanConfig dataclass
+- `tests/unit/test_config.py` - add timeout validation tests
+
+## Unresolved
+- Default timeout value? (suggest 300s)
+```
+
+**Bad plan format:**
+
+```text
+I will modify the jmo.py file to add a new timeout flag. This flag will allow users to specify
+a custom timeout value for their scans. I'll also need to update the configuration system...
+```
+
+### Artifact Guardrails (CI blocks these)
+
+- No `venv/`, `__pycache__/`, `build/`, `dist/` in git
+- No files >10MB (`check-added-large-files` hook)
+- No secrets (detect-private-key pre-commit hook + TruffleHog CI scan)
+
+### Proactive Issue Resolution
+
+**CRITICAL:** When encountering issues (test failures, deprecation warnings, linting errors), address them immediately rather than deferring. Technical debt compounds quickly.
+
+**Decision Framework:**
+
+| Issue Type | Scale | Action |
+|------------|-------|--------|
+| Small & Simple | Single clear solution | **Fix immediately** - deprecation warnings, threshold adjustments, typos |
+| Complex OR Multiple Solutions | Architectural impact or trade-offs | **Stop & discuss first** - get alignment before implementing |
+| Blocking | CI broken, security vulnerability | **Fix immediately** - but document reasoning |
+
+**Issue Handling Protocol:**
+
+1. **Fix Now (Small & Simple):** If the fix is straightforward with one clear solution
+   - Deprecation warnings: Update to recommended API
+   - Performance test thresholds: Adjust with documented reasoning
+   - Linting errors: Apply the fix
+   - Single failing test: Fix the root cause
+
+2. **Stop & Discuss (Complex/Multiple Solutions):** If any of these apply:
+   - Multiple valid approaches exist
+   - Fix affects architecture or public API
+   - Uncertainty about the right solution
+   - Change scope is larger than expected
+   - **Action:** Present the issue, options, and recommendation before proceeding
+
+3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
+   - Create GitHub issue with `tech-debt` or `enhancement` label
+   - Add `# TODO(issue-#):` comment in code at the relevant location
+   - Document in `.claude/known-issues.md` with:
+     - Description of the issue
+     - Root cause analysis (if known)
+     - Proposed fix approach
+     - Priority (P0-P3)
+
+4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
+5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
+
+**Example - Performance Test Thresholds (Simple Fix):**
+
+```python
+# BAD: Arbitrary threshold without context
+assert elapsed < 0.05  # <50ms target
+
+# GOOD: Documented threshold with platform considerations
+assert elapsed < 0.2, f"Insert took {elapsed:.3f}s (target: <200ms)"
+# Note: Windows ~100-150ms, Linux ~30-50ms, threshold allows 4x variance
+```
+
+**Example - Complex Fix (Stop & Discuss):**
+
+```text
+Issue: Database queries are slow with 10k+ findings
+Options:
+  A) Add indexes (simple, may not scale)
+  B) Implement pagination (API change, better long-term)
+  C) Add caching layer (complex, best performance)
+Recommendation: B - discuss with user before proceeding
+```
+
+## Quick Reference
 
 ### Development Setup
 
 ```bash
-# Install Python dev dependencies
-make dev-deps
-
-# Install pre-commit hooks (YAML/Actions validation, formatting, linting)
-make pre-commit-install
-
-# Install external security tools (semgrep, trivy, checkov, etc.)
-make tools
-
-# Verify environment and tool availability
-make verify-env
-
-# Format code (shfmt, black, ruff)
-make fmt
-
-# Lint code (shellcheck, ruff, bandit, pre-commit)
-make lint
-
-# Run tests with coverage (CI requires ≥85%)
-make test
+pip install -e ".[dev]"                # Install in editable mode with dev deps
+make pre-commit-install                # Setup pre-commit hooks
+jmo tools install --profile balanced   # Install security tools
+make test-fast                         # Fast parallel tests (recommended for dev)
 ```
 
-### Dependency Management
+> **Note:** `make test` runs sequentially with coverage. Use `make test-fast` for 3-5x faster parallel execution during development. Requires `pytest-xdist` (included in dev deps).
+
+### Essential Commands
+
+| Command | Purpose |
+|---------|---------|
+| `jmo wizard` | Interactive setup wizard |
+| `jmo scan --profile balanced` | Production scan (18 tools, 18-25 min) |
+| `jmo scan --image nginx:latest` | Container image scan |
+| `jmo report ./results` | Generate reports from scan |
+| `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
+| `jmo tools check` | Check tool installation status |
+| `jmo tools install --profile balanced` | Install tools (parallel by default, 3-4x faster) |
+| `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
+| `jmo diff results-A/ results-B/` | Compare scans |
+| `jmo history list` | View scan history |
+| `make fmt` | Format code (Black + Ruff) |
+| `make lint` | Lint checks |
+| `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
+| `make test-parallel` | Parallel tests with coverage (CI-like) |
+| `make test` | Sequential tests with coverage (original) |
+| `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive) |
+
+> **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
+>
+> **Wizard Testing:** Run `python scripts/dev/test_wizard_tools.py --profile balanced` before `jmo wizard` to verify tool infrastructure. The script tests isolated venvs, version detection, and dependency checks (Java, Node.js, bash) non-interactively.
+
+### Version Management (CRITICAL)
 
 ```bash
-# Compile requirements-dev.in → requirements-dev.txt (pip-tools)
-make deps-compile
-
-# Sync environment to compiled requirements
-make deps-sync
-
-# Upgrade pip/setuptools/wheel
-make upgrade-pip
-
-# Alternative: use uv for faster compilation/sync
-make uv-sync
+python3 scripts/dev/update_versions.py --check-latest  # Check updates
+python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
 ```
 
-### Version Management (v0.6.1+)
+**NEVER manually edit tool versions in Dockerfiles!** See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)
 
-**IMPORTANT: Use the 5-layer version management system to update tool versions.**
+## AI Tooling Ecosystem
 
-```bash
-# Check current versions
-python3 scripts/dev/update_versions.py --report
+JMo Security includes agents, skills, and an MCP server for AI-assisted development.
 
-# Check for available updates
-python3 scripts/dev/update_versions.py --check-latest
+### MCP Server (Security Findings API)
 
-# Update a specific tool
-python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+- `get_security_findings` - Query with filters (severity, tool, path)
+- `apply_fix` - Apply AI-suggested patches (use `dry_run=True` first!)
+- `mark_resolved` - Mark as fixed/false_positive/wont_fix
 
-# Sync all Dockerfiles with versions.yaml
-python3 scripts/dev/update_versions.py --sync
+### Key Agents (invoke naturally)
 
-# Validate consistency (CI uses this)
-python3 scripts/dev/update_versions.py --sync --dry-run
-```
+| Agent | Purpose |
+|-------|---------|
+| `coverage-gap-finder` | Find untested code paths, missing test categories |
+| `release-readiness` | Pre-release checklist verification |
+| `code-quality-auditor` | Technical debt, refactoring opportunities |
+| `security-auditor` | Security vulnerability analysis |
+| `dependency-analyzer` | Impact analysis for changes |
 
-**Key Files:**
+### Key Skills (invoke with /skill-name)
 
-- **[versions.yaml](versions.yaml)** — Single source of truth for all tool versions
-- **[scripts/dev/update_versions.py](scripts/dev/update_versions.py)** — Automation script
-- **[.github/workflows/version-check.yml](.github/workflows/version-check.yml)** — Weekly CI checks
-- **[.github/dependabot.yml](.github/dependabot.yml)** — Python/Docker/Actions updates
-- **[docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** — Complete guide
+- `/jmo-adapter-generator` - Generate new tool adapters with tests
+- `/jmo-test-fabricator` - Create comprehensive test suites
+- `/jmo-ci-debugger` - Debug CI/CD pipeline failures
 
-**Critical Rules:**
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (14 skills, 7 agents)
 
-1. **NEVER manually edit tool versions in Dockerfiles** — Always use `update_versions.py`
-2. **ALWAYS sync after updating versions.yaml** — Run `update_versions.py --sync`
-3. **CRITICAL: Trivy versions MUST match** — Mismatches cause CVE detection gaps (see ROADMAP #14)
-4. **Update critical tools within 7 days** — trivy, trufflehog, semgrep, checkov, syft, zap
-5. **Monthly review process** — First Monday: check-latest → review → update → test → commit
+**Persona guidelines:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
-**Workflow for Updating Tools:**
+### Parallel Work: Agent Teams vs Subagents
 
-```bash
-# Step 1: Check for updates
-python3 scripts/dev/update_versions.py --check-latest
-# Output: [warn] trivy: 0.67.2 → 0.68.0 (UPDATE AVAILABLE)
+Choose the right parallelism strategy based on task characteristics:
 
-# Step 2: Review release notes
-gh release view v0.68.0 --repo aquasecurity/trivy
+| Use **Agent Teams** when | Use **Subagents** when |
+|--------------------------|------------------------|
+| Multi-file refactors spanning 3+ modules | Focused research or single-file tasks |
+| Cross-layer changes (CLI + core + adapters + tests) | Quick searches, file reads, code exploration |
+| Competing hypotheses during debugging | Tasks where only the result matters |
+| Parallel code review (security + perf + coverage) | Sequential work with dependencies |
+| New feature implementation across multiple packages | One-off verification or validation |
 
-# Step 3: Update versions.yaml
-python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
+**Decision rule:** If teammates need to communicate findings with each other or coordinate across file boundaries, use agent teams. If work can be fire-and-forget with results reported back, use subagents.
 
-# Step 4: Sync Dockerfiles
-python3 scripts/dev/update_versions.py --sync
+**Agent team best practices for this codebase:**
 
-# Step 5: Verify changes
-git diff versions.yaml Dockerfile Dockerfile.slim Dockerfile.alpine
+- Assign file ownership: one teammate per module (e.g., `scripts/cli/`, `scripts/core/`, `tests/`)
+- Avoid two teammates editing the same file (overwrites silently)
+- Use delegate mode when the lead should only coordinate, not implement
+- Size tasks to produce a clear deliverable (a function, a test file, a review)
+- For adapter work: one teammate per adapter + its test file
 
-# Step 6: Test locally
-make docker-build
+> **Note:** Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental feature).
 
-# Step 7: Commit
-git add versions.yaml Dockerfile*
-git commit -m "deps(tools): update trivy to v0.68.0
+## Architecture Overview
 
-- trivy: 0.67.2 → 0.68.0 (CVE database updates)
+### Two-Phase Workflow
 
-Related: ROADMAP #14, Issue #46"
-```
+1. **Scan Phase:** Invokes tools in parallel, writes raw JSON to `results/individual-{type}/`
+2. **Report Phase:** Normalizes to CommonFinding schema, deduplicates, then enriches all findings with compliance frameworks via single-pass `enrich_findings_with_compliance()`, and outputs
 
-**See [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) for complete documentation.**
-
-### Running Scans
-
-```bash
-# Interactive wizard (recommended for first-time users)
-jmotools wizard
-
-# Non-interactive wizard with defaults
-jmotools wizard --yes
-
-# Fast scan with wrapper command
-jmotools fast --repos-dir ~/repos
-
-# Balanced scan (default profile)
-jmotools balanced --repos-dir ~/repos
-
-# Full deep scan
-jmotools full --repos-dir ~/repos
-
-# Manual scan using Python CLI - Repository scanning
-python3 scripts/cli/jmo.py scan --repos-dir ~/repos --profile-name balanced --human-logs
-
-# Multi-target scanning (v0.6.0+)
-# Scan container images
-python3 scripts/cli/jmo.py scan --image nginx:latest --tools trivy syft
-
-# Scan IaC files
-python3 scripts/cli/jmo.py scan --terraform-state infrastructure.tfstate --tools checkov trivy
-
-# Scan live web URLs (DAST)
-python3 scripts/cli/jmo.py scan --url https://example.com --tools zap
-
-# Scan GitLab repositories
-python3 scripts/cli/jmo.py scan --gitlab-repo mygroup/myrepo --gitlab-token TOKEN --tools trufflehog
-
-# Scan Kubernetes clusters
-python3 scripts/cli/jmo.py scan --k8s-context prod --k8s-all-namespaces --tools trivy
-
-# Scan multiple target types in one command
-python3 scripts/cli/jmo.py scan \
-  --repo ./myapp \
-  --image myapp:latest \
-  --terraform-state infrastructure.tfstate \
-  --url https://myapp.com \
-  --gitlab-repo myorg/backend \
-  --k8s-context prod \
-  --results-dir ./comprehensive-audit
-
-# Aggregate and report (all target types)
-python3 scripts/cli/jmo.py report ./results --profile --human-logs
-
-# CI mode: scan + report + threshold gating (multi-target support)
-python3 scripts/cli/jmo.py ci --image nginx:latest --url https://api.example.com --fail-on HIGH --profile
-```
-
-### Running a Single Test
-
-```bash
-# Run specific test file
-pytest tests/unit/test_common_and_sarif.py -v
-
-# Run specific test function
-pytest tests/unit/test_common_and_sarif.py::test_write_sarif -v
-
-# Run with coverage
-pytest tests/unit/ --cov=scripts --cov-report=term-missing
-
-# Run adapter tests (useful when adding new tool adapters)
-pytest tests/adapters/test_gitleaks_adapter.py -v
-
-# Run integration tests (end-to-end CLI workflows)
-pytest tests/integration/test_cli_scan_ci.py -v
-
-# Run tests by category
-pytest tests/unit/ -v         # All unit tests
-pytest tests/adapters/ -v     # All adapter tests
-pytest tests/reporters/ -v    # All reporter tests
-pytest tests/integration/ -v  # All integration tests
-```
-
-## Architecture
+**Enrichment Architecture:** Compliance enrichment (OWASP, CWE, CIS, NIST, PCI DSS, MITRE ATT&CK) is handled centrally in `normalize_and_report.py` after all findings are collected. Adapters return raw findings without enrichment.
 
 ### Directory Structure
 
 ```text
 scripts/
-├── cli/
-│   ├── jmo.py          # Main CLI entry point (scan/report/ci commands)
-│   ├── jmotools.py     # Wrapper commands (fast/balanced/full/setup)
-│   └── wizard.py       # Interactive wizard for guided scanning
-├── core/
-│   ├── normalize_and_report.py  # Aggregation engine: loads tool outputs, dedupes, enriches
-│   ├── config.py       # Config loader for jmo.yml
-│   ├── suppress.py     # Suppression logic (jmo.suppress.yml)
-│   ├── common_finding.py  # CommonFinding schema and fingerprinting
-│   ├── adapters/       # Tool output parsers (gitleaks, semgrep, trivy, etc.)
-│   │   ├── gitleaks_adapter.py
-│   │   ├── semgrep_adapter.py
-│   │   ├── trivy_adapter.py
-│   │   └── ...
-│   └── reporters/      # Output formatters
-│       ├── basic_reporter.py    # JSON + Markdown
-│       ├── yaml_reporter.py     # YAML (optional, requires PyYAML)
-│       ├── html_reporter.py     # Interactive dashboard
-│       ├── sarif_reporter.py    # SARIF 2.1.0
-│       └── suppression_reporter.py  # Suppression summary
-└── dev/               # Helper scripts for tool installation and CI
+├── cli/             # CLI commands (jmo.py, scan/report orchestrators, wizard)
+│   ├── installers/  # Tool installation strategies (Strategy pattern)
+│   └── ui/          # UI components (progress reporters)
+├── core/            # Core logic (normalize_and_report.py, config.py, history_db.py)
+│   ├── adapters/    # Tool parsers (plugin architecture with @adapter_plugin)
+│   └── reporters/   # Output formatters (JSON/MD/HTML/SARIF/CSV)
+└── dev/             # Helper scripts (update_versions.py)
 
-tests/
-├── unit/              # Core logic tests
-├── adapters/          # Adapter tests with fabricated JSON fixtures
-├── reporters/         # Reporter tests
-├── integration/       # End-to-end CLI tests
-└── cli/               # CLI argument and smoke tests
+tests/               # 5,000+ tests across unit/adapters/reporters/integration
 ```
 
-### Key Concepts
-
-**Two-Phase Workflow:**
-
-1. **Scan Phase** (`jmo scan`):
-   - **v0.5.x and earlier:** Discovers repos from `--repo`, `--repos-dir`, or `--targets`
-   - **v0.6.0+:** Multi-target scanning across 6 target types:
-     - **Repositories:** `--repo`, `--repos-dir`, `--targets` (local Git repos)
-     - **Container Images:** `--image`, `--images-file` (Docker/OCI images)
-     - **IaC Files:** `--terraform-state`, `--cloudformation`, `--k8s-manifest`
-     - **Web URLs:** `--url`, `--urls-file`, `--api-spec` (DAST scanning)
-     - **GitLab Repos:** `--gitlab-repo`, `--gitlab-group` (GitLab integration)
-     - **Kubernetes Clusters:** `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces`
-   - Invokes tools in parallel (configurable threads)
-   - Writes raw JSON to results directories by target type:
-     - `results/individual-repos/<repo>/{tool}.json`
-     - `results/individual-images/<image>/{tool}.json`
-     - `results/individual-iac/<file>/{tool}.json`
-     - `results/individual-web/<domain>/{tool}.json`
-     - `results/individual-gitlab/<group>_<repo>/{tool}.json`
-     - `results/individual-k8s/<context>_<namespace>/{tool}.json`
-   - Supports timeouts, retries, and per-tool overrides
-   - Gracefully handles missing tools with `--allow-missing-tools` (writes empty stubs)
-
-2. **Report Phase** (`jmo report`):
-   - Scans all 6 target type directories for tool outputs
-   - Loads all tool outputs via adapters
-   - Normalizes to CommonFinding schema (v1.2.0 with compliance fields)
-   - Deduplicates by fingerprint ID across all target types
-   - Enriches findings with compliance frameworks (OWASP, CWE, CIS, NIST CSF, PCI DSS, ATT&CK)
-   - Enriches Trivy findings with Syft SBOM context
-   - Writes unified outputs: `findings.json`, `SUMMARY.md`, `dashboard.html`, `findings.sarif`, `COMPLIANCE_SUMMARY.md`, etc.
-   - Supports severity-based failure thresholds (`--fail-on HIGH`)
-
-**CommonFinding Schema:**
-
-All tool outputs are converted to a unified shape defined in `docs/schemas/common_finding.v1.json`:
-
-- **Required fields:** `schemaVersion`, `id` (fingerprint), `ruleId`, `severity`, `tool` (name/version), `location` (path/lines), `message`
-- **Optional fields:** `title`, `description`, `remediation`, `references`, `tags`, `cvss`, `context`, `raw` (original tool payload)
-- **Compliance field (v1.2.0+):** `compliance` object with 6 framework mappings:
-  - `owaspTop10_2021`: Array of OWASP Top 10 categories (e.g., ["A02:2021", "A06:2021"])
-  - `cweTop25_2024`: Array of CWE Top 25 entries with rank, category
-  - `cisControlsV8_1`: Array of CIS Controls with Implementation Group (IG1/IG2/IG3)
-  - `nistCsf2_0`: Array of NIST CSF mappings (function, category, subcategory)
-  - `pciDss4_0`: Array of PCI DSS 4.0 requirements with priority
-  - `mitreAttack`: Array of ATT&CK techniques (tactic, technique, subtechnique)
-- **Risk field (v1.1.0+):** `risk` object with CWE, confidence, likelihood, impact
-- **Fingerprinting:** Deterministic ID computed from `tool | ruleId | path | startLine | message[:120]` to enable cross-run deduplication
-- **Schema Versions:**
-  - **1.0.0:** Basic finding format
-  - **1.1.0:** Added `risk`, `context`, enhanced remediation
-  - **1.2.0:** Added `compliance` field (v0.5.1+), auto-enriched during reporting
-
-**Profiles (v0.5.0):**
-
-Configuration via `jmo.yml` supports named profiles for different scan depths:
-
-- **fast:** 3 best-in-breed tools (trufflehog, semgrep, trivy), 300s timeout, 8 threads, 5-8 minutes
-  - Use case: Pre-commit checks, quick validation, CI/CD gate
-  - Coverage: Verified secrets, SAST, SCA, containers, IaC, backup secrets scanning
-
-- **balanced:** 8 production-ready tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei), 600s timeout, 4 threads, 15-20 minutes
-  - Use case: CI/CD pipelines, regular audits, production scans
-  - Coverage: Verified secrets, SAST, SCA, containers, IaC, Dockerfiles, DAST, API security
-
-- **deep:** 12 comprehensive tools (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++), 900s timeout, 2 threads, 30-60 minutes, retries enabled
-  - Use case: Security audits, compliance scans, pre-release validation
-  - Coverage: Dual secrets scanners, dual Python SAST, SBOM, SCA, IaC, DAST, API security, runtime security, fuzzing
-
-Profiles can override tools, timeouts, threads, and per-tool flags. Use `--profile-name <name>` to apply.
-
-**Interactive Wizard:**
-
-The wizard (`scripts/cli/wizard.py`) provides guided onboarding for first-time users:
-
-- **Interactive mode:** Step-by-step prompts for profile selection, target configuration, execution mode (Docker/native)
-- **Non-interactive mode:** `--yes` flag uses smart defaults for automation
-- **Artifact generation:** Can emit Makefile targets (`--emit-make-target`), shell scripts (`--emit-script`), or GitHub Actions workflows (`--emit-gha`) for reusable configurations
-- **Docker integration:** Automatically detects Docker availability and offers zero-installation scanning
-- Auto-opens results dashboard after scan completion
-
-### Tool Adapters
-
-Each adapter in `scripts/core/adapters/` follows this pattern:
-
-1. Check if output file exists
-2. Parse tool-specific JSON format
-3. Map to CommonFinding schema
-4. Generate stable fingerprint ID
-5. Return list of findings
-
-**Supported Tools (v0.7.2):**
-
-- **Secrets:** trufflehog (verified, 95% false positive reduction), noseyparker (optional, deep profile, local + Docker fallback)
-- **SAST:** semgrep (multi-language), bandit (Python-specific, deep profile)
-- **SBOM+Vuln:** syft (SBOM generation), trivy (vuln/misconfig/secrets scanning)
-- **IaC:** checkov (policy-as-code)
-- **Dockerfile:** hadolint (best practices)
-- **DAST:** OWASP ZAP (web security, runtime vulnerabilities), **Nuclei (fast vulnerability scanner with 4000+ templates, API security)** — FULLY INTEGRATED v0.7.2+
-- **Runtime Security:** Falco (container/K8s monitoring, eBPF-based, deep profile)
-- **Fuzzing:** AFL++ (coverage-guided fuzzing, deep profile)
-
-**Tool Count: 12 security scanners** (trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, nuclei, falco, afl++)
-
-**Removed Tools (v0.5.0):**
-
-- ❌ gitleaks → Replaced by trufflehog (better verification, fewer false positives)
-- ❌ tfsec → Deprecated since 2021, functionality merged into trivy
-- ❌ osv-scanner → Trivy provides superior container/dependency scanning
-
-**Nosey Parker Fallback:**
-
-When local binary is missing/fails, automatically falls back to Docker-based runner via `scripts/core/run_noseyparker_docker.sh`. Requires Docker installed and `ghcr.io/praetorian-inc/noseyparker:latest` image.
-
-### Multi-Target Scanning Architecture (v0.6.0+)
-
-**Overview:**
-
-v0.6.0 expands scanning beyond local Git repositories to 5 additional target types, enabling comprehensive security coverage across an organization's entire infrastructure.
-
-**Supported Target Types:**
-
-1. **Repositories** (existing): Local Git repos via `--repo`, `--repos-dir`, `--targets`
-2. **Container Images** (NEW): Docker/OCI images via `--image`, `--images-file`
-3. **IaC Files** (NEW): Terraform/CloudFormation/K8s manifests via `--terraform-state`, `--cloudformation`, `--k8s-manifest`
-4. **Web URLs** (NEW): Live web apps/APIs via `--url`, `--urls-file`, `--api-spec`
-5. **GitLab Repos** (NEW): GitLab-hosted repos via `--gitlab-repo`, `--gitlab-group`
-6. **Kubernetes Clusters** (NEW): Live K8s clusters via `--k8s-context`, `--k8s-namespace`, `--k8s-all-namespaces`
-
-**Implementation Pattern:**
-
-All scan targets follow a consistent pattern in [jmo.py](scripts/cli/jmo.py):
-
-```python
-# 1. Target Collection Function
-def _iter_images(args) -> list[str]:
-    """Collect container images from CLI arguments."""
-    images = []
-    if getattr(args, "image", None):
-        images.append(args.image)
-    if getattr(args, "images_file", None):
-        # Load from file, skip comments/empty lines
-        ...
-    return images
-
-# 2. Scan Job Function (ThreadPoolExecutor)
-def job_image(image: str) -> tuple[str, dict[str, bool]]:
-    """Scan a container image with trivy and syft."""
-    # Sanitize name for directory
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
-    out_dir = results_dir / "individual-images" / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Tool invocation
-    if "trivy" in tools:
-        cmd = ["trivy", "image", "-q", "-f", "json", image, "-o", str(out)]
-        rc, _, _, used = _run_cmd(cmd, timeout, retries, ok_rcs=(0, 1))
-
-    # Return status
-    return image, statuses
-
-# 3. Parallel Execution
-with ThreadPoolExecutor(max_workers=max_workers) as ex:
-    for image in images:
-        futures.append(ex.submit(job_image, image))
-    for fut in as_completed(futures):
-        name, statuses = fut.result()
-        _log(args, "INFO", f"scanned image {name}: {statuses}")
-```
-
-**Key Architectural Decisions:**
-
-- **Parallel execution:** All target types use ThreadPoolExecutor for concurrent scanning
-- **Consistent logging:** Each scan target type has distinct log prefix (`repo`, `image`, `IaC`, `URL`, `GitLab`, `K8s`)
-- **Directory isolation:** Each target type writes to separate `individual-{type}/` directories
-- **Error resilience:** `--allow-missing-tools` writes empty stubs, allowing partial results
-- **Unified reporting:** `normalize_and_report.py` scans all 6 directories and deduplicates across targets
-
-**Tool Assignments by Target Type (v0.6.2):**
-
-| Target Type | Primary Tools | Secondary Tools |
-|-------------|---------------|-----------------|
-| Repositories | trufflehog, semgrep | trivy, noseyparker, bandit, syft, checkov, hadolint, falco, afl++ |
-| Container Images | trivy, syft | - |
-| IaC Files | checkov, trivy | - |
-| Web URLs | zap, nuclei | - |
-| GitLab Repos | Full repository scanner | trufflehog, semgrep, bandit, trivy, syft, checkov, hadolint, noseyparker, falco, afl++ |
-| Kubernetes | trivy | - |
-
-**Key Changes (v0.6.2):**
-
-- **GitLab Repos:** Now run full repository scanner (10/12 tools) instead of trufflehog-only
-- **Web URLs:** Added Nuclei for fast API security scanning alongside ZAP
-- **GitLab Container Discovery:** Auto-discovers and scans container images found in Dockerfiles, docker-compose.yml, K8s manifests
-
-**CLI Argument Design:**
-
-- **Single target:** `--image nginx:latest`
-- **Batch file:** `--images-file images.txt` (one per line, # comments supported)
-- **Type-specific:** `--terraform-state` vs `--cloudformation` for IaC type detection
-- **Context-aware:** `--gitlab-url`, `--gitlab-token` for authentication
-- **Namespace control:** `--k8s-namespace` vs `--k8s-all-namespaces`
-
-**Results Aggregation:**
-
-[normalize_and_report.py:75-132](scripts/core/normalize_and_report.py#L75-L132) scans all target directories:
-
-```python
-target_dirs = [
-    results_dir / "individual-repos",
-    results_dir / "individual-images",
-    results_dir / "individual-iac",
-    results_dir / "individual-web",
-    results_dir / "individual-gitlab",
-    results_dir / "individual-k8s",
-]
-
-for target_dir in target_dirs:
-    if not target_dir.exists():
-        continue
-    for target in sorted(p for p in target_dir.iterdir() if p.is_dir()):
-        # Load all tool outputs (trivy, syft, checkov, zap, trufflehog, etc.)
-        # Findings deduplicated by fingerprint ID across all targets
-```
-
-**Benefits:**
-
-- **Unified security posture:** Single tool for all asset types
-- **Reduced tooling sprawl:** No separate container scanners, IaC validators, DAST tools
-- **Consistent findings:** All findings normalized to CommonFinding schema
-- **Compliance automation:** All findings enriched with 6 compliance frameworks
-- **CI/CD efficiency:** Multi-target scanning in single pipeline step
-
-### Output Formats
-
-Report phase writes to `<results_dir>/summaries/`:
-
-- `findings.json` — Unified normalized findings (machine-readable)
-- `SUMMARY.md` — Human-readable summary with severity counts and top rules
-- `findings.yaml` — Optional YAML format (requires `pip install -e ".[reporting]"`)
-- `dashboard.html` — Self-contained interactive HTML dashboard
-- `findings.sarif` — SARIF 2.1.0 for code scanning platforms (GitHub, GitLab, etc.)
-- `SUPPRESSIONS.md` — Summary of suppressed findings (when `jmo.suppress.yml` is present)
-- `timings.json` — Profiling data (when `--profile` flag used)
-
-### Configuration
-
-**jmo.yml** controls tool selection, output formats, thresholds, and profiles (v0.5.0):
-
-```yaml
-default_profile: balanced
-tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
-outputs: [json, md, yaml, html, sarif]
-fail_on: ""  # Optional: CRITICAL/HIGH/MEDIUM/LOW/INFO
-retries: 0   # Global retry count for flaky tools
-threads: 4   # Default parallelism
-
-profiles:
-  fast:
-    tools: [trufflehog, semgrep, trivy]
-    threads: 8
-    timeout: 300
-    per_tool:
-      semgrep:
-        flags: ["--exclude", "node_modules", "--exclude", ".git"]
-      trivy:
-        flags: ["--no-progress", "--scanners", "vuln,secret,misconfig"]
-
-  balanced:
-    tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, zap]
-    threads: 4
-    timeout: 600
-    per_tool:
-      zap:
-        flags: ["-config", "api.disablekey=true", "-config", "spider.maxDuration=5"]
-
-  deep:
-    tools: [trufflehog, noseyparker, semgrep, bandit, syft, trivy, checkov, hadolint, zap, falco, afl++]
-    threads: 2
-    timeout: 900
-    retries: 1
-    per_tool:
-      noseyparker:
-        timeout: 1200
-      afl++:
-        timeout: 1800
-        flags: ["-m", "none"]
-
-per_tool:
-  trivy:
-    flags: ["--no-progress"]
-    timeout: 1200
-```
-
-**jmo.suppress.yml** (optional) filters findings:
-
-```yaml
-suppressions:
-
-  - id: "fingerprint-id-here"
-    reason: "False positive, accepted risk"
-
-  - ruleId: "G101"
-    path: "tests/*"
-    reason: "Test files excluded"
-```
-
-## Testing Strategy
-
-- **Unit tests** (`tests/unit/`): Core logic, config parsing, helpers
-- **Adapter tests** (`tests/adapters/`): Parse fabricated tool JSON fixtures, validate CommonFinding mapping
-- **Reporter tests** (`tests/reporters/`): Verify output formats (JSON/MD/YAML/HTML/SARIF)
-- **Integration tests** (`tests/integration/`): End-to-end CLI flows, profile/thread behavior, CI gating
-
-**Test Patterns:**
-
-- Use `tmp_path` fixture for isolated file operations
-- Fabricate minimal tool JSONs to test adapters
-- Mock subprocess calls when testing tool invocation logic
-- Assert on specific exit codes for `--fail-on` thresholds
-
-**Coverage:**
-
-CI enforces ≥85% coverage (see [.github/workflows/ci.yml](.github/workflows/ci.yml)). Upload to Codecov uses OIDC (tokenless) for public repos.
-
-## CI/CD
-
-**GitHub Actions Workflows:**
-
-The project uses 5 workflows for full CI/CD automation:
-
-1. **[.github/workflows/ci.yml](.github/workflows/ci.yml)** — Primary CI workflow
-   - `quick-checks` job: actionlint, yamllint, deps-compile freshness, guardrails, badge verification (2-3 min)
-   - `test-matrix` job: Ubuntu/macOS × Python 3.10/3.11/3.12 (parallel, independent)
-   - `lint-full` job: Full pre-commit suite (nightly scheduled runs only)
-   - Triggers: push, pull_request, workflow_dispatch, schedule (nightly at 6 AM UTC)
-
-2. **[.github/workflows/release.yml](.github/workflows/release.yml)** — Release automation
-   - `pre-release-check` job: Blocks release if tools outdated (CRITICAL GATE)
-   - `pypi-publish` job: Build and publish to PyPI (Trusted Publishers OIDC)
-   - `docker-build` job: Multi-arch Docker images (full/slim/alpine variants)
-   - `docker-scan` job: Trivy vulnerability scanning
-   - `verify-badges` job: Verify PyPI badges after publish
-   - Triggers: version tags (`v*`), workflow_dispatch
-
-3. **[.github/workflows/weekly-tool-update.yml](.github/workflows/weekly-tool-update.yml)** — Weekly automation (NEW)
-   - Runs every Sunday at 00:00 UTC
-   - Updates ALL security tools to latest versions via `update_versions.py --update-all`
-   - Syncs Dockerfiles automatically
-   - Creates PR with auto-merge enabled
-   - Merges automatically if CI passes
-   - Triggers: schedule (weekly), workflow_dispatch
-
-4. **[.github/workflows/automated-release.yml](.github/workflows/automated-release.yml)** — One-click releases (NEW)
-   - Manual trigger with version bump type (patch/minor/major) and changelog entry
-   - Updates ALL tools before release
-   - Bumps version in pyproject.toml
-   - Updates CHANGELOG.md
-   - Creates release PR
-   - Triggers: workflow_dispatch only
-
-5. **[.github/workflows/version-check.yml](.github/workflows/version-check.yml)** — Version consistency (EXISTING)
-   - Runs weekly to detect outdated tools
-   - Fails CI if CRITICAL tools outdated
-   - Sends alerts for non-critical updates
-   - Triggers: schedule (weekly Sunday 02:00 UTC), workflow_dispatch
-
-**Pre-commit Hooks:**
-
-Configured via `.pre-commit-config.yaml`:
-
-- **Formatting:** Black, Ruff, shfmt (shell scripts)
-- **Linting:** Ruff, shellcheck, yamllint, markdownlint
-- **Validation:** actionlint (GitHub Actions), check-yaml, detect-private-key
-- **Security:** Bandit (local only; skipped in CI pre-commit stage but covered by `make lint`)
-
-Run `make pre-commit-run` before committing. CI enforces these checks.
-
-**Technical Debt Management:**
-
-**IMPORTANT PRINCIPLE: Never leave technical debt when found. Fix it immediately.**
-
-When working on any task and you encounter linting issues, failing tests, or code quality problems:
-
-1. **Fix all issues comprehensively**, not just the ones related to your current task
-2. **Example:** If you add content to CHANGELOG.md and markdownlint shows 8 warnings (3 from your changes + 5 from previous releases), fix all 8 warnings, not just the 3 new ones
-3. **Rationale:**
-   - Technical debt compounds quickly if left unaddressed
-   - "Boy Scout Rule": Leave the codebase better than you found it
-   - Future contributors shouldn't have to fix your accumulated debt
-   - Linting issues indicate real problems (accessibility, compatibility, maintainability)
-4. **Common scenarios:**
-   - Markdown linting: Fix ALL MD036 (emphasis as heading), MD032 (blanks around lists), MD040 (code fence language) issues
-   - Python linting: Fix all ruff/black/bandit violations in touched files
-   - YAML linting: Fix all yamllint violations when editing workflow files
-   - Shell linting: Fix all shellcheck issues when editing bash scripts
-
-**Documentation debt specifically:**
-
-- Markdown linting failures are NOT cosmetic; they affect:
-  - Screen reader accessibility (heading hierarchy)
-  - Rendering consistency across platforms
-  - Copy-paste reliability of code blocks
-  - Link resolution in different viewers
-- Always run `pre-commit run markdownlint --all-files` after documentation changes
-- Fix issues incrementally: use `pre-commit run markdownlint --files <file>` to verify fixes
-
-**CI/CD Common Fixes (Lessons Learned):**
-
-When working with release.yml or ci.yml workflows, apply these proven fixes:
-
-1. **Docker Tag Extraction:**
-   - ❌ DON'T: Construct tags manually from `github.ref_name` (includes 'v' prefix)
-   - ✅ DO: Extract tag directly from `metadata-action` output (strips 'v' automatically)
-   ```yaml
-   TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
-   ```
-
-2. **Actionlint Parameters:**
-   - ❌ DON'T: Use deprecated `fail_on_error: true`
-   - ✅ DO: Use current API `fail_level: error`
-   ```yaml
-   - uses: reviewdog/action-actionlint@v1
-     with:
-       fail_level: error
-   ```
-
-3. **Docker Image Testing:**
-   - ❌ DON'T: Use `jmo --version` (CLI doesn't support top-level version flag)
-   - ✅ DO: Use `jmo --help` and `jmo scan --help` (tests CLI works correctly)
-   ```yaml
-   docker run --rm jmo-security:tag --help
-   docker run --rm jmo-security:tag scan --help
-   ```
-
-4. **SARIF Upload Permissions:**
-   - ❌ DON'T: Omit `security-events: write` permission (causes "Resource not accessible by integration")
-   - ✅ DO: Add `security-events: write` to workflow permissions
-   ```yaml
-   permissions:
-     security-events: write  # Required for uploading SARIF to GitHub Security
-   ```
-
-5. **Docker Hub README Sync:**
-   - Use `peter-evans/dockerhub-description@v4` (not v3)
-   - Gate with repository variable: `if: vars.DOCKERHUB_ENABLED == 'true'`
-   - Requires secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (PAT with read/write/delete scope)
-   - Only run on version tags: `if: startsWith(github.ref, 'refs/tags/v')`
-
-## Common Development Tasks
-
-### Adding a New Tool Adapter
-
-1. Create `scripts/core/adapters/<tool>_adapter.py` following existing patterns:
-   - `load_<tool>(path: Path) -> List[Dict[str, Any]]`
-   - Map tool output to CommonFinding schema
-   - Generate stable fingerprint via `common_finding.py` utilities
-2. Update `scripts/core/normalize_and_report.py`:
-   - Import the loader
-   - Add to the loop in `gather_results()`
-3. Update `scripts/cli/jmo.py`:
-   - Add tool invocation logic to `cmd_scan()`
-   - Update `_write_stub()` for empty JSON structure
-4. Add fabricated test JSON to `tests/adapters/test_<tool>_adapter.py`
-5. Update docs: `README.md`, `QUICKSTART.md`, `jmo.yml` tool lists
-
-### Modifying Output Formats
-
-- Reporters live in `scripts/core/reporters/`
-- JSON/Markdown: `basic_reporter.py`
-- YAML: `yaml_reporter.py` (requires PyYAML)
-- HTML: `html_reporter.py` (self-contained template)
-- SARIF: `sarif_reporter.py` (maps to SARIF 2.1.0 schema)
-- Update `scripts/cli/jmo.py:cmd_report()` to call new reporter
-- Add tests in `tests/reporters/`
-
-### Changing CLI Behavior
-
-- Main CLI: `scripts/cli/jmo.py`
-- Subcommands: `scan`, `report`, `ci`
-- When modifying flags/behavior:
-  1. Update `parse_args()` function
-  2. Update `README.md`, `QUICKSTART.md`, `SAMPLE_OUTPUTS.md`
-  3. Add/update tests in `tests/cli/` and `tests/integration/`
-
-### Updating Dependencies
-
-- **Runtime deps:** Minimal; declared in `pyproject.toml` under `[project.dependencies]` (currently empty)
-- **Optional deps:** `[project.optional-dependencies]` for reporters (PyYAML, jsonschema)
-- **Dev deps:** `requirements-dev.in` → compile with `make deps-compile` → commit `requirements-dev.txt`
-- **External tools:** Install via `make tools` (see `scripts/dev/install_tools.sh`)
-- **Pre-commit hooks:** Update with `pre-commit autoupdate`
-
-CI validates that `requirements-dev.txt` matches `requirements-dev.in` on PRs.
-
-## Claude Skills (Dev-Only, Not Committed)
-
-**IMPORTANT: The `.claude/skills/` directory is gitignored and NOT part of the committed codebase.** Skills are local development aids for contributors using Claude Code. They are referenced in this file to help Claude understand when to use them during local development.
-
-This project uses **specialized skills** to guide complex, repetitive workflows. Skills are comprehensive knowledge bases that ensure consistency, reduce errors, and accelerate development.
-
-### Why Skills Matter
-
-Skills centralize expertise for complex tasks, providing:
-
-- Step-by-step workflows with verification checklists
-- Real-world examples and proven patterns
-- Error handling and troubleshooting guides
-- Output artifact specifications
-- Success criteria verification
-
-**Time Savings:** Skills reduce task completion time by 50-75% (2-4 hours per task) and ensure consistency across the codebase.
-
-### Available Skills by Category
-
-**Code Generation:**
-
-- [jmo-adapter-generator](.claude/skills/jmo-adapter-generator/SKILL.md) — Add new tool integrations (2-3 hour savings)
-- [jmo-target-type-expander](.claude/skills/jmo-target-type-expander/SKILL.md) — Add new scan target types (3-4 hour savings)
-
-**Quality Assurance:**
-
-- [jmo-test-fabricator](.claude/skills/jmo-test-fabricator/SKILL.md) — Write adapter test suites with ≥85% coverage (1-2 hour savings)
-- [jmo-compliance-mapper](.claude/skills/jmo-compliance-mapper/SKILL.md) — Map findings to 6 compliance frameworks (30-60 min savings)
-
-**Operations:**
-
-- [jmo-profile-optimizer](.claude/skills/jmo-profile-optimizer/SKILL.md) — Optimize scan performance and reliability (1-2 hour savings)
-- [jmo-ci-debugger](.claude/skills/jmo-ci-debugger/SKILL.md) — Debug GitHub Actions and CI/CD failures (30-60 min savings)
-
-**Documentation:**
-
-- [jmo-documentation-updater](.claude/skills/jmo-documentation-updater/SKILL.md) — Maintain docs consistency and structure (30-45 min savings)
-
-**Workflow Automation:**
-
-- [dev-helper](.claude/skills/dev-helper/SKILL.md) — Version bumps, release prep, issue triage (15-30 min savings)
-- [community-manager](.claude/skills/community-manager/SKILL.md) — Track feedback, draft responses (30-60 min savings)
-- [content-generator](.claude/skills/content-generator/SKILL.md) — Create marketing content (1-2 hour savings)
-- [job-search-helper](.claude/skills/job-search-helper/SKILL.md) — Resume bullets, interview prep (30-60 min savings)
-
-**Complete catalog:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (11 skills, ~14,300 lines of guidance)
-
-### When to Use Skills
-
-**Use skills proactively when:**
-
-| Task | Skill to Use | Trigger |
-|------|--------------|---------|
-| Adding new tool adapter | jmo-adapter-generator | "Add support for [tool]" |
-| Writing adapter tests | jmo-test-fabricator | "Write tests for [tool] adapter" |
-| Debugging CI failures | jmo-ci-debugger | "CI is failing", "GitHub Actions not working" |
-| Updating documentation | jmo-documentation-updater | "Update docs for [feature]" |
-| Optimizing scan performance | jmo-profile-optimizer | "Scans are too slow", "Too many timeouts" |
-| Adding new target type | jmo-target-type-expander | "Scan [AWS/npm/GraphQL/etc.]" |
-| Mapping to compliance frameworks | jmo-compliance-mapper | "What frameworks does [CWE] map to?" |
-| Preparing for release | dev-helper | "Bump version to X.Y.Z" |
-
-**Skills are guides, not rigid requirements.** If project constraints require a different approach, document the deviation in your PR description or code comments. Consider updating the skill if the deviation becomes a common pattern.
-
-## Skill Auto-Activation
-
-Claude Code automatically activates skills based on natural language patterns. You don't need to remember skill names - just describe what you want to do.
-
-### Common Trigger Patterns
-
-| User Request | Auto-Activated Skill | Example |
-|--------------|---------------------|---------|
-| "Add support for [tool]" | jmo-adapter-generator | "Add support for Snyk" |
-| "Scans are too slow" | jmo-profile-optimizer | "Optimize balanced profile" |
-| "CI is failing" | jmo-ci-debugger | "GitHub Actions timeout" |
-| "Write tests for [adapter]" | jmo-test-fabricator | "Write tests for snyk_adapter.py" |
-| "Map [CWE] to frameworks" | jmo-compliance-mapper | "Map CWE-79 to OWASP" |
-| "Fix [vulnerability]" | jmo-security-hardening | "Fix CSRF in API" |
-| "Refactor [function]" | jmo-refactoring-assistant | "Refactor cmd_scan" |
-| "Document [feature]" | jmo-documentation-updater | "Document AWS scanning" |
-| "[tool] not working" | jmo-systematic-debugging | "Semgrep returns no findings" |
-| "Build React [component]" | jmo-dashboard-builder | "Add SBOM tree view" |
-
-### How It Works
-
-1. **User describes task** in natural language
-2. **Claude matches pattern** to appropriate skill
-3. **Skill activates automatically** with context
-4. **Workflow begins** without manual skill invocation
-
-### Override Auto-Activation
-
-If you want to use a specific skill explicitly:
-
-```text
-"Use the jmo-profile-optimizer skill to analyze timings.json"
-```
-
-This ensures the exact skill is used, even if the pattern might match multiple skills.
-
-### Full Trigger Patterns
-
-See [dev-only/hybrid-implementation-files/02-natural-language-triggers.md](dev-only/hybrid-implementation-files/02-natural-language-triggers.md) for complete trigger pattern reference.
-
-### Common Skill Workflows
-
-Skills compose together for end-to-end features. See [.claude/skills/SKILL_WORKFLOWS.md](.claude/skills/SKILL_WORKFLOWS.md) for detailed multi-skill workflows.
-
-#### Example: Add New Tool (Full Stack)
-
-1. **jmo-adapter-generator** — Create `snyk_adapter.py` and `test_snyk_adapter.py`
-2. **jmo-test-fabricator** — Expand test suite to ≥85% coverage
-3. **jmo-compliance-mapper** — Add Snyk-specific rule mappings (if needed)
-4. **jmo-documentation-updater** — Update README.md, QUICKSTART.md, USER_GUIDE.md
-
-Time: 4-6 hours (vs. 8-12 hours without skills)
-
-#### Example: Performance Investigation
-
-1. **jmo-profile-optimizer** — Analyze `timings.json`, identify bottlenecks
-2. **jmo-ci-debugger** — Fix CI timeout configuration
-3. **jmo-documentation-updater** — Document performance tuning in USER_GUIDE.md
-
-Time: 2-3 hours (vs. 4-6 hours without skills)
-
-## Parallel Multi-Skill Workflows
-
-For independent tasks, use Task tool parallelism to achieve 2-3x speedup.
-
-### Workflow Example: Add New Tool (Parallel)
-
-**Sequential (Old):** 6-8 hours
-
-```text
-1. jmo-adapter-generator (2-3 hours)
-2. jmo-test-fabricator (1-2 hours)
-3. jmo-documentation-updater (30-45 min)
-```
-
-**Parallel (New):** 3-4 hours (2x speedup)
-
-```text
-Launch 3 agents in parallel:
-- Agent 1: jmo-adapter-generator (code)
-- Agent 2: jmo-test-fabricator (tests)
-- Agent 3: jmo-documentation-updater (docs)
-
-Wait for all to complete → integrate results
-```
-
-### When to Use Parallel
-
-✅ **Use parallel when:**
-
-- Tasks are independent (no data dependencies)
-- Each task takes >30 minutes
-- Total time savings >50%
-
-❌ **Don't use parallel when:**
-
-- Tasks depend on each other (adapter must exist before tests)
-- Tasks are quick (<5 minutes)
-- Coordination overhead > time savings
-
-### Parallel Workflow Patterns
-
-#### Pattern 1: Fan-out/Fan-in (Independent Analysis)
-
-```text
-User: "Analyze performance and dependencies before refactoring"
-  ↓
-Fork:
-  - Agent 1: jmo-profile-optimizer (analyze timings.json)
-  - Agent 2: dependency-analyzer (analyze dependencies)
-  ↓
-Join: Combine results
-  ↓
-jmo-refactoring-assistant (refactor with full context)
-```
-
-#### Pattern 2: Pipeline (Sequential with Parallel Stages)
-
-```text
-User: "Add AWS scanning and document it"
-  ↓
-Stage 1: jmo-target-type-expander (sequential)
-  ↓
-Stage 2 (parallel):
-  - Agent 1: jmo-test-fabricator (write tests)
-  - Agent 2: jmo-documentation-updater (document feature)
-  ↓
-Integration: Merge results
-```
-
-**Full Parallel Workflows:** See [dev-only/hybrid-implementation-files/13-parallel-workflows.md](dev-only/hybrid-implementation-files/13-parallel-workflows.md)
-
-### Skill Maintenance
-
-Skills use **Semantic Versioning** and are updated on a regular schedule:
-
-- **Weekly:** jmo-ci-debugger (GitHub Actions API changes)
-- **Monthly:** jmo-documentation-updater (documentation structure adjustments)
-- **Quarterly:** jmo-compliance-mapper (MITRE ATT&CK updates)
-- **Annually:** jmo-compliance-mapper (CWE Top 25, OWASP Top 10, NIST CSF, CIS Controls)
-- **As Needed:** All others (when core architecture changes)
-
-See [.claude/skills/INDEX.md#skill-maintenance](.claude/skills/INDEX.md#skill-maintenance) for complete versioning and update process.
-
-## Agents vs. Skills
-
-JMo Security uses a **hybrid architecture** combining skills (domain-specific workflows) and agents (autonomous detection/validation).
-
-### When to Use Skills (Agents vs. Skills)
-
-✅ **Use Skills When:**
-
-- Known workflow exists (e.g., adding adapter, optimizing profiles)
-- Step-by-step guidance needed
-- Domain expertise required (security, compliance, profiling)
-- Consistency matters (following JMo patterns)
-
-**Examples:**
-
-- "Add Snyk scanner" → jmo-adapter-generator
-- "Scans too slow" → jmo-profile-optimizer
-- "Fix CSRF" → jmo-security-hardening
-
-### When to Use Agents
-
-✅ **Use Agents When:**
-
-- Proactive detection needed (find issues before user notices)
-- Automated validation required (pre-release checks)
-- Impact analysis before changes (refactoring safety)
-- Broad codebase scanning (not targeted fixes)
-
-**Examples:**
-
-- "Find coverage gaps" → coverage-gap-finder agent
-- "Verify release readiness" → release-readiness agent
-- "What depends on jmo.py?" → dependency-analyzer agent
-- "Check if docs up-to-date" → doc-sync-checker agent
-
-### Retained Agents (4)
-
-| Agent | Purpose | Use Case | Integration |
-|-------|---------|----------|-------------|
-| **coverage-gap-finder** | Find untested code paths | Before release, weekly checks | → jmo-test-fabricator |
-| **release-readiness** | Pre-release validation | Before tagging versions | → jmo-ci-debugger |
-| **dependency-analyzer** | Analyze code dependencies | Before refactoring | → jmo-refactoring-assistant |
-| **doc-sync-checker** | Detect documentation drift | After features, weekly | → jmo-documentation-updater |
-
-### Retired Agents (3)
-
-- ❌ **security-auditor** - Redundant with jmo-security-hardening skill
-- ❌ **code-quality-auditor** - Redundant with jmo-refactoring-assistant skill
-- ❌ **codebase-explorer** - Use faster `Explore` agent instead
-
-### Agent Coordination Patterns
-
-#### Pattern 1: Agent → Skill (Detection → Fix)
-
-```text
-coverage-gap-finder (detect gaps) → jmo-test-fabricator (write tests)
-doc-sync-checker (detect drift) → jmo-documentation-updater (fix docs)
-```
-
-#### Pattern 2: Skill → Agent → Skill (Safe Refactoring)
-
-```text
-User: "Refactor cmd_scan"
-  → dependency-analyzer (analyze impact)
-  → jmo-refactoring-assistant (refactor safely)
-```
-
-### Proactive Agent Triggers
-
-**Weekly (Automated):**
-
-- Sunday 10 PM UTC: coverage-gap-finder, doc-sync-checker
-
-**Pre-Release (Automated):**
-
-- Before `git tag`: release-readiness
-
-**Post-Feature (Automated):**
-
-- After scripts/ modified: doc-sync-checker
-
-**Manual:**
-
-- "Find coverage gaps" → coverage-gap-finder
-- "Verify release readiness" → release-readiness
-- "Analyze dependencies of [file]" → dependency-analyzer
-- "Check doc sync" → doc-sync-checker
-
-**Full Agent Policy:** See [dev-only/hybrid-implementation-files/03-agent-usage-policy.md](dev-only/hybrid-implementation-files/03-agent-usage-policy.md)
-
-## Memory System (.jmo/memory/)
-
-JMo Security uses a **lightweight JSON-based memory system** to persist learning across sessions, reducing repeated analysis and speeding up common workflows.
-
-### How Memory Works
-
-**Automated (80%):**
-
-- Claude automatically queries memory before re-analyzing patterns
-- Stores findings after skill completion
-- Retrieves cached results for common queries
-- Updates namespace-scoped data
-
-**Manual (20%):**
-
-- Review memory contents: `cat .jmo/memory/adapters/snyk.json`
-- Prune outdated entries: `rm .jmo/memory/adapters/deprecated-tool.json`
-- Override cached data: Edit JSON if analysis was incorrect
-- Analyze trends: `jq '.success_rate' .jmo/memory/*/*.json`
-
-### Memory Directory Structure
-
-```text
-.jmo/memory/
-├── adapters/           # Tool adapter patterns
-│   ├── snyk.json
-│   ├── trivy.json
-│   └── semgrep.json
-├── compliance/         # CWE → framework mappings
-│   ├── cwe-79.json
-│   └── cwe-89.json
-├── profiles/           # Performance optimization history
-│   ├── fast-optimization.json
-│   └── balanced-optimization.json
-├── target-types/       # Multi-target patterns
-│   ├── aws.json
-│   └── npm.json
-├── refactoring/        # Code refactoring decisions
-│   └── cmd_scan.json
-└── security/           # Security fix patterns
-    ├── csrf-protection.json
-    └── path-traversal.json
-```
-
-### What's Stored
-
-✅ **Stored:**
-
-- Tool output patterns (e.g., "Snyk uses `vulnerabilities[]` array")
-- Common pitfalls (e.g., "Trivy exits code 1 on findings")
-- Performance metrics (e.g., "Semgrep averages 45s on 10k LOC")
-- Compliance mappings (e.g., "CWE-79 → OWASP A03:2021")
-
-❌ **NOT Stored:**
-
-- Actual security findings (those go in `results/`)
-- Secrets or credentials
-- Repository names or code snippets
-- Personal data
-
-### Example: Automated Memory Usage
-
-```bash
-# User: "Add support for Snyk scanner"
-
-# Claude automatically:
-# 1. Checks: .jmo/memory/adapters/snyk.json (not found)
-# 2. Uses jmo-adapter-generator skill (full workflow)
-# 3. Stores: .jmo/memory/adapters/snyk.json
-#    {
-#      "tool": "snyk",
-#      "output_format": "results[].vulnerabilities[]",
-#      "exit_codes": {"0": "clean", "1": "findings", "2": "error"},
-#      "common_pitfalls": ["Requires auth token", "Large repos timeout"],
-#      "last_updated": "2025-10-21"
-#    }
-
-# Next time: "Update Snyk adapter for v2.0"
-# Claude retrieves .jmo/memory/adapters/snyk.json
-# - Already knows exit codes (skip research)
-# - Already has patterns (faster updates)
-# - 40% time savings
-```
-
-### Memory Integration by Skill
-
-| Skill | Memory Namespace | Query Pattern | Time Savings |
-|-------|-----------------|---------------|--------------|
-| jmo-adapter-generator | adapters/ | "Have I added this tool?" | 40% |
-| jmo-compliance-mapper | compliance/ | "What frameworks map?" | 60% |
-| jmo-profile-optimizer | profiles/ | "What optimizations worked?" | 50% |
-| jmo-refactoring-assistant | refactoring/ | "What refactorings done?" | 30% |
-| jmo-security-hardening | security/ | "How did I fix this CWE?" | 45% |
-
-### Manual Memory Management
-
-**Review memory:**
-
-```bash
-cat .jmo/memory/compliance/cwe-79.json
-```
-
-**Prune old entries (quarterly cleanup):**
-
-```bash
-# Remove deprecated tool patterns
-rm .jmo/memory/adapters/gitleaks.json  # Tool removed from JMo
-
-# Future: Memory CLI
-jmotools memory prune --older-than 180d
-```
-
-**Override incorrect data:**
-
-```bash
-# If Claude misidentified a pattern, edit JSON directly
-vim .jmo/memory/adapters/tool.json
-```
-
-### Privacy & Security
-
-- Memory is **gitignored** (never committed)
-- Stored in `.jmo/memory/` (local only)
-- No secrets or PII
-- Safe to delete (regenerates on next use)
-
-**Full Memory Guide:** See [dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md](dev-only/hybrid-implementation-files/20-MEMORY_USER_GUIDE.md)
-
-## Pre/Post-Operation Hooks
-
-JMo Security uses hooks to automate quality enforcement at key points in the development workflow.
-
-### Recommended Hooks Configuration
-
-Add to `.claude/hooks.json`:
-
-```json
-{
-  "pre-edit": {
-    "command": "make lint-file {file}",
-    "description": "Lint file before editing"
-  },
-  "post-edit": {
-    "command": "make fmt-file {file}",
-    "description": "Format file after editing"
-  },
-  "pre-task": {
-    "command": "make verify-env",
-    "description": "Verify environment before starting task"
-  },
-  "post-task": {
-    "command": "pytest --cov={changed_files} --cov-fail-under=85",
-    "description": "Run tests on changed files after task"
-  },
-  "pre-release": {
-    "command": "claude-code agent release-readiness",
-    "description": "Run release-readiness agent before tagging"
-  }
-}
-```
-
-### Hook Execution Flow
-
-```text
-User: "Add Snyk adapter"
-  ↓
-pre-task hook: make verify-env
-  ↓
-jmo-adapter-generator skill
-  ↓
-pre-edit hook: make lint-file scripts/core/adapters/snyk_adapter.py
-  ↓
-Edit file
-  ↓
-post-edit hook: make fmt-file scripts/core/adapters/snyk_adapter.py
-  ↓
-post-task hook: pytest --cov=scripts/core/adapters/snyk_adapter.py
-  ↓
-Done (with automated quality checks)
-```
-
-### Benefits
-
-- **Enforce quality automatically** - No manual `make` commands
-- **Catch issues early** - Pre-edit linting prevents broken code
-- **Maintain consistency** - Post-edit formatting ensures style
-- **Verify coverage** - Post-task testing ensures ≥85%
-
-### When to Disable Hooks Temporarily
-
-```bash
-# For rapid prototyping (skip formatting)
-export SKIP_HOOKS=post-edit
-
-# For large refactors (skip tests until done)
-export SKIP_HOOKS=post-task
-
-# Re-enable
-unset SKIP_HOOKS
-```
-
-**Full Hooks Guide:** See [dev-only/hybrid-implementation-files/10-hooks-configuration.md](dev-only/hybrid-implementation-files/10-hooks-configuration.md)
-
-## Important Conventions
-
-### Tool Invocation
-
-- Tools invoked via `subprocess.run()` without shell (`shell=False`)
-- Respect tool-specific exit codes:
-  - semgrep: 0 (clean), 1 (findings), 2 (errors) — treat 0/1/2 as success when output exists
-  - trivy/checkov/bandit: 0/1 treated as success
-  - gitleaks/trufflehog: 0/1 treated as success
-- Timeout enforcement per tool (configurable via `jmo.yml` per_tool overrides)
-- Retry logic: global `retries` or per-profile; skips retries for "findings" exit codes
-
-### Logging
-
-- Machine JSON logs by default (structured for parsing)
-- Human-friendly colored logs with `--human-logs` flag
-- Log levels: DEBUG/INFO/WARN/ERROR (controlled by `--log-level` or config)
-- Always log to stderr, never stdout (stdout reserved for tool outputs)
-
-### Security Practices
-
-- Never commit secrets (pre-commit hook checks via `detect-private-key`)
-- Bandit scans `scripts/` with strict config (`bandit.yaml`)
-- Test files scanned with B101,B404 skipped
-- No shell=True in subprocess calls (use list args)
-- Validate all file paths from user input
-
-### Results Directory Layout (v0.6.0+)
-
-```text
-results/
-├── individual-repos/          # Repository scans (existing)
-│   └── <repo-name>/
-│       ├── trufflehog.json
-│       ├── semgrep.json
-│       ├── trivy.json
-│       └── ...
-├── individual-images/         # v0.6.0: Container image scans
-│   └── <sanitized-image>/
-│       ├── trivy.json
-│       └── syft.json
-├── individual-iac/            # v0.6.0: IaC file scans
-│   └── <file-stem>/
-│       ├── checkov.json
-│       └── trivy.json
-├── individual-web/            # v0.6.0: Web app/API scans
-│   └── <domain>/
-│       └── zap.json
-├── individual-gitlab/         # v0.6.0: GitLab repository scans
-│   └── <group>_<repo>/
-│       └── trufflehog.json
-├── individual-k8s/            # v0.6.0: Kubernetes cluster scans
-│   └── <context>_<namespace>/
-│       └── trivy.json
-└── summaries/                 # Aggregated reports (all targets)
-    ├── findings.json          # Unified findings from all target types
-    ├── SUMMARY.md             # Summary with severity counts
-    ├── findings.yaml          # Optional YAML format
-    ├── dashboard.html         # Interactive dashboard
-    ├── findings.sarif         # SARIF 2.1.0 format
-    ├── SUPPRESSIONS.md        # Suppression summary
-    ├── COMPLIANCE_SUMMARY.md  # v0.5.1: Multi-framework compliance
-    ├── PCI_DSS_COMPLIANCE.md  # v0.5.1: PCI DSS report
-    ├── attack-navigator.json  # v0.5.1: MITRE ATT&CK Navigator
-    └── timings.json           # Performance profiling (when --profile used)
-```
-
-**Important:** Never change default paths without updating all tests and documentation.
-
-**v0.6.0 Note:** `normalize_and_report.py` automatically scans all 6 target directories. Findings are deduplicated across all target types by fingerprint ID.
-
-## Release Process
-
-**Two Release Methods:**
-
-### Method 1: Automated Release (Recommended)
-
-Use the automated-release workflow for one-click releases:
-
-```bash
-# Navigate to GitHub Actions → Automated Release → Run workflow
-# Select:
-#   - Version bump: patch/minor/major
-#   - Changelog entry: "Brief summary of changes"
-```
-
-**What it does automatically:**
-
-1. Updates ALL security tools to latest versions
-2. Bumps version in pyproject.toml
-3. Updates CHANGELOG.md with your entry
-4. Creates release PR with detailed summary
-5. When PR merged → automatically creates tag and triggers full release workflow
-
-**Advantages:**
-
-- ✅ Zero manual steps
-- ✅ Guaranteed tool updates before release
-- ✅ Consistent commit messages and PR structure
-- ✅ Cannot accidentally skip tool updates
-
-### Method 2: Manual Release (Advanced)
-
-For advanced users who want full control:
-
-**CRITICAL: All security tools MUST be updated before EVERY release.**
-
-1. **Update ALL security tools to latest versions:**
-   ```bash
-   python3 scripts/dev/update_versions.py --check-latest  # Check for updates
-   python3 scripts/dev/update_versions.py --update-all    # Update all tools
-   python3 scripts/dev/update_versions.py --sync          # Sync Dockerfiles
-   git add versions.yaml Dockerfile*
-   git commit -m "deps(tools): update all to latest before vX.Y.Z"
-   ```
-
-2. Bump version in `pyproject.toml` under `[project] version`
-3. Update `CHANGELOG.md` with changes
-4. Commit with message: `release: vX.Y.Z`
-5. Create and push tag: `git tag vX.Y.Z && git push --tags`
-6. **CI enforces tool updates** — Release BLOCKS if tools outdated (pre-release-check job)
-7. CI publishes to PyPI automatically using Trusted Publishers (OIDC)
-8. CI verifies badges auto-update correctly (60s after PyPI publish)
-
-**Prerequisites:**
-
-- Configure repo as Trusted Publisher in PyPI settings (one-time setup)
-- No `PYPI_API_TOKEN` required with OIDC workflow
-- **CRITICAL:** All tools must be up-to-date (enforced by CI pre-release gate)
-
-**Badge Automation:**
-
-- All README badges auto-update from PyPI (no manual edits needed)
-
-**Weekly Tool Updates:**
-
-The project uses automated weekly tool updates to ensure all security tools stay current:
-
-- **Schedule:** Every Sunday at 00:00 UTC
-- **Process:**
-  1. `weekly-tool-update.yml` workflow runs automatically
-  2. Updates ALL tools to latest versions via `update_versions.py --update-all`
-  3. Syncs Dockerfiles automatically
-  4. Creates PR with auto-merge enabled
-  5. Merges automatically if CI tests pass
-- **Benefits:**
-  - Zero manual intervention for tool updates
-  - Continuous security improvements
-  - Early detection of breaking changes (fails CI if incompatible)
-  - PRs provide clear audit trail of what changed
-- **Override:** Can manually trigger via GitHub Actions → Weekly Tool Update → Run workflow
-- Badge verification runs on every release (`.github/workflows/release.yml`)
-- Badge CDN caching: expect 5-30 minute delay for global propagation
-- Manual verification: `make verify-badges`
-- See [docs/BADGE_AUTOMATION.md](docs/BADGE_AUTOMATION.md) for complete guide
-
-## Troubleshooting
-
-### Tests Failing
-
-- Run `make test` locally with `--maxfail=1` to stop at first failure
-- Check coverage with `pytest --cov --cov-report=term-missing`
-- Ensure `requirements-dev.txt` is up to date: `make deps-compile`
-
-### Tool Not Found
-
-- Run `make verify-env` to see detected tools and install hints
-- Install missing tools: `make tools` (Linux/WSL/macOS detection)
-- Use `--allow-missing-tools` to write empty stubs instead of failing
-
-### Pre-commit Hook Failures
-
-- Run `make pre-commit-run` to see all violations
-- Format code: `make fmt`
-- Lint code: `make lint`
-- Update hooks: `pre-commit autoupdate`
-
-### CI Failures
-
-- Matrix tests run on Ubuntu/macOS × Python 3.10/3.11/3.12
-- Check coverage ≥85% threshold
-- Verify `requirements-dev.txt` matches `requirements-dev.in`
-- Pre-commit checks must pass (actionlint, yamllint, etc.)
-
-## Additional Resources
-
-- **Claude Skills Index: [.claude/skills/INDEX.md](.claude/skills/INDEX.md)** — Complete skill catalog with workflows
-- User Guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-- Quick Start: [QUICKSTART.md](QUICKSTART.md)
-- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Testing: [TEST.md](TEST.md)
-- Release Process: [docs/RELEASE.md](docs/RELEASE.md)
-- **Version Management: [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md)** (v0.6.1+)
-- CommonFinding Schema: [docs/schemas/common_finding.v1.json](docs/schemas/common_finding.v1.json)
-- Copilot Instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
-- Project Homepage: [jmotools.com](https://jmotools.com)
-
-## Document Creation Policy
-
-**CRITICAL: Limit document creation and summaries unless they provide long-term project value.**
-
-### When NOT to Create Documents
-
-**Do NOT create markdown documents for:**
-
-1. ❌ **Session summaries or task reports** — These are ephemeral and clutter the repository
-2. ❌ **Temporary analysis notes** — Use conversation context instead
-3. ❌ **Quick reference guides** — Information should go into existing docs
-4. ❌ **One-off troubleshooting** — Document patterns in USER_GUIDE.md, not standalone files
-5. ❌ **Work-in-progress drafts** — Keep in `.claude/` or `dev-only/` (gitignored)
-6. ❌ **Review artifacts** — Use GitHub PR reviews, not committed files
-
-**IMPORTANT .gitignore locations for temporary work:**
-
-- **`.claude/`** — Claude Code user-specific configuration (gitignored in line 84)
-- **`dev-only/`** — Private local scripts and outputs (gitignored in line 78)
-- **`/tmp/`** — Test results and temporary files (gitignored in line 51)
-
-**When temporary documents ARE needed:**
-
-```bash
-# Store drafts and analysis in gitignored locations
-echo "analysis notes" > .claude/draft-analysis.md
-echo "temp script" > dev-only/test-script.sh
-echo "results" > /tmp/scan-output.json
-
-# These files NEVER appear in git status
-git status  # Clean working tree
-```
-
-### When to Create Documents
-
-**ONLY create markdown documents when:**
-
-1. ✅ **Long-term project value** — Information needed for >6 months
-2. ✅ **User-facing documentation** — Guides, tutorials, references (see Perfect Documentation Structure below)
-3. ✅ **Contributor onboarding** — CONTRIBUTING.md, TEST.md, RELEASE.md
-4. ✅ **Architectural decisions** — Major design changes (CLAUDE.md, ROADMAP.md)
-5. ✅ **Compliance/auditing** — Security policies, license info
-
-**Examples of valid document creation:**
-
-- Adding new section to USER_GUIDE.md for new CLI flag
-- Creating docs/examples/new-workflow.md for reusable pattern
-- Updating CHANGELOG.md for release notes
-- Adding troubleshooting section to existing doc
-
-### Document Management Workflow
-
-**When documents ARE created, use the jmo-documentation-updater skill to manage them:**
-
-```bash
-# After creating or modifying documentation
-# The skill will:
-# 1. Check for duplicates and consolidate
-# 2. Verify against Perfect Documentation Structure
-# 3. Update docs/index.md with new links
-# 4. Run markdownlint and fix ALL issues
-# 5. Organize into appropriate locations
-# 6. Archive or delete obsolete docs
-```
-
-**Invoke the skill:**
-
-```text
-Use the jmo-documentation-updater skill to:
-- Organize new documentation about [topic]
-- Check for duplicate content in [docs]
-- Consolidate fragmented documentation
-- Archive outdated [doc-name].md
-```
-
-**The skill ensures:**
-
-- No duplicate content across files
-- Proper linking in docs/index.md
-- Compliance with Perfect Documentation Structure
-- Markdownlint validation passes
-- Proper .gitignore handling for drafts
-
-### Prefer Editing Over Creating
-
-**ALWAYS prefer editing existing files to creating new ones:**
-
-```markdown
-# ❌ WRONG: Create new SNYK_SETUP.md
-echo "# Snyk Setup" > docs/SNYK_SETUP.md
-
-# ✅ CORRECT: Add section to existing USER_GUIDE.md
-# Edit docs/USER_GUIDE.md:
-## Tool-Specific Configuration
-
-### Snyk (SCA)
-...
-```
-
-**Rationale:**
-
-- **Reduced navigation:** Users know where to look (USER_GUIDE.md)
-- **Easier maintenance:** One file to update, not scattered docs
-- **Better search:** Ctrl+F finds everything in one place
-- **No link rot:** Fewer files = fewer broken links
-
-### Summary Guidelines
-
-**Limit AI-generated summaries unless explicitly requested:**
-
-- ❌ Don't create "SESSION_SUMMARY.md" after completing tasks
-- ❌ Don't create "WORK_LOG.md" tracking daily progress
-- ❌ Don't create "ANALYSIS_REPORT.md" for every investigation
-- ✅ DO update CHANGELOG.md with user-facing changes
-- ✅ DO add troubleshooting sections to USER_GUIDE.md
-- ✅ DO document new patterns in docs/examples/
-
-**If user requests a summary:**
-
-1. **Provide in conversation** — Don't create a file unless explicitly requested
-2. **Ask before creating** — "Should I add this to CHANGELOG.md or create a new doc?"
-3. **Use .claude/ for drafts** — If unsure, put in `.claude/draft-summary.md` first
-4. **Invoke jmo-documentation-updater** — After user approves, use skill to organize
-
-## Perfect Documentation Structure
-
-**IMPORTANT: This section defines the canonical documentation structure. Follow this guidance to avoid creating unnecessary or duplicate documentation files.**
-
-### Documentation Hierarchy and Purpose
-
-```text
-/
-├── README.md                          # Project overview, "Three Ways to Get Started", badges
-├── QUICKSTART.md                      # 5-minute guide for all user types
-├── CONTRIBUTING.md                    # Contributor setup and workflow
-├── CHANGELOG.md                       # Version history with user-facing changes
-├── ROADMAP.md                         # Future plans and completed milestones
-├── SAMPLE_OUTPUTS.md                  # Example outputs from real scans
-├── TEST.md                            # Testing guide for contributors
-└── docs/
-    ├── index.md                       # Documentation hub with all links
-    ├── USER_GUIDE.md                  # Comprehensive reference guide
-    ├── DOCKER_README.md               # Docker deep-dive (variants, CI/CD, troubleshooting)
-    ├── docs/DOCKER_README.md # Complete beginner Docker tutorial
-    ├── WIZARD_IMPLEMENTATION.md       # Wizard implementation details (for contributors)
-    ├── RELEASE.md                     # Release process for maintainers
-    ├── MCP_SETUP.md                   # MCP server setup instructions
-    ├── examples/
-    │   ├── README.md                  # Examples index
-    │   ├── wizard-examples.md         # Wizard workflows and patterns
-    │   ├── scan_from_tsv.md           # TSV scanning tutorial
-    │   └── github-actions-docker.yml  # CI/CD examples
-    ├── screenshots/
-    │   └── README.md                  # Screenshot capture guide
-    └── schemas/
-        └── common_finding.v1.json     # CommonFinding data schema
-```
-
-### User Journey-Based Documentation
-
-**Entry points based on user persona:**
-
-1. **Complete Beginner** (Never used security tools)
-   - Start: [docs/DOCKER_README.md#quick-start-absolute-beginners](docs/DOCKER_README.md#quick-start-absolute-beginners) OR run `jmotools wizard`
-   - Reason: Zero-installation path with step-by-step guidance
-   - Next: [docs/examples/wizard-examples.md](docs/examples/wizard-examples.md)
-
-2. **Developer** (Familiar with CLI, wants quick start)
-   - Start: [QUICKSTART.md](QUICKSTART.md)
-   - Reason: Fast 5-minute setup with platform-specific instructions
-   - Next: [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for deeper features
-
-3. **DevOps/SRE** (CI/CD integration focus)
-   - Start: [docs/DOCKER_README.md](docs/DOCKER_README.md)
-   - Reason: Container-based deployment, CI/CD patterns
-   - Next: [docs/examples/github-actions-docker.yml](docs/examples/github-actions-docker.yml)
-
-4. **Advanced User** (Fine-tuning, custom profiles)
-   - Start: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
-   - Reason: Comprehensive configuration reference
-   - See also: `jmo.yml` examples and per-tool overrides
-
-5. **Contributor** (Code contributions)
-   - Start: [CONTRIBUTING.md](CONTRIBUTING.md)
-   - Reason: Dev setup, coding standards, PR workflow
-   - Next: [TEST.md](TEST.md) and [docs/RELEASE.md](docs/RELEASE.md)
-
-### Documentation Content Guidelines
-
-**README.md:**
-
-- Purpose: First impression, project value proposition, quick navigation
-- Content: Badges, "Three Ways to Get Started" (Wizard/Docker/Local), features overview, tool list
-- Length: Moderate (current length is appropriate)
-- Updates: When major features added (Docker, Wizard) or key workflows change
-
-**QUICKSTART.md:**
-
-- Purpose: Get ANY user from zero to first scan in 5 minutes
-- Content: Platform-specific setup (Linux/WSL/macOS), basic scan commands, result viewing
-- Length: Concise, scannable
-- Updates: When default workflows or commands change
-
-**docs/USER_GUIDE.md:**
-
-- Purpose: Comprehensive reference for all features
-- Content: Configuration reference, CLI synopsis, profiles, suppressions, CI troubleshooting
-- Length: Long (current length appropriate)
-- Updates: When new CLI flags, config options, or features added
-
-**docs/DOCKER_README.md:**
-
-- Purpose: Complete Docker guide for all skill levels
-- Content: Image variants, CI/CD patterns, troubleshooting, security considerations
-- Length: Medium-long
-- Updates: When new Docker images, variants, or CI examples added
-
-**docs/DOCKER_README.md#quick-start-absolute-beginners:**
-
-- Purpose: Hand-holding tutorial for absolute beginners
-- Content: Docker installation, first scan, understanding results, common scenarios
-- Length: Long (step-by-step requires detail)
-- Updates: When beginner workflows or Docker commands change
-
-**docs/examples/wizard-examples.md:**
-
-- Purpose: Wizard workflows and use cases
-- Content: Interactive mode, non-interactive mode, artifact generation, common patterns
-- Length: Medium
-- Updates: When wizard features or flags added
-
-**docs/index.md:**
-
-- Purpose: Documentation hub - single source of truth for all doc links
-- Content: Links to all docs organized by purpose, quick links, FAQ
-- Length: Short (just navigation)
-- Updates: When ANY documentation file is added, moved, or removed
-
-### What NOT to Create
-
-**Do NOT create these files unless explicitly requested:**
-
-1. ❌ `ARCHITECTURE.md` - Architecture covered in CLAUDE.md
-2. ❌ `INSTALLATION.md` - Installation covered in QUICKSTART.md and README.md
-3. ❌ `CONFIGURATION.md` - Configuration covered in USER_GUIDE.md
-4. ❌ `API.md` - Not applicable (CLI tool, not library)
-5. ❌ `TUTORIAL.md` - Tutorials split appropriately (Docker beginner, Wizard examples)
-6. ❌ `FAQ.md` - FAQ embedded in docs/index.md and relevant guides
-7. ❌ `DEVELOPMENT.md` - Development covered in CONTRIBUTING.md
-8. ❌ Additional `ROADMAP_*.md` files - Single ROADMAP.md is sufficient
-9. ❌ Multiple beginner guides - One comprehensive Docker guide is enough
-10. ❌ Duplicate quick starts - QUICKSTART.md is the canonical 5-minute guide
-
-### Documentation Update Triggers
-
-**When to update documentation:**
-
-1. **New Major Feature** (Docker images, Wizard, etc.)
-   - Update: README.md, QUICKSTART.md, docs/index.md, relevant deep-dive docs
-   - Add: Examples in docs/examples/ if workflow patterns emerge
-   - Update: CHANGELOG.md with user-facing changes
-
-2. **New CLI Flag or Command**
-   - Update: docs/USER_GUIDE.md (CLI synopsis section)
-   - Update: QUICKSTART.md if it affects basic workflows
-   - Update: docs/examples/ if it enables new patterns
-
-3. **New Configuration Option**
-   - Update: docs/USER_GUIDE.md (Configuration section)
-   - Update: Example `jmo.yml` snippets throughout docs
-   - Update: docs/index.md FAQ if commonly asked
-
-4. **Breaking Change**
-   - Update: ALL affected documentation files
-   - Add: Migration guide in CHANGELOG.md
-   - Add: Deprecation notices in relevant docs
-
-5. **Bug Fix (User-Facing)**
-   - Update: CHANGELOG.md only
-   - Update: Troubleshooting sections if behavior change affects common issues
-
-6. **Contributor Workflow Change**
-   - Update: CONTRIBUTING.md, TEST.md, docs/RELEASE.md
-   - Update: CLAUDE.md if dev setup changes
-
-### Documentation Cross-References
-
-**Always use relative links:**
-
-- ✅ `[docs/USER_GUIDE.md](docs/USER_GUIDE.md)`
-- ❌ `https://github.com/jimmy058910/jmo-security-repo/blob/main/docs/USER_GUIDE.md` (breaks in forks)
-
-**Link to section anchors when helpful:**
-
-- ✅ `[USER_GUIDE.md — Configuration](docs/USER_GUIDE.md#configuration-jmoyml)`
-- ✅ `[QUICKSTART.md — Docker Mode](QUICKSTART.md#docker-mode)`
-
-**Maintain bi-directional links:**
-
-- README.md → QUICKSTART.md → USER_GUIDE.md → docs/examples/
-- Each doc should link back to docs/index.md or README.md
-
-### Documentation Maintenance Checklist
-
-When adding/updating documentation:
-
-- [ ] Updated docs/index.md with new links
-- [ ] Updated CHANGELOG.md if user-facing
-- [ ] Verified all cross-references still work
-- [ ] Checked for duplicate content (consolidate if found)
-- [ ] Used relative links (no absolute GitHub URLs)
-- [ ] Added section to table of contents if new doc
-- [ ] Ran markdownlint (`make pre-commit-run`)
-- [ ] Verified examples are copy-pasteable
-- [ ] Updated CLAUDE.md if documentation structure changed
-
-## Key Files Reference
+### Key Files
 
 | File | Purpose |
 |------|---------|
-| `scripts/cli/jmo.py` | Main CLI entry point (scan/report/ci) |
-| `scripts/cli/jmotools.py` | Wrapper commands (wizard, fast, balanced, full, setup) |
-| `scripts/cli/wizard.py` | Interactive wizard implementation |
-| `scripts/core/normalize_and_report.py` | Aggregation engine, deduplication, enrichment |
-| `scripts/core/config.py` | Config loader for jmo.yml |
-| `scripts/core/common_finding.py` | CommonFinding schema and fingerprinting |
-| `scripts/core/adapters/*.py` | Tool output parsers |
-| `scripts/core/reporters/*.py` | Output formatters (JSON/MD/YAML/HTML/SARIF) |
-| `scripts/dev/update_versions.py` | **Version management automation (v0.6.1+)** |
-| `jmo.yml` | Main configuration file |
-| `versions.yaml` | **Central tool version registry (v0.6.1+)** |
-| `pyproject.toml` | Python package metadata and build config |
-| `Makefile` | Developer shortcuts for common tasks |
-| `Dockerfile`, `Dockerfile.slim`, `Dockerfile.alpine` | Docker image variants |
-| `.pre-commit-config.yaml` | Pre-commit hook configuration |
-| `.github/workflows/ci.yml` | Primary CI: tests, quick checks, nightly lint |
-| `.github/workflows/release.yml` | Release automation: PyPI + Docker builds |
-| `.github/workflows/version-check.yml` | **Weekly version consistency checks (v0.6.1+)** |
-| `.github/dependabot.yml` | **Automated dependency updates (v0.6.1+)** |
+| `scripts/cli/jmo.py` | Main CLI entry point |
+| `scripts/cli/tool_installer.py` | Tool installation orchestrator |
+| `scripts/cli/installers/` | Strategy pattern installers (pip, npm, brew, binary) |
+| `scripts/core/normalize_and_report.py` | Aggregation engine |
+| `scripts/core/common_finding.py` | CommonFinding schema v1.2.0 |
+| `scripts/core/schema_validator.py` | JSON schema validation for findings |
+| `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
+| `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
+| `scripts/core/adapters/*.py` | Tool output parsers (28 adapters) |
+| `jmo.yml` | Main configuration |
+| `versions.yaml` | Tool version registry |
+| `Dockerfile*` | Docker variants (main=deep, .fast, .slim, .balanced) |
+
+## Scan Profiles
+
+> **Canonical Reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) - Complete tool lists, tool selection philosophy, content-triggered execution, scan type matrices, dependencies, manual installation
+
+| Profile | Tools | Time | Use Case | Docker Tag |
+|---------|-------|------|----------|------------|
+| `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
+| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
+| `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
+| `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
+
+**Note:** Main `Dockerfile` = deep variant. See PROFILES_AND_TOOLS.md for complete tool lists.
+
+## Development Guidelines
+
+### Adding New Tool Adapter
+
+1. Create `scripts/core/adapters/<tool>_adapter.py` with `@adapter_plugin` decorator
+2. **Use `safe_load_json_file()` from `scripts/core/adapters/common.py`** for consistent JSON loading
+3. **Use `map_tool_severity()` from `scripts/core/common_finding.py`** for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if tool has custom severity levels)
+4. Map tool output to CommonFinding schema
+5. Add test in `tests/adapters/test_<tool>_adapter.py`
+6. Update documentation
+
+**Naming Convention (CRITICAL):**
+
+- `PluginMetadata.name` must use **underscores**, matching the adapter filename (e.g., `dependency_check_adapter.py` → `name="dependency_check"`)
+- `PluginMetadata.tool_name` is the actual binary name (can use hyphens, e.g., `tool_name="dependency-check"`)
+
+**Important:** Adapters should NOT handle compliance enrichment. Return raw findings and let `normalize_and_report.py` handle enrichment centrally via `enrich_findings_with_compliance()`. This single-pass batch operation is more efficient than per-adapter enrichment.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow.
+
+### Tool Invocation Security
+
+```python
+# CORRECT: List arguments (default shell=False)
+subprocess.run(["trivy", "image", image_name], capture_output=True)
+
+# WRONG: String with shell=True - SECURITY VULNERABILITY
+subprocess.run(f"trivy image {image_name}", shell=True)  # CWE-78
+```
+
+### Logging
+
+- JSON logs by default (stderr)
+- Human logs with `--human-logs`
+- Never log to stdout
+
+### Testing
+
+```bash
+# Recommended: Parallel execution (3-5x faster)
+make test-fast                                     # Fastest dev loop (no coverage)
+make test-parallel                                 # With coverage (CI-like)
+pytest -n auto tests/unit/                         # Direct pytest with parallelism
+
+# Manual pytest (sequential)
+pytest tests/unit/ -v                              # Unit tests
+pytest tests/adapters/ -v                          # Adapter tests
+pytest --cov=scripts --cov-report=term-missing     # With coverage
+```
+
+**Cross-Platform Testing (CRITICAL):** Tests MUST pass on Windows, Linux, and macOS. See below for platform-specific patterns.
+
+See [TEST.md](TEST.md) for complete testing guide.
+
+## Configuration
+
+### Core Files
+
+| File | Purpose |
+|------|---------|
+| `jmo.yml` | Main JMo config (referenced throughout codebase) |
+| `jmo.suppress.yml` | Suppression rules |
+| `versions.yaml` | Tool versions (referenced by CI) |
+| `.pre-commit-config.yaml` | Pre-commit hooks |
+
+### jmo.yml Key Settings
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `default_profile` | string | Default scan profile (fast/balanced/deep) |
+| `fail_on` | string | Severity threshold for CI failures |
+| `retries` | int | Retries for failed tool invocations |
+| `per_tool` | object | Per-tool configuration overrides |
+| `profiles` | object | Custom profile definitions with tool lists |
+| `email` | object | Email notification settings (SMTP, recipients) |
+| `schedule` | object | Scheduled scan configuration (cron expressions) |
+| `deduplication.similarity_threshold` | float | Cross-tool clustering threshold (0.5-1.0, default: 0.65) |
+
+See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
+
+## CI/CD & Release
+
+### GitHub Actions Example
+
+```yaml
+- run: jmo scan --repo . --results-dir results-baseline
+- run: jmo scan --repo . --results-dir results-current
+- run: jmo diff results-baseline/ results-current/ --format md > diff.md
+```
+
+### Release Process
+
+**CRITICAL:** All tools MUST be updated before release (CI enforces this).
+
+1. **Automated (Recommended):** GitHub Actions → Automated Release workflow
+2. **Manual:** Update tools → bump version → tag → push
+
+See [docs/RELEASE.md](docs/RELEASE.md) for details.
+
+## Docker & Registries
+
+### Volume Mounts (CRITICAL)
+
+```bash
+# MUST mount .jmo/history.db for scan persistence
+docker run -v $PWD/.jmo:/scan/.jmo -v $PWD:/scan ghcr.io/jimmy058910/jmo-security:balanced scan
+```
+
+### Container Registries
+
+| Registry | Image | Purpose |
+|----------|-------|---------|
+| **GHCR** (Primary) | `ghcr.io/jimmy058910/jmo-security` | CI/CD, unlimited pulls |
+| **Docker Hub** | `jmogaming/jmo-security` | Discoverability |
+| **ECR Public** | `public.ecr.aws/m2d8u2k1/jmo-security` | AWS users |
+
+See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Tests failing | `make test --maxfail=1`, check coverage ≥85% |
+| Tool not found | `jmo tools check`, then `jmo tools install` |
+| Tool startup crash | `jmo tools clean --force && jmo tools install <tool>` |
+| Pre-commit fails | `make fmt`, `make lint` |
+| CI failures | Check matrix tests, coverage, pre-commit |
+| SQLite locked | `jmo history vacuum` |
+| Docker persistence | Mount `.jmo/` volume |
+
+See [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) for detailed solutions.
+
+## Platform Notes (Windows/WSL)
+
+### Path Handling
+
+- Use forward slashes in code (`path/to/file`), Windows handles both
+- Docker paths require POSIX format (`/c/Projects/...` or `/mnt/c/...`)
+
+### Docker Desktop
+
+- Enable WSL 2 backend for performance
+- Mount volumes: `-v "$(pwd):/scan"` works in Git Bash/WSL
+
+### Pre-commit
+
+- Install via pip, not system package manager
+- May need `git config core.autocrlf false` for line ending issues
+
+### Cross-Platform Testing Guidelines
+
+**Test Infrastructure (tests/conftest.py):**
+
+```python
+# Platform detection
+from tests.conftest import IS_WINDOWS, IS_LINUX, IS_MACOS
+
+# Skip decorators - use when tests require platform-specific features
+from tests.conftest import skip_on_windows, unix_only
+
+@skip_on_windows  # Skips on Windows with clear reason
+def test_unix_permissions():
+    pass
+
+# Error pattern matching
+from tests.conftest import is_command_not_found_error
+assert is_command_not_found_error(stderr)  # Works on all platforms
+
+# Subprocess mocking helpers
+from tests.conftest import mock_subprocess_success
+mock_run.return_value = mock_subprocess_success(returncode=0)
+```
+
+**Common Cross-Platform Issues:**
+
+| Issue | Windows Behavior | Solution |
+|-------|-----------------|----------|
+| `chmod` permissions | No effect (no Unix execute bits) | Skip test with `@skip_on_windows` |
+| Command not found errors | "cannot find the file specified" | Use `is_command_not_found_error()` |
+| Path separators | Uses backslashes `\` | Use `pathlib.Path` or forward slashes |
+| File locking | More aggressive locking | Close files before deletion |
+| Process spawning | Different error codes | Test for `!= 0` not specific codes |
+| HOME env variable | Windows uses `USERPROFILE`, not `HOME` | Use `Path.home()` or mock it (see below) |
+
+**HOME Directory Mocking (Cross-Platform):**
+
+```python
+# WRONG: Only works on Unix (HOME not set on Windows)
+monkeypatch.setenv("HOME", str(tmp_path))
+
+# CORRECT: Works on Windows, Linux, and macOS
+from pathlib import Path
+monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+```
+
+**Subprocess Testing Rules:**
+
+1. **ALWAYS mock `subprocess.run`** for tests calling external commands
+2. **Never assume tools exist** - mock `tool_exists()` and `find_tool()` together
+3. **Use `shell=False`** in production code (security requirement)
+4. **Verify mock signatures** - test `shell=False` explicitly
+
+```python
+# CORRECT: Mock both tool existence checks
+with (
+    patch("module.tool_exists", return_value=True),
+    patch("module.find_tool", return_value="/usr/bin/tool"),
+    patch("subprocess.run") as mock_run,
+):
+    mock_run.return_value = mock_subprocess_success()
+    # ... test code ...
+
+# WRONG: Missing find_tool mock causes None command
+with patch("module.tool_exists", return_value=True):
+    # find_tool returns None → command is None → hangs or crashes
+```
+
+**pytest-timeout Safety Net:**
+
+- All tests have 120s timeout (configurable in pyproject.toml)
+- Use `@pytest.mark.timeout(300)` for legitimately slow tests
+- Set `PYTEST_TIMEOUT=0` to disable during local debugging
+
+## Documentation References
+
+**Core:** [README.md](README.md) | [QUICKSTART.md](QUICKSTART.md) | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [TEST.md](TEST.md)
+
+**Features:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md) | [docs/VERSION_MANAGEMENT.md](docs/VERSION_MANAGEMENT.md) | [docs/DOCKER_README.md](docs/DOCKER_README.md) | [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md)
+
+**Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
+
+**Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
+
+**Plans:** [docs/plans/README.md](docs/plans/README.md)
+
+## Notes
+
+- Agent threads reset cwd between bash calls - use absolute paths
+- Avoid emojis unless explicitly requested
+- CommonFinding v1.2.0 includes compliance mappings (OWASP, CWE, CIS, NIST, PCI DSS, MITRE)
+- Cross-tool dedup uses similarity clustering (configurable via `deduplication.similarity_threshold`, default: 0.65)
+- Only create documentation with long-term value; use `.claude/` for temporary work
+- **Scope Discipline:** When given a bounded task (e.g., "root directory files only", "just these 13 bugs"), stay strictly within that scope — do not expand to adjacent directories, related systems, or broader reorganizations unless explicitly asked
+
+For detailed information on any topic, refer to the documentation links above.

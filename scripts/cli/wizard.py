@@ -20,482 +20,285 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import cast
 
 from scripts.core.exceptions import ToolExecutionException
-from scripts.core.config import load_config
 from scripts.cli.cpu_utils import get_cpu_count
 from scripts.cli.wizard_generators import (
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
 )
-from scripts.core.telemetry import send_event
+from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
+from scripts.cli.wizard_flows.validators import (
+    validate_path,
+    validate_url,
+    detect_iac_type,
+    validate_k8s_context,
+    detect_docker,
+    check_docker_running,
+)
+from scripts.cli.wizard_flows.command_builder import build_command_parts
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_repo_target as _configure_repo,
+    configure_image_target as _configure_image,
+    configure_iac_target as _configure_iac,
+    configure_url_target as _configure_url,
+    configure_gitlab_target as _configure_gitlab,
+    configure_k8s_target as _configure_k8s,
+)
+from scripts.cli.wizard_flows.telemetry_helper import (
+    send_wizard_telemetry,
+)
+
+# Phase 1 refactor: Import from new modules
+from scripts.cli.wizard_flows.config_models import (
+    TargetConfig,
+    WizardConfig,
+)
+from scripts.cli.wizard_flows.profile_config import (
+    PROFILES,
+    WIZARD_TOTAL_STEPS,
+    TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
+    calculate_time_estimate,
+    format_time_range,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,  # noqa: F401 - re-exported for tests
+    safe_print as _safe_print,
+    prompt_text as _prompt_text,
+    prompt_choice as _prompt_choice,
+    select_mode as _select_mode,
+)
+
+# Phase 2 refactor: Import tool checking from tool_checker module
+# Used functions
+from scripts.cli.wizard_flows.tool_checker import (
+    check_tools_for_profile,
+    _check_policy_tools,
+)
+
+# Re-exported for backward compatibility with tests
+from scripts.cli.wizard_flows.tool_checker import (  # noqa: F401
+    _auto_fix_tools,
+    _show_all_fix_commands,
+    _collect_missing_dependencies,
+    _install_missing_tools_interactive,
+    _install_opa_tool,
+)
+
+# Phase 3 refactor: Import trend analysis from trend_flow module
+# Used functions
+from scripts.cli.wizard_flows.trend_flow import (
+    offer_trend_analysis_after_scan,
+    _run_trend_command_interactive,
+)
+
+# Re-exported for backward compatibility with tests
+from scripts.cli.wizard_flows.trend_flow import (  # noqa: F401
+    explore_trends_interactive,
+    _compare_scans_interactive,
+    _export_trends_interactive,
+    _explain_metrics_interactive,
+    TrendArgs,
+    CompareArgs,
+)
+
+# Phase 4 refactor: Import diff wizard from diff_flow module
+from scripts.cli.wizard_flows.diff_flow import (
+    run_diff_wizard_impl,
+)
+
+# Re-exported for backward compatibility with tests
+from scripts.cli.wizard_flows.diff_flow import DiffArgs  # noqa: F401
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Version (from pyproject.toml)
-__version__ = "0.7.1"
 
-# Profile definitions with resource estimates (v0.5.0)
-PROFILES = {
-    "fast": {
-        "name": "Fast",
-        "description": "Speed + coverage with 3 best-in-breed tools",
-        "tools": ["trufflehog", "semgrep", "trivy"],
-        "timeout": 300,
-        "threads": 8,
-        "est_time": "5-8 minutes",
-        "use_case": "Pre-commit checks, quick validation, CI/CD gate",
-    },
-    "balanced": {
-        "name": "Balanced",
-        "description": "Production-ready with DAST and comprehensive coverage",
-        "tools": [
-            "trufflehog",
-            "semgrep",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-            "nuclei",
-        ],
-        "timeout": 600,
-        "threads": 4,
-        "est_time": "15-20 minutes",
-        "use_case": "CI/CD pipelines, regular audits, production scans",
-    },
-    "deep": {
-        "name": "Deep",
-        "description": "Maximum coverage with runtime monitoring and fuzzing",
-        "tools": [
-            "trufflehog",
-            "noseyparker",
-            "semgrep",
-            "bandit",
-            "syft",
-            "trivy",
-            "checkov",
-            "hadolint",
-            "zap",
-            "nuclei",
-            "falco",
-            "afl++",
-        ],
-        "timeout": 900,
-        "threads": 2,
-        "est_time": "30-60 minutes",
-        "use_case": "Security audits, compliance scans, pre-release validation",
-    },
+# Backward-compat: _get_db_path delegates to WizardConfig.get_db_path
+def _get_db_path() -> Path:
+    """Get the history database path, respecting custom --db flag.
+
+    Returns:
+        Path to SQLite history database
+    """
+    return WizardConfig.get_db_path()
+
+
+# Version (from pyproject.toml)
+__version__ = "1.0.0"
+
+# Standardized error message templates for tool issues
+# These provide consistent, actionable guidance for different failure scenarios
+TOOL_ISSUE_TEMPLATES: dict[str, str] = {
+    "linux_only": """  [{icon}] {tool}: Linux only
+       {reason}
+       Options:
+         - Docker: {docker_command}
+         - WSL2: wsl --install -d Ubuntu
+       Docs: {docs_url}""",
+    "no_windows_binary": """  [{icon}] {tool}: No Windows binary available
+       {reason}
+       Options:
+         - Docker: {docker_command}
+         - WSL2: wsl --install -d Ubuntu
+       Docs: {docs_url}""",
+    "missing_dependency": """  [{icon}] {tool}: {dependency} {min_version}+ required
+       {tool} requires {dependency} to run.
+       Auto-fix will install {dependency} automatically.
+       Manual: {manual_command}""",
+    "startup_crash": """  [!!] {tool}: STARTUP CRASH - {error_type}
+       Error: {error_detail}
+       Fix: jmo tools clean --force && jmo tools install {tool}
+            (Reinstalls in isolated virtual environment)""",
+    "docker_only": """  [{icon}] {tool}: Docker required
+       {reason}
+       Docker command:
+         {docker_command}
+       Docs: {docs_url}""",
+    "windows_registry": """  [{icon}] {tool}: Windows configuration required
+       {reason}
+       Fix (requires admin PowerShell):
+         {registry_command}
+       Then reboot and re-run: jmo tools install {tool}
+       Alternative: Use Docker mode""",
 }
 
 
-def _colorize(text: str, color: str) -> str:
-    """Apply ANSI color codes."""
-    colors = {
-        "blue": "\x1b[36m",
-        "green": "\x1b[32m",
-        "yellow": "\x1b[33m",
-        "red": "\x1b[31m",
-        "bold": "\x1b[1m",
-        "reset": "\x1b[0m",
-    }
-    return f"{colors.get(color, '')}{text}{colors['reset']}"
+# Use PromptHelper from wizard_flows for all prompting/coloring
+_prompter = PromptHelper()
+_colorize = _prompter.colorize
+_print_header = _prompter.print_header
+_print_step = _prompter.print_step
 
 
-def _print_header(text: str) -> None:
-    """Print a formatted section header."""
-    print()
-    print(_colorize("=" * 70, "blue"))
-    print(_colorize(text.center(70), "bold"))
-    print(_colorize("=" * 70, "blue"))
-    print()
+# Use PromptHelper.prompt_yes_no for all yes/no prompts
+_prompt_yes_no = _prompter.prompt_yes_no  # Direct delegation to PromptHelper
 
 
-def _print_step(step: int, total: int, text: str) -> None:
-    """Print a step indicator."""
-    print(_colorize(f"\n[Step {step}/{total}] {text}", "blue"))
+# Use Docker detection from validators module
+_detect_docker = detect_docker
+_check_docker_running = check_docker_running
 
 
-def _prompt_choice(
-    question: str, choices: List[Tuple[str, str]], default: str = ""
-) -> str:
-    """
-    Prompt user for a choice from a list.
+# Use TargetDetector from wizard_flows for all target detection
+_detector = TargetDetector()
+_detect_repos_in_dir = _detector.detect_repos  # Backward compat alias
 
-    Args:
-        question: Question to ask
-        choices: List of (key, description) tuples
-        default: Default choice key
-
-    Returns:
-        Selected choice key
-    """
-    print(f"\n{question}")
-    for key, desc in choices:
-        prefix = ">" if key == default else " "
-        print(f"  {prefix} [{key}] {desc}")
-
-    if default:
-        prompt = f"Choice [{default}]: "
-    else:
-        prompt = "Choice: "
-
-    while True:
-        choice = input(prompt).strip().lower()
-        if not choice and default:
-            return default
-        if any(c[0] == choice for c in choices):
-            return choice
-        print(
-            _colorize(
-                f"Invalid choice. Please enter one of: {', '.join(c[0] for c in choices)}",
-                "red",
-            )
-        )
+# Use validators from wizard_flows module (imported above)
+_validate_path = validate_path
+_validate_url = validate_url
+_detect_iac_type = detect_iac_type
+_validate_k8s_context = validate_k8s_context
 
 
-def _prompt_text(question: str, default: str = "") -> str:
-    """Prompt user for text input."""
-    if default:
-        prompt = f"{question} [{default}]: "
-    else:
-        prompt = f"{question}: "
+def _apply_target_preset(
+    target_config: TargetConfig, target_type: str, target: str
+) -> None:
+    """Apply preset target values to a TargetConfig.
 
-    value = input(prompt).strip()
-    return value if value else default
-
-
-def _prompt_yes_no(question: str, default: bool = True) -> bool:
-    """Prompt user for yes/no."""
-    default_str = "Y/n" if default else "y/N"
-    while True:
-        response = input(f"{question} [{default_str}]: ").strip().lower()
-        if not response:
-            return default
-        if response in ("y", "yes"):
-            return True
-        if response in ("n", "no"):
-            return False
-        print(_colorize("Please enter 'y' or 'n'", "red"))
-
-
-def _detect_docker() -> bool:
-    """Check if Docker is available."""
-    return shutil.which("docker") is not None
-
-
-def _check_docker_running() -> bool:
-    """Check if Docker daemon is running."""
-    try:
-        result = subprocess.run(  # nosec B603 - controlled command
-            ["docker", "info"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-            check=False,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-
-
-def _get_cpu_count() -> int:
-    """
-    Get CPU count for thread recommendations.
-
-    DEPRECATED: Use scripts.cli.cpu_utils.get_cpu_count() instead.
-    This function is kept for backward compatibility in tests.
-    """
-    return get_cpu_count()
-
-
-def _detect_repos_in_dir(path: Path) -> List[Path]:
-    """Detect git repositories in a directory."""
-    repos: List[Path] = []
-    if not path.exists() or not path.is_dir():
-        return repos
-
-    # Check immediate subdirectories
-    for item in path.iterdir():
-        if item.is_dir() and (item / ".git").exists():
-            repos.append(item)
-
-    return repos
-
-
-def _validate_url(url: str) -> bool:
-    """
-    Validate URL is reachable with a quick HEAD request.
+    Maps the target_type and target CLI arguments to the appropriate
+    TargetConfig fields for non-interactive wizard runs.
 
     Args:
-        url: URL to validate
-
-    Returns:
-        True if URL is reachable, False otherwise
+        target_config: TargetConfig instance to populate
+        target_type: One of 'repo', 'image', 'iac', 'url'
+        target: The target value (path, image name, or URL)
     """
-    import urllib.request
-    import urllib.error
+    target_config.type = target_type
 
-    try:
-        # Quick HEAD request with 2s timeout
-        req = urllib.request.Request(url, method="HEAD")
-        with urllib.request.urlopen(
-            req, timeout=2
-        ) as response:  # nosec B310 - user-provided URL, validated
-            is_ok: bool = response.status == 200
-            return is_ok
-    except urllib.error.HTTPError as e:
-        # HTTP errors (4xx, 5xx)
-        logger.debug(f"URL validation failed for {url}: HTTP {e.code} {e.reason}")
-        return False
-    except urllib.error.URLError as e:
-        # Network/DNS errors
-        logger.debug(
-            f"URL validation failed for {url}: {type(e.reason).__name__}: {e.reason}"
-        )
-        return False
-    except TimeoutError:
-        # Timeout errors
-        logger.debug(f"URL validation timeout for {url}: exceeded 2s")
-        return False
-    except Exception as e:
-        # Unexpected errors
-        logger.debug(f"URL validation failed for {url}: {type(e).__name__}: {e}")
-        return False
+    if target_type == "repo":
+        # Repo target: can be a single repo path or directory containing repos
+        path = Path(target).resolve()
+        if path.is_file():
+            # If it's a file, assume it's a targets file
+            target_config.repo_mode = "targets"
+            target_config.repo_path = str(path)
+        elif path.is_dir():
+            # Check if it's a git repo or a directory of repos
+            if (path / ".git").exists():
+                # Single repo
+                target_config.repo_mode = "repo"
+                target_config.repo_path = str(path)
+            else:
+                # Directory containing repos
+                target_config.repo_mode = "repos-dir"
+                target_config.repo_path = str(path)
+        else:
+            # Path doesn't exist yet - treat as repos-dir
+            target_config.repo_mode = "repos-dir"
+            target_config.repo_path = str(path)
 
+    elif target_type == "image":
+        # Container image: can be a single image or a file with image list
+        if Path(target).is_file():
+            target_config.images_file = target
+        else:
+            # Assume it's an image name (e.g., nginx:latest, bkimminich/juice-shop)
+            target_config.image_name = target
 
-def _detect_iac_type(file_path: Path) -> str:
-    """
-    Auto-detect IaC type from file extension and content.
+    elif target_type == "iac":
+        # IaC target: path to IaC files
+        path = Path(target).resolve()
+        target_config.iac_path = str(path)
+        # Try to auto-detect IaC type
+        if path.exists():
+            target_config.iac_type = _detect_iac_type(path) or "terraform"
+        else:
+            target_config.iac_type = "terraform"  # Default
 
-    Args:
-        file_path: Path to IaC file
-
-    Returns:
-        Detected type: terraform, cloudformation, or k8s-manifest
-    """
-    # Check extension first
-    suffix = file_path.suffix.lower()
-    name = file_path.name.lower()
-
-    if ".tfstate" in name or suffix == ".tfstate":
-        return "terraform"
-
-    if "cloudformation" in name or "cfn" in name:
-        return "cloudformation"
-
-    # For YAML files, check content
-    if suffix in (".yaml", ".yml"):
-        try:
-            content = file_path.read_text(encoding="utf-8")
-            # K8s manifests have apiVersion and kind
-            if "apiVersion:" in content and "kind:" in content:
-                return "k8s-manifest"
-            # CloudFormation templates have AWSTemplateFormatVersion or Resources
-            if "AWSTemplateFormatVersion:" in content or "Resources:" in content:
-                return "cloudformation"
-        except (IOError, OSError) as e:
-            # File read can fail: permissions, I/O errors
-            logger.debug(
-                f"Skipping IaC file {file_path}: I/O error - {type(e).__name__}: {e}"
-            )
-        except UnicodeDecodeError as e:
-            # Encoding issues
-            logger.debug(
-                f"Skipping IaC file {file_path}: encoding error at position {e.start}"
-            )
-
-    # Default to k8s-manifest for YAML files
-    if suffix in (".yaml", ".yml"):
-        return "k8s-manifest"
-
-    # Default
-    return "terraform"
-
-
-def _validate_k8s_context(context: str) -> bool:
-    """
-    Validate Kubernetes context exists.
-
-    Args:
-        context: K8s context name or 'current' for current context
-
-    Returns:
-        True if context exists, False otherwise
-    """
-    try:
-        # Check if kubectl is available
-        if not shutil.which("kubectl"):
-            return False
-
-        # Get contexts list
-        result = subprocess.run(  # nosec B603 - controlled command
-            ["kubectl", "config", "get-contexts", "-o", "name"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-
-        if result.returncode != 0:
-            return False
-
-        # If "current" requested, any context is fine
-        if context == "current":
-            return len(result.stdout.strip()) > 0
-
-        # Check if specific context exists
-        contexts = result.stdout.strip().split("\n")
-        return context in contexts
-    except subprocess.TimeoutExpired:
-        logger.debug(f"K8s context validation timeout for {context}: exceeded 5s")
-        return False
-    except FileNotFoundError:
-        logger.debug("K8s context validation failed: kubectl not found")
-        return False
-    except Exception as e:
-        logger.debug(
-            f"K8s context validation failed for {context}: {type(e).__name__}: {e}"
-        )
-        return False
-
-
-def _validate_path(path_str: str, must_exist: bool = True) -> Optional[Path]:
-    """Validate and expand a path."""
-    try:
-        path = Path(path_str).expanduser().resolve()
-        if must_exist and not path.exists():
-            return None
-        return path
-    except (OSError, ValueError, TypeError, RuntimeError, Exception) as e:
-        # Path expansion/resolution can fail:
-        # - OSError: permissions, invalid paths, symlink loops
-        # - ValueError: invalid characters, empty path
-        # - TypeError: non-string input
-        # - RuntimeError: infinite symlink recursion
-        # - Exception: catch-all for unexpected errors (defensive)
-        logger.debug(f"Failed to resolve path '{path_str}': {e}")
-        return None
-
-
-class TargetConfig:
-    """Target-specific configuration for a single scan target."""
-
-    def __init__(self) -> None:
-        self.type: str = "repo"  # repo, image, iac, url, gitlab, k8s
-
-        # Repository targets (existing)
-        self.repo_mode: str = ""  # repo, repos-dir, targets, tsv
-        self.repo_path: str = ""
-        self.tsv_path: str = ""
-        self.tsv_dest: str = "repos-tsv"
-
-        # Container image targets (v0.6.0+)
-        self.image_name: str = ""
-        self.images_file: str = ""
-
-        # IaC targets (v0.6.0+)
-        self.iac_type: str = ""  # terraform, cloudformation, k8s-manifest
-        self.iac_path: str = ""
-
-        # Web URL targets (v0.6.0+)
-        self.url: str = ""
-        self.urls_file: str = ""
-        self.api_spec: str = ""
-
-        # GitLab targets (v0.6.0+)
-        self.gitlab_url: str = "https://gitlab.com"
-        self.gitlab_token: str = ""  # Prefer GITLAB_TOKEN env var
-        self.gitlab_repo: str = ""  # group/repo format
-        self.gitlab_group: str = ""
-
-        # Kubernetes targets (v0.6.0+)
-        self.k8s_context: str = ""
-        self.k8s_namespace: str = ""
-        self.k8s_all_namespaces: bool = False
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "type": self.type,
-            "repo_mode": self.repo_mode,
-            "repo_path": self.repo_path,
-            "tsv_path": self.tsv_path,
-            "tsv_dest": self.tsv_dest,
-            "image_name": self.image_name,
-            "images_file": self.images_file,
-            "iac_type": self.iac_type,
-            "iac_path": self.iac_path,
-            "url": self.url,
-            "urls_file": self.urls_file,
-            "api_spec": self.api_spec,
-            "gitlab_url": self.gitlab_url,
-            "gitlab_token": "***" if self.gitlab_token else "",  # Redact token
-            "gitlab_repo": self.gitlab_repo,
-            "gitlab_group": self.gitlab_group,
-            "k8s_context": self.k8s_context,
-            "k8s_namespace": self.k8s_namespace,
-            "k8s_all_namespaces": self.k8s_all_namespaces,
-        }
-
-
-class WizardConfig:
-    """Configuration collected by the wizard."""
-
-    def __init__(self) -> None:
-        self.profile: str = "balanced"
-        self.use_docker: bool = False
-        self.target: TargetConfig = TargetConfig()
-        self.results_dir: str = "results"
-        self.threads: Optional[int] = None
-        self.timeout: Optional[int] = None
-        self.fail_on: str = ""
-        self.allow_missing_tools: bool = True
-        self.human_logs: bool = True
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "profile": self.profile,
-            "use_docker": self.use_docker,
-            "target": self.target.to_dict(),
-            "results_dir": self.results_dir,
-            "threads": self.threads,
-            "timeout": self.timeout,
-            "fail_on": self.fail_on,
-            "allow_missing_tools": self.allow_missing_tools,
-            "human_logs": self.human_logs,
-        }
+    elif target_type == "url":
+        # URL target: can be a single URL or file with URLs
+        if Path(target).is_file():
+            target_config.urls_file = target
+        elif target.startswith(("http://", "https://")):
+            target_config.url = target
+        else:
+            # Assume it's a URL without protocol
+            target_config.url = f"https://{target}"
 
 
 def select_profile() -> str:
-    """Step 1: Select scanning profile."""
-    _print_step(1, 6, "Select Scanning Profile")
+    """Step 1: Select scanning profile.
+
+    Shows profile comparison to help users differentiate between profiles (Fix 3.1).
+    """
+    _print_step(1, WIZARD_TOTAL_STEPS, "Select Scanning Profile")
 
     print("\nAvailable profiles:")
     for key, info in PROFILES.items():
         name = cast(str, info["name"])
-        tools = cast(List[str], info["tools"])
+        tools = cast(list[str], info["tools"])
         print(f"\n  {_colorize(name, 'bold')} ({key})")
-        print(f"    Tools: {', '.join(tools[:3])}{'...' if len(tools) > 3 else ''}")
-        print(f"    Time: {info['est_time']}")
+        print(f"    {info['description']}")
+        print(f"    Time: {info['est_time']} | Tools: {len(tools)}")
         print(f"    Use: {info['use_case']}")
 
-    choices = [(k, str(PROFILES[k]["name"])) for k in PROFILES.keys()]
-    return _prompt_choice("\nSelect profile:", choices, default="balanced")
+    # Profile comparison to help differentiate (Fix 3.1)
+    print("\n" + _colorize("Profile comparison:", "bold"))
+    print("  fast (8):      Core scanners - quick pre-commit checks")
+    print("  slim (14):     fast + Cloud/IaC (prowler, kubescape)")
+    print("  balanced (18): slim + Full SCA + DAST (zap, cdxgen)")
+    print("  deep (28):     balanced + Fuzzing, compliance, advanced")
+
+    # Use _select_mode helper (simpler than full custom display)
+    return _select_mode(
+        "Profiles",
+        [(k, str(PROFILES[k]["name"])) for k in PROFILES.keys()],
+        default="balanced",
+    )
 
 
 def select_execution_mode(force_docker: bool = False) -> bool:
-    """Step 2: Select execution mode (native vs Docker)."""
-    _print_step(2, 6, "Select Execution Mode")
+    """Step 2: Select execution mode (native vs Docker).
+
+    Uses numbered selection for consistency (Fix 3.2).
+    """
+    _print_step(2, WIZARD_TOTAL_STEPS, "Select Execution Mode")
 
     has_docker = _detect_docker()
     docker_running = _check_docker_running() if has_docker else False
@@ -510,12 +313,9 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         print("Docker mode: " + _colorize("FORCED (via --docker flag)", "green"))
         return True
 
-    print("\nExecution modes:")
-    print("  [native] Use locally installed tools")
-    print("  [docker] Use pre-built Docker image (zero installation)")
-    print()
+    # Show status
     print(
-        f"Docker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}"
+        f"\nDocker available: {_colorize('Yes' if has_docker else 'No', 'green' if has_docker else 'red')}"
     )
     if has_docker:
         print(
@@ -530,9 +330,25 @@ def select_execution_mode(force_docker: bool = False) -> bool:
         print(_colorize("\nDocker daemon not running. Using native mode.", "yellow"))
         return False
 
-    use_docker = _prompt_yes_no(
-        "\nUse Docker mode? (Recommended for first-time users)", default=True
-    )
+    # Numbered selection for consistency (Fix 3.2)
+    print("\nExecution mode:")
+    print("  1. Docker - Isolated container (recommended)")
+    print("  2. Native - Direct tool execution")
+
+    choice = input("\nChoice [1]: ").strip()
+    use_docker = choice != "2"  # Default to Docker (1)
+
+    # Warn Windows users about limited native tool availability
+    if not use_docker and sys.platform == "win32":
+        print(
+            _colorize(
+                "\n⚠️  Note: Some security tools (lynis, shellcheck, falco) may not be "
+                "available natively on Windows. Consider using Docker mode for full "
+                "tool coverage, or run 'jmo tools check' to verify installed tools.",
+                "yellow",
+            )
+        )
+
     return use_docker
 
 
@@ -543,427 +359,84 @@ def select_target_type() -> str:
     Returns:
         Target type string
     """
-    _print_step(3, 7, "Select Scan Target Type")
+    _print_step(3, WIZARD_TOTAL_STEPS, "Select Scan Target Type")
 
-    print("\nTarget types:")
-    print("  [repo]    Repositories (local Git repos)")
-    print("  [image]   Container images (Docker/OCI)")
-    print("  [iac]     Infrastructure as Code (Terraform/CloudFormation/K8s)")
-    print("  [url]     Web applications and APIs (DAST)")
-    print("  [gitlab]  GitLab repositories (remote)")
-    print("  [k8s]     Kubernetes clusters (live)")
-
-    choices = [
-        ("repo", "Repositories"),
-        ("image", "Container images"),
-        ("iac", "Infrastructure as Code"),
-        ("url", "Web applications/APIs"),
-        ("gitlab", "GitLab integration"),
-        ("k8s", "Kubernetes clusters"),
-    ]
-    # Default to repo (most common use case)
-    return _prompt_choice("\nSelect target type:", choices, default="repo")
-
-
-def configure_repo_target() -> TargetConfig:
-    """
-    Step 3b-repo: Configure repository scanning.
-
-    Returns:
-        TargetConfig for repository targets
-    """
-    _print_step(4, 7, "Configure Repository Target")
-
-    config = TargetConfig()
-    config.type = "repo"
-
-    print("\nRepository modes:")
-    print("  [repo]      Single repository")
-    print("  [repos-dir] Directory with multiple repos (most common)")
-    print("  [targets]   File listing repo paths")
-    print("  [tsv]       Clone from TSV file")
-
-    choices = [
-        ("repo", "Single repository"),
-        ("repos-dir", "Directory with repos"),
-        ("targets", "Targets file"),
-        ("tsv", "Clone from TSV"),
-    ]
-    mode = _prompt_choice("\nSelect mode:", choices, default="repos-dir")
-    config.repo_mode = mode
-
-    if mode == "tsv":
-        config.tsv_path = _prompt_text("Path to TSV file", default="./repos.tsv")
-        config.tsv_dest = _prompt_text("Clone destination", default="repos-tsv")
-        return config
-
-    # For other modes, prompt for path
-    prompts = {
-        "repo": "Path to repository",
-        "repos-dir": "Path to repos directory",
-        "targets": "Path to targets file",
-    }
-
-    while True:
-        path = _prompt_text(prompts[mode], default="." if mode == "repos-dir" else "")
-        if not path:
-            print(_colorize("Path cannot be empty", "red"))
-            continue
-
-        validated = _validate_path(path, must_exist=True)
-        if validated:
-            # For repos-dir, show detected repos
-            if mode == "repos-dir":
-                repos = _detect_repos_in_dir(validated)
-                if repos:
-                    print(
-                        f"\n{_colorize(f'Found {len(repos)} repositories:', 'green')}"
-                    )
-                    for repo in repos[:5]:
-                        print(f"  - {repo.name}")
-                    if len(repos) > 5:
-                        print(f"  ... and {len(repos) - 5} more")
-                else:
-                    print(_colorize("Warning: No git repositories detected", "yellow"))
-                    if not _prompt_yes_no("Continue anyway?", default=False):
-                        continue
-
-            config.repo_path = str(validated)
-            return config
-
-        print(_colorize(f"Path not found: {path}", "red"))
-
-
-def configure_image_target() -> TargetConfig:
-    """
-    Step 3b-image: Configure container image scanning.
-
-    Returns:
-        TargetConfig for container image targets
-    """
-    _print_step(4, 7, "Configure Container Image Target")
-
-    config = TargetConfig()
-    config.type = "image"
-
-    print("\nContainer image modes:")
-    print("  [single] Scan a single image")
-    print("  [batch]  Scan images from file")
-
-    mode = _prompt_choice(
-        "\nSelect mode:",
-        [("single", "Single image"), ("batch", "Batch file")],
-        default="single",
-    )
-
-    if mode == "single":
-        config.image_name = _prompt_text(
-            "Container image (e.g., nginx:latest, myregistry.io/app:v1.0)",
-            default="nginx:latest",
-        )
-        print(_colorize(f"Will scan: {config.image_name}", "green"))
-    else:
-        while True:
-            path = _prompt_text("Path to images file", default="./images.txt")
-            validated = _validate_path(path, must_exist=True)
-            if validated:
-                config.images_file = str(validated)
-                # Show preview
-                lines = validated.read_text(encoding="utf-8").splitlines()
-                images = [
-                    line.strip()
-                    for line in lines
-                    if line.strip() and not line.startswith("#")
-                ]
-                print(f"\n{_colorize(f'Found {len(images)} images:', 'green')}")
-                for img in images[:5]:
-                    print(f"  - {img}")
-                if len(images) > 5:
-                    print(f"  ... and {len(images) - 5} more")
-                break
-            print(_colorize(f"File not found: {path}", "red"))
-
-    return config
-
-
-def configure_iac_target() -> TargetConfig:
-    """
-    Step 3b-iac: Configure IaC file scanning.
-
-    Returns:
-        TargetConfig for IaC targets
-    """
-    _print_step(4, 7, "Configure Infrastructure as Code Target")
-
-    config = TargetConfig()
-    config.type = "iac"
-
-    # Prompt for file path first
-    while True:
-        path = _prompt_text(
-            "Path to IaC file (.tfstate, .yaml, .json)",
-            default="./infrastructure.tfstate",
-        )
-        validated = _validate_path(path, must_exist=True)
-        if validated:
-            config.iac_path = str(validated)
-
-            # Auto-detect type
-            detected_type = _detect_iac_type(validated)
-            print(
-                f"\n{_colorize(f'Detected type: {detected_type}', 'green')} (based on file)"
-            )
-
-            # Confirm or override
-            print("\nIaC file types:")
-            print("  [terraform]      Terraform state file (.tfstate)")
-            print("  [cloudformation] CloudFormation template (.yaml/.json)")
-            print("  [k8s-manifest]   Kubernetes manifest (.yaml)")
-
-            choices = [
-                ("terraform", "Terraform state"),
-                ("cloudformation", "CloudFormation"),
-                ("k8s-manifest", "Kubernetes manifest"),
-            ]
-            iac_type = _prompt_choice(
-                "\nConfirm or override type:", choices, default=detected_type
-            )
-            config.iac_type = iac_type
-
-            return config
-
-        print(_colorize(f"File not found: {path}", "red"))
-
-
-def configure_url_target() -> TargetConfig:
-    """
-    Step 3b-url: Configure web URL scanning.
-
-    Returns:
-        TargetConfig for web URL targets
-    """
-    _print_step(4, 7, "Configure Web Application/API Target")
-
-    config = TargetConfig()
-    config.type = "url"
-
-    print("\nWeb application modes:")
-    print("  [single] Scan a single URL")
-    print("  [batch]  Scan URLs from file")
-    print("  [api]    Scan API from OpenAPI spec")
-
-    mode = _prompt_choice(
-        "\nSelect mode:",
-        [("single", "Single URL"), ("batch", "Batch file"), ("api", "API spec")],
-        default="single",
-    )
-
-    if mode == "single":
-        while True:
-            url = _prompt_text("Web application URL", default="https://example.com")
-            # Validate URL is reachable
-            print(_colorize("Validating URL...", "blue"))
-            if _validate_url(url):
-                print(_colorize(f"URL is reachable: {url}", "green"))
-                config.url = url
-                break
-            else:
-                print(
-                    _colorize(
-                        f"Warning: URL not reachable (timeout or error): {url}",
-                        "yellow",
-                    )
-                )
-                if _prompt_yes_no("Use this URL anyway?", default=False):
-                    config.url = url
-                    break
-
-    elif mode == "batch":
-        while True:
-            path = _prompt_text("Path to URLs file", default="./urls.txt")
-            validated = _validate_path(path, must_exist=True)
-            if validated:
-                config.urls_file = str(validated)
-                # Show preview
-                lines = validated.read_text(encoding="utf-8").splitlines()
-                urls = [
-                    line.strip()
-                    for line in lines
-                    if line.strip() and not line.startswith("#")
-                ]
-                print(f"\n{_colorize(f'Found {len(urls)} URLs:', 'green')}")
-                for url in urls[:5]:
-                    print(f"  - {url}")
-                if len(urls) > 5:
-                    print(f"  ... and {len(urls) - 5} more")
-                break
-            print(_colorize(f"File not found: {path}", "red"))
-
-    else:  # api
-        config.api_spec = _prompt_text(
-            "OpenAPI spec URL or file path", default="./openapi.yaml"
-        )
-        print(_colorize(f"Will scan API spec: {config.api_spec}", "green"))
-
-    return config
-
-
-def configure_gitlab_target() -> TargetConfig:
-    """
-    Step 3b-gitlab: Configure GitLab scanning.
-
-    Returns:
-        TargetConfig for GitLab targets
-    """
-    _print_step(4, 7, "Configure GitLab Target")
-
-    config = TargetConfig()
-    config.type = "gitlab"
-
-    # GitLab URL
-    config.gitlab_url = _prompt_text("GitLab URL", default="https://gitlab.com")
-
-    # GitLab token (check env first)
-    env_token = os.getenv("GITLAB_TOKEN")
-    if env_token:
-        print(f"\n{_colorize('GitLab token found in GITLAB_TOKEN env var', 'green')}")
-        config.gitlab_token = env_token
-    else:
-        print(_colorize("\nWarning: GITLAB_TOKEN env var not set", "yellow"))
-        print("For security, it's recommended to set GITLAB_TOKEN env var")
-        token = _prompt_text("GitLab access token (or press Enter to skip)")
-        if token:
-            config.gitlab_token = token
-        else:
-            print(
-                _colorize(
-                    "Note: Scan will fail without token. Set GITLAB_TOKEN before running.",
-                    "yellow",
-                )
-            )
-
-    # Repo or group
-    print("\nGitLab scope:")
-    print("  [repo]  Single repository (group/repo)")
-    print("  [group] Entire group (all repos)")
-
-    mode = _prompt_choice(
-        "\nSelect scope:",
-        [("repo", "Single repo"), ("group", "Entire group")],
+    # Use _select_mode helper
+    return _select_mode(
+        "Target types",
+        [
+            ("repo", "Repositories (local Git repos)"),
+            ("image", "Container images (Docker/OCI)"),
+            ("iac", "Infrastructure as Code (Terraform/CloudFormation/K8s)"),
+            ("url", "Web applications and APIs (DAST)"),
+            ("gitlab", "GitLab repositories (remote)"),
+            ("k8s", "Kubernetes clusters (live)"),
+        ],
         default="repo",
     )
 
-    if mode == "repo":
-        config.gitlab_repo = _prompt_text(
-            "Repository (format: group/repo)", default="mygroup/myrepo"
-        )
-        print(
-            _colorize(
-                f"Will scan GitLab repo: {config.gitlab_url}/{config.gitlab_repo}",
-                "green",
-            )
-        )
-    else:
-        config.gitlab_group = _prompt_text("Group name", default="mygroup")
-        print(
-            _colorize(
-                f"Will scan all repos in group: {config.gitlab_url}/{config.gitlab_group}",
-                "green",
-            )
-        )
 
-    return config
+# Target configuration functions now delegated to target_configurators module
+def configure_repo_target() -> TargetConfig:
+    """Configure repository scanning (delegates to target_configurators module)."""
+    config = _configure_repo(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
+
+
+def configure_image_target() -> TargetConfig:
+    """Configure container image scanning (delegates to target_configurators module)."""
+    config = _configure_image(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
+
+
+def configure_iac_target() -> TargetConfig:
+    """Configure IaC file scanning (delegates to target_configurators module)."""
+    config = _configure_iac(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
+
+
+def configure_url_target() -> TargetConfig:
+    """Configure web URL scanning (delegates to target_configurators module)."""
+    config = _configure_url(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
+
+
+def configure_gitlab_target() -> TargetConfig:
+    """Configure GitLab scanning (delegates to target_configurators module)."""
+    config = _configure_gitlab(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
 def configure_k8s_target() -> TargetConfig:
-    """
-    Step 3b-k8s: Configure Kubernetes scanning.
-
-    Returns:
-        TargetConfig for Kubernetes targets
-    """
-    _print_step(4, 7, "Configure Kubernetes Target")
-
-    config = TargetConfig()
-    config.type = "k8s"
-
-    # Check if kubectl is available
-    if not shutil.which("kubectl"):
-        print(
-            _colorize(
-                "Warning: kubectl not found. Install kubectl to scan K8s clusters.",
-                "yellow",
-            )
-        )
-        config.k8s_context = "current"
-        config.k8s_namespace = "default"
-        return config
-
-    # Context
-    while True:
-        context = _prompt_text(
-            "Kubernetes context (or 'current' for default)", default="current"
-        )
-        # Validate context
-        if _validate_k8s_context(context):
-            print(_colorize(f"Context validated: {context}", "green"))
-            config.k8s_context = context
-            break
-        else:
-            print(_colorize(f"Warning: Context not found: {context}", "yellow"))
-            if _prompt_yes_no("Use this context anyway?", default=False):
-                config.k8s_context = context
-                break
-
-    # Namespace
-    print("\nNamespace scope:")
-    print("  [single] Single namespace")
-    print("  [all]    All namespaces")
-
-    mode = _prompt_choice(
-        "\nSelect scope:",
-        [("single", "Single namespace"), ("all", "All namespaces")],
-        default="single",
-    )
-
-    if mode == "single":
-        config.k8s_namespace = _prompt_text("Namespace name", default="default")
-        print(
-            _colorize(
-                f"Will scan namespace: {config.k8s_context}/{config.k8s_namespace}",
-                "green",
-            )
-        )
-    else:
-        config.k8s_all_namespaces = True
-        print(
-            _colorize(
-                f"Will scan all namespaces in context: {config.k8s_context}", "green"
-            )
-        )
-
-    return config
+    """Configure Kubernetes scanning (delegates to target_configurators module)."""
+    config = _configure_k8s(TargetConfig, _print_step, WIZARD_TOTAL_STEPS)
+    return config  # type: ignore[no-any-return]  # Delegated function returns TargetConfig
 
 
-def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]:
+def configure_advanced(profile: str) -> tuple[int | None, int | None, str]:
     """
     Step 5: Configure advanced options.
 
     Returns:
         Tuple of (threads, timeout, fail_on)
     """
-    _print_step(5, 7, "Advanced Configuration")
+    _print_step(5, WIZARD_TOTAL_STEPS, "Advanced Configuration")
 
     profile_info = PROFILES[profile]
-    cpu_count = _get_cpu_count()
+    cpu_count = get_cpu_count()
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_tools = cast(List[str], profile_info["tools"])
+
+    # Use ToolManager for consistent tool counts (single source of truth)
+    from scripts.cli.tool_manager import ToolManager
+
+    tm = ToolManager()
+    summary = tm.get_tool_summary(profile)
 
     print("\nProfile defaults:")
     print(f"  Threads: {profile_threads}")
     print(f"  Timeout: {profile_timeout}s")
-    print(f"  Tools: {len(profile_tools)}")
+    print(f"  Tools: {summary.platform_applicable} ({summary.execution_ready} ready)")
     print(f"\nSystem: {cpu_count} CPU cores detected")
 
     if not _prompt_yes_no("\nCustomize advanced settings?", default=False):
@@ -1002,68 +475,92 @@ def configure_advanced(profile: str) -> Tuple[Optional[int], Optional[int], str]
     return threads, timeout, fail_on.upper() if fail_on else ""
 
 
+def _display_target_details(target: TargetConfig) -> None:
+    """Display target configuration details."""
+    if target.type == "repo":
+        print(f"    Mode: {target.repo_mode}")
+        if target.repo_mode == "tsv":
+            print(f"    TSV: {target.tsv_path}")
+            print(f"    Dest: {target.tsv_dest}")
+        else:
+            print(f"    Path: {target.repo_path}")
+    elif target.type == "image":
+        if target.image_name:
+            print(f"    Image: {target.image_name}")
+        elif target.images_file:
+            print(f"    Images file: {target.images_file}")
+    elif target.type == "iac":
+        print(f"    Type: {target.iac_type}")
+        print(f"    File: {target.iac_path}")
+    elif target.type == "url":
+        if target.url:
+            print(f"    URL: {target.url}")
+        elif target.urls_file:
+            print(f"    URLs file: {target.urls_file}")
+        elif target.api_spec:
+            print(f"    API spec: {target.api_spec}")
+    elif target.type == "gitlab":
+        print(f"    GitLab URL: {target.gitlab_url}")
+        print(f"    Token: {'***' if target.gitlab_token else 'NOT SET'}")
+        if target.gitlab_repo:
+            print(f"    Repo: {target.gitlab_repo}")
+        elif target.gitlab_group:
+            print(f"    Group: {target.gitlab_group}")
+    elif target.type == "k8s":
+        print(f"    Context: {target.k8s_context}")
+        if target.k8s_all_namespaces:
+            print("    Namespaces: ALL")
+        else:
+            print(f"    Namespace: {target.k8s_namespace}")
+
+
 def review_and_confirm(config: WizardConfig) -> bool:
     """
     Step 6: Review configuration and confirm.
 
+    Shows dynamic time estimate based on available tools (Fix 2.2 - Issue #10).
+    Uses ToolStatusSummary for consistent tool counts across wizard/scan.
+
     Returns:
         True if user confirms, False otherwise
     """
-    _print_step(6, 7, "Review Configuration")
+    _print_step(6, WIZARD_TOTAL_STEPS, "Review Configuration")
 
     profile_info = PROFILES[config.profile]
     profile_name = cast(str, profile_info["name"])
     profile_threads = cast(int, profile_info["threads"])
     profile_timeout = cast(int, profile_info["timeout"])
-    profile_est_time = cast(str, profile_info["est_time"])
-    profile_tools = cast(List[str], profile_info["tools"])
+
+    # Use ToolStatusSummary for consistent counts (single source of truth)
+    try:
+        from scripts.cli.tool_manager import ToolManager
+
+        tm = ToolManager()
+        summary = tm.get_tool_summary(config.profile)
+
+        # Get execution-ready tools for time estimate
+        tool_statuses = tm.check_profile(config.profile)
+        available_tools = [
+            name for name, status in tool_statuses.items() if status.execution_ready
+        ]
+
+        # Calculate dynamic estimate based on available tools
+        min_time, max_time = calculate_time_estimate(available_tools)
+        dynamic_estimate = format_time_range(min_time, max_time)
+    except Exception:
+        # Fallback to static estimate if tool check fails
+        summary = None
+        profile_tools = cast(list[str], profile_info["tools"])
+        available_tools = profile_tools
+        dynamic_estimate = cast(str, profile_info["est_time"])
 
     print("\n" + _colorize("Configuration Summary:", "bold"))
     print(f"  Profile: {_colorize(profile_name, 'green')} ({config.profile})")
     print(f"  Mode: {_colorize('Docker' if config.use_docker else 'Native', 'green')}")
     print(f"  Target Type: {_colorize(config.target.type, 'green')}")
 
-    # Target-specific details
-    if config.target.type == "repo":
-        print(f"    Mode: {config.target.repo_mode}")
-        if config.target.repo_mode == "tsv":
-            print(f"    TSV: {config.target.tsv_path}")
-            print(f"    Dest: {config.target.tsv_dest}")
-        else:
-            print(f"    Path: {config.target.repo_path}")
-
-    elif config.target.type == "image":
-        if config.target.image_name:
-            print(f"    Image: {config.target.image_name}")
-        elif config.target.images_file:
-            print(f"    Images file: {config.target.images_file}")
-
-    elif config.target.type == "iac":
-        print(f"    Type: {config.target.iac_type}")
-        print(f"    File: {config.target.iac_path}")
-
-    elif config.target.type == "url":
-        if config.target.url:
-            print(f"    URL: {config.target.url}")
-        elif config.target.urls_file:
-            print(f"    URLs file: {config.target.urls_file}")
-        elif config.target.api_spec:
-            print(f"    API spec: {config.target.api_spec}")
-
-    elif config.target.type == "gitlab":
-        print(f"    GitLab URL: {config.target.gitlab_url}")
-        print(f"    Token: {'***' if config.target.gitlab_token else 'NOT SET'}")
-        if config.target.gitlab_repo:
-            print(f"    Repo: {config.target.gitlab_repo}")
-        elif config.target.gitlab_group:
-            print(f"    Group: {config.target.gitlab_group}")
-
-    elif config.target.type == "k8s":
-        print(f"    Context: {config.target.k8s_context}")
-        if config.target.k8s_all_namespaces:
-            print("    Namespaces: ALL")
-        else:
-            print(f"    Namespace: {config.target.k8s_namespace}")
+    # Display target-specific details using helper
+    _display_target_details(config.target)
 
     print(f"  Results: {config.results_dir}")
 
@@ -1075,142 +572,34 @@ def review_and_confirm(config: WizardConfig) -> bool:
     if config.fail_on:
         print(f"  Fail on: {_colorize(config.fail_on, 'yellow')}")
 
-    print(f"\n  Estimated time: {_colorize(profile_est_time, 'yellow')}")
-    print(f"  Tools: {len(profile_tools)} ({', '.join(profile_tools[:3])}...)")
+    # Show tools available vs platform-applicable (consistent denominator)
+    if summary:
+        print(
+            f"\n  Tools: {_colorize(f'{summary.execution_ready}/{summary.platform_applicable}', 'green')} ready"
+        )
+        # Show content-triggered tools info if any
+        if summary.content_triggered:
+            print(
+                f"         ({len(summary.content_triggered)} content-triggered: {', '.join(summary.content_triggered)})"
+            )
+    else:
+        # Fallback display
+        print(f"\n  Tools: {_colorize(str(len(available_tools)), 'green')} available")
+
+    # Show first 3 available tools
+    tools_preview = ", ".join(available_tools[:3])
+    if len(available_tools) > 3:
+        tools_preview += "..."
+    print(f"         ({tools_preview})")
+
+    # Dynamic time estimate
+    print(f"  Estimated time: {_colorize(dynamic_estimate, 'yellow')}")
 
     return _prompt_yes_no("\nProceed with scan?", default=True)
 
 
-def _build_command_parts(config: WizardConfig) -> list[str]:
-    """
-    Build command parts as a list (shared by generate_command and generate_command_list).
-
-    Returns list of command components for both string and list representations.
-    """
-    # Load profile info (threads/timeout may be overridden below)
-    profile_info = PROFILES[config.profile]  # noqa: F841 - used for reference
-
-    if config.use_docker:
-        # Docker command
-        cmd_parts = ["docker", "run", "--rm"]
-
-        # Volume mounts (only for file-based targets)
-        # Convert to absolute paths for Docker volume mounts
-        if config.target.type == "repo":
-            if config.target.repo_path:
-                repo_abs = str(Path(config.target.repo_path).resolve())
-                cmd_parts.extend(["-v", f"{repo_abs}:/scan"])
-        elif config.target.type == "iac":
-            if config.target.iac_path:
-                iac_abs = str(Path(config.target.iac_path).resolve())
-                cmd_parts.extend(["-v", f"{iac_abs}:/scan/iac-file"])
-
-        # Results mount (convert to absolute path)
-        results_abs = str(Path(config.results_dir).resolve())
-        cmd_parts.extend(["-v", f"{results_abs}:/results"])
-
-        # Image and base command
-        cmd_parts.append("ghcr.io/jimmy058910/jmo-security:latest")
-        cmd_parts.append("scan")
-
-        # Target-specific flags
-        if config.target.type == "repo":
-            if config.target.repo_mode in ("repo", "repos-dir"):
-                cmd_parts.extend(["--repos-dir", "/scan"])
-        elif config.target.type == "image":
-            if config.target.image_name:
-                cmd_parts.extend(["--image", config.target.image_name])
-        elif config.target.type == "iac":
-            cmd_parts.append(f"--{config.target.iac_type.replace('-', '-')}")
-            cmd_parts.append("/scan/iac-file")
-        elif config.target.type == "url":
-            if config.target.url:
-                cmd_parts.extend(["--url", config.target.url])
-        elif config.target.type == "gitlab":
-            if config.target.gitlab_repo:
-                cmd_parts.extend(["--gitlab-repo", config.target.gitlab_repo])
-            if config.target.gitlab_token:
-                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
-        elif config.target.type == "k8s":
-            if config.target.k8s_context:
-                cmd_parts.extend(["--k8s-context", config.target.k8s_context])
-            if config.target.k8s_namespace:
-                cmd_parts.extend(["--k8s-namespace", config.target.k8s_namespace])
-
-        cmd_parts.extend(["--results", "/results"])
-        cmd_parts.extend(["--profile", config.profile])
-
-    else:
-        # Native command
-        cmd_parts = ["jmotools", config.profile]
-
-        # Target-specific flags
-        if config.target.type == "repo":
-            if config.target.repo_mode == "repo":
-                cmd_parts.extend(["--repo", config.target.repo_path])
-            elif config.target.repo_mode == "repos-dir":
-                cmd_parts.extend(["--repos-dir", config.target.repo_path])
-            elif config.target.repo_mode == "targets":
-                cmd_parts.extend(["--targets", config.target.repo_path])
-            elif config.target.repo_mode == "tsv":
-                cmd_parts.extend(["--tsv", config.target.tsv_path])
-                if hasattr(config.target, "tsv_dest") and config.target.tsv_dest:
-                    cmd_parts.extend(["--dest", config.target.tsv_dest])
-        elif config.target.type == "image":
-            if config.target.image_name:
-                cmd_parts.extend(["--image", config.target.image_name])
-        elif config.target.type == "iac":
-            cmd_parts.append(f"--{config.target.iac_type}")
-            cmd_parts.append(config.target.iac_path)
-        elif config.target.type == "url":
-            if config.target.url:
-                cmd_parts.extend(["--url", config.target.url])
-        elif config.target.type == "gitlab":
-            if config.target.gitlab_repo:
-                cmd_parts.extend(["--gitlab-repo", config.target.gitlab_repo])
-            if config.target.gitlab_token:
-                cmd_parts.extend(["--gitlab-token", config.target.gitlab_token])
-        elif config.target.type == "k8s":
-            if config.target.k8s_context:
-                cmd_parts.extend(["--k8s-context", config.target.k8s_context])
-            if config.target.k8s_namespace:
-                cmd_parts.extend(["--k8s-namespace", config.target.k8s_namespace])
-
-        # Advanced options (check both config.advanced and direct attributes for backward compat)
-        threads = (
-            getattr(config.advanced, "threads", None)
-            if hasattr(config, "advanced") and config.advanced
-            else getattr(config, "threads", None)
-        )
-        timeout = (
-            getattr(config.advanced, "timeout", None)
-            if hasattr(config, "advanced") and config.advanced
-            else getattr(config, "timeout", None)
-        )
-        fail_on = (
-            getattr(config.advanced, "fail_on", None)
-            if hasattr(config, "advanced") and config.advanced
-            else getattr(config, "fail_on", None)
-        )
-        results_dir = getattr(config, "results_dir", "results")
-        allow_missing_tools = getattr(config, "allow_missing_tools", False)
-        human_logs = getattr(config, "human_logs", False)
-
-        if results_dir:
-            cmd_parts.extend(["--results-dir", results_dir])
-        # Include threads/timeout if explicitly set (non-None)
-        if threads is not None:
-            cmd_parts.extend(["--threads", str(threads)])
-        if timeout is not None:
-            cmd_parts.extend(["--timeout", str(timeout)])
-        if fail_on:
-            cmd_parts.extend(["--fail-on", fail_on.upper()])
-        if allow_missing_tools:
-            cmd_parts.append("--allow-missing-tools")
-        if human_logs:
-            cmd_parts.append("--human-logs")
-
-    return cmd_parts
+# Use command builder from wizard_flows module
+_build_command_parts = build_command_parts
 
 
 def generate_command(config: WizardConfig) -> str:
@@ -1232,14 +621,108 @@ def generate_command_list(config: WizardConfig) -> list[str]:
     return _build_command_parts(config)
 
 
-def execute_scan(config: WizardConfig) -> int:
+def _print_scan_completion_summary(
+    config: WizardConfig,
+    exit_code: int,
+    tools_executed: int | None = None,
+    tools_skipped_platform: list[str] | None = None,
+    tools_skipped_content: list[str] | None = None,
+) -> None:
+    """Print a completion summary after scan finishes.
+
+    Shows what ran, what was skipped, and where results are.
+    Helps Windows users understand why some tools were skipped.
+
+    Args:
+        config: Wizard configuration
+        exit_code: Scan exit code (0=clean, 1=findings, other=error)
+        tools_executed: Number of tools that ran (if known)
+        tools_skipped_platform: Tools skipped due to platform incompatibility
+        tools_skipped_content: Tools skipped due to no relevant content
+    """
+    print()
+    print("═" * 54)
+    print(_colorize("  Scan Completion Summary", "bold"))
+    print("═" * 54)
+    print()
+    print(f"  Profile: {config.profile}")
+    print(f"  Target: {config.target.type} - {_get_target_display(config)}")
+    print(f"  Exit code: {exit_code}")
+    print()
+
+    # Show tool execution info if available
+    if tools_executed is not None:
+        try:
+            from scripts.cli.tool_manager import ToolManager
+
+            tm = ToolManager()
+            summary = tm.get_tool_summary(config.profile)
+            total = summary.platform_applicable
+            print(f"  Tools executed: {tools_executed}/{total}")
+        except ImportError:
+            print(f"  Tools executed: {tools_executed}")
+
+    if tools_skipped_platform:
+        print(f"  Skipped (platform): {', '.join(tools_skipped_platform)}")
+
+    if tools_skipped_content:
+        print(f"  Skipped (no content): {', '.join(tools_skipped_content)}")
+
+    print()
+    print(f"  Results: {config.results_dir}/")
+    print()
+
+    # Status message based on actual finding count (not just exit code)
+    finding_count = 0
+    findings_file = Path(config.results_dir) / "summaries" / "findings.json"
+    if findings_file.exists():
+        import json as _json
+
+        try:
+            data = _json.loads(findings_file.read_text(encoding="utf-8"))
+            finding_count = len(data.get("findings", []))
+        except (OSError, ValueError):
+            pass
+
+    if finding_count > 0:
+        print(
+            _colorize(f"  Scan completed - {finding_count} findings detected", "yellow")
+        )
+    elif exit_code == 0:
+        print(_colorize("  Scan completed - no findings", "green"))
+    else:
+        print(_colorize(f"  Scan completed with errors (code: {exit_code})", "red"))
+
+    print("═" * 54)
+
+
+def _get_target_display(config: WizardConfig) -> str:
+    """Get a display string for the target configuration."""
+    target = config.target
+    if target.type == "repo":
+        return target.repo_path or "."
+    elif target.type == "image":
+        return target.image_name or target.images_file or "N/A"
+    elif target.type == "iac":
+        return target.iac_path or "N/A"
+    elif target.type == "url":
+        return target.url or target.urls_file or "N/A"
+    else:
+        return "N/A"
+
+
+def execute_scan(config: WizardConfig, yes: bool = False) -> int:
     """
     Step 7: Execute the scan.
+
+    Args:
+        config: Wizard configuration
+        yes: Skip prompts and use defaults
 
     Returns:
         Exit code from scan
     """
-    _print_step(7, 7, "Execute Scan")
+    _print_step(7, WIZARD_TOTAL_STEPS, "Execute Scan")
 
     command = generate_command(config)
 
@@ -1247,7 +730,8 @@ def execute_scan(config: WizardConfig) -> int:
     print(_colorize(f"  {command}", "green"))
     print()
 
-    if not _prompt_yes_no("Execute now?", default=True):
+    # In non-interactive mode, auto-execute without prompting
+    if not yes and not _prompt_yes_no("Execute now?", default=True):
         print("\nCommand saved. You can run it later:")
         print(f"  {command}")
         return 0
@@ -1257,35 +741,53 @@ def execute_scan(config: WizardConfig) -> int:
 
     # Execute via subprocess
     try:
-        if config.use_docker:
-            # Docker execution - use list for security (no shell=True)
-            command_list = generate_command_list(config)
-            result = subprocess.run(
-                command_list,
-                shell=False,  # IMPORTANT: shell=False prevents command injection
-                check=False,
-            )
-            # Print results guide after scan completes
-            if result.returncode == 0 or result.returncode == 1:
-                print(
-                    "\n"
-                    + _colorize(
-                        "📖 Learn how to triage and act on your findings:", "blue"
-                    )
-                )
-                print("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md")
-                print("  - Complete guide: docs/RESULTS_GUIDE.md")
-            return result.returncode
-        else:
-            # Native execution via jmotools
-            sys.path.insert(0, str(Path(__file__).parent))
-            from jmotools import main as jmotools_main
+        # Both Docker and native execution use subprocess for consistency and security
+        command_list = generate_command_list(config)
 
-            # Build argv from secure list
-            command_list = generate_command_list(config)
-            argv = command_list[1:]  # Skip 'jmotools'
-            exit_code: int = jmotools_main(argv)
-            return exit_code
+        # Prevent double telemetry banner: wizard shows it, subprocess shouldn't
+        env = os.environ.copy()
+        env["JMO_TELEMETRY_SHOWN"] = "1"
+
+        result = subprocess.run(
+            command_list,
+            shell=False,  # IMPORTANT: shell=False prevents command injection
+            check=False,
+            env=env,
+        )
+
+        # Get tool execution info for summary
+        tools_executed = None
+        tools_skipped_platform = None
+        tools_skipped_content = None
+        try:
+            from scripts.cli.tool_manager import ToolManager
+
+            tm = ToolManager()
+            summary = tm.get_tool_summary(config.profile)
+            tools_executed = summary.execution_ready
+            tools_skipped_platform = summary.platform_skipped
+            tools_skipped_content = summary.content_triggered
+        except ImportError:
+            pass
+
+        # Print completion summary (Windows UX improvement)
+        _print_scan_completion_summary(
+            config,
+            result.returncode,
+            tools_executed,
+            tools_skipped_platform,
+            tools_skipped_content,
+        )
+
+        # Print results guide after scan completes
+        if result.returncode == 0 or result.returncode == 1:
+            print(
+                "\n"
+                + _colorize("📖 Learn how to triage and act on your findings:", "blue")
+            )
+            print("  - Quick triage (30 min): docs/RESULTS_QUICK_REFERENCE.md")
+            print("  - Complete guide: docs/RESULTS_GUIDE.md")
+        return result.returncode
 
     except KeyboardInterrupt:
         print(_colorize("\n\nScan cancelled by user", "yellow"))
@@ -1307,125 +809,72 @@ def execute_scan(config: WizardConfig) -> int:
         return 1
 
 
-def _save_telemetry_preference(config_path: Path, enabled: bool) -> None:
-    """
-    Save telemetry preference to jmo.yml.
-
-    Args:
-        config_path: Path to jmo.yml
-        enabled: Whether telemetry is enabled
-    """
-    import yaml
-
-    # Load existing config or create new one
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                config_data = yaml.safe_load(f) or {}
-        except Exception:
-            config_data = {}
-    else:
-        config_data = {}
-
-    # Update telemetry section
-    config_data["telemetry"] = {"enabled": enabled}
-
-    # Write back to file
-    with open(config_path, "w") as f:
-        yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
-
-    status = "enabled" if enabled else "disabled"
-    print(f"\n✅ Telemetry {status}. You can change this later in {config_path}\n")
-
-
-def _send_wizard_telemetry(
-    wizard_start_time: float, config: Any, artifact_type: Optional[str] = None
-) -> None:
-    """
-    Send wizard.completed telemetry event.
-
-    Args:
-        wizard_start_time: Time when wizard started (from time.time())
-        config: WizardConfig object
-        artifact_type: Type of artifact generated ("makefile", "shell", "gha", or None)
-    """
-    import time
-
-    try:
-        cfg = load_config("jmo.yml") if Path("jmo.yml").exists() else None
-        if cfg:
-            wizard_duration = int(time.time() - wizard_start_time)
-            execution_mode = "docker" if config.use_docker else "native"
-
-            send_event(
-                "wizard.completed",
-                {
-                    "profile_selected": config.profile,
-                    "execution_mode": execution_mode,
-                    "artifact_generated": artifact_type,
-                    "duration_seconds": wizard_duration,
-                },
-                {},
-                version=__version__,
-            )
-    except Exception as e:
-        # Never let telemetry errors break the wizard
-        logger.debug(f"Telemetry send failed: {e}")
-
-
-def prompt_telemetry_opt_in() -> bool:
-    """
-    Prompt user to enable telemetry on first run.
-
-    Returns:
-        True if user opts in, False otherwise
-    """
-    print("\n" + "=" * 70)
-    print("📊 Help Improve JMo Security")
-    print("=" * 70)
-    print("We'd like to collect anonymous usage stats to prioritize features.")
-    print()
-    print("✅ What we collect:")
-    print("   • Tool usage (which tools ran)")
-    print("   • Scan duration (fast/slow)")
-    print("   • Execution mode (CLI/Docker/Wizard)")
-    print("   • Platform (Linux/macOS/Windows)")
-    print()
-    print("❌ What we DON'T collect:")
-    print("   • Repository names or paths")
-    print("   • Finding details or secrets")
-    print("   • IP addresses or user info")
-    print()
-    print("📄 Privacy policy: https://jmotools.com/privacy")
-    print("📖 Full details: docs/TELEMETRY_IMPLEMENTATION_GUIDE.md")
-    print("💡 You can change this later in jmo.yml")
-    print()
-
-    response = input("Enable anonymous telemetry? [y/N]: ").strip().lower()
-    return response == "y"
+# Telemetry functions now imported from telemetry_helper module
+# Tool checking functions now imported from tool_checker module (Phase 2 refactor)
 
 
 def run_wizard(
     yes: bool = False,
     force_docker: bool = False,
-    emit_make: Optional[str] = None,
-    emit_script: Optional[str] = None,
-    emit_gha: Optional[str] = None,
+    emit_make: str | None = None,
+    emit_script: str | None = None,
+    emit_gha: str | None = None,
+    analyze_trends: bool = False,
+    export_trends_html: bool = False,
+    export_trends_json: bool = False,
+    policies: list[str] | None = None,
+    skip_policies: bool = False,
+    db_path: str | None = None,
+    # Preset options for automation
+    profile: str | None = None,
+    target_type: str | None = None,
+    target: str | None = None,
+    use_docker: bool | None = None,
+    auto_fix: bool = False,
+    install_deps: bool = False,
+    threads: int | None = None,
+    timeout: int | None = None,
+    fail_on: str | None = None,
+    results_dir: str | None = None,
 ) -> int:
     """
     Run the interactive wizard.
 
     Args:
         yes: Skip prompts and use defaults
-        force_docker: Force Docker mode
+        force_docker: Force Docker mode (convenience alias for use_docker=True)
         emit_make: Generate Makefile target to this file
         emit_script: Generate shell script to this file
         emit_gha: Generate GitHub Actions workflow to this file
+        analyze_trends: Automatically analyze trends after scan (non-interactive)
+        export_trends_html: Export trend report as HTML after scan
+        export_trends_json: Export trend report as JSON after scan
+        policies: List of policies to evaluate after scan (e.g., ['owasp-top-10', 'zero-secrets'])
+        skip_policies: Skip policy evaluation entirely
+        db_path: Path to SQLite history database (default: ~/.jmo/history.db)
+        profile: Preset profile (fast/slim/balanced/deep)
+        target_type: Preset target type (repo/image/iac/url)
+        target: Preset target value (path, image name, or URL)
+        use_docker: Preset execution mode (True=Docker, False=native, None=prompt)
+        auto_fix: Automatically install missing tools without prompting
+        install_deps: Automatically install missing dependencies (Java, Node.js)
+        threads: Preset thread count for scanning
+        timeout: Preset per-tool timeout in seconds
+        fail_on: Preset severity threshold for CI failures
+        results_dir: Preset output directory for scan results
 
     Returns:
         Exit code
     """
     import time
+
+    from scripts.core.telemetry import (
+        should_show_telemetry_banner,
+        show_telemetry_banner,
+    )
+
+    # Set custom db_path for this wizard run (via WizardConfig class method)
+    WizardConfig.set_db_path(db_path)
 
     wizard_start_time = time.time()
 
@@ -1433,47 +882,104 @@ def run_wizard(
     print("Welcome! This wizard will guide you through your first security scan.")
     print("Press Ctrl+C at any time to cancel.")
 
-    # Check if telemetry preference already set
-    config_path = Path("jmo.yml")
-    telemetry_enabled = False
-    if config_path.exists():
-        try:
-            cfg = load_config(str(config_path))
-            telemetry_set = hasattr(cfg, "telemetry") and hasattr(
-                cfg.telemetry, "enabled"
-            )
-            if not telemetry_set and not yes:
-                # First run: prompt for telemetry
-                telemetry_enabled = prompt_telemetry_opt_in()
-                # Save preference to jmo.yml
-                _save_telemetry_preference(config_path, telemetry_enabled)
-        except Exception as e:
-            logger.debug(f"Config loading failed during telemetry check: {e}")
-    elif not yes:
-        # No config file exists, prompt for telemetry
-        telemetry_enabled = prompt_telemetry_opt_in()
-        # Create minimal jmo.yml with telemetry preference
-        _save_telemetry_preference(config_path, telemetry_enabled)
+    # Show telemetry banner on first 3 wizard runs (opt-out model)
+    if should_show_telemetry_banner():
+        show_telemetry_banner(mode="wizard")
 
     config = WizardConfig()
 
+    # Check if we have enough presets to skip interactive mode
+    # Presets fully specify the wizard when: profile + target_type + target are all provided
+    has_full_presets = (
+        profile is not None and target_type is not None and target is not None
+    )
+
     try:
-        if yes:
-            # Non-interactive mode: use defaults (repo scanning)
-            print("\n" + _colorize("Non-interactive mode: using defaults", "yellow"))
-            config.profile = "balanced"
-            config.use_docker = (
-                force_docker and _detect_docker() and _check_docker_running()
+        if yes or has_full_presets:
+            # Non-interactive mode: use presets or defaults
+            if has_full_presets:
+                print("\n" + _colorize("Using preset configuration", "blue"))
+            else:
+                print(
+                    "\n" + _colorize("Non-interactive mode: using defaults", "yellow")
+                )
+
+            # Profile: use preset, or default to balanced
+            config.profile = profile if profile else "balanced"
+
+            # Execution mode: preset > force_docker > auto-detect
+            if use_docker is not None:
+                config.use_docker = use_docker
+            elif force_docker:
+                config.use_docker = _detect_docker() and _check_docker_running()
+            else:
+                # Default to native mode for automation
+                config.use_docker = False
+
+            # Target configuration: use presets or defaults
+            if target_type and target:
+                _apply_target_preset(config.target, target_type, target)
+            else:
+                # Default to repo scanning with current directory
+                config.target.type = "repo"
+                config.target.repo_mode = "repos-dir"
+                config.target.repo_path = str(Path.cwd())
+
+            # Advanced settings: use presets or defaults
+            config.results_dir = results_dir if results_dir else "results"
+            config.threads = threads
+            config.timeout = timeout
+            config.fail_on = fail_on if fail_on else ""
+
+            # Tool check for non-interactive mode
+            should_continue, _ = check_tools_for_profile(
+                config.profile,
+                yes=True,
+                use_docker=config.use_docker,
+                auto_fix=auto_fix,
+                install_deps=install_deps,
             )
-            # Default to repo scanning with current directory
-            config.target.type = "repo"
-            config.target.repo_mode = "repos-dir"
-            config.target.repo_path = str(Path.cwd())
-            config.results_dir = "results"
+            if not should_continue:
+                return 0
+
+            # OPA pre-flight check (for policy evaluation)
+            should_continue, policies_enabled = _check_policy_tools(
+                policies, skip_policies, yes=True, use_docker=config.use_docker
+            )
+            if not should_continue:
+                return 0
+            config.policies_enabled = policies_enabled
         else:
             # Interactive mode with new multi-target selection
             config.profile = select_profile()
             config.use_docker = select_execution_mode(force_docker)
+
+            # Tool pre-flight check (only for native mode)
+            should_continue, _ = check_tools_for_profile(
+                config.profile, yes=False, use_docker=config.use_docker
+            )
+            if not should_continue:
+                print(_colorize("\nWizard cancelled", "yellow"))
+                return 0
+
+            # Version drift check (only for native mode)
+            if not config.use_docker:
+                from scripts.cli.scan_utils import check_version_drift_before_scan
+
+                if not check_version_drift_before_scan(
+                    config.profile, interactive=True
+                ):
+                    print(_colorize("\nWizard cancelled", "yellow"))
+                    return 0
+
+            # OPA pre-flight check (for policy evaluation)
+            should_continue, policies_enabled = _check_policy_tools(
+                policies, skip_policies, yes=False, use_docker=config.use_docker
+            )
+            if not should_continue:
+                print(_colorize("\nWizard cancelled", "yellow"))
+                return 0
+            config.policies_enabled = policies_enabled
 
             # Step 3a: Select target type
             target_type = select_target_type()
@@ -1507,17 +1013,30 @@ def run_wizard(
             content = generate_makefile_target(config, command)
             Path(emit_make).write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
-            _send_wizard_telemetry(wizard_start_time, config, artifact_type="makefile")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="makefile"
+            )
             return 0
 
         if emit_script:
             command = generate_command(config)
             content = generate_shell_script(config, command)
             script_path = Path(emit_script)
-            script_path.write_text(content)
-            script_path.chmod(0o755)
+            try:
+                script_path.parent.mkdir(parents=True, exist_ok=True)
+                script_path.write_text(content)
+            except (OSError, IOError) as e:
+                print(f"Error: Could not write to {emit_script}: {e}")
+                return 1
+            # Set execute permission (no effect on Windows, which lacks Unix permission bits)
+            try:
+                script_path.chmod(0o755)
+            except OSError:
+                pass  # Windows doesn't support Unix permissions
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
-            _send_wizard_telemetry(wizard_start_time, config, artifact_type="shell")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="shell"
+            )
             return 0
 
         if emit_gha:
@@ -1526,12 +1045,128 @@ def run_wizard(
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
-            _send_wizard_telemetry(wizard_start_time, config, artifact_type="gha")
+            send_wizard_telemetry(
+                wizard_start_time, config, __version__, artifact_type="gha"
+            )
             return 0
 
         # Execute scan
-        result = execute_scan(config)
-        _send_wizard_telemetry(wizard_start_time, config, artifact_type=None)
+        # Skip confirmation when using presets (has_full_presets) or --yes flag
+        result = execute_scan(config, yes=yes or has_full_presets)
+
+        # Handle trend analysis after successful scan (if ≥2 scans exist)
+        if result == 0 or result == 1:  # Success (0 = clean, 1 = findings)
+            history_db_path = _get_db_path()
+
+            # Non-interactive trend analysis
+            if analyze_trends or export_trends_html or export_trends_json:
+                if not history_db_path.exists():
+                    print(
+                        _colorize(
+                            "\n⚠ No history database found (need ≥2 scans)", "yellow"
+                        )
+                    )
+                else:
+                    try:
+                        from scripts.core.history_db import get_connection
+
+                        conn = get_connection(history_db_path)
+                        cursor = conn.execute("SELECT COUNT(*) FROM scans")
+                        scan_count = cursor.fetchone()[0]
+
+                        if scan_count < 2:
+                            print(
+                                _colorize(
+                                    f"\n⚠ Only {scan_count} scan(s) in history (need ≥2)",
+                                    "yellow",
+                                )
+                            )
+                        else:
+                            if analyze_trends:
+                                print(
+                                    _colorize("\n📊 Running trend analysis...", "blue")
+                                )
+                                _run_trend_command_interactive(
+                                    history_db_path, "analyze", last_n=30
+                                )
+
+                            if export_trends_html or export_trends_json:
+                                print(
+                                    _colorize("\n📊 Exporting trend reports...", "blue")
+                                )
+                                from scripts.core.trend_analyzer import TrendAnalyzer
+                                from scripts.cli.trend_formatters import (
+                                    format_html_report,
+                                    format_json_report,
+                                )
+
+                                analyzer = TrendAnalyzer(history_db_path)
+                                report = analyzer.analyze_trends(last_n=30)
+
+                                if export_trends_html:
+                                    output_file = (
+                                        Path(config.results_dir)
+                                        / "summaries"
+                                        / "trend_report.html"
+                                    )
+                                    output_file.parent.mkdir(
+                                        parents=True, exist_ok=True
+                                    )
+                                    html_content = format_html_report(report)
+                                    output_file.write_text(
+                                        html_content, encoding="utf-8"
+                                    )
+                                    print(
+                                        _colorize(
+                                            f"✓ HTML report: {output_file}", "green"
+                                        )
+                                    )
+
+                                if export_trends_json:
+                                    output_file = (
+                                        Path(config.results_dir)
+                                        / "summaries"
+                                        / "trend_report.json"
+                                    )
+                                    output_file.parent.mkdir(
+                                        parents=True, exist_ok=True
+                                    )
+                                    json_content = format_json_report(report)
+                                    output_file.write_text(
+                                        json_content, encoding="utf-8"
+                                    )
+                                    print(
+                                        _colorize(
+                                            f"✓ JSON report: {output_file}", "green"
+                                        )
+                                    )
+
+                    except Exception as e:
+                        _safe_print(
+                            _colorize(f"\n⚠ Trend analysis failed: {e}", "yellow")
+                        )
+                        logger.debug(f"Trend analysis error: {e}")
+            elif not (yes or has_full_presets):
+                # Interactive offers (only if no non-interactive flags)
+                # Skip when using presets or --yes flag (automation mode)
+                # 1. Policy evaluation (Phase 2.5)
+                # Create args-like object with policy flags
+                import argparse
+
+                policy_args = argparse.Namespace(
+                    policies=policies,
+                    skip_policies=skip_policies,
+                    yes=yes,
+                )
+                offer_policy_evaluation_after_scan(
+                    config.results_dir, config.profile, policy_args
+                )
+                # 2. Trend analysis
+                offer_trend_analysis_after_scan(config.results_dir)
+
+        send_wizard_telemetry(
+            wizard_start_time, config, __version__, artifact_type=None
+        )
         return result
 
     except KeyboardInterrupt:
@@ -1549,14 +1184,125 @@ def run_wizard(
         return 1
 
 
+def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> None:
+    """
+    Offer policy evaluation after scan completes.
+
+    Prompts user to evaluate security policies against scan findings.
+    Respects CLI flags: --policies, --skip-policies.
+
+    Args:
+        results_dir: Results directory from completed scan
+        profile: Scan profile name (fast/balanced/deep)
+        args: Parsed CLI arguments with policy flags
+    """
+    from pathlib import Path
+    import json
+
+    # Check if user explicitly skipped policies via CLI
+    if getattr(args, "skip_policies", False):
+        logger.debug("Policy evaluation skipped via --skip-policies flag")
+        return
+
+    # Load findings from scan results
+    findings_path = Path(results_dir) / "summaries" / "findings.json"
+    if not findings_path.exists():
+        logger.debug(
+            f"Findings not found at {findings_path}, skipping policy evaluation"
+        )
+        return
+
+    try:
+        findings_data = json.loads(findings_path.read_text())
+        # Handle both v1.0.0 wrapper format and legacy list format
+        if isinstance(findings_data, dict) and "findings" in findings_data:
+            findings = findings_data["findings"]
+        elif isinstance(findings_data, list):
+            findings = findings_data
+        else:
+            logger.warning(f"Unexpected findings format: {type(findings_data)}")
+            findings = []
+
+        if not findings:
+            logger.debug("No findings to evaluate, skipping policy evaluation")
+            return
+
+        # Import policy flow module
+        from scripts.cli.wizard_flows.policy_flow import policy_evaluation_menu
+
+        # Determine non-interactive mode
+        non_interactive = getattr(args, "yes", False)
+
+        # Call policy evaluation menu
+        policy_results = policy_evaluation_menu(
+            Path(results_dir),
+            profile,
+            findings,
+            non_interactive=non_interactive,
+        )
+
+        if policy_results:
+            logger.info(
+                f"Policy evaluation completed: {len(policy_results)} policies evaluated"
+            )
+
+    except Exception as e:
+        # Don't block user if policy evaluation fails
+        _safe_print(_colorize(f"\n⚠ Policy evaluation failed: {e}", "yellow"))
+        logger.debug(f"Policy evaluation error: {e}")
+
+
+# Trend analysis functions moved to wizard_flows/trend_flow.py (Phase 3 refactor)
+
+
+def run_diff_wizard(
+    use_docker: bool = False,
+    yes: bool = False,
+    baseline: str | None = None,
+    current: str | None = None,
+) -> int:
+    """Run the diff wizard for comparing scans.
+
+    This is a thin wrapper that delegates to the implementation
+    in wizard_flows/diff_flow.py (Phase 4 refactor).
+
+    Guides user through:
+    1. Scan selection from history (or directory paths)
+    2. Filter options (severity, tools, categories)
+    3. Output format selection
+    4. Diff execution and preview
+
+    Args:
+        use_docker: Whether to use Docker mode
+        yes: Non-interactive mode (use defaults, skip prompts)
+        baseline: Baseline results directory (for non-interactive diff)
+        current: Current results directory (for non-interactive diff)
+
+    Returns:
+        Exit code (0 = success, 1 = error, 130 = cancelled)
+    """
+    return run_diff_wizard_impl(
+        use_docker=use_docker, yes=yes, baseline=baseline, current=current
+    )
+
+
 def main() -> int:
     """CLI entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Interactive wizard for security scanning",
+        description="Interactive wizard for security scanning and diff analysis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+
+    # Add mode selector
+    parser.add_argument(
+        "--mode",
+        choices=["scan", "diff"],
+        default="scan",
+        help="Wizard mode: scan (default) or diff",
+    )
+
     parser.add_argument(
         "--yes", "-y", action="store_true", help="Non-interactive mode (use defaults)"
     )
@@ -1564,22 +1310,94 @@ def main() -> int:
         "--docker", action="store_true", help="Force Docker execution mode"
     )
     parser.add_argument(
-        "--emit-make-target", metavar="FILE", help="Generate Makefile target"
+        "--emit-make-target",
+        metavar="FILE",
+        nargs="?",
+        const="Makefile.jmo",
+        type=str,
+        help="Generate Makefile target (default: Makefile.jmo)",
     )
-    parser.add_argument("--emit-script", metavar="FILE", help="Generate shell script")
     parser.add_argument(
-        "--emit-gha", metavar="FILE", help="Generate GitHub Actions workflow"
+        "--emit-script",
+        metavar="FILE",
+        nargs="?",
+        const="jmo-scan.sh",
+        type=str,
+        help="Generate shell script (default: jmo-scan.sh)",
+    )
+    parser.add_argument(
+        "--emit-gha",
+        metavar="FILE",
+        nargs="?",
+        const=".github/workflows/jmo-security.yml",
+        type=str,
+        help="Generate GitHub Actions workflow (default: .github/workflows/jmo-security.yml)",
+    )
+
+    # Trend analysis flags (v1.0.0+)
+    parser.add_argument(
+        "--analyze-trends",
+        action="store_true",
+        help="Automatically analyze trends after scan (non-interactive)",
+    )
+    parser.add_argument(
+        "--export-trends-html",
+        action="store_true",
+        help="Export trend report as HTML after scan",
+    )
+    parser.add_argument(
+        "--export-trends-json",
+        action="store_true",
+        help="Export trend report as JSON after scan",
+    )
+
+    # Policy evaluation flags (v1.0.0+)
+    parser.add_argument(
+        "--policy",
+        action="append",
+        dest="policies",
+        help="Policy to evaluate after scan (can be specified multiple times, e.g., --policy owasp-top-10 --policy zero-secrets)",
+    )
+    parser.add_argument(
+        "--skip-policies",
+        action="store_true",
+        help="Skip policy evaluation entirely (overrides config defaults)",
+    )
+
+    # Diff mode arguments
+    parser.add_argument(
+        "--baseline",
+        metavar="DIR",
+        help="Baseline results directory for diff comparison (use with --mode diff --yes)",
+    )
+    parser.add_argument(
+        "--current",
+        metavar="DIR",
+        help="Current results directory for diff comparison (use with --mode diff --yes)",
     )
 
     args = parser.parse_args()
 
-    return run_wizard(
-        yes=args.yes,
-        force_docker=args.docker,
-        emit_make=args.emit_make_target,
-        emit_script=args.emit_script,
-        emit_gha=args.emit_gha,
-    )
+    if args.mode == "diff":
+        return run_diff_wizard(
+            use_docker=args.docker,
+            yes=args.yes,
+            baseline=getattr(args, "baseline", None),
+            current=getattr(args, "current", None),
+        )
+    else:
+        return run_wizard(
+            yes=args.yes,
+            force_docker=args.docker,
+            emit_make=args.emit_make_target,
+            emit_script=args.emit_script,
+            emit_gha=args.emit_gha,
+            analyze_trends=args.analyze_trends,
+            export_trends_html=args.export_trends_html,
+            export_trends_json=args.export_trends_json,
+            policies=args.policies,
+            skip_policies=args.skip_policies,
+        )
 
 
 if __name__ == "__main__":

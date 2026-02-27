@@ -20,22 +20,55 @@ Related:
 """
 
 import json
+import os
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 
 from scripts.core.telemetry import (
     bucket_duration,
     bucket_findings,
     bucket_targets,
+    bucket_violations,
+    bucket_duration_ms,
     detect_ci_environment,
     get_anonymous_id,
     infer_scan_frequency,
     is_telemetry_enabled,
     send_event,
+    send_policy_evaluation_event,
     _send_event_async,
     _get_gist_content,
 )
+
+# ========== Fixtures ==========
+
+
+@pytest.fixture
+def clear_ci_env(monkeypatch):
+    """Clear all CI environment variables to test non-CI behavior.
+
+    detect_ci_environment() checks 9 different CI env vars:
+    - CI, GITHUB_ACTIONS, GITLAB_CI, JENKINS_URL, BUILD_ID,
+      CIRCLECI, TRAVIS, TF_BUILD, BITBUCKET_PIPELINE_UUID
+
+    Tests that expect telemetry to be enabled must clear ALL of these,
+    otherwise detect_ci_environment() returns True and telemetry is disabled.
+    """
+    for var in [
+        "CI",
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "JENKINS_URL",
+        "BUILD_ID",
+        "CIRCLECI",
+        "TRAVIS",
+        "TF_BUILD",
+        "BITBUCKET_PIPELINE_UUID",
+    ]:
+        monkeypatch.delenv(var, raising=False)
 
 
 # ========== Test Category 1: Anonymous ID Management ==========
@@ -96,7 +129,7 @@ def test_get_anonymous_id_creates_parent_directory(tmp_path: Path, monkeypatch):
 # ========== Test Category 2: Telemetry Enablement Logic ==========
 
 
-def test_is_telemetry_enabled_when_config_enabled(monkeypatch):
+def test_is_telemetry_enabled_when_config_enabled(clear_ci_env, monkeypatch):
     """Test is_telemetry_enabled() returns True when config enabled."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 
@@ -112,17 +145,17 @@ def test_is_telemetry_enabled_when_config_disabled(monkeypatch):
     assert is_telemetry_enabled(config) is False
 
 
-def test_is_telemetry_enabled_default_false_when_missing(monkeypatch):
-    """Test is_telemetry_enabled() defaults to False when config missing (opt-in)."""
+def test_is_telemetry_enabled_default_true_when_missing(clear_ci_env, monkeypatch):
+    """Test is_telemetry_enabled() defaults to True when config missing (opt-out model v0.7.1+)."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
 
-    # No telemetry key in config
+    # No telemetry key in config - should default to True (opt-out)
     config = {}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
-    # Empty telemetry object
+    # Empty telemetry object - should default to True (opt-out)
     config = {"telemetry": {}}
-    assert is_telemetry_enabled(config) is False
+    assert is_telemetry_enabled(config) is True
 
 
 def test_is_telemetry_enabled_env_var_override(monkeypatch):
@@ -134,7 +167,7 @@ def test_is_telemetry_enabled_env_var_override(monkeypatch):
     assert is_telemetry_enabled(config) is False
 
 
-def test_is_telemetry_enabled_env_var_no_override_when_not_1(monkeypatch):
+def test_is_telemetry_enabled_env_var_no_override_when_not_1(clear_ci_env, monkeypatch):
     """Test JMO_TELEMETRY_DISABLE with values other than '1' don't disable."""
     monkeypatch.setenv("JMO_TELEMETRY_DISABLE", "0")
 
@@ -167,7 +200,7 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT", ""
     )  # Not configured
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -181,14 +214,14 @@ def test_send_event_skips_when_gist_not_configured(monkeypatch):
 
 
 @patch("scripts.core.telemetry.threading.Thread")
-def test_send_event_spawns_background_thread(mock_thread, monkeypatch):
+def test_send_event_spawns_background_thread(mock_thread, clear_ci_env, monkeypatch):
     """Test send_event() spawns daemon background thread."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_test_token")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -220,7 +253,7 @@ def test_send_event_async_builds_correct_payload(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_test_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_test_token")
 
     # Call _send_event_async directly
     _send_event_async("scan.started", {"profile": "fast", "tools": ["trivy"]}, "0.7.0")
@@ -275,7 +308,7 @@ def test_send_event_async_appends_to_existing_content(
             "scripts.core.telemetry.TELEMETRY_ENDPOINT",
             "https://api.github.com/gists/test123",
         )
-        monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+        monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
         _send_event_async("scan.completed", {"duration": 120}, "0.7.0")
 
@@ -308,7 +341,7 @@ def test_send_event_async_handles_network_errors_silently(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     # Should NOT raise exception
     _send_event_async("test.event", {"key": "value"}, "0.7.0")
@@ -330,7 +363,7 @@ def test_send_event_async_handles_timeout_silently(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     # Should NOT raise exception
     _send_event_async("test.event", {"key": "value"}, "0.7.0")
@@ -355,7 +388,7 @@ def test_get_gist_content_returns_existing_content(mock_urlopen, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     content = _get_gist_content()
 
@@ -373,7 +406,7 @@ def test_get_gist_content_returns_empty_on_error(mock_urlopen, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     content = _get_gist_content()
 
@@ -638,8 +671,16 @@ def test_infer_scan_frequency_creates_parent_directory(tmp_path: Path, monkeypat
     assert test_count_file.parent.exists()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows has different permission semantics - chmod doesn't prevent file creation",
+)
 def test_infer_scan_frequency_returns_none_on_error(tmp_path: Path, monkeypatch):
     """Test infer_scan_frequency() returns None on file operation errors."""
+    # Root user (e.g. Docker CI) bypasses Unix file permissions
+    if hasattr(os, "getuid") and os.getuid() == 0:
+        pytest.skip("root bypasses filesystem permissions")
+
     # Use a path that will cause permission error (read-only directory)
     test_count_file = tmp_path / "readonly" / "scan-count"
     test_count_file.parent.mkdir(parents=True, exist_ok=True)
@@ -693,14 +734,14 @@ def test_business_metrics_in_event_payload(tmp_path: Path, monkeypatch):
 # ========== Test Category 8: Edge Cases and Error Handling ==========
 
 
-def test_send_event_with_empty_metadata(monkeypatch):
+def test_send_event_with_empty_metadata(clear_ci_env, monkeypatch):
     """Test send_event() handles empty metadata dict."""
     monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
     monkeypatch.setattr(
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     config = {"telemetry": {"enabled": True}}
 
@@ -722,7 +763,7 @@ def test_send_event_with_unicode_metadata(tmp_path: Path, monkeypatch):
         "scripts.core.telemetry.TELEMETRY_ENDPOINT",
         "https://api.github.com/gists/test123",
     )
-    monkeypatch.setattr("scripts.core.telemetry.GITHUB_TOKEN", "ghp_token")
+    monkeypatch.setattr("scripts.core.telemetry._github_token_cache", "ghp_token")
 
     metadata = {
         "message": "Test with emoji 🔒 and Chinese: 安全漏洞",
@@ -772,3 +813,316 @@ def test_bucket_targets_with_zero():
     result = bucket_targets(0)
     # Should return first bucket or handle gracefully
     assert result in ["1", "2-5", "6-10", "11-50", ">50"]
+
+
+# ========== Test Category 9: Policy Evaluation Telemetry (v1.0.0) ==========
+
+
+def test_bucket_violations_all_ranges():
+    """Test bucket_violations() for all count ranges."""
+    # 0
+    assert bucket_violations(0) == "0"
+
+    # 1-5
+    assert bucket_violations(1) == "1-5"
+    assert bucket_violations(3) == "1-5"
+    assert bucket_violations(5) == "1-5"
+
+    # 5-20
+    assert bucket_violations(6) == "5-20"
+    assert bucket_violations(15) == "5-20"
+    assert bucket_violations(20) == "5-20"
+
+    # 20-100
+    assert bucket_violations(21) == "20-100"
+    assert bucket_violations(50) == "20-100"
+    assert bucket_violations(100) == "20-100"
+
+    # >100
+    assert bucket_violations(101) == ">100"
+    assert bucket_violations(500) == ">100"
+    assert bucket_violations(10000) == ">100"
+
+
+def test_bucket_duration_ms_all_ranges():
+    """Test bucket_duration_ms() for all time ranges."""
+    # <50ms
+    assert bucket_duration_ms(0) == "<50ms"
+    assert bucket_duration_ms(25.5) == "<50ms"
+    assert bucket_duration_ms(49.9) == "<50ms"
+
+    # 50-100ms
+    assert bucket_duration_ms(50) == "50-100ms"
+    assert bucket_duration_ms(75) == "50-100ms"
+    assert bucket_duration_ms(99.9) == "50-100ms"
+
+    # 100-500ms
+    assert bucket_duration_ms(100) == "100-500ms"
+    assert bucket_duration_ms(300) == "100-500ms"
+    assert bucket_duration_ms(499.9) == "100-500ms"
+
+    # >500ms
+    assert bucket_duration_ms(500) == ">500ms"
+    assert bucket_duration_ms(1000) == ">500ms"
+    assert bucket_duration_ms(5000) == ">500ms"
+
+
+def test_send_policy_evaluation_event_disabled_when_telemetry_disabled(monkeypatch):
+    """Test send_policy_evaluation_event() skips when telemetry disabled."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": False}}
+
+    # Mock _send_event_async (the actual network call) to verify it's NOT called
+    mock_send_async = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry._send_event_async", mock_send_async)
+
+    # Create mock policy results
+    from types import SimpleNamespace
+
+    policy_results = {
+        "zero-secrets": SimpleNamespace(passed=True, violations=[]),
+        "owasp-top-10": SimpleNamespace(passed=False, violations=[1, 2, 3]),
+    }
+
+    send_policy_evaluation_event(
+        ["zero-secrets", "owasp-top-10"], policy_results, 21.81, config, "1.0.0"
+    )
+
+    # Should NOT call _send_event_async (telemetry disabled via send_event check)
+    mock_send_async.assert_not_called()
+
+
+def test_send_policy_evaluation_event_builds_correct_metadata(
+    clear_ci_env, monkeypatch
+):
+    """Test send_policy_evaluation_event() builds privacy-preserving metadata."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": True}}
+
+    # Mock send_event to capture metadata
+    mock_send = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry.send_event", mock_send)
+
+    # Create mock policy results with violations
+    from types import SimpleNamespace
+
+    policy_results = {
+        "zero-secrets": SimpleNamespace(passed=True, violations=[]),
+        "owasp-top-10": SimpleNamespace(passed=False, violations=[1, 2, 3]),
+        "pci-dss": SimpleNamespace(passed=False, violations=[1, 2]),
+    }
+
+    send_policy_evaluation_event(
+        ["zero-secrets", "owasp-top-10", "pci-dss"],
+        policy_results,
+        75.5,
+        config,
+        "1.0.0",
+    )
+
+    # Verify send_event was called with correct parameters
+    mock_send.assert_called_once()
+    call_args = mock_send.call_args
+
+    assert call_args[0][0] == "policy.evaluated"  # event type
+    metadata = call_args[0][1]  # metadata dict
+    assert call_args[0][2] == config  # config
+    assert call_args[0][3] == "1.0.0"  # version (positional arg)
+
+    # Verify metadata structure
+    assert metadata["policy_count"] == 3  # Exact count OK (low cardinality)
+    assert metadata["violations_bucket"] == "1-5"  # 5 total violations (bucketed)
+    assert metadata["evaluation_time_bucket"] == "50-100ms"  # 75.5ms (bucketed)
+    assert metadata["policies"] == [
+        "owasp-top-10",
+        "pci-dss",
+        "zero-secrets",
+    ]  # Sorted alphabetically
+    assert metadata["passed_count"] == 1  # zero-secrets passed
+    assert metadata["failed_count"] == 2  # owasp-top-10, pci-dss failed
+
+
+def test_send_policy_evaluation_event_handles_zero_violations(
+    clear_ci_env, monkeypatch
+):
+    """Test send_policy_evaluation_event() handles zero violations correctly."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": True}}
+
+    mock_send = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry.send_event", mock_send)
+
+    from types import SimpleNamespace
+
+    policy_results = {
+        "zero-secrets": SimpleNamespace(passed=True, violations=[]),
+        "owasp-top-10": SimpleNamespace(passed=True, violations=[]),
+    }
+
+    send_policy_evaluation_event(
+        ["zero-secrets", "owasp-top-10"], policy_results, 20.5, config, "1.0.0"
+    )
+
+    metadata = mock_send.call_args[0][1]
+
+    assert metadata["violations_bucket"] == "0"  # Zero violations
+    assert metadata["passed_count"] == 2  # All passed
+    assert metadata["failed_count"] == 0  # None failed
+
+
+def test_send_policy_evaluation_event_handles_missing_violations_attribute(
+    clear_ci_env, monkeypatch
+):
+    """Test send_policy_evaluation_event() handles PolicyResult without violations attribute."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": True}}
+
+    mock_send = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry.send_event", mock_send)
+
+    from types import SimpleNamespace
+
+    # PolicyResult without violations attribute (malformed object)
+    policy_results = {
+        "zero-secrets": SimpleNamespace(passed=True),  # Missing violations
+    }
+
+    # Should NOT crash
+    send_policy_evaluation_event(
+        ["zero-secrets"], policy_results, 15.0, config, "1.0.0"
+    )
+
+    metadata = mock_send.call_args[0][1]
+
+    # Should count as 0 violations
+    assert metadata["violations_bucket"] == "0"
+    assert metadata["passed_count"] == 1
+    assert metadata["failed_count"] == 0
+
+
+def test_send_policy_evaluation_event_handles_missing_passed_attribute(
+    clear_ci_env, monkeypatch
+):
+    """Test send_policy_evaluation_event() handles PolicyResult without passed attribute."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": True}}
+
+    mock_send = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry.send_event", mock_send)
+
+    from types import SimpleNamespace
+
+    # PolicyResult without passed attribute
+    policy_results = {
+        "zero-secrets": SimpleNamespace(violations=[]),  # Missing passed
+    }
+
+    # Should NOT crash
+    send_policy_evaluation_event(
+        ["zero-secrets"], policy_results, 15.0, config, "1.0.0"
+    )
+
+    metadata = mock_send.call_args[0][1]
+
+    # Should count as 0 passed (no passed attribute)
+    assert metadata["passed_count"] == 0
+    assert metadata["failed_count"] == 1  # len(results) - passed_count
+
+
+def test_send_policy_evaluation_event_with_large_violation_count(
+    clear_ci_env, monkeypatch
+):
+    """Test send_policy_evaluation_event() handles large violation counts."""
+    monkeypatch.delenv("JMO_TELEMETRY_DISABLE", raising=False)
+
+    config = {"telemetry": {"enabled": True}}
+
+    mock_send = MagicMock()
+    monkeypatch.setattr("scripts.core.telemetry.send_event", mock_send)
+
+    from types import SimpleNamespace
+
+    # 500 violations total
+    policy_results = {
+        "zero-secrets": SimpleNamespace(passed=False, violations=list(range(500))),
+    }
+
+    send_policy_evaluation_event(
+        ["zero-secrets"], policy_results, 1200.5, config, "1.0.0"
+    )
+
+    metadata = mock_send.call_args[0][1]
+
+    # Should bucket to ">100"
+    assert metadata["violations_bucket"] == ">100"
+    assert metadata["evaluation_time_bucket"] == ">500ms"  # 1200.5ms
+
+
+def test_bucket_violations_with_negative_value():
+    """Test bucket_violations() handles negative values (defensive)."""
+    # Should treat as 0 (illogical but graceful)
+    result = bucket_violations(-5)
+    assert result in ["0", "1-5", "5-20", "20-100", ">100"]
+
+
+def test_bucket_duration_ms_with_negative_value():
+    """Test bucket_duration_ms() handles negative values (defensive)."""
+    # Should treat as <50ms (illogical but graceful)
+    result = bucket_duration_ms(-10.5)
+    assert result in ["<50ms", "50-100ms", "100-500ms", ">500ms"]
+
+
+# ========== Test Category 9: should_show_telemetry_banner ==========
+
+
+def test_should_show_telemetry_banner_env_var_skips(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns False when env var set.
+
+    This prevents double-display when wizard spawns scan subprocess.
+    """
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    # Simulate first scan (would normally show banner)
+    # But env var is set (wizard already showed it)
+    monkeypatch.setenv("JMO_TELEMETRY_SHOWN", "1")
+
+    result = should_show_telemetry_banner()
+
+    assert result is False
+
+
+def test_should_show_telemetry_banner_first_scan(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns True on first scan."""
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    monkeypatch.delenv("JMO_TELEMETRY_SHOWN", raising=False)
+
+    result = should_show_telemetry_banner()
+
+    assert result is True
+
+
+def test_should_show_telemetry_banner_subsequent_scan(tmp_path: Path, monkeypatch):
+    """Test should_show_telemetry_banner() returns False after first scan."""
+    from scripts.core.telemetry import should_show_telemetry_banner
+
+    test_count_file = tmp_path / "scan-count"
+    monkeypatch.setattr("scripts.core.telemetry.SCAN_COUNT_FILE", test_count_file)
+    monkeypatch.delenv("JMO_TELEMETRY_SHOWN", raising=False)
+
+    # Simulate that scan has run before
+    test_count_file.parent.mkdir(parents=True, exist_ok=True)
+    test_count_file.write_text("1")
+
+    result = should_show_telemetry_banner()
+
+    assert result is False

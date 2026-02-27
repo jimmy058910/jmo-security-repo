@@ -77,6 +77,9 @@ class TestImageScanner:
 
     def test_scan_image_sanitizes_name(self, tmp_path):
         """Test that image names are sanitized for directory names"""
+        # Create individual-images subdirectory (matches production usage in scan_orchestrator)
+        image_results_dir = tmp_path / "individual-images"
+
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -90,7 +93,7 @@ class TestImageScanner:
             # Image with special characters
             scan_image(
                 image="registry.example.com:5000/my-app:v1.2.3",
-                results_dir=tmp_path,
+                results_dir=image_results_dir,  # Pass individual-images directory
                 tools=["trivy"],
                 timeout=600,
                 retries=0,
@@ -99,19 +102,15 @@ class TestImageScanner:
             )
 
             # Check that directory was created with sanitized name
-            expected_dir = (
-                tmp_path
-                / "individual-images"
-                / "registry.example.com_5000_my-app_v1.2.3"
-            )
+            expected_dir = image_results_dir / "registry.example.com_5000_my-app_v1.2.3"
             assert expected_dir.exists()
 
     def test_scan_image_with_tool_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy only
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -133,7 +132,7 @@ class TestImageScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify ToolRunner was called
@@ -200,6 +199,9 @@ class TestImageScanner:
 
     def test_scan_image_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
+        # Create individual-images subdirectory (matches production usage in scan_orchestrator)
+        image_results_dir = tmp_path / "individual-images"
+
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -212,7 +214,7 @@ class TestImageScanner:
 
             scan_image(
                 image="alpine:latest",
-                results_dir=tmp_path,
+                results_dir=image_results_dir,  # Pass individual-images directory (matches production)
                 tools=["trivy"],
                 timeout=600,
                 retries=0,
@@ -220,15 +222,15 @@ class TestImageScanner:
                 allow_missing_tools=False,
             )
 
-            # Check directory structure
-            assert (tmp_path / "individual-images").exists()
-            assert (tmp_path / "individual-images" / "alpine_latest").exists()
+            # Check that directory was created with sanitized image name
+            expected_dir = image_results_dir / "alpine_latest"
+            assert expected_dir.exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -249,7 +251,7 @@ class TestImageScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -263,8 +265,8 @@ class TestImageScanner:
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["trivy", "syft"]
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name in ["trivy", "syft"] else None
 
         with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -290,7 +292,7 @@ class TestImageScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

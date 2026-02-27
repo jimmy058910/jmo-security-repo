@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 SARIF_VERSION = "2.1.0"
 
 
-def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
+def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert normalized findings to SARIF 2.1.0 format.
 
     Args:
@@ -27,10 +27,14 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
     Returns:
         SARIF document as dict
     """
-    rules: Dict[str, Dict[str, Any]] = {}
+    rules: dict[str, dict[str, Any]] = {}
     results = []
 
-    for f in findings:
+    for idx, f in enumerate(findings):
+        # Skip None or invalid findings (can happen with filtering)
+        if not f or not isinstance(f, dict):
+            logger.warning("Skipping invalid finding at index %d: %s", idx, type(f))
+            continue
         rule_id = f.get("ruleId", "rule")
 
         # Enhanced rule metadata
@@ -63,9 +67,10 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
         # Add code snippet if available in context
-        if f.get("context", {}).get("snippet"):
+        context = f.get("context") if f else None
+        if context and isinstance(context, dict) and context.get("snippet"):
             location_obj["physicalLocation"]["region"]["snippet"] = {
-                "text": f["context"]["snippet"]
+                "text": context["snippet"]
             }
 
         # End line if available
@@ -124,23 +129,39 @@ def to_sarif(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
                 result["properties"] = {}
             result["properties"]["cvss"] = f["cvss"]
 
+        # v1.0.0: Add cross-tool consensus information
+        detected_by = f.get("detected_by", [])
+        if detected_by and len(detected_by) > 1:
+            if "properties" not in result:
+                result["properties"] = {}
+            # Add consensus metadata
+            result["properties"]["consensus"] = {
+                "detectedByCount": len(detected_by),
+                "tools": [
+                    {"name": t.get("name", "unknown"), "version": t.get("version", "")}
+                    for t in detected_by
+                ],
+            }
+            # Add correlation IDs for cross-tool tracking
+            result["correlationGuid"] = f.get("id", "")
+
         results.append(result)
 
     # Read version from pyproject.toml if possible
     version = "0.4.0"  # Default
     try:
-        import tomli
+        import tomllib
 
         pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
         if pyproject_path.exists():
             with open(pyproject_path, "rb") as fp:
-                pyproject = tomli.load(fp)
+                pyproject = tomllib.load(fp)
                 version = pyproject.get("project", {}).get("version", version)
     except FileNotFoundError:
         # pyproject.toml missing - use default version
         logger.debug(f"pyproject.toml not found at {pyproject_path}")
-    except (ImportError, KeyError, ValueError) as e:
-        # tomli not available, or pyproject.toml invalid/missing version field
+    except (KeyError, ValueError) as e:
+        # pyproject.toml invalid/missing version field
         logger.debug(f"Failed to parse version from pyproject.toml: {e}")
 
     tool = {
@@ -176,7 +197,7 @@ def _severity_to_level(sev: str | None) -> str:
     return "note"
 
 
-def write_sarif(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
+def write_sarif(findings: list[dict[str, Any]], out_path: str | Path) -> None:
     """Write findings to SARIF 2.1.0 JSON file.
 
     Args:
@@ -185,5 +206,7 @@ def write_sarif(findings: List[Dict[str, Any]], out_path: str | Path) -> None:
     """
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    sarif = to_sarif(findings)
+    # Filter out None or invalid findings before converting to SARIF
+    valid_findings = [f for f in findings if f and isinstance(f, dict)]
+    sarif = to_sarif(valid_findings)
     p.write_text(json.dumps(sarif, indent=2), encoding="utf-8")

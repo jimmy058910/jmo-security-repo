@@ -1,0 +1,30 @@
+name: 'Install Security Tools'
+description: 'Install Bandit and TruffleHog for security scanning'
+
+inputs:
+  bandit-version:
+    description: 'Bandit version to install'
+    required: false
+    default: '1.7.5'
+  install-trufflehog:
+    description: 'Whether to install TruffleHog'
+    required: false
+    default: 'true'
+  trufflehog-version:
+    description: 'TruffleHog version to install'
+    required: false
+    default: '3.63.0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Bandit
+      shell: bash
+      run: pip install bandit==${{ inputs.bandit-version }}
+
+    - name: Install TruffleHog
+      if: inputs.install-trufflehog == 'true'
+      shell: bash
+      run: |
+        INSTALL_URL=https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh
+        curl -sSfL "$INSTALL_URL" | sh -s -- -b /usr/local/bin v${{ inputs.trufflehog-version }}

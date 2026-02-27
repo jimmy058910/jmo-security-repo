@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmo-security"
-version = "0.8.0"
+version = "1.0.0"
 description = "JMo Security Audit Suite (terminal-first, multi-tool, unified outputs, multi-target scanning)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "James Moceri", email = "general@jmogaming.com" }]
 keywords = [
@@ -15,23 +15,27 @@ keywords = [
     "compliance", "OWASP", "CWE", "DevSecOps", "cybersecurity"
 ]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
   "Topic :: Security",
   "Topic :: Software Development :: Quality Assurance",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "License :: OSI Approved :: MIT License",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
 ]
 dependencies = [
     "PyYAML>=6.0",  # Required for config file loading (jmo.yml)
+    "croniter>=1.0",  # Required for schedule management (v0.9.0+)
+    "requests>=2.31.0",  # Required for EPSS/KEV integration (v0.9.0+)
+    "rapidfuzz>=3.0.0",  # Required for cross-tool deduplication fuzzy matching (v1.0.0+)
+    "rich>=13.0",  # Required for trend analysis console formatting (v1.0.0+)
 ]
 
 [project.urls]
@@ -44,10 +48,38 @@ LinkedIn = "https://linkedin.com/in/jimmy-moceri"
 [project.optional-dependencies]
 reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
+mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
+attestation = ["sigstore>=2.0.0", "cryptography>=41.0.0"]  # SLSA attestation (Feature #6, v1.0.0)
+dev = [
+    # Testing
+    "pytest",
+    "pytest-cov",
+    "pytest-split>=0.9.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-rerunfailures",
+    "hypothesis",
+    # Linting & formatting
+    "ruff",
+    "black",
+    "bandit",
+    "mypy",
+    "pre-commit",
+    # Type stubs
+    "types-PyYAML",
+    "types-tabulate",
+    "types-requests",
+    "types-croniter",
+    # Required for tests
+    "jsonschema",
+    "packaging",
+    # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
+    "scipy>=1.11.0,<1.16.0",
+    "numpy>=1.24.0,<2.3.0",
+]
 
 [project.scripts]
 jmo = "scripts.cli.jmo:main"
-jmotools = "scripts.cli.jmotools:main"
+# jmotools removed in v0.9.0 - all commands consolidated into 'jmo'
 
 [tool.setuptools]
 include-package-data = true
@@ -59,7 +91,7 @@ license-files = ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE"]
 include = ["scripts*"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Start lenient, gradually increase
@@ -69,6 +101,9 @@ show_error_codes = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
+# Performance optimizations
+incremental = true
+cache_dir = ".mypy_cache"
 
 # Gradually increase strictness for core modules
 [[tool.mypy.overrides]]
@@ -79,26 +114,124 @@ disallow_untyped_defs = true
 module = "scripts.core.config"
 disallow_untyped_defs = true
 
+[[tool.mypy.overrides]]
+module = "scripts.core.plugin_api"
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "scripts.core.schema_validator"
+disallow_untyped_defs = true
+
+# Disable unused-ignore warnings for modules with optional dependency fallbacks
+# These have type: ignore comments needed locally but not in all environments
+[[tool.mypy.overrides]]
+module = "scripts.core.dedup_enhanced"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "scripts.cli.diff_commands"
+warn_unused_ignores = false
+
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as performance benchmarks (deselect with '-m \"not benchmark\"')",
+    "smoke: marks tests as smoke tests for released packages (deselect with '-m \"not smoke\"')",
+    "requires_tools: marks tests that require external security tools installed",
+    "integration: marks tests as integration tests requiring real tools and longer runtime",
+    "docker: marks tests that require Docker to be running",
+    "baseline: marks tests that validate against vulnerability baselines",
+    "e2e: marks end-to-end tests that validate complete workflows",
+    "stress: marks tests as stress tests requiring significant resources",
 ]
+# Test durations file for pytest-split sharding
+# Generate with: pytest --store-durations --durations-path=.test_durations
+# This enables duration-based splitting for more even shard distribution
+
+# pytest-timeout: Safety net to prevent infinite test hangs
+# - Default 120s per test (most tests complete in <1s)
+# - Use @pytest.mark.timeout(300) for legitimately slow tests
+# - Set PYTEST_TIMEOUT=0 to disable in local debugging
+timeout = 120
+timeout_method = "thread"  # Works on Windows (unlike signal)
+# pythonpath: Ensure tests can import 'scripts' package without PYTHONPATH env var
+pythonpath = ["."]
 
 [tool.coverage.run]
+branch = true
+source = ["scripts"]
 omit = [
     # Data-only files with no executable logic
-    "scripts/core/compliance_frameworks.py",  # Pure data structure (compliance mappings)
+    "scripts/core/compliance_frameworks.py",
+    # CLI entry points (tested via integration tests)
+    "scripts/cli/jmo.py",
+    "scripts/cli/jmotools.py",
+    "scripts/cli/clone_from_tsv.py",
+    # Dashboard generator (standalone HTML builder)
+    "scripts/core/generate_dashboard.py",
+    # MCP server - separate integration
+    "scripts/jmo_mcp/*",
+    # Email service requires SMTP infrastructure
+    "scripts/core/email_service.py",
+    # Interactive wizard - difficult to test comprehensively
+    "scripts/cli/wizard.py",
+    "scripts/cli/wizard_flows/policy_flow.py",
+    # Experimental policy engine
+    "scripts/core/policy_engine.py",
+    # Path sanitizers utility
+    "scripts/cli/path_sanitizers.py",
 ]
 
 [tool.coverage.report]
+show_missing = true
+skip_empty = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "if TYPE_CHECKING:",
     "raise AssertionError",
     "raise NotImplementedError",
+    "^if __name__ == ['\"]__main__['\"]:",
+]
+omit = [
+    "scripts/cli/jmo.py",
+    "scripts/cli/jmotools.py",
+    "scripts/cli/clone_from_tsv.py",
+    "scripts/core/generate_dashboard.py",
+    "scripts/jmo_mcp/*",
+    "scripts/core/email_service.py",
+    "scripts/cli/wizard.py",
+    "scripts/cli/wizard_flows/policy_flow.py",
+    "scripts/core/policy_engine.py",
+    "scripts/cli/path_sanitizers.py",
 ]
 
 [tool.ruff]
 # Exclude test fixtures that are intentionally vulnerable
 extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]
+
+[tool.bandit]
+exclude_dirs = [
+    ".venv",
+    ".venv-pypi",
+    ".post-release-venv",
+    "venv",
+    "docs",
+    "samples",
+    "assets",
+    "archive",
+    "tests",
+    "dev",
+]
+# Bandit skip justifications:
+# B404: import subprocess - expected in CLI wrappers
+# B603: subprocess without shell=True is SECURE (list args)
+# B606: os.startfile - guarded and platform-specific
+# B607: start_process_with_partial_path - well-known tools (git, docker, etc.)
+# B110: try_except_pass - intentional for cleanup/optional ops
+# B112: try_except_continue - intentional for parsing/iteration resilience
+# B608: SQL injection false positives - parameterized queries used
+# B101: assert_used - acceptable in dev scripts and verification
+# B202: tarfile extractall - official tool downloads from trusted sources
+# B324: MD5 for dedup fingerprinting, not security purposes
+skips = ["B404", "B603", "B606", "B607", "B110", "B112", "B608", "B101", "B202", "B324"]

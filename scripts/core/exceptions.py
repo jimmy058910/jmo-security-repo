@@ -18,8 +18,10 @@ Related:
     - ACTION_PLAN.md Task 3.3: Exception Handling Refactor
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class JmoSecurityException(Exception):
@@ -47,6 +49,30 @@ class ToolNotFoundException(JmoSecurityException):
     def __init__(self, tool: str):
         self.tool = tool
         super().__init__(f"Security tool not found: {tool}")
+
+
+class OPANotFoundException(ToolNotFoundException):
+    """Raised when OPA (Open Policy Agent) binary is not installed or not in PATH.
+
+    OPA is required for policy evaluation but is optional - scans can complete
+    without it. This exception allows graceful degradation when OPA is unavailable.
+
+    The exception provides installation instructions for the user.
+
+    Example:
+        >>> if not shutil.which("opa"):
+        ...     raise OPANotFoundException()
+    """
+
+    INSTALL_INSTRUCTIONS = (
+        "OPA not installed. Install via: jmo tools install opa "
+        "or download from https://www.openpolicyagent.org/docs/latest/#running-opa"
+    )
+
+    def __init__(self):
+        # Initialize with the tool name "opa"
+        super(ToolNotFoundException, self).__init__(self.INSTALL_INSTRUCTIONS)
+        self.tool = "opa"
 
 
 class AdapterParseException(JmoSecurityException):
@@ -97,7 +123,7 @@ class FingerprintCollisionException(JmoSecurityException):
     """
 
     def __init__(
-        self, fingerprint: str, finding1: Dict[str, Any], finding2: Dict[str, Any]
+        self, fingerprint: str, finding1: dict[str, Any], finding2: dict[str, Any]
     ):
         self.fingerprint = fingerprint
         self.finding1 = finding1
@@ -162,7 +188,7 @@ class ConfigurationException(JmoSecurityException):
         ...     raise ConfigurationException("timeout", "must be non-negative")
     """
 
-    def __init__(self, field: str, reason: str, path: Optional[Path] = None):
+    def __init__(self, field: str, reason: str, path: Path | None = None):
         self.field = field
         self.reason = reason
         self.path = path
@@ -198,9 +224,9 @@ class ToolExecutionException(JmoSecurityException):
     def __init__(
         self,
         tool: str,
-        command: List[str],
+        command: list[str],
         return_code: int,
-        stderr: Optional[str] = None,
+        stderr: str | None = None,
     ):
         self.tool = tool
         self.command = command
@@ -219,6 +245,7 @@ class ToolExecutionException(JmoSecurityException):
 __all__ = [
     "JmoSecurityException",
     "ToolNotFoundException",
+    "OPANotFoundException",
     "AdapterParseException",
     "FingerprintCollisionException",
     "ComplianceMappingException",

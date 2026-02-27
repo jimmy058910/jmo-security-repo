@@ -7,24 +7,27 @@ Scans Kubernetes clusters using:
 Integrates with ToolRunner for execution management.
 """
 
-from pathlib import Path
-from typing import Dict, List, Tuple, Callable, Optional
+from __future__ import annotations
 
+from pathlib import Path
+from collections.abc import Callable
+
+from ...core.config import RetryConfig
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_k8s_resource(
-    k8s_info: Dict[str, str],
+    k8s_info: dict[str, str],
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
-    retries: int,
-    per_tool_config: Dict,
+    retries: int | RetryConfig,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    find_tool_func: Callable[[str], str | None] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a Kubernetes cluster with trivy.
 
@@ -36,7 +39,7 @@ def scan_k8s_resource(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
@@ -44,10 +47,10 @@ def scan_k8s_resource(
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
+    _find_tool = find_tool_func or find_tool
     _write_stub = write_stub_func or write_stub
 
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
     context = k8s_info["context"]
@@ -55,7 +58,7 @@ def scan_k8s_resource(
     all_namespaces = k8s_info.get("all_namespaces", "False") == "True"
 
     safe_name = f"{context}_{namespace}".replace("/", "_").replace("*", "all")
-    out_dir = results_dir / "individual-k8s" / safe_name
+    out_dir = results_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def get_tool_timeout(tool: str, default: int) -> int:
@@ -67,7 +70,7 @@ def scan_k8s_resource(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -79,11 +82,12 @@ def scan_k8s_resource(
     # Trivy Kubernetes scan
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
-        if _tool_exists("trivy"):
+        trivy_path = _find_tool("trivy")
+        if trivy_path:
             trivy_flags = get_tool_flags("trivy")
 
             trivy_cmd = [
-                "trivy",
+                trivy_path,
                 "k8s",
                 "-q",
                 "-f",
@@ -126,7 +130,7 @@ def scan_k8s_resource(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     for result in results:
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)
@@ -151,7 +155,7 @@ def scan_k8s_resource(
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        statuses["__attempts__"] = attempts_map  # type: ignore[assignment]  # Store retry metadata alongside bool statuses
 
     # Return identifier in format "context:namespace"
     context = k8s_info.get("context", "unknown")
