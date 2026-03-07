@@ -228,7 +228,7 @@ def _scan_ast_tree(tree: ast.AST) -> list[tuple[str, int, str]]:
                 if kw.arg == "shell" and isinstance(kw.value, ast.Constant):
                     if kw.value.value is True:
                         violations.append(
-                            ("shell_true", node.lineno, f"{call_name}(shell=True)")
+                            ("shell_true", node.lineno, f"{call_name} uses shell=True")
                         )
 
         # f-string / format as first arg to subprocess
