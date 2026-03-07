@@ -83,7 +83,7 @@ These guidelines help AI coding agents work effectively in this repository. Focu
 - Config loader: `scripts/core/config.py`
 - Reporters: `scripts/core/reporters/`
 - Adapters: `scripts/core/adapters/`
-- Docs: `README.md`, `QUICKSTART.md`, `SAMPLE_OUTPUTS.md`, `TEST.md`
+- Docs: `README.md`, `QUICKSTART.md`, `docs/SAMPLE_OUTPUTS.md`, `TEST.md`
 - Make targets: `Makefile`
 
 ## Maintainers’ appendix

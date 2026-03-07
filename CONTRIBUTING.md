@@ -394,7 +394,7 @@ make samples-verify
 ### Related Documentation
 
 - [samples/README.md](samples/README.md) - Complete fixture documentation
-- [SAMPLE_OUTPUTS.md](SAMPLE_OUTPUTS.md) - Example outputs reference
+- [SAMPLE_OUTPUTS.md](docs/SAMPLE_OUTPUTS.md) - Example outputs reference
 - [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) - Output format specification
 
 ## Docker local testing

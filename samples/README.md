@@ -400,4 +400,4 @@ per_tool:
 - Main README: [../README.md](../README.md)
 - User Guide: [../docs/USER_GUIDE.md](../docs/USER_GUIDE.md)
 - Quick Start: [../QUICKSTART.md](../QUICKSTART.md)
-- Sample Outputs: [../SAMPLE_OUTPUTS.md](../SAMPLE_OUTPUTS.md)
+- Sample Outputs: [../docs/SAMPLE_OUTPUTS.md](../docs/SAMPLE_OUTPUTS.md)

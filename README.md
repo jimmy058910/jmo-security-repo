@@ -122,7 +122,7 @@ All findings normalized to CommonFinding schema v1.2.0:
 | SARIF | `findings.sarif` | GitHub/GitLab Code Scanning |
 | YAML | `findings.yaml` | Alternative data format |
 
-**Sample outputs:** [SAMPLE_OUTPUTS.md](SAMPLE_OUTPUTS.md)
+**Sample outputs:** [SAMPLE_OUTPUTS.md](docs/SAMPLE_OUTPUTS.md)
 
 ---
 

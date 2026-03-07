@@ -73,7 +73,7 @@
 |----------|---------|
 | [Results Guide](RESULTS_GUIDE.md) | Understanding findings, output formats, triage workflow |
 | [Results Quick Reference](RESULTS_QUICK_REFERENCE.md) | At-a-glance results reference card |
-| [Sample Outputs](../SAMPLE_OUTPUTS.md) | Example scan outputs |
+| [Sample Outputs](SAMPLE_OUTPUTS.md) | Example scan outputs |
 
 ### Features
 

@@ -521,7 +521,7 @@ with patch("module.tool_exists", return_value=True):
 
 **Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
 
-**Plans:** [docs/plans/README.md](docs/plans/README.md)
+**Plans:** [dev-only/plans/README.md](dev-only/plans/README.md)
 
 ## Notes
 
