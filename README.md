@@ -77,20 +77,22 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 ## Security Tools
 
-28 scanners across 11 categories:
+29 tools across 12 categories:
 
 | Category | Tools |
 |----------|-------|
 | **Secrets** | TruffleHog (verified), Nosey Parker, Semgrep-Secrets |
 | **SAST** | Semgrep, Bandit, Gosec, Horusec |
 | **SBOM** | Syft, CDXgen, ScanCode |
-| **SCA** | Trivy, Grype, OSV-Scanner, Dependency-Check |
+| **SCA** | Trivy, Grype, Dependency-Check |
 | **IaC** | Checkov, Checkov-CICD |
 | **Cloud/CSPM** | Prowler, Kubescape |
-| **DAST** | OWASP ZAP, Nuclei |
-| **Dockerfile** | Hadolint |
+| **DAST** | OWASP ZAP, Nuclei, Akto |
+| **Dockerfile/Shell** | Hadolint, ShellCheck |
 | **Malware** | YARA |
+| **Mobile** | MobSF |
 | **System** | Lynis |
+| **Policy** | OPA |
 | **Runtime** | Trivy-RBAC, Falco, AFL++ |
 
 **Tool details:** [docs/USER_GUIDE.md#tool-overview](docs/USER_GUIDE.md#tool-overview)
@@ -101,10 +103,10 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 
 | Profile | Tools | Time | Use Case |
 |---------|-------|------|----------|
-| `fast` | 8 | 5-10 min | Pre-commit, PR validation |
+| `fast` | 9 | 5-10 min | Pre-commit, PR validation |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s |
 | `balanced` | 18 | 18-25 min | CI/CD pipelines |
-| `deep` | 28 | 40-70 min | Comprehensive audits |
+| `deep` | 29 | 40-70 min | Comprehensive audits |
 
 ---
 
@@ -359,4 +361,4 @@ Dual licensed under [MIT](LICENSE-MIT) OR [Apache 2.0](LICENSE-APACHE).
 
 **Author:** James Moceri
 **Project:** <https://jmotools.com> | [GitHub](https://github.com/jimmy058910/jmo-security-repo)
-**Last Updated:** December 2025
+**Last Updated:** March 2026

@@ -265,7 +265,7 @@ All notable changes to JMo Security will be documented in this file.
 - Updated docs/index.md navigation hub
 - Archived historical documentation to docs/archive/
 
-## 0.9.0 (2025-11-XX)
+## 0.9.0 (2025-11-04)
 
 ### Added
 

@@ -148,7 +148,7 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 | Secrets | TruffleHog, Nosey Parker, Semgrep-Secrets |
 | SAST | Semgrep, Bandit, Gosec, Horusec |
 | SBOM | Syft, CDXgen, ScanCode |
-| SCA | Trivy, Grype, OSV-Scanner, Dependency-Check |
+| SCA | Trivy, Grype, Dependency-Check |
 | IaC | Checkov, Checkov-CICD |
 | Cloud/CSPM | Prowler, Kubescape |
 | DAST | OWASP ZAP, Nuclei |

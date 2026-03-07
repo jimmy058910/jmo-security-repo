@@ -284,7 +284,7 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
 | `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
 | `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
-| `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
+| `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
 
 **Note:** Main `Dockerfile` = deep variant. See PROFILES_AND_TOOLS.md for complete tool lists.
 

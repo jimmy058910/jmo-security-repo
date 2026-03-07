@@ -21,7 +21,7 @@
 
 ## Tool Profiles Reference
 
-> **Canonical source:** [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md)
+> **Canonical source:** [PROFILES_AND_TOOLS.md](../PROFILES_AND_TOOLS.md)
 
 ### Fast Profile (9 tools, 5-10 min)
 
@@ -388,4 +388,4 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 **Matrix Generated:** 2025-12-22
 **JMo Security:** v1.0.0
-**Maintainer:** See [CONTRIBUTING.md](../CONTRIBUTING.md)
+**Maintainer:** See [CONTRIBUTING.md](../../CONTRIBUTING.md)

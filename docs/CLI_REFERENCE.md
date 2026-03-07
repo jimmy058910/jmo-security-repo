@@ -15,7 +15,7 @@ Complete reference for all CLI commands and flags. Run `jmo <command> --help` fo
 | `jmo fast` | Quick scan (9 tools, 5-10 min) |
 | `jmo slim` | Cloud/IaC scan (14 tools, 12-18 min) |
 | `jmo balanced` | Production scan (18 tools, 18-25 min) |
-| `jmo full` | Comprehensive audit (28 tools, 40-70 min) |
+| `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
 | `jmo report` | Generate reports from scan results |
 | `jmo ci` | Scan + report for CI/CD pipelines |

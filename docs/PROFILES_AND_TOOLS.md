@@ -28,7 +28,7 @@ This document is the authoritative reference for which tools are included in eac
 | **fast** | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
 | **slim** | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
 | **balanced** | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
-| **deep** | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+| **deep** | 29 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
 
 **Installation:**
 
@@ -45,7 +45,7 @@ jmo tools install --profile balanced
 
 ## Profile Overview
 
-### Fast Profile (8 tools)
+### Fast Profile (9 tools)
 
 **Purpose:** Quick validation for pre-commit hooks, pull requests, and CI gates.
 
@@ -69,7 +69,7 @@ jmo tools install --profile balanced
 
 **Tools included:** Slim profile + DAST (ZAP), license scanning (ScanCode), SBOM generation (CDXgen), and Go-specific analysis (Gosec).
 
-### Deep Profile (28 tools)
+### Deep Profile (29 tools)
 
 **Purpose:** Comprehensive security audits for compliance and penetration testing.
 
@@ -89,7 +89,7 @@ jmo tools install --profile balanced
 
 ## Profile Tool Lists
 
-### Fast Profile (8 tools)
+### Fast Profile (9 tools)
 
 ```yaml
 fast:
@@ -101,13 +101,14 @@ fast:
   - hadolint        # Dockerfile linting
   - nuclei          # Fast vulnerability scanner
   - shellcheck      # Shell script analysis
+  - opa             # Policy-as-code engine (Open Policy Agent)
 ```
 
 ### Slim Profile (14 tools)
 
 ```yaml
 slim:
-  # Fast profile (8)
+  # Fast profile (9)
   - trufflehog
   - semgrep
   - syft
@@ -116,6 +117,7 @@ slim:
   - hadolint
   - nuclei
   - shellcheck
+  - opa             # Policy-as-code engine (Open Policy Agent)
   # Additional (5)
   - prowler         # Multi-cloud CSPM (AWS/Azure/GCP/K8s)
   - kubescape       # Kubernetes security (NSA/CISA)
@@ -129,7 +131,7 @@ slim:
 
 ```yaml
 balanced:
-  # Slim profile (13)
+  # Slim profile (14)
   - trufflehog
   - semgrep
   - syft
@@ -138,6 +140,7 @@ balanced:
   - hadolint
   - nuclei
   - shellcheck
+  - opa             # Policy-as-code engine (Open Policy Agent)
   - prowler
   - kubescape
   - grype
@@ -151,7 +154,7 @@ balanced:
   # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
-### Deep Profile (28 tools)
+### Deep Profile (29 tools)
 
 ```yaml
 deep:
@@ -187,6 +190,7 @@ deep:
   - afl++           # Coverage-guided fuzzing [MANUAL]
   - mobsf           # Mobile security (Android/iOS) [MANUAL]
   - lynis           # System hardening audit
+  - opa             # Policy-as-code engine (Open Policy Agent)
 ```
 
 ---
@@ -750,7 +754,7 @@ for profile in ['fast', 'slim', 'balanced', 'deep']:
 # fast: 9 tools
 # slim: 14 tools
 # balanced: 18 tools
-# deep: 28 tools
+# deep: 29 tools
 ```
 
 ---

@@ -832,7 +832,7 @@ All JSON/YAML outputs now include scan metadata:
 {
   "meta": {
     "output_version": "1.0.0",
-    "jmo_version": "0.9.0",
+    "jmo_version": "1.0.0",
     "schema_version": "1.2.0",
     "timestamp": "2025-11-04T12:34:56Z",
     "scan_id": "scan-abc123",

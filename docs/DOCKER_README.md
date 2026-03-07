@@ -296,7 +296,7 @@ START: What is your primary use case?
 
 ├─ Complete security audit (pre-release, compliance)
 │  → Use DEEP variant (:deep)
-│     - 28 tools, 40-70 min scans
+│     - 29 tools, 40-70 min scans
 │     - Best for: Security teams, audits, compliance
 
 ├─ Production CI/CD (daily/weekly scans)
@@ -311,7 +311,7 @@ START: What is your primary use case?
 
 └─ Fast feedback (pre-commit, PR checks)
    → Use FAST variant (:fast)
-      - 8 tools, 5-10 min scans
+      - 9 tools, 5-10 min scans
       - Best for: Developers, CI gates, quick validation
 ```
 
@@ -407,7 +407,7 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Deep - Maximum coverage (28 tools, 25 Docker-ready)
+# Deep - Maximum coverage (29 tools, 26 Docker-ready)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
 # Balanced - Production CI/CD (18 tools)
@@ -416,7 +416,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:balanced
 # Slim - Cloud/K8s focused (14 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:slim
 
-# Fast - Quick validation (8 tools)
+# Fast - Quick validation (9 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:fast
 ```
 
@@ -446,7 +446,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast \
 ```
 
 **Time:** 5-10 minutes
-**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck (8 tools)
+**Tools:** trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa (9 tools)
 
 #### Balanced Scan (Recommended Default)
 
@@ -456,7 +456,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
 ```
 
 **Time:** 18-25 minutes
-**Tools:** Fast + prowler, kubescape, grype, bearer, horusec, dependency-check, zap, scancode, cdxgen, gosec (18 tools)
+**Tools:** Fast + prowler, kubescape, grype, bearer, horusec, zap, scancode, cdxgen, gosec (18 tools)
 
 #### Deep Scan (Comprehensive)
 
@@ -466,7 +466,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** 40-70 minutes
-**Tools:** All 28 tools (25 Docker-ready + 3 manual installation)
+**Tools:** All 29 tools (26 Docker-ready + 3 manual installation)
 
 ### Scan Multiple Projects
 
