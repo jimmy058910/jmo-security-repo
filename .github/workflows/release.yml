@@ -71,11 +71,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚀 Running comprehensive pre-release validation..."
+          echo "Running comprehensive pre-release validation..."
           echo ""
-          python3 scripts/dev/pre_release_check.py || {
+          python3 -m scripts.cli.jmo validate --tier quick --json || {
             echo ""
-            echo "❌ PRE-RELEASE CHECKS FAILED!"
+            echo "PRE-RELEASE CHECKS FAILED!"
             echo "   Fix issues above before releasing."
             echo ""
             exit 1

@@ -861,6 +861,52 @@ Validate an adapter plugin file.
 |------|-------------|
 | `FILE` | Path to adapter plugin file (positional, required) |
 
+### jmo validate
+
+Pre-release validation system with GO/NO-GO scorecard. Runs 207 checks across 4 categories.
+
+```text
+jmo validate [OPTIONS]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--tier {quick,full}` | Validation tier (default: quick). Quick uses fixtures only; full runs real tools. |
+| `--category CAT[,CAT]` | Run specific categories only. Values: cli, scans, platform, release |
+| `--verbose, -v` | Show individual check details per category |
+| `--fail-fast` | Stop after first category with failures |
+| `--json` | Machine-readable JSON output |
+
+**Categories:**
+
+| Category | Quick Checks | Full Checks | What It Validates |
+|----------|-------------|-------------|-------------------|
+| CLI Completeness | 94 | 102 | Subcommand --help, arg validation, exit codes, version |
+| Scan Correctness | 80 | 92 | Adapter parsing, dedup, compliance, reporters, schema |
+| Cross-Platform | 33 | 38 | Path handling, subprocess security, SQLite, env vars |
+| Release Artifacts | 46 | 52 | Version consistency, docs, git hygiene, code quality |
+
+**Exit codes:** 0 = GO (all pass), 1 = NO-GO (failures found), 2 = system error.
+
+**Examples:**
+
+```bash
+# Quick validation (no external tools needed)
+jmo validate
+
+# Full validation with real tool checks
+jmo validate --tier full
+
+# Only check CLI completeness
+jmo validate --category cli -v
+
+# JSON output for CI/automation
+jmo validate --json
+
+# Stop on first failing category
+jmo validate --fail-fast
+```
+
 ---
 
 ## Examples

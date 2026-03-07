@@ -158,6 +158,8 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `jmo tools clean --force` | Remove isolated venvs (pip conflict tools) |
 | `jmo diff results-A/ results-B/` | Compare scans |
 | `jmo history list` | View scan history |
+| `jmo validate` | Pre-release validation scorecard (quick tier) |
+| `jmo validate --tier full` | Full validation with real tools |
 | `make fmt` | Format code (Black + Ruff) |
 | `make lint` | Lint checks |
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |

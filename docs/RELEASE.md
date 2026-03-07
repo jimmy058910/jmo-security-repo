@@ -157,7 +157,16 @@ Remember to update CHANGELOG.md with user-facing changes.
 
    **Documentation:** See [dev-only/README_CONSISTENCY.md](../dev-only/README_CONSISTENCY.md) for complete guide.
 
-6. **Verify CI is green:**
+6. **Run pre-release validation:**
+
+   ```bash
+   jmo validate                    # Quick tier (fixture-based, ~3 min)
+   jmo validate --tier full -v     # Full tier with real tools (~10 min)
+   ```
+
+   This runs 207 checks across CLI completeness, scan correctness, cross-platform behavior, and release artifacts. Expect a GO verdict before proceeding. Use `--json` for machine-readable output.
+
+7. **Verify CI is green:**
    - Check GitHub Actions: all tests passing on ubuntu-latest and macos-latest
    - Coverage uploaded to Codecov successfully
 
