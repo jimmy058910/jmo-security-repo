@@ -79,12 +79,7 @@ BUSINESS_PLAN.md
 PRODUCT_DEFINITION.md
 docs/COMPLETENESS_ANALYZER.md
 
-# Archived documentation (historical reference)
-# Archive structure is tracked (README.md, v0.6.0/)
-# Individual archived files are gitignored
-docs/archive/merged/*
-!docs/archive/README.md
-!docs/archive/v0.6.0/
+# Archived documentation moved to dev-only/archive/ (not tracked)
 
 # Private local scripts and outputs (developer-only workspace)
 /dev-only

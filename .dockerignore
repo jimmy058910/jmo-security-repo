@@ -34,7 +34,7 @@ htmlcov/
 .claude/
 .mcp.json
 .mcp.json.example
-.mcp-skills/
+# .mcp-skills/ consolidated into .claude/mcp-skills/
 .serena/
 
 # =============================================================================
