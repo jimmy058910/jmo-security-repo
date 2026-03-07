@@ -27,6 +27,7 @@ import tarfile
 import zipfile
 
 from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.tool_utils import find_tool, tool_exists
 
 from rich.console import Console
 from rich.progress import (
@@ -144,13 +145,13 @@ def install_dependency(
 
     # Determine if running as root (for sudo handling)
     is_root = os.getuid() == 0 if hasattr(os, "getuid") else False
-    sudo_available = shutil.which("sudo") is not None
+    sudo_available = tool_exists("sudo", warn=False)
 
     # Try each package manager in order of preference
     for pkg_manager, command in platform_commands.items():
         # Special case: NodeSource for Node.js 20+ on Linux
         if pkg_manager == "nodesource" and command == "curl_script":
-            if shutil.which("curl"):
+            if tool_exists("curl", warn=False):
                 _print("[*] Installing Node.js 20 via NodeSource...")
                 try:
                     # Download and run NodeSource setup script
@@ -1287,7 +1288,7 @@ class ToolInstaller:
         start_time = time.time()
 
         # Check if npm is available
-        npm_cmd = shutil.which("npm")
+        npm_cmd = find_tool("npm")
         if not npm_cmd:
             for tool_name in npm_tools:
                 results.append(
@@ -1577,7 +1578,7 @@ class ToolInstaller:
         """Install via Homebrew."""
         import time
 
-        if not shutil.which("brew"):
+        if not tool_exists("brew", warn=False):
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
@@ -1644,7 +1645,7 @@ class ToolInstaller:
         """Install via apt (requires sudo)."""
         import time
 
-        if not shutil.which("apt-get"):
+        if not tool_exists("apt-get", warn=False):
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
@@ -1725,7 +1726,7 @@ class ToolInstaller:
         """Install via npm."""
         import time
 
-        npm_cmd = shutil.which("npm")
+        npm_cmd = find_tool("npm")
         if not npm_cmd:
             return InstallResult(
                 tool_name=tool_name,
@@ -1737,7 +1738,7 @@ class ToolInstaller:
         # Check Node.js version for packages that require newer versions
         # cdxgen requires Node.js 18+ (fails silently on older versions)
         if tool_name == "cdxgen":
-            node_cmd = shutil.which("node")
+            node_cmd = find_tool("node")
             if node_cmd:
                 try:
                     ver_result = subprocess.run(
@@ -2524,12 +2525,12 @@ class ToolInstaller:
         Uses -f flag for curl to fail on HTTP errors (404, 500, etc.)
         rather than saving error pages as the output file.
         """
-        if shutil.which("curl"):
+        if tool_exists("curl", warn=False):
             # -f: Fail silently on server errors (exit non-zero on 4xx/5xx)
             # -S: Show errors even with -s
             # -L: Follow redirects
             return ["curl", "-fsSL", "-o", str(output_path), url]
-        elif shutil.which("wget"):
+        elif tool_exists("wget", warn=False):
             # wget already fails on HTTP errors by default
             return ["wget", "-q", "-O", str(output_path), url]
         return None

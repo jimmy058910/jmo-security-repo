@@ -327,7 +327,7 @@ def _check_tool_exists_consistency() -> CheckResult | None:
         )
 
     for path in sorted(_SCRIPTS_DIR.rglob("*.py")):
-        if path.name == "scan_utils.py":
+        if path.name in ("scan_utils.py", "tool_utils.py", "test_wizard_tools.py"):
             continue
         if "__pycache__" in str(path):
             continue

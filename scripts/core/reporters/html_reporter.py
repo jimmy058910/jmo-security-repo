@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+import html
 import json
 from pathlib import Path
 from typing import Any
@@ -116,7 +117,8 @@ def _write_fallback_html(findings: list[dict[str, Any]], out_path: Path) -> None
         out_path: Path to write fallback dashboard.html
     """
     total = len(findings)
-    html = f"""<!DOCTYPE html>
+    safe_total = html.escape(str(total))
+    content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -161,10 +163,10 @@ def _write_fallback_html(findings: list[dict[str, Any]], out_path: Path) -> None
     </div>
     <div class="stats">
         <h2>Summary</h2>
-        <p><strong>Total Findings:</strong> {total}</p>
+        <p><strong>Total Findings:</strong> {safe_total}</p>
         <p>For detailed findings, please view the JSON report at <code>findings.json</code>.</p>
     </div>
 </body>
 </html>
 """
-    out_path.write_text(html, encoding="utf-8")
+    out_path.write_text(content, encoding="utf-8")

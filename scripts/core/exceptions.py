@@ -42,7 +42,7 @@ class ToolNotFoundException(JmoSecurityException):
         tool: Name of the missing tool (e.g., 'trivy', 'semgrep')
 
     Example:
-        >>> if not shutil.which("trivy"):
+        >>> if not tool_exists("trivy"):
         ...     raise ToolNotFoundException("trivy")
     """
 
@@ -60,7 +60,7 @@ class OPANotFoundException(ToolNotFoundException):
     The exception provides installation instructions for the user.
 
     Example:
-        >>> if not shutil.which("opa"):
+        >>> if not tool_exists("opa"):
         ...     raise OPANotFoundException()
     """
 

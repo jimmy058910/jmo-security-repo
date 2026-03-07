@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import os
-import shutil
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
+
+from scripts.core.tool_utils import tool_exists
 
 if TYPE_CHECKING:
     pass
@@ -336,7 +337,7 @@ def configure_k8s_target(
     config = target_config_class()
     config.type = "k8s"
 
-    if not shutil.which("kubectl"):
+    if not tool_exists("kubectl", warn=False):
         print(
             _prompter.colorize(
                 "Warning: kubectl not found. Install kubectl to scan K8s clusters.",

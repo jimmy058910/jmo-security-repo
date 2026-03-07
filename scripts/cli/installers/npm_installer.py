@@ -12,7 +12,6 @@ Key features:
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 import time
 from typing import TYPE_CHECKING
@@ -25,6 +24,7 @@ from scripts.cli.installers.base import (
 )
 from scripts.cli.installers.models import InstallResult
 from scripts.core.install_config import NPM_INSTALL_TIMEOUT_SECONDS
+from scripts.core.tool_utils import find_tool
 from scripts.core.validation import sanitize_subprocess_output
 
 if TYPE_CHECKING:
@@ -95,7 +95,7 @@ class NpmInstaller(BaseInstaller):
         start_time = time.time()
 
         # Check npm availability
-        npm_cmd = shutil.which("npm")
+        npm_cmd = find_tool("npm")
         if not npm_cmd:
             return InstallResult(
                 tool_name=tool_name,
@@ -197,7 +197,7 @@ class NpmInstaller(BaseInstaller):
         start_time = time.time()
 
         # Check npm availability first
-        npm_cmd = shutil.which("npm")
+        npm_cmd = find_tool("npm")
         if not npm_cmd:
             for tool_name, _ in tools:
                 results.append(
@@ -325,7 +325,7 @@ class NpmInstaller(BaseInstaller):
         if min_version is None:
             return None
 
-        node_cmd = shutil.which("node")
+        node_cmd = find_tool("node")
         if not node_cmd:
             # Let the install proceed and fail naturally
             return None

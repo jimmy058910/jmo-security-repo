@@ -38,6 +38,7 @@ from scripts.cli.installers.base import (
 )
 from scripts.cli.installers.models import InstallResult
 from scripts.core.archive_security import safe_tar_extract, safe_zip_extract
+from scripts.core.tool_utils import tool_exists
 from scripts.core.install_config import (
     BINARY_URLS,
     DOWNLOAD_TIMEOUT_SECONDS,
@@ -424,12 +425,12 @@ class BinaryInstaller(BaseInstaller):
         Returns:
             Command as list of strings, or None if no download tool available
         """
-        if shutil.which("curl"):
+        if tool_exists("curl", warn=False):
             # -f: Fail silently on server errors (exit non-zero on 4xx/5xx)
             # -S: Show errors even with -s
             # -L: Follow redirects
             return ["curl", "-fsSL", "-o", str(output_path), url]
-        elif shutil.which("wget"):
+        elif tool_exists("wget", warn=False):
             # wget already fails on HTTP errors by default
             return ["wget", "-q", "-O", str(output_path), url]
         return None

@@ -3519,8 +3519,9 @@ def cmd_mcp_server(args):
 
 def _open_results(args):
     """Open scan results in browser/editor."""
-    import shutil
     import subprocess  # nosec B404
+
+    from scripts.core.tool_utils import find_tool
 
     results_dir = Path(args.results_dir) / "summaries"
     if not results_dir.exists():
@@ -3531,9 +3532,9 @@ def _open_results(args):
 
     opener = None
     if sys.platform.startswith("linux"):
-        opener = shutil.which("xdg-open")
+        opener = find_tool("xdg-open")
     elif sys.platform == "darwin":
-        opener = shutil.which("open")
+        opener = find_tool("open")
     elif os.name == "nt":
         opener = "start"
 

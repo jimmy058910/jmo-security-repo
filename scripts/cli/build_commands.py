@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import argparse
 import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
+
+from scripts.core.tool_utils import tool_exists
 
 # Variant configuration: maps variant name to Dockerfile
 VARIANTS = {
@@ -41,7 +42,7 @@ def _detect_arch() -> str:
 
 def _check_docker() -> bool:
     """Check if Docker is available and running."""
-    if not shutil.which("docker"):
+    if not tool_exists("docker", warn=False):
         print("Error: Docker not found in PATH", file=sys.stderr)
         return False
 

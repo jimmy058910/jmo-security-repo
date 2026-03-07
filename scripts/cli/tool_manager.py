@@ -11,13 +11,14 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable
+
+from scripts.core.tool_utils import find_tool, tool_exists
 
 from scripts.core.tool_registry import (
     CONTENT_TRIGGERED_TOOLS,
@@ -1078,7 +1079,7 @@ class ToolManager:
 
         # lynis is cloned to ~/.jmo/bin/lynis/ directory
         # The actual script is at ~/.jmo/bin/lynis/lynis
-        # Check this BEFORE shutil.which() to prefer our cloned version over apt-installed
+        # Check this BEFORE PATH lookup to prefer our cloned version over apt-installed
         if binary_name == "lynis":
             lynis_clone_path = home / ".jmo" / "bin" / "lynis" / "lynis"
             if lynis_clone_path.exists():
@@ -1165,7 +1166,7 @@ class ToolManager:
             return None
 
         # Now check PATH for standard tools
-        path = shutil.which(binary_name)
+        path = find_tool(binary_name)
         if path:
             return path
 
@@ -1623,8 +1624,8 @@ class ToolManager:
 
         missing = []
         for cmd in required:
-            # First try shutil.which for standard PATH lookup
-            if shutil.which(cmd):
+            # First try tool_exists for standard PATH + JMo paths lookup
+            if tool_exists(cmd, warn=False):
                 continue
             # Then try _find_binary for special paths (zap, dependency-check, etc.)
             if self._find_binary(cmd):
@@ -1654,7 +1655,7 @@ class ToolManager:
 
         # Lynis requires bash (shell script) - check on Windows
         if tool_name == "lynis" and self.platform == "windows":
-            if not shutil.which("bash"):
+            if not tool_exists("bash", warn=False):
                 return (
                     False,
                     "Requires bash (install WSL, Git Bash, or Cygwin)",
@@ -1705,7 +1706,7 @@ class ToolManager:
                 continue
             # Check for common dependency binaries
             if cmd in ("node", "npm", "java", "bash", "go", "cargo"):
-                if not shutil.which(cmd):
+                if not tool_exists(cmd, warn=False):
                     # Normalize node/npm to "node" for dependency tracking
                     dep = "node" if cmd == "npm" else cmd
                     if dep not in missing:

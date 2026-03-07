@@ -318,6 +318,12 @@ def apply_fix(
         >>> # Step 2: Apply if preview looks good
         >>> result = apply_fix(..., dry_run=False)
     """
+    # TODO(security): When implementing apply_fix(), add these controls:
+    #   1. Directory traversal validation on patch paths (CWE-22)
+    #   2. Backup-before-apply with rollback on failure
+    #   3. Run tests after applying patch, rollback if tests fail
+    #   4. Validate patch doesn't modify files outside project root
+    #   5. Rate limit to prevent rapid-fire patch application
     try:
         # Verify finding exists
         loader = get_findings_loader()

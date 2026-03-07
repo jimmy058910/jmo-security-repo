@@ -1922,23 +1922,13 @@ def get_query_plan(conn: sqlite3.Connection, query: str) -> str:
         >>> print(plan)
         SEARCH TABLE scans USING INDEX idx_scans_branch (branch=?)
     """
-    # Validate query is SELECT-only (prevent injection in diagnostic tool)
-    query_stripped = query.strip().upper()
-    if not query_stripped.startswith("SELECT") and not query_stripped.startswith(
-        "EXPLAIN"
-    ):
-        raise ValueError("get_query_plan() only supports SELECT queries")
-
-    # Security: Reject semicolons and compound statements to prevent SQL injection
-    # via f-string interpolation into EXPLAIN QUERY PLAN. Even though SQLite's
-    # execute() only runs the first statement, defense-in-depth matters.
-    if ";" in query:
-        raise ValueError(
-            "get_query_plan() does not allow semicolons (compound statements)"
-        )
+    # Security: Route through comprehensive query validator (CWE-89 defense-in-depth)
+    _validate_readonly_query(query)
 
     cursor = conn.cursor()
-    cursor.execute(f"EXPLAIN QUERY PLAN {query}")  # nosec B608 - query validated above
+    cursor.execute(
+        f"EXPLAIN QUERY PLAN {query}"
+    )  # nosec B608 - validated by _validate_readonly_query()
     rows = cursor.fetchall()
     # Convert rows to strings (handle both Row objects and tuples)
     lines = []

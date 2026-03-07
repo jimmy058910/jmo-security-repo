@@ -2013,11 +2013,11 @@ def _check_full_dedup_reduction_pct() -> CheckResult:
 def _check_full_real_scan_available() -> CheckResult:
     """Check if any scan tools are available for real scan test."""
     try:
-        import shutil
+        from scripts.core.tool_utils import tool_exists
 
         tools_available = []
         for tool in ["trivy", "bandit", "semgrep", "grype"]:
-            if shutil.which(tool):
+            if tool_exists(tool, warn=False):
                 tools_available.append(tool)
 
         if tools_available:

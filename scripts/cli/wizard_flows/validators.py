@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from scripts.core.tool_utils import tool_exists
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ def validate_k8s_context(context: str, timeout: int = 5) -> bool:
     """
     try:
         # Check if kubectl is available
-        if not shutil.which("kubectl"):
+        if not tool_exists("kubectl", warn=False):
             return False
 
         # Get contexts list
@@ -177,7 +178,7 @@ def detect_docker() -> bool:
     Returns:
         True if docker command exists, False otherwise
     """
-    return shutil.which("docker") is not None
+    return tool_exists("docker", warn=False)
 
 
 def check_docker_running(timeout: int = 5) -> bool:
