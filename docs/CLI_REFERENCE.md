@@ -284,7 +284,7 @@ Generate SLSA provenance attestation for scan results.
 |------|-------------|
 | `SUBJECT` | File to attest, e.g., `findings.json` (positional, required) |
 | `--output`, `-o FILE` | Output path (default: `<subject>.att.json`) |
-| `--sign` | Sign attestation with Sigstore (requires cosign) |
+| `--sign` | Sign attestation with Sigstore keyless signing. In CI (GitHub Actions, GitLab CI), uses automatic OIDC. Locally, opens a browser for OAuth. |
 | `--rekor` | Upload to Rekor transparency log |
 | `--scan-args FILE` | JSON file with original scan arguments |
 | `--tools TOOL [...]` | Tools used in scan (e.g., `trivy semgrep`) |

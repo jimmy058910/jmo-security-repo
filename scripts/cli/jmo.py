@@ -1667,7 +1667,9 @@ Example:
     attest_parser.add_argument(
         "--sign",
         action="store_true",
-        help="Sign attestation with Sigstore (requires cosign)",
+        help="Sign attestation with Sigstore keyless signing. "
+        "In CI (GitHub Actions, GitLab CI), uses automatic OIDC. "
+        "Locally, opens a browser for OAuth authentication.",
     )
     attest_parser.add_argument(
         "--rekor", action="store_true", help="Upload to Rekor transparency log"

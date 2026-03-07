@@ -149,12 +149,15 @@ class SigstoreSigner:
         Acquire OIDC token via local OAuth flow.
 
         Uses sigstore-python's OAuth flow to get token interactively.
+        This requires a browser for the OIDC authentication redirect.
+        In non-interactive environments (CI without OIDC, containers, SSH),
+        this will fail — use GitHub Actions or GitLab CI OIDC instead.
 
         Returns:
             OIDC token string
 
         Raises:
-            Exception: If OAuth flow fails
+            RuntimeError: If OAuth flow fails (e.g., no browser available)
         """
         try:
             # Use sigstore-python's built-in OAuth flow
@@ -166,7 +169,13 @@ class SigstoreSigner:
         except (
             Exception
         ) as e:  # Acceptable: re-raises after logging — OIDC failure is fatal for signing
-            logger.error(f"Local OIDC token acquisition failed: {e}")
+            logger.error(
+                f"Local OIDC token acquisition failed: {e}\n"
+                "Sigstore keyless signing requires browser-based OIDC authentication.\n"
+                "In CI environments, set ACTIONS_ID_TOKEN_REQUEST_URL (GitHub Actions) "
+                "or CI_JOB_JWT (GitLab CI) for automatic OIDC token acquisition.\n"
+                "For local signing, ensure a browser is available for the OAuth redirect."
+            )
             raise
 
     def sign(self, attestation_path: str) -> Dict[str, Any]:
