@@ -67,14 +67,18 @@ STANDARD_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
 
 def _make_sample_finding(**overrides: Any) -> dict[str, Any]:
     """Create a minimal valid CommonFinding dict."""
+    rule_id = overrides.get("ruleId", "TEST-001")
+    # Provide risk.cwe so compliance enrichment has CWEs to map from
+    cwe_list = [rule_id] if rule_id.startswith("CWE-") else []
     finding: dict[str, Any] = {
         "schemaVersion": "1.2.0",
         "id": "abcdef0123456789",
-        "ruleId": "TEST-001",
+        "ruleId": rule_id,
         "severity": "MEDIUM",
         "tool": {"name": "test-tool", "version": "1.0.0"},
         "location": {"path": "src/app.py", "startLine": 10},
         "message": "Test finding for validation",
+        "risk": {"cwe": cwe_list},
     }
     finding.update(overrides)
     return finding
@@ -1045,16 +1049,16 @@ def _check_compliance_owasp() -> CheckResult:
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
         # CWE-79 (XSS) should map to OWASP A03:2021
-        if compliance.get("owasp"):
+        if compliance.get("owaspTop10_2021"):
             return CheckResult(
                 name="compliance-owasp",
                 status=CheckStatus.PASS,
-                message=f"OWASP mapping: {compliance['owasp']}",
+                message=f"OWASP mapping: {compliance['owaspTop10_2021']}",
             )
         return CheckResult(
             name="compliance-owasp",
             status=CheckStatus.WARN,
-            message="No OWASP mapping for CWE-79 finding",
+            message="No owaspTop10_2021 mapping for CWE-79 finding",
         )
     except Exception as exc:
         return CheckResult(
@@ -1072,16 +1076,16 @@ def _check_compliance_cwe() -> CheckResult:
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
-        if compliance.get("cwe"):
+        if compliance.get("cweTop25_2024"):
             return CheckResult(
                 name="compliance-cwe",
                 status=CheckStatus.PASS,
-                message=f"CWE mapping: {compliance['cwe']}",
+                message=f"CWE mapping: {compliance['cweTop25_2024']}",
             )
         return CheckResult(
             name="compliance-cwe",
             status=CheckStatus.WARN,
-            message="No CWE mapping for CWE-89 finding",
+            message="No cweTop25_2024 mapping for CWE-89 finding",
         )
     except Exception as exc:
         return CheckResult(
@@ -1099,7 +1103,7 @@ def _check_compliance_cis() -> CheckResult:
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
-        if compliance.get("cis"):
+        if compliance.get("cisControlsV8_1"):
             return CheckResult(
                 name="compliance-cis",
                 status=CheckStatus.PASS,
@@ -1108,7 +1112,7 @@ def _check_compliance_cis() -> CheckResult:
         return CheckResult(
             name="compliance-cis",
             status=CheckStatus.WARN,
-            message="No CIS mapping found (may be expected for this ruleId)",
+            message="No cisControlsV8_1 mapping found (may be expected for this ruleId)",
         )
     except Exception as exc:
         return CheckResult(
@@ -1126,7 +1130,7 @@ def _check_compliance_nist() -> CheckResult:
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
-        if compliance.get("nist"):
+        if compliance.get("nistCsf2_0"):
             return CheckResult(
                 name="compliance-nist",
                 status=CheckStatus.PASS,
@@ -1135,7 +1139,7 @@ def _check_compliance_nist() -> CheckResult:
         return CheckResult(
             name="compliance-nist",
             status=CheckStatus.WARN,
-            message="No NIST mapping found (may be expected for this ruleId)",
+            message="No nistCsf2_0 mapping found (may be expected for this ruleId)",
         )
     except Exception as exc:
         return CheckResult(
@@ -1155,7 +1159,7 @@ def _check_compliance_pci_dss() -> CheckResult:
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
-        if compliance.get("pci_dss"):
+        if compliance.get("pciDss4_0"):
             return CheckResult(
                 name="compliance-pci-dss",
                 status=CheckStatus.PASS,
@@ -1164,7 +1168,7 @@ def _check_compliance_pci_dss() -> CheckResult:
         return CheckResult(
             name="compliance-pci-dss",
             status=CheckStatus.WARN,
-            message="No PCI DSS mapping found (may be expected for this ruleId)",
+            message="No pciDss4_0 mapping found (may be expected for this ruleId)",
         )
     except Exception as exc:
         return CheckResult(
@@ -1184,7 +1188,7 @@ def _check_compliance_mitre() -> CheckResult:
         )
         enriched = enrich_finding_with_compliance(finding)
         compliance = enriched.get("compliance", {})
-        if compliance.get("mitre_attack"):
+        if compliance.get("mitreAttack"):
             return CheckResult(
                 name="compliance-mitre",
                 status=CheckStatus.PASS,
@@ -1193,7 +1197,7 @@ def _check_compliance_mitre() -> CheckResult:
         return CheckResult(
             name="compliance-mitre",
             status=CheckStatus.WARN,
-            message="No MITRE mapping found (may be expected for this ruleId)",
+            message="No mitreAttack mapping found (may be expected for this ruleId)",
         )
     except Exception as exc:
         return CheckResult(

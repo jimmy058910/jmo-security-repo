@@ -499,6 +499,15 @@ class TestToolVersionChecks:
         assert result is None
 
     @patch("scripts.core.validators.release_validator._read_text")
+    def test_version_format_prefixed(self, mock_read):
+        """Accepts prefixed versions like akto's mini-testing-1.53.7."""
+        mock_read.return_value = (
+            "java_tools:\n" "  akto:\n    version: mini-testing-1.53.7\n"
+        )
+        result = _check_version_format()
+        assert result is None
+
+    @patch("scripts.core.validators.release_validator._read_text")
     def test_version_format_invalid(self, mock_read):
         mock_read.return_value = (
             "python_tools:\n" "  bandit:\n    version: abc-not-a-version\n"
@@ -671,13 +680,19 @@ class TestSecurityChecks:
             assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
-    def test_no_secrets_excludes_fixtures(self, mock_cmd):
+    def test_no_secrets_excludes_prefixed_paths(self, mock_cmd):
         mock_cmd.return_value = MagicMock(
             returncode=0,
-            stdout="tests/fixtures/creds.py\ntests/e2e/fixtures/test.py\n",
+            stdout=(
+                "tests/fixtures/creds.py\n"
+                "docs/examples/config.md\n"
+                ".claude/skills/test.md\n"
+                ".github/workflows/ci.yml\n"
+                "scripts/dev/helper.py\n"
+            ),
         )
         result = _check_no_secrets()
-        # Fixture files should be excluded
+        # All these paths should be excluded by prefix
         assert result is None
 
     @patch("scripts.core.validators.release_validator._run_cmd")
@@ -837,11 +852,20 @@ class TestTestHealthChecks:
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_test_count_pass(self, mock_cmd):
         mock_cmd.return_value = MagicMock(
-            returncode=0, stdout="7500 tests collected\n", stderr=""
+            returncode=0, stdout="8234 tests collected\n", stderr=""
         )
         result = _check_test_count()
         assert result.status == CheckStatus.PASS
-        assert "7500" in result.message
+        assert "8234" in result.message
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_test_count_pass_with_items(self, mock_cmd):
+        """Handles pytest's alternate 'X test items collected' format."""
+        mock_cmd.return_value = MagicMock(
+            returncode=0, stdout="7500 test items collected\n", stderr=""
+        )
+        result = _check_test_count()
+        assert result.status == CheckStatus.PASS
 
     @patch("scripts.core.validators.release_validator._run_cmd")
     def test_test_count_low(self, mock_cmd):
@@ -856,6 +880,18 @@ class TestTestHealthChecks:
         mock_cmd.return_value = MagicMock(returncode=0, stdout="no output\n", stderr="")
         result = _check_test_count()
         assert result.status == CheckStatus.WARN
+
+    @patch("scripts.core.validators.release_validator._run_cmd")
+    def test_test_count_ignores_worker_count(self, mock_cmd):
+        """Ensures '3 workers' doesn't match as test count."""
+        mock_cmd.return_value = MagicMock(
+            returncode=0,
+            stdout="running 3 workers\n8234 tests collected\n",
+            stderr="",
+        )
+        result = _check_test_count()
+        assert result.status == CheckStatus.PASS
+        assert "8234" in result.message
 
     @patch("scripts.core.validators.release_validator._path_exists")
     @patch("scripts.core.validators.release_validator._read_text")
@@ -884,6 +920,21 @@ class TestTestHealthChecks:
         mock_read.return_value = "test:\n\tpytest --cov-fail-under=50\n"
         result = _check_coverage_threshold()
         assert result.status == CheckStatus.FAIL
+
+    @patch("scripts.core.validators.release_validator._path_exists")
+    @patch("scripts.core.validators.release_validator._read_text")
+    @patch("scripts.core.validators.release_validator._get_pyproject_data")
+    def test_coverage_threshold_from_ci_inline(self, mock_data, mock_read, mock_exists):
+        """Detects inline 'coverage_pct < 85' pattern in CI workflow."""
+        mock_data.return_value = {"tool": {}}
+
+        def exists_side(path):
+            return path == ".github/workflows/ci.yml"
+
+        mock_exists.side_effect = exists_side
+        mock_read.return_value = "if coverage_pct < 85:\n    sys.exit(1)\n"
+        result = _check_coverage_threshold()
+        assert result.status == CheckStatus.PASS
 
     @patch("scripts.core.validators.release_validator._path_exists", return_value=True)
     @patch("scripts.core.validators.release_validator._read_text")
@@ -1223,8 +1274,9 @@ class TestTestFileScanning:
         assert result is None or result.status in (CheckStatus.PASS, CheckStatus.WARN)
 
     def test_no_sleep_in_tests_on_real_tests(self):
-        """Run against real test files."""
+        """Run against real test files — allowed files are skipped."""
         result = _check_no_sleep_in_tests()
+        # With allowlist, all known sleep usages should be excluded
         assert result is None or result.status in (CheckStatus.PASS, CheckStatus.WARN)
 
     @patch("scripts.core.validators.release_validator._path_exists", return_value=False)

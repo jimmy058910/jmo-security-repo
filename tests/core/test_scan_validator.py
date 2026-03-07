@@ -470,11 +470,11 @@ class TestComplianceChecks:
 
     def test_owasp(self):
         result = _check_compliance_owasp()
-        assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
+        assert result.status == CheckStatus.PASS
 
     def test_cwe(self):
         result = _check_compliance_cwe()
-        assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
+        assert result.status == CheckStatus.PASS
 
     def test_cis(self):
         result = _check_compliance_cis()
@@ -482,15 +482,15 @@ class TestComplianceChecks:
 
     def test_nist(self):
         result = _check_compliance_nist()
-        assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
+        assert result.status == CheckStatus.PASS
 
     def test_pci_dss(self):
         result = _check_compliance_pci_dss()
-        assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
+        assert result.status == CheckStatus.PASS
 
     def test_mitre(self):
         result = _check_compliance_mitre()
-        assert result.status in (CheckStatus.PASS, CheckStatus.WARN)
+        assert result.status == CheckStatus.PASS
 
     def test_unmapped(self):
         result = _check_compliance_unmapped()
