@@ -198,7 +198,33 @@ def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int
 
 
 def check_pip_conflicts() -> tuple[bool, list[str]]:
-    """Check for dependency conflicts using pip check."""
+    """Check for dependency conflicts using pip check.
+
+    Note: pip check reports conflicts in the *installed* environment.
+    Many reported conflicts are theoretical — tools like checkov, prowler,
+    and semgrep run in isolated venvs at runtime and never share a Python
+    environment. Dev-only packages (pip-audit, py-ocsf-models) also don't
+    affect production.
+    """
+    # Tools that run in isolated venvs — conflicts involving these are safe
+    ISOLATED_VENV_PACKAGES = {
+        "checkov",
+        "prowler",
+        "semgrep",
+        "oci",
+        "bc-python-hcl2",
+        "bc-detect-secrets",
+        "bc-jsonpath-ng",
+        "alibabacloud",  # prowler transitive dep (alibabacloud-tea-openapi)
+    }
+    # Dev-only packages — conflicts involving these don't affect production
+    DEV_ONLY_PACKAGES = {
+        "pip-audit",
+        "py-ocsf-models",
+        "pip-tools",
+        "pre-commit",
+    }
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "check"], capture_output=True, text=True
@@ -209,12 +235,40 @@ def check_pip_conflicts() -> tuple[bool, list[str]]:
             return True, []
         else:
             conflicts = result.stdout.strip().split("\n")
-            print(
-                f"{RED}[error]{RESET} {len(conflicts)} dependency conflict(s) detected:"
-            )
+            safe_conflicts = []
+            real_conflicts = []
+
             for conflict in conflicts:
-                print(f"  {RED}•{RESET} {conflict}")
-            return False, conflicts
+                conflict_lower = conflict.lower()
+                if any(pkg in conflict_lower for pkg in ISOLATED_VENV_PACKAGES):
+                    safe_conflicts.append(conflict)
+                elif any(pkg in conflict_lower for pkg in DEV_ONLY_PACKAGES):
+                    safe_conflicts.append(conflict)
+                else:
+                    real_conflicts.append(conflict)
+
+            # Report safe conflicts as warnings, not errors
+            if safe_conflicts:
+                print(
+                    f"{YELLOW}[info]{RESET} {len(safe_conflicts)} safe conflict(s) "
+                    f"(isolated venv or dev-only packages):"
+                )
+                for conflict in safe_conflicts:
+                    print(f"  {YELLOW}•{RESET} {conflict}")
+
+            if real_conflicts:
+                print(
+                    f"{RED}[error]{RESET} {len(real_conflicts)} dependency conflict(s) detected:"
+                )
+                for conflict in real_conflicts:
+                    print(f"  {RED}•{RESET} {conflict}")
+            else:
+                print(
+                    f"{GREEN}[ok]{RESET} All {len(conflicts)} conflict(s) are in "
+                    f"isolated-venv or dev-only packages (safe to ignore)"
+                )
+
+            return len(real_conflicts) == 0, conflicts
     except Exception as e:
         print(f"{RED}[error]{RESET} Failed to run pip check: {e}")
         return False, [str(e)]

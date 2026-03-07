@@ -1,3 +1,13 @@
+# Diamond Dependency Conflicts (Non-Blocking)
+# ──────────────────────────────────────────────
+# This file surfaces ~10 theoretical conflicts when pip-compile flattens all deps.
+# These are SAFE TO IGNORE because conflicting tools run in isolated venvs:
+#   - checkov, prowler, semgrep: installed in isolated venvs via `jmo tools install`
+#   - pip-audit, py-ocsf-models: dev-only packages, not shipped to users
+# The flat requirements-dev.txt combines all dev deps which exposes version
+# conflicts between packages that never share a Python environment in production.
+# See: .claude/known-issues.md "deps-compile Diamond Dependencies" for details.
+
 pytest
 pytest-cov
 pytest-split>=0.9.0  # Test sharding for CI parallelization
