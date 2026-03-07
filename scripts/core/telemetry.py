@@ -235,8 +235,9 @@ def _get_gist_content() -> str:
             )
             return content
 
-    except Exception:
-        # If fetch fails, return empty string (will create new content)
+    except (
+        Exception
+    ):  # Acceptable: telemetry fetch is optional — empty string triggers fresh content
         return ""
 
 
@@ -456,7 +457,9 @@ def should_show_telemetry_banner() -> bool:
 
         # Show banner on first scan only
         return count == 0
-    except Exception:
+    except (
+        Exception
+    ):  # Acceptable: banner display is optional — safe default on failure
         return False
 
 
@@ -529,8 +532,9 @@ def infer_scan_frequency() -> str | None:
         else:
             return "daily"
 
-    except Exception:
-        # If file operations fail, return None (don't break scan)
+    except (
+        Exception
+    ):  # Acceptable: scan frequency detection is optional — must not break scan
         return None
 
 

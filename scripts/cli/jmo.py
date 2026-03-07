@@ -108,7 +108,7 @@ def _effective_scan_settings(args) -> dict[str, Any]:
     }
 
 
-def _add_target_args(parser, target_group=None):
+def _add_target_args(parser: argparse.ArgumentParser, target_group: Any = None) -> None:
     """Add common target scanning arguments (repos, images, IaC, URLs, GitLab, K8s)."""
     # Repository targets (mutually exclusive if in a group)
     if target_group:
@@ -159,7 +159,7 @@ def _add_target_args(parser, target_group=None):
     )
 
 
-def _add_scan_config_args(parser):
+def _add_scan_config_args(parser: argparse.ArgumentParser) -> None:
     """Add common scan configuration arguments."""
     parser.add_argument(
         "--results-dir",
@@ -241,7 +241,7 @@ def _add_scan_config_args(parser):
     )
 
 
-def _add_logging_args(parser):
+def _add_logging_args(parser: argparse.ArgumentParser) -> None:
     """Add common logging arguments."""
     parser.add_argument(
         "--log-level",
@@ -255,7 +255,7 @@ def _add_logging_args(parser):
     )
 
 
-def _add_scan_args(subparsers):
+def _add_scan_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'scan' subcommand arguments."""
     sp = subparsers.add_parser(
         "scan", help="Run configured tools on repos and write JSON outputs"
@@ -267,7 +267,7 @@ def _add_scan_args(subparsers):
     return sp
 
 
-def _add_report_args(subparsers):
+def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'report' subcommand arguments."""
     rp = subparsers.add_parser("report", help="Aggregate findings and emit reports")
     # Allow both positional and optional for results dir (backward compatible)
@@ -321,7 +321,7 @@ def _add_report_args(subparsers):
     return rp
 
 
-def _add_ci_args(subparsers):
+def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'ci' subcommand arguments."""
     cp = subparsers.add_parser(
         "ci", help="Run scan then report with thresholds; convenient for CI"
@@ -357,7 +357,9 @@ def _add_ci_args(subparsers):
     return cp
 
 
-def _add_profile_args(subparsers, profile_name: str, description: str):
+def _add_profile_args(
+    subparsers: argparse._SubParsersAction, profile_name: str, description: str
+) -> Any:
     """Add profile-based scan command (fast/balanced/full)."""
     profile_parser = subparsers.add_parser(profile_name, help=description)
 
@@ -409,7 +411,7 @@ def _add_profile_args(subparsers, profile_name: str, description: str):
     return profile_parser
 
 
-def _add_wizard_args(subparsers):
+def _add_wizard_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'wizard' subcommand for interactive guided scanning."""
     wizard_parser = subparsers.add_parser(
         "wizard", help="Interactive wizard for guided security scanning"
@@ -584,7 +586,7 @@ def _add_wizard_args(subparsers):
     return wizard_parser
 
 
-def _add_setup_args(subparsers):
+def _add_setup_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'setup' subcommand for tool verification and installation."""
     setup_parser = subparsers.add_parser(
         "setup", help="Verify and optionally auto-install security tools"
@@ -615,7 +617,9 @@ def _add_setup_args(subparsers):
     return setup_parser
 
 
-def _add_validate_args(subparsers):
+def _add_validate_args(
+    subparsers: argparse._SubParsersAction,
+) -> Any:
     """Add 'validate' subcommand for pre-release validation."""
     validate_parser = subparsers.add_parser(
         "validate",
@@ -663,7 +667,7 @@ Examples:
     return validate_parser
 
 
-def _add_tools_args(subparsers):
+def _add_tools_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'tools' subcommand for tool management."""
     tools_parser = subparsers.add_parser(
         "tools",
@@ -869,7 +873,9 @@ After cleaning, reinstall tools with:
     return tools_parser
 
 
-def _add_adapters_args(subparsers):
+def _add_adapters_args(
+    subparsers: argparse._SubParsersAction,
+) -> Any:
     """Add 'adapters' subcommand arguments for plugin management."""
     adapters_parser = subparsers.add_parser("adapters", help="Manage adapter plugins")
     adapters_subparsers = adapters_parser.add_subparsers(dest="adapters_command")
@@ -886,7 +892,9 @@ def _add_adapters_args(subparsers):
     return adapters_parser
 
 
-def _add_schedule_args(subparsers):
+def _add_schedule_args(
+    subparsers: argparse._SubParsersAction,
+) -> Any:
     """Add 'schedule' subcommand arguments for scheduled scan management."""
     schedule_parser = subparsers.add_parser(
         "schedule",
@@ -1006,7 +1014,7 @@ def _add_schedule_args(subparsers):
     return schedule_parser
 
 
-def _add_mcp_args(subparsers):
+def _add_mcp_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'mcp-server' subcommand arguments for AI remediation server."""
     mcp_parser = subparsers.add_parser(
         "mcp-server",
@@ -1051,7 +1059,9 @@ See: docs/MCP_SETUP.md for GitHub Copilot and Claude Code integration guides.
     return mcp_parser
 
 
-def _add_history_args(subparsers):
+def _add_history_args(
+    subparsers: argparse._SubParsersAction,
+) -> Any:
     """Add 'history' subcommand arguments for historical scan management."""
     history_parser = subparsers.add_parser(
         "history",
@@ -1307,7 +1317,7 @@ See: docs/HISTORY_GUIDE.md for complete documentation.
     return history_parser
 
 
-def _add_trends_args(subparsers):
+def _add_trends_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'trends' subcommand arguments for security trend analysis."""
     trends_parser = subparsers.add_parser(
         "trends",
@@ -1542,7 +1552,7 @@ See: dev-only/archive/feature-plans/TREND_ANALYSIS.md for complete documentation
     return trends_parser
 
 
-def _add_policy_args(subparsers):
+def _add_policy_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'policy' subcommand arguments for Policy-as-Code management."""
     policy_parser = subparsers.add_parser(
         "policy",
@@ -1627,7 +1637,7 @@ See: docs/POLICY_AS_CODE.md for complete documentation.
     return policy_parser
 
 
-def _add_attest_args(subparsers):
+def _add_attest_args(subparsers: argparse._SubParsersAction) -> None:
     """Add 'attest' subcommand arguments for generating attestations."""
     attest_parser = subparsers.add_parser(
         "attest",
@@ -1678,7 +1688,7 @@ Example:
     )
 
 
-def _add_verify_args(subparsers):
+def _add_verify_args(subparsers: argparse._SubParsersAction) -> None:
     """Add 'verify' subcommand arguments for verifying attestations."""
     verify_parser = subparsers.add_parser(
         "verify",
@@ -1725,7 +1735,7 @@ Example:
     )
 
 
-def _add_diff_args(subparsers):
+def _add_diff_args(subparsers: argparse._SubParsersAction) -> Any:
     """Add 'diff' subcommand arguments for comparing scans."""
     diff_parser = subparsers.add_parser(
         "diff",
@@ -2106,7 +2116,9 @@ def _check_scan_tools(args, requested_tools: list[str]) -> tuple[list[str], list
         # Tool manager not available - continue with all requested tools
         logger.debug(f"Tool check unavailable: {e}")
         return requested_tools, []
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: graceful degradation for optional pre-flight check
         logger.warning(f"Tool check failed: {e}")
         return requested_tools, []
 
@@ -2158,7 +2170,9 @@ def _install_and_retry(
         logger.warning(f"Tool installer unavailable: {e}")
         print(f"\nInstaller unavailable: {e}")
         return available, [s.name for s in missing_statuses]
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: graceful degradation — report failure, don't crash CLI
         logger.error(f"Installation failed: {e}")
         print(f"\nInstallation error: {e}")
         return available, [s.name for s in missing_statuses]
@@ -2195,7 +2209,9 @@ def _warn_critical_updates() -> None:
             _safe_print("=" * 60 + "\n")
     except ImportError:
         pass  # Tool manager not available
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: graceful degradation for optional update notification
         logger.debug(f"Critical update check failed: {e}")
 
 
@@ -3065,7 +3081,9 @@ def cmd_scan(args) -> int:
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
             return 130
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
@@ -3100,7 +3118,9 @@ def cmd_scan(args) -> int:
         except KeyboardInterrupt:
             _log(args, "WARN", "Scan interrupted by user")
             return 130
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: top-level scan error handler — re-raises unless allow_missing_tools
             _log(args, "ERROR", f"Scan failed: {e}")
             if not scan_config.allow_missing_tools:
                 raise
@@ -3225,7 +3245,9 @@ def cmd_adapters(args) -> int:
 
             _safe_print(f"✅ Valid plugin: {plugin_file}")
             return 0
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: plugin validation — report error without crashing CLI
             _safe_print(f"❌ Invalid plugin: {e}")
             return 1
 
@@ -3509,7 +3531,9 @@ def cmd_mcp_server(args):
     except KeyboardInterrupt:
         sys.stderr.write("\n\nMCP server stopped by user.\n")
         return 0
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: top-level MCP server error handler — must not crash parent process
         sys.stderr.write(f"ERROR: MCP server failed: {e}\n")
         import traceback
 
@@ -3627,7 +3651,9 @@ def cmd_attest(args) -> int:
             if sign_result.get("rekor_entry"):
                 _log(args, "INFO", f"  Rekor entry: {sign_result['rekor_entry']}")
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: signing is optional — report failure without crashing
             _log(args, "ERROR", f"Signing failed: {e}")
             return 1
 

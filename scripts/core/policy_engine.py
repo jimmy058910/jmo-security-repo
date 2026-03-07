@@ -119,7 +119,9 @@ class PolicyEngine:
                             f"OPA version {version} detected. "
                             "Recommend upgrading to >= 0.70.0 for full compatibility."
                         )
-                except Exception as e:
+                except (
+                    Exception
+                ) as e:  # Acceptable: version detection fallback — OPA may output unexpected format
                     logger.debug(f"Could not parse OPA version: {e}")
 
             logger.debug(f"OPA version: {result.stdout.strip()}")
@@ -327,7 +329,9 @@ class PolicyEngine:
                 # Convert to data.* format (package jmo.policy.secrets → data.jmo.policy.secrets)
                 return f"data.{package}"
             return None
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: policy file parsing is best-effort — skip malformed policies
             logger.warning(f"Failed to extract package name from {policy_path}: {e}")
             return None
 
@@ -404,6 +408,8 @@ class PolicyEngine:
 
             return {}
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: metadata extraction is optional — empty dict on failure
             logger.warning(f"Failed to extract metadata from {policy_path}: {e}")
             return {}

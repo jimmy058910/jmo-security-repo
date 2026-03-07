@@ -137,7 +137,9 @@ class AdapterPlugin(ABC):
         try:
             self.parse(output_path)
             return True
-        except Exception:
+        except (
+            Exception
+        ):  # Acceptable: validation probe — any parse failure means invalid
             return False
 
     def get_fingerprint(self, finding: Finding) -> str:

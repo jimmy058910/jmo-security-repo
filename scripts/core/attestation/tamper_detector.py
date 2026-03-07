@@ -166,7 +166,9 @@ class TamperDetector:
 
         try:
             attestation_data = json.loads(Path(attestation_path).read_text())
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
             logger.error(f"Failed to read attestation for timestamp check: {e}")
             return indicators
 
@@ -330,7 +332,9 @@ class TamperDetector:
             )
             current_builder_id = current_builder.get("id", "")
             current_builder_version = current_builder.get("version", {})
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
             logger.error(f"Failed to read current attestation: {e}")
             return indicators
 
@@ -393,7 +397,9 @@ class TamperDetector:
                             },
                         )
                     )
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: skip unreadable historical attestations — continue checking others
                 logger.warning(
                     f"Failed to read historical attestation {historical_path}: {e}"
                 )
@@ -429,7 +435,9 @@ class TamperDetector:
             # Fallback to resolvedDependencies (alternative format)
             if not current_tools:
                 current_tools = build_def.get("resolvedDependencies", [])
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
             logger.error(f"Failed to read current attestation: {e}")
             return indicators
 
@@ -503,7 +511,9 @@ class TamperDetector:
                                     },
                                 )
                             )
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: skip unreadable historical attestations — continue checking others
                 logger.warning(
                     f"Failed to read historical attestation {historical_path}: {e}"
                 )
@@ -534,7 +544,9 @@ class TamperDetector:
 
         try:
             attestation_data = json.loads(Path(attestation_path).read_text())
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: file scanning safety — skip unreadable attestations
             logger.error(f"Failed to read attestation: {e}")
             return indicators
 
@@ -570,7 +582,9 @@ class TamperDetector:
                                 },
                             )
                         )
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: findings count check is optional — continue with other checks
                 logger.warning(f"Failed to check findings count: {e}")
 
         # Check for unusual subject names (path traversal)

@@ -101,8 +101,9 @@ def secure_temp_dir(
             try:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 logger.debug(f"Cleaned up secure temp directory: {temp_dir}")
-            except Exception as e:
-                # Log but don't raise - cleanup failure shouldn't mask original errors
+            except (
+                Exception
+            ) as e:  # Acceptable: cleanup failure must not mask original errors
                 logger.warning(
                     f"Failed to clean up temp directory {temp_dir}: {type(e).__name__}: {e}"
                 )
@@ -176,8 +177,9 @@ def secure_temp_file(
             try:
                 temp_path.unlink()
                 logger.debug(f"Cleaned up secure temp file: {temp_path}")
-            except Exception as e:
-                # Log but don't raise - cleanup failure shouldn't mask original errors
+            except (
+                Exception
+            ) as e:  # Acceptable: cleanup failure must not mask original errors
                 logger.warning(
                     f"Failed to clean up temp file {temp_path}: {type(e).__name__}: {e}"
                 )

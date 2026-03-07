@@ -163,7 +163,9 @@ class SigstoreSigner:
             issuer = Issuer.production()
             token = issuer.identity_token()
             return str(token.value)
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: re-raises after logging — OIDC failure is fatal for signing
             logger.error(f"Local OIDC token acquisition failed: {e}")
             raise
 
@@ -272,7 +274,9 @@ class SigstoreSigner:
                 "rekor_entry": rekor_entry_url,
             }
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: re-raises after logging — signing failure is fatal
             logger.error(f"Signing failed: {e}")
             raise
 
@@ -300,6 +304,8 @@ class SigstoreSigner:
             else:
                 logger.warning(f"⚠️ Unexpected Rekor response: {response.status_code}")
                 return False
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: re-raises after logging — Rekor failure is fatal for verification
             logger.error(f"Rekor verification failed: {e}")
             raise

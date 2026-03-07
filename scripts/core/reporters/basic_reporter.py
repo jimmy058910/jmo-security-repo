@@ -34,8 +34,9 @@ def _get_jmo_version() -> str:
         with open(pyproject_path, "rb") as f:
             pyproject = tomllib.load(f)
             return str(pyproject["project"]["version"])
-    except Exception:
-        # Fallback if pyproject.toml can't be read
+    except (
+        Exception
+    ):  # Acceptable: version detection fallback — pyproject.toml may not exist
         return "1.0.0"
 
 

@@ -331,7 +331,9 @@ class ToolRunner:
                     continue
                 break
 
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: tool invocation may fail unexpectedly — retry with budget
                 last_error = str(e)
                 attempts_by_type["unknown"] = attempts_by_type.get("unknown", 0) + 1
                 budget = rc.attempts_for_failure("unknown")
@@ -373,8 +375,10 @@ class ToolRunner:
             for tool in self.tools:
                 try:
                     self.progress_callback(tool.name, "start", 0)
-                except Exception:
-                    pass  # Don't let callback errors affect scanning
+                except (
+                    Exception
+                ):  # Acceptable: callback protection — must not crash scan flow
+                    pass
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tool executions
@@ -392,8 +396,10 @@ class ToolRunner:
                     if self.progress_callback:
                         try:
                             self.progress_callback(result.tool, result.status, 0)
-                        except Exception:
-                            pass  # Don't let callback errors affect scanning
+                        except (
+                            Exception
+                        ):  # Acceptable: callback protection — must not crash scan flow
+                            pass
 
                 except ToolExecutionException as e:
                     # Tool execution raised our custom exception
@@ -412,11 +418,14 @@ class ToolRunner:
                     if self.progress_callback:
                         try:
                             self.progress_callback(tool.name, "error", 0)
-                        except Exception:
+                        except (
+                            Exception
+                        ):  # Acceptable: callback protection — must not crash scan flow
                             pass
 
-                except Exception as e:
-                    # Unexpected exception from future (should rarely happen)
+                except (
+                    Exception
+                ) as e:  # Acceptable: future may raise any exception — graceful error handling
                     tool = future_to_tool[future]
                     logger.error(
                         f"Unexpected exception from future for {tool.name}: {e}",
@@ -433,7 +442,9 @@ class ToolRunner:
                     if self.progress_callback:
                         try:
                             self.progress_callback(tool.name, "error", 0)
-                        except Exception:
+                        except (
+                            Exception
+                        ):  # Acceptable: callback protection — must not crash scan flow
                             pass
 
         return results

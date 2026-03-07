@@ -141,7 +141,9 @@ class AttestationVerifier:
                 result.error_message = "Invalid attestation format"
                 return result
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: attestation file may be corrupted or unreadable
             result.error_message = f"Could not load attestation: {e}"
             return result
 
@@ -184,7 +186,9 @@ class AttestationVerifier:
                     result.error_message = "Signature verification failed"
                     return result
                 logger.info("✅ Signature verified")
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: sigstore may fail for many reasons — report as verification error
                 result.error_message = f"Signature verification error: {e}"
                 return result
 
@@ -210,10 +214,10 @@ class AttestationVerifier:
                     result.error_message = f"CRITICAL tamper detected: {critical_indicators[0].description}"
                     return result
 
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: tamper detection is optional enrichment — graceful degradation
                 logger.warning(f"Tamper detection failed: {e}")
-                # Don't fail verification if tamper detection fails
-                # (graceful degradation)
 
         # Extract builder and build time
         predicate = attestation_data.get("predicate", {})
@@ -275,6 +279,8 @@ class AttestationVerifier:
                 logger.warning(f"Signature verification failed: {result.stderr}")
                 return False
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: re-raises after logging — caller handles verification failure
             logger.error(f"Signature verification error: {e}")
             raise

@@ -15,7 +15,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def parse_json_safe(filepath):
+def parse_json_safe(filepath: str | Path) -> Any | None:
     """Safely parse JSON file with error handling"""
     try:
         with open(filepath, encoding="utf-8") as f:
@@ -26,7 +26,7 @@ def parse_json_safe(filepath):
         return None
 
 
-def parse_gitleaks(filepath):
+def parse_gitleaks(filepath: str | Path) -> list[dict[str, Any]]:
     """Parse gitleaks JSON output"""
     data = parse_json_safe(filepath)
     if not data:
@@ -48,7 +48,7 @@ def parse_gitleaks(filepath):
     return findings
 
 
-def parse_trufflehog(filepath):
+def parse_trufflehog(filepath: str | Path) -> list[dict[str, Any]]:
     """Parse trufflehog JSON output supporting arrays, objects, nested lists, and NDJSON"""
 
     def _extract_file_path(metadata):
@@ -127,7 +127,7 @@ def parse_trufflehog(filepath):
     return findings
 
 
-def parse_semgrep(filepath):
+def parse_semgrep(filepath: str | Path) -> list[dict[str, Any]]:
     """Parse semgrep JSON output"""
     data = parse_json_safe(filepath)
     if not data:
@@ -150,7 +150,7 @@ def parse_semgrep(filepath):
     return findings
 
 
-def parse_noseyparker(filepath):
+def parse_noseyparker(filepath: str | Path) -> list[dict[str, Any]]:
     """Parse nosey parker JSON output"""
     data = parse_json_safe(filepath)
     if not data:
@@ -247,7 +247,7 @@ def parse_noseyparker(filepath):
     return findings
 
 
-def calculate_metrics(results_dir):
+def calculate_metrics(results_dir: str | Path) -> dict[str, Any]:
     """Calculate all metrics from JSON outputs"""
 
     repos_dir = Path(results_dir) / "individual-repos"
@@ -263,8 +263,9 @@ def calculate_metrics(results_dir):
     }
 
     if not repos_dir.exists() or not repos_dir.is_dir():
-        print(
-            f"Warning: Results directory '{repos_dir}' not found. Returning empty dashboard metrics."
+        logger.warning(
+            "Results directory '%s' not found. Returning empty dashboard metrics.",
+            repos_dir,
         )
         return {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -392,7 +393,9 @@ def calculate_metrics(results_dir):
     }
 
 
-def generate_dashboard(results_dir, output_path=None):
+def generate_dashboard(
+    results_dir: str | Path, output_path: str | Path | None = None
+) -> None:
     """Generate an HTML dashboard with all metrics"""
 
     # Calculate metrics
@@ -651,10 +654,10 @@ def generate_dashboard(results_dir, output_path=None):
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(dashboard_html)
 
-    print(f"✅ Dashboard generated: {output_file}")
-    print(f"📊 Total findings: {metrics['total_findings']}")
-    print(f"⚠️  Critical issues: {metrics['critical_count']}")
-    print(f"🔍 Verified secrets: {metrics['verified_secrets']}")
+    logger.info("Dashboard generated: %s", output_file)
+    logger.info("Total findings: %d", metrics["total_findings"])
+    logger.info("Critical issues: %d", metrics["critical_count"])
+    logger.info("Verified secrets: %d", metrics["verified_secrets"])
 
 
 if __name__ == "__main__":

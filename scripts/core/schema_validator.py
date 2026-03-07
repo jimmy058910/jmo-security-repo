@@ -91,7 +91,9 @@ def validate_finding(
                 else "root"
             )
             errors.append(f"{path}: {error.message}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: schema validation infrastructure error — report as validation error
         errors.append(f"Validation error: {e}")
 
     return errors

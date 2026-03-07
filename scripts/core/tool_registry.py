@@ -548,7 +548,9 @@ class ToolRegistry:
         try:
             with open(self._versions_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: re-raises after logging — versions.yaml is required
             logger.error(f"Failed to load versions.yaml: {e}")
             raise
 
@@ -608,7 +610,9 @@ class ToolRegistry:
                 install_notes=info.get("notes"),
                 update_check=info.get("update_check"),
             )
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: malformed tool entry — skip and continue loading others
             logger.warning(f"Failed to parse tool {name}: {e}")
             return None
 

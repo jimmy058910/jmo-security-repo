@@ -6,7 +6,9 @@ from typing import Any
 
 try:
     import jsonschema
-except Exception:  # pragma: no cover
+except (
+    Exception
+):  # Acceptable: jsonschema is optional dependency — degrade gracefully  # pragma: no cover
     jsonschema = None
 
 import json
@@ -82,8 +84,9 @@ def validate_findings(findings: list[dict]) -> bool:
         for f in findings:
             jsonschema.validate(instance=f, schema=schema)
         return True
-    except Exception:
-        # Attempt draft-07 fallback
+    except (
+        Exception
+    ):  # Acceptable: draft-2020-12 validation may fail — try draft-07 fallback
         schema["$schema"] = "http://json-schema.org/draft-07/schema#"
         for f in findings:
             jsonschema.validate(instance=f, schema=schema)

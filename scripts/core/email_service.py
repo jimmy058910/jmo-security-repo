@@ -330,8 +330,7 @@ def send_welcome_email(
             )
         )
 
-    except Exception as e:
-        # Fail silently - don't block CLI workflow
+    except Exception as e:  # Acceptable: must not block CLI workflow for optional email
         # Log error for debugging
         logger.error("Email send failed: %s", e, exc_info=True)
         return False

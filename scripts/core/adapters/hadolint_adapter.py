@@ -131,8 +131,10 @@ def _get_hadolint_version() -> str:
         tool_info = registry.get_tool("hadolint")
         if tool_info:
             return tool_info.version
-    except Exception:
-        pass  # Fall back to "unknown" if registry fails
+    except (
+        Exception
+    ):  # Acceptable: version detection fallback — registry may not be initialized
+        pass
     return "unknown"
 
 

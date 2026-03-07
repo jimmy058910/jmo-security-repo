@@ -76,7 +76,9 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
             integrity_check = [row[0] for row in integrity_result]
             errors.extend(integrity_check)
             logger.error(f"Integrity check failed: {integrity_check}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: PRAGMA may fail on corrupted DB — record as error
         integrity_check = f"error: {e}"
         errors.append(str(e))
         logger.error(f"Integrity check error: {e}")
@@ -98,7 +100,9 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
             ]
             errors.extend(foreign_key_check)
             logger.warning(f"Foreign key violations: {foreign_key_check}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: foreign key PRAGMA may fail — record as warning
         foreign_key_check = f"error: {e}"
         logger.warning(f"Foreign key check error: {e}")
 
@@ -112,7 +116,9 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
             quick_check = [row[0] for row in quick_result]
             errors.extend(quick_check)
             logger.error(f"Quick check failed: {quick_check}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: PRAGMA may fail on corrupted DB — record as error
         quick_check = f"error: {e}"
         errors.append(str(e))
         logger.error(f"Quick check error: {e}")
@@ -137,7 +143,9 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
 
         # Database size
         stats["size_mb"] = db_path.stat().st_size / (1024 * 1024)
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: stats collection is informational — partial results OK
         stats = {"error": str(e)}
         logger.warning(f"Stats collection error: {e}")
 
@@ -197,7 +205,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
     try:
         shutil.copy2(db_path, backup_path)
         logger.info(f"Created backup: {backup_path}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: backup failure is fatal for recovery — return early
         errors.append(f"Backup failed: {e}")
         logger.error(f"Backup creation failed: {e}")
         return {
@@ -231,7 +241,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
 
         # Close connection before file operations (required on Windows)
         conn_old.close()
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: dump failure is fatal for recovery — return early
         errors.append(f"Data dump failed: {e}")
         logger.error(f"Data dump failed: {e}")
         return {
@@ -247,7 +259,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         db_path.unlink()  # Delete corrupted database
         init_database(db_path)  # Create fresh schema
         logger.info(f"Created fresh database: {db_path}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: fresh DB creation failure is fatal — return early
         errors.append(f"Fresh database creation failed: {e}")
         logger.error(f"Fresh database creation failed: {e}")
         return {
@@ -303,7 +317,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
 
         conn_new.commit()
 
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: import failure is fatal for recovery — return early
         errors.append(f"Data import failed: {e}")
         logger.error(f"Data import failed: {e}")
         return {
@@ -324,7 +340,9 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
             logger.warning(
                 f"Post-recovery verification issues: {verification['errors']}"
             )
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: post-recovery verification is best-effort — recovery still succeeded
         logger.warning(f"Post-recovery verification error: {e}")
 
     rows_recovered = {

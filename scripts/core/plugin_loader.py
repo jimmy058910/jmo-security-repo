@@ -239,7 +239,9 @@ class PluginLoader:
                 hyphenated_name = name.replace("_", "-")
                 result = self.registry._plugins.get(hyphenated_name)
             return result
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: adapter may not be installed — return None for fallback
             logger.warning(f"Failed to lazy-load adapter {name}: {e}")
             return None
 
@@ -396,7 +398,9 @@ class PluginLoader:
                     self._load_plugin(plugin_file)
                     logger.info(f"Reloaded plugin: {name}")
                     return True
-                except Exception as e:
+                except (
+                    Exception
+                ) as e:  # Acceptable: plugin reload is best-effort — keep old version loaded
                     logger.error(f"Failed to reload plugin {name}: {e}")
                     return False
 

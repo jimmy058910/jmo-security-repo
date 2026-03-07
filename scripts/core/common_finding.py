@@ -292,8 +292,7 @@ def extract_code_snippet(
         # File read errors, encoding issues, or line indexing errors
         logger.debug(f"Failed to read code snippet from {file_path}:{start_line}: {e}")
         return None
-    except Exception as e:
-        # Unexpected errors
+    except Exception as e:  # Acceptable: code snippet extraction is best-effort
         logger.debug(
             f"Unexpected error reading code snippet from {file_path}:{start_line}: {e}"
         )

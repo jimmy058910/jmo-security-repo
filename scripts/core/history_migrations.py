@@ -169,7 +169,9 @@ def discover_migrations(
                             )
                         break
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: skip unloadable migration files — don't block discovery
             logger.error(f"Failed to load migration from {file}: {e}")
             continue
 
@@ -271,7 +273,9 @@ def run_migrations(
             applied.append(migration.version)
             logger.info(f"✅ Migration {migration.version} applied successfully")
 
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: migration failure triggers rollback — must catch all errors
             logger.error(f"❌ Migration {migration.version} failed: {e}")
 
             # Attempt rollback
@@ -281,7 +285,9 @@ def run_migrations(
                     migration.migrate_down(conn)
                 rollback_performed = True
                 logger.info(f"✅ Rollback of {migration.version} successful")
-            except Exception as rollback_error:
+            except (
+                Exception
+            ) as rollback_error:  # Acceptable: rollback is best-effort — log and continue
                 logger.error(
                     f"❌ Rollback of {migration.version} failed: {rollback_error}"
                 )

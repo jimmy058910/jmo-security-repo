@@ -57,7 +57,9 @@ def write_yaml(
                         logger.warning(
                             f"Finding {idx} failed schema validation: {e.message}"
                         )
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: schema validation is optional — report without validation
                 logger.debug(f"Schema validation skipped: {e}")
 
     p = Path(out_path)

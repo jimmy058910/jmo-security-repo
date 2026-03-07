@@ -186,8 +186,9 @@ class ProvenanceGenerator:
                             "annotations": {"version": "unknown"},
                         }
                     )
-        except Exception as e:
-            # Best-effort version resolution - log but continue
+        except (
+            Exception
+        ) as e:  # Acceptable: version resolution is best-effort — continue without versions
             logger.debug(f"Failed to load tool versions: {e}")
 
         return resolved_deps

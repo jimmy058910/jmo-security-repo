@@ -104,7 +104,9 @@ class EPSSClient:
             if score:
                 self._cache_score(score)
                 return score
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: EPSS API is optional enrichment — graceful degradation
             logger.warning("Failed to fetch EPSS score for %s: %s", cve, e)
 
         return None
@@ -139,7 +141,9 @@ class EPSSClient:
                 for cve, score in bulk_scores.items():
                     self._cache_score(score)
                     scores[cve] = score
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: bulk EPSS fetch is optional enrichment — graceful degradation
                 logger.warning("Failed to fetch bulk EPSS scores: %s", e)
 
         return scores

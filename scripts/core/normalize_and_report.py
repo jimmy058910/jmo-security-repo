@@ -208,7 +208,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
             except FileNotFoundError as e:
                 # Tool output missing (expected when using --allow-missing-tools)
                 logger.debug(f"Tool output file not found: {e.filename}")
-            except Exception as e:
+            except (
+                Exception
+            ) as e:  # Acceptable: adapter parse error — skip tool, continue aggregation
                 # Unexpected error - log with traceback for debugging
                 logger.error(f"Unexpected error loading findings: {e}", exc_info=True)
     # Dedupe by id (fingerprint) - memory-efficient approach
@@ -222,8 +224,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     except (KeyError, ValueError, TypeError) as e:
         # Best-effort enrichment - missing SBOM data or malformed findings
         logger.debug(f"Trivy-Syft enrichment skipped: {e}")
-    except Exception as e:
-        # Unexpected enrichment failure
+    except (
+        Exception
+    ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
         logger.debug(f"Unexpected error during Trivy-Syft enrichment: {e}")
 
     # Enrich all findings with compliance framework mappings (v1.2.0)
@@ -237,8 +240,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     except (KeyError, ValueError, TypeError) as e:
         # Malformed compliance data or findings
         logger.debug(f"Compliance enrichment skipped: {e}")
-    except Exception as e:
-        # Unexpected enrichment failure
+    except (
+        Exception
+    ) as e:  # Acceptable: enrichment is best-effort — must not block report generation
         logger.debug(f"Unexpected error during compliance enrichment: {e}")
 
     # Enrich findings with priority scores (v0.9.0 Feature #5: EPSS/KEV)
@@ -247,8 +251,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
     except (KeyError, ValueError, TypeError) as e:
         # Missing priority data or malformed findings
         logger.debug(f"Priority enrichment skipped: {e}")
-    except Exception as e:
-        # Unexpected enrichment failure (e.g., EPSS/KEV API errors)
+    except (
+        Exception
+    ) as e:  # Acceptable: enrichment is best-effort — EPSS/KEV API failures non-fatal
         logger.debug(f"Unexpected error during priority enrichment: {e}")
 
     # Cross-tool deduplication clustering (v1.0.0 Feature #4 - Phase 2)
@@ -271,8 +276,9 @@ def gather_results(results_dir: Path) -> list[dict[str, Any]]:
         deduped = _cluster_cross_tool_duplicates(
             deduped, similarity_threshold=dedup_threshold
         )
-    except Exception as e:
-        # Best-effort clustering - log but continue with unfiltered results
+    except (
+        Exception
+    ) as e:  # Acceptable: dedup clustering is best-effort — continue with unfiltered results
         logger.warning(
             f"Cross-tool clustering failed, continuing with Phase 1 deduplication: {e}"
         )
@@ -328,7 +334,9 @@ def _safe_load_plugin(
     except (OSError, PermissionError) as e:
         logger.debug(f"Failed to read tool output {path}: {e}")
         return []
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: file scanning safety — skip unreadable tool outputs
         logger.error(f"Unexpected error loading {path}: {e}", exc_info=True)
         return []
 

@@ -124,7 +124,9 @@ def evaluate_policies(
             logger.info(f"Evaluating policy: {policy_name}")
             result = engine.evaluate(findings, policy_path)
             results[policy_name] = result
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Acceptable: individual policy failure — skip and continue with others
             logger.error(f"Failed to evaluate policy '{policy_name}': {e}")
             continue
 

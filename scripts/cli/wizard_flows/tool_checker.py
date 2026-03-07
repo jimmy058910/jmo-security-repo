@@ -21,7 +21,7 @@ import logging
 import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
@@ -44,7 +44,7 @@ _UNICODE_FALLBACKS = None
 _print_step = None
 
 
-def _init_ui_helpers():
+def _init_ui_helpers() -> None:
     """Initialize UI helpers lazily to avoid import cycles."""
     global _colorize, _UNICODE_FALLBACKS, _print_step
     if _colorize is None:
@@ -57,19 +57,20 @@ def _init_ui_helpers():
         _UNICODE_FALLBACKS = UNICODE_FALLBACKS
 
 
-def _get_colorize():
+def _get_colorize() -> Any:
     """Get colorize function, initializing if needed."""
     _init_ui_helpers()
     return _colorize
 
 
-def _get_unicode_fallbacks():
+def _get_unicode_fallbacks() -> dict[str, str]:
     """Get Unicode fallbacks dict, initializing if needed."""
     _init_ui_helpers()
+    assert _UNICODE_FALLBACKS is not None  # guaranteed after _init_ui_helpers()
     return _UNICODE_FALLBACKS
 
 
-def _get_print_step():
+def _get_print_step() -> Any:
     """Get print_step function, initializing if needed."""
     _init_ui_helpers()
     return _print_step
@@ -600,7 +601,9 @@ def check_tools_for_profile(
         colorize = _get_colorize()
         print(colorize("\nTool check unavailable - continuing anyway", "yellow"))
         return True, []
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: graceful degradation — tool check must not block wizard
         logger.warning(f"Tool check failed: {e}")
         colorize = _get_colorize()
         print(colorize(f"\nTool check failed: {e} - continuing anyway", "yellow"))
@@ -1020,7 +1023,9 @@ def _auto_fix_tools(
                         )
                         success = False
                         break
-                    except Exception as e:
+                    except (
+                        Exception
+                    ) as e:  # Acceptable: individual tool install failure — continue with others
                         print(
                             colorize(
                                 f"   {FALLBACKS.get('❌', '[X]')} Error: {e}",
@@ -1109,7 +1114,9 @@ def _auto_fix_tools(
                     )
                 )
 
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: post-install re-check is optional — continue regardless
         logger.warning(f"Re-check failed: {e}")
 
     # Continue with whatever we have
@@ -1193,7 +1200,9 @@ def _install_missing_tools_interactive(
 
         cont = input("Continue anyway? [y/N]: ").strip().lower()
         return cont == "y", available
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: installation failure — report error, don't crash wizard
         logger.error(f"Installation failed: {e}")
         print(colorize(f"\nInstallation error: {e}", "red"))
 
@@ -1345,7 +1354,9 @@ def _install_opa_tool() -> tuple[bool, bool]:
             "Install OPA manually: https://www.openpolicyagent.org/docs/latest/#running-opa"
         )
         return True, False
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: OPA install is optional — policy evaluation gracefully skipped
         logger.warning(f"OPA installation failed: {e}")
         print(colorize(f"\nInstallation failed: {e}", "red"))
         print("Continuing without policy evaluation")

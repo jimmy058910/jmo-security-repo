@@ -286,7 +286,9 @@ def transaction(conn: sqlite3.Connection):
     try:
         yield conn
         conn.commit()
-    except Exception:
+    except (
+        Exception
+    ):  # Acceptable: transaction rollback safety — re-raises after cleanup
         conn.rollback()
         raise
 
@@ -767,7 +769,9 @@ def _enforce_database_permissions(db_path: Path) -> None:
     try:
         os.chmod(db_path, 0o600)
         logger.debug(f"Database permissions set to 0o600: {db_path}")
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: chmod may fail on Windows or restricted filesystems
         logger.warning(f"Failed to set database permissions: {e}")
 
 
@@ -901,12 +905,12 @@ def store_scan(
             import socket
 
             hostname = socket.gethostname()
-        except Exception:
+        except Exception:  # Acceptable: hostname detection — safe default on failure
             pass
 
         try:
             username = os.environ.get("USER") or os.environ.get("USERNAME")
-        except Exception:
+        except Exception:  # Acceptable: username detection — safe default on failure
             pass
 
     # Detect CI environment
@@ -1981,7 +1985,7 @@ def optimize_database(db_path: Path) -> Dict[str, Any]:
     try:
         conn.execute("VACUUM")
         vacuum_success = True
-    except Exception as e:
+    except Exception as e:  # Acceptable: VACUUM is best-effort optimization — non-fatal
         logger.error(f"VACUUM failed: {e}")
         vacuum_success = False
 
@@ -1989,7 +1993,9 @@ def optimize_database(db_path: Path) -> Dict[str, Any]:
     try:
         conn.execute("ANALYZE")
         analyze_success = True
-    except Exception as e:
+    except (
+        Exception
+    ) as e:  # Acceptable: ANALYZE is best-effort optimization — non-fatal
         logger.error(f"ANALYZE failed: {e}")
         analyze_success = False
 

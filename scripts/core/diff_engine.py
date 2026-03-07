@@ -789,8 +789,9 @@ class DiffEngine:
                 # Attach to diff result (note: dataclass is frozen, so we use setattr)
                 object.__setattr__(diff, "trend_context", trend_context)
 
-        except Exception as e:
-            # Trend analysis may fail, don't crash diff
+        except (
+            Exception
+        ) as e:  # Acceptable: trend context is optional enrichment — must not crash diff
             logger.warning(f"Failed to add trend context: {e}")
             object.__setattr__(diff, "trend_context", None)
 
