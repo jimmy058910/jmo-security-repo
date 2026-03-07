@@ -122,7 +122,7 @@ slim:
   - prowler         # Multi-cloud CSPM (AWS/Azure/GCP/K8s)
   - kubescape       # Kubernetes security (NSA/CISA)
   - grype           # Vulnerability scanner (Anchore DB)
-  - bearer          # Data privacy/SAST (GDPR/CCPA)
+  - bearer          # Data privacy/SAST (GDPR/CCPA) [EOL: project archived, v2.0.1 final]
   - horusec         # Multi-language SAST (18+ languages)
   # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
@@ -423,7 +423,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 | Category | Tools |
 |----------|-------|
 | Secrets | trufflehog, noseyparker, semgrep-secrets |
-| SAST | semgrep, bandit, gosec, horusec, bearer |
+| SAST | semgrep, bandit, gosec, horusec, bearer (EOL) |
 | SCA | trivy, grype, dependency-check |
 | SBOM | syft, cdxgen |
 | IaC | checkov, checkov-cicd, hadolint, kubescape, prowler* |

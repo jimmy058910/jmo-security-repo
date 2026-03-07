@@ -433,6 +433,16 @@ class ToolInstaller:
                 message=f"Unknown tool: {tool_name}",
             )
 
+        # Warn about end-of-life tools
+        EOL_TOOLS = {
+            "bearer": (
+                "Bearer project is archived (EOL). v2.0.1 is the final release. "
+                "Consider Semgrep privacy rules (p/privacy, p/owasp-top-10) as a replacement."
+            ),
+        }
+        if tool_name in EOL_TOOLS:
+            logger.warning(f"[deprecation] {tool_name}: {EOL_TOOLS[tool_name]}")
+
         # Check for tool variants (share binary with base tool)
         if tool_name in TOOL_VARIANTS:
             base_tool = TOOL_VARIANTS[tool_name]

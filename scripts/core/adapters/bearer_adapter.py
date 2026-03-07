@@ -14,7 +14,7 @@ v1.0.0 Feature #1:
 - Supports: Ruby, JavaScript, TypeScript, Python, Go, PHP, Java
 - Privacy-first security scanning
 
-Tool Version: 1.40.0+
+Tool Version: 2.0.1 (final release, project archived)
 Output Format: JSON with dataflow/security findings
 Exit Codes: 0 (pass), 1 (findings), 2+ (errors)
 
@@ -188,7 +188,7 @@ def _load_bearer_internal(path: str | Path) -> list[dict[str, Any]]:
                                 "severity": "MEDIUM",  # Data privacy findings default to MEDIUM
                                 "tool": {
                                     "name": "bearer",
-                                    "version": "1.40.0",  # Bearer v1.40.0+
+                                    "version": "2.0.1",
                                 },
                                 "location": {
                                     "path": filename,
@@ -243,7 +243,7 @@ def _load_bearer_internal(path: str | Path) -> list[dict[str, Any]]:
                 "severity": severity,
                 "tool": {
                     "name": "bearer",
-                    "version": "1.40.0",
+                    "version": "2.0.1",
                 },
                 "location": {
                     "path": filename,
