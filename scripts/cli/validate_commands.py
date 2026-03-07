@@ -28,8 +28,12 @@ def _get_validators() -> list[ValidatorFn]:
 
     Lazy imports to keep jmo startup fast.
     """
-    # Placeholder: validators wired in Task 7
-    return []
+    from scripts.core.validators.cli_validator import validate_cli
+    from scripts.core.validators.platform_validator import validate_platform
+    from scripts.core.validators.release_validator import validate_release
+    from scripts.core.validators.scan_validator import validate_scans
+
+    return [validate_cli, validate_scans, validate_platform, validate_release]
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
