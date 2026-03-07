@@ -1,5 +1,5 @@
 # JMo Security Suite - Balanced Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 19 production-ready security tools + OPA
+# Base: Ubuntu 24.04 with 18 production-ready security tools + OPA
 # Size: ~1.41 GB (optimized) | Tools: 19 scanners | Multi-arch: amd64, arm64
 # v1.0.0: Balanced variant - Excludes specialized tools (Noseyparker, Bandit, Semgrep-Secrets, Trivy-RBAC, Falco, AFL++, MobSF, Lynis)
 
@@ -188,9 +188,9 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.151.0 \
     checkov==3.2.501 \
     ruff==0.15.2 \
-    yara-python==4.5.2 && \
-    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
-    python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.3.0 && \
+    yara-python==4.5.4 && \
+    python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
+    python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.5.0 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 

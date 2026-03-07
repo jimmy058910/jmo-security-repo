@@ -1,5 +1,5 @@
 # JMo Security Suite - Fast Docker Image (v1.0.0)
-# Base: Ubuntu 22.04 with 8 CI/CD gate tools + OPA for policy-as-code
+# Base: Ubuntu 24.04 with 9 CI/CD gate tools (8 scanners + OPA)
 # Size: ~502 MB (optimized) | Tools: 9 (8 scanners + OPA) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
 

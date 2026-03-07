@@ -1,6 +1,6 @@
 # JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
-# Base: Ubuntu 22.04 with 26 security tools pre-installed + OPA
-# Size: ~1.9 GB (optimized) | Tools: 26 Docker-ready scanners | Multi-arch: amd64, arm64
+# Base: Ubuntu 24.04 with 29 security tools pre-installed
+# Size: ~1.9 GB (optimized) | Tools: 29 (26 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
 
 #
@@ -183,7 +183,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 27 pre-installed scanners + OPA policy engine + plugin system (v1.0.0)"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -255,14 +255,14 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.5
 RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.2 && \
     echo "✓ ruff installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \
     echo "✓ yara-python installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.4.1 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.5.0 && \
     scancode --version && \
     echo "✓ scancode-toolkit installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.13.1 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
     prowler --version && \
     echo "✓ prowler installed"
 
@@ -354,8 +354,8 @@ RUN cd /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
-# Verify all 27 tools are installed and accessible
-RUN echo "=== Verifying all 27 tools ===" && \
+# Verify Docker-ready tools are installed and accessible
+RUN echo "=== Verifying Docker-ready tools ===" && \
     python3 --version && \
     jmo --help > /dev/null && \
     jmo tools --help > /dev/null && \
@@ -385,7 +385,7 @@ RUN echo "=== Verifying all 27 tools ===" && \
     scancode --version && \
     cdxgen --version && \
     opa version && \
-    echo "=== All 27 tools verified ==="
+    echo "=== All Docker-ready tools verified ==="
 
 # Create non-root user and set ownership (Security best practice)
 # Note: Ubuntu 24.04 pre-creates 'ubuntu' user with UID 1000, must remove first
