@@ -68,6 +68,16 @@ jobs:
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
 
+      - name: "Secrets scan (TruffleHog)"
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
+          VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
+          if [ "$VERIFIED" -gt 0 ]; then
+            echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
+            exit 1
+          fi
+
       - name: "Check import direction (core/cli layering)"
         run: python scripts/dev/check_import_direction.py
 
@@ -531,7 +541,10 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'))
     timeout-minutes: 30
     steps:
       - name: Checkout repository
