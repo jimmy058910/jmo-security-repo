@@ -197,6 +197,8 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Uses Google OSV database for comprehensive vulnerability data
   bearer:
+    # NOTE: Bearer project is archived (EOL). v2.0.1 is latest release.
+    # Evaluate replacement when compatibility issues arise.
     version: 2.0.0
     github_repo: Bearer/bearer
     description: Data security and privacy scanner (GDPR/CCPA)

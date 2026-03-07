@@ -741,7 +741,7 @@ def test_configure_k8s_target_kubectl_not_found():
     mock_print_step = MagicMock()
 
     with patch(
-        "scripts.cli.wizard_flows.target_configurators.shutil.which", return_value=None
+        "scripts.cli.wizard_flows.target_configurators.tool_exists", return_value=False
     ):
         result = configure_k8s_target(mock_config, mock_print_step)
 
@@ -757,8 +757,8 @@ def test_configure_k8s_target_single_namespace_valid_context():
 
     with (
         patch(
-            "scripts.cli.wizard_flows.target_configurators.shutil.which",
-            return_value="/usr/bin/kubectl",
+            "scripts.cli.wizard_flows.target_configurators.tool_exists",
+            return_value=True,
         ),
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
@@ -785,8 +785,8 @@ def test_configure_k8s_target_all_namespaces():
 
     with (
         patch(
-            "scripts.cli.wizard_flows.target_configurators.shutil.which",
-            return_value="/usr/bin/kubectl",
+            "scripts.cli.wizard_flows.target_configurators.tool_exists",
+            return_value=True,
         ),
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
@@ -813,8 +813,8 @@ def test_configure_k8s_target_invalid_context_use_anyway():
 
     with (
         patch(
-            "scripts.cli.wizard_flows.target_configurators.shutil.which",
-            return_value="/usr/bin/kubectl",
+            "scripts.cli.wizard_flows.target_configurators.tool_exists",
+            return_value=True,
         ),
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
@@ -841,8 +841,8 @@ def test_configure_k8s_target_invalid_context_retry():
 
     with (
         patch(
-            "scripts.cli.wizard_flows.target_configurators.shutil.which",
-            return_value="/usr/bin/kubectl",
+            "scripts.cli.wizard_flows.target_configurators.tool_exists",
+            return_value=True,
         ),
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
@@ -869,8 +869,8 @@ def test_configure_k8s_target_current_context():
 
     with (
         patch(
-            "scripts.cli.wizard_flows.target_configurators.shutil.which",
-            return_value="/usr/bin/kubectl",
+            "scripts.cli.wizard_flows.target_configurators.tool_exists",
+            return_value=True,
         ),
         patch(
             "scripts.cli.wizard_flows.target_configurators._prompter"
