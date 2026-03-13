@@ -8,6 +8,9 @@ venv-*
 
 # Claude Code temp directories (created during sessions)
 tmpclaude-*/
+
+# Git worktrees (isolated workspaces for feature development)
+.worktrees/
 nul
 
 # Coverage artifacts
