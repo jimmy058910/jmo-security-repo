@@ -1,0 +1,45 @@
+name: 'Notify on Failure'
+description: 'Create or update GitHub issue on workflow failure'
+
+inputs:
+  title-prefix:
+    description: 'Prefix for issue title'
+    required: false
+    default: 'CI failure'
+  label:
+    description: 'Label for the issue'
+    required: false
+    default: 'ci-failure'
+  github-token:
+    description: 'GitHub token for issue creation'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Create or update failure issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        TITLE_PREFIX: ${{ inputs.title-prefix }}
+        ISSUE_LABEL: ${{ inputs.label }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      run: |
+        TODAY=$(date -u +%Y-%m-%d)
+        TITLE="${TITLE_PREFIX} on ${TODAY}"
+        TRIGGERED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        BODY="Workflow: ${WORKFLOW_NAME}"$'\n'"Run: ${RUN_URL}"$'\n'"Branch: ${BRANCH_NAME}"$'\n'"Triggered at: ${TRIGGERED_AT}"
+
+        # Check for existing open issue with same title
+        EXISTING=$(gh issue list --state open --search "in:title ${TITLE}" \
+          --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+        if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+          echo "Adding comment to existing issue #${EXISTING}"
+          gh issue comment "$EXISTING" --body "$BODY"
+        else
+          echo "Creating new issue: ${TITLE}"
+          gh issue create --title "$TITLE" --body "$BODY" --label "$ISSUE_LABEL"
+        fi
