@@ -1,0 +1,42 @@
+name: 'TruffleHog Secret Scan'
+description: 'Scan filesystem for verified secrets using TruffleHog'
+
+inputs:
+  scan-path:
+    description: 'Path to scan'
+    required: false
+    default: '.'
+  exclude-paths:
+    description: 'Path to exclusion file'
+    required: false
+    default: '.trufflehog-exclude.txt'
+  fail-on-verified:
+    description: 'Fail if verified secrets found'
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Install TruffleHog
+      shell: bash
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+          | sh -s -- -b /usr/local/bin
+
+    - name: Run TruffleHog scan
+      shell: bash
+      run: |
+        trufflehog filesystem ${{ inputs.scan-path }} \
+          --json \
+          --exclude-paths ${{ inputs.exclude-paths }} \
+          --only-verified > trufflehog-results.json || true
+
+        VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
+
+        if [ "$VERIFIED" -gt 0 ] && [ "${{ inputs.fail-on-verified }}" = "true" ]; then
+          echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
+          exit 1
+        fi
+
+        echo "TruffleHog scan complete. Verified secrets: $VERIFIED"
