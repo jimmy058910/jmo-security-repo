@@ -14,27 +14,37 @@ inputs:
     description: 'Fail if verified secrets found'
     required: false
     default: 'true'
+  trufflehog-version:
+    description: 'TruffleHog version to install'
+    required: false
+    default: '3.63.0'
 
 runs:
   using: composite
   steps:
     - name: Install TruffleHog
       shell: bash
+      env:
+        TRUFFLEHOG_VERSION: ${{ inputs.trufflehog-version }}
       run: |
-        curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
-          | sh -s -- -b /usr/local/bin
+        INSTALL_URL=https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh
+        curl -sSfL "$INSTALL_URL" | sh -s -- -b /usr/local/bin "v${TRUFFLEHOG_VERSION}"
 
     - name: Run TruffleHog scan
       shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.scan-path }}
+        EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+        FAIL_ON_VERIFIED: ${{ inputs.fail-on-verified }}
       run: |
-        trufflehog filesystem ${{ inputs.scan-path }} \
+        trufflehog filesystem "$SCAN_PATH" \
           --json \
-          --exclude-paths ${{ inputs.exclude-paths }} \
+          --exclude-paths "$EXCLUDE_PATHS" \
           --only-verified > trufflehog-results.json || true
 
         VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
 
-        if [ "$VERIFIED" -gt 0 ] && [ "${{ inputs.fail-on-verified }}" = "true" ]; then
+        if [ "$VERIFIED" -gt 0 ] && [ "$FAIL_ON_VERIFIED" = "true" ]; then
           echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
           exit 1
         fi
