@@ -33,13 +33,13 @@ runs:
         BODY="Workflow: ${WORKFLOW_NAME}"$'\n'"Run: ${RUN_URL}"$'\n'"Branch: ${BRANCH_NAME}"$'\n'"Triggered at: ${TRIGGERED_AT}"
 
         # Check for existing open issue with same title
-        EXISTING=$(gh issue list --state open --search "in:title ${TITLE}" \
+        EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"${TITLE}\" in:title" \
           --json number --jq '.[0].number' 2>/dev/null || echo "")
 
         if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
           echo "Adding comment to existing issue #${EXISTING}"
-          gh issue comment "$EXISTING" --body "$BODY"
+          gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
         else
           echo "Creating new issue: ${TITLE}"
-          gh issue create --title "$TITLE" --body "$BODY" --label "$ISSUE_LABEL"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" --label "$ISSUE_LABEL"
         fi
