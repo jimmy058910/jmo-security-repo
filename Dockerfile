@@ -140,10 +140,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Clean __pycache__ and .pyc files immediately after install
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
-    bandit==1.8.6 \
-    semgrep==1.141.0 \
-    checkov==3.2.488 \
-    ruff==0.14.2 && \
+    bandit==1.9.4 \
+    semgrep==1.155.0 \
+    checkov==3.2.508 \
+    ruff==0.15.6 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
