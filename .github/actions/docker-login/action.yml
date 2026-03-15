@@ -45,7 +45,7 @@ runs:
 
     - name: Configure AWS credentials for ECR Public
       if: inputs.aws-role-arn != ''
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@v5
       with:
         role-to-assume: ${{ inputs.aws-role-arn }}
         aws-region: ${{ inputs.aws-region }}
