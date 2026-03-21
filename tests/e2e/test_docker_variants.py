@@ -14,10 +14,13 @@ Runtime: ~30-60 minutes for all variants
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.conftest import skip_on_windows
 
 # Docker image variants to test
 DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
@@ -257,7 +260,7 @@ class TestDockerVolumeMount:
         if results_dir.exists():
             # Should have some output files
             output_files = list(results_dir.glob("*"))
-            assert len(output_files) >= 0  # May or may not have findings
+            assert len(output_files) > 0  # Should have at least one output file
 
     def test_history_db_mount(self, tmp_path: Path):
         """History database should persist when mounted."""
@@ -424,6 +427,7 @@ class TestDockerNonRootExecution:
         combined = result.stdout.lower() + result.stderr.lower()
         assert "permission denied" not in combined or result.returncode == 0
 
+    @skip_on_windows
     def test_run_with_uid_mapping(self, tmp_path: Path):
         """Container should work with UID/GID mapping."""
         image = f"{DOCKER_REGISTRY}:fast"
@@ -436,8 +440,6 @@ class TestDockerNonRootExecution:
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
         # Get current user ID
-        import os
-
         uid = os.getuid() if hasattr(os, "getuid") else 1000
         gid = os.getgid() if hasattr(os, "getgid") else 1000
 
@@ -695,7 +697,7 @@ class TestDockerOutputFormats:
         assert result.stdout or result.stderr
         combined = result.stdout + result.stderr
         # Should not have garbled characters
-        assert all(ord(c) < 128 or ord(c) > 127 for c in combined)
+        assert all(ord(c) < 128 for c in combined)
 
 
 # Image size ranges in MB (min, max) — allow generous tolerance for registry builds
@@ -959,7 +961,7 @@ class TestDockerCLIConsistency:
         """All variants should report the same jmo package version."""
         versions: dict[str, str] = {}
 
-        for variant, _ in [(p.values[0], p.values[1]) for p in DOCKER_VARIANTS]:
+        for variant, _ in [("deep", 28), ("balanced", 18), ("slim", 14), ("fast", 8)]:
             image = f"{DOCKER_REGISTRY}:{variant}"
 
             if not image_exists(image):
