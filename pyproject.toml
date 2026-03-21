@@ -50,6 +50,9 @@ reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
 attestation = ["sigstore>=2.0.0", "cryptography>=41.0.0"]  # SLSA attestation (Feature #6, v1.0.0)
+visual = [
+    "pytest-playwright>=0.5.2",
+]
 dev = [
     # Testing
     "pytest",
