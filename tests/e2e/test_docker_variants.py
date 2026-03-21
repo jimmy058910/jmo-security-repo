@@ -696,3 +696,511 @@ class TestDockerOutputFormats:
         combined = result.stdout + result.stderr
         # Should not have garbled characters
         assert all(ord(c) < 128 or ord(c) > 127 for c in combined)
+
+
+# Image size ranges in MB (min, max) — allow generous tolerance for registry builds
+# Actual sizes will vary by build cache / layer optimization
+IMAGE_SIZE_RANGES = {
+    "deep": (1500, 3000),  # Deep/full: ~1.6-2.5 GB (most tools)
+    "balanced": (900, 2000),  # Balanced: ~1.0-1.8 GB
+    "slim": (700, 1600),  # Slim: ~0.8-1.5 GB (IaC/cloud focus)
+    "fast": (500, 1200),  # Fast: ~0.5-1.0 GB (fewest tools)
+}
+
+# Tools that are deep-profile-only (should NOT appear in lighter variants)
+DEEP_ONLY_TOOLS = ["noseyparker", "bandit", "falcoctl", "afl-fuzz"]
+# Tools that are deep/balanced but NOT in fast (slim uses fast profile tools)
+BALANCED_ONLY_TOOLS = ["checkov", "hadolint"]
+
+# Named tool sets per variant for exhaustive presence checks
+DEEP_EXPECTED_TOOLS = [
+    "trufflehog",
+    "noseyparker",
+    "semgrep",
+    "bandit",
+    "syft",
+    "trivy",
+    "checkov",
+    "hadolint",
+    "zap",
+    "falcoctl",
+    "afl-fuzz",
+]
+BALANCED_EXPECTED_TOOLS = [
+    "trufflehog",
+    "semgrep",
+    "syft",
+    "trivy",
+    "checkov",
+    "hadolint",
+    "zap",
+]
+FAST_EXPECTED_TOOLS = ["trufflehog", "semgrep", "trivy"]
+
+# Mapping of variant -> (profile, expected_named_tools, shell)
+VARIANT_NAMED_TOOLS: list[tuple[str, str, list[str], str]] = [
+    ("deep", "deep", DEEP_EXPECTED_TOOLS, "bash"),
+    ("balanced", "balanced", BALANCED_EXPECTED_TOOLS, "bash"),
+    ("fast", "fast", FAST_EXPECTED_TOOLS, "sh"),
+]
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerImageSize:
+    """Test Docker image sizes are within expected ranges."""
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    @pytest.mark.parametrize(
+        "variant,size_range",
+        [
+            ("deep", IMAGE_SIZE_RANGES["deep"]),
+            ("balanced", IMAGE_SIZE_RANGES["balanced"]),
+            ("slim", IMAGE_SIZE_RANGES["slim"]),
+            ("fast", IMAGE_SIZE_RANGES["fast"]),
+        ],
+    )
+    def test_image_size_within_range(self, variant: str, size_range: tuple):
+        """Image sizes should be within expected ranges (no runaway bloat)."""
+        image = f"{DOCKER_REGISTRY}:{variant}"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        result = subprocess.run(
+            ["docker", "image", "inspect", image, "--format={{.Size}}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0, f"Failed to inspect {image}"
+
+        size_bytes = int(result.stdout.strip())
+        size_mb = size_bytes / (1024 * 1024)
+        min_mb, max_mb = size_range
+
+        assert min_mb <= size_mb <= max_mb, (
+            f"{image} size {size_mb:.0f} MB out of expected range [{min_mb}, {max_mb}] MB. "
+            f"This may indicate bloated dependencies or missing tools."
+        )
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerToolExclusion:
+    """Test that lighter variants correctly exclude heavy/deep-only tools."""
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    def test_balanced_excludes_deep_only_tools(self):
+        """Balanced variant should NOT include deep-profile-only tools."""
+        image = f"{DOCKER_REGISTRY}:balanced"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        found = []
+        for tool in DEEP_ONLY_TOOLS:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "bash",
+                    image,
+                    "-c",
+                    f"which {tool}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                found.append(tool)
+
+        assert (
+            not found
+        ), f"Balanced image should not include deep-only tools, but found: {found}"
+
+    def test_fast_excludes_deep_only_tools(self):
+        """Fast variant should NOT include deep-profile-only tools."""
+        image = f"{DOCKER_REGISTRY}:fast"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        found = []
+        for tool in DEEP_ONLY_TOOLS:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "bash",
+                    image,
+                    "-c",
+                    f"which {tool}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                found.append(tool)
+
+        assert (
+            not found
+        ), f"Fast image should not include deep-only tools, but found: {found}"
+
+    def test_deep_includes_deep_only_tools(self):
+        """Deep variant SHOULD include the deep-profile-only tools."""
+        image = f"{DOCKER_REGISTRY}:deep"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        missing = []
+        for tool in DEEP_ONLY_TOOLS:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "bash",
+                    image,
+                    "-c",
+                    f"which {tool}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                missing.append(tool)
+
+        assert (
+            not missing
+        ), f"Deep image should include deep-only tools, but missing: {missing}"
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerCLIConsistency:
+    """Test that all variants have a consistent CLI interface."""
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
+    def test_scan_help_available(self, variant: str, _expected_tools: int):
+        """All variants should support scan --help."""
+        image = f"{DOCKER_REGISTRY}:{variant}"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        result = subprocess.run(
+            ["docker", "run", "--rm", image, "scan", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert (
+            result.returncode == 0
+        ), f"scan --help failed for {image}: {result.stderr}"
+        assert "scan" in result.stdout.lower()
+        assert "--repo" in result.stdout
+
+    @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
+    def test_core_scan_flags_present(self, variant: str, _expected_tools: int):
+        """All variants should expose the same core scan flags."""
+        image = f"{DOCKER_REGISTRY}:{variant}"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        result = subprocess.run(
+            ["docker", "run", "--rm", image, "scan", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0
+        # All variants must expose core flags
+        assert "--repo" in result.stdout
+        assert "--results-dir" in result.stdout
+        assert "--profile" in result.stdout or "--profile-name" in result.stdout
+
+    def test_all_variants_same_version(self):
+        """All variants should report the same jmo package version."""
+        versions: dict[str, str] = {}
+
+        for variant, _ in [(p.values[0], p.values[1]) for p in DOCKER_VARIANTS]:
+            image = f"{DOCKER_REGISTRY}:{variant}"
+
+            if not image_exists(image):
+                continue  # Skip missing images, don't fail
+
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "bash",
+                    image,
+                    "-c",
+                    "python3 -c 'import importlib.metadata; print(importlib.metadata.version(\"jmo-security\"))'",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                versions[variant] = result.stdout.strip()
+
+        if len(versions) < 2:
+            pytest.skip(
+                "Fewer than 2 variants available locally — cannot compare versions"
+            )
+
+        unique_versions = set(versions.values())
+        assert (
+            len(unique_versions) == 1
+        ), f"Version mismatch across variants: {versions}"
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerNamedToolPresence:
+    """Verify specific named tools are present (via which) in each variant.
+
+    Merged from tests/integration/test_docker_variants.py which used legacy
+    variant names: full→deep, slim→balanced, alpine→fast.
+    """
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    @pytest.mark.parametrize(
+        "variant,profile,expected_tools,shell",
+        VARIANT_NAMED_TOOLS,
+        ids=["deep", "balanced", "fast"],
+    )
+    def test_variant_has_named_tools(
+        self, variant: str, profile: str, expected_tools: list[str], shell: str
+    ):
+        """Each variant should have its expected named tools on PATH."""
+        image = f"{DOCKER_REGISTRY}:{variant}"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        missing_tools = []
+        for tool in expected_tools:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    shell,
+                    image,
+                    "-c",
+                    f"which {tool}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                missing_tools.append(tool)
+
+        assert (
+            not missing_tools
+        ), f"{image} ({profile} profile) missing tools: {missing_tools}"
+
+    def test_deep_has_all_expected_tools(self):
+        """Deep variant should have all expected tools (comprehensive check)."""
+        image = f"{DOCKER_REGISTRY}:deep"
+
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        missing = []
+        for tool in DEEP_EXPECTED_TOOLS:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--entrypoint",
+                    "bash",
+                    image,
+                    "-c",
+                    f"which {tool}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                missing.append(tool)
+
+        assert not missing, f"Deep image missing expected tools: {missing}"
+
+
+@pytest.mark.docker
+@pytest.mark.e2e
+class TestDockerBasicScanByVariant:
+    """Basic scan functionality tests using /repo mount pattern.
+
+    Merged from tests/integration/test_docker_variants.py (test_docker_full_basic_scan,
+    test_docker_slim_basic_scan, test_docker_alpine_basic_scan). Uses --profile-name
+    flag and /repo volume mount rather than working-directory approach.
+    """
+
+    @pytest.fixture(autouse=True)
+    def check_docker(self):
+        """Skip all tests if Docker is not available."""
+        if not docker_available():
+            pytest.skip("Docker not available")
+
+    def test_deep_basic_scan(self, tmp_path: "Path"):
+        """Deep variant can perform a basic repository scan."""
+        image = f"{DOCKER_REGISTRY}:deep"
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        test_repo = tmp_path / "test-repo"
+        test_repo.mkdir()
+        (test_repo / "README.md").write_text("# Test Repository")
+        (test_repo / "requirements.txt").write_text("requests==2.25.0")
+
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{test_repo}:/repo",
+                image,
+                "scan",
+                "--repo",
+                "/repo",
+                "--profile",
+                "fast",
+                "--allow-missing-tools",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
+
+    def test_balanced_basic_scan(self, tmp_path: "Path"):
+        """Balanced variant can perform a basic repository scan."""
+        image = f"{DOCKER_REGISTRY}:balanced"
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        test_repo = tmp_path / "test-repo"
+        test_repo.mkdir()
+        (test_repo / "app.py").write_text("print('hello')")
+
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{test_repo}:/repo",
+                image,
+                "scan",
+                "--repo",
+                "/repo",
+                "--profile",
+                "balanced",
+                "--allow-missing-tools",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
+
+    def test_fast_basic_scan(self, tmp_path: "Path"):
+        """Fast variant can perform a basic repository scan."""
+        image = f"{DOCKER_REGISTRY}:fast"
+        if not image_exists(image):
+            if not pull_image(image):
+                pytest.skip(f"Could not pull image: {image}")
+
+        test_repo = tmp_path / "test-repo"
+        test_repo.mkdir()
+        (test_repo / "test.py").write_text("x = 1")
+
+        result = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{test_repo}:/repo",
+                image,
+                "scan",
+                "--repo",
+                "/repo",
+                "--profile",
+                "fast",
+                "--allow-missing-tools",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        assert result.returncode in (
+            0,
+            1,
+        ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
