@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -1206,3 +1208,108 @@ class TestDockerBasicScanByVariant:
             0,
             1,
         ), f"Scan failed with exit code {result.returncode}: {result.stderr}"
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+@pytest.mark.docker
+class TestDockerCLIWorkflows:
+    """Docker CLI workflow tests replacing bash U9-U11, M5-M6, W3-W4.
+
+    Tests jmo scan execution inside Docker containers with volume mounts.
+    """
+
+    DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
+
+    @pytest.mark.skipif(not shutil.which("docker"), reason="Docker not installed")
+    @pytest.mark.parametrize(
+        "test_id,variant,cli_args,platform",
+        [
+            pytest.param(
+                "U9",
+                "latest-full",
+                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                "linux",
+                id="U9-docker-full-repo",
+            ),
+            pytest.param(
+                "U10",
+                "latest-full",
+                ["ci", "--image", "alpine:3.19", "--tools", "trivy,syft"],
+                "linux",
+                id="U10-docker-full-image",
+            ),
+            pytest.param(
+                "U11",
+                "latest-slim",
+                ["ci", "--repo", "/scan", "--profile", "fast"],
+                "linux",
+                id="U11-docker-slim-multi",
+            ),
+            pytest.param(
+                "M5",
+                "latest-full",
+                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                "darwin",
+                id="M5-docker-full-macos",
+            ),
+            pytest.param(
+                "M6",
+                "latest-slim",
+                ["ci", "--repo", "/scan", "--profile", "fast"],
+                "darwin",
+                id="M6-docker-slim-macos",
+            ),
+            pytest.param(
+                "W3",
+                "latest-full",
+                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                "win32",
+                id="W3-docker-full-windows",
+            ),
+            pytest.param(
+                "W4",
+                "latest-slim",
+                ["ci", "--repo", "/scan", "--profile", "fast"],
+                "win32",
+                id="W4-docker-slim-windows",
+            ),
+        ],
+    )
+    def test_docker_cli_workflow(self, test_id, variant, cli_args, platform, tmp_path):
+        """Run jmo inside Docker container and validate output."""
+        if sys.platform != platform:
+            pytest.skip(f"Test {test_id} is for {platform}")
+
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+
+        docker_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{tmp_path}:/scan",
+            "-v",
+            f"{results_dir}:/scan/results",
+            f"{self.DOCKER_REGISTRY}:{variant}",
+            *cli_args,
+            "--results-dir",
+            "/scan/results",
+            "--allow-missing-tools",
+        ]
+
+        result = subprocess.run(
+            docker_cmd,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+
+        assert result.returncode in (0, 1), (
+            f"Docker test {test_id} failed with exit code {result.returncode}.\n"
+            f"stderr: {result.stderr[:500]}"
+        )
+
+        # Validate output files exist on host via volume mount
+        assert (results_dir / "findings.json").exists() or result.returncode == 0
