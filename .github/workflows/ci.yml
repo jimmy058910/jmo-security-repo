@@ -164,9 +164,11 @@ jobs:
               sys.exit(1)
           "
 
-  # Test matrix for cross-platform compatibility (excludes Ubuntu/3.12 which uses sharding)
-  test-matrix:
-    name: Test ${{ matrix.os }} / Python ${{ matrix.python-version }}
+  # Sharded test execution across all platforms
+  # Ubuntu: 4 parallel shards with coverage (primary CI target)
+  # macOS/Windows: single shard each, no coverage (cross-platform validation)
+  test-sharded:
+    name: Test ${{ matrix.os }} Shard ${{ matrix.shard }}/${{ matrix.total-shards }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -177,62 +179,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12"]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-
-      - name: Install dependencies (with retry)
-        env:
-          PIP_DISABLE_PIP_VERSION_CHECK: "1"
-          PIP_DEFAULT_TIMEOUT: "60"
-        run: |
-          python -m pip install --upgrade 'pip<25.3'
-          for attempt in 1 2 3; do
-            echo "[deps] attempt ${attempt} to install requirements-dev.txt"
-            if pip install -r requirements-dev.txt; then
-              break
-            fi
-            sleep 5
-          done
-          # Install project in editable mode
-          for attempt in 1 2 3; do
-            echo "[deps] attempt ${attempt} to install project in editable mode"
-            if pip install -e .; then
-              break
-            fi
-            sleep 5
-          done
-
-      - name: Run tests (no coverage)
-        env:
-          CI: "true"
-          PYTHONUTF8: "1"
-          JMO_THREADS: "2"
-          SKIP_REACT_BUILD_CHECK: "true"
-        run: |
-          python -m pytest -q --maxfail=1 --disable-warnings -m "not smoke and not requires_tools"
-
-  # Sharded test execution for Ubuntu/Python 3.12 (primary CI target)
-  # Distributes 5000+ tests across 4 parallel shards for ~60% faster execution
-  test-sharded:
-    name: Test Shard ${{ matrix.shard }}/4 (Ubuntu/3.12)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
+        include:
+          - os: ubuntu-latest
+            shard: 1
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 2
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 3
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 4
+            total-shards: 4
+          - os: macos-latest
+            shard: 1
+            total-shards: 1
+          - os: windows-latest
+            shard: 1
+            total-shards: 1
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -266,7 +231,8 @@ jobs:
             sleep 5
           done
 
-      - name: Run sharded tests with coverage
+      - name: Run sharded tests with coverage (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         env:
           CI: "true"
           PYTHONUTF8: "1"
@@ -277,18 +243,33 @@ jobs:
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
-            --splits 4 \
+            --splits ${{ matrix.total-shards }} \
             --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --cov=. \
-            --cov-report=xml:coverage-shard-${{ matrix.shard }}.xml \
+            --cov-report=xml:coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml \
             -m "not smoke and not requires_tools"
 
-      - name: Upload shard coverage artifact
+      - name: Run tests (macOS/Windows, no coverage)
+        if: matrix.os != 'ubuntu-latest'
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
+        run: |
+          python -m pytest -q \
+            --disable-warnings \
+            --reruns 2 \
+            --reruns-delay 2 \
+            -m "not smoke and not requires_tools"
+
+      - name: Upload shard coverage artifact (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v5
         with:
-          name: coverage-shard-${{ matrix.shard }}
-          path: coverage-shard-${{ matrix.shard }}.xml
+          name: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}
+          path: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml
           retention-days: 1
 
   # Aggregate coverage from all shards and upload to Codecov
@@ -312,7 +293,7 @@ jobs:
       - name: Download all coverage artifacts
         uses: actions/download-artifact@v5
         with:
-          pattern: coverage-shard-*
+          pattern: coverage-shard-ubuntu-latest-*
           merge-multiple: true
 
       - name: Install coverage tool
