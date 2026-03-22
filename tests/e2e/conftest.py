@@ -131,3 +131,26 @@ def validate_multi_target(results_dir: Path) -> None:
 def current_platform() -> str:
     """Return current platform identifier as linux/darwin/win32."""
     return sys.platform
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Generate e2e markdown report after test run."""
+    report_path = getattr(config.option, "json_report_file", None)
+    if report_path is None:
+        return
+
+    # Report generation is handled by pytest-json-report
+    # This hook adds a release readiness check
+    stats = terminalreporter.stats
+    passed = len(stats.get("passed", []))
+    failed = len(stats.get("failed", []))
+    total = passed + failed
+
+    if total > 0:
+        pass_rate = (passed / total) * 100
+        status = "PASS" if pass_rate >= 95.0 else "FAIL"
+        terminalreporter.write_line("")
+        terminalreporter.write_line(
+            f"E2E Release Readiness: {status} ({pass_rate:.1f}% pass rate, "
+            f"threshold: 95%)"
+        )
