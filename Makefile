@@ -579,7 +579,7 @@ docker-build-local:
 	@echo "  - jmo-security:local-alpine"
 	@echo ""
 	@echo "Test with: docker run --rm jmo-security:local-full --help"
-	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local bash tests/e2e/run_comprehensive_tests.sh"
+	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local make test-e2e"
 
 docker-test:
 	@echo "Testing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"

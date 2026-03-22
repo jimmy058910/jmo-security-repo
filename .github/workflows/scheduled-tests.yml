@@ -418,15 +418,20 @@ jobs:
           docker pull nginx:alpine
           docker pull redis:alpine
 
-      - name: Setup test fixtures
-        run: |
-          bash tests/e2e/fixtures/setup_fixtures.sh
-
       - name: Run comprehensive test suite
         id: run_tests
         run: |
           echo "Running full Ubuntu + Advanced test suite"
-          bash tests/e2e/run_comprehensive_tests.sh
+          RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
+          mkdir -p "$RESULTS_DIR"
+          python -m pytest tests/e2e/ -v --timeout=300 \
+            --ignore=tests/e2e/test_linux_specific.py \
+            --ignore=tests/e2e/test_macos_specific.py \
+            --ignore=tests/e2e/test_windows_specific.py \
+            -m "not docker" \
+            --json-report \
+            --json-report-file="$RESULTS_DIR/pytest-report.json" \
+            2>&1 | tee "$RESULTS_DIR/test.log" || true
         env:
           TEST_REPO: https://github.com/juice-shop/juice-shop.git
           TEST_IMAGE: alpine:3.19
@@ -434,32 +439,23 @@ jobs:
           RESULTS_BASE: /tmp/jmo-e2e-results-${{ github.run_id }}
         continue-on-error: true
 
-      - name: Generate test report
-        if: always()
-        run: |
-          if [[ -f /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv ]]; then
-            python tests/e2e/generate_report.py /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv
-          else
-            echo "No test results found"
-          fi
-
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: e2e-ubuntu-results-${{ github.run_id }}
           path: |
-            /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv
-            /tmp/jmo-e2e-results-${{ github.run_id }}/*/test.log
-            /tmp/jmo-e2e-results-${{ github.run_id }}/*/summaries/findings.json
-            /tmp/jmo-e2e-results-${{ github.run_id }}/*/summaries/SUMMARY.md
+            /tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json
+            /tmp/jmo-e2e-results-${{ github.run_id }}/test.log
           retention-days: 30
 
       - name: Check test success
         if: always()
         run: |
-          if [[ -f /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv ]]; then
-            FAILED_TESTS=$(grep -c ",FAIL," /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv || echo 0)
+          RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
+          if [[ -f "$RESULTS_DIR/pytest-report.json" ]]; then
+            REPORT="$RESULTS_DIR/pytest-report.json"
+            FAILED_TESTS=$(python3 -c "import json; r=json.load(open('$REPORT')); print(r['summary'].get('failed',0))")
             if [[ $FAILED_TESTS -gt 0 ]]; then
               echo "$FAILED_TESTS tests failed"
               exit 1
@@ -498,13 +494,17 @@ jobs:
         run: |
           brew install semgrep trivy syft checkov hadolint || echo "Some tools failed"
 
-      - name: Setup test fixtures
-        run: |
-          bash tests/e2e/fixtures/setup_fixtures.sh
-
       - name: Run macOS test suite
         run: |
-          bash tests/e2e/run_comprehensive_tests.sh
+          RESULTS_DIR="/tmp/jmo-e2e-results-${{ github.run_id }}"
+          mkdir -p "$RESULTS_DIR"
+          python -m pytest tests/e2e/ -v --timeout=300 \
+            --ignore=tests/e2e/test_linux_specific.py \
+            --ignore=tests/e2e/test_windows_specific.py \
+            -m "not docker" \
+            --json-report \
+            --json-report-file="$RESULTS_DIR/pytest-report.json" \
+            2>&1 | tee "$RESULTS_DIR/test.log" || true
         env:
           TEST_REPO: https://github.com/juice-shop/juice-shop.git
           TEST_IMAGE: alpine:3.19

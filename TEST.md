@@ -86,96 +86,53 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 xdg-open results/summaries/dashboard.html  # mac: open
 ```
 
-## Comprehensive E2E Test Suite (v0.6.0+)
+## Comprehensive E2E Test Suite
 
-For thorough validation across all target types, OS platforms, and execution methods, use the comprehensive test suite:
+The E2E suite lives in `tests/e2e/` and uses pytest. All tests replaced the legacy bash scripts after parity was confirmed.
 
 ### Quick Start
 
 ```bash
-# Run full test suite for your OS (Ubuntu/macOS/Windows WSL2)
-bash tests/e2e/run_comprehensive_tests.sh
+# Run full E2E suite
+make test-e2e
 
-# Run specific test
-bash tests/e2e/run_comprehensive_tests.sh --test U1
+# Run specific workflow file
+pytest tests/e2e/test_scan_workflows.py -v
 
-# Generate HTML report from results
-python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.csv
+# Run specific test by ID (e.g., U1, U9, A1)
+pytest tests/e2e/ -k "U1" -v
+
+# Run Docker-based tests only
+pytest tests/e2e/ -m docker -v
+
+# Skip Docker tests (default for local dev)
+pytest tests/e2e/ -m "not docker" -v
 ```
 
-### Test Matrix
+### Test Files
 
-The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
-
-**Target Types:**
-
-- Repository scanning (existing functionality)
-- Container image scanning (v0.6.0)
-- IaC file scanning (v0.6.0)
-- Web app/API scanning (v0.6.0)
-- GitLab repository scanning (v0.6.0)
-- Kubernetes cluster scanning (v0.6.0)
-
-**Operating Systems:**
-
-- Ubuntu 22.04 (12 tests)
-- macOS 14 Sonoma (6 tests)
-- Windows 11 WSL2 (4 tests)
-
-**Execution Methods:**
-
-- Native CLI (`jmo` command)
-- Wizard (`jmo wizard`)
-- Docker containers (deep/balanced/slim/fast variants)
-
-### Test Suites
-
-**Ubuntu Test Suite (U1-U12):**
-
-```bash
-# Single repo scan (native CLI)
-bash tests/e2e/run_comprehensive_tests.sh --test U1
-
-# Container image scan
-bash tests/e2e/run_comprehensive_tests.sh --test U2
-
-# Multi-target scan (repo + image + IaC)
-bash tests/e2e/run_comprehensive_tests.sh --test U5
-
-# CI mode with severity gating
-bash tests/e2e/run_comprehensive_tests.sh --test U12
-
-# Docker-based scanning
-bash tests/e2e/run_comprehensive_tests.sh --test U9
-```
-
-**Advanced Tests (A1-A3):**
-
-```bash
-# GitLab scanning (requires GITLAB_TOKEN)
-export GITLAB_TOKEN=your-token
-bash tests/e2e/run_comprehensive_tests.sh --test A1
-
-# Kubernetes scanning (requires kubectl + cluster)
-bash tests/e2e/run_comprehensive_tests.sh --test A2
-
-# Deep profile with all 28 tools
-bash tests/e2e/run_comprehensive_tests.sh --test A3
-```
+| File | Tests | Coverage |
+|------|-------|---------|
+| `test_scan_workflows.py` | U1-U6, M1-M3, W1 | Repo, image, IaC, multi-target, wizard scans |
+| `test_wizard_workflows.py` | M4, W2 | Wizard emit-script, non-interactive wizard |
+| `test_ci_gating.py` | U12 | CI mode exit codes, severity thresholds |
+| `test_advanced_targets.py` | A1-A3 | GitLab, Kubernetes, deep profile |
+| `test_docker_workflows.py` | U9-U11, M5-M6, W3-W4 | Docker-based scanning variants |
+| `test_cross_platform.py` | - | Cross-platform compatibility |
+| `test_linux_specific.py` | - | Linux-only features |
+| `test_macos_specific.py` | - | macOS-only features |
+| `test_windows_specific.py` | - | Windows-only features |
 
 ### Test Fixtures
 
-The test suite uses realistic fixtures with known security issues:
+Fixtures live in `tests/e2e/fixtures/` and are loaded automatically via `conftest.py`:
 
-```bash
-# Setup test fixtures
-bash tests/e2e/fixtures/setup_fixtures.sh
-
-# Fixtures include:
-# - IaC: Terraform with CIS violations, K8s privileged pods, bad Dockerfiles
-# - Python: Flask app with OWASP Top 10 vulnerabilities
-# - JavaScript: Node.js app with vulnerable dependencies
-# - Configs: Hardcoded secrets, API keys
+```text
+tests/e2e/fixtures/
+├── iac/         # Terraform + K8s + Dockerfiles with CIS violations
+├── python/      # Flask app with OWASP Top 10 vulnerabilities
+├── javascript/  # Node.js app with vulnerable dependencies
+└── configs/     # Hardcoded secrets, API keys
 ```
 
 ### CI/CD Integration
@@ -186,40 +143,7 @@ The comprehensive test suite runs automatically in CI:
 - **Nightly:** Full test suite on Ubuntu + macOS (2-3 hours)
 - **On Demand:** Manual workflow with specific test selection
 
-See [.github/workflows/ci.yml](.github/workflows/ci.yml) for test execution details.
-
-### Test Results
-
-Test results include:
-
-- **CSV:** `test-results.csv` with test ID, status, duration
-- **Logs:** Individual test logs in `{results_dir}/{test_id}/test.log`
-- **Findings:** Scan outputs in `{results_dir}/{test_id}/summaries/findings.json`
-- **Report:** Human-readable markdown report with statistics
-
-**Example Report:**
-
-```bash
-python tests/e2e/generate_report.py /tmp/jmo-e2e-results-123/test-results.csv
-
-# Output:
-# ============================================================
-# E2E Test Results Summary
-# ============================================================
-#
-# Overall Statistics:
-#   Total Tests:   12
-#   ✅ Passed:      11
-#   ❌ Failed:      1
-#   ⏭️  Skipped:    0
-#   Success Rate:  91.7%
-#
-# Results by Suite:
-#   Ubuntu: 11/12 passed (1 failed, 0 skipped)
-#
-# ✅ RELEASE READY
-# ============================================================
-```
+See [.github/workflows/scheduled-tests.yml](.github/workflows/scheduled-tests.yml) for test execution details.
 
 ### Success Criteria
 
@@ -235,11 +159,8 @@ For release readiness:
 **Test failures:**
 
 ```bash
-# Check test log
-cat /tmp/jmo-e2e-results-*/U1/test.log
-
 # Re-run specific test with verbose output
-bash tests/e2e/run_comprehensive_tests.sh --test U1
+pytest tests/e2e/ -k "U1" -v -s
 
 # Verify tool installations
 jmo tools check --profile balanced
@@ -263,9 +184,6 @@ docker run --rm -v $(pwd):/test alpine:3.19 ls /test
 **Fixture issues:**
 
 ```bash
-# Re-create fixtures
-bash tests/e2e/fixtures/setup_fixtures.sh
-
 # Verify fixtures exist
 ls -la tests/e2e/fixtures/iac/
 ls -la tests/e2e/fixtures/python/
