@@ -51,6 +51,15 @@ Skills are invoked with `/skill-name` in Claude Code.
 | Content Generator | `/content-generator` | Generate marketing content |
 | Community Manager | `/community-manager` | Track community engagement |
 | Skill Optimizer | `/jmo-skill-optimizer` | Review and upgrade skills |
+| E2E Verifier | `/jmo-e2e-verify` | AI-orchestrated e2e verification with failure categorization and visual dashboard inspection |
+
+The `/jmo-e2e-verify` skill uses **3 parallel research sub-agents** in Phase 2:
+
+| Sub-agent | Purpose |
+|-----------|---------|
+| Codebase Delta | Maps changed files (since `main`) to affected test categories |
+| Test Health | Identifies known-flaky tests, xfail/skip markers, cached failure history |
+| Infrastructure | Verifies fixture directories, jmo CLI, Docker, disk space readiness |
 
 Skill definitions: [.claude/skills/](.claude/skills/)
 
