@@ -55,6 +55,7 @@ tests/e2e/
 ├── test_ci_gating.py                  # U12
 ├── test_advanced_targets.py           # A1-A3
 ├── test_docker_workflows.py           # U9-U11, M5-M6, W3-W4
+├── test_dashboard_visual.py           # Playwright visual tests for HTML dashboard
 ├── test_cross_platform.py             # Cross-platform compatibility
 ├── test_linux_specific.py             # Linux-only features
 ├── test_macos_specific.py             # macOS-only features
@@ -98,6 +99,19 @@ tests/e2e/
 - A1: GitLab repo scan (requires GITLAB_TOKEN)
 - A2: K8s cluster scan (requires kubectl + cluster)
 - A3: Deep profile (all 28 tools, 40-70 min)
+
+### Dashboard Visual Tests
+
+`test_dashboard_visual.py` — Playwright visual tests for the HTML dashboard:
+
+Requires installation before use:
+
+```bash
+pip install pytest-playwright
+playwright install chromium
+```
+
+Run via `make test-e2e-visual` or `pytest tests/e2e/test_dashboard_visual.py -v`. Tests are automatically skipped if Playwright is not installed.
 
 ### Docker Workflows (U9-U11, M5-M6, W3-W4)
 
