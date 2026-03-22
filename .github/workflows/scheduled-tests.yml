@@ -2,11 +2,13 @@
 name: Scheduled Tests
 
 # Consolidated scheduled test workflows
-# Merged from: nightly-tests.yml, e2e-comprehensive-tests.yml, performance-regression.yml
+# Merged from: nightly-tests.yml, e2e-comprehensive-tests.yml, performance-regression.yml,
+#              docker-validation.yml
 #
 # Schedule:
 #   - 2AM UTC daily: Nightly extended tests
 #   - 4AM UTC weekdays: E2E comprehensive tests
+#   - 3AM UTC Sunday: Docker variant validation
 #
 # Manual dispatch allows running any test suite on demand
 
@@ -14,6 +16,7 @@ on:
   schedule:
     - cron: '0 2 * * *'   # 2AM UTC daily - nightly tests
     - cron: '0 4 * * 1-5' # 4AM UTC Mon-Fri - E2E tests
+    - cron: '0 3 * * 0'   # 3AM UTC Sunday - Docker validation
   workflow_dispatch:
     # checkov:skip=CKV_GHA_7: Manual test execution requires task selection for targeted testing
     inputs:
@@ -24,13 +27,19 @@ on:
           - nightly
           - e2e
           - performance
+          - docker
           - all
         default: 'all'
 
 permissions:
   contents: read
   issues: write
+  packages: read
   pull-requests: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jimmy058910/jmo-security
 
 # ==============================================================================
 # NIGHTLY TESTS - Extended test suite with security audits
@@ -802,3 +811,149 @@ jobs:
         run: |
           echo "Performance regression detected! See benchmark-comparison.md for details."
           exit 1
+
+# ==============================================================================
+# DOCKER VALIDATION - Validates JMo Security Docker image variants
+# Runs weekly Sunday at 3AM UTC or on manual dispatch (task=docker or task=all)
+# ==============================================================================
+  validate-variants:
+    name: Validate ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: deep
+            expected_tools: 28
+            profile: deep
+          - variant: balanced
+            expected_tools: 18
+            profile: balanced
+          - variant: slim
+            expected_tools: 14
+            profile: fast
+          - variant: fast
+            expected_tools: 8
+            profile: fast
+    # Run on Sunday 3AM schedule OR manual docker/all dispatch
+    if: |
+      github.event_name == 'schedule' && github.event.schedule == '0 3 * * 0' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'docker' || github.event.inputs.task == 'all')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }}
+
+      - name: Verify tool installation
+        id: tools
+        run: |
+          echo "Checking tools in ${{ matrix.variant }} variant..."
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
+            tools check --json > tools-check.json
+
+          # Count installed tools
+          INSTALLED=$(cat tools-check.json | jq '[.[] | select(.installed == true)] | length')
+          echo "installed_count=$INSTALLED" >> $GITHUB_OUTPUT
+
+          echo "Installed tools: $INSTALLED (expected: ${{ matrix.expected_tools }})"
+
+          if [ "$INSTALLED" -lt "${{ matrix.expected_tools }}" ]; then
+            echo "::error::Tool count $INSTALLED is less than expected ${{ matrix.expected_tools }}"
+            cat tools-check.json | jq '.[] | select(.installed == false) | .name'
+            exit 1
+          fi
+
+      - name: Test scan capability
+        run: |
+          # Create sample vulnerable code
+          mkdir -p /tmp/test-repo/src
+          cat > /tmp/test-repo/src/app.js << 'EOF'
+          const userId = req.query.id;
+          const query = "SELECT * FROM users WHERE id = " + userId;
+          EOF
+
+          # Run scan
+          docker run --rm \
+            -v /tmp/test-repo:/scan \
+            -w /scan \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
+            scan --repo . --profile ${{ matrix.profile }} --results-dir /scan/results || true
+
+          # Check for output
+          if [ -d /tmp/test-repo/results ]; then
+            echo "Scan completed successfully"
+            ls -la /tmp/test-repo/results
+          else
+            echo "::warning::Scan did not produce results directory"
+          fi
+
+      - name: Test help command
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --help
+
+      - name: Test version command
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --version
+
+      - name: Upload tools check results
+        uses: actions/upload-artifact@v5
+        with:
+          name: tools-check-${{ matrix.variant }}
+          path: tools-check.json
+          retention-days: 30
+
+  # ==============================================================================
+  # DOCKER VALIDATION SUMMARY
+  # Reports overall Docker variant validation status
+  # ==============================================================================
+  validation-summary:
+    name: Validation Summary
+    runs-on: ubuntu-latest
+    needs: validate-variants
+    if: |
+      always() && (
+        github.event_name == 'schedule' && github.event.schedule == '0 3 * * 0' ||
+        github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'docker' || github.event.inputs.task == 'all')
+      )
+    steps:
+      - name: Check validation results
+        run: |
+          if [ "${{ needs.validate-variants.result }}" == "failure" ]; then
+            echo "::error::One or more Docker variants failed validation"
+            exit 1
+          fi
+          echo "All Docker variants validated successfully"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: tools-check-*
+          path: artifacts
+
+      - name: Generate summary
+        run: |
+          echo "# Docker Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Variant | Status | Tools |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+
+          for variant in deep balanced slim fast; do
+            if [ -f "artifacts/tools-check-$variant/tools-check.json" ]; then
+              TOOLS=$(cat "artifacts/tools-check-$variant/tools-check.json" | jq '[.[] | select(.installed == true)] | length')
+              echo "| $variant | :white_check_mark: | $TOOLS |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $variant | :x: | N/A |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
