@@ -145,6 +145,9 @@ diff-data.json
 .playwright-mcp/
 *.playwright.png
 
+# E2E visual test screenshots
+e2e-screenshots/
+
 # Serena MCP auto-generated project config
 .serena/
 
