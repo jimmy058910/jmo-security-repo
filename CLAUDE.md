@@ -165,6 +165,9 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
 | `make test-parallel` | Parallel tests with coverage (CI-like) |
 | `make test` | Sequential tests with coverage (original) |
+| `make test-e2e` | E2E tests (pytest-native) |
+| `make test-e2e-visual` | Dashboard visual tests (Playwright) |
+| `make test-e2e-report` | E2E tests with JSON report |
 | `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive) |
 
 > **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
@@ -205,8 +208,9 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-adapter-generator` - Generate new tool adapters with tests
 - `/jmo-test-fabricator` - Create comprehensive test suites
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
+- `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (14 skills, 7 agents)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (15 skills, 7 agents)
 
 **Persona guidelines:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
@@ -378,11 +382,22 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 - run: jmo diff results-baseline/ results-current/ --format md > diff.md
 ```
 
+### GitHub Actions Workflows
+
+4-workflow structure (consolidated from 8):
+
+| Workflow | File | Trigger | Purpose |
+|----------|------|---------|---------|
+| CI | `ci.yml` | PR / push to main | Lint, unit tests, adapter tests, coverage |
+| Scheduled | `scheduled.yml` | Cron / manual | Nightly e2e, tool update checks, security scans |
+| Release | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
+| Maintenance | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
+
 ### Release Process
 
 **CRITICAL:** All tools MUST be updated before release (CI enforces this).
 
-1. **Automated (Recommended):** GitHub Actions → Automated Release workflow
+1. **Automated (Recommended):** GitHub Actions → Release workflow (tag push triggers `release.yml`)
 2. **Manual:** Update tools → bump version → tag → push
 
 See [docs/RELEASE.md](docs/RELEASE.md) for details.
@@ -519,7 +534,7 @@ with patch("module.tool_exists", return_value=True):
 
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
 
-**Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
+**Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
 
 **Plans:** [dev-only/plans/README.md](dev-only/plans/README.md)
 
