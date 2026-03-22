@@ -143,7 +143,7 @@ Each test validates:
 
 ## CI/CD Integration
 
-See [.github/workflows/scheduled-tests.yml](../../.github/workflows/scheduled-tests.yml)
+See [.github/workflows/scheduled.yml](../../.github/workflows/scheduled.yml)
 
 **Triggers:**
 
@@ -208,7 +208,7 @@ When adding new tests:
 
 - [Testing Guide](../../TEST.md) - General testing instructions
 - [User Guide](../../docs/USER_GUIDE.md) - Multi-target scanning documentation
-- [CI Workflow](../../.github/workflows/scheduled-tests.yml) - GitHub Actions config (E2E jobs)
+- [CI Workflow](../../.github/workflows/scheduled.yml) - GitHub Actions config (E2E jobs)
 
 ---
 

@@ -106,7 +106,7 @@ jobs:
           ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
           echo "::endgroup::"
 
-          echo "✅ Lint preview complete. Full lint-full runs nightly at 2 AM UTC (scheduled-tests.yml)."
+          echo "✅ Lint preview complete. Full lint-full runs nightly at 2 AM UTC (scheduled.yml)."
 
       - name: Validate SARIF schema
         run: |

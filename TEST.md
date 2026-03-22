@@ -143,7 +143,7 @@ The comprehensive test suite runs automatically in CI:
 - **Nightly:** Full test suite on Ubuntu + macOS (2-3 hours)
 - **On Demand:** Manual workflow with specific test selection
 
-See [.github/workflows/scheduled-tests.yml](.github/workflows/scheduled-tests.yml) for test execution details.
+See [.github/workflows/scheduled.yml](.github/workflows/scheduled.yml) for test execution details.
 
 ### Success Criteria
 

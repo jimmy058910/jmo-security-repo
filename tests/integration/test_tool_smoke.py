@@ -24,7 +24,7 @@ Usage:
     pytest tests/integration/test_tool_smoke.py -v --timeout=60
 
 Schedule:
-    These tests run nightly in scheduled-tests.yml (not on every PR - requires tools)
+    These tests run nightly in scheduled.yml (not on every PR - requires tools)
 """
 
 from __future__ import annotations

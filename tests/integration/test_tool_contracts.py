@@ -17,7 +17,7 @@ Usage:
     pytest tests/integration/test_tool_contracts.py -v -k "trivy"
 
 Schedule:
-    These tests run weekly in scheduled-tests.yml (not on every PR - too slow)
+    These tests run weekly in scheduled.yml (not on every PR - too slow)
 """
 
 from __future__ import annotations
