@@ -631,8 +631,8 @@ jobs:
         with:
           name: e2e-macos-results-${{ github.run_id }}
           path: |
-            /tmp/jmo-e2e-results-${{ github.run_id }}/test-results.csv
-            /tmp/jmo-e2e-results-${{ github.run_id }}/*/test.log
+            /tmp/jmo-e2e-results-${{ github.run_id }}/pytest-report.json
+            /tmp/jmo-e2e-results-${{ github.run_id }}/test.log
           retention-days: 30
 
   e2e-tool-integration:
@@ -787,10 +787,39 @@ jobs:
             .pytest_cache/
           retention-days: 7
 
+  e2e-visual:
+    name: E2E Visual Dashboard Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1-5' ||
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup-python-jmo
+
+      - name: Install Playwright
+        run: |
+          pip install pytest-playwright
+          playwright install chromium --with-deps
+
+      - name: Run visual tests
+        run: make test-e2e-visual
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: visual-test-screenshots-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
+
   e2e-summary:
     name: E2E Test Summary
     runs-on: ubuntu-latest
-    needs: [e2e-ubuntu, e2e-tool-integration]
+    needs: [e2e-ubuntu, e2e-tool-integration, e2e-visual]
     if: |
       always() && (
         github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1-5' ||
@@ -810,17 +839,25 @@ jobs:
             echo ""
           } > summary.md
 
-          for results_file in test-results/*/test-results.csv; do
-            if [[ -f "$results_file" ]]; then
-              os=$(dirname "$results_file" | xargs basename | cut -d'-' -f2)
+          get_field() {
+            python3 -c \
+              "import json,sys; r=json.load(open(sys.argv[1])); \
+               print(r.get('summary',{}).get(sys.argv[2],0))" \
+              "$1" "$2" 2>/dev/null || echo 0
+          }
 
-              total=$(($(wc -l < "$results_file") - 1))
-              passed=$(grep -c ",PASS," "$results_file" || echo 0)
-              failed=$(grep -c ",FAIL," "$results_file" || echo 0)
-              skipped=$(grep -c ",SKIP," "$results_file" || echo 0)
+          for report_file in test-results/*/pytest-report.json; do
+            if [[ -f "$report_file" ]]; then
+              job=$(dirname "$report_file" | xargs basename \
+                | sed 's/-results-.*//' | sed 's/e2e-//')
+
+              total=$(get_field "$report_file" total)
+              passed=$(get_field "$report_file" passed)
+              failed=$(get_field "$report_file" failed)
+              skipped=$(get_field "$report_file" skipped)
 
               {
-                echo "### $os Results"
+                echo "### $job Results"
                 echo "- Total: $total"
                 echo "- Passed: $passed"
                 echo "- Failed: $failed"
