@@ -217,13 +217,15 @@ jobs:
     name: Check tool versions
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: >
-      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 0') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'version-check' || github.event.inputs.task == 'all'))
+    if: >-
+      always() && (
+        (github.event_name == 'schedule' && github.event.schedule == '0 2 * * 0') ||
+        (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'version-check' || github.event.inputs.task == 'all'))
+      )
     needs:
       - auto-update-tools
-    # auto-update-tools only runs for task=all; allow this job to run independently
-    # when auto-update-tools is skipped (it reports as 'skipped', not 'failure')
+    # always() ensures this job runs even when auto-update-tools is skipped
+    # (e.g., on the Sunday 02:00 schedule when only version checks are triggered)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
