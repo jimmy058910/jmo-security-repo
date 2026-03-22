@@ -96,6 +96,12 @@ The E2E suite lives in `tests/e2e/` and uses pytest. All tests replaced the lega
 # Run full E2E suite
 make test-e2e
 
+# Run E2E suite with JSON report (for CI/archiving)
+make test-e2e-report
+
+# Run dashboard visual tests (requires Playwright)
+make test-e2e-visual
+
 # Run specific workflow file
 pytest tests/e2e/test_scan_workflows.py -v
 
@@ -118,6 +124,7 @@ pytest tests/e2e/ -m "not docker" -v
 | `test_ci_gating.py` | U12 | CI mode exit codes, severity thresholds |
 | `test_advanced_targets.py` | A1-A3 | GitLab, Kubernetes, deep profile |
 | `test_docker_workflows.py` | U9-U11, M5-M6, W3-W4 | Docker-based scanning variants |
+| `test_dashboard_visual.py` | - | Playwright visual tests for HTML dashboard |
 | `test_cross_platform.py` | - | Cross-platform compatibility |
 | `test_linux_specific.py` | - | Linux-only features |
 | `test_macos_specific.py` | - | macOS-only features |
@@ -134,6 +141,27 @@ tests/e2e/fixtures/
 ├── javascript/  # Node.js app with vulnerable dependencies
 └── configs/     # Hardcoded secrets, API keys
 ```
+
+### Visual Testing (Playwright)
+
+`test_dashboard_visual.py` uses pytest-playwright to inspect the HTML dashboard visually.
+
+Install Playwright before running visual tests:
+
+```bash
+pip install pytest-playwright
+playwright install chromium
+```
+
+Then run via:
+
+```bash
+make test-e2e-visual
+# or directly:
+pytest tests/e2e/test_dashboard_visual.py -v
+```
+
+Visual tests are skipped automatically if Playwright is not installed.
 
 ### CI/CD Integration
 
