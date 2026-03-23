@@ -137,7 +137,7 @@ export default function App() {
           <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Loading Failed</h2>
           <p className="text-gray-700 mb-4">{error}</p>
           <p className="text-gray-500 text-sm">
-            Make sure findings.json is in the same directory as this HTML file.
+            Make sure dashboard-data.json is in the same directory as this HTML file.
           </p>
         </div>
       </div>

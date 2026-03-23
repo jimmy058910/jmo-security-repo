@@ -18,7 +18,7 @@ def test_inline_mode_small_dataset(tmp_path: Path):
 
     Verifies:
     - JSON embedded directly in HTML (React mode)
-    - No external findings.json created
+    - No external dashboard-data.json created
     - window.__FINDINGS__ placeholder replaced with data
     """
     # Create small dataset (below threshold)
@@ -48,7 +48,7 @@ def test_inline_mode_small_dataset(tmp_path: Path):
     assert "window.__FINDINGS__ = []" not in html_content
 
     # Verify external JSON NOT created
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert not findings_json.exists()
 
 
@@ -57,7 +57,7 @@ def test_external_mode_large_dataset(tmp_path: Path):
     Test external mode for datasets > INLINE_THRESHOLD.
 
     Verifies:
-    - findings.json created separately (React mode)
+    - dashboard-data.json created separately (React mode)
     - Data loaded asynchronously by React app
     - window.__FINDINGS__ placeholder remains empty
     """
@@ -88,11 +88,11 @@ def test_external_mode_large_dataset(tmp_path: Path):
     assert "Large dataset finding 500" not in html_content
     assert "test-500" not in html_content
 
-    # Verify external findings.json created
-    findings_json = tmp_path / "findings.json"
+    # Verify external dashboard-data.json created
+    findings_json = tmp_path / "dashboard-data.json"
     assert findings_json.exists()
 
-    # Verify findings.json has all data
+    # Verify dashboard-data.json has all data
     import json
 
     external_data = json.loads(findings_json.read_text(encoding="utf-8"))
@@ -128,7 +128,7 @@ def test_threshold_boundary_inline(tmp_path: Path):
     assert "window.__FINDINGS__ = []" not in html_content
 
     # Verify no external file
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert not findings_json.exists()
 
 
@@ -161,7 +161,7 @@ def test_threshold_boundary_external(tmp_path: Path):
     assert "boundary-500" not in html_content
 
     # Verify external file created
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert findings_json.exists()
     import json
 
@@ -171,7 +171,7 @@ def test_threshold_boundary_external(tmp_path: Path):
 
 def test_external_mode_loading_ui_elements(tmp_path: Path):
     """
-    Test that external mode creates findings.json file (React loads it).
+    Test that external mode creates dashboard-data.json file (React loads it).
     """
     findings = [{"id": f"ui-{i}", "severity": "LOW"} for i in range(1500)]
 
@@ -187,13 +187,13 @@ def test_external_mode_loading_ui_elements(tmp_path: Path):
     assert 'id="root"' in html_content
 
     # Verify external file created
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert findings_json.exists()
 
 
 def test_external_mode_fetch_error_handling(tmp_path: Path):
     """
-    Test that external mode creates findings.json (React handles errors).
+    Test that external mode creates dashboard-data.json (React handles errors).
     """
     findings = [{"id": f"err-{i}", "severity": "CRITICAL"} for i in range(2000)]
 
@@ -206,7 +206,7 @@ def test_external_mode_fetch_error_handling(tmp_path: Path):
     assert "window.__FINDINGS__ = []" in html_content
 
     # Verify external file created (React will fetch this)
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert findings_json.exists()
 
     # React app has React root for rendering
@@ -229,13 +229,13 @@ def test_inline_mode_no_loading_ui(tmp_path: Path):
     assert "window.__FINDINGS__ = []" not in html_content  # Placeholder replaced
 
     # No external file needed
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert not findings_json.exists()
 
 
 def test_external_mode_findings_json_formatting(tmp_path: Path):
     """
-    Test that external findings.json is properly formatted (pretty-printed).
+    Test that external dashboard-data.json is properly formatted (pretty-printed).
     """
     findings = [
         {
@@ -253,7 +253,7 @@ def test_external_mode_findings_json_formatting(tmp_path: Path):
     out_path = tmp_path / "dashboard.html"
     write_html(findings, out_path)
 
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert findings_json.exists()
 
     json_content = findings_json.read_text(encoding="utf-8")
@@ -280,7 +280,7 @@ def test_empty_dataset_uses_inline(tmp_path: Path):
     assert "window.__FINDINGS__ = []" in html_content
 
     # No external file needed
-    findings_json = tmp_path / "findings.json"
+    findings_json = tmp_path / "dashboard-data.json"
     assert not findings_json.exists()
 
 
@@ -362,7 +362,7 @@ def test_dual_mode_preserves_dashboard_features(tmp_path: Path):
             assert "feature-0" in html_content
         else:
             # External mode: data in separate file
-            findings_json = tmp_path / "findings.json"
+            findings_json = tmp_path / "dashboard-data.json"
             assert findings_json.exists()
             assert "window.__FINDINGS__ = []" in html_content
 
@@ -413,10 +413,10 @@ def test_threshold_decision_parametrized(
         else:
             # Empty dataset: placeholder replaced with empty array
             assert "window.__FINDINGS__ = []" in html_content
-        findings_json = tmp_path / "findings.json"
+        findings_json = tmp_path / "dashboard-data.json"
         assert not findings_json.exists()
     else:
         # React implementation: placeholder remains empty, data in external file
         assert "window.__FINDINGS__ = []" in html_content
-        findings_json = tmp_path / "findings.json"
+        findings_json = tmp_path / "dashboard-data.json"
         assert findings_json.exists()

@@ -78,8 +78,10 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
         )
     else:
         # Mode 2: External - Load JSON via fetch() (prevents 50-100 MB HTML files)
-        # Write findings.json separately for async loading
-        findings_json_path = p.parent / "findings.json"
+        # Write dashboard data separately for async loading
+        # Uses dashboard-data.json to avoid overwriting the metadata-wrapped
+        # findings.json produced by basic_reporter.write_json()
+        findings_json_path = p.parent / "dashboard-data.json"
         findings_json_path.write_text(json.dumps(findings, indent=2), encoding="utf-8")
 
         # Replace placeholder with fetch() call
