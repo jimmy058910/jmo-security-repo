@@ -129,22 +129,6 @@ SCAN_WORKFLOWS = [
         marks=[requires_docker],
         id="U5-multi-target",
     ),
-    pytest.param(
-        "U6",
-        "Batch images - native CLI",
-        lambda: [
-            "ci",
-            "--image",
-            _get_test_image(),
-            "--tools",
-            "trivy,syft",
-            "--allow-missing-tools",
-        ],
-        validate_basic_scan,
-        "linux",
-        marks=[requires_docker],
-        id="U6-batch-images",
-    ),
     # macOS tests (same commands, different platform)
     pytest.param(
         "M1",
@@ -236,3 +220,31 @@ def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_runner):
     )
 
     validator(results_dir)
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+@requires_docker
+def test_batch_images_file(jmo_runner, tmp_path):
+    """U6: Batch image scan using --images-file (replaces single-image duplicate)."""
+    if current_platform() != "linux":
+        pytest.skip("U6 is for linux")
+
+    images_file = tmp_path / "batch-images.txt"
+    images_file.write_text(f"{_get_test_image()}\n" "nginx:alpine\n" "redis:alpine\n")
+
+    rc, stdout, stderr, results_dir = jmo_runner(
+        [
+            "ci",
+            "--images-file",
+            str(images_file),
+            "--tools",
+            "trivy,syft",
+            "--allow-missing-tools",
+        ]
+    )
+
+    assert rc in (0, 1), (
+        f"U6 batch images failed with exit code {rc}.\n" f"stderr: {stderr[:500]}"
+    )
+    validate_basic_scan(results_dir)
