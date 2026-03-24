@@ -118,6 +118,8 @@ jobs:
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Update CHANGELOG.md
+        env:
+          CHANGELOG_ENTRY: ${{ inputs.changelog_entry }}
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           TODAY=$(date +%Y-%m-%d)
@@ -128,7 +130,7 @@ jobs:
             echo ""
             echo "### Summary"
             echo ""
-            echo "${{ inputs.changelog_entry }}"
+            echo "$CHANGELOG_ENTRY"
             echo ""
             echo "### Changes"
             echo ""
@@ -160,6 +162,8 @@ jobs:
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Commit release changes
+        env:
+          CHANGELOG_ENTRY: ${{ inputs.changelog_entry }}
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
 
@@ -188,7 +192,11 @@ jobs:
 
           # Substitute variables
           sed -i "s/\$NEW_VERSION/${NEW_VERSION}/g" commit_message.txt
-          sed -i "s/\$CHANGELOG_ENTRY/${{ inputs.changelog_entry }}/g" commit_message.txt
+          printf '%s\n' \
+            'import os,pathlib as PL' \
+            'p=PL.Path("commit_message.txt")' \
+            'p.write_text(p.read_text().replace("$CHANGELOG_ENTRY",os.environ["CHANGELOG_ENTRY"]))' \
+            | python3
           sed -i "s/\$VERSION_BUMP/${{ inputs.version_bump }}/g" commit_message.txt
 
           git commit -F commit_message.txt
@@ -201,6 +209,8 @@ jobs:
       - name: Create Pull Request
         env:
           GH_TOKEN: ${{ github.token }}
+          CHANGELOG_ENTRY: ${{ inputs.changelog_entry }}
+          VERSION_BUMP: ${{ inputs.version_bump }}
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           BRANCH="${{ steps.create_branch.outputs.branch }}"
@@ -211,11 +221,11 @@ jobs:
             echo ""
             echo "### Summary"
             echo ""
-            echo "${{ inputs.changelog_entry }}"
+            echo "$CHANGELOG_ENTRY"
             echo ""
             echo "### Changes in this release"
             echo ""
-            echo "**Version Bump:** ${{ inputs.version_bump }}"
+            echo "**Version Bump:** $VERSION_BUMP"
             echo ""
             echo "**Tool Updates:**"
 
