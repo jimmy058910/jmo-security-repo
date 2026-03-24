@@ -65,6 +65,7 @@ class TestAdvancedTargets:
         )
         assert rc in (0, 1), f"K8s scan failed: {stderr[:500]}"
 
+    @pytest.mark.timeout(4500)
     def test_deep_profile_scan(self, jmo_runner):
         """A3: Deep profile scan (all tools, 40-70 min)."""
         rc, stdout, stderr, results_dir = jmo_runner(
