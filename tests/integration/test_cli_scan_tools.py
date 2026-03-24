@@ -50,7 +50,9 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
             """Create subprocess.run mock for specific tool."""
 
             def mock_run(cmd, *args, **kwargs):
-                prog = cmd[0]
+                # Use basename to handle both bare names and full paths
+                # (e.g., "semgrep" vs "/usr/bin/semgrep" from shutil.which)
+                prog = Path(cmd[0]).name
                 result = MagicMock()
                 result.returncode = 0
                 result.stderr = ""

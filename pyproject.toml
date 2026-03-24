@@ -147,6 +147,9 @@ markers = [
     "e2e: marks end-to-end tests that validate complete workflows",
     "stress: marks tests as stress tests requiring significant resources",
 ]
+# Exclude smoke tests by default (post-release only); run with: pytest -m smoke
+addopts = "-m 'not smoke'"
+
 # Test durations file for pytest-split sharding
 # Generate with: pytest --store-durations --durations-path=.test_durations
 # This enables duration-based splitting for more even shard distribution
