@@ -45,7 +45,12 @@ class TestWizardWorkflows:
         assert result.returncode == 0, f"Wizard failed: {result.stderr[:500]}"
         assert script_path.exists(), "Emitted script not created"
         content = script_path.read_text()
-        assert "jmo" in content.lower(), "Emitted script doesn't contain jmo command"
+        # Script must contain actual jmo scan/ci command, not just a mention
+        assert any(
+            cmd in content for cmd in ["jmo scan", "jmo ci", "scripts.cli.jmo"]
+        ), f"Emitted script doesn't contain a jmo scan command:\n{content[:200]}"
+        # Script should reference the profile
+        assert "fast" in content, "Emitted script doesn't reference the profile"
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows only")
     def test_wizard_emit_script_windows(self, tmp_path):
@@ -71,3 +76,10 @@ class TestWizardWorkflows:
         )
         assert result.returncode == 0, f"Wizard failed: {result.stderr[:500]}"
         assert script_path.exists(), "Emitted script not created"
+        content = script_path.read_text()
+        # Script must contain actual jmo scan/ci command, not just a mention
+        assert any(
+            cmd in content for cmd in ["jmo scan", "jmo ci", "scripts.cli.jmo"]
+        ), f"Emitted script doesn't contain a jmo scan command:\n{content[:200]}"
+        # Script should reference the profile
+        assert "fast" in content, "Emitted script doesn't reference the profile"
