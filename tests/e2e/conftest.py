@@ -81,43 +81,43 @@ def jmo_runner(tmp_path):
 
 
 def validate_basic_scan(results_dir: Path) -> None:
-    """Validate basic scan output files exist and are valid JSON.
+    """Validate basic scan output files exist and are valid JSON."""
+    summaries = results_dir / "summaries"
+    findings_file = summaries / "findings.json"
+    assert findings_file.exists(), f"findings.json not found in {summaries}"
 
-    Checks:
-    - findings.json exists and is valid JSON
-    - findings.json contains a JSON array
-    - SUMMARY.md exists
-    - dashboard.html exists
+    data = json.loads(findings_file.read_text())
+    # v1.0.0: findings.json uses metadata wrapper {"meta": {...}, "findings": [...]}
+    if isinstance(data, dict) and "findings" in data:
+        findings = data["findings"]
+    elif isinstance(data, list):
+        findings = data
+    else:
+        raise AssertionError(f"findings.json has unexpected format: {type(data)}")
+    assert isinstance(findings, list), "findings must be a list"
 
-    Args:
-        results_dir: Path returned by ``jmo_runner``.
-    """
-    findings_file = results_dir / "findings.json"
-    assert findings_file.exists(), f"findings.json not found in {results_dir}"
+    summary_file = summaries / "SUMMARY.md"
+    assert summary_file.exists(), f"SUMMARY.md not found in {summaries}"
 
-    findings = json.loads(findings_file.read_text())
-    assert isinstance(findings, list), "findings.json must be a JSON array"
-
-    summary_file = results_dir / "SUMMARY.md"
-    assert summary_file.exists(), f"SUMMARY.md not found in {results_dir}"
-
-    dashboard_file = results_dir / "dashboard.html"
-    assert dashboard_file.exists(), f"dashboard.html not found in {results_dir}"
+    dashboard_file = summaries / "dashboard.html"
+    assert dashboard_file.exists(), f"dashboard.html not found in {summaries}"
 
 
 def validate_multi_target(results_dir: Path) -> None:
-    """Validate multi-target scan output.
-
-    Checks all basic scan validations plus:
-    - No duplicate finding fingerprints across all findings.
-
-    Args:
-        results_dir: Path returned by ``jmo_runner``.
-    """
+    """Validate multi-target scan output."""
     validate_basic_scan(results_dir)
 
-    findings_file = results_dir / "findings.json"
-    findings = json.loads(findings_file.read_text())
+    summaries = results_dir / "summaries"
+    findings_file = summaries / "findings.json"
+    data = json.loads(findings_file.read_text())
+
+    # Handle both wrapped and raw formats (same logic as validate_basic_scan)
+    if isinstance(data, dict) and "findings" in data:
+        findings = data["findings"]
+    elif isinstance(data, list):
+        findings = data
+    else:
+        raise AssertionError(f"findings.json has unexpected format: {type(data)}")
 
     if findings:
         fingerprints = [
