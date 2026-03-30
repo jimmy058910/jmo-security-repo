@@ -247,7 +247,16 @@ jobs:
       - name: Check for latest versions
         id: check
         run: |
-          python3 scripts/dev/update_versions.py --check-latest || echo "outdated=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if ! python3 scripts/dev/update_versions.py --check-latest > version_check_output.txt 2>&1; then
+            cat version_check_output.txt
+            echo "::error::update_versions.py --check-latest failed"
+            exit 1
+          fi
+          cat version_check_output.txt
+          if grep -q "UPDATE AVAILABLE" version_check_output.txt; then
+            echo "outdated=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Generate version report
         run: |
