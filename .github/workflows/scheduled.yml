@@ -819,7 +819,7 @@ jobs:
   e2e-summary:
     name: E2E Test Summary
     runs-on: ubuntu-latest
-    needs: [e2e-ubuntu, e2e-tool-integration, e2e-visual]
+    needs: [e2e-ubuntu, e2e-macos, e2e-tool-integration, tool-contract-tests, e2e-visual]
     if: |
       always() && (
         github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1-5' ||
