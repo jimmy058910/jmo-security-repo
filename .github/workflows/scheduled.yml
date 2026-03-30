@@ -545,7 +545,7 @@ jobs:
             -m "not docker" \
             --json-report \
             --json-report-file="$RESULTS_DIR/pytest-report.json" \
-            2>&1 | tee "$RESULTS_DIR/test.log" || true
+            2>&1 | tee "$RESULTS_DIR/test.log"
         env:
           TEST_REPO: https://github.com/juice-shop/juice-shop.git
           TEST_IMAGE: alpine:3.19
@@ -618,7 +618,7 @@ jobs:
             -m "not docker" \
             --json-report \
             --json-report-file="$RESULTS_DIR/pytest-report.json" \
-            2>&1 | tee "$RESULTS_DIR/test.log" || true
+            2>&1 | tee "$RESULTS_DIR/test.log"
         env:
           TEST_REPO: https://github.com/juice-shop/juice-shop.git
           TEST_IMAGE: alpine:3.19
