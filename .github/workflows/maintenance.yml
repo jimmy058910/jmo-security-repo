@@ -398,6 +398,11 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ needs.check-python-deps.result }}" == "failure" ]; then
+            echo "::error::Python dependency check failed"
+            exit 1
+          fi
+
           echo "All version checks passed"
 
   # ─── Repository Completeness ─────────────────────────────────────────────────
