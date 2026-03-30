@@ -50,8 +50,28 @@ def write_html(findings: list[dict[str, Any]], out_path: str | Path) -> None:
             template = fixture_path.read_text(encoding="utf-8")
         else:
             # Last resort: use simple fallback HTML
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "React dashboard build not found. "
+                "Run 'npm run build' in scripts/dashboard/ for the interactive dashboard. "
+                "Using fallback HTML."
+            )
             _write_fallback_html(findings, p)
             return
+
+    # Verify placeholder exists before attempting replacement
+    placeholder = "window.__FINDINGS__ = []"
+    if placeholder not in template:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Template does not contain expected placeholder '%s'. "
+            "Dashboard may not display findings correctly.",
+            placeholder,
+        )
+        _write_fallback_html(findings, p)
+        return
 
     # Decide: Inline vs External mode
     if total <= INLINE_THRESHOLD:
