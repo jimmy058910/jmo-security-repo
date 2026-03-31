@@ -198,6 +198,7 @@ SCAN_WORKFLOWS = [
 
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.requires_tools
 @pytest.mark.parametrize("test_id,desc,args_fn,validator,platform", SCAN_WORKFLOWS)
 def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_scan_runner):
     """Unified scan workflow test.
