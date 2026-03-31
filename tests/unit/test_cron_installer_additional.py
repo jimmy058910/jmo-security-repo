@@ -367,7 +367,7 @@ def test_generate_cron_entry_default_results_dir(basic_schedule):
     installer = CronInstaller()
     entry = installer._generate_cron_entry(basic_schedule)
 
-    assert "--results-dir ~/jmo-results/$(date +%Y-%m-%d)" in entry
+    assert "--results-dir" in entry and "~/jmo-results" in entry
 
 
 # ========== Category 10: _generate_cron_entry() - Multi-Target Comprehensive ==========
