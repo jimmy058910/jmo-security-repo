@@ -226,6 +226,7 @@ def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_scan_run
 
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.requires_tools
 @requires_docker
 def test_batch_images_file(jmo_scan_runner, tmp_path):
     """U6: Batch image scan using --images-file (replaces single-image duplicate)."""
