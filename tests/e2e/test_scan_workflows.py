@@ -3,7 +3,7 @@
 Replaces bash tests U1-U6 (Ubuntu), M1-M3 (macOS), W1 (Windows).
 Each test runs jmo CLI with specific arguments and validates output.
 
-Uses jmo_runner fixture from conftest.py.
+Uses jmo_scan_runner fixture from conftest.py.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ SCAN_WORKFLOWS = [
             "ci",
             "--repo",
             _get_test_repo(),
-            "--profile",
+            "--profile-name",
             "fast",
             "--allow-missing-tools",
         ],
@@ -137,7 +137,7 @@ SCAN_WORKFLOWS = [
             "ci",
             "--repo",
             _get_test_repo(),
-            "--profile",
+            "--profile-name",
             "fast",
             "--allow-missing-tools",
         ],
@@ -184,7 +184,7 @@ SCAN_WORKFLOWS = [
             "ci",
             "--repo",
             _get_test_repo(),
-            "--profile",
+            "--profile-name",
             "fast",
             "--allow-missing-tools",
         ],
@@ -198,7 +198,7 @@ SCAN_WORKFLOWS = [
 @pytest.mark.e2e
 @pytest.mark.slow
 @pytest.mark.parametrize("test_id,desc,args_fn,validator,platform", SCAN_WORKFLOWS)
-def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_runner):
+def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_scan_runner):
     """Unified scan workflow test.
 
     Replaces bash tests U1-U6, M1-M3, W1.
@@ -210,7 +210,7 @@ def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_runner):
         )
 
     args = args_fn()
-    rc, stdout, stderr, results_dir = jmo_runner(args)
+    rc, stdout, stderr, results_dir = jmo_scan_runner(args)
 
     # Exit code 0 (no findings) or 1 (findings found) are success
     # Exit code 2+ means error
@@ -225,7 +225,7 @@ def test_scan_workflow(test_id, desc, args_fn, validator, platform, jmo_runner):
 @pytest.mark.e2e
 @pytest.mark.slow
 @requires_docker
-def test_batch_images_file(jmo_runner, tmp_path):
+def test_batch_images_file(jmo_scan_runner, tmp_path):
     """U6: Batch image scan using --images-file (replaces single-image duplicate)."""
     if current_platform() != "linux":
         pytest.skip("U6 is for linux")
@@ -233,7 +233,7 @@ def test_batch_images_file(jmo_runner, tmp_path):
     images_file = tmp_path / "batch-images.txt"
     images_file.write_text(f"{_get_test_image()}\n" "nginx:alpine\n" "redis:alpine\n")
 
-    rc, stdout, stderr, results_dir = jmo_runner(
+    rc, stdout, stderr, results_dir = jmo_scan_runner(
         [
             "ci",
             "--images-file",

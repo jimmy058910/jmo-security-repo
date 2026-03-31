@@ -1,16 +1,15 @@
 """Shared fixtures for e2e tests.
 
 Provides:
-- jmo_runner: Execute jmo CLI commands and return results
+- jmo_scan_runner: Execute jmo CLI scan commands and return (rc, stdout, stderr, results_dir)
 - e2e_fixtures_dir: Path to e2e test fixtures
 - validate_basic_scan: Helper to assert scan output files exist and are valid
 - validate_multi_target: Helper to assert multi-target scan output
 - current_platform: Return current platform as linux/darwin/win32
 
-Note: This conftest defines an e2e-specific ``jmo_runner`` fixture that returns
-a (rc, stdout, stderr, results_dir) tuple.  The root-level ``tests/conftest.py``
-has a simpler ``jmo_runner`` that returns a ``subprocess.CompletedProcess``; the
-e2e version intentionally shadows it within this package.
+Note: ``jmo_scan_runner`` is intentionally named differently from the root-level
+``jmo_runner`` (tests/conftest.py) to avoid shadowing. The root fixture returns
+``subprocess.CompletedProcess``; this one returns a tuple with auto-created results_dir.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ def e2e_fixtures_dir() -> Path:
 
 
 @pytest.fixture
-def jmo_runner(tmp_path):
+def jmo_scan_runner(tmp_path):
     """Execute jmo CLI and return (rc, stdout, stderr, results_dir).
 
     This e2e-specific fixture automatically creates a results directory under
@@ -42,8 +41,8 @@ def jmo_runner(tmp_path):
 
     Usage::
 
-        def test_scan(jmo_runner):
-            rc, stdout, stderr, results_dir = jmo_runner([
+        def test_scan(jmo_scan_runner):
+            rc, stdout, stderr, results_dir = jmo_scan_runner([
                 "ci", "--repo", ".", "--profile", "fast"
             ])
             assert rc in (0, 1)
