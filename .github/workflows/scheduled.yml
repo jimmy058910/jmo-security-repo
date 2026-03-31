@@ -1030,20 +1030,28 @@ jobs:
           const query = "SELECT * FROM users WHERE id = " + userId;
           EOF
 
-          # Run scan
+      - name: Run scan
+        id: docker-scan
+        continue-on-error: true
+        run: |
           docker run --rm \
             -v /tmp/test-repo:/scan \
             -w /scan \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
-            scan --repo . --profile ${{ matrix.profile }} --results-dir /scan/results || true
+            scan --repo . --profile ${{ matrix.profile }} --results-dir /scan/results
 
-          # Check for output
-          if [ -d /tmp/test-repo/results ]; then
-            echo "Scan completed successfully"
-            ls -la /tmp/test-repo/results
-          else
-            echo "::warning::Scan did not produce results directory"
+      - name: Verify scan results
+        run: |
+          if [ "${{ steps.docker-scan.outcome }}" == "failure" ]; then
+            echo "::error::Docker scan for ${{ matrix.variant }} failed"
+            exit 1
           fi
+          if [ ! -d /tmp/test-repo/results ]; then
+            echo "::error::Scan completed but produced no results directory"
+            exit 1
+          fi
+          echo "Scan completed successfully"
+          ls -la /tmp/test-repo/results
 
       - name: Test help command
         run: |
