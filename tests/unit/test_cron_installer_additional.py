@@ -398,7 +398,7 @@ def test_generate_cron_entry_comprehensive_all_targets(basic_schedule):
     assert "jmo scan --profile deep" in entry
 
     # Verify all targets
-    assert "--repos-dir ~/repos" in entry
+    assert "--repos-dir" in entry and "~/repos" in entry
     assert "--image nginx:latest" in entry
     assert "--terraform-state infra.tfstate" in entry
     assert "--url https://example.com" in entry

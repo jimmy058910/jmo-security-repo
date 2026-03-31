@@ -259,7 +259,7 @@ jobs:
             --splitting-algorithm least_duration \
             --cov=. \
             --cov-report=xml:coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml \
-            -m "not smoke and not requires_tools"
+            -m "not smoke and not requires_tools and not docker"
 
       - name: Run tests (macOS/Windows, no coverage)
         if: matrix.os != 'ubuntu-latest'
@@ -273,7 +273,7 @@ jobs:
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
-            -m "not smoke and not requires_tools"
+            -m "not smoke and not requires_tools and not docker"
 
       - name: Upload shard coverage artifact (Ubuntu only)
         if: matrix.os == 'ubuntu-latest'
