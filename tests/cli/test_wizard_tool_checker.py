@@ -1534,14 +1534,24 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 1: auto-install deps
-        with patch("builtins.print"):
-            with patch("builtins.input", return_value="1"):
-                should_continue, available = _auto_fix_tools(
-                    fix_info=fix_info,
-                    platform="linux",
-                    profile="fast",
-                    available=[],
-                )
+        # Mock ToolInstaller to prevent real npm/pip subprocess calls
+        mock_progress = MagicMock()
+        mock_progress.results = []
+
+        with (
+            patch("builtins.print"),
+            patch("builtins.input", return_value="1"),
+            patch("scripts.cli.tool_installer.ToolInstaller") as mock_installer_cls,
+        ):
+            mock_installer_cls.return_value.install_tools_parallel.return_value = (
+                mock_progress
+            )
+            should_continue, available = _auto_fix_tools(
+                fix_info=fix_info,
+                platform="linux",
+                profile="fast",
+                available=[],
+            )
 
         # Both java and node should be installed
         assert mock_install_dep.call_count == 2

@@ -273,6 +273,7 @@ jobs:
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
+            -p no:xdist \
             -m "not smoke and not requires_tools and not docker"
 
       - name: Upload shard coverage artifact (Ubuntu only)
