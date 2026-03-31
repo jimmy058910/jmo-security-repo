@@ -4,9 +4,9 @@
   "description": "Test app with known vulnerabilities",
   "dependencies": {
     "express": "4.20.0",
-    "lodash": "4.17.21",
+    "lodash": "4.17.23",
     "jquery": "3.5.0",
     "moment": "2.29.4",
-    "axios": "0.30.2"
+    "axios": "0.30.3"
   }
 }
