@@ -109,6 +109,7 @@ SCAN_WORKFLOWS = [
         ],
         validate_basic_scan,
         "linux",
+        marks=[pytest.mark.requires_tools],
         id="U4-url-dast",
     ),
     pytest.param(

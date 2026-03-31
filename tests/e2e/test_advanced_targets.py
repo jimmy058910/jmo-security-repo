@@ -19,6 +19,7 @@ E2E_FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.requires_tools
 class TestAdvancedTargets:
     """Advanced scan targets requiring specific infrastructure."""
 
