@@ -277,7 +277,7 @@ jobs:
 
       - name: Upload shard coverage artifact (Ubuntu only)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}
           path: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml
@@ -302,7 +302,7 @@ jobs:
           python-version: '3.12'
 
       - name: Download all coverage artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: coverage-shard-ubuntu-latest-*
           merge-multiple: true

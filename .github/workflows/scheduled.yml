@@ -127,7 +127,7 @@ jobs:
 
       - name: Archive test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-test-results-${{ github.run_id }}
           path: |
@@ -228,7 +228,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image (balanced variant)
         run: |
@@ -336,7 +336,7 @@ jobs:
 
       - name: Upload smoke test results on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: tool-smoke-results-${{ github.run_id }}
           path: |
@@ -534,7 +534,7 @@ jobs:
           make tools || echo "Some tools failed to install, continuing..."
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Pull Docker test images
         run: |
@@ -565,7 +565,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-ubuntu-results-${{ github.run_id }}
           path: |
@@ -637,7 +637,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-macos-results-${{ github.run_id }}
           path: |
@@ -706,7 +706,7 @@ jobs:
 
       - name: Upload test results on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-tool-integration-results-${{ github.run_id }}
           path: |
@@ -790,7 +790,7 @@ jobs:
 
       - name: Upload contract test results on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: contract-test-results-${{ github.run_id }}
           path: |
@@ -820,7 +820,7 @@ jobs:
 
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: visual-test-screenshots-${{ github.run_id }}
           path: test-results/
@@ -837,7 +837,7 @@ jobs:
       )
     steps:
       - name: Download all test results
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: e2e-*-results-*
           path: test-results
@@ -880,7 +880,7 @@ jobs:
           cat summary.md
 
       - name: Upload summary
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-test-summary-${{ github.run_id }}
           path: summary.md
@@ -953,7 +953,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-${{ github.run_id }}
           path: |
@@ -1072,7 +1072,7 @@ jobs:
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} --version
 
       - name: Upload tools check results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: tools-check-${{ matrix.variant }}
           path: tools-check.json
@@ -1101,7 +1101,7 @@ jobs:
           echo "All Docker variants validated successfully"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: tools-check-*
           path: artifacts

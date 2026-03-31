@@ -19,7 +19,7 @@ runs:
   using: composite
   steps:
     - name: Download coverage artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         pattern: ${{ inputs.artifact-pattern }}
         merge-multiple: true
