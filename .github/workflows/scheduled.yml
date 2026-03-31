@@ -105,14 +105,24 @@ jobs:
 
           echo ""
           echo "Scanning for secrets..."
-          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt > trufflehog-results.json || true
+          set -euo pipefail
+          if ! trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt \
+              --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt; then
+            EXIT_CODE=$?
+            echo "::error::TruffleHog exited with code ${EXIT_CODE}"
+            cat trufflehog-stderr.txt >&2
+            exit "${EXIT_CODE}"
+          fi
 
-          VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
-          if [ "$VERIFIED" -gt 0 ]; then
-            echo "Found $VERIFIED verified secrets!"
-            exit 1
+          if [ ! -s trufflehog-results.json ]; then
+            echo "Security audit complete. Verified secrets: 0"
           else
-            echo "No verified secrets found"
+            VERIFIED=$({ jq -r 'select(.Verified == true)' trufflehog-results.json || true; } | wc -l)
+            if [ "$VERIFIED" -gt 0 ]; then
+              echo "::error::Found $VERIFIED verified secrets!"
+              exit 1
+            fi
+            echo "Security audit complete. Verified secrets: $VERIFIED"
           fi
 
       - name: Archive test results
