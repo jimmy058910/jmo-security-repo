@@ -905,15 +905,19 @@ jobs:
           pip install psutil
 
       - name: Run baseline benchmarks (main branch)
-        id: baseline
+        id: perf-tests
+        continue-on-error: true
         run: |
           git checkout main
           python3 -m pytest tests/performance/test_benchmarks.py \
             -v \
             --benchmark-only \
-            --benchmark-json=baseline-results.json \
-            || true
-        continue-on-error: true
+            --benchmark-json=baseline-results.json
+
+      - name: Warn on performance regression
+        if: steps.perf-tests.outcome == 'failure'
+        run: |
+          echo "::warning::Performance benchmarks failed. Review nightly logs for regressions."
 
       - name: Checkout current branch
         run: |
