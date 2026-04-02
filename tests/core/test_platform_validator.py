@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import ast
 import os
-import sys
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -225,13 +224,9 @@ class TestPathChecks:
 
     def test_mixed_separators(self):
         result = _check_mixed_separators()
-        if sys.platform == "win32":
-            assert result is None  # PASS on Windows (paths normalized)
-        else:
-            # On Unix, backslash is a valid filename char, not a separator.
-            # The check may report a false-positive "mixed separators" —
-            # this is acceptable behavior, not a bug.
-            pass
+        # Windows: validates mixed separators resolve identically
+        # Linux/macOS: skips (backslash is a filename char, not a separator)
+        assert result is None
 
     def test_relative_path_resolve(self):
         result = _check_relative_path_resolve()
