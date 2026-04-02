@@ -2,7 +2,7 @@
 
 All notable changes to JMo Security will be documented in this file.
 
-## [1.0.0] - 2026-02-23
+## [1.0.0 Alpha] - 2026-04-02
 
 ### Added
 
