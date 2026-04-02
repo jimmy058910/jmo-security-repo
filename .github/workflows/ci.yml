@@ -60,6 +60,9 @@ jobs:
           if ! grep -q "colorama" requirements-dev.txt; then
             sed -i '/^coverage/i colorama==0.4.6\n    # via\n    #   bandit\n    #   click\n    #   pytest' requirements-dev.txt
           fi
+          if ! grep -q "pytz" requirements-dev.txt; then
+            sed -i '/^pywin32/i pytz==2025.2\n    # via croniter' requirements-dev.txt
+          fi
 
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
 
