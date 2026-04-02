@@ -15,10 +15,12 @@ exclude_dirs:
 
 # Do not globally skip tests; we handle targeted skips via Makefile for tests/ only.
 skips:
+  - B310  # urllib.urlopen - URLs are hardcoded HTTPS API endpoints, not user input
   - B404  # import subprocess is expected in CLI wrappers
   - B603  # subprocess without shell=True is SECURE (we use list args, not strings)
   - B606  # os.startfile usage is guarded and platform-specific
   - B607  # start_process_with_partial_path - we use well-known tools (git, docker, etc.)
+  - B608  # hardcoded_sql - false positive on HTML template f-strings
   - B110  # try_except_pass - intentional for cleanup/optional operations
   - B112  # try_except_continue - intentional for parsing/iteration resilience
 

@@ -451,7 +451,7 @@ netlify env:set RESEND_API_KEY re_your_key_here
    max: 20, // Increase from 10 to 20
    ```
 
-2. Use Redis for distributed rate limiting (multi-instance deployments)
+1. Use Redis for distributed rate limiting (multi-instance deployments)
 
 ### CORS errors from GitHub Pages
 
@@ -515,5 +515,4 @@ const response = await fetch('<https://jmo-security-subscribe-api.vercel.app/api
 
 ---
 
-**Last Updated:** October 16, 2025
-**Version:** 1.0.0
+**Last Updated:** December 2025

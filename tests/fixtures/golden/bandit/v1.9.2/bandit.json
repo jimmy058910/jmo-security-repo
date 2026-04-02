@@ -1,0 +1,255 @@
+{
+  "errors": [],
+  "generated_at": "2026-01-08T04:46:37Z",
+  "metrics": {
+    "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py": {
+      "CONFIDENCE.HIGH": 8,
+      "CONFIDENCE.LOW": 1,
+      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 2,
+      "SEVERITY.LOW": 6,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 40,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "_totals": {
+      "CONFIDENCE.HIGH": 8,
+      "CONFIDENCE.LOW": 1,
+      "CONFIDENCE.MEDIUM": 2,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 2,
+      "SEVERITY.LOW": 6,
+      "SEVERITY.MEDIUM": 3,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 40,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": [
+    {
+      "code": "12 import hashlib\n13 import pickle\n14 import subprocess\n",
+      "col_offset": 0,
+      "end_col_offset": 13,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 502,
+        "link": "https://cwe.mitre.org/data/definitions/502.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with pickle module.",
+      "line_number": 13,
+      "line_range": [
+        13
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/blacklists/blacklist_imports.html#b403-import-pickle",
+      "test_id": "B403",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "13 import pickle\n14 import subprocess\n15 \n",
+      "col_offset": 0,
+      "end_col_offset": 17,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with the subprocess module.",
+      "line_number": 14,
+      "line_range": [
+        14
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/blacklists/blacklist_imports.html#b404-import-subprocess",
+      "test_id": "B404",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "18 def check_admin(user):\n19     assert user.is_admin, \"User must be admin\"  # noqa: S101\n20     return True\n",
+      "col_offset": 4,
+      "end_col_offset": 46,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+      "line_number": 19,
+      "line_range": [
+        19
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b101_assert_used.html",
+      "test_id": "B101",
+      "test_name": "assert_used"
+    },
+    {
+      "code": "24 def load_user_data(data_bytes):\n25     return pickle.loads(data_bytes)  # noqa: S301\n26 \n",
+      "col_offset": 11,
+      "end_col_offset": 35,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 502,
+        "link": "https://cwe.mitre.org/data/definitions/502.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Pickle and modules that wrap it can be unsafe when used to deserialize untrusted data, possible security issue.",
+      "line_number": 25,
+      "line_range": [
+        25
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/blacklists/blacklist_calls.html#b301-pickle",
+      "test_id": "B301",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "29 def hash_password(password):\n30     return hashlib.md5(password.encode()).hexdigest()  # noqa: S324\n31 \n",
+      "col_offset": 11,
+      "end_col_offset": 41,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 327,
+        "link": "https://cwe.mitre.org/data/definitions/327.html"
+      },
+      "issue_severity": "HIGH",
+      "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
+      "line_number": 30,
+      "line_range": [
+        30
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b324_hashlib.html",
+      "test_id": "B324",
+      "test_name": "hashlib"
+    },
+    {
+      "code": "36 \n37     return random.randint(100000, 999999)  # noqa: S311\n38 \n",
+      "col_offset": 11,
+      "end_col_offset": 41,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 330,
+        "link": "https://cwe.mitre.org/data/definitions/330.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Standard pseudo-random generators are not suitable for security/cryptographic purposes.",
+      "line_number": 37,
+      "line_range": [
+        37
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/blacklists/blacklist_calls.html#b311-random",
+      "test_id": "B311",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "41 def run_command(user_input):\n42     subprocess.Popen(f\"echo {user_input}\", shell=True)  # noqa: S602\n43 \n",
+      "col_offset": 4,
+      "end_col_offset": 54,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 78,
+        "link": "https://cwe.mitre.org/data/definitions/78.html"
+      },
+      "issue_severity": "HIGH",
+      "issue_text": "subprocess call with shell=True identified, security issue.",
+      "line_number": 42,
+      "line_range": [
+        42
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b602_subprocess_popen_with_shell_equals_true.html",
+      "test_id": "B602",
+      "test_name": "subprocess_popen_with_shell_equals_true"
+    },
+    {
+      "code": "46 def get_user(username):\n47     query = f\"SELECT * FROM users WHERE username = '{username}'\"  # noqa: S608\n48     return query\n",
+      "col_offset": 14,
+      "end_col_offset": 52,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "LOW",
+      "issue_cwe": {
+        "id": 89,
+        "link": "https://cwe.mitre.org/data/definitions/89.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible SQL injection vector through string-based query construction.",
+      "line_number": 47,
+      "line_range": [
+        47
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b608_hardcoded_sql_expressions.html",
+      "test_id": "B608",
+      "test_name": "hardcoded_sql_expressions"
+    },
+    {
+      "code": "51 # B105: hardcoded_password_string - Hardcoded credentials\n52 DATABASE_PASSWORD = \"super_secret_password123\"  # noqa: S105\n53 \n",
+      "col_offset": 20,
+      "end_col_offset": 46,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 259,
+        "link": "https://cwe.mitre.org/data/definitions/259.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Possible hardcoded password: 'super_secret_password123'",
+      "line_number": 52,
+      "line_range": [
+        52
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b105_hardcoded_password_string.html",
+      "test_id": "B105",
+      "test_name": "hardcoded_password_string"
+    },
+    {
+      "code": "58         dangerous_action()\n59     except Exception:\n60         pass  # noqa: S110\n61 \n",
+      "col_offset": 4,
+      "end_col_offset": 12,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 59,
+      "line_range": [
+        59,
+        60
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
+    },
+    {
+      "code": "71     sock = socket.socket()\n72     sock.bind((\"0.0.0.0\", 8080))  # noqa: S104\n73     return sock\n",
+      "col_offset": 15,
+      "end_col_offset": 24,
+      "filename": "C:\\Projects\\jmo-security-repo\\tests\\fixtures\\samples\\python-vulnerable\\vulnerable_app.py",
+      "issue_confidence": "MEDIUM",
+      "issue_cwe": {
+        "id": 605,
+        "link": "https://cwe.mitre.org/data/definitions/605.html"
+      },
+      "issue_severity": "MEDIUM",
+      "issue_text": "Possible binding to all interfaces.",
+      "line_number": 72,
+      "line_range": [
+        72
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.9.2/plugins/b104_hardcoded_bind_all_interfaces.html",
+      "test_id": "B104",
+      "test_name": "hardcoded_bind_all_interfaces"
+    }
+  ]
+}

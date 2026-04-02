@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 
 from scripts.cli.wizard import PROFILES
 from scripts.cli.wizard_generators import (
+    JMO_DOCKER_IMAGE_FULL,
     generate_github_actions,
     generate_makefile_target,
     generate_shell_script,
@@ -79,7 +80,7 @@ def test_github_actions_gitlab_docker():
 
     # Verify Docker container usage
     assert "container:" in result
-    assert "ghcr.io/jimmy058910/jmo-security:latest" in result
+    assert JMO_DOCKER_IMAGE_FULL in result
 
 
 def test_github_actions_gitlab_native():
@@ -198,7 +199,8 @@ def test_github_actions_image_native_no_name():
 
     # Should generate valid workflow even without image name
     assert "security-scan:" in result
-    assert "jmotools balanced" in result
+    assert "jmo scan" in result
+    assert "--profile-name balanced" in result
 
 
 # ========== Test Category 4: URL Target Type ==========
@@ -246,7 +248,8 @@ def test_github_actions_url_native_no_url():
     result = generate_github_actions(config, PROFILES)
 
     # Should generate valid workflow even without URL
-    assert "jmotools balanced" in result
+    assert "jmo scan" in result
+    assert "--profile-name balanced" in result
 
 
 # ========== Test Category 5: IaC Target Type ==========
@@ -434,7 +437,8 @@ def test_github_actions_deep_profile():
     # Verify deep profile defaults: threads=2, timeout=900
     assert "--threads 2" in result
     assert "--timeout 900" in result
-    assert "jmotools deep" in result
+    assert "jmo scan" in result
+    assert "--profile-name deep" in result
 
 
 # ========== Test Category 10: Environment Variables ==========
@@ -545,7 +549,8 @@ def test_github_actions_unknown_target_type():
     result = generate_github_actions(config, PROFILES)
 
     assert "security-scan:" in result
-    assert "jmotools balanced" in result
+    assert "jmo scan" in result
+    assert "--profile-name balanced" in result
 
 
 def test_github_actions_gitlab_without_repo():
@@ -560,7 +565,8 @@ def test_github_actions_gitlab_without_repo():
     result = generate_github_actions(config, PROFILES)
 
     # Should generate valid workflow even without gitlab_repo
-    assert "jmotools balanced" in result
+    assert "jmo scan" in result
+    assert "--profile-name balanced" in result
 
 
 def test_github_actions_k8s_without_context():
@@ -575,7 +581,8 @@ def test_github_actions_k8s_without_context():
     result = generate_github_actions(config, PROFILES)
 
     # Should generate valid workflow even without k8s_context
-    assert "jmotools balanced" in result
+    assert "jmo scan" in result
+    assert "--profile-name balanced" in result
 
 
 # ========== Test Category 13: YAML Structure Verification ==========

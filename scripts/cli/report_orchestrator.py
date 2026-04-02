@@ -9,7 +9,8 @@ import os
 import time
 from pathlib import Path
 
-from scripts.core.config import load_config
+from scripts.core.config import load_config_with_env_overrides
+from scripts.core.exceptions import OPANotFoundException
 from scripts.core.normalize_and_report import gather_results
 from scripts.core.reporters.basic_reporter import write_json, write_markdown
 from scripts.core.reporters.compliance_reporter import (
@@ -17,17 +18,27 @@ from scripts.core.reporters.compliance_reporter import (
     write_compliance_summary,
     write_pci_dss_report,
 )
+from scripts.core.reporters.csv_reporter import write_csv
 from scripts.core.reporters.html_reporter import write_html
 from scripts.core.reporters.sarif_reporter import write_sarif
+from scripts.core.reporters.simple_html_reporter import write_simple_html
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
-from scripts.core.suppress import filter_suppressed, load_suppressions
-from scripts.core.telemetry import send_event, bucket_findings
+from scripts.core.suppress import (
+    filter_suppressed_with_summary,
+    load_suppressions,
+    SuppressionSummary,
+)
+from scripts.core.telemetry import (
+    send_event,
+    bucket_findings,
+    send_policy_evaluation_event,
+)
 
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "0.7.0-dev"  # Will be updated to 0.7.0 at release
+__version__ = "1.0.0"
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
@@ -62,7 +73,7 @@ def cmd_report(args, _log_fn) -> int:
     Returns:
         Exit code (0 for success, 1 if threshold exceeded, 2 for errors)
     """
-    cfg = load_config(args.config)
+    cfg = load_config_with_env_overrides(args.config)
 
     # Normalize results_dir from positional or optional
     rd = (
@@ -105,30 +116,103 @@ def cmd_report(args, _log_fn) -> int:
         else (Path.cwd() / "jmo.suppress.yml")
     )
     suppressions = load_suppressions(str(sup_file) if sup_file.exists() else None)
-    suppressed_ids = []
+    suppressed_ids: list[str] = []
+    suppression_summary: SuppressionSummary | None = None
     if suppressions:
-        before = {f.get("id") for f in findings}
-        findings = filter_suppressed(findings, suppressions)
-        after = {f.get("id") for f in findings}
-        suppressed_ids = list(before - after)
+        findings, suppression_summary = filter_suppressed_with_summary(
+            findings, suppressions
+        )
+        suppressed_ids = suppression_summary.suppressed_ids
+        if suppression_summary.total_suppressed > 0:
+            _log_fn(args, "INFO", suppression_summary.debt_label)
 
-    # Write reports
+    # Generate metadata for v1.0.0 output format
+    from scripts.core.reporters.basic_reporter import _generate_metadata
+    import uuid
+
+    # Collect scan metadata
+    scan_id = str(uuid.uuid4())
+
+    # Read profile from scan metadata if available (Bug #3 fix)
+    scan_metadata_path = results_dir / ".scan_metadata.json"
+    profile = ""
+    tools_from_scan: list[str] = []
+    if scan_metadata_path.exists():
+        try:
+            scan_meta = json.loads(scan_metadata_path.read_text(encoding="utf-8"))
+            profile = scan_meta.get("profile", "")
+            tools_from_scan = scan_meta.get("tools", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not profile:
+        profile = getattr(cfg, "default_profile", "") or ""
+
+    # Use tools from scan metadata if available, else infer from findings (Bug #5 fix)
+    tools_used: list[str] = tools_from_scan.copy() if tools_from_scan else []
+    if not tools_used:
+        # Fallback: infer tools from findings
+        for f in findings:
+            tool_name = f.get("tool", {}).get("name", "")
+            if tool_name and tool_name not in tools_used:
+                tools_used.append(tool_name)
+
+    # Count targets scanned
+    target_count = 0
+    for target_dir_name in [
+        "individual-repos",
+        "individual-images",
+        "individual-iac",
+        "individual-web",
+        "individual-gitlab",
+        "individual-k8s",
+    ]:
+        target_dir = results_dir / target_dir_name
+        if target_dir.exists():
+            target_count += sum(1 for p in target_dir.iterdir() if p.is_dir())
+
+    metadata = _generate_metadata(
+        findings,
+        scan_id=scan_id,
+        profile=profile,
+        tools=sorted(tools_used),
+        target_count=target_count,
+    )
+
+    # Write reports (v1.0.0: with metadata wrapper)
     if "json" in cfg.outputs:
-        write_json(findings, out_dir / "findings.json")
+        write_json(findings, out_dir / "findings.json", metadata=metadata)
     if "md" in cfg.outputs:
         write_markdown(findings, out_dir / "SUMMARY.md")
     if "yaml" in cfg.outputs:
         try:
-            write_yaml(findings, out_dir / "findings.yaml")
+            write_yaml(findings, out_dir / "findings.yaml", metadata=metadata)
         except RuntimeError as e:
             _log_fn(args, "DEBUG", f"YAML reporter unavailable: {e}")
     if "html" in cfg.outputs:
         write_html(findings, out_dir / "dashboard.html")
+    if "simple-html" in cfg.outputs:
+        write_simple_html(findings, out_dir / "simple-report.html")
     if "sarif" in cfg.outputs:
         write_sarif(findings, out_dir / "findings.sarif")
+    if "csv" in cfg.outputs:
+        # Get CSV configuration from config
+        csv_config = getattr(cfg, "csv", None)
+        csv_columns = None
+        if csv_config and isinstance(csv_config, dict):
+            csv_columns = csv_config.get("columns")
+        # Pass suppressions for triage status column (Feature #3)
+        write_csv(
+            findings,
+            out_dir / "findings.csv",
+            columns=csv_columns,
+            suppressions=suppressions,
+        )
     if suppressions:
         write_suppression_report(
-            [str(x) for x in suppressed_ids], suppressions, out_dir / "SUPPRESSIONS.md"
+            [str(x) for x in suppressed_ids],
+            suppressions,
+            out_dir / "SUPPRESSIONS.md",
+            summary=suppression_summary,
         )
 
     # Write compliance framework reports (v1.2.0)
@@ -142,6 +226,106 @@ def cmd_report(args, _log_fn) -> int:
     except (KeyError, ValueError, TypeError) as e:
         _log_fn(args, "DEBUG", f"Failed to write compliance reports: {e}")
         logger.debug(f"Compliance data formatting error: {e}")
+
+    # Evaluate and write policy reports (v1.0.0 Feature #5: Policy-as-Code)
+    # Determine policies to evaluate using configuration precedence:
+    # 1. CLI arguments (highest priority)
+    # 2. Environment variables (already loaded via load_config_with_env_overrides)
+    # 3. Config file (jmo.yml)
+    # 4. Skip if disabled
+    policy_names = []
+    policy_exit_code = 0
+
+    # 1. CLI arguments (highest priority)
+    if hasattr(args, "policies") and args.policies:
+        policy_names = args.policies
+        _log_fn(args, "INFO", f"Using policies from CLI: {', '.join(policy_names)}")
+    # 2. Config (includes env vars via load_config_with_env_overrides)
+    elif (
+        cfg.policy.enabled and cfg.policy.auto_evaluate and cfg.policy.default_policies
+    ):
+        policy_names = cfg.policy.default_policies
+        _log_fn(args, "INFO", f"Using policies from config: {', '.join(policy_names)}")
+    # 3. Skip if disabled
+    elif not cfg.policy.enabled:
+        _log_fn(args, "DEBUG", "Policy evaluation disabled via config")
+
+    if policy_names:
+        try:
+            from scripts.core.reporters.policy_reporter import (
+                evaluate_policies,
+                write_policy_report,
+                write_policy_json,
+                write_policy_summary_md,
+            )
+
+            builtin_dir = Path(__file__).parent.parent.parent / "policies" / "builtin"
+            user_dir = Path.home() / ".jmo" / "policies"
+
+            _log_fn(
+                args,
+                "INFO",
+                f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
+            )
+
+            # Measure policy evaluation time for telemetry
+            policy_start = time.perf_counter()
+            policy_results = evaluate_policies(
+                findings, policy_names, builtin_dir, user_dir
+            )
+            policy_duration_ms = (time.perf_counter() - policy_start) * 1000
+
+            if policy_results:
+                write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
+                write_policy_json(policy_results, out_dir / "policy_results.json")
+                write_policy_summary_md(policy_results, out_dir / "POLICY_SUMMARY.md")
+
+                passed = sum(1 for r in policy_results.values() if r.passed)
+                failed = len(policy_results) - passed
+
+                _log_fn(
+                    args,
+                    "INFO",
+                    f"Policy evaluation complete: {passed}/{len(policy_results)} passed, {failed} failed",
+                )
+
+                # Send policy evaluation telemetry event (privacy-preserving)
+                send_policy_evaluation_event(
+                    policy_names,
+                    policy_results,
+                    policy_duration_ms,
+                    cfg.__dict__,
+                    __version__,
+                )
+
+                # Fail if violations and fail_on_violation=True (check both CLI and config)
+                cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
+                if failed > 0 and (
+                    cli_fail_on_violation or cfg.policy.fail_on_violation
+                ):
+                    _log_fn(
+                        args,
+                        "ERROR",
+                        f"❌ {failed} policies FAILED. Exiting due to fail_on_violation=True",
+                    )
+                    policy_exit_code = 1
+
+        except ImportError as e:
+            _log_fn(args, "DEBUG", f"Policy reporter unavailable: {e}")
+            logger.debug(f"Policy reporter import error: {e}")
+        except (OSError, PermissionError) as e:
+            _log_fn(args, "DEBUG", f"Failed to write policy reports: {e}")
+            logger.debug(f"Policy report write failed: {e}")
+        except OPANotFoundException as e:
+            # OPA not installed - graceful degradation with warning (not error)
+            _log_fn(args, "WARN", f"Policy evaluation skipped: {e}")
+            logger.warning("Policy evaluation skipped: OPA not installed")
+        except Exception as e:
+            _log_fn(args, "ERROR", f"Policy evaluation failed: {e}")
+            logger.error(f"Policy evaluation error: {e}", exc_info=True)
+            cli_fail_on_violation = getattr(args, "fail_on_policy_violation", False)
+            if cli_fail_on_violation or cfg.policy.fail_on_violation:
+                policy_exit_code = 1
 
     # Write profiling data
     if args.profile:
@@ -210,6 +394,8 @@ def cmd_report(args, _log_fn) -> int:
         output_formats.append("md")
     if getattr(args, "html", False) or "html" in cfg.outputs:
         output_formats.append("html")
+    if getattr(args, "simple_html", False) or "simple-html" in cfg.outputs:
+        output_formats.append("simple-html")
     if getattr(args, "sarif", False) or "sarif" in cfg.outputs:
         output_formats.append("sarif")
     if getattr(args, "yaml", False) or "yaml" in cfg.outputs:
@@ -232,4 +418,52 @@ def cmd_report(args, _log_fn) -> int:
         "INFO",
         f"Wrote reports to {out_dir} (threshold={threshold or 'none'}, exit={code})",
     )
-    return code
+
+    # Auto-storage hook: Store scan in history database if requested
+    if getattr(args, "store_history", False):
+        try:
+            from scripts.core.history_db import store_scan as db_store_scan
+
+            history_db_path = getattr(args, "history_db", None)
+            if history_db_path:
+                history_db_path = Path(history_db_path)
+            else:
+                history_db_path = Path(".jmo/history.db")
+
+            # Get profile name from config
+            profile_name = (
+                getattr(args, "profile_name", None) or cfg.default_profile or "balanced"
+            )
+
+            # Get tools from config
+            tools = getattr(cfg, "tools", [])
+
+            # Get security flags (Phase 6 Step 6.1, 6.2, 6.3)
+            no_store_raw = getattr(args, "no_store_raw_findings", False)
+            encrypt_findings = getattr(args, "encrypt_findings", False)
+            collect_metadata = getattr(args, "collect_metadata", False)
+
+            # Store scan in history database
+            scan_id = db_store_scan(
+                results_dir=results_dir,
+                profile=profile_name,
+                tools=tools,
+                db_path=history_db_path,
+                no_store_raw=no_store_raw,
+                encrypt_findings=encrypt_findings,
+                collect_metadata=collect_metadata,
+            )
+
+            _log_fn(args, "INFO", f"Stored scan in history: {scan_id}")
+            _log_fn(args, "INFO", f"Database: {history_db_path}")
+
+        except FileNotFoundError as e:
+            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
+        except Exception as e:
+            _log_fn(args, "WARN", f"Failed to store scan history: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    # Return non-zero if either severity threshold or policy violations occurred
+    return max(code, policy_exit_code)

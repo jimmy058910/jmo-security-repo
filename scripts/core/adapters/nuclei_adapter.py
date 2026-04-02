@@ -1,51 +1,135 @@
 #!/usr/bin/env python3
 """
-Nuclei adapter: normalize Nuclei JSON to CommonFinding schema.
+Nuclei adapter - Maps Nuclei vulnerability scanner JSON to CommonFinding schema.
 
-Expected input: JSON output from 'nuclei -json' command.
-Output schema: CommonFinding v1.2.0 with compliance enrichment.
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
 
-Tool version tested: v3.3.7+
-Last updated: 2025-01-19
+v1.0.0 Feature #1:
+- Template-based vulnerability scanning
+- CVE/CWE detection with CVSS enrichment
+- Web application and API security testing
+- Cloud and network misconfiguration detection
 
-Nuclei is a fast vulnerability scanner based on simple YAML templates.
-It excels at detecting CVEs, misconfigurations, and security issues across
-web applications, APIs, and cloud configurations.
+Tool Version: 3.3.7+
+Output Format: NDJSON (newline-delimited JSON)
+Exit Codes: 0 (clean), varies by template match
 
-Output format: NDJSON (newline-delimited JSON)
+Template Categories:
+- cves: Known vulnerability (CVE) templates
+- exposures: Sensitive file/config exposure
+- misconfigurations: Security misconfigurations
+- takeovers: Subdomain takeover vulnerabilities
+- technologies: Technology fingerprinting
+- fuzzing: Active fuzzing templates
+- workflows: Multi-step scan workflows
+
+Severity Mapping (Nuclei -> CommonFinding):
+- critical: CRITICAL
+- high: HIGH
+- medium: MEDIUM
+- low: LOW
+- info: INFO
+
+Scan Types:
+- http: HTTP-based vulnerability scanning
+- dns: DNS record analysis
+- tcp: TCP service scanning
+- ssl: TLS/SSL certificate issues
+- headless: Browser-based checks
+- code: Source code analysis
+
+Example:
+    >>> adapter = NucleiAdapter()
+    >>> findings = adapter.parse(Path('nuclei.json'))
+    >>> # Returns vulnerability findings with CVE/CWE enrichment
+
+See Also:
+    - https://nuclei.projectdiscovery.io/
+    - https://github.com/projectdiscovery/nuclei-templates
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-from scripts.core.common_finding import fingerprint
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.common_finding import fingerprint, map_tool_severity
+from scripts.core.plugin_api import (
+    AdapterPlugin,
+    Finding,
+    PluginMetadata,
+    adapter_plugin,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _nuclei_severity_to_severity(severity: str) -> str:
-    """Map Nuclei severity to CommonFinding severity.
+@adapter_plugin(
+    PluginMetadata(
+        name="nuclei",
+        version="1.0.0",
+        author="JMo Security",
+        description="Adapter for Nuclei vulnerability scanner",
+        tool_name="nuclei",
+        schema_version="1.2.0",
+        output_format="json",
+        exit_codes={0: "clean"},
+    )
+)
+class NucleiAdapter(AdapterPlugin):
+    """Adapter for Nuclei vulnerability scanner (plugin architecture)."""
 
-    Nuclei uses: info, low, medium, high, critical, unknown
-    CommonFinding uses: INFO, LOW, MEDIUM, HIGH, CRITICAL, UNKNOWN
-    """
-    severity_map = {
-        "info": "INFO",
-        "low": "LOW",
-        "medium": "MEDIUM",
-        "high": "HIGH",
-        "critical": "CRITICAL",
-        "unknown": "UNKNOWN",
-    }
-    return severity_map.get(severity.lower(), "UNKNOWN")
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Return plugin metadata."""
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
+
+    def parse(self, output_path: Path) -> list[Finding]:
+        """Parse tool output and return normalized findings.
+
+        Args:
+            output_path: Path to nuclei.json output file
+
+        Returns:
+            List of Finding objects following CommonFinding schema v1.2.0
+        """
+        # Delegate to internal function that returns dicts
+        findings_dicts = _load_nuclei_internal(output_path)
+
+        # Convert dicts to Finding objects
+        findings = []
+        for f_dict in findings_dicts:
+            finding = Finding(
+                schemaVersion=f_dict.get("schemaVersion", "1.2.0"),
+                id=f_dict.get("id", ""),
+                ruleId=f_dict.get("ruleId", ""),
+                severity=f_dict.get("severity", "INFO"),
+                tool=f_dict.get("tool", {}),
+                location=f_dict.get("location", {}),
+                message=f_dict.get("message", ""),
+                title=f_dict.get("title"),
+                description=f_dict.get("description"),
+                remediation=f_dict.get("remediation"),
+                references=f_dict.get("references", []),
+                tags=f_dict.get("tags", []),
+                cvss=f_dict.get("cvss"),
+                risk=f_dict.get("risk"),
+                compliance=f_dict.get("compliance"),
+                context=f_dict.get("context"),
+                raw=f_dict.get("raw"),
+            )
+            findings.append(finding)
+
+        return findings
 
 
-def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
+def _load_nuclei_internal(path: str | Path) -> list[dict[str, Any]]:
     """Load and normalize Nuclei findings to CommonFinding schema.
 
     Args:
@@ -59,33 +143,10 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
         - Returns [] if file is empty
         - Skips malformed JSON lines (NDJSON format)
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
 
     # Nuclei outputs NDJSON (one JSON object per line)
-    for line_num, line in enumerate(raw.splitlines(), start=1):
-        line = line.strip()
-        if not line:
-            logger.debug(f"Skipping empty line {line_num} in {path}")
-            continue  # Skip empty lines
-
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as e:
-            logger.debug(
-                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
-            )
-            continue  # Skip malformed lines
-
-        if not isinstance(item, dict):
-            continue
+    for item in safe_load_ndjson_file(path):
 
         # Extract required fields
         # Nuclei structure:
@@ -117,7 +178,7 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
         name = info.get("name") or template_id
         description = info.get("description") or name
         severity_raw = info.get("severity") or "MEDIUM"
-        severity = _nuclei_severity_to_severity(severity_raw)
+        severity = map_tool_severity("nuclei", severity_raw)
 
         # Location: matched URL
         matched_at = item.get("matched-at") or item.get("matched") or ""
@@ -135,7 +196,7 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
         # For web findings, use URL instead of file path
         fid = fingerprint("nuclei", template_id, url, 0, msg)
 
-        finding: Dict[str, Any] = {
+        finding: dict[str, Any] = {
             "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": template_id,
@@ -204,9 +265,6 @@ def load_nuclei(path: str | Path) -> List[Dict[str, Any]]:
 
         if risk:
             finding["risk"] = risk
-
-        # Enrich with compliance framework mappings
-        finding = enrich_finding_with_compliance(finding)
 
         out.append(finding)
 

@@ -1,10 +1,26 @@
+import os
+import platform
 import types
 from pathlib import Path
 import sys
 
+import pytest
+
 from scripts.cli import jmo
 
 
+@pytest.fixture(autouse=True)
+def skip_react_build_check():
+    """Skip React build check for all tests in this file (CI compatibility)."""
+    os.environ["SKIP_REACT_BUILD_CHECK"] = "true"
+    yield
+    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
+
+
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Unix signal handling not fully supported on Windows",
+)
 def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     # Create two repos under repos_dir
     base = tmp_path / "repos"
@@ -25,7 +41,10 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(jmo, "_effective_scan_settings", fake_eff)
-    monkeypatch.setattr(jmo, "_tool_exists", lambda n: False)
+    # Mock _check_scan_tools to skip tool availability checks
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    # Note: _tool_exists removed in v0.9.0 refactoring - tools handled by scanners now
+    # allow_missing_tools=True handles missing tools gracefully
 
     # Monkeypatch signal.signal to immediately invoke handler once to set stop flag
     captured = {"handler": None}

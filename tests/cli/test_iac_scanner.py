@@ -86,6 +86,9 @@ class TestIacScanner:
         iac_file = tmp_path / "my-infrastructure.tf"
         iac_file.write_text('resource "null_resource" "test" {}')
 
+        # Create individual-iac subdirectory (matches production usage in scan_orchestrator)
+        iac_results_dir = tmp_path / "individual-iac"
+
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -99,7 +102,7 @@ class TestIacScanner:
             scan_iac_file(
                 iac_type="terraform",
                 iac_path=iac_file,
-                results_dir=tmp_path,
+                results_dir=iac_results_dir,  # Pass individual-iac directory (matches production)
                 tools=["checkov"],
                 timeout=600,
                 retries=0,
@@ -108,7 +111,7 @@ class TestIacScanner:
             )
 
             # Check that directory was created with file stem
-            expected_dir = tmp_path / "individual-iac" / "my-infrastructure"
+            expected_dir = iac_results_dir / "my-infrastructure"
             assert expected_dir.exists()
 
     def test_scan_iac_with_tool_timeout_override(self, tmp_path):
@@ -116,9 +119,9 @@ class TestIacScanner:
         iac_file = tmp_path / "deployment.yaml"
         iac_file.write_text("apiVersion: v1\nkind: Pod")
 
-        # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        # Mock find_tool to return path for trivy
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -143,7 +146,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,  # Inject mock
+                find_tool_func=mock_find_tool,  # Inject mock
             )
 
             # Verify ToolRunner was called
@@ -223,6 +226,9 @@ class TestIacScanner:
         iac_file = tmp_path / "network.tf"
         iac_file.write_text('resource "aws_vpc" "main" {}')
 
+        # Create individual-iac subdirectory (matches production usage in scan_orchestrator)
+        iac_results_dir = tmp_path / "individual-iac"
+
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -236,7 +242,7 @@ class TestIacScanner:
             scan_iac_file(
                 iac_type="terraform",
                 iac_path=iac_file,
-                results_dir=tmp_path,
+                results_dir=iac_results_dir,  # Pass individual-iac directory
                 tools=["checkov"],
                 timeout=600,
                 retries=0,
@@ -245,16 +251,16 @@ class TestIacScanner:
             )
 
             # Check directory structure
-            assert (tmp_path / "individual-iac").exists()
-            assert (tmp_path / "individual-iac" / "network").exists()
+            assert iac_results_dir.exists()
+            assert (iac_results_dir / "network").exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
         iac_file = tmp_path / "main.tf"
         iac_file.write_text('resource "aws_s3_bucket" "test" {}')
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -276,7 +282,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -292,8 +298,10 @@ class TestIacScanner:
         iac_file = tmp_path / "stack.yaml"
         iac_file.write_text("AWSTemplateFormatVersion: 2010-09-09")
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["checkov", "trivy"]
+        def mock_find_tool(tool_name):
+            if tool_name in ["checkov", "trivy"]:
+                return f"/usr/bin/{tool_name}"
+            return None
 
         with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -320,7 +328,7 @@ class TestIacScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

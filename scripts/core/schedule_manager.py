@@ -1,12 +1,14 @@
 """Schedule management following Kubernetes CronJob API patterns."""
 
+from __future__ import annotations
+
 import json
 import os
 import uuid
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import Any
 from croniter import croniter
 
 
@@ -16,8 +18,8 @@ class ScheduleMetadata:
 
     name: str
     uid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    labels: Dict[str, str] = field(default_factory=dict)
-    annotations: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
+    annotations: dict[str, str] = field(default_factory=dict)
     creationTimestamp: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -29,7 +31,7 @@ class BackendConfig:
     """Backend-specific configuration."""
 
     type: str  # "github-actions" | "gitlab-ci" | "local-cron"
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -37,10 +39,10 @@ class JobTemplateSpec:
     """Scan job specification."""
 
     profile: str
-    targets: Dict[str, Any]
-    results: Dict[str, Any]
-    options: Dict[str, Any]
-    notifications: Dict[str, Any] = field(default_factory=dict)
+    targets: dict[str, Any]
+    results: dict[str, Any]
+    options: dict[str, Any]
+    notifications: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -51,7 +53,7 @@ class ScheduleSpec:
     timezone: str = "UTC"
     suspend: bool = False
     concurrencyPolicy: str = "Forbid"  # Forbid|Allow|Replace
-    startingDeadlineSeconds: Optional[int] = None
+    startingDeadlineSeconds: int | None = None
     successfulJobsHistoryLimit: int = 30
     failedJobsHistoryLimit: int = 10
     backend: BackendConfig = field(
@@ -68,10 +70,10 @@ class ScheduleSpec:
 class ScheduleStatus:
     """Runtime status."""
 
-    conditions: List[Dict[str, Any]] = field(default_factory=list)
-    lastScheduleTime: Optional[str] = None
-    lastSuccessfulTime: Optional[str] = None
-    nextScheduleTime: Optional[str] = None
+    conditions: list[dict[str, Any]] = field(default_factory=list)
+    lastScheduleTime: str | None = None
+    lastSuccessfulTime: str | None = None
+    nextScheduleTime: str | None = None
     active: int = 0
     succeeded: int = 0
     failed: int = 0
@@ -94,11 +96,96 @@ class ScanSchedule:
     )
     status: ScheduleStatus = field(default_factory=lambda: ScheduleStatus())
 
+    def to_dict(self) -> dict:
+        """Convert schedule to dictionary for JSON/YAML serialization."""
+        return asdict(self)
+
+    @classmethod
+    def from_simple_args(
+        cls,
+        name: str,
+        cron: str,
+        profile: str,
+        repos_dir: str | None = None,
+        backend: str = "github-actions",
+        labels: dict[str, str] | None = None,
+        **kwargs,
+    ) -> "ScanSchedule":
+        """Convenience factory for creating schedules with simplified args.
+
+        This method provides a simpler API for tests and CLI usage:
+
+        ScanSchedule.from_simple_args(
+            name="nightly-scan",
+            cron="0 2 * * *",
+            profile="balanced",
+            repos_dir="~/repos",
+            labels={"env": "prod"}
+        )
+
+        Instead of the verbose nested structure:
+
+        ScanSchedule(
+            metadata=ScheduleMetadata(name="nightly-scan", labels={"env": "prod"}),
+            spec=ScheduleSpec(
+                schedule="0 2 * * *",
+                jobTemplate=JobTemplateSpec(
+                    profile="balanced",
+                    targets={"repos_dir": "~/repos"},
+                    ...
+                )
+            )
+        )
+        """
+        # Build targets from simplified args
+        targets = {}
+        if repos_dir:
+            targets["repos_dir"] = repos_dir
+
+        # Extract other target types from kwargs
+        for key in ["image", "terraform_state", "url", "gitlab_repo", "k8s_context"]:
+            if key in kwargs:
+                targets[key] = kwargs.pop(key)
+
+        # Build results config
+        results = kwargs.pop("results", {"dir": "./results"})
+
+        # Build options
+        options = kwargs.pop("options", {})
+
+        # Build annotations (description stored here)
+        annotations = kwargs.pop("annotations", {})
+        if "description" in kwargs:
+            annotations["description"] = kwargs.pop("description")
+
+        # Create nested structure
+        return cls(
+            metadata=ScheduleMetadata(
+                name=name,
+                labels=labels or {},
+                annotations=annotations,
+            ),
+            spec=ScheduleSpec(
+                schedule=cron,
+                backend=BackendConfig(
+                    type=backend, config=kwargs.pop("backend_config", {})
+                ),
+                jobTemplate=JobTemplateSpec(
+                    profile=profile,
+                    targets=targets,
+                    results=results,
+                    options=options,
+                ),
+                timezone=kwargs.pop("timezone", "UTC"),
+                suspend=kwargs.pop("suspend", False),
+            ),
+        )
+
 
 class ScheduleManager:
     """Manage scan schedules with Kubernetes-inspired API."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         if config_dir is None:
             # Respect HOME environment variable for testing
             home = os.environ.get("HOME")
@@ -168,7 +255,7 @@ class ScheduleManager:
 
         return schedule
 
-    def list(self, labels: Optional[Dict[str, str]] = None) -> List[ScanSchedule]:
+    def list(self, labels: dict[str, str] | None = None) -> list[ScanSchedule]:
         """List schedules, optionally filtered by labels."""
         manifest = json.loads(self.schedules_file.read_text())
         schedules = [self._from_dict(s) for s in manifest["schedules"]]
@@ -182,7 +269,7 @@ class ScheduleManager:
 
         return schedules
 
-    def get(self, name: str) -> Optional[ScanSchedule]:
+    def get(self, name: str) -> ScanSchedule | None:
         """Get schedule by name."""
         schedules = self.list()
         for schedule in schedules:
@@ -221,11 +308,11 @@ class ScheduleManager:
         self.schedules_file.write_text(json.dumps(manifest, indent=2))
         return True
 
-    def _to_dict(self, schedule: ScanSchedule) -> Dict:
+    def _to_dict(self, schedule: ScanSchedule) -> dict:
         """Convert dataclass to dict."""
         return asdict(schedule)
 
-    def _from_dict(self, data: Dict) -> ScanSchedule:
+    def _from_dict(self, data: dict) -> ScanSchedule:
         """Convert dict to dataclass."""
         # Reconstruct nested dataclasses
         metadata = ScheduleMetadata(**data["metadata"])

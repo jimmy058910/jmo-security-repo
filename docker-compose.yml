@@ -5,8 +5,6 @@
 #   docker-compose run --rm jmo-ci            # Run CI mode with failure threshold
 #   docker-compose run --rm jmo-custom        # Custom scan with flags
 
-version: '3.8'
-
 services:
   # Full image with all tools
   jmo-scan:
@@ -42,6 +40,7 @@ services:
       - --fail-on
       - HIGH
       - --profile
+      - balanced
       - --human-logs
     environment:
       - PYTHONUNBUFFERED=1
@@ -63,9 +62,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
 
-  # Alpine variant (minimal size)
-  jmo-alpine:
-    image: ghcr.io/jimmy058910/jmo-security:alpine
+  # Balanced variant (recommended for most use cases)
+  jmo-balanced:
+    image: ghcr.io/jimmy058910/jmo-security:balanced
     volumes:
       - .:/scan:ro
       - ./results:/scan/results
@@ -76,7 +75,7 @@ services:
       - --results
       - /scan/results
       - --profile
-      - fast
+      - balanced
     environment:
       - PYTHONUNBUFFERED=1
 

@@ -1,0 +1,157 @@
+[
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-xss-001",
+    "ruleId": "CWE-79",
+    "severity": "HIGH",
+    "tool": {
+      "name": "semgrep",
+      "version": "1.45.0"
+    },
+    "location": {
+      "path": "src/app.js",
+      "startLine": 42,
+      "endLine": 42,
+      "startColumn": 5,
+      "endColumn": 30
+    },
+    "message": "Potential XSS vulnerability: User input directly rendered without sanitization",
+    "title": "Cross-Site Scripting (XSS) - Reflected",
+    "description": "The application renders user-controlled input without proper sanitization, allowing attackers to inject malicious scripts.",
+    "remediation": {
+      "description": "Use a sanitization library like DOMPurify or escape user input before rendering.",
+      "references": [
+        "https://owasp.org/www-community/attacks/xss/"
+      ]
+    },
+    "tags": ["web", "xss", "injection"],
+    "context": {
+      "snippet": "  res.send(userInput);\n",
+      "language": "javascript"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-sqli-001",
+    "ruleId": "CWE-89",
+    "severity": "CRITICAL",
+    "tool": {
+      "name": "semgrep",
+      "version": "1.45.0"
+    },
+    "location": {
+      "path": "src/database.py",
+      "startLine": 15,
+      "endLine": 15,
+      "startColumn": 8,
+      "endColumn": 45
+    },
+    "message": "SQL Injection vulnerability: Unsanitized user input in SQL query",
+    "title": "SQL Injection",
+    "description": "The application constructs SQL queries using unsanitized user input, allowing attackers to manipulate database queries.",
+    "remediation": {
+      "description": "Use parameterized queries or prepared statements instead of string concatenation.",
+      "references": [
+        "https://owasp.org/www-community/attacks/SQL_Injection"
+      ]
+    },
+    "tags": ["database", "injection", "sql"],
+    "context": {
+      "snippet": "query = f\"SELECT * FROM users WHERE id = {user_id}\"\n",
+      "language": "python"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-crypto-001",
+    "ruleId": "CWE-327",
+    "severity": "MEDIUM",
+    "tool": {
+      "name": "trivy",
+      "version": "0.48.0"
+    },
+    "location": {
+      "path": "src/auth.go",
+      "startLine": 28,
+      "endLine": 30,
+      "startColumn": 1,
+      "endColumn": 25
+    },
+    "message": "Use of weak cryptographic algorithm MD5",
+    "title": "Broken or Risky Cryptographic Algorithm",
+    "description": "MD5 is cryptographically broken and should not be used for security purposes.",
+    "remediation": {
+      "description": "Use SHA-256 or bcrypt for password hashing.",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/327.html"
+      ]
+    },
+    "tags": ["crypto", "hash"],
+    "context": {
+      "snippet": "hash := md5.Sum([]byte(password))\n",
+      "language": "go"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-path-traversal-001",
+    "ruleId": "CWE-22",
+    "severity": "HIGH",
+    "tool": {
+      "name": "semgrep",
+      "version": "1.45.0"
+    },
+    "location": {
+      "path": "src/files.js",
+      "startLine": 10,
+      "endLine": 10,
+      "startColumn": 5,
+      "endColumn": 40
+    },
+    "message": "Path traversal vulnerability: Unsanitized file path from user input",
+    "title": "Path Traversal",
+    "description": "The application uses user-controlled input to construct file paths without proper validation.",
+    "remediation": {
+      "description": "Validate and sanitize file paths, use path.resolve() and check if result is within allowed directory.",
+      "references": [
+        "https://owasp.org/www-community/attacks/Path_Traversal"
+      ]
+    },
+    "tags": ["file", "path-traversal"],
+    "context": {
+      "snippet": "fs.readFile(userPath, callback);\n",
+      "language": "javascript"
+    }
+  },
+  {
+    "schemaVersion": "1.2.0",
+    "id": "fingerprint-hardcoded-secret-001",
+    "ruleId": "trufflehog:generic-api-key",
+    "severity": "CRITICAL",
+    "tool": {
+      "name": "trufflehog",
+      "version": "3.63.0"
+    },
+    "location": {
+      "path": "config/prod.yaml",
+      "startLine": 5,
+      "endLine": 5,
+      "startColumn": 10,
+      "endColumn": 50
+    },
+    "message": "Hardcoded API key detected",
+    "title": "Hardcoded Secret",
+    "description": "API key hardcoded in configuration file, poses security risk if repository is compromised.",
+    "remediation": {
+      "description": "Move API key to environment variable and use a secrets manager.",
+      "references": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+      ]
+    },
+    "tags": ["secrets", "credentials"],
+    "context": {
+      "snippet": "api_key: sk-1234567890abcdef1234567890abcdef\n",
+      "language": "yaml"
+    }
+  }
+]

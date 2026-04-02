@@ -1,41 +1,126 @@
 #!/usr/bin/env python3
 """
-Falco adapter: normalize Falco JSON outputs to CommonFinding
-Supports:
-- Falco alert JSON output (NDJSON format)
-- Falco event logs from runtime monitoring
+Falco adapter - Maps Falco runtime security alerts to CommonFinding schema.
+
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- CNCF runtime security monitoring
+- Container and Kubernetes threat detection
+- Syscall-based behavioral analysis
+- MITRE ATT&CK mapping support
+
+Tool Version: 0.35.0+
+Output Format: NDJSON (newline-delimited JSON alerts)
+Exit Codes: 0 (success), 1+ (errors)
+
+Supported Detection Sources:
+- syscall: Kernel-level syscall monitoring
+- k8s_audit: Kubernetes audit log events
+- plugin: Falco plugins (AWS CloudTrail, GitHub, etc.)
+
+Priority Levels (Falco -> CommonFinding):
+- Emergency: CRITICAL (system-wide impact)
+- Alert: CRITICAL (immediate action required)
+- Critical: CRITICAL (critical conditions)
+- Error: HIGH (error conditions)
+- Warning: MEDIUM (warning conditions)
+- Notice: LOW (normal but significant)
+- Informational: INFO (informational messages)
+- Debug: INFO (debug-level messages)
+
+Example:
+    >>> adapter = FalcoAdapter()
+    >>> findings = adapter.parse(Path('falco.json'))
+    >>> # Returns runtime security alerts as findings
+
+See Also:
+    - https://falco.org/docs/
+    - MITRE ATT&CK for Containers
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-from scripts.core.common_finding import fingerprint, normalize_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.adapters.common import safe_load_ndjson_file
+from scripts.core.common_finding import fingerprint, map_tool_severity
+from scripts.core.plugin_api import (
+    AdapterPlugin,
+    Finding,
+    PluginMetadata,
+    adapter_plugin,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _falco_priority_to_severity(priority: str) -> str:
-    """Map Falco priority levels to CommonFinding severity."""
-    priority_lower = str(priority).lower().strip()
-    mapping = {
-        "emergency": "CRITICAL",
-        "alert": "CRITICAL",
-        "critical": "CRITICAL",
-        "error": "HIGH",
-        "warning": "MEDIUM",
-        "notice": "LOW",
-        "informational": "INFO",
-        "debug": "INFO",
-    }
-    return mapping.get(priority_lower, "MEDIUM")
+@adapter_plugin(
+    PluginMetadata(
+        name="falco",
+        version="1.0.0",
+        author="JMo Security",
+        description="Adapter for Falco runtime security monitoring",
+        tool_name="falco",
+        schema_version="1.2.0",
+        output_format="json",
+        exit_codes={0: "clean"},
+    )
+)
+class FalcoAdapter(AdapterPlugin):
+    """Adapter for Falco runtime security monitoring (plugin architecture)."""
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Return plugin metadata."""
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
+
+    def parse(self, output_path: Path) -> list[Finding]:
+        """Parse tool output and return normalized findings.
+
+        Args:
+            output_path: Path to falco.json output file
+
+        Returns:
+            List of Finding objects following CommonFinding schema v1.2.0
+        """
+        # Delegate to internal function that returns dicts
+        findings_dicts = _load_falco_internal(output_path)
+
+        # Convert dicts to Finding objects
+        findings = []
+        for f_dict in findings_dicts:
+            finding = Finding(
+                schemaVersion=f_dict.get("schemaVersion", "1.2.0"),
+                id=f_dict.get("id", ""),
+                ruleId=f_dict.get("ruleId", ""),
+                severity=f_dict.get("severity", "INFO"),
+                tool=f_dict.get("tool", {}),
+                location=f_dict.get("location", {}),
+                message=f_dict.get("message", ""),
+                title=f_dict.get("title"),
+                description=f_dict.get("description"),
+                remediation=f_dict.get("remediation"),
+                references=f_dict.get("references", []),
+                tags=f_dict.get("tags", []),
+                cvss=f_dict.get("cvss"),
+                risk=f_dict.get("risk"),
+                compliance=f_dict.get("compliance"),
+                context=f_dict.get("context"),
+                raw=f_dict.get("raw"),
+            )
+            findings.append(finding)
+
+        return findings
 
 
-def load_falco(path: str | Path) -> List[Dict[str, Any]]:
+def _load_falco_internal(path: str | Path) -> list[dict[str, Any]]:
     """Load and normalize Falco JSON output.
 
     Expected JSON structure (NDJSON - one JSON object per line):
@@ -56,37 +141,10 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
       "hostname": "host1"
     }
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
-    findings: List[Dict[str, Any]] = []
-
-    try:
-        content = p.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return []
-
-    if not content.strip():
-        return []
+    findings: list[dict[str, Any]] = []
 
     # Falco outputs NDJSON (one JSON object per line)
-    for line_num, line in enumerate(content.splitlines(), start=1):
-        line = line.strip()
-        if not line:
-            continue
-
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError as e:
-            logger.debug(
-                f"Skipping malformed JSON at line {line_num} in {path}: {e.msg} at position {e.pos}"
-            )
-            continue
-
-        if not isinstance(event, dict):
-            continue
-
+    for line_num, event in enumerate(safe_load_ndjson_file(path), start=1):
         rule = str(event.get("rule") or "Unknown Rule")
         output = str(event.get("output") or "")
         priority = str(event.get("priority") or "Warning")
@@ -114,9 +172,8 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
         if isinstance(tags_raw, list):
             tags.extend([str(t) for t in tags_raw if t])
 
-        # Map priority to severity
-        severity = _falco_priority_to_severity(priority)
-        severity_normalized = normalize_severity(severity)
+        # Map priority to severity using centralized mapping
+        severity_normalized = map_tool_severity("falco", priority)
 
         # Build message
         message = output if output else rule
@@ -137,7 +194,7 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
         description = " | ".join(description_parts)
 
         finding = {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": rule_id,
             "title": rule,
@@ -168,8 +225,6 @@ def load_falco(path: str | Path) -> List[Dict[str, Any]]:
             "raw": event,
         }
 
-        # Enrich with compliance framework mappings
-        finding = enrich_finding_with_compliance(finding)
         findings.append(finding)
 
     return findings

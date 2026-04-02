@@ -62,8 +62,11 @@ default_profile: fast
         config=str(cfg), profile_name=None, tools=None, threads=None, timeout=None
     )
     eff = jmo._effective_scan_settings(args)
-    # From default_profile 'fast'
-    assert eff["tools"] == ["semgrep"]
+    # From default_profile 'fast' - tools come from PROFILE_TOOLS registry (single source of truth),
+    # NOT from jmo.yml profiles section. Other settings (threads, retries, etc.) still merge from config.
+    from scripts.core.tool_registry import PROFILE_TOOLS
+
+    assert eff["tools"] == PROFILE_TOOLS["fast"]
     assert eff["threads"] == 1
     assert eff["timeout"] == 111  # inherited from base config
     assert eff["retries"] == 0

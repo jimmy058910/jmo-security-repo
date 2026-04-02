@@ -1,157 +1,236 @@
 #!/usr/bin/env python3
 """
-Semgrep adapter: normalize Semgrep JSON to CommonFinding
-Expected input shape often contains {"results": [ ... ]}
+Semgrep adapter - Maps Semgrep multi-language SAST JSON to CommonFinding schema.
+
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Multi-language SAST with 2500+ rules
+- Lightweight and fast pattern-matching engine
+- Semantic code analysis (dataflow, taint tracking)
+- Autofix support for automated remediation
+
+Tool Version: 1.90.0+
+Output Format: JSON with results array
+Exit Codes: 0 (clean), 1 (findings), 2 (error)
+
+Supported Languages (30+):
+- Python, JavaScript/TypeScript, Java, C/C++, Go
+- Ruby, PHP, Kotlin, Swift, Rust, Scala
+- C#, Lua, OCaml, R, Elixir, Terraform
+- Dockerfile, YAML, JSON, XML, HTML
+
+Registry Rule Categories:
+- security: OWASP Top 10, CWE coverage
+- best-practices: Code quality and patterns
+- correctness: Bug detection
+- performance: Performance anti-patterns
+- secrets: Hardcoded credentials (see semgrep_secrets_adapter)
+
+Severity Mapping (Semgrep -> CommonFinding):
+- ERROR: HIGH
+- WARNING: MEDIUM
+- INFO: LOW
+
+Autofix Support:
+- When available, findings include fix suggestions
+- Returned as remediation.fix with remediation.steps
+
+Example:
+    >>> adapter = SemgrepAdapter()
+    >>> findings = adapter.parse(Path('semgrep.json'))
+    >>> # Returns SAST findings with CWE/OWASP enrichment
+
+See Also:
+    - https://semgrep.dev/
+    - Semgrep Registry (semgrep.dev/explore)
+    - semgrep_secrets_adapter.py for secrets-focused scanning
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import (
     extract_code_snippet,
-    fingerprint,
-    normalize_severity,
+    map_tool_severity,
 )
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.plugin_api import (
+    AdapterPlugin,
+    Finding,
+    PluginMetadata,
+    adapter_plugin,
+)
 
 
-SEMGREP_TO_SEV = {
-    "ERROR": "HIGH",
-    "WARNING": "MEDIUM",
-    "INFO": "LOW",
-}
+@adapter_plugin(
+    PluginMetadata(
+        name="semgrep",
+        version="1.0.0",
+        author="JMo Security",
+        description="Adapter for Semgrep multi-language SAST scanner",
+        tool_name="semgrep",
+        schema_version="1.2.0",
+        output_format="json",
+        exit_codes={0: "clean", 1: "findings", 2: "error"},
+    )
+)
+class SemgrepAdapter(AdapterPlugin):
+    """Semgrep SAST scanner adapter (plugin architecture)."""
 
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Return plugin metadata."""
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
 
-def load_semgrep(path: str | Path) -> List[Dict[str, Any]]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    raw = p.read_text(encoding="utf-8", errors="ignore").strip()
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return []
+    def parse(self, output_path: Path) -> list[Finding]:
+        """Parse Semgrep JSON output and return normalized findings.
 
-    results = data.get("results") if isinstance(data, dict) else None
-    if not isinstance(results, list):
-        return []
+        Args:
+            output_path: Path to semgrep.json output file
 
-    out: List[Dict[str, Any]] = []
-    for r in results:
-        if not isinstance(r, dict):
-            continue
-        check_id = str(r.get("check_id") or r.get("ruleId") or r.get("id") or "SEMGR")
-        msg = (
-            (r.get("extra") or {}).get("message")
-            or r.get("message")
-            or "Semgrep finding"
+        Returns:
+            List of Finding objects following CommonFinding schema v1.2.0
+        """
+        data = safe_load_json_file(output_path, default=None)
+        if data is None:
+            return []
+
+        results = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results, list):
+            return []
+
+        findings: list[Finding] = []
+        tool_version = str(
+            (data.get("version") if isinstance(data, dict) else None) or "unknown"
         )
-        sev_raw = (r.get("extra") or {}).get("severity") or r.get("severity")
-        sev_norm = SEMGREP_TO_SEV.get(str(sev_raw).upper(), None)
-        severity = normalize_severity(sev_norm or str(sev_raw))
-        path_str = r.get("path") or (r.get("location") or {}).get("path") or ""
-        start_line = 0
-        if isinstance(r.get("start"), dict) and isinstance(r["start"].get("line"), int):
-            start_line = r["start"]["line"]
-        else:
-            line_val = (r.get("start") or {}).get("line")
-            if isinstance(line_val, int):
-                start_line = line_val
-        loc = r.get("location")
-        if (
-            isinstance(loc, dict)
-            and isinstance(loc.get("start"), dict)
-            and isinstance(loc["start"].get("line"), int)
-        ):
-            start_line = loc["start"]["line"]
-        fid = fingerprint("semgrep", check_id, path_str, start_line, msg)
 
-        # Extract v1.1.0 fields
-        extra = r.get("extra", {})
+        for r in results:
+            if not isinstance(r, dict):
+                continue
 
-        # Remediation with autofix
-        remediation: str | dict[str, Any] = "Review and remediate per rule guidance."
-        autofix = extra.get("fix")
-        if autofix:
-            remediation = {
-                "summary": msg,
-                "fix": autofix,
-                "steps": [
+            # Extract rule ID
+            check_id = str(
+                r.get("check_id") or r.get("ruleId") or r.get("id") or "SEMGR"
+            )
+
+            # Extract message
+            msg = (
+                (r.get("extra") or {}).get("message")
+                or r.get("message")
+                or "Semgrep finding"
+            )
+
+            # Extract and normalize severity using centralized mapping
+            sev_raw = (r.get("extra") or {}).get("severity") or r.get("severity")
+            severity = map_tool_severity("semgrep", str(sev_raw) if sev_raw else "")
+
+            # Extract path
+            path_str = r.get("path") or (r.get("location") or {}).get("path") or ""
+
+            # Extract line number (multiple fallbacks)
+            start_line = 0
+            if isinstance(r.get("start"), dict) and isinstance(
+                r["start"].get("line"), int
+            ):
+                start_line = r["start"]["line"]
+            else:
+                line_val = (r.get("start") or {}).get("line")
+                if isinstance(line_val, int):
+                    start_line = line_val
+
+            # Alternative location structure
+            loc = r.get("location")
+            if (
+                isinstance(loc, dict)
+                and isinstance(loc.get("start"), dict)
+                and isinstance(loc["start"].get("line"), int)
+            ):
+                start_line = loc["start"]["line"]
+
+            # Extract v1.1.0 fields
+            extra = r.get("extra", {})
+
+            # Remediation with autofix
+            # v1.1.0: Return dict for autofix, string otherwise
+            remediation: str | dict[str, Any] = (
+                "Review and remediate per rule guidance."
+            )
+            autofix = extra.get("fix")
+            if autofix:
+                remediation_steps = [
                     "Apply the suggested fix above",
                     "Test the changes",
                     "Commit the fix",
-                ],
-            }
+                ]
+                remediation = {
+                    "fix": autofix,
+                    "steps": remediation_steps,
+                }
 
-        # Risk metadata (CWE, OWASP, confidence)
-        risk = {}
-        metadata = extra.get("metadata", {})
-        if metadata:
-            # CWE
-            cwe_list = metadata.get("cwe", [])
-            if isinstance(cwe_list, list) and cwe_list:
-                risk["cwe"] = cwe_list
-            elif isinstance(cwe_list, str):
-                risk["cwe"] = [cwe_list]
+            # Risk metadata (CWE, OWASP, confidence)
+            risk = {}
+            metadata = extra.get("metadata", {})
+            if metadata:
+                # CWE
+                cwe_list = metadata.get("cwe", [])
+                if isinstance(cwe_list, list) and cwe_list:
+                    risk["cwe"] = cwe_list
+                elif isinstance(cwe_list, str):
+                    risk["cwe"] = [cwe_list]
 
-            # OWASP
-            owasp = metadata.get("owasp", [])
-            if isinstance(owasp, list) and owasp:
-                risk["owasp"] = owasp
-            elif isinstance(owasp, str):
-                risk["owasp"] = [owasp]
+                # OWASP
+                owasp = metadata.get("owasp", [])
+                if isinstance(owasp, list) and owasp:
+                    risk["owasp"] = owasp
+                elif isinstance(owasp, str):
+                    risk["owasp"] = [owasp]
 
-            # Confidence
-            confidence = metadata.get("confidence", "").upper()
-            if confidence in ["HIGH", "MEDIUM", "LOW"]:
-                risk["confidence"] = confidence
+                # Confidence
+                confidence = metadata.get("confidence", "").upper()
+                if confidence in ["HIGH", "MEDIUM", "LOW"]:
+                    risk["confidence"] = confidence
 
-            # Likelihood/Impact
-            likelihood = metadata.get("likelihood", "").upper()
-            if likelihood in ["HIGH", "MEDIUM", "LOW"]:
-                risk["likelihood"] = likelihood
-            impact = metadata.get("impact", "").upper()
-            if impact in ["HIGH", "MEDIUM", "LOW"]:
-                risk["impact"] = impact
+                # Likelihood/Impact
+                likelihood = metadata.get("likelihood", "").upper()
+                if likelihood in ["HIGH", "MEDIUM", "LOW"]:
+                    risk["likelihood"] = likelihood
+                impact = metadata.get("impact", "").upper()
+                if impact in ["HIGH", "MEDIUM", "LOW"]:
+                    risk["impact"] = impact
 
-        # Code context
-        context = None
-        if path_str and start_line:
-            context = extract_code_snippet(path_str, start_line, context_lines=2)
+            # Code context
+            context = None
+            if path_str and start_line:
+                context = extract_code_snippet(path_str, start_line, context_lines=2)
 
-        finding: Dict[str, Any] = {
-            "schemaVersion": "1.1.0",
-            "id": fid,
-            "ruleId": check_id,
-            "title": check_id,
-            "message": msg,
-            "description": msg,
-            "severity": severity,
-            "tool": {
-                "name": "semgrep",
-                "version": str(
-                    (data.get("version") if isinstance(data, dict) else None)
-                    or "unknown"
-                ),
-            },
-            "location": {"path": path_str, "startLine": start_line},
-            "remediation": remediation,
-            "tags": ["sast"],
-            "raw": r,
-        }
+            # Create Finding object
+            finding = Finding(
+                schemaVersion="1.2.0",
+                id="",  # Will be set by fingerprint
+                ruleId=check_id,
+                title=check_id,
+                message=msg,
+                description=msg,
+                severity=severity,
+                tool={"name": "semgrep", "version": tool_version},
+                location={"path": path_str, "startLine": start_line},
+                remediation=remediation,
+                tags=["sast"],
+                context=context,
+                risk=risk if risk else None,
+                raw=r,
+            )
 
-        # Add optional v1.1.0 fields if present
-        if context:
-            finding["context"] = context
-        if risk:
-            finding["risk"] = risk
+            # Generate fingerprint
+            finding.id = self.get_fingerprint(finding)
 
-        # Enrich with compliance framework mappings
-        finding = enrich_finding_with_compliance(finding)
-        out.append(finding)
-    return out
+            findings.append(finding)
+
+        return findings

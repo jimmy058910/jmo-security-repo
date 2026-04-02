@@ -1,12 +1,13 @@
 # Version Management Guide
 
-**Status:** ✅ Implemented (v0.6.1+)
+**Status:** ✅ Implemented
 **Related:** [ROADMAP.md #14](../ROADMAP.md#1-tool-version-consistency--automated-dependency-management), [Issue #46](https://github.com/jimmy058910/jmo-security-repo/issues/46), [Issue #12](https://github.com/jimmy058910/jmo-security-repo/issues/12)
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [The 5-Layer System](#the-5-layer-system)
+- [Unified CLI/Docker Versioning (v1.0.0)](#unified-clidocker-versioning-v100)
 - [Quick Start](#quick-start)
 - [Central Version Registry](#central-version-registry)
 - [Automation Scripts](#automation-scripts)
@@ -126,7 +127,98 @@ Tracks:
 **Does NOT track:**
 
 - ❌ Binary tools (trivy, trufflehog, syft) — use `update_versions.py` instead
-- ❌ Custom installations (ZAP, AFL++, Falco) — manual updates required
+- ❌ Custom installations (AFL++, Falco) — manual updates required
+
+---
+
+## Unified CLI/Docker Versioning (v1.0.0)
+
+Starting with v1.0.0, CLI and Docker tool installations use the **same pinned versions** from `versions.yaml`. This ensures reproducible scans regardless of installation method.
+
+### What Changed
+
+**Before v1.0.0:**
+
+| Method | Tool Versions | Problem |
+|--------|--------------|---------|
+| Docker | Pinned (hardcoded in Dockerfile) | Deterministic |
+| CLI (`jmo tools install`) | Latest from GitHub | Non-reproducible |
+
+**After v1.0.0:**
+
+| Method | Tool Versions | Benefit |
+|--------|--------------|---------|
+| Docker | Pinned from versions.yaml | Deterministic |
+| CLI (`jmo tools install`) | Pinned from versions.yaml | **Now deterministic!** |
+
+### Version Drift Detection
+
+JMo now detects when installed tool versions don't match `versions.yaml`:
+
+```bash
+# Check version status
+jmo tools check --profile balanced
+
+# View drift details
+jmo tools outdated
+
+# Update tools to match versions.yaml
+jmo tools update
+```
+
+### Pre-Scan Version Checks
+
+JMo automatically checks for version drift before scans:
+
+| Context | Behavior | Rationale |
+|---------|----------|-----------|
+| `jmo scan` (CLI) | **Warn** — logs warning, continues | Non-blocking for speed |
+| `jmo wizard` | **Interactive** — prompts user | Users already in guided flow |
+| `jmo ci --strict-versions` | **Fail** — exits with error | Reproducibility required |
+| Docker container | **N/A** — tools baked in | Already deterministic |
+
+**Example output (version drift detected):**
+
+```text
+WARNING: Version drift detected for 2 tool(s):
+  trivy: installed=0.57.0 expected=0.67.2 [CRITICAL]
+  semgrep: installed=1.90.0 expected=1.94.0
+
+Run 'jmo tools update' to synchronize versions
+```
+
+### CI Strict Mode
+
+For CI/CD pipelines requiring reproducibility:
+
+```bash
+# Fail if versions don't match versions.yaml
+jmo ci --repo . --strict-versions --fail-on HIGH
+
+# Example GitHub Actions usage
+- name: Security Scan (Strict)
+  run: jmo ci --repo . --strict-versions --fail-on HIGH
+```
+
+**Exit codes:**
+
+- `0` — Scan completed, no findings above threshold
+- `1` — Version drift detected (with `--strict-versions`) OR findings above threshold
+
+### Migration from Pre-v1.0.0
+
+If you installed tools before v1.0.0:
+
+```bash
+# Step 1: Check current state
+jmo tools check --profile balanced
+
+# Step 2: Update all tools to versions.yaml
+jmo tools update
+
+# Step 3: Verify
+jmo tools check --profile balanced
+```
 
 ---
 
@@ -383,6 +475,20 @@ All PRs automatically validate:
 python3 scripts/dev/update_versions.py --sync --dry-run || exit 1
 ```
 
+### Strict Version Enforcement (v1.0.0)
+
+For reproducible CI builds, use `--strict-versions`:
+
+```yaml
+# .github/workflows/security-scan.yml
+- name: Security Scan (Reproducible)
+  run: |
+    jmo tools check --profile balanced
+    jmo ci --repo . --strict-versions --fail-on HIGH
+```
+
+This ensures scans use exactly the versions specified in `versions.yaml`.
+
 ---
 
 ## Dependabot Configuration
@@ -526,7 +632,7 @@ gh pr create --title "deps(tools): monthly tool updates (Jan 2025)"
 Wait for:
 
 - ✅ version-check.yml validates consistency
-- ✅ ci.yml tests pass (Ubuntu/macOS × Python 3.10/3.11/3.12)
+- ✅ ci.yml tests pass (Ubuntu/macOS/Windows × Python 3.12/3.13)
 - ✅ Docker builds succeed (multi-arch: amd64, arm64)
 
 ---
@@ -620,6 +726,11 @@ python3 scripts/dev/update_versions.py --sync
 python3 scripts/dev/update_versions.py --report          # View current versions
 python3 scripts/dev/update_versions.py --check-latest    # Check for updates
 
+# === CLI Tool Management (v1.0.0) ===
+jmo tools check --profile balanced                       # Check tool status
+jmo tools outdated                                       # View version drift
+jmo tools update                                         # Update to versions.yaml
+
 # === Update Workflow ===
 python3 scripts/dev/update_versions.py --tool <name> --version <X.Y.Z>
 python3 scripts/dev/update_versions.py --sync
@@ -628,6 +739,7 @@ git commit -m "deps(tools): update <name> to vX.Y.Z"
 
 # === CI Validation ===
 python3 scripts/dev/update_versions.py --sync --dry-run  # Check consistency
+jmo ci --repo . --strict-versions --fail-on HIGH         # Reproducible CI scan
 
 # === Advanced ===
 python3 scripts/dev/update_versions.py --check-outdated --create-issues  # Auto-issue
@@ -635,8 +747,7 @@ python3 scripts/dev/update_versions.py --check-outdated --create-issues  # Auto-
 
 ---
 
-**Last updated:** 2025-01-16
+**Last Updated:** February 2026
 **Maintainer:** jimmy058910
-**Status:** Production-ready
 
 **Documentation Hub:** [docs/index.md](index.md) | **Project Home:** [README.md](../README.md)

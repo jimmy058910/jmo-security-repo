@@ -18,13 +18,14 @@ Usage:
     python3 scripts/dev/update_dependencies.py --validate
 
 Features:
-    - Python version validation (enforces 3.10+)
-    - Auto-detection of Python 3.10+ interpreters
+    - Python version validation (enforces 3.12+)
+    - Auto-detection of Python 3.12+ interpreters
     - Prevents accidental downgrades
     - Detects dependency conflicts
     - Provides upgrade preview before applying
     - CI-compatible (exit codes for automation)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,7 +34,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # ANSI colors for output
 GREEN = "\033[92m"
@@ -43,15 +43,13 @@ BLUE = "\033[94m"
 RESET = "\033[0m"
 
 
-def find_python_310_plus() -> Optional[str]:
-    """Find Python 3.10+ interpreter on the system."""
+def find_python_312_plus() -> str | None:
+    """Find Python 3.12+ interpreter on the system."""
     # Candidates to try (in order of preference)
     candidates = [
-        "python3.11",  # Most common in CI/modern systems
-        "python3.10",  # Minimum required version
-        "python3.12",  # Latest stable
-        "python3.13",  # Future-proofing
-        "python3",  # Default (may be 3.8/3.9)
+        "python3.12",  # Minimum required version
+        "python3.13",  # Latest stable
+        "python3",  # Default (may be older)
     ]
 
     for candidate in candidates:
@@ -60,12 +58,12 @@ def find_python_310_plus() -> Optional[str]:
                 [candidate, "--version"], capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
-                # Extract version from "Python 3.11.13"
+                # Extract version from "Python 3.12.x"
                 version_str = result.stdout.strip()
                 if "Python 3." in version_str:
                     version_parts = version_str.split("Python 3.")[1].split(".")
                     minor = int(version_parts[0])
-                    if minor >= 10:
+                    if minor >= 12:
                         return candidate
         except (FileNotFoundError, subprocess.TimeoutExpired, ValueError, IndexError):
             continue
@@ -73,20 +71,20 @@ def find_python_310_plus() -> Optional[str]:
     return None
 
 
-def get_python_version() -> Tuple[int, int]:
+def get_python_version() -> tuple[int, int]:
     """Get current Python version as (major, minor)."""
     return (sys.version_info.major, sys.version_info.minor)
 
 
 def validate_python_version(
-    min_major: int = 3, min_minor: int = 10, auto_reexec: bool = True
+    min_major: int = 3, min_minor: int = 12, auto_reexec: bool = True
 ) -> bool:
     """Validate Python version meets minimum requirements.
 
     Args:
         min_major: Minimum Python major version
         min_minor: Minimum Python minor version
-        auto_reexec: If True and current Python is too old, re-exec with Python 3.10+
+        auto_reexec: If True and current Python is too old, re-exec with Python 3.12+
 
     Returns:
         True if version is valid, False otherwise
@@ -94,32 +92,32 @@ def validate_python_version(
     major, minor = get_python_version()
     if major < min_major or (major == min_major and minor < min_minor):
         if auto_reexec:
-            # Try to find Python 3.10+ and re-execute
-            python_310_plus = find_python_310_plus()
-            if python_310_plus:
+            # Try to find Python 3.12+ and re-execute
+            python_312_plus = find_python_312_plus()
+            if python_312_plus:
                 print(
-                    f"{YELLOW}[warn]{RESET} Python {major}.{minor} detected, re-executing with {python_310_plus}..."
+                    f"{YELLOW}[warn]{RESET} Python {major}.{minor} detected, re-executing with {python_312_plus}..."
                 )
                 # Re-execute this script with the correct Python version
-                os.execvp(python_310_plus, [python_310_plus] + sys.argv)
+                os.execvp(python_312_plus, [python_312_plus] + sys.argv)
                 # execvp never returns (replaces current process)
             else:
                 print(
                     f"{RED}[error]{RESET} Python {min_major}.{min_minor}+ required (detected {major}.{minor})"
                 )
-                print(f"{YELLOW}[hint]{RESET} No Python 3.10+ found on system")
+                print(f"{YELLOW}[hint]{RESET} No Python 3.12+ found on system")
                 print(
-                    f"{YELLOW}[hint]{RESET} Install: sudo apt install python3.11  # Ubuntu/Debian"
+                    f"{YELLOW}[hint]{RESET} Install: sudo apt install python3.12  # Ubuntu/Debian"
                 )
-                print(f"{YELLOW}[hint]{RESET} Or: brew install python@3.11  # macOS")
+                print(f"{YELLOW}[hint]{RESET} Or: brew install python@3.12  # macOS")
                 return False
         else:
             print(
                 f"{RED}[error]{RESET} Python {min_major}.{min_minor}+ required (detected {major}.{minor})"
             )
-            print(f"{YELLOW}[hint]{RESET} Use: python3.10 -m pip install pip-tools")
+            print(f"{YELLOW}[hint]{RESET} Use: python3.12 -m pip install pip-tools")
             print(
-                f"{YELLOW}[hint]{RESET} Then: python3.10 scripts/dev/update_dependencies.py --compile"
+                f"{YELLOW}[hint]{RESET} Then: python3.12 scripts/dev/update_dependencies.py --compile"
             )
             return False
     print(
@@ -128,7 +126,7 @@ def validate_python_version(
     return True
 
 
-def check_requirements_txt_python_version(req_file: Path) -> Tuple[bool, str]:
+def check_requirements_txt_python_version(req_file: Path) -> tuple[bool, str]:
     """Check Python version used to compile requirements-dev.txt."""
     if not req_file.exists():
         return False, "File not found"
@@ -199,8 +197,34 @@ def run_pip_compile(upgrade: bool = False, repo_root: Path | None = None) -> int
         return 1
 
 
-def check_pip_conflicts() -> Tuple[bool, List[str]]:
-    """Check for dependency conflicts using pip check."""
+def check_pip_conflicts() -> tuple[bool, list[str]]:
+    """Check for dependency conflicts using pip check.
+
+    Note: pip check reports conflicts in the *installed* environment.
+    Many reported conflicts are theoretical — tools like checkov, prowler,
+    and semgrep run in isolated venvs at runtime and never share a Python
+    environment. Dev-only packages (pip-audit, py-ocsf-models) also don't
+    affect production.
+    """
+    # Tools that run in isolated venvs — conflicts involving these are safe
+    ISOLATED_VENV_PACKAGES = {
+        "checkov",
+        "prowler",
+        "semgrep",
+        "oci",
+        "bc-python-hcl2",
+        "bc-detect-secrets",
+        "bc-jsonpath-ng",
+        "alibabacloud",  # prowler transitive dep (alibabacloud-tea-openapi)
+    }
+    # Dev-only packages — conflicts involving these don't affect production
+    DEV_ONLY_PACKAGES = {
+        "pip-audit",
+        "py-ocsf-models",
+        "pip-tools",
+        "pre-commit",
+    }
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "check"], capture_output=True, text=True
@@ -211,18 +235,46 @@ def check_pip_conflicts() -> Tuple[bool, List[str]]:
             return True, []
         else:
             conflicts = result.stdout.strip().split("\n")
-            print(
-                f"{RED}[error]{RESET} {len(conflicts)} dependency conflict(s) detected:"
-            )
+            safe_conflicts = []
+            real_conflicts = []
+
             for conflict in conflicts:
-                print(f"  {RED}•{RESET} {conflict}")
-            return False, conflicts
+                conflict_lower = conflict.lower()
+                if any(pkg in conflict_lower for pkg in ISOLATED_VENV_PACKAGES):
+                    safe_conflicts.append(conflict)
+                elif any(pkg in conflict_lower for pkg in DEV_ONLY_PACKAGES):
+                    safe_conflicts.append(conflict)
+                else:
+                    real_conflicts.append(conflict)
+
+            # Report safe conflicts as warnings, not errors
+            if safe_conflicts:
+                print(
+                    f"{YELLOW}[info]{RESET} {len(safe_conflicts)} safe conflict(s) "
+                    f"(isolated venv or dev-only packages):"
+                )
+                for conflict in safe_conflicts:
+                    print(f"  {YELLOW}•{RESET} {conflict}")
+
+            if real_conflicts:
+                print(
+                    f"{RED}[error]{RESET} {len(real_conflicts)} dependency conflict(s) detected:"
+                )
+                for conflict in real_conflicts:
+                    print(f"  {RED}•{RESET} {conflict}")
+            else:
+                print(
+                    f"{GREEN}[ok]{RESET} All {len(conflicts)} conflict(s) are in "
+                    f"isolated-venv or dev-only packages (safe to ignore)"
+                )
+
+            return len(real_conflicts) == 0, conflicts
     except Exception as e:
         print(f"{RED}[error]{RESET} Failed to run pip check: {e}")
         return False, [str(e)]
 
 
-def check_outdated_packages() -> List[Dict[str, str]]:
+def check_outdated_packages() -> list[dict[str, str]]:
     """Check for outdated packages using pip list --outdated."""
     try:
         result = subprocess.run(
@@ -255,10 +307,10 @@ def check_outdated_packages() -> List[Dict[str, str]]:
 
 def compare_requirements(
     old_file: Path, new_file: Path
-) -> Tuple[List[str], List[str], List[str]]:
+) -> tuple[list[str], list[str], list[str]]:
     """Compare old and new requirements files to detect changes."""
 
-    def parse_requirements(file_path: Path) -> Dict[str, str]:
+    def parse_requirements(file_path: Path) -> dict[str, str]:
         """Parse requirements file into dict of package: version."""
         packages: dict[str, str] = {}
         if not file_path.exists():
@@ -367,7 +419,7 @@ CI Usage:
 
     # Validate Python version for compilation
     if args.compile or args.upgrade:
-        if not validate_python_version(min_major=3, min_minor=10):
+        if not validate_python_version(min_major=3, min_minor=12):
             return 1
 
     # Validation
@@ -377,13 +429,18 @@ CI Usage:
         # Check Python version in requirements-dev.txt
         found, version_str = check_requirements_txt_python_version(req_file)
         if found:
-            if "3.8" in version_str or "3.9" in version_str:
+            if (
+                "3.8" in version_str
+                or "3.9" in version_str
+                or "3.10" in version_str
+                or "3.11" in version_str
+            ):
                 print(
                     f"{RED}[error]{RESET} requirements-dev.txt compiled with {version_str}"
                 )
-                print(f"{YELLOW}[hint]{RESET} Must be Python 3.10+")
+                print(f"{YELLOW}[hint]{RESET} Must be Python 3.12+")
                 print(
-                    f"{YELLOW}[fix]{RESET} Run: python3.10 scripts/dev/update_dependencies.py --compile"
+                    f"{YELLOW}[fix]{RESET} Run: python3.12 scripts/dev/update_dependencies.py --compile"
                 )
                 exit_code = 1
             else:

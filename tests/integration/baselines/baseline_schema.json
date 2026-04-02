@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jmo-security.dev/schemas/baseline.v1.json",
+  "title": "JMo Security Baseline Schema",
+  "description": "Schema for vulnerability baseline files used in integration testing",
+  "type": "object",
+  "required": ["metadata", "expected_findings", "tolerance"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Information about the baseline target and generation",
+      "required": ["target", "version", "generated", "profile"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Target repository or application name (e.g., 'juice-shop/juice-shop')"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the target at baseline generation time"
+        },
+        "generated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when baseline was generated"
+        },
+        "profile": {
+          "type": "string",
+          "enum": ["fast", "slim", "balanced", "deep"],
+          "description": "JMo scan profile used for baseline generation"
+        },
+        "tools_used": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of security tools that produced findings"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes about this baseline"
+        }
+      }
+    },
+    "expected_findings": {
+      "type": "array",
+      "description": "List of vulnerability categories expected to be detected",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "severity", "category"],
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "CWE ID or rule identifier (e.g., 'CWE-79', 'sql-injection')"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+            "description": "Expected severity level"
+          },
+          "category": {
+            "type": "string",
+            "description": "Vulnerability category (e.g., 'xss', 'sqli', 'path-traversal')"
+          },
+          "min_count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Minimum number of findings expected"
+          },
+          "max_count": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Maximum number of findings expected (optional)"
+          },
+          "path_pattern": {
+            "type": "string",
+            "description": "Regex pattern for expected file paths"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what this finding represents"
+          }
+        }
+      }
+    },
+    "tolerance": {
+      "type": "object",
+      "description": "Acceptable variance thresholds for baseline comparison",
+      "properties": {
+        "missing_critical": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Max allowed missing CRITICAL findings (recommend 0)"
+        },
+        "missing_high": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2,
+          "description": "Max allowed missing HIGH findings"
+        },
+        "missing_medium": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 5,
+          "description": "Max allowed missing MEDIUM findings"
+        },
+        "extra_findings_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.3,
+          "description": "Max ratio of extra findings to expected (0.3 = 30% more allowed)"
+        }
+      }
+    }
+  }
+}

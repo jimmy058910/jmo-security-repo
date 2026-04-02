@@ -4,29 +4,47 @@ This document explains how to run tests, coverage, linting, and selected end-to-
 
 ## Prerequisites
 
-- Python 3.11 recommended (project venv is configured automatically by the editor)
+- Python 3.12+ required (project venv is configured automatically by the editor)
 - Install dev dependencies:
 
 ```bash
 make dev-deps
 ```
 
-- Optional linters/tools for full local CI:
+- Optional security tools for full local CI:
 
 ```bash
-make tools  # installs shellcheck, shfmt, ruff, bandit, and curated scanners
+jmo tools install --profile balanced  # Install security scanners
 ```
 
 ## Unit & Integration Tests
 
-Run the full test suite with coverage:
+Run the test suite with coverage:
 
 ```bash
-make test
+# Recommended: Parallel execution (3-5x faster)
+make test-fast               # Parallel, no coverage, skip slow (fastest dev loop)
+make test-parallel           # Parallel with coverage (CI-like)
+pytest -n auto tests/        # Direct pytest with auto-detected workers
+
+# Sequential execution
+make test                    # Sequential with coverage (original)
+pytest tests/                # ALL tests including slow e2e
+pytest tests/ -m "slow"      # Only slow tests
 ```
 
-- Outputs show a coverage summary (threshold in CI is 85%).
-- Coverage config is defined in `.coveragerc`.
+- **Parallel tests** use `pytest-xdist` (`-n auto`) to utilize all CPU cores
+- `make test-fast` is recommended for development (~5 min vs ~15-20 min sequential)
+- `make test` excludes `smoke` and `requires_tools` markers by default (matches CI behavior)
+- Outputs show a coverage summary (threshold in CI is 85%)
+- Coverage config is defined in `pyproject.toml` under `[tool.coverage]`
+
+### Test Configuration
+
+- **pytest-xdist**: Parallel test execution using `-n auto` (auto-detects CPU cores). Install: `pip install pytest-xdist`.
+- **pytest-timeout**: All tests have a 120-second timeout (configurable in `pyproject.toml`). Use `@pytest.mark.timeout(300)` for legitimately slow tests.
+- **Slow tests**: Tests marked with `@pytest.mark.slow` can be excluded with `-m "not slow"`.
+- **Cross-platform**: Tests must pass on Windows, Linux, and macOS. See `CLAUDE.md` for cross-platform testing guidelines.
 
 ## Linting & Security Checks
 
@@ -37,7 +55,18 @@ make lint    # lint (shellcheck, ruff, bandit)
 
 Notes:
 
-- If ruff/bandit/shellcheck are missing, install via `make tools`.
+- If ruff/bandit/shellcheck are missing, install via `pip install ruff bandit` or `jmo tools install`.
+
+## Optional Test Dependencies
+
+Some test modules require optional dependencies and will be **automatically skipped** if not installed:
+
+| Test Module | Required Package | Install Command |
+|-------------|------------------|-----------------|
+| `tests/jmo_mcp/` | MCP SDK + pydantic v2 | `pip install "jmo-security[mcp]"` or `pip install "mcp[cli]>=1.0.0" "pydantic>=2.11.0"` |
+| `tests/adapters/test_adapter_fuzzing.py` | Hypothesis | `pip install hypothesis` |
+
+**Note:** If you see collection errors like `cannot import name 'TypeAdapter' from 'pydantic'`, upgrade pydantic: `pip install "pydantic>=2.11.0"`
 
 ## End-to-End Smoke (optional)
 
@@ -57,97 +86,82 @@ python3 scripts/cli/jmo.py report ./results --profile --human-logs
 xdg-open results/summaries/dashboard.html  # mac: open
 ```
 
-## Comprehensive E2E Test Suite (v0.6.0+)
+## Comprehensive E2E Test Suite
 
-For thorough validation across all target types, OS platforms, and execution methods, use the comprehensive test suite:
+The E2E suite lives in `tests/e2e/` and uses pytest. All tests replaced the legacy bash scripts after parity was confirmed.
 
 ### Quick Start
 
 ```bash
-# Run full test suite for your OS (Ubuntu/macOS/Windows WSL2)
-bash tests/e2e/run_comprehensive_tests.sh
+# Run full E2E suite
+make test-e2e
 
-# Run specific test
-bash tests/e2e/run_comprehensive_tests.sh --test U1
+# Run E2E suite with JSON report (for CI/archiving)
+make test-e2e-report
 
-# Generate HTML report from results
-python tests/e2e/generate_report.py /tmp/jmo-comprehensive-tests-*/test-results.csv
+# Run dashboard visual tests (requires Playwright)
+make test-e2e-visual
+
+# Run specific workflow file
+pytest tests/e2e/test_scan_workflows.py -v
+
+# Run specific test by ID (e.g., U1, U9, A1)
+pytest tests/e2e/ -k "U1" -v
+
+# Run Docker-based tests only
+pytest tests/e2e/ -m docker -v
+
+# Skip Docker tests (default for local dev)
+pytest tests/e2e/ -m "not docker" -v
 ```
 
-### Test Matrix
+### Test Files
 
-The comprehensive suite tests **6 target types × 3 OS × 3 execution methods**:
-
-**Target Types:**
-
-- Repository scanning (existing functionality)
-- Container image scanning (v0.6.0)
-- IaC file scanning (v0.6.0)
-- Web app/API scanning (v0.6.0)
-- GitLab repository scanning (v0.6.0)
-- Kubernetes cluster scanning (v0.6.0)
-
-**Operating Systems:**
-
-- Ubuntu 22.04 (12 tests)
-- macOS 14 Sonoma (6 tests)
-- Windows 11 WSL2 (4 tests)
-
-**Execution Methods:**
-
-- Native CLI (`jmo` command)
-- Wizard (`jmotools wizard`)
-- Docker containers (full/slim variants)
-
-### Test Suites
-
-**Ubuntu Test Suite (U1-U12):**
-
-```bash
-# Single repo scan (native CLI)
-bash tests/e2e/run_comprehensive_tests.sh --test U1
-
-# Container image scan
-bash tests/e2e/run_comprehensive_tests.sh --test U2
-
-# Multi-target scan (repo + image + IaC)
-bash tests/e2e/run_comprehensive_tests.sh --test U5
-
-# CI mode with severity gating
-bash tests/e2e/run_comprehensive_tests.sh --test U12
-
-# Docker-based scanning
-bash tests/e2e/run_comprehensive_tests.sh --test U9
-```
-
-**Advanced Tests (A1-A3):**
-
-```bash
-# GitLab scanning (requires GITLAB_TOKEN)
-export GITLAB_TOKEN=your-token
-bash tests/e2e/run_comprehensive_tests.sh --test A1
-
-# Kubernetes scanning (requires kubectl + cluster)
-bash tests/e2e/run_comprehensive_tests.sh --test A2
-
-# Deep profile with all 11 tools
-bash tests/e2e/run_comprehensive_tests.sh --test A3
-```
+| File | Tests | Coverage |
+|------|-------|---------|
+| `test_scan_workflows.py` | U1-U6, M1-M3, W1 | Repo, image, IaC, multi-target, wizard scans |
+| `test_wizard_workflows.py` | M4, W2 | Wizard emit-script, non-interactive wizard |
+| `test_ci_gating.py` | U12 | CI mode exit codes, severity thresholds |
+| `test_advanced_targets.py` | A1-A3 | GitLab, Kubernetes, deep profile |
+| `test_docker_workflows.py` | U9-U11, M5-M6, W3-W4 | Docker-based scanning variants |
+| `test_dashboard_visual.py` | - | Playwright visual tests for HTML dashboard |
+| `test_cross_platform.py` | - | Cross-platform compatibility |
+| `test_linux_specific.py` | - | Linux-only features |
+| `test_macos_specific.py` | - | macOS-only features |
+| `test_windows_specific.py` | - | Windows-only features |
 
 ### Test Fixtures
 
-The test suite uses realistic fixtures with known security issues:
+Fixtures live in `tests/e2e/fixtures/` and are loaded automatically via `conftest.py`:
+
+```text
+tests/e2e/fixtures/
+├── iac/         # Terraform + K8s + Dockerfiles with CIS violations
+├── python/      # Flask app with OWASP Top 10 vulnerabilities
+├── javascript/  # Node.js app with vulnerable dependencies
+└── configs/     # Hardcoded secrets, API keys
+```
+
+### Visual Testing (Playwright)
+
+`test_dashboard_visual.py` uses pytest-playwright to inspect the HTML dashboard visually.
+
+Install Playwright before running visual tests:
 
 ```bash
-# Setup test fixtures
-bash tests/e2e/fixtures/setup_fixtures.sh
-
-# Fixtures include:
-# - IaC: Terraform with CIS violations, K8s privileged pods, bad Dockerfiles
-# - Python: Flask app with OWASP Top 10 vulnerabilities
-# - JavaScript: Node.js app with vulnerable dependencies
-# - Configs: Hardcoded secrets, API keys
+pip install pytest-playwright
+playwright install chromium
 ```
+
+Then run via:
+
+```bash
+make test-e2e-visual
+# or directly:
+pytest tests/e2e/test_dashboard_visual.py -v
+```
+
+Visual tests are skipped automatically if Playwright is not installed.
 
 ### CI/CD Integration
 
@@ -157,40 +171,7 @@ The comprehensive test suite runs automatically in CI:
 - **Nightly:** Full test suite on Ubuntu + macOS (2-3 hours)
 - **On Demand:** Manual workflow with specific test selection
 
-See [.github/workflows/ci.yml](.github/workflows/ci.yml) for test execution details.
-
-### Test Results
-
-Test results include:
-
-- **CSV:** `test-results.csv` with test ID, status, duration
-- **Logs:** Individual test logs in `{results_dir}/{test_id}/test.log`
-- **Findings:** Scan outputs in `{results_dir}/{test_id}/summaries/findings.json`
-- **Report:** Human-readable markdown report with statistics
-
-**Example Report:**
-
-```bash
-python tests/e2e/generate_report.py /tmp/jmo-e2e-results-123/test-results.csv
-
-# Output:
-# ============================================================
-# E2E Test Results Summary
-# ============================================================
-#
-# Overall Statistics:
-#   Total Tests:   12
-#   ✅ Passed:      11
-#   ❌ Failed:      1
-#   ⏭️  Skipped:    0
-#   Success Rate:  91.7%
-#
-# Results by Suite:
-#   Ubuntu: 11/12 passed (1 failed, 0 skipped)
-#
-# ✅ RELEASE READY
-# ============================================================
-```
+See [.github/workflows/scheduled.yml](.github/workflows/scheduled.yml) for test execution details.
 
 ### Success Criteria
 
@@ -206,15 +187,12 @@ For release readiness:
 **Test failures:**
 
 ```bash
-# Check test log
-cat /tmp/jmo-e2e-results-*/U1/test.log
-
 # Re-run specific test with verbose output
-bash tests/e2e/run_comprehensive_tests.sh --test U1
+pytest tests/e2e/ -k "U1" -v -s
 
 # Verify tool installations
-make verify-env
-make tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 ```
 
 **Docker tests failing:**
@@ -234,9 +212,6 @@ docker run --rm -v $(pwd):/test alpine:3.19 ls /test
 **Fixture issues:**
 
 ```bash
-# Re-create fixtures
-bash tests/e2e/fixtures/setup_fixtures.sh
-
 # Verify fixtures exist
 ls -la tests/e2e/fixtures/iac/
 ls -la tests/e2e/fixtures/python/
@@ -246,15 +221,33 @@ For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST
 
 ## CI
 
-- GitHub Actions workflow `.github/workflows/tests.yml` enforces coverage ≥85%.
+- GitHub Actions workflow `.github/workflows/ci.yml` enforces coverage ≥85%.
 - The workflow installs dev dependencies and runs `pytest` with coverage.
+
+### Test Sharding
+
+CI uses **pytest-split** to distribute 5,000+ tests across 4 parallel shards for ~60% faster execution:
+
+- **Sharded tests**: Ubuntu/Python 3.12 (primary CI target) runs tests in 4 parallel jobs
+- **Matrix tests**: Other OS/Python combinations run full test suite sequentially
+- **Coverage aggregation**: Coverage from all shards is merged before upload to Codecov
+
+To run tests locally with sharding (for debugging CI issues):
+
+```bash
+# Run specific shard (1-4)
+pytest tests/ --splits 4 --group 1 -m "not smoke and not requires_tools"
+
+# Generate test durations for optimal splitting
+pytest tests/ --store-durations --durations-path=.test_durations
+```
 
 ## General Troubleshooting
 
-- Missing tools: run `make verify-env` and `make tools`.
+- Missing tools: run `jmo tools check` and `jmo tools install --profile balanced`.
 - PATH issues: ensure `~/.local/bin` is in your PATH if using pip --user installs.
-- Coverage too low: add tests or temporarily adjust `.coveragerc` (prefer adding tests).
-- Different Python version: tests target 3.11 in CI; using older versions may cause minor differences.
+- Coverage too low: add tests or temporarily adjust `pyproject.toml [tool.coverage]` (prefer adding tests).
+- Different Python version: tests target 3.12 in CI; using older versions may cause minor differences.
 
 ### Import errors like `ModuleNotFoundError: No module named 'scripts'`
 

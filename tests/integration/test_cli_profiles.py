@@ -4,6 +4,8 @@ from pathlib import Path
 
 import types
 
+import pytest
+
 from scripts.cli import jmo
 
 
@@ -37,8 +39,10 @@ def test_scan_profile_include_exclude_only_scans_included(tmp_path: Path, monkey
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Force which to say no tools installed so stubs are written
-    monkeypatch.setattr(jmo, "_tool_exists", lambda _: False)
+    # Mock tool availability check to pretend trufflehog is installed
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
+    # Set CI=true to skip interactive prompts
+    monkeypatch.setenv("CI", "true")
 
     # Prepare args and run scan
     args = types.SimpleNamespace(
@@ -83,11 +87,16 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    # Pretend semgrep exists, others do not
-    def fake_which(tool: str) -> bool:
-        return tool == "semgrep"
+    # Mock _check_scan_tools to skip tool availability checks
+    monkeypatch.setattr(jmo, "_check_scan_tools", lambda args, tools: (tools, []))
 
-    monkeypatch.setattr(jmo, "_tool_exists", fake_which)
+    # Mock shutil.which to simulate semgrep being installed
+    import shutil
+
+    def fake_which(tool: str):
+        return "/usr/bin/semgrep" if tool == "semgrep" else None
+
+    monkeypatch.setattr(shutil, "which", fake_which)
 
     calls = []
 
@@ -132,7 +141,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
     # Ensure one of the commands contains our flags
     found = False
     for c in calls:
-        if isinstance(c, list) and c and c[0] == "semgrep":
+        if isinstance(c, list) and c and "semgrep" in Path(c[0]).name:
             # flags must be present in the argument list
             if "--exclude" in c and "node_modules" in c:
                 found = True
@@ -159,7 +168,12 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "jmo.yml"
     _write_yaml(cfg_path, cfg)
 
-    monkeypatch.setattr(jmo, "_tool_exists", lambda t: t == "syft")
+    # Mock shutil.which to simulate syft being installed
+    import shutil
+
+    monkeypatch.setattr(
+        shutil, "which", lambda tool: "/usr/bin/syft" if tool == "syft" else None
+    )
 
     attempt = {"n": 0}
 
@@ -207,9 +221,11 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
 # ========== Expanded Per-Tool Override Tests (Added Oct 19 2025) ==========
 
 
+@pytest.mark.requires_tools
 def test_per_tool_timeout_override(tmp_path: Path):
     """Test per-tool timeout override in profile."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -217,8 +233,7 @@ def test_per_tool_timeout_override(tmp_path: Path):
 
     # Create custom config with per-tool override
     config_file = tmp_path / "custom-jmo.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [semgrep]
 outputs: [json]
 
@@ -230,13 +245,13 @@ profiles:
       semgrep:
         timeout: 600  # Override global timeout
         flags: ["--exclude", "tests"]
-"""
-    )
+""")
 
     # Run scan with custom profile
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -268,6 +283,7 @@ profiles:
 def test_per_tool_flags_override(tmp_path: Path):
     """Test per-tool flags override in profile."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -278,8 +294,7 @@ def test_per_tool_flags_override(tmp_path: Path):
 
     # Create config with exclude flags
     config_file = tmp_path / "exclude-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [semgrep]
 outputs: [json]
 
@@ -289,13 +304,13 @@ profiles:
     per_tool:
       semgrep:
         flags: ["--exclude", "tests"]
-"""
-    )
+""")
 
     # Run scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -317,6 +332,7 @@ profiles:
 def test_per_tool_retries_override(tmp_path: Path):
     """Test per-tool retry override in profile."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -324,8 +340,7 @@ def test_per_tool_retries_override(tmp_path: Path):
 
     # Create config with retry override
     config_file = tmp_path / "retry-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trivy]
 outputs: [json]
 
@@ -336,13 +351,13 @@ profiles:
     per_tool:
       trivy:
         retries: 2  # Override: 2 retries for trivy
-"""
-    )
+""")
 
     # Run scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -358,9 +373,11 @@ profiles:
     assert result.returncode in [0, 1]
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_fast(tmp_path: Path):
     """Test fast profile invokes correct tool subset."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -370,8 +387,9 @@ def test_profile_tool_selection_fast(tmp_path: Path):
 
     # Run fast profile scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -399,9 +417,11 @@ def test_profile_tool_selection_fast(tmp_path: Path):
         ), f"Fast profile should invoke {tool} (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_balanced(tmp_path: Path):
     """Test balanced profile invokes correct tool subset."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -415,8 +435,9 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
 
     # Run balanced profile scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -458,9 +479,11 @@ def test_profile_tool_selection_balanced(tmp_path: Path):
         ), f"{tool} should run when applicable files exist (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_tool_selection_deep(tmp_path: Path):
     """Test deep profile invokes correct tool subset."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -474,8 +497,9 @@ def test_profile_tool_selection_deep(tmp_path: Path):
 
     # Run deep profile scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -518,9 +542,11 @@ def test_profile_tool_selection_deep(tmp_path: Path):
         ), f"{tool} should run when applicable files exist (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_inherits_global_per_tool_config(tmp_path: Path):
     """Test profile inherits global per_tool config and merges correctly."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -528,8 +554,7 @@ def test_profile_inherits_global_per_tool_config(tmp_path: Path):
 
     # Create config with global per_tool and profile per_tool
     config_file = tmp_path / "inherit-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trivy, semgrep]
 outputs: [json]
 
@@ -547,13 +572,13 @@ profiles:
         timeout: 600  # Profile adds timeout (merges with global flags)
       semgrep:
         flags: ["--exclude", "node_modules"]  # Profile overrides global flags
-"""
-    )
+""")
 
     # Run scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -580,9 +605,11 @@ profiles:
         ), f"{tool} should run (log or stub)"
 
 
+@pytest.mark.requires_tools
 def test_profile_thread_override(tmp_path: Path):
     """Test profile-specific thread count override."""
     import subprocess
+    import sys
 
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
@@ -590,8 +617,7 @@ def test_profile_thread_override(tmp_path: Path):
 
     # Create config with profile thread override
     config_file = tmp_path / "thread-config.yml"
-    config_file.write_text(
-        """
+    config_file.write_text("""
 tools: [trufflehog, semgrep]
 outputs: [json]
 threads: 2  # Global default
@@ -600,13 +626,13 @@ profiles:
   high-thread:
     tools: [trufflehog, semgrep]
     threads: 8  # Profile overrides to 8
-"""
-    )
+""")
 
     # Run scan with profile
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),

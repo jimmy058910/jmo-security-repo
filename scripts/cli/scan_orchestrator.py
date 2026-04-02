@@ -5,12 +5,95 @@ This module provides the ScanOrchestrator class for discovering scan targets,
 filtering repositories, and coordinating multi-target scans.
 
 Created as part of PHASE 1 refactoring to extract orchestration logic from cmd_scan().
+
+Security: Uses centralized validation from scripts.core.validation for
+URL and container image validation to prevent injection attacks.
 """
 
+from __future__ import annotations
+
+import fnmatch
+import logging
+import os
+import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
-import fnmatch
+from typing import Any
+
+from scripts.core.config import RetryConfig
+from scripts.core.validation import validate_url, validate_container_image
+from scripts.core.tool_registry import filter_tools_for_scan_type
+
+logger = logging.getLogger(__name__)
+
+
+def _detect_msys_path_mangling(path_str: str) -> bool:
+    """
+    Detect if a path has been mangled by Git Bash's MSYS layer on Windows.
+
+    When running Docker commands from Git Bash on Windows, the MSYS layer
+    automatically converts Unix-style paths (like /scan/repo) to Windows paths
+    (like C:/Program Files/Git/scan/repo). This breaks Docker volume mounts.
+
+    Args:
+        path_str: The path string to check
+
+    Returns:
+        True if the path appears to be MSYS-mangled, False otherwise
+    """
+    if not path_str:
+        return False
+
+    # Pattern: Windows drive letter followed by path containing "Program Files/Git"
+    # This is the telltale sign of MSYS path conversion
+    msys_pattern = r"^[A-Za-z]:[/\\].*Program Files[/\\]Git"
+    if re.match(msys_pattern, path_str):
+        return True
+
+    # Also detect any Windows path inside a Docker Linux container
+    # Check if we're in Docker AND the path looks like a Windows path
+    if os.environ.get("DOCKER_CONTAINER") == "1":
+        # Windows drive letter pattern: C:/ or D:\
+        if re.match(r"^[A-Za-z]:[/\\]", path_str):
+            return True
+
+    return False
+
+
+def _warn_msys_path_mangling(path_str: str) -> None:
+    """
+    Print a helpful warning about MSYS path mangling with solutions.
+
+    Args:
+        path_str: The mangled path that was detected
+    """
+    warning = f"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ⚠️  MSYS PATH CONVERSION DETECTED                                             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ The path '{path_str[:50]}...'
+║ appears to have been converted by Git Bash's MSYS layer.
+║
+║ This happens when running Docker from Git Bash on Windows.
+║ The path /scan/... was converted to a Windows path.
+║
+║ SOLUTIONS:
+║
+║ 1. Set environment variable (recommended):
+║    MSYS_NO_PATHCONV=1 docker run ...
+║
+║ 2. Use PowerShell or CMD instead of Git Bash
+║
+║ 3. Use double-slash prefix:
+║    docker run ... --repo //scan/repo
+║
+║ Example:
+║    MSYS_NO_PATHCONV=1 docker run --rm -v "C:\\Projects\\myrepo:/scan" \\
+║      jmo-security:fast scan --repo /scan --profile fast
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+    sys.stderr.write(warning)
 
 
 @dataclass
@@ -27,12 +110,12 @@ class ScanTargets:
         k8s_resources: List of Kubernetes resource info dicts
     """
 
-    repos: List[Path] = field(default_factory=list)
-    images: List[str] = field(default_factory=list)
-    iac_files: List[Tuple[str, Path]] = field(default_factory=list)
-    urls: List[str] = field(default_factory=list)
-    gitlab_repos: List[Dict[str, str]] = field(default_factory=list)
-    k8s_resources: List[Dict[str, str]] = field(default_factory=list)
+    repos: list[Path] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
+    iac_files: list[tuple[str, Path]] = field(default_factory=list)
+    urls: list[str] = field(default_factory=list)
+    gitlab_repos: list[dict[str, str]] = field(default_factory=list)
+    k8s_resources: list[dict[str, str]] = field(default_factory=list)
 
     def total_count(self) -> int:
         """Return total number of scan targets across all types."""
@@ -60,7 +143,7 @@ class ScanTargets:
             f"{len(self.k8s_resources)} K8s resources"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "repos": [str(r) for r in self.repos],
@@ -89,13 +172,13 @@ class ScanConfig:
         allow_missing_tools: Allow scan to continue if tools missing
     """
 
-    tools: List[str]
+    tools: list[str]
     results_dir: Path
     timeout: int = 600
-    retries: int = 0
-    max_workers: Optional[int] = None
-    include_patterns: List[str] = field(default_factory=list)
-    exclude_patterns: List[str] = field(default_factory=list)
+    retries: int | RetryConfig = 0
+    max_workers: int | None = None
+    include_patterns: list[str] = field(default_factory=list)
+    exclude_patterns: list[str] = field(default_factory=list)
     allow_missing_tools: bool = False
 
     def __post_init__(self):
@@ -104,7 +187,7 @@ class ScanConfig:
             raise ValueError("At least one tool must be specified")
         if self.timeout <= 0:
             raise ValueError(f"Timeout must be positive, got {self.timeout}")
-        if self.retries < 0:
+        if isinstance(self.retries, int) and self.retries < 0:
             raise ValueError(f"Retries must be non-negative, got {self.retries}")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError(f"max_workers must be >= 1, got {self.max_workers}")
@@ -172,7 +255,7 @@ class ScanOrchestrator:
 
         return targets
 
-    def _discover_repos(self, args) -> List[Path]:
+    def _discover_repos(self, args) -> list[Path]:
         """
         Discover local Git repositories from CLI arguments.
 
@@ -180,18 +263,35 @@ class ScanOrchestrator:
         - --repo: Single repository path
         - --repos-dir: Directory containing multiple repos
         - --targets: File with list of repository paths
+
+        Also detects MSYS path mangling from Git Bash on Windows and provides
+        helpful error messages with solutions.
         """
-        repos: List[Path] = []
+        repos: list[Path] = []
 
         # Single repository
         if getattr(args, "repo", None):
-            p = Path(args.repo)
+            repo_path = args.repo
+
+            # Check for MSYS path mangling (Git Bash on Windows + Docker)
+            if _detect_msys_path_mangling(repo_path):
+                _warn_msys_path_mangling(repo_path)
+                return repos  # Return empty - path is invalid
+
+            p = Path(repo_path)
             if p.exists():
                 repos.append(p)
 
         # Directory of repositories
         elif getattr(args, "repos_dir", None):
-            base = Path(args.repos_dir)
+            repos_dir_path = args.repos_dir
+
+            # Check for MSYS path mangling
+            if _detect_msys_path_mangling(repos_dir_path):
+                _warn_msys_path_mangling(repos_dir_path)
+                return repos
+
+            base = Path(repos_dir_path)
             if base.exists() and base.is_dir():
                 # Find all subdirectories (assumed to be repos)
                 repos.extend([p for p in base.iterdir() if p.is_dir()])
@@ -210,19 +310,25 @@ class ScanOrchestrator:
 
         return repos
 
-    def _discover_images(self, args) -> List[str]:
+    def _discover_images(self, args) -> list[str]:
         """
         Discover container images from CLI arguments.
 
         Supports two input modes:
         - --image: Single container image
         - --images-file: File with list of image names
+
+        Security: Validates container image references to prevent injection.
         """
-        images: List[str] = []
+        images: list[str] = []
 
         # Single image
         if getattr(args, "image", None):
-            images.append(args.image)
+            image = args.image
+            if validate_container_image(image):
+                images.append(image)
+            else:
+                logger.warning(f"Skipping invalid container image: '{image}'")
 
         # Images file
         if getattr(args, "images_file", None):
@@ -232,11 +338,14 @@ class ScanOrchestrator:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
-                    images.append(line)
+                    if validate_container_image(line):
+                        images.append(line)
+                    else:
+                        logger.warning(f"Skipping invalid container image: '{line}'")
 
         return images
 
-    def _discover_iac_files(self, args) -> List[Tuple[str, Path]]:
+    def _discover_iac_files(self, args) -> list[tuple[str, Path]]:
         """
         Discover IaC files from CLI arguments.
 
@@ -245,7 +354,7 @@ class ScanOrchestrator:
         - "cloudformation": CloudFormation templates
         - "k8s": Kubernetes manifests
         """
-        iac_files: List[Tuple[str, Path]] = []
+        iac_files: list[tuple[str, Path]] = []
 
         # Terraform state files
         if getattr(args, "terraform_state", None):
@@ -267,19 +376,26 @@ class ScanOrchestrator:
 
         return iac_files
 
-    def _discover_urls(self, args) -> List[str]:
+    def _discover_urls(self, args) -> list[str]:
         """
         Discover web URLs from CLI arguments.
 
         Supports two input modes:
         - --url: Single URL
         - --urls-file: File with list of URLs
+
+        Security: Validates URLs to ensure only http/https protocols
+        and prevent injection attacks.
         """
-        urls: List[str] = []
+        urls: list[str] = []
 
         # Single URL
         if getattr(args, "url", None):
-            urls.append(args.url)
+            url = args.url
+            if validate_url(url):
+                urls.append(url)
+            else:
+                logger.warning(f"Skipping invalid URL: '{url}'")
 
         # URLs file
         if getattr(args, "urls_file", None):
@@ -289,11 +405,14 @@ class ScanOrchestrator:
                     line = line.strip()
                     if not line or line.startswith("#"):
                         continue
-                    urls.append(line)
+                    if validate_url(line):
+                        urls.append(line)
+                    else:
+                        logger.warning(f"Skipping invalid URL: '{line}'")
 
         return urls
 
-    def _discover_gitlab_repos(self, args) -> List[Dict[str, str]]:
+    def _discover_gitlab_repos(self, args) -> list[dict[str, str]]:
         """
         Discover GitLab repositories from CLI arguments.
 
@@ -304,7 +423,7 @@ class ScanOrchestrator:
         Returns:
             List of dicts with keys: full_path, url, token, repo, group, name
         """
-        gitlab_repos: List[Dict[str, str]] = []
+        gitlab_repos: list[dict[str, str]] = []
 
         # Single GitLab repository
         if getattr(args, "gitlab_repo", None):
@@ -342,7 +461,7 @@ class ScanOrchestrator:
 
         return gitlab_repos
 
-    def _discover_k8s_resources(self, args) -> List[Dict[str, str]]:
+    def _discover_k8s_resources(self, args) -> list[dict[str, str]]:
         """
         Discover Kubernetes resources from CLI arguments.
 
@@ -354,7 +473,7 @@ class ScanOrchestrator:
         Returns:
             List of dicts with keys: context, namespace, name
         """
-        k8s_resources: List[Dict[str, str]] = []
+        k8s_resources: list[dict[str, str]] = []
 
         if getattr(args, "k8s_context", None):
             context = args.k8s_context
@@ -388,7 +507,7 @@ class ScanOrchestrator:
 
         return k8s_resources
 
-    def _filter_repos(self, repos: List[Path]) -> List[Path]:
+    def _filter_repos(self, repos: list[Path]) -> list[Path]:
         """
         Apply include/exclude patterns to repository list.
 
@@ -438,23 +557,24 @@ class ScanOrchestrator:
         base = self.config.results_dir
 
         # Always create repos directory (legacy compatibility)
-        (base / "individual-repos").mkdir(parents=True, exist_ok=True)
+        # mode=0o700: restrictive permissions for security scan results
+        (base / "individual-repos").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         # Create directories for other target types (only if targets present)
         if targets.images:
-            (base / "individual-images").mkdir(parents=True, exist_ok=True)
+            (base / "individual-images").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.iac_files:
-            (base / "individual-iac").mkdir(parents=True, exist_ok=True)
+            (base / "individual-iac").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.urls:
-            (base / "individual-web").mkdir(parents=True, exist_ok=True)
+            (base / "individual-web").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.gitlab_repos:
-            (base / "individual-gitlab").mkdir(parents=True, exist_ok=True)
+            (base / "individual-gitlab").mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if targets.k8s_resources:
-            (base / "individual-k8s").mkdir(parents=True, exist_ok=True)
+            (base / "individual-k8s").mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def validate_targets(self, targets: ScanTargets) -> bool:
         """
@@ -493,7 +613,7 @@ class ScanOrchestrator:
 
         return 4  # Default
 
-    def get_summary(self, targets: ScanTargets) -> Dict[str, Any]:
+    def get_summary(self, targets: ScanTargets) -> dict[str, Any]:
         """
         Generate summary of orchestration configuration.
 
@@ -519,3 +639,207 @@ class ScanOrchestrator:
                 "total_count": targets.total_count(),
             },
         }
+
+    def scan_all(
+        self,
+        targets: ScanTargets,
+        per_tool_config: dict,
+        progress_callback=None,
+        tool_progress_callback=None,
+        session=None,
+        session_path=None,
+    ) -> list[tuple[str, dict[str, bool]]]:
+        """
+        Execute scans on all discovered targets in parallel.
+
+        This method encapsulates ALL scanning logic that was previously inline in cmd_scan.
+        It handles parallel execution, progress tracking, and result aggregation for all 6 target types.
+
+        Args:
+            targets: Discovered scan targets
+            per_tool_config: Per-tool configuration overrides
+            progress_callback: Optional callback for target-level progress updates (callable)
+            tool_progress_callback: Optional callback for tool-level progress (tool_name, status, count)
+                                   Called when each tool starts and completes
+            session: Optional ScanSession for checkpointing (skip completed targets)
+            session_path: Optional Path to session file for checkpoint writes
+
+        Returns:
+            List of (target_name, statuses_dict) tuples for all scanned targets
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        from scripts.cli.scan_jobs import (
+            scan_repository,
+            scan_image,
+            scan_iac_file,
+            scan_url,
+            scan_gitlab_repo,
+            scan_k8s_resource,
+        )
+
+        all_results = []
+        futures = []
+        max_workers = self.get_effective_max_workers()
+
+        # Helper to check if a target was already completed in a previous session
+        def _is_completed(target_id: str) -> bool:
+            if session is not None:
+                return bool(session.is_target_completed(target_id))
+            return False
+
+        # Helper to checkpoint after each target completes
+        def _checkpoint(target_id: str, statuses: dict[str, bool]) -> None:
+            if session is not None and session_path is not None:
+                session.mark_target_complete(target_id, statuses)
+                from scripts.cli.scan_session import save_session as _save
+
+                _save(session, session_path)
+
+        # Filter tools by scan type for smarter tool selection
+        # This avoids running URL-only tools on repos, repo-only tools on images, etc.
+        repo_tools = filter_tools_for_scan_type(self.config.tools, "repo")
+        image_tools = filter_tools_for_scan_type(self.config.tools, "image")
+        iac_tools = filter_tools_for_scan_type(self.config.tools, "iac")
+        url_tools = filter_tools_for_scan_type(self.config.tools, "url")
+        gitlab_tools = filter_tools_for_scan_type(self.config.tools, "gitlab")
+        k8s_tools = filter_tools_for_scan_type(self.config.tools, "k8s")
+
+        skipped_count = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit repositories - use repo-filtered tools
+            for repo in targets.repos:
+                if _is_completed(repo.name):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_repository,
+                    repo,
+                    self.config.results_dir / "individual-repos",
+                    repo_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                    progress_callback=tool_progress_callback,
+                )
+                futures.append(("repo", repo.name, future))
+
+            # Submit images - use image-filtered tools (trivy, syft only)
+            for image in targets.images:
+                if _is_completed(image):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_image,
+                    image,
+                    self.config.results_dir / "individual-images",
+                    image_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("image", image, future))
+
+            # Submit IaC files - use IaC-filtered tools
+            for iac_type, iac_path in targets.iac_files:
+                iac_id = str(iac_path)
+                if _is_completed(iac_id):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_iac_file,
+                    iac_type,
+                    iac_path,
+                    self.config.results_dir / "individual-iac",
+                    iac_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("iac", iac_id, future))
+
+            # Submit URLs - use URL-filtered tools (nuclei, zap, akto only)
+            for url in targets.urls:
+                if _is_completed(url):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_url,
+                    url,
+                    self.config.results_dir / "individual-web",
+                    url_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("url", url, future))
+
+            # Submit GitLab repos - use gitlab-filtered tools
+            for gitlab_repo_info in targets.gitlab_repos:
+                gl_id = gitlab_repo_info.get("full_path", "unknown")
+                if _is_completed(gl_id):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_gitlab_repo,
+                    gitlab_repo_info,
+                    self.config.results_dir / "individual-gitlab",
+                    gitlab_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("gitlab", gl_id, future))
+
+            # Submit K8s resources - use k8s-filtered tools (trivy only)
+            for k8s_resource_info in targets.k8s_resources:
+                ctx = k8s_resource_info.get("context", "unknown")
+                ns = k8s_resource_info.get("namespace", "unknown")
+                k8s_id = f"{ctx}:{ns}"
+                if _is_completed(k8s_id):
+                    skipped_count += 1
+                    continue
+                future = executor.submit(
+                    scan_k8s_resource,
+                    k8s_resource_info,
+                    self.config.results_dir / "individual-k8s",
+                    k8s_tools,
+                    self.config.timeout,
+                    self.config.retries,
+                    per_tool_config,
+                    self.config.allow_missing_tools,
+                )
+                futures.append(("k8s", k8s_id, future))
+
+            if skipped_count > 0:
+                logger.info(
+                    f"Resuming scan: skipped {skipped_count} previously completed target(s)"
+                )
+
+            # Collect results as they complete
+            for target_type, target_id, future in futures:
+                try:
+                    name, statuses = future.result()
+                    all_results.append((name, statuses))
+
+                    # Checkpoint after each completed target
+                    _checkpoint(target_id, statuses)
+
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(target_type, target_id, statuses)
+
+                except Exception as e:
+                    # Log error but continue with other targets
+                    logger.error(
+                        f"Scan failed for {target_type} {target_id}: {e}", exc_info=True
+                    )
+                    # Still append partial result
+                    all_results.append((target_id, {}))
+
+        return all_results

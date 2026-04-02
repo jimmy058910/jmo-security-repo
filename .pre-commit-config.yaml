@@ -1,7 +1,7 @@
 repos:
   # Basic sanity hooks (combined set)
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -18,74 +18,110 @@ repos:
             samples/iac-files/.*\.yaml|
             docker-compose\.yml|
             docs/examples/github-actions-docker\.yml|
-            mkdocs\.yml
+            (docs/)?mkdocs\.yml
           )$
       - id: check-json
       - id: check-toml
       - id: mixed-line-ending
       - id: detect-private-key
+        # Exclude test files with mock private keys (used to test redaction/parsing)
+        exclude: |
+          (?x)^(
+            tests/unit/test_validation\.py|
+            tests/adapters/test_noseyparker_adapter\.py|
+            tests/fixtures/samples/credential-patterns/config\.py
+          )$
       # Prevent committing very large files by mistake (limit also enforced by guardrails in CI)
       - id: check-added-large-files
         args: ["--maxkb=10240"]  # 10 MB
 
   # Strict YAML linting (schema-agnostic)
+  # Note: Let pre-commit pass files instead of scanning "." to respect exclude patterns
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
-        args: ["-c", ".yamllint.yaml", "."]
+        args: ["-c", ".yamllint.yaml"]
+        # Exclude paths that may contain non-UTF-8 content or special YAML
+        exclude: |
+          (?x)^(
+            results/|
+            samples/|
+            tests/e2e/fixtures/
+          )
 
   # Validate GitHub Actions workflows
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.1
+    rev: v1.7.11
     hooks:
       - id: actionlint
         # Enable colorized output in local runs; CI may ignore colors
         args: ["-color"]
 
-  # Markdown linting
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.41.0
+  # Markdown linting (cli2 shares .markdownlint-cli2.jsonc config with CI)
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.21.0
     hooks:
-      - id: markdownlint
+      - id: markdownlint-cli2
 
-  # Python lint/format
+  # Python format/lint (Black MUST run before Ruff per jmo-ci-debugger #15)
+  - repo: https://github.com/psf/black
+    rev: 26.1.0
+    hooks:
+      - id: black
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.15.2
     hooks:
       - id: ruff
         args: ["--fix"]
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
 
-  # Type checking
+  # Type checking (optimized for incremental mode)
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
+    rev: v1.19.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-PyYAML, types-croniter]
-        args: [--config-file=pyproject.toml]
-        files: ^scripts/
+        additional_dependencies: [types-PyYAML, types-croniter, types-requests, types-tabulate]
+        args:
+          - --config-file=pyproject.toml
+          - scripts/
+        pass_filenames: false
+        require_serial: true
 
   # Security and shell formatting
+  # Note: Using --format json avoids Windows cp1252 encoding issues with Unicode arrows
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.9
+    rev: 1.9.3
     hooks:
       - id: bandit
         name: bandit (scripts only)
-        args: ["-q", "-r", "scripts", "-c", "bandit.yaml"]
+        args: ["-q", "-r", "scripts", "-c", "pyproject.toml", "--format", "json"]
         pass_filenames: false
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: ["-S", "error", "-e", "SC2016,SC2028"]
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.6.0-1
+    rev: v3.12.0-2
     hooks:
       - id: shfmt
+
+  # Architecture enforcement hooks
+  - repo: local
+    hooks:
+      - id: import-direction
+        name: import-direction (check dependency layering)
+        language: system
+        types: [python]
+        files: ^scripts/(core|jmo_mcp)/
+        entry: python scripts/dev/check_import_direction.py
+        pass_filenames: false
+      - id: doc-links
+        name: doc-links (validate documentation links)
+        language: system
+        files: ^(CLAUDE\.md|docs/)
+        entry: python scripts/dev/check_doc_links.py
+        pass_filenames: false
 
   # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes
   # IMPORTANT: Uses Python 3.10+ to match CI/CD environments (prevents version mismatches)
@@ -96,10 +132,14 @@ repos:
         language: system
         files: ^requirements-dev\.in$
         pass_filenames: false
-        # Strategy: Try Python 3.11 first (most common), fallback to 3.10, then 3.12
+        # Strategy: Check python first (Windows), then python3 (Unix), verify it's real Python not Windows stub
         # If none available, fail with clear error message
         entry: >-
-          bash -c 'python3 -m pip install --quiet pip-tools 2>/dev/null || true;
-          python3 scripts/dev/update_dependencies.py --compile ||
+          bash -c 'PY=""; for p in python python3; do
+            if command -v "$p" >/dev/null 2>&1 && "$p" --version >/dev/null 2>&1; then PY="$p"; break; fi;
+          done;
+          [ -z "$PY" ] && { echo "ERROR: Python not found"; exit 1; };
+          $PY -m pip install --quiet pip-tools 2>/dev/null || true;
+          $PY scripts/dev/update_dependencies.py --compile ||
           { echo "ERROR: deps-compile requires Python 3.10+.
           Install python3.10, python3.11, or python3.12"; exit 1; }'

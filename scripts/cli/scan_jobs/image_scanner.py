@@ -8,25 +8,28 @@ Scans container images using:
 Integrates with ToolRunner for execution management.
 """
 
-import re
-from pathlib import Path
-from typing import Dict, List, Tuple, Callable, Optional
+from __future__ import annotations
 
+from pathlib import Path
+from collections.abc import Callable
+
+from ...core.config import RetryConfig
 from ...core.tool_runner import ToolRunner, ToolDefinition
-from ..scan_utils import tool_exists, write_stub
+from ..path_sanitizers import _sanitize_path_component, _validate_output_path
+from ..scan_utils import find_tool, write_stub
 
 
 def scan_image(
     image: str,
     results_dir: Path,
-    tools: List[str],
+    tools: list[str],
     timeout: int,
-    retries: int,
-    per_tool_config: Dict,
+    retries: int | RetryConfig,
+    per_tool_config: dict,
     allow_missing_tools: bool,
-    tool_exists_func: Optional[Callable[[str], bool]] = None,
-    write_stub_func: Optional[Callable[[str, Path], None]] = None,
-) -> Tuple[str, Dict[str, bool]]:
+    find_tool_func: Callable[[str], str | None] | None = None,
+    write_stub_func: Callable[[str, Path], None] | None = None,
+) -> tuple[str, dict[str, bool]]:
     """
     Scan a container image with trivy and syft.
 
@@ -38,7 +41,7 @@ def scan_image(
         retries: Number of retries for flaky tools
         per_tool_config: Per-tool configuration overrides
         allow_missing_tools: If True, write empty stubs for missing tools
-        tool_exists_func: Optional function to check if tool exists (for testing)
+        find_tool_func: Optional function to find tool path (for testing)
         write_stub_func: Optional function to write stub files (for testing)
 
     Returns:
@@ -46,16 +49,17 @@ def scan_image(
         statuses_dict contains tool success/failure and __attempts__ metadata
     """
     # Use provided functions or defaults
-    _tool_exists = tool_exists_func or tool_exists
+    _find_tool = find_tool_func or find_tool
     _write_stub = write_stub_func or write_stub
 
-    statuses: Dict[str, bool] = {}
+    statuses: dict[str, bool] = {}
     tool_defs = []
 
-    # Sanitize image name for directory (replace special chars with underscores)
-    safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", image)
-    out_dir = results_dir / "individual-images" / safe_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    # Sanitize image name for directory (prevent path traversal)
+    safe_name = _sanitize_path_component(image)
+    out_dir = results_dir / safe_name
+    _validate_output_path(results_dir, out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def get_tool_timeout(tool: str, default: int) -> int:
         """Get timeout override for specific tool."""
@@ -66,7 +70,7 @@ def scan_image(
                 return override
         return default
 
-    def get_tool_flags(tool: str) -> List[str]:
+    def get_tool_flags(tool: str) -> list[str]:
         """Get additional flags for specific tool."""
         tool_cfg = per_tool_config.get(tool, {})
         if isinstance(tool_cfg, dict):
@@ -78,10 +82,11 @@ def scan_image(
     # Trivy image scan
     if "trivy" in tools:
         trivy_out = out_dir / "trivy.json"
-        if _tool_exists("trivy"):
+        trivy_path = _find_tool("trivy")
+        if trivy_path:
             trivy_flags = get_tool_flags("trivy")
             trivy_cmd = [
-                "trivy",
+                trivy_path,
                 "image",
                 "-q",
                 "-f",
@@ -111,10 +116,11 @@ def scan_image(
     # Syft SBOM generation
     if "syft" in tools:
         syft_out = out_dir / "syft.json"
-        if _tool_exists("syft"):
+        syft_path = _find_tool("syft")
+        if syft_path:
             syft_flags = get_tool_flags("syft")
             syft_cmd = [
-                "syft",
+                syft_path,
                 image,
                 "-o",
                 "json",
@@ -142,7 +148,7 @@ def scan_image(
     results = runner.run_all_parallel()
 
     # Process results
-    attempts_map: Dict[str, int] = {}
+    attempts_map: dict[str, int] = {}
     for result in results:
         if result.status == "success":
             # Write stdout to file ONLY if we captured it (capture_stdout=True)
@@ -167,6 +173,6 @@ def scan_image(
 
     # Include attempts metadata if any retries occurred
     if attempts_map:
-        statuses["__attempts__"] = attempts_map  # type: ignore
+        statuses["__attempts__"] = attempts_map  # type: ignore[assignment]  # Store retry metadata alongside bool statuses
 
     return image, statuses

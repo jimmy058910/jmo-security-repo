@@ -1,13 +1,11 @@
 ---
 name: CI
 
+# checkov:skip=CKV2_GHA_1: CI workflow requires write permissions for uploading coverage and SARIF results
 on:
   push:
   pull_request:
   workflow_dispatch:
-  schedule:
-    # Nightly at 6 AM UTC for full lint check
-    - cron: '0 6 * * *'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -23,10 +21,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Validate GitHub workflows (actionlint)
         uses: reviewdog/action-actionlint@v1.69.1
@@ -52,10 +50,50 @@ jobs:
           # Tracking: https://github.com/jazzband/pip-tools/issues
           python -m pip install -U "pip<25.3" setuptools wheel pip-tools
           python -m piptools compile -o requirements-dev.txt requirements-dev.in
+
+          # Re-add platform-specific deps that pip-compile on Linux omits.
+          # These are transitive deps resolved only on Windows but needed in
+          # the cross-platform lock file for Windows CI/dev environments.
+          if ! grep -q "pywin32" requirements-dev.txt; then
+            sed -i '/^pyyaml==/i pywin32==311 ; sys_platform == "win32"\n    # via mcp' requirements-dev.txt
+          fi
+          if ! grep -q "colorama" requirements-dev.txt; then
+            sed -i '/^coverage/i colorama==0.4.6\n    # via\n    #   bandit\n    #   click\n    #   pytest' requirements-dev.txt
+          fi
+          if ! grep -q "pytz" requirements-dev.txt; then
+            sed -i '/^pywin32/i pytz==2025.2\n    # via croniter' requirements-dev.txt
+          fi
+
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
+
+      - name: Audit Python dependencies for vulnerabilities
+        run: |
+          pip install pip-audit
+          # Audit dependencies for known vulnerabilities (CVEs)
+          # Uses OSV database for comprehensive vulnerability coverage
+          pip-audit -r requirements-dev.txt --progress-spinner=off || {
+            echo "::warning::Vulnerable dependencies detected. Review and update."
+            exit 1
+          }
 
       - name: "Guardrails: forbid tracked venv/artifacts"
         run: bash scripts/dev/guardrails_check.sh
+
+      - name: "Secrets scan (TruffleHog)"
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
+          VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
+          if [ "$VERIFIED" -gt 0 ]; then
+            echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
+            exit 1
+          fi
+
+      - name: "Check import direction (core/cli layering)"
+        run: python scripts/dev/check_import_direction.py
+
+      - name: "Check documentation link freshness"
+        run: python scripts/dev/check_doc_links.py
 
       - name: "Verify PyPI badge version matches pyproject.toml"
         run: |
@@ -82,7 +120,7 @@ jobs:
           ruff check scripts/ tests/ || echo "⚠️  Ruff issues found (non-blocking preview)"
           echo "::endgroup::"
 
-          echo "✅ Lint preview complete. Full lint-full runs nightly at 6 AM UTC."
+          echo "✅ Lint preview complete. Full lint-full runs nightly at 2 AM UTC (scheduled.yml)."
 
       - name: Validate SARIF schema
         run: |
@@ -140,27 +178,48 @@ jobs:
               sys.exit(1)
           "
 
-  # Test matrix runs in parallel, independent of quick-checks
-  test-matrix:
-    name: Test ${{ matrix.os }} / Python ${{ matrix.python-version }}
+  # Sharded test execution across all platforms
+  # Ubuntu: 4 parallel shards with coverage (primary CI target)
+  # macOS/Windows: single shard each, no coverage (cross-platform validation)
+  test-sharded:
+    name: Test ${{ matrix.os }} Shard ${{ matrix.shard }}/${{ matrix.total-shards }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
-      id-token: write  # Needed for Codecov OIDC
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            shard: 1
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 2
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 3
+            total-shards: 4
+          - os: ubuntu-latest
+            shard: 4
+            total-shards: 4
+          - os: macos-latest
+            shard: 1
+            total-shards: 1
+          - os: windows-2022
+            shard: 1
+            total-shards: 1
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
@@ -186,34 +245,219 @@ jobs:
             sleep 5
           done
 
-      - name: Run tests (no coverage)
-        if: ${{ !(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11') }}
+      - name: Run sharded tests with coverage (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         env:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
-        run: |
-          python -m pytest -q --maxfail=1 --disable-warnings
-
-      - name: Run tests with coverage (gate)
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
-        env:
-          CI: "true"
-          PYTHONUTF8: "1"
-          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
         run: |
           python -m pytest -q \
-            --maxfail=1 \
             --disable-warnings \
             --reruns 2 \
             --reruns-delay 2 \
-            --cov=. \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-fail-under=85
+            --splits ${{ matrix.total-shards }} \
+            --group ${{ matrix.shard }} \
+            --splitting-algorithm least_duration \
+            --cov=scripts \
+            --cov-report=xml:coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml \
+            -m "not smoke and not requires_tools and not docker"
+
+      - name: Run tests (macOS, no coverage)
+        if: matrix.os == 'macos-latest'
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
+        run: |
+          python -m pytest -q \
+            --disable-warnings \
+            --reruns 2 \
+            --reruns-delay 2 \
+            -p no:xdist \
+            -m "not smoke and not requires_tools and not docker"
+
+      - name: Configure Windows temp directory for faster I/O
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\Temp" | Out-Null
+          "TEMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+          "TMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Run tests (Windows, no coverage, no reruns)
+        if: matrix.os == 'windows-2022'
+        continue-on-error: true  # Windows has intermittent hangs; non-blocking until fully stabilized
+        timeout-minutes: 15
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
+        run: |
+          python -m pytest -q \
+            --disable-warnings \
+            --timeout=60 \
+            -p no:xdist \
+            -p no:rerunfailures \
+            -m "not smoke and not requires_tools and not docker and not slow"
+
+      - name: Windows post-test cleanup
+        if: matrix.os == 'windows-2022' && always()
+        shell: pwsh
+        run: |
+          $procs = Get-Process -Name python,cmd,node,java -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -ne $PID }
+          if ($procs) {
+            Write-Host "Killing $($procs.Count) orphan processes"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload shard coverage artifact (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}
+          path: coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml
+          retention-days: 1
+
+  # Aggregate coverage from all shards and upload to Codecov
+  coverage-aggregate:
+    name: Aggregate Coverage
+    runs-on: ubuntu-latest
+    needs: test-sharded
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write  # Needed for Codecov OIDC
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-shard-ubuntu-latest-*
+          merge-multiple: true
+
+      - name: Install coverage tool
+        run: pip install coverage[toml]
+
+      - name: Combine coverage reports
+        run: |
+          # List downloaded coverage files
+          echo "📊 Coverage files from shards:"
+          ls -la coverage-shard-*.xml
+
+          # Combine XML reports using coverage.py
+          # First convert XML to .coverage files, then combine
+          pip install coverage[toml]
+
+          # Create a simple Python script to merge XML coverage
+          python3 << 'EOF'
+          import xml.etree.ElementTree as ET
+          import glob
+          import sys
+
+          def merge_coverage_xml(files, output):
+              """Merge multiple coverage XML files into one."""
+              if not files:
+                  print("No coverage files to merge")
+                  sys.exit(1)
+
+              # Parse first file as base
+              base_tree = ET.parse(files[0])
+              base_root = base_tree.getroot()
+              base_packages = base_root.find('.//packages')
+
+              if base_packages is None:
+                  # Cobertura format
+                  base_packages = base_root.find('packages')
+
+              # Track merged data
+              merged_files = {}
+
+              def process_package(pkg):
+                  """Extract file data from a package element."""
+                  classes = pkg.find('classes') or pkg.findall('class')
+                  if hasattr(classes, '__iter__'):
+                      for cls in classes:
+                          filename = cls.get('filename')
+                          if filename:
+                              if filename not in merged_files:
+                                  merged_files[filename] = cls
+                              else:
+                                  # Merge line coverage
+                                  existing_lines = {l.get('number'): l for l in merged_files[filename].findall('.//line')}
+                                  for line in cls.findall('.//line'):
+                                      line_num = line.get('number')
+                                      if line_num in existing_lines:
+                                          # OR the hits (covered in any shard = covered)
+                                          existing_hits = int(existing_lines[line_num].get('hits', 0))
+                                          new_hits = int(line.get('hits', 0))
+                                          existing_lines[line_num].set('hits', str(max(existing_hits, new_hits)))
+                                      else:
+                                          lines_elem = merged_files[filename].find('lines')
+                                          if lines_elem is not None:
+                                              lines_elem.append(line)
+
+              # Process all packages in base
+              for pkg in base_root.findall('.//package'):
+                  process_package(pkg)
+
+              # Merge additional files
+              for f in files[1:]:
+                  try:
+                      tree = ET.parse(f)
+                      root = tree.getroot()
+                      for pkg in root.findall('.//package'):
+                          process_package(pkg)
+                  except Exception as e:
+                      print(f"Warning: Could not process {f}: {e}")
+
+              # Write merged output
+              base_tree.write(output, encoding='unicode', xml_declaration=True)
+              print(f"✅ Merged {len(files)} coverage files into {output}")
+
+          # Find and merge all shard coverage files
+          coverage_files = sorted(glob.glob('coverage-shard-*.xml'))
+          print(f"Found {len(coverage_files)} coverage files: {coverage_files}")
+          merge_coverage_xml(coverage_files, 'coverage.xml')
+          EOF
+
+      - name: Verify coverage threshold
+        run: |
+          # Parse coverage.xml and check threshold
+          python3 << 'EOF'
+          import xml.etree.ElementTree as ET
+          import sys
+
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+
+          # Get line-rate from coverage element
+          line_rate = float(root.get('line-rate', 0))
+          coverage_pct = line_rate * 100
+
+          print(f"📊 Combined coverage: {coverage_pct:.1f}%")
+
+          # CI threshold is 70% (excludes requires_tools/docker/smoke tests)
+          # Full 85% coverage is enforced via make test locally
+          if coverage_pct < 70:
+              print(f"❌ Coverage {coverage_pct:.1f}% is below 70% CI threshold")
+              sys.exit(1)
+          else:
+              print(f"✅ Coverage {coverage_pct:.1f}% meets 70% CI threshold")
+          EOF
 
       - name: Upload coverage to Codecov
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@v5.5.2
         with:
           files: ./coverage.xml
@@ -231,10 +475,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dev dependencies
         run: |
@@ -276,47 +520,3 @@ jobs:
       - name: Check shell formatting (shfmt -d)
         run: |
           shfmt -d -i 2 -ci -bn scripts/dev/*.sh scripts/core/*.sh 2>/dev/null || true
-
-  # Full pre-commit lint suite - nightly only
-  lint-full:
-    name: Lint (full pre-commit suite)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
-      - name: Install dev dependencies
-        run: |
-          python -m pip install --upgrade 'pip<25.3'
-          pip install -r requirements-dev.txt
-
-      - name: Cache pre-commit environments
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pre-commit
-          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-precommit-
-
-      - name: Run pre-commit (full suite, all hooks)
-        env:
-          PRE_COMMIT_HOME: ~/.cache/pre-commit
-          # Skip bandit (already covered by make lint)
-          # Skip yamllint to avoid validating external pre-commit cache files
-          SKIP: bandit,yamllint
-        run: |
-          pre-commit run --all-files --show-diff-on-failure
-          # Run yamllint separately on our repo files only
-          yamllint -c .yamllint.yaml .

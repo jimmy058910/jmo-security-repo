@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.adapters.trufflehog_adapter import load_trufflehog
+from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 from scripts.core.schema_utils import validate_findings
 
 
@@ -17,9 +17,12 @@ def test_schema_validation_with_samples(tmp_path: Path):
     }
     p = tmp_path / "trufflehog.json"
     p.write_text(json.dumps([sample]), encoding="utf-8")
-    findings = load_trufflehog(p)
+    adapter = TruffleHogAdapter()
+    findings = adapter.parse(p)
+    # Convert Finding objects to dicts for validation (excluding None values)
+    findings_dicts = [f.to_dict() for f in findings]
     assert len(findings) == 1
-    assert validate_findings(findings) is True
+    assert validate_findings(findings_dicts) is True
 
 
 @pytest.mark.skipif(

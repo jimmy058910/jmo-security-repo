@@ -7,6 +7,9 @@ used by JMo Security Suite. It serves as Layer 4 of the 5-layer version manageme
 system described in ROADMAP.md #14.
 
 Usage:
+  # Validate all versions exist upstream BEFORE building (RECOMMENDED)
+  python3 scripts/dev/update_versions.py --validate
+
   # Check for latest versions of all tools
   python3 scripts/dev/update_versions.py --check-latest
 
@@ -33,13 +36,15 @@ Exit codes:
   2: Missing dependencies
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 from datetime import datetime, timezone
 
 try:
@@ -52,8 +57,9 @@ except ImportError:
 REPO_ROOT = Path(__file__).parent.parent.parent
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
 DOCKERFILE = REPO_ROOT / "Dockerfile"
+DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
 DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
-DOCKERFILE_ALPINE = REPO_ROOT / "Dockerfile.alpine"
+DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
 
 # ANSI colors
@@ -84,18 +90,18 @@ def err(msg: str) -> None:
     print(f"{RED}[err]{NC} {msg}", file=sys.stderr)
 
 
-def load_versions() -> Dict:
+def load_versions() -> dict:
     """Load versions.yaml."""
     if not VERSIONS_YAML.exists():
         err(f"versions.yaml not found at {VERSIONS_YAML}")
         sys.exit(1)
 
     with open(VERSIONS_YAML) as f:
-        data: Dict[Any, Any] = yaml.safe_load(f) or {}
+        data: dict[Any, Any] = yaml.safe_load(f) or {}
         return data
 
 
-def save_versions(data: Dict) -> None:
+def save_versions(data: dict) -> None:
     """Save versions.yaml with updated timestamp."""
     # Update version history
     if "version_history" not in data:
@@ -116,7 +122,7 @@ def save_versions(data: Dict) -> None:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
-def get_latest_github_release(repo: str) -> Optional[str]:
+def get_latest_github_release(repo: str) -> str | None:
     """Get latest release version from GitHub using gh CLI."""
     try:
         result = subprocess.run(
@@ -134,7 +140,7 @@ def get_latest_github_release(repo: str) -> Optional[str]:
         return None
 
 
-def get_latest_pypi_version(package: str) -> Optional[str]:
+def get_latest_pypi_version(package: str) -> str | None:
     """Get latest version from PyPI."""
     try:
         result = subprocess.run(
@@ -150,7 +156,168 @@ def get_latest_pypi_version(package: str) -> Optional[str]:
         return None
 
 
-def check_latest_versions() -> Dict[str, Tuple[str, str, bool]]:
+def get_npm_version_exists(package: str, version: str) -> bool:
+    """Check if a specific npm package version exists."""
+    try:
+        result = subprocess.run(
+            ["npm", "view", f"{package}@{version}", "version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def check_github_release_exists(repo: str, version: str) -> bool:
+    """Check if a specific GitHub release version exists."""
+    try:
+        # Try both with and without 'v' prefix
+        for tag in [f"v{version}", version]:
+            result = subprocess.run(
+                ["gh", "api", f"repos/{repo}/releases/tags/{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                return True
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def check_pypi_version_exists(package: str, version: str) -> bool:
+    """Check if a specific PyPI package version exists."""
+    try:
+        result = subprocess.run(
+            ["pip", "index", "versions", package],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return False
+        # Check if version appears in available versions
+        return version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def check_npm_version_exists(package: str, version: str) -> bool:
+    """Check if a specific npm package version exists."""
+    try:
+        result = subprocess.run(
+            ["npm", "view", f"{package}@{version}", "version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0 and version in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def validate_all_versions() -> tuple[list[str], list[str]]:
+    """
+    Validate that all versions in versions.yaml exist upstream.
+
+    Returns:
+        Tuple of (passed_tools, failed_tools)
+    """
+    versions = load_versions()
+    passed = []
+    failed = []
+
+    log("Validating Python tool versions on PyPI...")
+    for tool, info in versions.get("python_tools", {}).items():
+        version = info["version"]
+        pypi_package = info.get("pypi_package")
+        if not pypi_package:
+            # Skip tools without PyPI package
+            ok(f"{tool}: {version} (skipped - no PyPI package)")
+            passed.append(tool)
+            continue
+
+        if check_pypi_version_exists(pypi_package, version):
+            ok(f"{tool}: {version} (exists on PyPI)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on PyPI ({pypi_package})")
+            failed.append(tool)
+
+    log("Validating binary tool versions on GitHub...")
+    for tool, info in versions.get("binary_tools", {}).items():
+        version = info["version"]
+        github_repo = info.get("github_repo")
+        if not github_repo:
+            ok(f"{tool}: {version} (skipped - no GitHub repo)")
+            passed.append(tool)
+            continue
+
+        if check_github_release_exists(github_repo, version):
+            ok(f"{tool}: {version} (exists on GitHub)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
+            failed.append(tool)
+
+    log("Validating special tool versions...")
+    for tool, info in versions.get("special_tools", {}).items():
+        version = info["version"]
+        github_repo = info.get("github_repo")
+        npm_package = info.get("npm_package")
+
+        if npm_package:
+            if check_npm_version_exists(npm_package, version):
+                ok(f"{tool}: {version} (exists on npm)")
+                passed.append(tool)
+            else:
+                err(f"{tool}: {version} NOT FOUND on npm ({npm_package})")
+                failed.append(tool)
+        elif github_repo:
+            if check_github_release_exists(github_repo, version):
+                ok(f"{tool}: {version} (exists on GitHub)")
+                passed.append(tool)
+            else:
+                err(f"{tool}: {version} NOT FOUND on GitHub ({github_repo})")
+                failed.append(tool)
+        else:
+            ok(f"{tool}: {version} (skipped - manual validation required)")
+            passed.append(tool)
+
+    # Check npm tools specifically (cdxgen is in special_tools but uses npm)
+    log("Validating npm tool versions...")
+    npm_tools = {
+        "cdxgen": (
+            "@cyclonedx/cdxgen",
+            versions.get("python_tools", {}).get("cdxgen", {}).get("version"),
+        ),
+    }
+    # Also check from special_tools if cdxgen is there
+    if "cdxgen" in versions.get("special_tools", {}):
+        npm_tools["cdxgen"] = (
+            "@cyclonedx/cdxgen",
+            versions["special_tools"]["cdxgen"]["version"],
+        )
+
+    for tool, (package, version) in npm_tools.items():
+        if not version:
+            continue
+        if tool in passed or tool in failed:
+            continue  # Already validated
+        if check_npm_version_exists(package, version):
+            ok(f"{tool}: {version} (exists on npm)")
+            passed.append(tool)
+        else:
+            err(f"{tool}: {version} NOT FOUND on npm ({package})")
+            failed.append(tool)
+
+    return passed, failed
+
+
+def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
     """
     Check for latest versions of all tools.
 
@@ -163,7 +330,11 @@ def check_latest_versions() -> Dict[str, Tuple[str, str, bool]]:
     log("Checking latest versions for Python tools...")
     for tool, info in versions.get("python_tools", {}).items():
         current = info["version"]
-        latest = get_latest_pypi_version(info["pypi_package"])
+        pypi_package = info.get("pypi_package")
+        if not pypi_package:
+            # Skip tools without PyPI package (e.g., lynis)
+            continue
+        latest = get_latest_pypi_version(pypi_package)
         if latest:
             is_outdated = current != latest
             results[tool] = (current, latest, is_outdated)
@@ -270,7 +441,12 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         version_map[tool.upper()] = info["version"]
 
     # Update each Dockerfile
-    for dockerfile_path in [DOCKERFILE, DOCKERFILE_SLIM, DOCKERFILE_ALPINE]:
+    for dockerfile_path in [
+        DOCKERFILE,
+        DOCKERFILE_BALANCED,
+        DOCKERFILE_SLIM,
+        DOCKERFILE_FAST,
+    ]:
         if not dockerfile_path.exists():
             warn(f"{dockerfile_path.name} not found, skipping")
             continue
@@ -346,6 +522,66 @@ def generate_report() -> None:
     print("\n" + "=" * 80 + "\n")
 
 
+def _close_superseded_version_issues(tool_names: list[str]) -> None:
+    """
+    Close existing open version update issues for the given tools.
+
+    Prevents weekly duplicate accumulation by closing old issues before
+    creating new ones. Matches issues by title pattern and 'dependencies' label.
+    """
+    import json as _json
+
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "list",
+                "--state",
+                "open",
+                "--label",
+                "dependencies",
+                "--limit",
+                "200",
+                "--json",
+                "number,title",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        existing_issues = _json.loads(result.stdout)
+    except (subprocess.CalledProcessError, _json.JSONDecodeError):
+        warn("Could not query existing issues; skipping dedup")
+        return
+
+    for tool in tool_names:
+        # Match both "Update <tool> to v..." and "[CRITICAL] Update <tool> to v..."
+        matching = [
+            issue for issue in existing_issues if f"Update {tool} to " in issue["title"]
+        ]
+        if not matching:
+            continue
+
+        for issue in matching:
+            try:
+                subprocess.run(
+                    [
+                        "gh",
+                        "issue",
+                        "close",
+                        str(issue["number"]),
+                        "--comment",
+                        "Superseded by newer version check. Closing stale issue.",
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+                log(f"  Closed superseded issue #{issue['number']}: {issue['title']}")
+            except subprocess.CalledProcessError:
+                warn(f"  Failed to close issue #{issue['number']}")
+
+
 def check_outdated_and_create_issues(create_issues: bool = False) -> int:
     """
     Check for outdated tools and optionally create GitHub issues.
@@ -389,6 +625,10 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
 
     # Create GitHub issues if requested
     if create_issues and (outdated_critical or outdated_normal):
+        log("Closing superseded version update issues before creating new ones...")
+        _close_superseded_version_issues(
+            [t for t, _, _ in outdated_critical] + [t for t, _, _ in outdated_normal]
+        )
         log("Creating GitHub issues for outdated tools...")
 
         for tool, current, latest in outdated_critical:
@@ -597,6 +837,11 @@ def main() -> int:
         action="store_true",
         help="Update ALL tools to latest versions automatically",
     )
+    group.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate all versions exist upstream (GitHub, PyPI, npm) before Docker build",
+    )
 
     parser.add_argument("--version", type=str, help="Version to set (used with --tool)")
     parser.add_argument(
@@ -674,6 +919,19 @@ def main() -> int:
                 )
                 return 0
             return 0
+
+        elif args.validate:
+            log("Validating all tool versions exist upstream...")
+            passed, failed = validate_all_versions()
+            print()
+            log(f"Validation complete: {len(passed)} passed, {len(failed)} failed")
+            if failed:
+                err(f"Failed tools: {', '.join(failed)}")
+                err("Fix these versions before building Docker images")
+                return 1
+            else:
+                ok("All versions validated successfully - safe to build")
+                return 0
 
     except Exception as e:
         err(f"Unexpected error: {e}")

@@ -9,7 +9,7 @@ This test suite achieves 95%+ coverage by testing:
 """
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 
@@ -33,14 +33,12 @@ class MockResendResponse:
 class MockResendEmails:
     """Mock Resend Emails API."""
 
-    def __init__(
-        self, should_fail: bool = False, exception: Optional[Exception] = None
-    ):
+    def __init__(self, should_fail: bool = False, exception: Exception | None = None):
         self.should_fail = should_fail
         self.exception = exception
-        self.last_params: Optional[Dict[str, Any]] = None
+        self.last_params: dict[str, Any] | None = None
 
-    def send(self, params: Dict[str, Any]):
+    def send(self, params: dict[str, Any]):
         """Mock send method."""
         self.last_params = params
 
@@ -59,9 +57,11 @@ class MockResendEmails:
 
 def test_send_welcome_email_success():
     """Test successful email sending with all parameters."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails()
         mock_resend.Emails = mock_emails
         mock_resend.api_key = None
@@ -88,9 +88,11 @@ def test_send_welcome_email_all_sources():
     sources = ["cli", "dashboard", "website"]
 
     for source in sources:
-        with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-            "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-        ), patch("scripts.core.email_service.resend") as mock_resend:
+        with (
+            patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+            patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+            patch("scripts.core.email_service.resend") as mock_resend,
+        ):
             mock_emails = MockResendEmails()
             mock_resend.Emails = mock_emails
 
@@ -153,8 +155,9 @@ def test_send_welcome_email_resend_not_available():
 
 def test_send_welcome_email_no_api_key():
     """Test graceful failure when API key not configured."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", ""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", ""),
     ):
         from scripts.core.email_service import send_welcome_email
 
@@ -164,9 +167,11 @@ def test_send_welcome_email_no_api_key():
 
 def test_send_welcome_email_api_exception():
     """Test graceful failure when Resend API raises exception."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails(exception=Exception("API rate limit exceeded"))
         mock_resend.Emails = mock_emails
 
@@ -179,9 +184,11 @@ def test_send_welcome_email_api_exception():
 
 def test_send_welcome_email_api_returns_none():
     """Test handling when API returns None (unexpected response)."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_resend.Emails.send = MagicMock(return_value=None)
 
         from scripts.core.email_service import send_welcome_email
@@ -192,9 +199,11 @@ def test_send_welcome_email_api_returns_none():
 
 def test_send_welcome_email_api_returns_dict_without_id():
     """Test handling when API returns dict without 'id' field."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_resend.Emails.send = MagicMock(return_value={"status": "queued"})
 
         from scripts.core.email_service import send_welcome_email
@@ -206,9 +215,11 @@ def test_send_welcome_email_api_returns_dict_without_id():
 
 def test_send_welcome_email_api_returns_object_with_id():
     """Test handling when API returns object with .id attribute."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         response_obj = type("ResendResponse", (), {"id": "email-123"})()
         mock_resend.Emails.send = MagicMock(return_value=response_obj)
 
@@ -306,9 +317,11 @@ def test_welcome_email_html_valid_structure():
 
 def test_send_welcome_email_unicode_characters():
     """Test email sending with Unicode characters."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails()
         mock_resend.Emails = mock_emails
 
@@ -344,9 +357,11 @@ def test_get_subscriber_count_placeholder():
 
 def test_send_welcome_email_long_email_address():
     """Test email sending with very long email address."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails()
         mock_resend.Emails = mock_emails
 
@@ -362,9 +377,11 @@ def test_send_welcome_email_long_email_address():
 
 def test_send_welcome_email_special_chars_in_email():
     """Test email sending with special characters."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails()
         mock_resend.Emails = mock_emails
 
@@ -383,9 +400,11 @@ def test_send_welcome_email_special_chars_in_email():
 
 def test_send_welcome_email_api_timeout():
     """Test handling of API timeout exception."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails(exception=TimeoutError("Request timeout"))
         mock_resend.Emails = mock_emails
 
@@ -397,9 +416,11 @@ def test_send_welcome_email_api_timeout():
 
 def test_send_welcome_email_api_connection_error():
     """Test handling of connection error exception."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails(exception=ConnectionError("Network unreachable"))
         mock_resend.Emails = mock_emails
 
@@ -411,9 +432,11 @@ def test_send_welcome_email_api_connection_error():
 
 def test_send_welcome_email_api_invalid_key():
     """Test handling of invalid API key exception."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_invalid_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_invalid_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails(exception=ValueError("Invalid API key"))
         mock_resend.Emails = mock_emails
 
@@ -428,9 +451,11 @@ def test_send_welcome_email_api_invalid_key():
 
 def test_send_welcome_email_tags_structure():
     """Test that email tags are correctly structured."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_emails = MockResendEmails()
         mock_resend.Emails = mock_emails
 
@@ -512,9 +537,11 @@ def test_validate_email_case_sensitivity():
 
 def test_send_welcome_email_api_returns_empty_dict():
     """Test handling when API returns empty dict."""
-    with patch("scripts.core.email_service.RESEND_AVAILABLE", True), patch(
-        "scripts.core.email_service.RESEND_API_KEY", "re_test_key"
-    ), patch("scripts.core.email_service.resend") as mock_resend:
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
         mock_resend.Emails.send = MagicMock(return_value={})
 
         from scripts.core.email_service import send_welcome_email

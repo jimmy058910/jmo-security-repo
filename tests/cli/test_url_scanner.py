@@ -72,6 +72,9 @@ class TestUrlScanner:
 
     def test_scan_url_sanitizes_domain(self, tmp_path):
         """Test that domain names are sanitized for directory names"""
+        # Create individual-web subdirectory (matches production usage in scan_orchestrator)
+        web_results_dir = tmp_path / "individual-web"
+
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -85,7 +88,7 @@ class TestUrlScanner:
             # URL with special characters
             scan_url(
                 url="https://sub.example.com:8080/path",
-                results_dir=tmp_path,
+                results_dir=web_results_dir,  # Pass individual-web directory (matches production)
                 tools=["zap"],
                 timeout=600,
                 retries=0,
@@ -94,7 +97,7 @@ class TestUrlScanner:
             )
 
             # Check that directory was created with sanitized domain
-            expected_dir = tmp_path / "individual-web" / "sub.example.com_8080"
+            expected_dir = web_results_dir / "sub.example.com_8080"
             assert expected_dir.exists()
 
     def test_scan_url_file_protocol_rejected(self, tmp_path):
@@ -138,9 +141,13 @@ class TestUrlScanner:
 
     def test_scan_url_with_tool_timeout_override(self, tmp_path):
         """Test per-tool timeout overrides"""
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True
-        ):
+
+        def mock_find_tool(tool_name):
+            if tool_name in ["zap.sh", "zap"]:
+                return "/usr/bin/zap.sh"
+            return None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
@@ -162,6 +169,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify ToolRunner was called
@@ -202,6 +210,9 @@ class TestUrlScanner:
 
     def test_scan_url_creates_output_directory(self, tmp_path):
         """Test that output directories are created"""
+        # Create individual-web subdirectory (matches production usage in scan_orchestrator)
+        web_results_dir = tmp_path / "individual-web"
+
         with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -214,7 +225,7 @@ class TestUrlScanner:
 
             scan_url(
                 url="https://secure.example.com",
-                results_dir=tmp_path,
+                results_dir=web_results_dir,  # Pass individual-web directory (matches production)
                 tools=["zap"],
                 timeout=600,
                 retries=0,
@@ -222,15 +233,15 @@ class TestUrlScanner:
                 allow_missing_tools=False,
             )
 
-            # Check directory structure
-            assert (tmp_path / "individual-web").exists()
-            assert (tmp_path / "individual-web" / "secure.example.com").exists()
+            # Check that directory was created with sanitized domain
+            expected_dir = web_results_dir / "secure.example.com"
+            assert expected_dir.exists()
 
     def test_allow_missing_tools_writes_stubs(self, tmp_path):
         """Test that allow_missing_tools writes stubs for missing tools"""
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool(tool_name):
+            return None  # No tools found
 
         stub_calls = []
 
@@ -238,10 +249,7 @@ class TestUrlScanner:
             stub_calls.append((tool_name, str(output_path)))
             output_path.write_text("{}")
 
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists",
-            side_effect=mock_tool_exists,
-        ):
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
             mock_runner.run_all_parallel.return_value = []
@@ -254,6 +262,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -266,9 +275,15 @@ class TestUrlScanner:
 
     def test_per_tool_flags_applied(self, tmp_path):
         """Test that per_tool_config flags are correctly applied"""
-        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner, patch(
-            "scripts.cli.scan_jobs.url_scanner.tool_exists", return_value=True
-        ):
+
+        def mock_find_tool(tool_name):
+            if tool_name in ["zap.sh", "zap"]:
+                return "/usr/bin/zap.sh"
+            if tool_name == "nuclei":
+                return "/usr/bin/nuclei"
+            return None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
 
@@ -292,6 +307,7 @@ class TestUrlScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()

@@ -1,0 +1,70 @@
+name: 'TruffleHog Secret Scan'
+description: 'Scan filesystem for verified secrets using TruffleHog'
+
+inputs:
+  scan-path:
+    description: 'Path to scan'
+    required: false
+    default: '.'
+  exclude-paths:
+    description: 'Path to exclusion file'
+    required: false
+    default: '.trufflehog-exclude.txt'
+  fail-on-verified:
+    description: 'Fail if verified secrets found'
+    required: false
+    default: 'true'
+  trufflehog-version:
+    description: 'TruffleHog version to install'
+    required: false
+    default: '3.63.0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install TruffleHog
+      shell: bash
+      env:
+        TRUFFLEHOG_VERSION: ${{ inputs.trufflehog-version }}
+      run: |
+        set -euo pipefail
+        INSTALL_URL="https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh"
+        curl -sSfL "$INSTALL_URL" | sh -s -- -b /usr/local/bin "v${TRUFFLEHOG_VERSION}"
+        if ! command -v trufflehog >/dev/null 2>&1; then
+          echo "::error::TruffleHog installation failed — binary not found after install"
+          exit 1
+        fi
+        echo "TruffleHog $(trufflehog --version 2>&1 | head -1) installed successfully"
+
+    - name: Run TruffleHog scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.scan-path }}
+        EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+        FAIL_ON_VERIFIED: ${{ inputs.fail-on-verified }}
+      run: |
+        set -euo pipefail
+
+        if ! trufflehog filesystem "$SCAN_PATH" \
+          --json \
+          --exclude-paths "$EXCLUDE_PATHS" \
+          --only-verified > trufflehog-results.json 2>trufflehog-stderr.txt; then
+          EXIT_CODE=$?
+          echo "::error::TruffleHog exited with code ${EXIT_CODE}"
+          cat trufflehog-stderr.txt >&2
+          exit "${EXIT_CODE}"
+        fi
+
+        if [ ! -s trufflehog-results.json ]; then
+          echo "TruffleHog scan complete. Verified secrets: 0"
+          exit 0
+        fi
+
+        VERIFIED=$({ jq -r 'select(.Verified == true)' trufflehog-results.json || true; } | wc -l)
+
+        if [ "$VERIFIED" -gt 0 ] && [ "$FAIL_ON_VERIFIED" = "true" ]; then
+          echo "::error::Found $VERIFIED verified secrets! Review trufflehog-results.json"
+          exit 1
+        fi
+
+        echo "TruffleHog scan complete. Verified secrets: $VERIFIED"

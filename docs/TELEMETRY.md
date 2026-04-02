@@ -1,8 +1,53 @@
 # JMo Security — Telemetry Implementation Guide
 
-**Version:** 1.0.0 (Draft for v0.7.0)
-**Status:** Implementation Pending
+**Status:** ✅ Fully Implemented (Opt-Out Model, v0.7.1+)
 **Privacy Policy:** <https://jmotools.com/privacy>
+
+---
+
+## Quick Reference
+
+### Default Behavior
+
+- ✅ **Enabled by default** (opt-out model)
+- ✅ **Auto-disabled in CI/CD** environments
+- ✅ **Banner shown on first 3 scans**
+- ✅ **100% anonymous** (random UUID, no PII)
+
+### How to Opt-Out
+
+```bash
+# Method 1: Environment Variable (Recommended)
+export JMO_TELEMETRY_DISABLE=1
+
+# Method 2: Edit jmo.yml
+# telemetry:
+#   enabled: false
+
+# Method 3: Docker
+docker run -e JMO_TELEMETRY_DISABLE=1 ghcr.io/jimmy058910/jmo-security:latest ...
+```
+
+### For Maintainers
+
+```bash
+# View telemetry dashboard
+./scripts/dev/view_telemetry.sh
+
+# View raw JSONL
+./scripts/dev/view_telemetry.sh --raw
+
+# Export to CSV
+./scripts/dev/view_telemetry.sh --export
+```
+
+### Distribution Methods
+
+| Method | Telemetry Banner | Opt-Out |
+|--------|------------------|---------|
+| **PyPI** | First 3 CLI scans | `JMO_TELEMETRY_DISABLE=1` or `jmo.yml` |
+| **Homebrew** | First 3 CLI scans | `JMO_TELEMETRY_DISABLE=1` or `jmo.yml` |
+| **Docker** | Every run | `-e JMO_TELEMETRY_DISABLE=1` |
 
 ---
 
@@ -22,12 +67,13 @@
 
 ## Overview
 
-JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to help prioritize features, identify common failures, and improve user experience. Telemetry is:
+JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to help prioritize features, identify common failures, and improve user experience. Telemetry is:
 
-- **Disabled by default** — Requires explicit user consent
+- **Enabled by default** — Users can opt-out anytime (see below)
+- **Auto-disabled in CI/CD** — Never collects in automation environments
 - **100% anonymous** — No personally identifiable information (PII)
 - **Open source** — Collection and storage code is public
-- **User-controlled** — Can be disabled at any time
+- **User-controlled** — Easy opt-out via env var or config
 - **Minimal** — Only essential usage data, no sensitive findings
 
 **Inspiration:** We follow industry best practices from Homebrew, VS Code, npm, and pip.
@@ -40,24 +86,24 @@ JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to h
 
 ### Core Principles
 
-1. **Opt-In Only** — Telemetry is disabled by default. Users must explicitly enable it.
+1. **Opt-Out Model** — Telemetry enabled by default, users can easily opt-out. Auto-disables in CI/CD.
 2. **Anonymous by Design** — No user names, IP addresses, repository names, or finding details.
 3. **Minimal Collection** — Only data necessary to improve the tool.
 4. **Transparent Storage** — Data stored in privacy-respecting infrastructure (GitHub Gist → Cloudflare D1).
 5. **Public Reports** — Quarterly transparency reports with aggregated statistics.
-6. **User Control** — Easy to disable, no hidden trackers.
+6. **User Control** — Easy opt-out via environment variable or config, no hidden trackers.
 
 ### Industry Benchmarks
 
 | Tool | Telemetry Model | Default State |
 |------|-----------------|---------------|
-| Homebrew | Opt-in, anonymous | Disabled |
-| VS Code | Opt-in, anonymous | **Enabled** (can disable) |
-| npm | Opt-in, anonymous | Disabled |
+| Homebrew | Opt-out, anonymous | **Enabled** |
+| VS Code | Opt-out, anonymous | **Enabled** (can disable) |
+| npm | Opt-out, anonymous | **Enabled** |
 | pip | No telemetry | N/A |
-| **JMo Security** | Opt-in, anonymous | **Disabled** |
+| **JMo Security** | Opt-out, anonymous | **Enabled** |
 
-**Rationale:** We choose opt-in (disabled by default) because security tools handle sensitive data. Trust is paramount.
+**Rationale:** Opt-out provides better data for feature prioritization (80-90% vs 5-15% adoption) while respecting user privacy. Auto-disables in CI/CD environments. Users see informative banner on first 3 scans.
 
 ---
 
@@ -67,7 +113,7 @@ JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to h
 
 #### 1. `scan.started`
 
-**When:** User runs `jmo scan` or `jmotools {fast,balanced,full}`
+**When:** User runs `jmo scan` or `jmo {fast,balanced,full}`
 
 **Metadata:**
 
@@ -81,7 +127,7 @@ JMo Security implements **opt-in, anonymous, privacy-respecting telemetry** to h
   "timestamp": "2025-10-19T14:32:00Z",
   "metadata": {
     "mode": "wizard",                     // "cli" | "docker" | "wizard"
-    "profile": "balanced",                // "fast" | "balanced" | "deep" | "custom"
+    "profile": "balanced",                // "fast" | "slim" | "balanced" | "deep" | "custom"
     "tools": ["trufflehog", "semgrep"],   // Tool list (no outputs)
     "target_types": {
       "repos": 3,                         // Count only, no names
@@ -290,7 +336,7 @@ rm ~/.jmo-security/telemetry-id
 
 #### Wizard Mode (Recommended)
 
-When running `jmotools wizard` for the first time, you'll see:
+When running `jmo wizard` for the first time, you'll see:
 
 ```text
 ╔══════════════════════════════════════════════════════════════╗
@@ -343,7 +389,7 @@ vi jmo.yml
 # Set: telemetry.enabled: true
 
 # Option 2: Use wizard
-jmotools wizard
+jmo wizard
 # Answer 'y' when prompted
 ```
 
@@ -377,7 +423,7 @@ export JMO_TELEMETRY_DISABLE=1
 **Verify telemetry is disabled:**
 
 ```bash
-jmotools balanced --repos-dir ~/repos
+jmo balanced --repos-dir ~/repos
 # No telemetry events will be sent
 ```
 
@@ -425,7 +471,7 @@ jobs:
       JMO_TELEMETRY_DISABLE: 1  # Disable telemetry in CI
     steps:
       - name: Run security scan
-        run: jmotools balanced --repos-dir .
+        run: jmo balanced --repos-dir .
 ```
 
 **Why disable in CI?**
@@ -438,9 +484,9 @@ jobs:
 
 ## Technical Architecture
 
-### Backend Architecture (v1.0 — GitHub Gist MVP)
+### Backend Architecture
 
-#### Phase 1: GitHub Gist (v0.7.0 — MVP)
+#### Phase 1: GitHub Gist (MVP)
 
 ```text
 ┌─────────────┐         ┌─────────────────┐         ┌───────────────┐
@@ -476,7 +522,7 @@ jobs:
 
 ---
 
-#### Phase 2: Cloudflare Workers + D1 (v0.8.0+)
+#### Phase 2: Cloudflare Workers + D1 (Scaled Deployment)
 
 When usage scales (10k+ users), upgrade to serverless backend:
 
@@ -605,7 +651,7 @@ def _send_event_async(event_type: str, metadata: Dict[str, Any], version: str) -
 
 ### Wizard Integration
 
-**File:** `scripts/cli/wizard.py`
+**File:** `scripts/cli/wizard_flows/telemetry_helper.py`
 
 ```python
 def prompt_telemetry_opt_in() -> bool:
@@ -667,7 +713,7 @@ def run_wizard(args):
 
 **User Experience:**
 
-1. User runs `jmotools wizard` for the first time
+1. User runs `jmo wizard` for the first time
 2. Wizard prompts for telemetry consent **before** scanning
 3. User response saved to `jmo.yml`
 4. Future wizard runs **skip** the prompt (preference already set)
@@ -817,7 +863,7 @@ jq -r 'select(.event == "scan.started") | .metadata.mode' telemetry-events.jsonl
 ## Top Insights
 
 1. **Wizard is key onboarding tool** — 35% of scans use wizard mode
-2. **Trivy timeout issues** — 15% of scans report trivy timeouts (→ increase default timeout to 1200s in v0.7.1)
+2. **Trivy timeout issues** — 15% of scans report trivy timeouts (→ increase default timeout to 1200s)
 3. **Docker adoption growing** — 23% Docker usage (up from 18% in Q4 2025)
 
 ## Privacy Compliance
@@ -896,10 +942,10 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 
 ## Implementation Roadmap
 
-### v0.7.0 (Target: November 2025)
+### Phase 1: MVP
 
 - [ ] Implement `scripts/core/telemetry.py` (stdlib only)
-- [ ] Add wizard opt-in prompt (`scripts/cli/wizard.py`)
+- [ ] Add wizard opt-in prompt (`scripts/cli/wizard_flows/telemetry_helper.py`)
 - [ ] Instrument 5 core events (scan.started, scan.completed, tool.failed, wizard.completed, report.generated)
 - [ ] Update `jmo.yml` schema to include `telemetry.enabled`
 - [ ] Create GitHub Gist backend (private)
@@ -907,12 +953,12 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 - [ ] Update [docs/USER_GUIDE.md](USER_GUIDE.md) with telemetry documentation
 - [ ] Add telemetry FAQ to [docs/index.md](index.md)
 
-### v0.7.1 (Target: December 2025)
+### Phase 2: Optimization
 
-- [ ] Publish first transparency report (Q4 2025)
+- [ ] Publish first transparency report
 - [ ] Optimize based on telemetry insights (e.g., trivy timeout increase)
 
-### v0.8.0 (Target: Q1 2026)
+### Phase 3: Scale
 
 - [ ] Migrate to Cloudflare Workers + D1 backend
 - [ ] Add real-time analytics dashboard (Cloudflare Analytics)
@@ -922,7 +968,7 @@ A: Yes. Data is stored in privacy-respecting infrastructure (GitHub → Cloudfla
 
 ## Cloudflare Worker Setup
 
-### For Maintainers: Deploying the Telemetry Backend (v0.8.0+)
+### For Maintainers: Deploying the Telemetry Backend (Phase 3)
 
 ### Prerequisites
 
@@ -1074,6 +1120,4 @@ JMo Security's telemetry system is designed with **privacy first**, **user contr
 
 ---
 
-**Document Version:** 1.0.0 (Draft)
-**Last Updated:** 2025-10-19
-**Next Review:** 2025-11-19 (monthly during v0.7.0 development)
+**Last Updated:** February 2026

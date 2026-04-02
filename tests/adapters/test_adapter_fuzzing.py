@@ -2,6 +2,9 @@
 
 This module uses Hypothesis to generate edge cases and test adapter resilience
 against malformed, deeply nested, and extremely large inputs.
+
+Requires: hypothesis (optional dev dependency)
+Install with: pip install hypothesis
 """
 
 from __future__ import annotations
@@ -10,13 +13,19 @@ import json
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
 
-from scripts.core.adapters.bandit_adapter import load_bandit
-from scripts.core.adapters.checkov_adapter import load_checkov
-from scripts.core.adapters.trufflehog_adapter import load_trufflehog
-from scripts.core.adapters.semgrep_adapter import load_semgrep
-from scripts.core.adapters.trivy_adapter import load_trivy
+# Skip entire module if hypothesis is not installed
+hypothesis = pytest.importorskip(
+    "hypothesis",
+    reason="Hypothesis library required for property-based tests. Install with: pip install hypothesis",
+)
+from hypothesis import HealthCheck, given, settings, strategies as st  # noqa: E402
+
+from scripts.core.adapters.bandit_adapter import BanditAdapter  # noqa: E402
+from scripts.core.adapters.checkov_adapter import CheckovAdapter  # noqa: E402
+from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter  # noqa: E402
+from scripts.core.adapters.semgrep_adapter import SemgrepAdapter  # noqa: E402
+from scripts.core.adapters.trivy_adapter import TrivyAdapter  # noqa: E402
 
 
 # Strategy: Generate malformed JSON
@@ -54,7 +63,8 @@ def test_trufflehog_handles_malformed_json(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should return a list, not crash (may be empty or have stub findings)
-    result = load_trufflehog(test_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
 
 
@@ -69,7 +79,8 @@ def test_semgrep_handles_malformed_json(tmp_path: Path, content: str):
     test_file = tmp_path / "semgrep.json"
     test_file.write_text(content, encoding="utf-8")
 
-    result = load_semgrep(test_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
     assert len(result) == 0
 
@@ -85,7 +96,8 @@ def test_trivy_handles_malformed_json(tmp_path: Path, content: str):
     test_file = tmp_path / "trivy.json"
     test_file.write_text(content, encoding="utf-8")
 
-    result = load_trivy(test_file)
+    adapter = TrivyAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
     assert len(result) == 0
 
@@ -101,7 +113,9 @@ def test_checkov_handles_malformed_json(tmp_path: Path, content: str):
     test_file = tmp_path / "checkov.json"
     test_file.write_text(content, encoding="utf-8")
 
-    result = load_checkov(test_file)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
     assert len(result) == 0
 
@@ -117,7 +131,9 @@ def test_bandit_handles_malformed_json(tmp_path: Path, content: str):
     test_file = tmp_path / "bandit.json"
     test_file.write_text(content, encoding="utf-8")
 
-    result = load_bandit(test_file)
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
 
 
@@ -146,11 +162,19 @@ def test_adapters_handle_deep_nesting(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should complete without recursion errors
-    load_trufflehog(test_file)
-    load_semgrep(test_file)
-    load_trivy(test_file)
-    load_checkov(test_file)
-    load_bandit(test_file)
+    adapter = TruffleHogAdapter()
+
+    adapter.parse(test_file)
+    adapter = SemgrepAdapter()
+
+    adapter.parse(test_file)
+    adapter = TrivyAdapter()
+
+    adapter.parse(test_file)
+    adapter = CheckovAdapter()
+    adapter.parse(test_file)
+    adapter = BanditAdapter()
+    adapter.parse(test_file)
 
 
 # Strategy: Generate very large arrays
@@ -174,7 +198,8 @@ def test_adapters_handle_large_outputs(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should complete without OOM
-    result = load_trufflehog(test_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
 
 
@@ -208,10 +233,12 @@ def test_adapters_handle_special_characters(tmp_path: Path, content: str):
     test_file.write_text(content, encoding="utf-8")
 
     # Should not crash or corrupt data
-    result = load_trufflehog(test_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
 
-    result = load_semgrep(test_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(test_file)
     assert isinstance(result, list)
 
 
@@ -238,19 +265,26 @@ def test_adapters_handle_missing_files(tmp_path: Path):
     """Adapters should gracefully handle nonexistent files."""
     missing_file = tmp_path / "nonexistent.json"
 
-    result = load_trufflehog(missing_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(missing_file)
     assert result == []
 
-    result = load_semgrep(missing_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(missing_file)
     assert result == []
 
-    result = load_trivy(missing_file)
+    adapter = TrivyAdapter()
+    result = adapter.parse(missing_file)
     assert result == []
 
-    result = load_checkov(missing_file)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    result = adapter.parse(missing_file)
     assert result == []
 
-    result = load_bandit(missing_file)
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    result = adapter.parse(missing_file)
     assert result == []
 
 
@@ -260,19 +294,26 @@ def test_adapters_handle_empty_files(tmp_path: Path):
     empty_file = tmp_path / "empty.json"
     empty_file.write_text("", encoding="utf-8")
 
-    result = load_trufflehog(empty_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(empty_file)
     assert result == []
 
-    result = load_semgrep(empty_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(empty_file)
     assert result == []
 
-    result = load_trivy(empty_file)
+    adapter = TrivyAdapter()
+    result = adapter.parse(empty_file)
     assert result == []
 
-    result = load_checkov(empty_file)
+    adapter = CheckovAdapter()
+    adapter = CheckovAdapter()
+    result = adapter.parse(empty_file)
     assert result == []
 
-    result = load_bandit(empty_file)
+    adapter = BanditAdapter()
+    adapter = BanditAdapter()
+    result = adapter.parse(empty_file)
     assert result == []
 
 
@@ -282,10 +323,12 @@ def test_adapters_handle_binary_data(tmp_path: Path):
     binary_file = tmp_path / "binary.json"
     binary_file.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")  # PNG header
 
-    result = load_trufflehog(binary_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(binary_file)
     assert result == []
 
-    result = load_semgrep(binary_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(binary_file)
     assert result == []
 
 
@@ -298,10 +341,12 @@ def test_adapters_handle_long_strings(tmp_path: Path):
     long_file = tmp_path / "long.json"
     long_file.write_text(content, encoding="utf-8")
 
-    result = load_trufflehog(long_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(long_file)
     assert isinstance(result, list)
 
-    result = load_semgrep(long_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(long_file)
     assert isinstance(result, list)
 
 
@@ -318,10 +363,12 @@ def test_adapters_handle_unicode(tmp_path: Path):
     unicode_file = tmp_path / "unicode.json"
     unicode_file.write_text(content, encoding="utf-8")
 
-    result = load_trufflehog(unicode_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(unicode_file)
     assert isinstance(result, list)
 
-    result = load_semgrep(unicode_file)
+    adapter = SemgrepAdapter()
+    result = adapter.parse(unicode_file)
     assert isinstance(result, list)
 
 
@@ -341,7 +388,8 @@ def test_adapters_skip_invalid_entries(tmp_path: Path):
     mixed_file = tmp_path / "mixed.json"
     mixed_file.write_text(mixed_content, encoding="utf-8")
 
-    result = load_trufflehog(mixed_file)
+    adapter = TruffleHogAdapter()
+    result = adapter.parse(mixed_file)
     assert isinstance(result, list)
 
 
@@ -360,7 +408,8 @@ def test_adapters_handle_permission_errors(tmp_path: Path):
         os.chmod(restricted_file, 0o000)
 
         # Should return empty list or handle gracefully
-        result = load_trufflehog(restricted_file)
+        adapter = TruffleHogAdapter()
+        result = adapter.parse(restricted_file)
         assert isinstance(result, list)
 
         # Restore permissions for cleanup

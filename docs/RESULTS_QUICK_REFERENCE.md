@@ -108,7 +108,7 @@ suppressions:
 ```text
 **Re-run scan to verify:**
 ```bash
-jmotools balanced --repos-dir .
+jmo balanced --repos-dir .
 cat results/summaries/SUPPRESSIONS.md
 ```text
 ---

@@ -12,13 +12,17 @@ Architecture Note (v0.6.1+):
 
 Related:
 - COVERAGE_GAP_ANALYSIS.md Gap #4
-- TESTING_MATRIX.md Matrix 3.1
+- docs/internal/TESTING_MATRIX.md Matrix 3.1
 """
 
 import json
 import subprocess
+import sys
+
+import pytest
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_includes_all_tools(tmp_path):
     """Verify deep profile invokes all 12 tools."""
     # Create minimal test repo
@@ -29,8 +33,9 @@ def test_deep_profile_includes_all_tools(tmp_path):
 
     # Run deep profile scan
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -67,6 +72,7 @@ def test_deep_profile_includes_all_tools(tmp_path):
     assert has_common_tool, f"No common tools found. Found: {found_tools}"
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_falco_output(tmp_path):
     """Test falco output is generated (if tool installed)."""
     test_repo = tmp_path / "test-repo"
@@ -74,8 +80,9 @@ def test_deep_profile_falco_output(tmp_path):
     (test_repo / "test.py").write_text("x = 1")
 
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -101,6 +108,7 @@ def test_deep_profile_falco_output(tmp_path):
         assert isinstance(data, (dict, list))
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_aflplusplus_output(tmp_path):
     """Test afl++ output is generated (if tool installed)."""
     test_repo = tmp_path / "test-repo"
@@ -108,8 +116,9 @@ def test_deep_profile_aflplusplus_output(tmp_path):
     (test_repo / "test.c").write_text("int main() { return 0; }")
 
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -130,6 +139,7 @@ def test_deep_profile_aflplusplus_output(tmp_path):
         assert isinstance(data, (dict, list))
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_graceful_degradation(tmp_path):
     """Test deep profile continues when some tools missing."""
     test_repo = tmp_path / "test-repo"
@@ -138,8 +148,9 @@ def test_deep_profile_graceful_degradation(tmp_path):
 
     # Run deep profile with --allow-missing-tools
     cmd = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -159,6 +170,7 @@ def test_deep_profile_graceful_degradation(tmp_path):
     assert (tmp_path / "results" / "individual-repos").exists()
 
 
+@pytest.mark.requires_tools
 def test_deep_profile_report_aggregation(tmp_path):
     """Test report phase aggregates deep profile findings."""
     test_repo = tmp_path / "test-repo"
@@ -167,8 +179,9 @@ def test_deep_profile_report_aggregation(tmp_path):
 
     # Run deep profile scan
     cmd_scan = [
-        "python3",
-        "scripts/cli/jmo.py",
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
         "scan",
         "--repo",
         str(test_repo),
@@ -181,13 +194,22 @@ def test_deep_profile_report_aggregation(tmp_path):
     subprocess.run(cmd_scan, capture_output=True, timeout=240)
 
     # Generate report
-    cmd_report = ["python3", "scripts/cli/jmo.py", "report", str(tmp_path / "results")]
+    cmd_report = [
+        sys.executable,
+        "-m",
+        "scripts.cli.jmo",
+        "report",
+        str(tmp_path / "results"),
+    ]
     subprocess.run(cmd_report, check=True, timeout=60)
 
     # Verify aggregated findings
     findings_json = tmp_path / "results" / "summaries" / "findings.json"
     assert findings_json.exists()
 
-    findings = json.loads(findings_json.read_text())
-    # findings.json is now a list of findings directly (not wrapped in {"findings": [...]})
-    assert isinstance(findings, list)
+    data = json.loads(findings_json.read_text())
+    # v1.0.0: findings.json uses metadata wrapper structure
+    assert isinstance(data, dict)
+    assert "meta" in data
+    assert "findings" in data
+    assert isinstance(data["findings"], list)

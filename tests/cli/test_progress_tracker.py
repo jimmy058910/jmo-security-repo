@@ -189,7 +189,7 @@ class TestProgressTracker:
                 t.start()
 
             for t in threads:
-                t.join()
+                t.join(timeout=10)
 
             # All updates should be counted
             assert tracker.completed == 100

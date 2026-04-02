@@ -21,37 +21,31 @@ open results/summaries/dashboard.html
 
 | Tag | Size | Tools | Use Case |
 |-----|------|-------|----------|
-| `latest`, `X.Y.Z-full` | ~2.5 GB | 12 tools | Complete scanning (deep profile) |
-| `slim` | ~2.2 GB | 8 tools | CI/CD pipelines (balanced profile) |
-| `alpine` | ~2.0 GB | 3 tools | Minimal footprint (fast profile) |
+| `latest`, `X.Y.Z-deep` | ~1.97 GB | 28 tools | Complete scanning (deep profile, all tools) |
+| `X.Y.Z-balanced` | ~1.41 GB | 18 tools | Production CI/CD pipelines (balanced profile) |
+| `X.Y.Z-slim` | ~557 MB | 14 tools | Cloud-focused scanning (IaC, K8s, containers) |
+| `X.Y.Z-fast` | ~502 MB | 9 tools | CI/CD gate, pre-commit hooks (fast profile) |
 
 ## Features
 
-- 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab (v0.6.0+)
-- 🔐 **12 Security Tools**: TruffleHog, Semgrep, Trivy, Syft, Checkov, Hadolint, ZAP, Nuclei, Bandit, Nosey Parker, Falco, AFL++
+- 🎯 **Multi-Target Scanning**: Repos, containers, IaC, URLs, Kubernetes, GitLab
+- 🔐 **28 Security Tools** (25 Docker-ready + 3 manual): Secrets (TruffleHog, Nosey Parker, Semgrep-Secrets), SAST (Semgrep, Bandit, Gosec, Horusec), SBOM (Syft, CDXgen, ScanCode), SCA (Trivy, Grype, Dependency-Check), IaC (Checkov, Checkov-CICD), Cloud (Prowler, Kubescape), DAST (ZAP, Nuclei, Akto*), Dockerfile (Hadolint), Mobile (MobSF*), Malware (YARA), System (Lynis), Runtime (Trivy-RBAC, Falco), Fuzzing (AFL++*), License (Bearer) |*Manual install required
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
-- 🎨 **3 Profiles**: Fast (3 tools, 5-8 min), Balanced (8 tools, 15-20 min), Deep (12 tools, 30-60 min)
-- 🔒 **Privacy-First Telemetry**: Anonymous usage analytics (opt-out model, v0.7.1+)
-- 📈 **Real-Time Progress**: Live scan progress with ETA estimation (v0.7.0+)
+- 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (18 tools, 18-25 min), Slim (14 tools, cloud-focused), Deep (25 Docker-ready tools, 40-70 min)
+- 🔒 **Privacy-First Telemetry**: Anonymous usage analytics (opt-out model)
+- 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
-## What's New
+## What's New in v1.0.0 (February 2026)
 
-### v0.7.1 (October 2025)
+- **Unified Profile System**: 4 profiles (fast/slim/balanced/deep) with matching Docker variants
+- **SQLite Historical Storage**: Track findings over time with `jmo history` and `jmo trends`
+- **Machine-Readable Diffs**: Compare scans with `jmo diff` for CI/CD integration
+- **28 Security Tools**: Expanded from 11 to 28 tools across all profiles
+- **Tool Management**: `jmo tools install/check/update/outdated` commands
+- **Enhanced Deduplication**: 30-40% noise reduction with cross-tool similarity clustering
 
-- **Opt-out telemetry model**: Anonymous usage analytics now enabled by default (auto-disabled in CI/CD)
-  - Easy opt-out: `jmotools telemetry disable` or `export JMO_TELEMETRY_DISABLE=1`
-  - Privacy policy: [jmotools.com/privacy](https://jmotools.com/privacy)
-- **Enhanced debugging**: Detailed exception logging for GitLab, wizard, adapters (Nuclei, Falco, TruffleHog)
-- **SHA256 verification**: Homebrew installer verification for supply chain security
-
-### v0.7.0 (October 2025)
-
-- **Auto-detect CPU threads**: 75% CPU utilization (min 2, max 16) for optimal performance
-- **Real-time progress tracking**: Live ETA estimation during long scans (15-60 min)
-- **Privacy-first telemetry**: Optional anonymous usage analytics to improve features
-
-## Multi-Target Scanning (v0.6.0+)
+## Multi-Target Scanning
 
 Scan repositories AND infrastructure in one unified workflow:
 

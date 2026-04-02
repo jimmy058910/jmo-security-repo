@@ -75,7 +75,10 @@ def test_cmd_report_suppression_report(tmp_path: Path, monkeypatch):
     data = (out_dir / "findings.json").read_text(encoding="utf-8")
     import json as _json
 
-    fid = _json.loads(data)[0]["id"]
+    # v1.0.0: findings.json uses metadata wrapper structure
+    findings_data = _json.loads(data)
+    assert "findings" in findings_data, "findings.json should have 'findings' key"
+    fid = findings_data["findings"][0]["id"]
 
     # Write suppressions file and re-run
     (results / "jmo.suppress.yml").write_text(

@@ -21,11 +21,12 @@ Optional but recommended to install dev tools and Python deps:
 make dev-deps
 ```
 
-Install external scanners as needed (Semgrep, Trivy, Checkov, Bandit, Syft, TruffleHog, Hadolint, Nosey Parker, ZAP, Falco, AFL++). You can use:
+Install external scanners as needed (Semgrep, Trivy, Checkov, Bandit, Syft, TruffleHog, Hadolint, Nosey Parker, ZAP, Falco, AFL++):
 
 ```bash
-# See what's installed/missing and how to install
-make verify-env
+# Check tool status and install missing tools
+jmo tools check --profile balanced
+jmo tools install --profile balanced
 ```
 
 Tip: You can still proceed with `--allow-missing-tools` to create stubs for missing tools.
@@ -117,6 +118,6 @@ xdg-open results/summaries/dashboard.html 2>/dev/null || open results/summaries/
 
 ### Troubleshooting
 
-- Tool not found: run `make verify-env` for install hints or add `--allow-missing-tools` to create stubs and continue.
+- Tool not found: run `jmo tools check` to see status, then `jmo tools install` to install, or add `--allow-missing-tools` to create stubs and continue.
 - Nosey Parker fails locally: the CLI will try Docker automatically if available; ensure Docker daemon is running.
 - Slow scans: reduce `--threads`, set a lower `--timeout`, or use the `balanced` profile.

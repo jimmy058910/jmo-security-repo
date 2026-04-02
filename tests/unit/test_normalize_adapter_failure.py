@@ -1,6 +1,5 @@
 from pathlib import Path
 import json
-import os
 
 from scripts.core import normalize_and_report as nr
 from scripts.core.exceptions import AdapterParseException
@@ -17,11 +16,11 @@ def test_safe_load_adapter_failure_isolated(tmp_path: Path, monkeypatch):
     repo = root / "individual-repos" / "r1"
     _write(repo / "trufflehog.json", [])
 
-    # Monkeypatch one loader to raise
-    def boom(_path):
+    # Monkeypatch _safe_load_plugin to raise (v0.9.0 plugin architecture)
+    def boom(_plugin_class, _path, _profiling=False):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(nr, "load_trufflehog", boom)
+    monkeypatch.setattr(nr, "_safe_load_plugin", boom)
 
     out = nr.gather_results(root)
     # Should still return a list (adapter failure ignored)
@@ -62,13 +61,13 @@ def test_adapter_parse_exception_in_gather(tmp_path: Path, monkeypatch):
     repo = root / "individual-repos" / "r1"
     _write(repo / "semgrep.json", [])
 
-    # Monkeypatch loader to raise AdapterParseException
-    def raise_adapter_error(path):
+    # Monkeypatch _safe_load_plugin to raise AdapterParseException
+    def raise_adapter_error(_plugin_class, path, _profiling=False):
         raise AdapterParseException(
             tool="semgrep", path=str(path), reason="malformed JSON"
         )
 
-    monkeypatch.setattr(nr, "load_semgrep", raise_adapter_error)
+    monkeypatch.setattr(nr, "_safe_load_plugin", raise_adapter_error)
 
     out = nr.gather_results(root)
     # Should handle exception gracefully and return empty list
@@ -82,11 +81,11 @@ def test_file_not_found_in_gather(tmp_path: Path, monkeypatch):
     repo = root / "individual-repos" / "r1"
     _write(repo / "trivy.json", [])
 
-    # Monkeypatch loader to raise FileNotFoundError
-    def raise_file_not_found(path):
+    # Monkeypatch _safe_load_plugin to raise FileNotFoundError
+    def raise_file_not_found(_plugin_class, path, _profiling=False):
         raise FileNotFoundError(f"File not found: {path}")
 
-    monkeypatch.setattr(nr, "load_trivy", raise_file_not_found)
+    monkeypatch.setattr(nr, "_safe_load_plugin", raise_file_not_found)
 
     out = nr.gather_results(root)
     # Should handle exception gracefully
@@ -113,11 +112,12 @@ def test_trivy_syft_enrichment_error(tmp_path: Path, monkeypatch):
         }
     ]
 
-    # Mock load_trivy to return findings
-    def mock_load_trivy(path):
+    # Mock _safe_load_plugin to return findings (v0.9.0 plugin architecture)
+    def mock_load_plugin(_plugin_class, _path, _profiling=False):
+        # Return list of dicts (plugin.parse returns Finding objects, _safe_load_plugin converts to dicts)
         return trivy_findings
 
-    monkeypatch.setattr(nr, "load_trivy", mock_load_trivy)
+    monkeypatch.setattr(nr, "_safe_load_plugin", mock_load_plugin)
 
     # Monkeypatch _enrich_trivy_with_syft to raise KeyError
     def raise_key_error(findings_list):
@@ -159,11 +159,11 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
         }
     ]
 
-    # Mock load_semgrep to return findings
-    def mock_load_semgrep(path):
+    # Mock _safe_load_plugin to return findings (v0.9.0 plugin architecture)
+    def mock_load_plugin(_plugin_class, _path, _profiling=False):
         return semgrep_findings
 
-    monkeypatch.setattr(nr, "load_semgrep", mock_load_semgrep)
+    monkeypatch.setattr(nr, "_safe_load_plugin", mock_load_plugin)
 
     # Monkeypatch enrich_findings_with_compliance to raise FileNotFoundError
     from scripts.core import compliance_mapper
@@ -192,48 +192,3 @@ def test_compliance_enrichment_error(tmp_path: Path, monkeypatch):
     )
     out = nr.gather_results(root)
     assert isinstance(out, list)
-
-
-def test_safe_load_file_not_found(tmp_path: Path):
-    """Test FileNotFoundError handler in _safe_load (lines 199-200)."""
-    from scripts.core.adapters.trufflehog_adapter import load_trufflehog
-
-    # Call _safe_load with non-existent file
-    result = nr._safe_load(load_trufflehog, tmp_path / "nonexistent.json")
-
-    # Should return empty list
-    assert result == []
-
-
-def test_safe_load_adapter_parse_exception(tmp_path: Path, monkeypatch):
-    """Test AdapterParseException handler in _safe_load (lines 203-204)."""
-    fake_file = tmp_path / "bad.json"
-    fake_file.write_text("{}", encoding="utf-8")
-
-    def raise_adapter_error(path):
-        raise AdapterParseException(tool="test", path=str(path), reason="bad format")
-
-    result = nr._safe_load(raise_adapter_error, fake_file)
-
-    # Should return empty list
-    assert result == []
-
-
-def test_safe_load_permission_error(tmp_path: Path):
-    """Test OSError/PermissionError handler in _safe_load (lines 207-208)."""
-    from scripts.core.adapters.trufflehog_adapter import load_trufflehog
-
-    # Create a file we can't read (Unix permissions)
-    restricted_file = tmp_path / "restricted.json"
-    restricted_file.write_text("[]", encoding="utf-8")
-
-    # Make file unreadable
-    os.chmod(restricted_file, 0o000)
-
-    try:
-        result = nr._safe_load(load_trufflehog, restricted_file)
-        # Should return empty list
-        assert result == []
-    finally:
-        # Restore permissions for cleanup
-        os.chmod(restricted_file, 0o644)

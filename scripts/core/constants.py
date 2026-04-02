@@ -9,6 +9,10 @@ Benefits:
 - Eliminates magic numbers scattered across code
 - Easier to update values (change once, apply everywhere)
 - Better code documentation through named constants
+
+Note: Runtime profile-to-tool resolution uses PROFILE_TOOLS from
+scripts.core.tool_registry (loaded from versions.yaml). The profile
+lists below are static references for validation and documentation.
 """
 
 # ============================================================================
@@ -69,24 +73,44 @@ TOOL_GITLEAKS = "gitleaks"
 
 # Static Analysis (SAST)
 TOOL_SEMGREP = "semgrep"
+TOOL_SEMGREP_SECRETS = "semgrep-secrets"  # Same binary, secrets ruleset
 TOOL_BANDIT = "bandit"
+TOOL_BEARER = "bearer"
+TOOL_HORUSEC = "horusec"
+TOOL_GOSEC = "gosec"
 
-# Vulnerability Scanning
+# Vulnerability Scanning (SCA)
 TOOL_TRIVY = "trivy"
+TOOL_TRIVY_RBAC = "trivy-rbac"  # Same binary, RBAC config
+TOOL_GRYPE = "grype"
 TOOL_OSV_SCANNER = "osv-scanner"
+TOOL_DEPENDENCY_CHECK = "dependency-check"
 
 # SBOM Generation
 TOOL_SYFT = "syft"
+TOOL_CDXGEN = "cdxgen"
+TOOL_SCANCODE = "scancode"
 
 # IaC Scanning
 TOOL_CHECKOV = "checkov"
+TOOL_CHECKOV_CICD = "checkov-cicd"  # Same binary, CI/CD policies
 TOOL_TFSEC = "tfsec"
+TOOL_OPA = "opa"
 
 # Container Scanning
 TOOL_HADOLINT = "hadolint"
 
+# Shell Script Analysis
+TOOL_SHELLCHECK = "shellcheck"
+
 # DAST/Web Scanning
 TOOL_ZAP = "zap"
+TOOL_NUCLEI = "nuclei"
+TOOL_AKTO = "akto"
+
+# Cloud Security
+TOOL_PROWLER = "prowler"
+TOOL_KUBESCAPE = "kubescape"
 
 # Runtime Security
 TOOL_FALCO = "falco"
@@ -94,22 +118,50 @@ TOOL_FALCO = "falco"
 # Fuzzing
 TOOL_AFLPLUSPLUS = "afl++"
 
-# All tools (for validation)
+# Mobile Security
+TOOL_MOBSF = "mobsf"
+
+# Host Auditing
+TOOL_LYNIS = "lynis"
+
+# YARA Rules
+TOOL_YARA = "yara"
+
+# All tools (for validation) - matches tool_registry.py deep profile
 ALL_TOOLS = [
     TOOL_TRUFFLEHOG,
     TOOL_NOSEYPARKER,
     TOOL_GITLEAKS,
     TOOL_SEMGREP,
+    TOOL_SEMGREP_SECRETS,
     TOOL_BANDIT,
+    TOOL_BEARER,
+    TOOL_HORUSEC,
+    TOOL_GOSEC,
     TOOL_TRIVY,
+    TOOL_TRIVY_RBAC,
+    TOOL_GRYPE,
     TOOL_OSV_SCANNER,
+    TOOL_DEPENDENCY_CHECK,
     TOOL_SYFT,
+    TOOL_CDXGEN,
+    TOOL_SCANCODE,
     TOOL_CHECKOV,
+    TOOL_CHECKOV_CICD,
     TOOL_TFSEC,
+    TOOL_OPA,
     TOOL_HADOLINT,
+    TOOL_SHELLCHECK,
     TOOL_ZAP,
+    TOOL_NUCLEI,
+    TOOL_AKTO,
+    TOOL_PROWLER,
+    TOOL_KUBESCAPE,
     TOOL_FALCO,
     TOOL_AFLPLUSPLUS,
+    TOOL_MOBSF,
+    TOOL_LYNIS,
+    TOOL_YARA,
 ]
 
 # ============================================================================
@@ -134,11 +186,43 @@ SEVERITY_ORDER = [
 # Profile Names
 # ============================================================================
 PROFILE_FAST = "fast"
+PROFILE_SLIM = "slim"
 PROFILE_BALANCED = "balanced"
 PROFILE_DEEP = "deep"
 
-# Profile configurations
-PROFILE_FAST_TOOLS = [TOOL_TRUFFLEHOG, TOOL_SEMGREP, TOOL_TRIVY]
+ALL_PROFILES = [PROFILE_FAST, PROFILE_SLIM, PROFILE_BALANCED, PROFILE_DEEP]
+
+# Static profile tool lists (for validation/documentation)
+# Runtime resolution uses PROFILE_TOOLS from scripts.core.tool_registry
+PROFILE_FAST_TOOLS = [
+    TOOL_TRUFFLEHOG,
+    TOOL_SEMGREP,
+    TOOL_SYFT,
+    TOOL_TRIVY,
+    TOOL_CHECKOV,
+    TOOL_HADOLINT,
+    TOOL_NUCLEI,
+    TOOL_SHELLCHECK,
+    TOOL_OPA,
+]  # 9 tools
+
+PROFILE_SLIM_TOOLS = [
+    TOOL_TRUFFLEHOG,
+    TOOL_SEMGREP,
+    TOOL_SYFT,
+    TOOL_TRIVY,
+    TOOL_CHECKOV,
+    TOOL_HADOLINT,
+    TOOL_NUCLEI,
+    TOOL_PROWLER,
+    TOOL_KUBESCAPE,
+    TOOL_GRYPE,
+    TOOL_BEARER,
+    TOOL_HORUSEC,
+    TOOL_SHELLCHECK,
+    TOOL_OPA,
+]  # 14 tools
+
 PROFILE_BALANCED_TOOLS = [
     TOOL_TRUFFLEHOG,
     TOOL_SEMGREP,
@@ -147,20 +231,50 @@ PROFILE_BALANCED_TOOLS = [
     TOOL_CHECKOV,
     TOOL_HADOLINT,
     TOOL_ZAP,
-]
+    TOOL_NUCLEI,
+    TOOL_PROWLER,
+    TOOL_KUBESCAPE,
+    TOOL_SCANCODE,
+    TOOL_CDXGEN,
+    TOOL_GOSEC,
+    TOOL_GRYPE,
+    TOOL_BEARER,
+    TOOL_HORUSEC,
+    TOOL_SHELLCHECK,
+    TOOL_OPA,
+]  # 18 tools
+
 PROFILE_DEEP_TOOLS = [
     TOOL_TRUFFLEHOG,
     TOOL_NOSEYPARKER,
     TOOL_SEMGREP,
+    TOOL_SEMGREP_SECRETS,
     TOOL_BANDIT,
     TOOL_SYFT,
     TOOL_TRIVY,
+    TOOL_TRIVY_RBAC,
     TOOL_CHECKOV,
+    TOOL_CHECKOV_CICD,
     TOOL_HADOLINT,
     TOOL_ZAP,
+    TOOL_NUCLEI,
+    TOOL_PROWLER,
+    TOOL_KUBESCAPE,
+    TOOL_AKTO,
+    TOOL_SCANCODE,
+    TOOL_CDXGEN,
+    TOOL_GOSEC,
+    TOOL_YARA,
+    TOOL_GRYPE,
+    TOOL_BEARER,
+    TOOL_HORUSEC,
+    TOOL_DEPENDENCY_CHECK,
     TOOL_FALCO,
     TOOL_AFLPLUSPLUS,
-]
+    TOOL_MOBSF,
+    TOOL_LYNIS,
+    TOOL_OPA,
+]  # 29 tools
 
 # ============================================================================
 # Output Formats
@@ -170,6 +284,7 @@ OUTPUT_MARKDOWN = "md"
 OUTPUT_YAML = "yaml"
 OUTPUT_HTML = "html"
 OUTPUT_SARIF = "sarif"
+OUTPUT_CSV = "csv"
 
 ALL_OUTPUT_FORMATS = [
     OUTPUT_JSON,
@@ -177,6 +292,7 @@ ALL_OUTPUT_FORMATS = [
     OUTPUT_YAML,
     OUTPUT_HTML,
     OUTPUT_SARIF,
+    OUTPUT_CSV,
 ]
 
 # ============================================================================
@@ -269,3 +385,10 @@ RC_ZAP_OK = (0, 1, 2)  # ZAP treats 0/1/2 as success
 # ============================================================================
 FINGERPRINT_MESSAGE_MAX_LENGTH = 120  # First 120 chars of message
 FINGERPRINT_HASH_LENGTH = 16  # 16-char hex fingerprint
+
+# ============================================================================
+# Deduplication
+# ============================================================================
+DEDUP_SIMILARITY_THRESHOLD_DEFAULT = 0.65  # Cross-tool clustering threshold
+DEDUP_SIMILARITY_THRESHOLD_MIN = 0.5
+DEDUP_SIMILARITY_THRESHOLD_MAX = 1.0

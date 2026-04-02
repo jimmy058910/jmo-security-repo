@@ -56,8 +56,10 @@ class TestRepositoryScanner:
         repo.mkdir()
 
         # Mock tool_exists to return True for trivy
-        def mock_tool_exists(tool_name):
-            return tool_name == "trivy"
+        def mock_find_tool(tool_name):
+            if tool_name == "trivy":
+                return "/usr/bin/trivy"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -81,7 +83,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()
@@ -188,8 +190,10 @@ class TestRepositoryScanner:
         repo.mkdir()
         (repo / ".git").mkdir()
 
-        def mock_tool_exists(tool_name):
-            return tool_name == "noseyparker"
+        def mock_find_tool(tool_name):
+            if tool_name == "noseyparker":
+                return "/usr/bin/noseyparker"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -219,7 +223,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert statuses["noseyparker"] is True
@@ -237,9 +241,11 @@ class TestRepositoryScanner:
         repo = tmp_path / "docker-fallback-repo"
         repo.mkdir()
 
-        def mock_tool_exists(tool_name):
+        def mock_find_tool(tool_name):
             # noseyparker not available, but docker is
-            return tool_name == "docker"
+            if tool_name == "docker":
+                return "/usr/bin/docker"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -259,7 +265,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             # Verify Docker fallback was used
@@ -279,7 +285,14 @@ class TestRepositoryScanner:
         (repo / "app.js").write_text("console.log('test');")
 
         def mock_tool_exists(tool_name):
-            return tool_name == "zap-baseline.py"
+            # ZAP requires either zap-baseline.py OR docker to be available
+            return tool_name in ("zap-baseline.py", "docker")
+
+        def mock_find_tool(tool_name):
+            # Return a fake path for zap-baseline.py
+            if tool_name == "zap-baseline.py":
+                return "/usr/bin/zap-baseline.py"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -299,7 +312,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert statuses["zap"] is True
@@ -309,7 +322,8 @@ class TestRepositoryScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             zap_def = next((t for t in tool_defs if t.name == "zap"), None)
             assert zap_def is not None
-            assert "zap-baseline.py" in zap_def.command
+            # command is a list, check if zap-baseline.py is in any element
+            assert any("zap-baseline.py" in str(c) for c in zap_def.command)
 
     def test_zap_stub_when_no_web_files(self, tmp_path):
         """Test ZAP writes stub when no web files found"""
@@ -317,8 +331,10 @@ class TestRepositoryScanner:
         repo.mkdir()
         (repo / "main.py").write_text("print('hello')")
 
-        def mock_tool_exists(tool_name):
-            return tool_name == "zap-baseline.py"
+        def mock_find_tool(tool_name):
+            if tool_name == "zap-baseline.py":
+                return "/usr/bin/zap-baseline.py"
+            return None
 
         def mock_write_stub(tool_name, output_path):
             output_path.write_text("{}")
@@ -337,7 +353,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -352,18 +368,18 @@ class TestRepositoryScanner:
         """Test Falco validates rule files when present"""
         repo = tmp_path / "falco-repo"
         repo.mkdir()
-        (repo / "custom-falco-rules.yaml").write_text(
-            """
+        (repo / "custom-falco-rules.yaml").write_text("""
 - rule: Detect Shell in Container
   desc: Alert on shell execution
   condition: spawned_process and container
   output: "Shell spawned in container"
   priority: WARNING
-"""
-        )
+""")
 
-        def mock_tool_exists(tool_name):
-            return tool_name == "falco"
+        def mock_find_tool(tool_name):
+            if tool_name == "falco":
+                return "/usr/bin/falco"
+            return None
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -383,7 +399,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert statuses["falco"] is True
@@ -401,8 +417,10 @@ class TestRepositoryScanner:
         repo.mkdir()
         (repo / "README.md").write_text("# No Falco rules")
 
-        def mock_tool_exists(tool_name):
-            return tool_name == "falco"
+        def mock_find_tool(tool_name):
+            if tool_name == "falco":
+                return "/usr/bin/falco"
+            return None
 
         def mock_write_stub(tool_name, output_path):
             output_path.write_text("{}")
@@ -421,12 +439,16 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
             assert statuses["falco"] is True
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Windows doesn't have Unix-style execute bits for binary detection",
+    )
     def test_aflplusplus_fuzzes_binaries(self, tmp_path):
         """Test AFL++ fuzzes binaries when found"""
         repo = tmp_path / "afl-repo"
@@ -437,8 +459,12 @@ class TestRepositoryScanner:
         binary.write_bytes(b"\x7fELF")  # Minimal ELF header
         binary.chmod(0o755)
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["afl-fuzz", "afl-analyze"]
+        def mock_find_tool(tool_name):
+            tool_paths = {
+                "afl-fuzz": "/usr/bin/afl-fuzz",
+                "afl-analyze": "/usr/bin/afl-analyze",
+            }
+            return tool_paths.get(tool_name)
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -458,7 +484,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert statuses["afl++"] is True
@@ -468,7 +494,8 @@ class TestRepositoryScanner:
             tool_defs = kwargs.get("tools") or (args[0] if args else [])
             afl_def = next((t for t in tool_defs if t.name == "afl++"), None)
             assert afl_def is not None
-            assert "afl-fuzz" in afl_def.command
+            # command is a list, check if afl-fuzz is in any element
+            assert any("afl-fuzz" in str(c) for c in afl_def.command)
 
     def test_aflplusplus_stub_when_no_binaries(self, tmp_path):
         """Test AFL++ writes stub when no binaries found"""
@@ -476,8 +503,12 @@ class TestRepositoryScanner:
         repo.mkdir()
         (repo / "source.c").write_text("#include <stdio.h>\nint main() {}")
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["afl-fuzz", "afl-analyze"]
+        def mock_find_tool(tool_name):
+            tool_paths = {
+                "afl-fuzz": "/usr/bin/afl-fuzz",
+                "afl-analyze": "/usr/bin/afl-analyze",
+            }
+            return tool_paths.get(tool_name)
 
         def mock_write_stub(tool_name, output_path):
             output_path.write_text("{}")
@@ -496,7 +527,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -516,21 +547,23 @@ class TestRepositoryScanner:
         binary.chmod(0o755)
         (repo / "Dockerfile").write_text("FROM ubuntu")
 
-        def mock_tool_exists(tool_name):
-            return tool_name in [
-                "trufflehog",
-                "noseyparker",
-                "semgrep",
-                "bandit",
-                "syft",
-                "trivy",
-                "checkov",
-                "hadolint",
-                "zap-baseline.py",
-                "falco",
-                "afl-fuzz",
-                "afl-analyze",
-            ]
+        def mock_find_tool(tool_name):
+            tool_paths = {
+                "trufflehog": "/usr/bin/trufflehog",
+                "noseyparker": "/usr/bin/noseyparker",
+                "semgrep": "/usr/bin/semgrep",
+                "bandit": "/usr/bin/bandit",
+                "syft": "/usr/bin/syft",
+                "trivy": "/usr/bin/trivy",
+                "checkov": "/usr/bin/checkov",
+                "hadolint": "/usr/bin/hadolint",
+                "zap-baseline.py": "/usr/bin/zap-baseline.py",
+                "falco": "/usr/bin/falco",
+                "afl-fuzz": "/usr/bin/afl-fuzz",
+                "afl-analyze": "/usr/bin/afl-analyze",
+                "": "/usr/bin/",
+            }
+            return tool_paths.get(tool_name)
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -584,7 +617,7 @@ class TestRepositoryScanner:
                 retries=1,
                 per_tool_config={},
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             assert name == "deep-profile-repo"
@@ -608,6 +641,10 @@ class TestRepositoryScanner:
             stub_calls.append((tool_name, output_path))
             output_path.write_text('{"results": []}')
 
+        def mock_find_tool_none(tool_name):
+            # No tools available
+            return None
+
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
             MockRunner.return_value = mock_runner
@@ -621,7 +658,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool_none,
                 write_stub_func=mock_write_stub,
             )
 
@@ -641,8 +678,9 @@ class TestRepositoryScanner:
         repo = tmp_path / "all-missing-repo"
         repo.mkdir()
 
-        def mock_tool_exists(tool_name):
-            return False
+        def mock_find_tool_none(tool_name):
+            # No tools available
+            return None
 
         stub_calls = []
 
@@ -677,7 +715,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool_none,
                 write_stub_func=mock_write_stub,
             )
 
@@ -696,8 +734,9 @@ class TestRepositoryScanner:
         repo = tmp_path / "flags-test-repo"
         repo.mkdir()
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["semgrep", "trivy"]
+        def mock_find_tool(tool_name):
+            tool_paths = {"semgrep": "/usr/bin/semgrep", "trivy": "/usr/bin/trivy"}
+            return tool_paths.get(tool_name)
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -725,7 +764,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()
@@ -749,8 +788,13 @@ class TestRepositoryScanner:
         repo = tmp_path / "timeout-override-repo"
         repo.mkdir()
 
-        def mock_tool_exists(tool_name):
-            return tool_name in ["trufflehog", "semgrep", "trivy"]
+        def mock_find_tool(tool_name):
+            tool_paths = {
+                "trufflehog": "/usr/bin/trufflehog",
+                "semgrep": "/usr/bin/semgrep",
+                "trivy": "/usr/bin/trivy",
+            }
+            return tool_paths.get(tool_name)
 
         with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
             mock_runner = MagicMock()
@@ -778,7 +822,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config=per_tool_config,
                 allow_missing_tools=False,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
             )
 
             MockRunner.assert_called_once()
@@ -802,9 +846,11 @@ class TestRepositoryScanner:
         repo = tmp_path / "mixed-tools-repo"
         repo.mkdir()
 
-        def mock_tool_exists(tool_name):
+        def mock_find_tool(tool_name):
             # Only trufflehog and trivy available
-            return tool_name in ["trufflehog", "trivy"]
+            if tool_name in ["trufflehog", "trivy"]:
+                return f"/usr/bin/{tool_name}"
+            return None
 
         stub_calls = []
 
@@ -831,7 +877,7 @@ class TestRepositoryScanner:
                 retries=0,
                 per_tool_config={},
                 allow_missing_tools=True,
-                tool_exists_func=mock_tool_exists,
+                find_tool_func=mock_find_tool,
                 write_stub_func=mock_write_stub,
             )
 
@@ -847,6 +893,111 @@ class TestRepositoryScanner:
             assert "semgrep" in [call for call in stub_calls]
             assert "bandit" in [call for call in stub_calls]
             assert len(stub_calls) == 2  # Only semgrep and bandit
+
+    def test_timeout_writes_stub_file(self, tmp_path):
+        """Test that tools that timeout get stub files written"""
+        repo = tmp_path / "timeout-repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+
+        def mock_find_tool(tool_name):
+            tool_paths = {
+                "semgrep": "/usr/bin/semgrep",
+                "semgrep-secrets": "/usr/bin/semgrep-secrets",
+            }
+            return tool_paths.get(tool_name)
+
+        stub_calls = []
+
+        def mock_write_stub(tool_name, output_path):
+            stub_calls.append(tool_name)
+            output_path.write_text("{}")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            # Simulate semgrep-secrets timing out
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="semgrep", status="success", attempts=1),
+                ToolResult(
+                    tool="semgrep-secrets",
+                    status="error",
+                    attempts=2,
+                    error_message="Timeout after 900s",
+                ),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["semgrep", "semgrep-secrets"],
+                timeout=900,
+                retries=1,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            # semgrep should succeed
+            assert statuses["semgrep"] is True
+
+            # semgrep-secrets should fail but have stub written
+            assert statuses["semgrep-secrets"] is False
+
+            # Stub should be written for timed out tool
+            assert "semgrep-secrets" in stub_calls
+
+    def test_timeout_records_attempts(self, tmp_path):
+        """Test that timed out tools record their attempt counts"""
+        repo = tmp_path / "timeout-attempts-repo"
+        repo.mkdir()
+
+        def mock_find_tool(tool_name):
+            if tool_name == "semgrep-secrets":
+                return "/usr/bin/semgrep-secrets"
+            return None
+
+        def mock_write_stub(tool_name, output_path):
+            output_path.write_text("{}")
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            # Simulate tool timing out after 3 attempts
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="semgrep-secrets",
+                    status="retry_exhausted",
+                    attempts=3,
+                    error_message="Timeout after 900s",
+                ),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["semgrep-secrets"],
+                timeout=900,
+                retries=2,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            # Tool should be marked as failed
+            assert statuses["semgrep-secrets"] is False
+
+            # Attempts should be recorded in metadata
+            assert "__attempts__" in statuses
+            assert statuses["__attempts__"]["semgrep-secrets"] == 3
 
 
 if __name__ == "__main__":

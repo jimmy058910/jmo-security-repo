@@ -1,19 +1,55 @@
 #!/usr/bin/env python3
 """
-AFL++ adapter: normalize AFL++ fuzzing outputs to CommonFinding
-Supports:
-- AFL++ crash reports and findings
-- JSON exports from afl-collect or custom scripts
+AFL++ adapter - Maps AFL++ fuzzing crash reports to CommonFinding schema.
+
+Plugin Architecture (v0.9.0):
+- Uses @adapter_plugin decorator for auto-discovery
+- Inherits from AdapterPlugin base class
+- Returns Finding objects (not dicts)
+- Auto-loaded by plugin registry
+
+v1.0.0 Feature #1:
+- Fuzzing-based crash detection and analysis
+- Memory corruption and exploitability classification
+- Crash deduplication and root cause identification
+- Support for AFL++ crash collector output
+
+Tool Version: 4.0+
+Output Format: JSON with crashes array (afl-collect or custom scripts)
+Exit Codes: N/A (post-processing of fuzzing output)
+
+Supported Crash Types:
+- SEGV/Segfault: Memory access violations (CRITICAL)
+- SIGABRT/Abort: Program aborts (CRITICAL)
+- SIGILL: Illegal instruction (CRITICAL)
+- Heap/Stack Overflow: Buffer overflows (CRITICAL)
+- Use-After-Free (UAF): Memory corruption (CRITICAL)
+- Hang/Timeout: Program hangs (MEDIUM)
+
+Severity Classification:
+- CRITICAL: Exploitable crashes (SEGV, overflow, UAF)
+- HIGH: Other crashes (generic faults)
+- MEDIUM: Hangs and timeouts
+
+Example:
+    >>> adapter = AFLPlusPlusAdapter()
+    >>> findings = adapter.parse(Path('aflplusplus.json'))
+    >>> # Returns findings for each unique crash discovered
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
+from scripts.core.adapters.common import safe_load_json_file
 from scripts.core.common_finding import fingerprint, normalize_severity
-from scripts.core.compliance_mapper import enrich_finding_with_compliance
+from scripts.core.plugin_api import (
+    AdapterPlugin,
+    Finding,
+    PluginMetadata,
+    adapter_plugin,
+)
 
 
 def _crash_type_to_severity(crash_type: str) -> str:
@@ -49,7 +85,66 @@ def _crash_type_to_severity(crash_type: str) -> str:
     return "MEDIUM"
 
 
-def load_aflplusplus(path: str | Path) -> List[Dict[str, Any]]:
+@adapter_plugin(
+    PluginMetadata(
+        name="aflplusplus",
+        version="1.0.0",
+        author="JMo Security",
+        description="Adapter for AFL++ fuzzer",
+        tool_name="aflplusplus",
+        schema_version="1.2.0",
+        output_format="json",
+        exit_codes={0: "clean"},
+    )
+)
+class AFLPlusPlusAdapter(AdapterPlugin):
+    """Adapter for AFL++ fuzzer (plugin architecture)."""
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Return plugin metadata."""
+        return self.__class__._plugin_metadata  # type: ignore[attr-defined,no-any-return]  # Dynamically attached by @adapter_plugin decorator
+
+    def parse(self, output_path: Path) -> list[Finding]:
+        """Parse tool output and return normalized findings.
+
+        Args:
+            output_path: Path to aflplusplus.json output file
+
+        Returns:
+            List of Finding objects following CommonFinding schema v1.2.0
+        """
+        # Delegate to internal function that returns dicts
+        findings_dicts = _load_aflplusplus_internal(output_path)
+
+        # Convert dicts to Finding objects
+        findings = []
+        for f_dict in findings_dicts:
+            finding = Finding(
+                schemaVersion=f_dict.get("schemaVersion", "1.2.0"),
+                id=f_dict.get("id", ""),
+                ruleId=f_dict.get("ruleId", ""),
+                severity=f_dict.get("severity", "INFO"),
+                tool=f_dict.get("tool", {}),
+                location=f_dict.get("location", {}),
+                message=f_dict.get("message", ""),
+                title=f_dict.get("title"),
+                description=f_dict.get("description"),
+                remediation=f_dict.get("remediation"),
+                references=f_dict.get("references", []),
+                tags=f_dict.get("tags", []),
+                cvss=f_dict.get("cvss"),
+                risk=f_dict.get("risk"),
+                compliance=f_dict.get("compliance"),
+                context=f_dict.get("context"),
+                raw=f_dict.get("raw"),
+            )
+            findings.append(finding)
+
+        return findings
+
+
+def _load_aflplusplus_internal(path: str | Path) -> list[dict[str, Any]]:
     """Load and normalize AFL++ JSON output.
 
     Expected JSON structure:
@@ -75,19 +170,11 @@ def load_aflplusplus(path: str | Path) -> List[Dict[str, Any]]:
       }
     }
     """
-    p = Path(path)
-    if not p.exists():
-        return []
-
-    try:
-        data = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
-    except (json.JSONDecodeError, OSError):
-        return []
-
+    data = safe_load_json_file(path, default=None)
     if not isinstance(data, dict):
         return []
 
-    findings: List[Dict[str, Any]] = []
+    findings: list[dict[str, Any]] = []
 
     # Extract crashes
     crashes = data.get("crashes", [])
@@ -166,7 +253,7 @@ def load_aflplusplus(path: str | Path) -> List[Dict[str, Any]]:
             remediation += "PRIORITY: This crash is potentially exploitable."
 
         finding = {
-            "schemaVersion": "1.0.0",
+            "schemaVersion": "1.2.0",
             "id": fid,
             "ruleId": rule_id,
             "title": title,
@@ -195,9 +282,6 @@ def load_aflplusplus(path: str | Path) -> List[Dict[str, Any]]:
             },
             "raw": crash,
         }
-
-        # Enrich with compliance framework mappings
-        finding = enrich_finding_with_compliance(finding)
         findings.append(finding)
 
     return findings
