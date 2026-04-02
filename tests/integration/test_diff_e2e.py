@@ -101,6 +101,7 @@ def test_e2e_directory_diff_json(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0, f"Diff failed: {result.stderr}"
@@ -194,6 +195,7 @@ def test_e2e_modification_detection(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0
@@ -264,6 +266,7 @@ def test_e2e_ci_workflow(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0
@@ -329,6 +332,7 @@ def test_e2e_filtering_combinations(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0
@@ -382,6 +386,7 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     # Run diff WITHOUT modifications
@@ -402,6 +407,7 @@ def test_e2e_no_modifications_flag(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result_with.returncode == 0
@@ -458,6 +464,7 @@ def test_e2e_html_output(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0
@@ -504,6 +511,7 @@ def test_e2e_markdown_output(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0
@@ -550,6 +558,7 @@ def test_e2e_sarif_output(temp_workspace, sample_findings):
         ],
         capture_output=True,
         text=True,
+        timeout=120,
     )
 
     assert result.returncode == 0

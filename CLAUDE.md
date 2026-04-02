@@ -539,9 +539,19 @@ This project has a history of Windows CI hangs. Follow these rules to prevent th
 | **Don't spawn >100 threads in tests** | Windows thread creation is expensive | Use `concurrent.futures` with `max_workers` |
 | **Mark real-tool tests `@pytest.mark.requires_tools`** | CI excludes these; tools aren't installed on runners | `-m "not requires_tools"` in CI |
 
-**Root cause pattern:** pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't work). When a subprocess hangs, the thread method can kill the Python test thread but NOT the child process. The child becomes an orphan, and `--reruns 2` retries the test, tripling the hang time.
+**Root cause pattern:** pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't work). When a subprocess hangs, the thread method can kill the Python test thread but NOT the child process. The child becomes an orphan, and `--reruns` retries the test, multiplying the hang time.
 
-**If Windows CI hangs:** Check for missing `timeout=` in subprocess calls, missing mocks for `ToolInstaller`/`subprocess.run`, or tests that spawn real external tools without `@pytest.mark.requires_tools`.
+**Windows CI architecture (ci.yml):**
+
+- Pinned to `windows-2022` (stable, D: drive available for fast I/O)
+- `TEMP=D:\Temp` set via CI step (up to 30% I/O speedup)
+- `-p no:xdist -p no:rerunfailures` disables plugins that cause socket deadlocks
+- `--timeout=60` per-test (halved from default 120s for faster failure detection)
+- `-m "not smoke and not requires_tools and not docker and not slow"` excludes tests that need tools, Docker, or are slow
+- Post-test `always()` step kills orphan processes via `Stop-Process`
+- `timeout-minutes: 15` hard job-level safety net
+
+**If Windows CI hangs:** Check for missing `timeout=` in subprocess calls, missing mocks for `ToolInstaller`/`subprocess.run`, bare `.join()` on threads, or tests that spawn real external tools without `@pytest.mark.requires_tools`.
 
 ## Documentation References
 

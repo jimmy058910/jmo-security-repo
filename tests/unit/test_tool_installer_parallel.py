@@ -172,7 +172,7 @@ class TestParallelInstallProgress:
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=10)
 
         assert len(errors) == 0
         # Total operations: 10 threads * 50 iterations = 500 completions

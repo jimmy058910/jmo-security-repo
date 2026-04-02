@@ -206,7 +206,7 @@ jobs:
           - os: macos-latest
             shard: 1
             total-shards: 1
-          - os: windows-latest
+          - os: windows-2022
             shard: 1
             total-shards: 1
     steps:
@@ -276,29 +276,40 @@ jobs:
             -p no:xdist \
             -m "not smoke and not requires_tools and not docker"
 
+      - name: Configure Windows temp directory for faster I/O
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "D:\Temp" | Out-Null
+          "TEMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+          "TMP=D:\Temp" | Out-File -Append $env:GITHUB_ENV
+
       - name: Run tests (Windows, no coverage, no reruns)
-        if: matrix.os == 'windows-latest'
-        id: windows-tests
-        continue-on-error: true
+        if: matrix.os == 'windows-2022'
+        timeout-minutes: 15
         env:
           CI: "true"
           PYTHONUTF8: "1"
           JMO_THREADS: "2"
           SKIP_REACT_BUILD_CHECK: "true"
-        timeout-minutes: 15
         run: |
           python -m pytest -q \
             --disable-warnings \
             --timeout=60 \
             -p no:xdist \
             -p no:rerunfailures \
-            -m "not smoke and not requires_tools and not docker"
+            -m "not smoke and not requires_tools and not docker and not slow"
 
-      - name: Windows test status
-        if: matrix.os == 'windows-latest' && steps.windows-tests.outcome == 'failure'
+      - name: Windows post-test cleanup
+        if: matrix.os == 'windows-2022' && always()
+        shell: pwsh
         run: |
-          echo "::warning::Windows tests failed or timed out. This is a known intermittent issue."
-          echo "::warning::See CLAUDE.md 'Windows Test Hang Prevention' for root cause documentation."
+          $procs = Get-Process -Name python,cmd,node,java -ErrorAction SilentlyContinue |
+            Where-Object { $_.Id -ne $PID }
+          if ($procs) {
+            Write-Host "Killing $($procs.Count) orphan processes"
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
 
       - name: Upload shard coverage artifact (Ubuntu only)
         if: matrix.os == 'ubuntu-latest'

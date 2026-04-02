@@ -120,8 +120,10 @@ def jmo_runner():
         Callable that runs JMo commands
     """
 
-    def _run(args: List[str], **kwargs) -> subprocess.CompletedProcess:
-        defaults = {"capture_output": True, "text": True}
+    def _run(
+        args: List[str], timeout: int = 120, **kwargs
+    ) -> subprocess.CompletedProcess:
+        defaults = {"capture_output": True, "text": True, "timeout": timeout}
         defaults.update(kwargs)
         return run_jmo_command(args, **defaults)
 

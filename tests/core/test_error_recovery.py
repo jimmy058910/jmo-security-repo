@@ -398,7 +398,7 @@ class TestConcurrentAccessRecovery:
             t.start()
 
         for t in threads:
-            t.join()
+            t.join(timeout=10)
 
         # At least some should succeed
         assert success_count > 0
@@ -423,7 +423,7 @@ class TestConcurrentAccessRecovery:
             t.start()
 
         for t in threads:
-            t.join()
+            t.join(timeout=10)
 
         # File should exist and be valid JSON
         if output_file.exists():
