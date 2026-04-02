@@ -1,15 +1,19 @@
 #!/bin/bash
-# Pre-push hook to prevent incomplete commits from breaking Dependabot PRs
-# Installed: $(date)
+# Pre-push hook: checks that pre-commit doesn't cover
+# Install: cp hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#
+# Checks run here are UNIQUE to pre-push. Black, Ruff, mypy, markdownlint,
+# and other code quality checks are handled by pre-commit hooks at commit time.
+# See .pre-commit-config.yaml for the full list.
 
 set -e
 
-echo "🔍 Running pre-push checks..."
+echo "Running pre-push checks..."
 
 # 1. Check for untracked Python modules in scripts/
 untracked=$(git ls-files --others --exclude-standard scripts/ | grep "\.py$" || true)
 if [ -n "$untracked" ]; then
-  echo "❌ ERROR: Untracked Python files found in scripts/:"
+  echo "ERROR: Untracked Python files found in scripts/:"
   echo "$untracked"
   echo ""
   echo "Fix: Run 'git add scripts/' before pushing"
@@ -26,19 +30,18 @@ critical_modules=(
 )
 
 for module in "${critical_modules[@]}"; do
-  # Use Python 3.11 to support modern type hints (python_requires='>=3.10')
-  if ! python3.11 -c "import $module" 2>/dev/null; then
-    echo "❌ ERROR: Cannot import $module - module missing or broken"
+  if ! python -c "import $module" 2>/dev/null; then
+    echo "ERROR: Cannot import $module - module missing or broken"
     echo "Fix: Ensure all Python modules in scripts/ are committed and functional"
     exit 1
   fi
 done
 
 # 3. Verify requirements-dev.txt is in sync (if requirements-dev.in was modified)
-if git diff --name-only HEAD @{u} 2>/dev/null | grep -q "requirements-dev.in"; then
+if git diff --name-only @{u} HEAD 2>/dev/null | grep -q "requirements-dev.in"; then
   echo "  Checking requirements-dev.txt is in sync..."
-  if ! git diff --name-only HEAD @{u} 2>/dev/null | grep -q "requirements-dev.txt"; then
-    echo "⚠️  WARNING: requirements-dev.in modified but requirements-dev.txt not updated"
+  if ! git diff --name-only @{u} HEAD 2>/dev/null | grep -q "requirements-dev.txt"; then
+    echo "WARNING: requirements-dev.in modified but requirements-dev.txt not updated"
     echo "Fix: Run 'make deps-compile' and commit requirements-dev.txt"
     echo ""
     read -p "Continue anyway? (y/N) " -n 1 -r
@@ -49,47 +52,4 @@ if git diff --name-only HEAD @{u} 2>/dev/null | grep -q "requirements-dev.in"; t
   fi
 fi
 
-# 4. Run mypy type checking on scripts/
-echo "  Running mypy type checks..."
-if command -v mypy >/dev/null 2>&1; then
-  if ! mypy scripts/ --config-file=pyproject.toml; then
-    echo "❌ ERROR: Mypy type checking failed"
-    echo "Fix: Run 'mypy scripts/' locally and fix type errors"
-    echo ""
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      exit 1
-    fi
-  fi
-else
-  echo "⚠️  WARNING: mypy not installed, skipping type checks"
-fi
-
-# 5. Run markdownlint on changed markdown files
-echo "  Running markdownlint on changed files..."
-changed_md=$(git diff --name-only HEAD @{u} 2>/dev/null | grep "\.md$" || true)
-if [ -n "$changed_md" ]; then
-  if command -v markdownlint >/dev/null 2>&1 || command -v npx >/dev/null 2>&1; then
-    # Try markdownlint-cli2 first (more configurable)
-    if npx markdownlint-cli2 $changed_md 2>/dev/null; then
-      : # Success
-    elif markdownlint $changed_md 2>/dev/null; then
-      : # Fallback to markdownlint-cli
-    else
-      echo "⚠️  WARNING: Markdownlint found issues in:"
-      echo "$changed_md"
-      echo "Fix: Run 'npx markdownlint-cli2 --fix <file>' to auto-fix"
-      echo ""
-      read -p "Continue anyway? (y/N) " -n 1 -r
-      echo
-      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-      fi
-    fi
-  else
-    echo "⚠️  WARNING: markdownlint not installed, skipping markdown checks"
-  fi
-fi
-
-echo "✅ Pre-push checks passed!"
+echo "Pre-push checks passed!"

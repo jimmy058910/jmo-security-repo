@@ -1,6 +1,7 @@
-# docs/plans/ Convention
+# dev-only/plans/ Convention
 
 This directory holds implementation plans for non-trivial changes to JMo Security.
+Completed plans are archived in `dev-only/archive/plans/`.
 
 ## When to Write a Plan
 
