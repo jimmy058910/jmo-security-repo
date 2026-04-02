@@ -59,6 +59,8 @@ def _check_forward_slashes_in_pathlib() -> CheckResult | None:
 
 def _check_mixed_separators() -> CheckResult | None:
     """Mixed separators (/ and \\\\) resolve correctly."""
+    if sys.platform != "win32":
+        return None  # Only meaningful on Windows where \\ is a separator
     p1 = Path("scripts/core")
     p2 = Path("scripts\\core")
     if p1.resolve() == p2.resolve():
