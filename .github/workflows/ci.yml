@@ -257,7 +257,7 @@ jobs:
             --splits ${{ matrix.total-shards }} \
             --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
-            --cov=. \
+            --cov=scripts \
             --cov-report=xml:coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml \
             -m "not smoke and not requires_tools and not docker"
 
