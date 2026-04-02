@@ -261,8 +261,8 @@ jobs:
             --cov-report=xml:coverage-shard-${{ matrix.os }}-${{ matrix.shard }}.xml \
             -m "not smoke and not requires_tools and not docker"
 
-      - name: Run tests (macOS/Windows, no coverage)
-        if: matrix.os != 'ubuntu-latest'
+      - name: Run tests (macOS, no coverage)
+        if: matrix.os == 'macos-latest'
         env:
           CI: "true"
           PYTHONUTF8: "1"
@@ -274,6 +274,22 @@ jobs:
             --reruns 2 \
             --reruns-delay 2 \
             -p no:xdist \
+            -m "not smoke and not requires_tools and not docker"
+
+      - name: Run tests (Windows, no coverage, no reruns)
+        if: matrix.os == 'windows-latest'
+        env:
+          CI: "true"
+          PYTHONUTF8: "1"
+          JMO_THREADS: "2"
+          SKIP_REACT_BUILD_CHECK: "true"
+        timeout-minutes: 15
+        run: |
+          python -m pytest -q \
+            --disable-warnings \
+            --timeout=60 \
+            -p no:xdist \
+            -p no:rerunfailures \
             -m "not smoke and not requires_tools and not docker"
 
       - name: Upload shard coverage artifact (Ubuntu only)
