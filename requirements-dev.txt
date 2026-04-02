@@ -38,12 +38,7 @@ click==8.3.1
     #   black
     #   typer
     #   uvicorn
-colorama==0.4.6
-    # via
-    #   bandit
-    #   click
-    #   pytest
-coverage[toml]==7.13.5
+coverage==7.13.5
     # via pytest-cov
 croniter==6.2.2
     # via -r requirements-dev.in
@@ -62,10 +57,8 @@ email-validator==2.3.0
     # via pydantic
 execnet==2.1.2
     # via pytest-xdist
-filelock==3.25.2
-    # via
-    #   python-discovery
-    #   virtualenv
+filelock==3.20.3
+    # via virtualenv
 h11==0.16.0
     # via
     #   httpcore
@@ -100,7 +93,7 @@ librt==0.8.1
     # via mypy
 markdown-it-py==4.0.0
     # via rich
-mcp[cli]==1.26.0
+mcp==1.26.0
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
@@ -129,7 +122,6 @@ pathspec==1.0.4
 platformdirs==4.9.4
     # via
     #   black
-    #   python-discovery
     #   sigstore
     #   virtualenv
 pluggy==1.6.0
@@ -142,7 +134,7 @@ pyasn1==0.6.3
     # via sigstore
 pycparser==3.0
     # via cffi
-pydantic[email]==2.12.5
+pydantic==2.12.5
     # via
     #   mcp
     #   pydantic-settings
@@ -157,7 +149,7 @@ pygments==2.20.0
     # via
     #   pytest
     #   rich
-pyjwt[crypto]==2.12.1
+pyjwt==2.12.1
     # via
     #   mcp
     #   sigstore
@@ -189,8 +181,6 @@ pytest-xdist==3.8.0
     # via -r requirements-dev.in
 python-dateutil==2.9.0.post0
     # via croniter
-python-discovery==1.2.1
-    # via virtualenv
 python-dotenv==1.2.2
     # via
     #   mcp
@@ -199,10 +189,6 @@ python-multipart==0.0.22
     # via mcp
 pytokens==0.4.1
     # via black
-pytz==2025.2
-    # via croniter
-pywin32==311 ; sys_platform == "win32"
-    # via mcp
 pyyaml==6.0.3
     # via
     #   -r requirements-dev.in
@@ -212,7 +198,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.1
+requests==2.33.0
     # via sigstore
 rfc3161-client==1.0.5
     # via sigstore
@@ -290,5 +276,5 @@ urllib3==2.6.3
     #   types-requests
 uvicorn==0.42.0
     # via mcp
-virtualenv==21.2.0
+virtualenv==20.36.1
     # via pre-commit
