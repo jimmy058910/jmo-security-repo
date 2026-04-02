@@ -526,6 +526,23 @@ with patch("module.tool_exists", return_value=True):
 - Use `@pytest.mark.timeout(300)` for legitimately slow tests
 - Set `PYTEST_TIMEOUT=0` to disable during local debugging
 
+**Windows Test Hang Prevention (CRITICAL):**
+
+This project has a history of Windows CI hangs. Follow these rules to prevent them:
+
+| Rule | Why | Example |
+|------|-----|---------|
+| **Always use `timeout=` on `subprocess.run`** | No-timeout calls become orphan processes on Windows | `subprocess.run(cmd, timeout=60)` |
+| **Always mock `ToolInstaller`** in tests | Real installs spawn `cmd.exe`/`node.exe` that hang | `@patch("scripts.cli.tool_installer.ToolInstaller")` |
+| **Use `-p no:xdist` on Windows/macOS CI** | pytest-rerunfailures 16.x + xdist creates a socket server that deadlocks with pytest-timeout's thread cleanup | CI uses `-p no:xdist` in ci.yml |
+| **Use `join(timeout=N)` on threads** | Bare `.join()` blocks forever if thread hangs | `thread.join(timeout=10)` |
+| **Don't spawn >100 threads in tests** | Windows thread creation is expensive | Use `concurrent.futures` with `max_workers` |
+| **Mark real-tool tests `@pytest.mark.requires_tools`** | CI excludes these; tools aren't installed on runners | `-m "not requires_tools"` in CI |
+
+**Root cause pattern:** pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't work). When a subprocess hangs, the thread method can kill the Python test thread but NOT the child process. The child becomes an orphan, and `--reruns 2` retries the test, tripling the hang time.
+
+**If Windows CI hangs:** Check for missing `timeout=` in subprocess calls, missing mocks for `ToolInstaller`/`subprocess.run`, or tests that spawn real external tools without `@pytest.mark.requires_tools`.
+
 ## Documentation References
 
 **Core:** [README.md](README.md) | [QUICKSTART.md](QUICKSTART.md) | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [TEST.md](TEST.md)
