@@ -444,11 +444,13 @@ jobs:
 
           print(f"📊 Combined coverage: {coverage_pct:.1f}%")
 
-          if coverage_pct < 85:
-              print(f"❌ Coverage {coverage_pct:.1f}% is below 85% threshold")
+          # CI threshold is 70% (excludes requires_tools/docker/smoke tests)
+          # Full 85% coverage is enforced via make test locally
+          if coverage_pct < 70:
+              print(f"❌ Coverage {coverage_pct:.1f}% is below 70% CI threshold")
               sys.exit(1)
           else:
-              print(f"✅ Coverage {coverage_pct:.1f}% meets 85% threshold")
+              print(f"✅ Coverage {coverage_pct:.1f}% meets 70% CI threshold")
           EOF
 
       - name: Upload coverage to Codecov
