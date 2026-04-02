@@ -5,7 +5,7 @@ inputs:
   threshold:
     description: 'Minimum coverage percentage required'
     required: false
-    default: '85'
+    default: '70'  # CI excludes requires_tools/docker/smoke tests; full 85% via make test
   codecov-token:
     description: 'Codecov upload token (optional - for upload)'
     required: false
@@ -19,7 +19,7 @@ runs:
   using: composite
   steps:
     - name: Download coverage artifacts
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         pattern: ${{ inputs.artifact-pattern }}
         merge-multiple: true

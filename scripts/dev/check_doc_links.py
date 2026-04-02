@@ -3,7 +3,7 @@
 Validate that markdown links in key documentation files resolve to real files.
 
 Checks: CLAUDE.md, docs/index.md (if present)
-Skips: http/https URLs, anchor-only links (#section)
+Skips: http/https URLs, anchor-only links (#section), gitignored paths
 Exit code 0 = all links valid, 1 = broken links found.
 """
 
@@ -24,6 +24,11 @@ FILES_TO_CHECK = [
 # Pattern to extract markdown links: [text](path)
 LINK_PATTERN = re.compile(r"\[.*?\]\(([^)]+)\)")
 
+# Link prefixes to skip (e.g. gitignored directories that won't be present in all worktrees)
+SKIP_LINK_PREFIXES = [
+    ".claude/",
+]
+
 
 def check_links_in_file(file_path: Path) -> list[str]:
     """Return list of broken link messages for a file."""
@@ -42,6 +47,10 @@ def check_links_in_file(file_path: Path) -> list[str]:
 
         # Skip anchor-only links
         if link.startswith("#"):
+            continue
+
+        # Skip gitignored/excluded prefixes
+        if any(link.startswith(prefix) for prefix in SKIP_LINK_PREFIXES):
             continue
 
         # Strip anchor from file links (e.g., file.md#section -> file.md)

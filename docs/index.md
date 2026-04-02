@@ -126,7 +126,6 @@
 |----------|---------|
 | [Contributing](../CONTRIBUTING.md) | Development setup, git workflow, standards |
 | [Testing Guide](../TEST.md) | Test suite documentation |
-| [Completeness Analyzer](COMPLETENESS_ANALYZER.md) | CI/CD integration for documentation-code drift detection |
 | [Platform Notes](PLATFORM_NOTES.md) | Cross-platform compatibility |
 
 ### Project

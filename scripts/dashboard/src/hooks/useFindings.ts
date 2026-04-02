@@ -45,8 +45,8 @@ export function useFindings(scanId: string | null = null) {
           return
         }
 
-        // External mode: fetch findings.json
-        const response = await fetch('findings.json')
+        // External mode: fetch dashboard-data.json (separate from metadata-wrapped findings.json)
+        const response = await fetch('dashboard-data.json')
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }

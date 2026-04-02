@@ -165,6 +165,9 @@ make test-fast                         # Fast parallel tests (recommended for de
 | `make test-fast` | Parallel tests, no coverage (fastest dev loop) |
 | `make test-parallel` | Parallel tests with coverage (CI-like) |
 | `make test` | Sequential tests with coverage (original) |
+| `make test-e2e` | E2E tests (pytest-native) |
+| `make test-e2e-visual` | Dashboard visual tests (Playwright) |
+| `make test-e2e-report` | E2E tests with JSON report |
 | `python scripts/dev/test_wizard_tools.py` | Test wizard tool detection (non-interactive) |
 
 > **Note:** `jmo tools install` uses parallel installation by default. Use `--sequential` for debugging or `--jobs N` to adjust workers (default: 4, max: 8).
@@ -205,8 +208,9 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-adapter-generator` - Generate new tool adapters with tests
 - `/jmo-test-fabricator` - Create comprehensive test suites
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
+- `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (14 skills, 7 agents)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (15 skills, 7 agents)
 
 **Persona guidelines:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
@@ -378,11 +382,22 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 - run: jmo diff results-baseline/ results-current/ --format md > diff.md
 ```
 
+### GitHub Actions Workflows
+
+4-workflow structure (consolidated from 8):
+
+| Workflow | File | Trigger | Purpose |
+|----------|------|---------|---------|
+| CI | `ci.yml` | PR / push to main | Lint, unit tests, adapter tests, coverage |
+| Scheduled | `scheduled.yml` | Cron / manual | Nightly e2e, tool update checks, security scans |
+| Release | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
+| Maintenance | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
+
 ### Release Process
 
 **CRITICAL:** All tools MUST be updated before release (CI enforces this).
 
-1. **Automated (Recommended):** GitHub Actions → Automated Release workflow
+1. **Automated (Recommended):** GitHub Actions → Release workflow (tag push triggers `release.yml`)
 2. **Manual:** Update tools → bump version → tag → push
 
 See [docs/RELEASE.md](docs/RELEASE.md) for details.
@@ -511,6 +526,33 @@ with patch("module.tool_exists", return_value=True):
 - Use `@pytest.mark.timeout(300)` for legitimately slow tests
 - Set `PYTEST_TIMEOUT=0` to disable during local debugging
 
+**Windows Test Hang Prevention (CRITICAL):**
+
+This project has a history of Windows CI hangs. Follow these rules to prevent them:
+
+| Rule | Why | Example |
+|------|-----|---------|
+| **Always use `timeout=` on `subprocess.run`** | No-timeout calls become orphan processes on Windows | `subprocess.run(cmd, timeout=60)` |
+| **Always mock `ToolInstaller`** in tests | Real installs spawn `cmd.exe`/`node.exe` that hang | `@patch("scripts.cli.tool_installer.ToolInstaller")` |
+| **Use `-p no:xdist` on Windows/macOS CI** | pytest-rerunfailures 16.x + xdist creates a socket server that deadlocks with pytest-timeout's thread cleanup | CI uses `-p no:xdist` in ci.yml |
+| **Use `join(timeout=N)` on threads** | Bare `.join()` blocks forever if thread hangs | `thread.join(timeout=10)` |
+| **Don't spawn >100 threads in tests** | Windows thread creation is expensive | Use `concurrent.futures` with `max_workers` |
+| **Mark real-tool tests `@pytest.mark.requires_tools`** | CI excludes these; tools aren't installed on runners | `-m "not requires_tools"` in CI |
+
+**Root cause pattern:** pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't work). When a subprocess hangs, the thread method can kill the Python test thread but NOT the child process. The child becomes an orphan, and `--reruns` retries the test, multiplying the hang time.
+
+**Windows CI architecture (ci.yml):**
+
+- Pinned to `windows-2022` (stable, D: drive available for fast I/O)
+- `TEMP=D:\Temp` set via CI step (up to 30% I/O speedup)
+- `-p no:xdist -p no:rerunfailures` disables plugins that cause socket deadlocks
+- `--timeout=60` per-test (halved from default 120s for faster failure detection)
+- `-m "not smoke and not requires_tools and not docker and not slow"` excludes tests that need tools, Docker, or are slow
+- Post-test `always()` step kills orphan processes via `Stop-Process`
+- `timeout-minutes: 15` hard job-level safety net
+
+**If Windows CI hangs:** Check for missing `timeout=` in subprocess calls, missing mocks for `ToolInstaller`/`subprocess.run`, bare `.join()` on threads, or tests that spawn real external tools without `@pytest.mark.requires_tools`.
+
 ## Documentation References
 
 **Core:** [README.md](README.md) | [QUICKSTART.md](QUICKSTART.md) | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | [CONTRIBUTING.md](CONTRIBUTING.md) | [TEST.md](TEST.md)
@@ -519,7 +561,7 @@ with patch("module.tool_exists", return_value=True):
 
 **Operations:** [docs/RELEASE.md](docs/RELEASE.md) | [docs/SCHEDULE_GUIDE.md](docs/SCHEDULE_GUIDE.md) | [docs/POLICY_AS_CODE.md](docs/POLICY_AS_CODE.md)
 
-**Internal (Dev-Only):** [dev-only/DOCUMENTATION_STRUCTURE.md](dev-only/DOCUMENTATION_STRUCTURE.md) - Complete documentation hierarchy, update checklists, cross-reference rules
+**Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
 
 **Plans:** [dev-only/plans/README.md](dev-only/plans/README.md)
 

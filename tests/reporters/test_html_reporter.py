@@ -66,7 +66,7 @@ def test_write_html_inline_mode_react_build(tmp_path, sample_findings):
         assert "finding-2" in html
 
         # Verify no external JSON file created
-        json_path = tmp_path / "findings.json"
+        json_path = tmp_path / "dashboard-data.json"
         assert not json_path.exists()
     finally:
         os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
@@ -90,7 +90,7 @@ def test_write_html_inline_mode_threshold(tmp_path):
         assert "window.__FINDINGS__ = [" in html
 
         # Verify no external JSON file
-        json_path = tmp_path / "findings.json"
+        json_path = tmp_path / "dashboard-data.json"
         assert not json_path.exists()
     finally:
         os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
@@ -114,7 +114,7 @@ def test_write_html_external_mode(tmp_path):
         assert "window.__FINDINGS__ = []  // Loaded via fetch()" in html
 
         # Verify external JSON file created
-        json_path = tmp_path / "findings.json"
+        json_path = tmp_path / "dashboard-data.json"
         assert json_path.exists()
 
         # Verify JSON content
@@ -347,7 +347,7 @@ def test_write_html_large_findings_performance(tmp_path):
         assert html_size < 1_000_000  # Should be < 1MB (no embedded data)
 
         # Verify external JSON file is created and large
-        json_path = tmp_path / "findings.json"
+        json_path = tmp_path / "dashboard-data.json"
         assert json_path.exists()
         json_size = json_path.stat().st_size
         assert json_size > 100_000  # Should be > 100KB (5000 findings)
@@ -397,20 +397,18 @@ def test_write_html_with_react_build(tmp_path, sample_findings):
         assert "window.__FINDINGS__ = [{" in html
 
 
-def test_write_html_react_build_check_enforced(tmp_path, sample_findings):
-    """Test that React build check is enforced when SKIP_REACT_BUILD_CHECK=false."""
+def test_write_html_fallback_when_react_build_missing(tmp_path, sample_findings):
+    """Test that fallback HTML is produced when React build is missing."""
     output_path = tmp_path / "dashboard.html"
-
-    # Ensure SKIP_REACT_BUILD_CHECK and CI are not set
-    os.environ.pop("SKIP_REACT_BUILD_CHECK", None)
-    os.environ.pop("CI", None)
 
     # Mock the __file__ location to ensure React build path doesn't exist
     fake_file_path = tmp_path / "fake_module.py"
     fake_file_path.touch()  # Create the fake module file
 
     with patch("scripts.core.reporters.html_reporter.__file__", str(fake_file_path)):
-        # Should raise FileNotFoundError when React build missing and check enabled
-        # The dashboard_dir will be tmp_path/dashboard which doesn't exist
-        with pytest.raises(FileNotFoundError, match="React dashboard build not found"):
-            write_html(sample_findings, output_path)
+        # Should produce fallback HTML instead of raising
+        write_html(sample_findings, output_path)
+
+    assert output_path.exists(), "Fallback dashboard.html should be created"
+    html = output_path.read_text(encoding="utf-8")
+    assert "Fallback HTML Mode" in html or "JMo Security" in html

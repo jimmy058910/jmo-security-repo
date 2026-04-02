@@ -50,6 +50,9 @@ reporting = ["jsonschema>=4.0"]  # PyYAML moved to main dependencies
 email = ["resend>=2.0"]
 mcp = ["mcp[cli]>=1.0.0"]  # MCP server for AI-powered remediation (Feature #2, v1.0.0)
 attestation = ["sigstore>=2.0.0", "cryptography>=41.0.0"]  # SLSA attestation (Feature #6, v1.0.0)
+visual = [
+    "pytest-playwright>=0.5.2",
+]
 dev = [
     # Testing
     "pytest",
@@ -144,6 +147,9 @@ markers = [
     "e2e: marks end-to-end tests that validate complete workflows",
     "stress: marks tests as stress tests requiring significant resources",
 ]
+# Exclude smoke tests by default (post-release only); run with: pytest -m smoke
+addopts = "-m 'not smoke'"
+
 # Test durations file for pytest-split sharding
 # Generate with: pytest --store-durations --durations-path=.test_durations
 # This enables duration-based splitting for more even shard distribution

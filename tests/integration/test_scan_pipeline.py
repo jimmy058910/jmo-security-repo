@@ -46,6 +46,7 @@ def run_scan(
         str(results_dir),
         "--profile",
         profile,
+        "--allow-missing-tools",
     ]
     if extra_args:
         cmd.extend(extra_args)

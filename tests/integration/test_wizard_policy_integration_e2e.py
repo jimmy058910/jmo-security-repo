@@ -49,30 +49,37 @@ def sample_repo(tmp_path):
     repo_dir.mkdir()
 
     # Initialize git
-    subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init"], cwd=repo_dir, check=True, capture_output=True, timeout=120
+    )
     subprocess.run(
         ["git", "config", "user.email", "test@example.com"],
         cwd=repo_dir,
         check=True,
         capture_output=True,
+        timeout=120,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
         cwd=repo_dir,
         check=True,
         capture_output=True,
+        timeout=120,
     )
 
     # Create a file with a fake secret
     test_file = repo_dir / "config.py"
     test_file.write_text('API_KEY = "sk-1234567890abcdef"\n', encoding="utf-8")
 
-    subprocess.run(["git", "add", "."], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=repo_dir, check=True, capture_output=True, timeout=120
+    )
     subprocess.run(
         ["git", "commit", "-m", "Initial commit"],
         cwd=repo_dir,
         check=True,
         capture_output=True,
+        timeout=120,
     )
 
     return repo_dir

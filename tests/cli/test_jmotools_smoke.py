@@ -15,6 +15,7 @@ def run(args):
         [sys.executable, "-m", "scripts.cli.jmo", *args],
         capture_output=True,
         text=True,
+        timeout=30,
     )
 
 

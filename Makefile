@@ -1,6 +1,6 @@
 # Makefile - Developer shortcuts for terminal-first workflow
 
-.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
+.PHONY: help fmt lint typecheck test test-fast test-parallel test-profile test-e2e test-e2e-visual test-e2e-report verify clean tools verify-env analyze-completeness verify-completeness dev-deps dev-setup pre-commit-install pre-commit-run install-git-hooks upgrade-pip deps-compile deps-sync deps-refresh uv-sync docker-build docker-build-all docker-build-local docker-push docker-test validate-readme check-pypi-readme collect-metrics metrics verify-badges samples-clean samples-scan samples-report samples-verify regenerate-samples dist dist-clean dist-verify clean-build clean-test clean-caches clean-all
 
 # Prefer workspace venv if available
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
@@ -153,6 +153,19 @@ test-profile:
 			-m "not smoke and not requires_tools" \
 			--durations=50 --durations-min=0.5 tests/ ; \
 	else echo 'no tests/ directory'; fi
+
+# Run e2e and slow tests (requires real tools, 15 min timeout per test)
+test-e2e:
+	$(PY) -m pytest tests/e2e/ -m "e2e or slow" --timeout=900 -v
+
+# Run visual regression tests only
+test-e2e-visual:
+	$(PY) -m pytest tests/e2e/test_dashboard_visual.py -v --timeout=120
+
+# Run e2e tests with JSON report output
+test-e2e-report:
+	$(PY) -m pytest tests/e2e/ -m "e2e or slow" --timeout=900 --json-report --json-report-file=e2e-results.json -v
+	@echo "E2E results written to e2e-results.json"
 
 verify:
 	bash $(VERIFY_SCRIPT)
@@ -566,7 +579,7 @@ docker-build-local:
 	@echo "  - jmo-security:local-alpine"
 	@echo ""
 	@echo "Test with: docker run --rm jmo-security:local-full --help"
-	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local bash tests/e2e/run_comprehensive_tests.sh"
+	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local make test-e2e"
 
 docker-test:
 	@echo "Testing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"

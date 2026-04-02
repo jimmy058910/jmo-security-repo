@@ -96,7 +96,7 @@ class TestTokenBucket:
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=10)
 
         # Expect 100 successes, 10 failures
         successes = sum(results)
@@ -294,7 +294,7 @@ class TestRateLimiterEdgeCases:
                 t.start()
 
         for t in threads:
-            t.join()
+            t.join(timeout=10)
 
         # Count successes per client (each should get ~10 tokens)
         successes_per_client = {}

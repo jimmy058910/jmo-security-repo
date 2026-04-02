@@ -454,12 +454,10 @@ export DOCKER_IMAGE_BASE="jmo-security"
 export DOCKER_TAG="local-balanced"
 
 # Run specific Docker tests
-bash tests/e2e/run_comprehensive_tests.sh --test U9
-bash tests/e2e/run_comprehensive_tests.sh --test U10
-bash tests/e2e/run_comprehensive_tests.sh --test U11
+pytest tests/e2e/test_docker_workflows.py -k "U9 or U10 or U11" -v
 
 # Or run full suite
-bash tests/e2e/run_comprehensive_tests.sh
+make test-e2e
 ```
 
 ### Pre-release Docker checklist

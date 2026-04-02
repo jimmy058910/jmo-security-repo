@@ -1,0 +1,57 @@
+name: 'Docker Registry Login'
+description: 'Login to GHCR, Docker Hub, and ECR Public registries'
+
+inputs:
+  ghcr-token:
+    description: 'GitHub token for GHCR login'
+    required: true
+  dockerhub-username:
+    description: 'Docker Hub username'
+    required: false
+    default: ''
+  dockerhub-token:
+    description: 'Docker Hub token'
+    required: false
+    default: ''
+  dockerhub-enabled:
+    description: 'Whether Docker Hub is enabled'
+    required: false
+    default: 'false'
+  aws-role-arn:
+    description: 'AWS IAM role ARN for ECR Public login'
+    required: false
+    default: ''
+  aws-region:
+    description: 'AWS region for ECR'
+    required: false
+    default: 'us-east-1'
+
+runs:
+  using: composite
+  steps:
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.ghcr-token }}
+
+    - name: Login to Docker Hub
+      if: inputs.dockerhub-enabled == 'true' && inputs.dockerhub-username != ''
+      uses: docker/login-action@v3
+      with:
+        username: ${{ inputs.dockerhub-username }}
+        password: ${{ inputs.dockerhub-token }}
+
+    - name: Configure AWS credentials for ECR Public
+      if: inputs.aws-role-arn != ''
+      uses: aws-actions/configure-aws-credentials@v5
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Login to ECR Public
+      if: inputs.aws-role-arn != ''
+      uses: aws-actions/amazon-ecr-login@v2
+      with:
+        registry-type: public
