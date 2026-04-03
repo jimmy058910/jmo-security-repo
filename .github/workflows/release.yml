@@ -455,11 +455,15 @@ jobs:
         with:
           skip-existing: true  # Allow re-running releases if PyPI already has the version
 
-  # Build and push multi-arch Docker images (v1.0.0: 4 variants)
-  docker-build:
-    name: Build Docker ${{ matrix.variant }}
+  # ─── DOCKER: Native multi-arch builds (amd64 + arm64) ──────────────────────
+  # Split into 3 jobs: build-amd64, build-arm64, merge manifests
+  # Uses native ARM runners instead of QEMU emulation (65 min → ~20 min)
+
+  docker-build-amd64:
+    name: Docker ${{ matrix.variant }} (amd64)
     runs-on: ubuntu-latest
     needs: pypi-publish
+    if: startsWith(github.ref, 'refs/tags/v')
     strategy:
       fail-fast: false
       matrix:
@@ -468,9 +472,122 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Dockerfile
+        id: dockerfile
+        run: |
+          if [ "${{ matrix.variant }}" = "full" ]; then
+            echo "file=Dockerfile" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ steps.dockerfile.outputs.file }}
+          platforms: linux/amd64
+          outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.variant }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-amd64
+          provenance: false
+          sbom: false
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.variant }}-amd64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-build-arm64:
+    name: Docker ${{ matrix.variant }} (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: pypi-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, balanced, slim, fast]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine Dockerfile
+        id: dockerfile
+        run: |
+          if [ "${{ matrix.variant }}" = "full" ]; then
+            echo "file=Dockerfile" >> "$GITHUB_OUTPUT"
+          else
+            echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ steps.dockerfile.outputs.file }}
+          platforms: linux/arm64
+          outputs: type=image,name=${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.variant }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-arm64
+          provenance: false
+          sbom: false
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.variant }}-arm64
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Merge amd64 + arm64 digests into multi-arch manifests, push to all registries
+  docker-merge:
+    name: Merge Docker ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    needs: [docker-build-amd64, docker-build-arm64]
+    if: always() && needs.docker-build-amd64.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, balanced, slim, fast]
+    steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -500,7 +617,7 @@ jobs:
         with:
           registry-type: public
 
-      - name: Extract metadata
+      - name: Extract metadata (tags)
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -517,52 +634,55 @@ jobs:
             suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'full' }}
             latest=false
 
-      - name: Determine Dockerfile
-        id: dockerfile
+      - name: Download amd64 digest
+        uses: actions/download-artifact@v7
+        with:
+          name: digests-${{ matrix.variant }}-amd64
+          path: /tmp/digests-amd64
+
+      - name: Download arm64 digest
+        id: arm64-digest
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: digests-${{ matrix.variant }}-arm64
+          path: /tmp/digests-arm64
+
+      - name: Create multi-arch manifest
+        working-directory: /tmp
         run: |
-          if [ "${{ matrix.variant }}" = "full" ]; then
-            echo "file=Dockerfile" >> "$GITHUB_OUTPUT"
+          # Collect all digests (amd64 required, arm64 optional)
+          DIGESTS=""
+          for f in digests-amd64/*; do
+            DIGESTS="$DIGESTS ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}@sha256:$(basename $f)"
+          done
+          if [ -d digests-arm64 ] && [ "$(ls -A digests-arm64 2>/dev/null)" ]; then
+            for f in digests-arm64/*; do
+              DIGESTS="$DIGESTS ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}@sha256:$(basename $f)"
+            done
+            echo "Merging amd64 + arm64 manifests"
           else
-            echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
+            echo "arm64 digest not available, creating amd64-only manifest"
           fi
 
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ${{ steps.dockerfile.outputs.file }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.variant }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
-          provenance: false
-          sbom: false
+          # Create and push manifest for each tag across all registries
+          TAG_ARGS=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools create $TAG_ARGS $DIGESTS
 
-      - name: Test image (amd64 only)
+      - name: Test image (amd64)
         run: |
-          # Use the first tag from metadata output (e.g., 0.4.0-full)
           TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
-
-          echo "Testing GHCR image: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
+          echo "Testing GHCR: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
           docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
-          # Test basic commands (jmo CLI doesn't have --version, use --help instead)
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" scan --help
-
-          echo ""
-          echo "Testing ECR Public image: ${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}"
-          docker pull --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}"
-          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}" --help
-          docker run --rm --platform linux/amd64 "${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}:${TEST_TAG}" scan --help
 
   # Benchmark image sizes (v0.6.1+ optimization tracking)
   docker-size-benchmark:
     name: Benchmark Docker Image Sizes
     runs-on: ubuntu-latest
-    needs: docker-build
+    needs: docker-merge
+    if: always() && needs.docker-merge.result == 'success'
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -638,7 +758,8 @@ jobs:
   docker-scan:
     name: Scan Docker ${{ matrix.variant }}
     runs-on: ubuntu-latest
-    needs: docker-build
+    needs: docker-merge
+    if: always() && needs.docker-merge.result == 'success'
     strategy:
       matrix:
         variant: [full, balanced, slim, fast]
@@ -681,10 +802,10 @@ jobs:
     name: Update Docker Hub README
     runs-on: ubuntu-latest
     # Run on version tags (after docker-build) OR on manual workflow_dispatch
-    needs: docker-build
+    needs: docker-merge
     if: |
       always() &&
-      (needs.docker-build.result == 'success' || needs.docker-build.result == 'skipped') &&
+      (needs.docker-merge.result == 'success' || needs.docker-merge.result == 'skipped') &&
       (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout repository
@@ -845,7 +966,7 @@ jobs:
   winget-bump:
     name: Submit WinGet Manifest PR
     runs-on: windows-latest  # Required for WinGet releaser
-    needs: docker-build  # Wait for release assets to be available
+    needs: pypi-publish  # WinGet needs PyPI package, not Docker images
     if: startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 15
     steps:

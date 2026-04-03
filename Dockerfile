@@ -181,6 +181,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 # Stage 2: Runtime - Complete runtime environment with ALL tools
 #
 FROM ubuntu:24.04 AS runtime
+ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
 LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.0)"
@@ -258,9 +259,14 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.2 &
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \
     echo "✓ yara-python installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.5.0 && \
-    scancode --version && \
-    echo "✓ scancode-toolkit installed"
+# scancode-toolkit: extractcode-7z has no arm64 Linux wheel on PyPI
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        python3 -m pip install --no-cache-dir --break-system-packages scancode-toolkit==32.5.0 && \
+        scancode --version && \
+        echo "✓ scancode-toolkit installed"; \
+    else \
+        echo "scancode-toolkit skipped on $TARGETARCH (extractcode-7z unavailable)"; \
+    fi
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
     prowler --version && \
@@ -382,7 +388,7 @@ RUN echo "=== Verifying Docker-ready tools ===" && \
     lynis --version && \
     dependency-check --version && \
     horusec version && \
-    scancode --version && \
+    ([ "$TARGETARCH" = "amd64" ] && scancode --version || echo "scancode skipped on $TARGETARCH") && \
     cdxgen --version && \
     opa version && \
     echo "=== All Docker-ready tools verified ==="
