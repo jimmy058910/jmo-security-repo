@@ -39,7 +39,7 @@ RUN SYFT_VERSION="1.38.0" && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy (SCA + Vuln)
-RUN TRIVY_VERSION="0.67.2" && \
+RUN TRIVY_VERSION="0.69.3" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
@@ -129,7 +129,7 @@ RUN OSV_VERSION="2.3.1" && \
     chmod +x /usr/local/bin/osv-scanner
 
 # Download Bearer (Data Privacy + SAST)
-RUN BEARER_VERSION="2.0.0" && \
+RUN BEARER_VERSION="2.0.1" && \
     BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
     -o /tmp/bearer.tar.gz && \

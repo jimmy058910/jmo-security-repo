@@ -87,7 +87,7 @@ All Dockerfiles use parameterized versions:
 
 ```dockerfile
 # ✅ CORRECT: Read from ARG/ENV
-RUN TRIVY_VERSION="0.67.2" && \
+RUN TRIVY_VERSION="0.69.3" && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/..."
 
 # ❌ WRONG: Hardcoded version

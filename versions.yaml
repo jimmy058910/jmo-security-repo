@@ -97,7 +97,7 @@ binary_tools:
     update_check: gh api repos/anchore/syft/releases/latest
     critical: true
   trivy:
-    version: 0.67.2
+    version: 0.69.3
     github_repo: aquasecurity/trivy
     description: Vulnerability/misconfig/secrets scanner
     release_pattern: trivy_{version}_Linux-{arch}.tar.gz
