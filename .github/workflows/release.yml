@@ -617,14 +617,11 @@ jobs:
         with:
           registry-type: public
 
-      - name: Extract metadata (tags)
+      - name: Extract metadata (GHCR tags for manifest creation)
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: |
-            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
-            ${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}
-            ${{ vars.DOCKERHUB_ENABLED == 'true' && format('{0}/{1}', env.REGISTRY_DOCKERHUB, env.IMAGE_NAME_DOCKERHUB) || '' }}
+          images: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -641,17 +638,15 @@ jobs:
           path: /tmp/digests-amd64
 
       - name: Download arm64 digest
-        id: arm64-digest
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           name: digests-${{ matrix.variant }}-arm64
           path: /tmp/digests-arm64
 
-      - name: Create multi-arch manifest
+      - name: Create GHCR multi-arch manifest
         working-directory: /tmp
         run: |
-          # Collect all digests (amd64 required, arm64 optional)
           DIGESTS=""
           for f in digests-amd64/*; do
             DIGESTS="$DIGESTS ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}@sha256:$(basename $f)"
@@ -662,16 +657,48 @@ jobs:
             done
             echo "Merging amd64 + arm64 manifests"
           else
-            echo "arm64 digest not available, creating amd64-only manifest"
+            echo "arm64 not available, creating amd64-only manifest"
           fi
-
-          # Create and push manifest for each tag across all registries
           TAG_ARGS=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
           docker buildx imagetools create $TAG_ARGS $DIGESTS
 
+      # Replicate from GHCR to secondary registries using crane
+      # (imagetools create can't copy blobs cross-registry; crane handles it)
+      - name: Install crane
+        run: |
+          VERSION="0.20.3"
+          BASE="https://github.com/google/go-containerregistry"
+          ASSET="go-containerregistry_Linux_x86_64.tar.gz"
+          curl -sL "$BASE/releases/download/v$VERSION/$ASSET" \
+            | tar xz -C /usr/local/bin crane
+          crane version
+
+      - name: Replicate to Docker Hub
+        if: vars.DOCKERHUB_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}"
+          DOCKERHUB_IMAGE="${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME_DOCKERHUB }}"
+          echo "${{ steps.meta.outputs.tags }}" | while read -r FULL_TAG; do
+            TAG="${FULL_TAG##*:}"
+            echo "Copying $GHCR_IMAGE:$TAG -> $DOCKERHUB_IMAGE:$TAG"
+            crane copy "$GHCR_IMAGE:$TAG" "$DOCKERHUB_IMAGE:$TAG" --platform all || true
+          done
+
+      - name: Replicate to ECR Public
+        continue-on-error: true
+        run: |
+          GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}"
+          ECR_IMAGE="${{ env.REGISTRY_ECR_PUBLIC }}/${{ env.IMAGE_NAME_ECR_PUBLIC }}"
+          echo "${{ steps.meta.outputs.tags }}" | while read -r FULL_TAG; do
+            TAG="${FULL_TAG##*:}"
+            echo "Copying $GHCR_IMAGE:$TAG -> $ECR_IMAGE:$TAG"
+            crane copy "$GHCR_IMAGE:$TAG" "$ECR_IMAGE:$TAG" --platform all || true
+          done
+
       - name: Test image (amd64)
         run: |
-          TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | cut -d':' -f2)
+          TEST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1 | awk -F: '{print $NF}')
           echo "Testing GHCR: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
           docker pull --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}"
           docker run --rm --platform linux/amd64 "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TEST_TAG}" --help
@@ -705,7 +732,7 @@ jobs:
       - name: Pull and measure all variants
         run: |
           {
-            echo "## Docker Image Size Comparison (v1.0.0 - 4 Variants)"
+            echo "## Docker Image Size Comparison (${{ github.ref_name }} - 4 Variants)"
             echo ""
             echo "| Variant | Size (amd64) | Size (arm64) | Reduction vs v0.6.0 |"
             echo "|---------|--------------|--------------|---------------------|"
@@ -963,11 +990,14 @@ jobs:
           echo "Successfully submitted PR to homebrew-core for version $VERSION"
 
   # Submit WinGet manifest PR (automated) - inlined from winget-releaser.yml
+  # NOTE: Requires package to already exist in microsoft/winget-pkgs. First-time
+  # submission must be done manually via PR to https://github.com/microsoft/winget-pkgs
   winget-bump:
     name: Submit WinGet Manifest PR
     runs-on: windows-latest  # Required for WinGet releaser
     needs: pypi-publish  # WinGet needs PyPI package, not Docker images
     if: startsWith(github.ref, 'refs/tags/v')
+    continue-on-error: true  # Non-blocking until package is in winget-pkgs
     timeout-minutes: 15
     steps:
       - name: Extract version
