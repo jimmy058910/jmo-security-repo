@@ -34,7 +34,7 @@ RUN SYFT_VERSION="1.36.0" && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy
-RUN TRIVY_VERSION="0.67.2" && \
+RUN TRIVY_VERSION="0.69.3" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     wget -q "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -O /tmp/trivy.tar.gz && \

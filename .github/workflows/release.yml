@@ -779,11 +779,14 @@ jobs:
           echo "✅ Badge verification successful!"
 
   # Submit Homebrew formula PR (automated) - inlined from homebrew-bump-formula.yml
+  # NOTE: Requires formula to already exist in homebrew-core. First-time submission
+  # must be done manually via PR to https://github.com/Homebrew/homebrew-core
   homebrew-bump:
     name: Submit Homebrew Formula PR
     runs-on: ubuntu-latest
     needs: pypi-publish
     if: startsWith(github.ref, 'refs/tags/v')
+    continue-on-error: true  # Non-blocking until formula is accepted into homebrew-core
     timeout-minutes: 10
     steps:
       - name: Extract version
@@ -791,28 +794,38 @@ jobs:
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Submitting Homebrew formula PR for version $VERSION"
+
+      - name: Check if formula exists in homebrew-core
+        id: check_formula
+        run: |
+          if brew info jmo-security > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Formula 'jmo-security' not yet in homebrew-core."
+            echo "Submit initial formula via PR to https://github.com/Homebrew/homebrew-core"
+            echo "See: https://docs.brew.sh/Adding-Software-to-Homebrew"
+          fi
 
       - name: Wait for PyPI release
+        if: steps.check_formula.outputs.exists == 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          echo "⏳ Waiting for PyPI release to be available..."
-
           MAX_ATTEMPTS=30
           ATTEMPT=0
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             if curl -fsSL "https://pypi.org/pypi/jmo-security/$VERSION/json" > /dev/null 2>&1; then
-              echo "✅ PyPI release $VERSION confirmed!"
+              echo "PyPI release $VERSION confirmed"
               exit 0
             fi
             ATTEMPT=$((ATTEMPT + 1))
-            echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: waiting 10s..."
             sleep 10
           done
-          echo "❌ PyPI release not available after 5 minutes"
+          echo "PyPI release not available after 5 minutes"
           exit 1
 
       - name: Bump Homebrew formula
+        if: steps.check_formula.outputs.exists == 'true'
         uses: dawidd6/action-homebrew-bump-formula@v4
         with:
           # Required: Personal Access Token with repo + workflow scopes
@@ -823,15 +836,10 @@ jobs:
           force: false
 
       - name: Success notification
-        if: success()
+        if: steps.check_formula.outputs.exists == 'true' && success()
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          echo "✅ Successfully submitted PR to homebrew-core for version $VERSION"
-          echo ""
-          echo "📋 Next steps:"
-          echo "  1. Monitor PR at: https://github.com/Homebrew/homebrew-core/pulls?q=is%3Apr+jmo-security"
-          echo "  2. Homebrew maintainers will review (typically 1-2 weeks)"
-          echo "  3. After merge, users can install with: brew install jmo-security"
+          echo "Successfully submitted PR to homebrew-core for version $VERSION"
 
   # Submit WinGet manifest PR (automated) - inlined from winget-releaser.yml
   winget-bump:
