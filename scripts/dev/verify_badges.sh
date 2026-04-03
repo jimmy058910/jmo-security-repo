@@ -22,7 +22,7 @@ NC='\033[0m' # No Color
 
 # Extract version from pyproject.toml
 get_local_version() {
-  grep '^version = ' "$PYPROJECT" | sed 's/version = "\(.*\)"/\1/'
+  grep '^version = ' "$PYPROJECT" | head -1 | sed 's/version = "\(.*\)"/\1/' | tr -d '\r'
 }
 
 # Get version from PyPI
@@ -97,9 +97,9 @@ main() {
   elif [[ $current_tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     is_release_commit=true
     echo -e "${YELLOW}ℹ️  Detected release tag: $current_tag${NC}"
-  elif [[ $current_branch == "dev" ]] || [[ $current_branch =~ ^(feature|refactor|hotfix)/ ]]; then
+  elif [[ $current_branch == "dev" ]] || [[ $current_branch =~ ^(feature|refactor|hotfix|dependabot)/ ]]; then
     is_release_commit=true
-    echo -e "${YELLOW}ℹ️  Detected dev/feature/refactor/hotfix branch: $current_branch (skipping version check)${NC}"
+    echo -e "${YELLOW}ℹ️  Detected dev/feature/refactor/hotfix/dependabot branch: $current_branch (skipping version check)${NC}"
   fi
 
   # Check if PyPI matches local
