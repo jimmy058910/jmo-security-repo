@@ -393,14 +393,62 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Release | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
 | Maintenance | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
 
+**Scheduled job pattern:** All `scheduled.yml` jobs that run pytest MUST include `pip install -r requirements-dev.txt` and `cache-dependency-path: requirements-dev.txt`. Reference pattern: `e2e-tool-integration` job (line ~660). Omitting dev deps causes `--json-report` to fail silently.
+
 ### Release Process
 
 **CRITICAL:** All tools MUST be updated before release (CI enforces this).
 
 1. **Automated (Recommended):** GitHub Actions → Release workflow (tag push triggers `release.yml`)
 2. **Manual:** Update tools → bump version → tag → push
+3. **Hotfix to main:** Must go through PR (GitHub rulesets enforce `quick-checks`). Cannot push directly.
 
 See [docs/RELEASE.md](docs/RELEASE.md) for details.
+
+### Release Workflow Architecture (v1.0.0+)
+
+The release pipeline has 3 phases triggered by `v*` tag push:
+
+```text
+Pre-Release Validation → PyPI Publish → Docker Build (8 parallel: 4 variants × 2 arches)
+                                      → Homebrew (existence check, skip if not in homebrew-core)
+                                      → WinGet (existence check via GitHub API, skip if not in winget-pkgs)
+                                      → Badge Verify
+                         Docker Build → Docker Merge (4 parallel: create multi-arch manifests)
+                         Docker Merge → Docker Scan + Benchmarks + Docker Hub README
+```
+
+**Docker multi-arch builds use native runners (not QEMU):**
+- `docker-build-amd64`: `runs-on: ubuntu-latest` (native x86_64)
+- `docker-build-arm64`: `runs-on: ubuntu-24.04-arm` (native ARM)
+- `docker-merge`: downloads both digests, creates GHCR manifest via `imagetools create`, replicates to Docker Hub/ECR via `crane copy`
+
+**GHCR is the primary registry.** `imagetools create` targets GHCR only (cross-registry blob copy doesn't work). Docker Hub and ECR are replicated via `crane copy --platform all` with `continue-on-error: true`.
+
+### Release Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Tag push fails | Main has rulesets — must PR through CI, then tag |
+| Docker build cache stale | `gh cache delete --all --repo owner/repo` then re-tag |
+| scancode fails on arm64 | Expected — `extractcode-7z` has no arm64 wheel. Conditional install via `TARGETARCH` check |
+| Homebrew/WinGet fail on first release | Both have existence checks that skip gracefully. Submit initial manifests manually. |
+| `verify_badges.sh` fails on new branch types | Add branch prefix to allowlist at `scripts/dev/verify_badges.sh:100` (currently: dev, feature, refactor, hotfix, dependabot) |
+| `jmo validate` fails on Linux but passes locally | Platform-specific checks (e.g., `path-mixed-separators`) — guard with `sys.platform` |
+| Tool version 404 in Docker build | Run `python scripts/dev/update_versions.py --validate` to check all URLs, then `--sync` |
+| Scheduled e2e jobs fail with "no test results" | Likely missing `pip install -r requirements-dev.txt` — compare against `e2e-tool-integration` job pattern |
+| Dependabot PR fails deps-compile freshness | Dependabot uses uv resolver; CI uses pip-tools. Reset `requirements-dev.txt` to main's version, keep only `uv.lock` changes |
+| Tool contract test fails after version bump | Automated version bumps can change output schemas. Run the tool against fixtures to verify, then update `result_item_keys` in `test_tool_contracts.py` |
+
+### Re-Tag Cycle (When Release Workflow Fails)
+
+```bash
+git tag -d v1.0.0 && git push origin :refs/tags/v1.0.0  # Delete tag
+# ... merge hotfix PR to main ...
+git checkout main && git pull origin main                 # Sync main
+git tag -a v1.0.0 -m "..." && git push origin v1.0.0     # Re-tag + push
+git checkout dev && git merge origin/main && git push origin dev  # Sync dev
+```
 
 ## Docker & Registries
 
@@ -416,8 +464,15 @@ docker run -v $PWD/.jmo:/scan/.jmo -v $PWD:/scan ghcr.io/jimmy058910/jmo-securit
 | Registry | Image | Purpose |
 |----------|-------|---------|
 | **GHCR** (Primary) | `ghcr.io/jimmy058910/jmo-security` | CI/CD, unlimited pulls |
-| **Docker Hub** | `jmogaming/jmo-security` | Discoverability |
-| **ECR Public** | `public.ecr.aws/m2d8u2k1/jmo-security` | AWS users |
+| **Docker Hub** | `jmogaming/jmo-security` | Discoverability (replicated via `crane copy`) |
+| **ECR Public** | `public.ecr.aws/m2d8u2k1/jmo-security` | AWS users (replicated via `crane copy`) |
+
+### Docker arm64 Notes
+
+- `scancode-toolkit`: skipped on arm64 (`extractcode-7z` has no `linux/aarch64` wheel on PyPI)
+- `TARGETARCH` ARG must be re-declared in runtime stage (`FROM ... AS runtime` then `ARG TARGETARCH`)
+- arm64 builds use native `ubuntu-24.04-arm` runners (free for public repos)
+- If arm64 build fails, merge job creates amd64-only manifest (graceful degradation)
 
 See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
 
