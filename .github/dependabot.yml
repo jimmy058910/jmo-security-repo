@@ -85,6 +85,33 @@ updates:
         update-types:
           - "patch"
 
+  # npm dependencies - scripts/dashboard
+  - package-ecosystem: "npm"
+    directory: "/scripts/dashboard"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    groups:
+      dashboard-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm dependencies - scripts/api
+  - package-ecosystem: "npm"
+    directory: "/scripts/api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+
 # Important notes:
 # 1. Dependabot DOES NOT track binary tools (trivy, trufflehog, syft, etc.)
 #    Those are managed via versions.yaml + update_versions.py + CI checks
