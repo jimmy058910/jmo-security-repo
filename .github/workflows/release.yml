@@ -1008,17 +1008,20 @@ jobs:
 
       - name: Check if package exists in winget-pkgs
         id: check_package
-        shell: pwsh
+        shell: bash
         run: |
-          try {
-            winget show jmo.jmo-security 2>$null
-            Write-Output "exists=true" >> $env:GITHUB_OUTPUT
-          } catch {
-            Write-Output "exists=false" >> $env:GITHUB_OUTPUT
-            Write-Output "Package 'jmo.jmo-security' not yet in winget-pkgs."
-            Write-Output "Submit initial manifest via PR to:"
-            Write-Output "  https://github.com/microsoft/winget-pkgs"
-          }
+          # Check via GitHub API (avoids winget CLI interactive prompts)
+          MANIFEST_PATH="manifests/j/jmo/jmo-security"
+          HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://api.github.com/repos/microsoft/winget-pkgs/contents/$MANIFEST_PATH")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Package 'jmo.jmo-security' not yet in winget-pkgs."
+            echo "Submit initial manifest via PR to:"
+            echo "  https://github.com/microsoft/winget-pkgs"
+          fi
 
       - name: Submit manifest to microsoft/winget-pkgs
         if: steps.check_package.outputs.exists == 'true'
