@@ -393,6 +393,8 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | Release | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
 | Maintenance | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
 
+**Scheduled job pattern:** All `scheduled.yml` jobs that run pytest MUST include `pip install -r requirements-dev.txt` and `cache-dependency-path: requirements-dev.txt`. Reference pattern: `e2e-tool-integration` job (line ~660). Omitting dev deps causes `--json-report` to fail silently.
+
 ### Release Process
 
 **CRITICAL:** All tools MUST be updated before release (CI enforces this).
@@ -431,9 +433,12 @@ Pre-Release Validation → PyPI Publish → Docker Build (8 parallel: 4 variants
 | Docker build cache stale | `gh cache delete --all --repo owner/repo` then re-tag |
 | scancode fails on arm64 | Expected — `extractcode-7z` has no arm64 wheel. Conditional install via `TARGETARCH` check |
 | Homebrew/WinGet fail on first release | Both have existence checks that skip gracefully. Submit initial manifests manually. |
-| `verify_badges.sh` fails on new branch types | Add branch prefix to allowlist at `scripts/dev/verify_badges.sh:100` |
+| `verify_badges.sh` fails on new branch types | Add branch prefix to allowlist at `scripts/dev/verify_badges.sh:100` (currently: dev, feature, refactor, hotfix, dependabot) |
 | `jmo validate` fails on Linux but passes locally | Platform-specific checks (e.g., `path-mixed-separators`) — guard with `sys.platform` |
 | Tool version 404 in Docker build | Run `python scripts/dev/update_versions.py --validate` to check all URLs, then `--sync` |
+| Scheduled e2e jobs fail with "no test results" | Likely missing `pip install -r requirements-dev.txt` — compare against `e2e-tool-integration` job pattern |
+| Dependabot PR fails deps-compile freshness | Dependabot uses uv resolver; CI uses pip-tools. Reset `requirements-dev.txt` to main's version, keep only `uv.lock` changes |
+| Tool contract test fails after version bump | Automated version bumps can change output schemas. Run the tool against fixtures to verify, then update `result_item_keys` in `test_tool_contracts.py` |
 
 ### Re-Tag Cycle (When Release Workflow Fails)
 
