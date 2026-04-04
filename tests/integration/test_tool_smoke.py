@@ -230,21 +230,6 @@ SMOKE_TEST_CONFIGS: dict[str, ToolSmokeConfig] = {
         output_format="stdout",  # Checkov outputs to stdout, CLI captures it
         description="IaC scanner",
     ),
-    "bearer": ToolSmokeConfig(
-        name="bearer",
-        timeout=180,
-        min_findings=0,  # Findings vary - just check tool runs
-        command_template=[
-            "bearer",
-            "scan",
-            "{target}",
-            "--format",
-            "json",
-            "--output",
-            "{output}",
-        ],
-        description="Data privacy scanner",
-    ),
     "horusec": ToolSmokeConfig(
         name="horusec",
         timeout=240,

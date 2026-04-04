@@ -21,7 +21,6 @@ import pytest
 from scripts.core.adapters.aflplusplus_adapter import AFLPlusPlusAdapter
 from scripts.core.adapters.akto_adapter import AktoAdapter
 from scripts.core.adapters.bandit_adapter import BanditAdapter
-from scripts.core.adapters.bearer_adapter import BearerAdapter
 from scripts.core.adapters.cdxgen_adapter import CdxgenAdapter
 from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.dependency_check_adapter import DependencyCheckAdapter
@@ -55,7 +54,6 @@ ALL_ADAPTERS = [
     ("aflplusplus", AFLPlusPlusAdapter),
     ("akto", AktoAdapter),
     ("bandit", BanditAdapter),
-    ("bearer", BearerAdapter),
     ("cdxgen", CdxgenAdapter),
     ("checkov", CheckovAdapter),
     ("dependency_check", DependencyCheckAdapter),

@@ -1348,13 +1348,13 @@ class TestToolStatusSummary:
             platform_skipped=["falco", "afl++"],
             manual_install=["mobsf"],
             missing_dependency=["zap"],
-            not_installed=["bearer"],
+            not_installed=[],
             version_issues=["prowler"],
             content_triggered=[],
         )
 
-        # needs_attention = manual(1) + missing_deps(1) + not_installed(1) + version_issues(1) = 4
-        assert summary.needs_attention_count == 4
+        # needs_attention = manual(1) + missing_deps(1) + not_installed(0) + version_issues(1) = 3
+        assert summary.needs_attention_count == 3
 
     def test_toolstatussummary_skipped_count(self):
         """Test skipped_count property."""
@@ -1411,14 +1411,14 @@ class TestToolStatusSummary:
             platform_skipped=["falco", "afl++"],
             manual_install=[],
             missing_dependency=["zap"],
-            not_installed=["bearer"],
+            not_installed=[],
             version_issues=[],
             content_triggered=[],
         )
 
         status_line = summary.format_status_line()
         assert "12/16 tools ready" in status_line
-        assert "2 need attention" in status_line
+        assert "1 need attention" in status_line
 
 
 class TestGetToolSummary:
@@ -1451,7 +1451,7 @@ class TestGetToolSummary:
         with patch.object(manager, "check_tool", side_effect=mock_check_tool):
             with patch(
                 "scripts.cli.tool_manager.get_tools_for_profile_filtered",
-                return_value=["trivy", "semgrep", "checkov", "bearer"],
+                return_value=["trivy", "semgrep", "checkov"],
             ):
                 with patch(
                     "scripts.cli.tool_manager.get_skipped_tools_for_profile",
@@ -1459,14 +1459,14 @@ class TestGetToolSummary:
                 ):
                     with patch(
                         "scripts.cli.tool_manager.PROFILE_TOOLS",
-                        {"fast": ["trivy", "semgrep", "checkov", "bearer", "falco"]},
+                        {"fast": ["trivy", "semgrep", "checkov", "falco"]},
                     ):
                         summary = manager.get_tool_summary("fast")
 
         assert isinstance(summary, ToolStatusSummary)
         assert summary.profile_name == "fast"
-        assert summary.profile_total == 5  # Total in profile
-        assert summary.platform_applicable == 4  # After filtering
+        assert summary.profile_total == 4  # Total in profile
+        assert summary.platform_applicable == 3  # After filtering
         assert summary.installed == 3  # Tools with installed=True
         assert summary.execution_ready == 3  # Tools that are ready
         assert "falco" in summary.platform_skipped
