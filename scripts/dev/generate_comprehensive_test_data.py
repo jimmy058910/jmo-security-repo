@@ -50,7 +50,6 @@ TOOLS = {
     "kubescape": {"type": "k8s", "weight": 0.05},
     # Other scanners
     "yara": {"type": "malware", "weight": 0.02},
-    "bearer": {"type": "privacy", "weight": 0.03},
     "scancode": {"type": "license", "weight": 0.04},
     "cdxgen": {"type": "sbom", "weight": 0.03},
     "mobsf": {"type": "mobile", "weight": 0.02},

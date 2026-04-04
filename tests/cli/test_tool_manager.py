@@ -1315,7 +1315,7 @@ class TestToolStatusSummary:
 
         summary = ToolStatusSummary(
             profile_name="deep",
-            profile_total=29,
+            profile_total=28,
             platform_applicable=27,
             installed=25,
             execution_ready=22,
@@ -1328,7 +1328,7 @@ class TestToolStatusSummary:
         )
 
         assert summary.profile_name == "deep"
-        assert summary.profile_total == 29
+        assert summary.profile_total == 28
         assert summary.platform_applicable == 27
         assert summary.installed == 25
         assert summary.execution_ready == 22

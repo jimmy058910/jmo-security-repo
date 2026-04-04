@@ -39,8 +39,8 @@ def test_profile_tools_deep_count():
     """Test deep profile has expected number of tools."""
     from scripts.core.tool_registry import PROFILE_TOOLS
 
-    # Deep profile: 28 security tools + OPA for policy-as-code = 29 tools
-    assert len(PROFILE_TOOLS["deep"]) == 29
+    # Deep profile: 27 security tools + OPA for policy-as-code = 28 tools
+    assert len(PROFILE_TOOLS["deep"]) == 28
 
 
 def test_tool_binary_names_mapping():

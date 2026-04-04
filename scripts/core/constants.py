@@ -75,7 +75,6 @@ TOOL_GITLEAKS = "gitleaks"
 TOOL_SEMGREP = "semgrep"
 TOOL_SEMGREP_SECRETS = "semgrep-secrets"  # Same binary, secrets ruleset
 TOOL_BANDIT = "bandit"
-TOOL_BEARER = "bearer"
 TOOL_HORUSEC = "horusec"
 TOOL_GOSEC = "gosec"
 
@@ -135,7 +134,6 @@ ALL_TOOLS = [
     TOOL_SEMGREP,
     TOOL_SEMGREP_SECRETS,
     TOOL_BANDIT,
-    TOOL_BEARER,
     TOOL_HORUSEC,
     TOOL_GOSEC,
     TOOL_TRIVY,
@@ -217,11 +215,10 @@ PROFILE_SLIM_TOOLS = [
     TOOL_PROWLER,
     TOOL_KUBESCAPE,
     TOOL_GRYPE,
-    TOOL_BEARER,
     TOOL_HORUSEC,
     TOOL_SHELLCHECK,
     TOOL_OPA,
-]  # 14 tools
+]  # 13 tools
 
 PROFILE_BALANCED_TOOLS = [
     TOOL_TRUFFLEHOG,
@@ -238,11 +235,10 @@ PROFILE_BALANCED_TOOLS = [
     TOOL_CDXGEN,
     TOOL_GOSEC,
     TOOL_GRYPE,
-    TOOL_BEARER,
     TOOL_HORUSEC,
     TOOL_SHELLCHECK,
     TOOL_OPA,
-]  # 18 tools
+]  # 17 tools
 
 PROFILE_DEEP_TOOLS = [
     TOOL_TRUFFLEHOG,
@@ -266,7 +262,6 @@ PROFILE_DEEP_TOOLS = [
     TOOL_GOSEC,
     TOOL_YARA,
     TOOL_GRYPE,
-    TOOL_BEARER,
     TOOL_HORUSEC,
     TOOL_DEPENDENCY_CHECK,
     TOOL_FALCO,
@@ -274,7 +269,7 @@ PROFILE_DEEP_TOOLS = [
     TOOL_MOBSF,
     TOOL_LYNIS,
     TOOL_OPA,
-]  # 29 tools
+]  # 28 tools
 
 # ============================================================================
 # Output Formats

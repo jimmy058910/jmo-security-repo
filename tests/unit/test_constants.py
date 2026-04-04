@@ -44,7 +44,7 @@ class TestConstants:
         assert constants.TOOL_TRUFFLEHOG == "trufflehog"
         assert constants.TOOL_SEMGREP == "semgrep"
         assert constants.TOOL_TRIVY == "trivy"
-        assert len(constants.ALL_TOOLS) == 33
+        assert len(constants.ALL_TOOLS) == 32
 
     def test_severity_levels_defined(self):
         """Test severity constants are defined"""
@@ -64,8 +64,8 @@ class TestConstants:
     def test_profile_tools_defined(self):
         """Test profile tool lists are defined"""
         assert len(constants.PROFILE_FAST_TOOLS) == 9
-        assert len(constants.PROFILE_BALANCED_TOOLS) == 18
-        assert len(constants.PROFILE_DEEP_TOOLS) == 29
+        assert len(constants.PROFILE_BALANCED_TOOLS) == 17
+        assert len(constants.PROFILE_DEEP_TOOLS) == 28
 
     def test_output_formats_defined(self):
         """Test output format constants are defined"""
