@@ -58,7 +58,7 @@ docker pull ghcr.io/jimmy058910/jmo-security:fast
 | Dockerfile | Hadolint | Hadolint | Hadolint |
 | DAST | - | Nuclei | Nuclei |
 | Cloud CSPM | - | Prowler, Kubescape | - |
-| License | - | Bearer | - |
+| License | - | - | - |
 | Multi-language SAST | - | Horusec | - |
 
 **Recommendation:** Use **Slim variant** for cloud/IaC/container security (Alpine's original use case) with 2x tool coverage.

@@ -11,8 +11,8 @@ This matrix provides prescriptive guidance for selecting the right tools, profil
 
 - **12 Use Cases:** Pre-commit, PR gate, nightly audit, container release, IaC validation, web app scan, compliance audit, secret scanning, CVE monitoring, fuzzing, incident response, third-party audit
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
-- **28 Tools:** Organized across 4 profiles
-- **4 Profiles:** fast (9 tools, 5-10 min), slim (14 tools, 12-18 min), balanced (18 tools, 18-25 min), deep (28 tools, 40-70 min)
+- **27 Tools:** Organized across 4 profiles
+- **4 Profiles:** fast (9 tools, 5-10 min), slim (13 tools, 12-18 min), balanced (17 tools, 18-25 min), deep (28 tools, 40-70 min)
 - **6 Compliance Frameworks:** OWASP Top 10, CWE Top 25, CIS Controls, NIST CSF, PCI DSS, MITRE ATT&CK
 
 > **Canonical tool reference:** [PROFILES_AND_TOOLS.md](PROFILES_AND_TOOLS.md)
@@ -245,7 +245,7 @@ This matrix shows the recommended execution mode for each use case.
    YES -> Docker (profile matching your needs)
    NO -> Continue to 3
 
-3. Do you need all 28 tools?
+3. Do you need all 27 tools?
    YES -> CLI (native) or Docker (deep)
    NO -> Continue to 4
 
@@ -318,7 +318,6 @@ This matrix shows the recommended execution mode for each use case.
 | **prowler** | Cloud security (AWS/Azure/GCP) | IaC, K8s | N/A | ~10-15% |
 | **kubescape** | Kubernetes security | IaC, K8s | N/A | ~10-15% |
 | **grype** | Vulnerability scanner | Repos, Images | N/A | ~5-10% |
-| **bearer** | Data privacy SAST | Repos | N/A | ~15-20% |
 | **horusec** | Multi-language SAST | Repos | N/A | ~20-25% |
 | **dependency-check** | OWASP SCA | Repos | N/A | ~10-15% |
 | **scancode** | License/copyright scanning | Repos | N/A | ~5% |
@@ -338,7 +337,7 @@ This matrix shows the recommended execution mode for each use case.
 **Key Takeaways:**
 
 1. **Start Small:** Use `fast` profile for pre-commit, `balanced` for PRs, `deep` for audits
-2. **Match Use Case to Profile:** Don't run all 28 tools on every commit
+2. **Match Use Case to Profile:** Don't run all 27 tools on every commit
 3. **Compliance First:** Define required frameworks and work backwards
 4. **Threshold Tuning:** CRITICAL for pre-commit, HIGH for PRs, MEDIUM for releases
 5. **Execution Mode:** Native CLI for speed, Docker for CI/CD isolation
@@ -367,13 +366,13 @@ profiles:
 
   slim:
     tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck,
-            prowler, kubescape, grype, bearer, horusec, dependency-check]
+            prowler, kubescape, grype, horusec, dependency-check]
     timeout: 600
     fail_on: "HIGH"
 
   balanced:
     tools: [trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck,
-            prowler, kubescape, grype, bearer, horusec, dependency-check,
+            prowler, kubescape, grype, horusec, dependency-check,
             zap, scancode, cdxgen, gosec]
     timeout: 900
     fail_on: "HIGH"

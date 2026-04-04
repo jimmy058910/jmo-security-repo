@@ -27,17 +27,17 @@
 
 trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, opa
 
-### Slim Profile (14 tools, 12-18 min)
+### Slim Profile (13 tools, 12-18 min)
 
-Fast + prowler, kubescape, grype, bearer, horusec, dependency-check
+Fast + prowler, kubescape, grype, horusec, dependency-check
 
-### Balanced Profile (18 tools, 18-25 min)
+### Balanced Profile (17 tools, 18-25 min)
 
 Slim + zap, scancode, cdxgen, gosec
 
 ### Deep Profile (28 tools, 40-70 min)
 
-Core (14): trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, prowler, kubescape, grype, bearer, horusec, dependency-check, zap
+Core (13): trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, prowler, kubescape, grype, horusec, dependency-check, zap
 
 Extended (6): scancode, cdxgen, gosec, yara, noseyparker, bandit
 
@@ -69,7 +69,6 @@ This matrix shows which tools can scan which target types.
 | prowler | - | - | Yes | - | - | Yes |
 | kubescape | - | - | Yes | - | - | Yes |
 | grype | Yes | Yes | - | - | Yes | - |
-| bearer | Yes | - | - | - | Yes | - |
 | horusec | Yes | - | - | - | Yes | - |
 | dependency-check | Yes | - | - | - | Yes | - |
 | zap | - | - | - | Yes | - | - |
@@ -191,7 +190,6 @@ This matrix shows which tools are tested on which platforms and execution modes.
 | prowler | Tested | Partial | Untested | Untested | N/A |
 | kubescape | Tested | Partial | Untested | Untested | N/A |
 | grype | Tested | Partial | Untested | Untested | N/A |
-| bearer | Tested | Partial | Untested | Untested | N/A |
 | horusec | Partial | Partial | Untested | Untested | N/A |
 | dependency-check | Tested | Partial | Untested | Untested | N/A |
 
@@ -270,7 +268,7 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 | Target Type | Tools Available | Coverage |
 |-------------|-----------------|----------|
-| **Repositories** | Fast + bearer, horusec, dependency-check, grype | 11/14 (79%) |
+| **Repositories** | Fast + horusec, dependency-check, grype | 10/13 (77%) |
 | **Container Images** | syft, trivy, grype | 3/14 (21%) |
 | **IaC Files** | trivy, checkov, prowler, kubescape | 4/14 (29%) |
 | **Web URLs** | nuclei | 1/14 (7%) |
