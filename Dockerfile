@@ -128,13 +128,6 @@ RUN OSV_VERSION="2.3.1" && \
     -o /usr/local/bin/osv-scanner && \
     chmod +x /usr/local/bin/osv-scanner
 
-# Download Bearer (Data Privacy + SAST)
-RUN BEARER_VERSION="2.0.1" && \
-    BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
-    -o /tmp/bearer.tar.gz && \
-    tar -xzf /tmp/bearer.tar.gz -C /usr/local/bin bearer && \
-    chmod +x /usr/local/bin/bearer
 
 # Download Lynis (System Hardening)
 RUN LYNIS_VERSION="3.1.3" && \
@@ -299,7 +292,6 @@ COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
-COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
@@ -317,7 +309,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/gosec \
     /usr/local/bin/grype \
-    /usr/local/bin/bearer \
     /usr/local/bin/horusec \
     /usr/local/bin/opa \
     2>/dev/null || true
@@ -384,7 +375,6 @@ RUN echo "=== Verifying Docker-ready tools ===" && \
     kubescape version && \
     gosec --version && \
     grype version && \
-    bearer version && \
     lynis --version && \
     dependency-check --version && \
     horusec version && \
