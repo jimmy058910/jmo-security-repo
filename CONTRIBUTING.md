@@ -21,7 +21,7 @@ Be respectful and constructive. We expect contributors to follow a standard code
 ```bash
 pip install -e ".[dev]"                # Install in editable mode with dev deps
 make pre-commit-install                # Setup pre-commit hooks
-jmo tools install --profile balanced   # Install security tools (18 tools)
+jmo tools install --profile balanced   # Install security tools (17 tools)
 make test                              # Run unit tests and coverage
 make fmt && make lint
 ```
@@ -33,8 +33,8 @@ CLI profiles and Docker variants are unified - same 4 profiles, same tools:
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
-| `slim` | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
-| `balanced` | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
+| `slim` | 13 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
+| `balanced` | 17 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
 | `deep` | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
 
 **Canonical tool reference:** [docs/PROFILES_AND_TOOLS.md](docs/PROFILES_AND_TOOLS.md)

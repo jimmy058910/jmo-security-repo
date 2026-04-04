@@ -26,9 +26,9 @@ This document is the authoritative reference for which tools are included in eac
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
 | **fast** | 9 | 5-10 min | Pre-commit, PR validation | `jmo-security:fast` |
-| **slim** | 14 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
-| **balanced** | 18 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
-| **deep** | 29 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
+| **slim** | 13 | 12-18 min | Cloud/IaC (AWS/Azure/GCP/K8s) | `jmo-security:slim` |
+| **balanced** | 17 | 18-25 min | Production scans, CI/CD | `jmo-security:balanced` |
+| **deep** | 28 | 40-70 min | Compliance audits, pentests | `jmo-security:deep` |
 
 **Installation:**
 
@@ -53,15 +53,15 @@ jmo tools install --profile balanced
 
 **Tools included:** Core secrets detection, SAST, SCA, IaC scanning, and shell analysis.
 
-### Slim Profile (14 tools)
+### Slim Profile (13 tools)
 
 **Purpose:** Cloud and infrastructure-focused scanning.
 
 **Best for:** AWS/Azure/GCP environments, Kubernetes deployments, IaC repositories.
 
-**Tools included:** Fast profile + cloud security (Prowler, Kubescape), additional SCA (Grype), data privacy (Bearer), and multi-language SAST (Horusec).
+**Tools included:** Fast profile + cloud security (Prowler, Kubescape), additional SCA (Grype), and multi-language SAST (Horusec).
 
-### Balanced Profile (18 tools)
+### Balanced Profile (17 tools)
 
 **Purpose:** Production-ready CI/CD scanning with comprehensive coverage.
 
@@ -69,7 +69,7 @@ jmo tools install --profile balanced
 
 **Tools included:** Slim profile + DAST (ZAP), license scanning (ScanCode), SBOM generation (CDXgen), and Go-specific analysis (Gosec).
 
-### Deep Profile (29 tools)
+### Deep Profile (28 tools)
 
 **Purpose:** Comprehensive security audits for compliance and penetration testing.
 
@@ -104,7 +104,7 @@ fast:
   - opa             # Policy-as-code engine (Open Policy Agent)
 ```
 
-### Slim Profile (14 tools)
+### Slim Profile (13 tools)
 
 ```yaml
 slim:
@@ -118,20 +118,19 @@ slim:
   - nuclei
   - shellcheck
   - opa             # Policy-as-code engine (Open Policy Agent)
-  # Additional (5)
+  # Additional (4)
   - prowler         # Multi-cloud CSPM (AWS/Azure/GCP/K8s)
   - kubescape       # Kubernetes security (NSA/CISA)
   - grype           # Vulnerability scanner (Anchore DB)
-  - bearer          # Data privacy/SAST (GDPR/CCPA) [EOL: project archived, v2.0.1 final]
   - horusec         # Multi-language SAST (18+ languages)
   # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
-### Balanced Profile (18 tools)
+### Balanced Profile (17 tools)
 
 ```yaml
 balanced:
-  # Slim profile (14)
+  # Slim profile (13)
   - trufflehog
   - semgrep
   - syft
@@ -144,7 +143,6 @@ balanced:
   - prowler
   - kubescape
   - grype
-  - bearer
   - horusec
   # Additional (4)
   - zap             # OWASP ZAP - DAST
@@ -154,11 +152,11 @@ balanced:
   # Note: dependency-check moved to deep profile only (slow first-run NVD download)
 ```
 
-### Deep Profile (29 tools)
+### Deep Profile (28 tools)
 
 ```yaml
 deep:
-  # Core scanning (14)
+  # Core scanning (13)
   - trufflehog
   - semgrep
   - syft
@@ -169,7 +167,6 @@ deep:
   - prowler
   - kubescape
   - grype
-  - bearer
   - horusec
   - dependency-check  # OWASP SCA - deep only (30-40min first-run NVD download)
   - zap
@@ -213,7 +210,6 @@ deep:
 | Bandit | deep | Python |
 | Gosec | balanced+ | Go |
 | Horusec | slim+ | 18+ languages |
-| Bearer | slim+ | 12+ languages (privacy focus) |
 
 ### SCA (Software Composition Analysis)
 
@@ -300,9 +296,8 @@ JMo Security intentionally includes **overlapping tools** for defense-in-depth c
 | **Horusec** | Different rule engine, catches patterns Semgrep misses | 18+ languages |
 | **Bandit** | Deep Python expertise (weak crypto, shell injection) | Python only |
 | **Gosec** | Go-specific patterns (race conditions, memory safety) | Go only |
-| **Bearer** | Data privacy focus (GDPR/CCPA, PII exposure) | 12+ languages |
 
-**Rationale:** No single SAST tool catches everything. Language-specific tools (Bandit, Gosec) have deeper coverage than polyglot tools. Bearer adds privacy-specific rules that security-focused tools often miss.
+**Rationale:** No single SAST tool catches everything. Language-specific tools (Bandit, Gosec) have deeper coverage than polyglot tools.
 
 ### Why Multiple IaC Scanners?
 
@@ -407,7 +402,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 
 | Target Type | CLI Flag | Scanner Module | Tool Count |
 |-------------|----------|----------------|------------|
-| **Local Repository** | `--repo .` | `repository_scanner.py` | Up to 28 (profile-dependent) |
+| **Local Repository** | `--repo .` | `repository_scanner.py` | Up to 27 (profile-dependent) |
 | **Container Image** | `--image nginx:latest` | `image_scanner.py` | 2 (trivy, syft) |
 | **IaC File** | Auto-detected | `iac_scanner.py` | 2 (checkov, trivy) |
 | **Web URL/API** | `--url https://...` | `url_scanner.py` | 3 (zap, nuclei, akto) |
@@ -423,7 +418,7 @@ Different target types invoke different subsets of tools. This matrix shows the 
 | Category | Tools |
 |----------|-------|
 | Secrets | trufflehog, noseyparker, semgrep-secrets |
-| SAST | semgrep, bandit, gosec, horusec, bearer (EOL) |
+| SAST | semgrep, bandit, gosec, horusec |
 | SCA | trivy, grype, dependency-check |
 | SBOM | syft, cdxgen |
 | IaC | checkov, checkov-cicd, hadolint, kubescape, prowler* |
@@ -498,7 +493,6 @@ Different target types invoke different subsets of tools. This matrix shows the 
 | bandit | ✅ | - | - | - | ✅ | - |
 | gosec | ✅ | - | - | - | ✅ | - |
 | horusec | ✅ | - | - | - | ✅ | - |
-| bearer | ✅ | - | - | - | ✅ | - |
 | trivy | ✅ | ✅ | ✅ | - | ✅ | ✅ |
 | grype | ✅ | - | - | - | ✅ | - |
 | dependency-check | ✅ | - | - | - | ✅ | - |
@@ -527,39 +521,38 @@ Different target types invoke different subsets of tools. This matrix shows the 
 
 ## Complete Tool Reference
 
-### All 28 Tools (Alphabetical)
+### All 27 Tools (Alphabetical)
 
 | # | Tool | Version | Profiles | Installation | Critical |
 |---|------|---------|----------|--------------|----------|
 | 1 | AFL++ | 4.34c | deep | Manual | No |
 | 2 | Akto | 1.53.7 | deep | Manual | No |
 | 3 | Bandit | 1.9.2 | deep | pip | No |
-| 4 | Bearer | 1.51.1 | slim+ | binary | No |
-| 5 | CDXgen | 12.0.0 | balanced+ | npm | No |
-| 6 | Checkov | 3.2.495 | fast+ | pip | Yes |
-| 7 | Checkov-CICD | (variant) | deep | pip | No |
-| 8 | Dependency-Check | 12.1.0 | slim+ | Java JAR | No |
-| 9 | Falco | 0.11.4 | deep | binary | No |
-| 10 | Gosec | 2.22.10 | balanced+ | binary | No |
-| 11 | Grype | 0.104.0 | slim+ | binary | No |
-| 12 | Hadolint | 2.14.0 | fast+ | binary | No |
-| 13 | Horusec | 2.8.0 | slim+ | binary | No |
-| 14 | Kubescape | 3.0.47 | slim+ | binary | Yes |
-| 15 | Lynis | 3.1.3 | deep | apt/script | No |
-| 16 | MobSF | 4.4.2 | deep | Manual | No |
-| 17 | Nosey Parker | 0.24.0 | deep | binary | No |
-| 18 | Nuclei | 3.5.1 | fast+ | binary | No |
-| 19 | Prowler | 5.13.1 | slim+ | pip | Yes |
-| 20 | ScanCode | 32.4.1 | balanced+ | pip | No |
-| 21 | Semgrep | 1.144.0 | fast+ | pip | Yes |
-| 22 | Semgrep-Secrets | (variant) | deep | pip | No |
-| 23 | ShellCheck | 0.10.0 | fast+ | apt/binary | No |
-| 24 | Syft | 1.38.0 | fast+ | binary | Yes |
-| 25 | Trivy | 0.67.2 | fast+ | binary | Yes |
-| 26 | Trivy-RBAC | (variant) | deep | binary | No |
-| 27 | TruffleHog | 3.91.1 | fast+ | binary | Yes |
-| 28 | YARA | 4.5.5 | deep | pip | No |
-| 29 | ZAP | 2.16.1 | balanced+ | Java/binary | Yes |
+| 4 | CDXgen | 12.0.0 | balanced+ | npm | No |
+| 5 | Checkov | 3.2.495 | fast+ | pip | Yes |
+| 6 | Checkov-CICD | (variant) | deep | pip | No |
+| 7 | Dependency-Check | 12.1.0 | slim+ | Java JAR | No |
+| 8 | Falco | 0.11.4 | deep | binary | No |
+| 9 | Gosec | 2.22.10 | balanced+ | binary | No |
+| 10 | Grype | 0.104.0 | slim+ | binary | No |
+| 11 | Hadolint | 2.14.0 | fast+ | binary | No |
+| 12 | Horusec | 2.8.0 | slim+ | binary | No |
+| 13 | Kubescape | 3.0.47 | slim+ | binary | Yes |
+| 14 | Lynis | 3.1.3 | deep | apt/script | No |
+| 15 | MobSF | 4.4.2 | deep | Manual | No |
+| 16 | Nosey Parker | 0.24.0 | deep | binary | No |
+| 17 | Nuclei | 3.5.1 | fast+ | binary | No |
+| 18 | Prowler | 5.13.1 | slim+ | pip | Yes |
+| 19 | ScanCode | 32.4.1 | balanced+ | pip | No |
+| 20 | Semgrep | 1.144.0 | fast+ | pip | Yes |
+| 21 | Semgrep-Secrets | (variant) | deep | pip | No |
+| 22 | ShellCheck | 0.10.0 | fast+ | apt/binary | No |
+| 23 | Syft | 1.38.0 | fast+ | binary | Yes |
+| 24 | Trivy | 0.67.2 | fast+ | binary | Yes |
+| 25 | Trivy-RBAC | (variant) | deep | binary | No |
+| 26 | TruffleHog | 3.91.1 | fast+ | binary | Yes |
+| 27 | YARA | 4.5.5 | deep | pip | No |
+| 28 | ZAP | 2.16.1 | balanced+ | Java/binary | Yes |
 
 **Notes:**
 
@@ -752,9 +745,9 @@ for profile in ['fast', 'slim', 'balanced', 'deep']:
 
 # Expected output:
 # fast: 9 tools
-# slim: 14 tools
-# balanced: 18 tools
-# deep: 29 tools
+# slim: 13 tools
+# balanced: 17 tools
+# deep: 28 tools
 ```
 
 ---

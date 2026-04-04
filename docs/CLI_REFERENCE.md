@@ -13,8 +13,8 @@ Complete reference for all CLI commands and flags. Run `jmo <command> --help` fo
 |---------|---------|
 | `jmo wizard` | Interactive guided scanning |
 | `jmo fast` | Quick scan (9 tools, 5-10 min) |
-| `jmo slim` | Cloud/IaC scan (14 tools, 12-18 min) |
-| `jmo balanced` | Production scan (18 tools, 18-25 min) |
+| `jmo slim` | Cloud/IaC scan (13 tools, 12-18 min) |
+| `jmo balanced` | Production scan (17 tools, 18-25 min) |
 | `jmo full` | Comprehensive audit (29 tools, 40-70 min) |
 | `jmo scan` | Low-level scan with full control |
 | `jmo report` | Generate reports from scan results |
@@ -170,8 +170,8 @@ Beginner-friendly shortcut commands with sensible defaults.
 | Command | Tools | Time | Description |
 |---------|-------|------|-------------|
 | `jmo fast` | 9 | 5-10 min | Quick pre-commit/PR validation |
-| `jmo slim` | 14 | 12-18 min | Cloud/IaC scanning (AWS, Azure, GCP, K8s) |
-| `jmo balanced` | 18 | 18-25 min | Production scans |
+| `jmo slim` | 13 | 12-18 min | Cloud/IaC scanning (AWS, Azure, GCP, K8s) |
+| `jmo balanced` | 17 | 18-25 min | Production scans |
 | `jmo full` | 28 | 40-70 min | Comprehensive audits |
 
 **Common flags (all three commands):**
@@ -214,7 +214,7 @@ Interactive setup wizard for guided security scanning.
 The wizard performs a pre-flight check showing tool availability in clear categories:
 
 ```text
-Balanced profile: 18 tools
+Balanced profile: 17 tools
 
 ✅ READY TO SCAN (13 tools)
 
@@ -222,15 +222,12 @@ Balanced profile: 18 tools
    scancode, zap, nuclei
    Install with: jmo tools install <tool-name>
 
-🚫 PLATFORM INCOMPATIBLE (1 tool, windows):
-   bearer
-
 📖 REQUIRES MANUAL SETUP (1 tool):
    prowler
    See: docs/MANUAL_INSTALLATION.md
 
 Expected findings from: 13 tools
-   (5 tools will be skipped)
+   (4 tools will be skipped)
 ```
 
 Use `--auto-fix` to automatically install missing tools, or use Docker mode for full tool coverage.
@@ -379,10 +376,9 @@ Manage security tool installation and updates.
 Example output:
 
 ```text
-Balanced profile: 18 tools
+Balanced profile: 17 tools
   ✅ 13 ready
   ⚠️ 2 outdated (run 'jmo tools update' when convenient)
-  🚫 1 platform-skipped (bearer - Windows not supported)
   ❌ 2 not installed (scancode, zap)
 ```
 
@@ -786,8 +782,8 @@ Build Docker images for JMo Security.
 | Variant | Tools | Size | Use Case |
 |---------|-------|------|----------|
 | `fast` | 9 | ~502 MB | CI/CD, pre-commit hooks |
-| `slim` | 14 | ~557 MB | Cloud/IaC focused |
-| `balanced` | 18 | ~1.4 GB | Production scans (default) |
+| `slim` | 13 | ~557 MB | Cloud/IaC focused |
+| `balanced` | 17 | ~1.4 GB | Production scans (default) |
 | `deep` | 28 | ~2.0 GB | Comprehensive audits |
 
 | Flag | Description |
