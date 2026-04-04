@@ -35,13 +35,12 @@ help:
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
 	@echo "  install-git-hooks  - Install git hooks (pre-push with Python 3.11 support)"
-	@echo "  smoke-ai   - Run AI repo finder smoke test (creates TSV/CSV/JSONL in ai-search/smoke)"
 	@echo "  capture-screenshot - Render dashboard.html from RESULTS_DIR and save PNG via headless Chromium"
 	@echo "  screenshots-demo  - Produce demo results from samples/fixtures/infra-demo (stubs allowed), render dashboard, capture PNG"
-	@echo "  setup     - Bootstrap security tools (jmotools setup)"
-	@echo "  fast      - Fast profile scan via jmotools"
-	@echo "  balanced  - Balanced profile scan via jmotools"
-	@echo "  full      - Deep profile scan via jmotools"
+	@echo "  setup     - Check security tool installation (jmo tools check)"
+	@echo "  fast      - Fast profile scan (9 tools) via jmo"
+	@echo "  balanced  - Balanced profile scan (17 tools) via jmo"
+	@echo "  full      - Deep profile scan (28 tools) via jmo"
 	@echo "  attack-navigator - Open ATT&CK Navigator with scan findings (auto-serve)"
 	@echo ""
 	@echo "Sample Fixture Targets:"
@@ -295,38 +294,28 @@ screenshots-demo:
 	@echo "[screenshots-demo] Dashboard: /tmp/jmo-infra-demo-results/summaries/dashboard.html"
 	@echo "[screenshots-demo] Screenshot(s) saved under $${OUTDIR:-docs/internal/screenshots}"
 
-.PHONY: smoke-ai
-smoke-ai:
-	@echo "[smoke-ai] Running constrained search to validate outputs..."
-	@mkdir -p ai-search/smoke
-	@OUTDIR=ai-search/smoke FORMATS=tsv,csv,jsonl RPM=10 PER_PAGE=50 MAX_PER_QUERY=50 LIMIT=15 \
-		./ai-search/find-ai-generated-repos.sh --months 1 --stars-max 50 --query-file ai-search/queries.txt --outdir ai-search/smoke >/dev/null
-	@ls -1 ai-search/smoke | grep -E '^ai-repos-.*\.(tsv|csv|jsonl)$$' >/dev/null || (echo "[smoke-ai] Expected outputs not found in ai-search/smoke" && exit 1)
-	@echo "[smoke-ai] OK - Found outputs:"
-	@ls -1 ai-search/smoke | grep -E '^ai-repos-.*\.(tsv|csv|jsonl)$$' | sed 's/^/  - /'
-
 .PHONY: setup fast balanced full
 setup:
-	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
-	jmotools setup --check || true
+	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
+	jmo tools check || true
 
 # Usage: make fast [DIR=~/repos] [TARGETS=results/targets.tsv.txt] [RESULTS=results]
 fast:
-	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmotools fast --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmotools fast --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmo scan --profile fast --repo $(DIR) --results $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmo scan --profile fast --targets $(TARGETS) --results $${RESULTS:-results}; \
 	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
 
 balanced:
-	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmotools balanced --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmotools balanced --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmo scan --profile balanced --repo $(DIR) --results $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmo scan --profile balanced --targets $(TARGETS) --results $${RESULTS:-results}; \
 	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
 
 full:
-	@which jmotools >/dev/null 2>&1 || (echo 'Installing package to expose jmotools…' && $(PY) -m pip install -e . )
-	@if [ -n "$(DIR)" ]; then jmotools full --repos-dir $(DIR) --results-dir $${RESULTS:-results}; \
-	elif [ -n "$(TARGETS)" ]; then jmotools full --targets $(TARGETS) --results-dir $${RESULTS:-results}; \
+	@which jmo >/dev/null 2>&1 || (echo 'Installing package to expose jmo…' && $(PY) -m pip install -e . )
+	@if [ -n "$(DIR)" ]; then jmo scan --profile deep --repo $(DIR) --results $${RESULTS:-results}; \
+	elif [ -n "$(TARGETS)" ]; then jmo scan --profile deep --targets $(TARGETS) --results $${RESULTS:-results}; \
 	else echo 'Set DIR=~/repos or TARGETS=results/targets.tsv.txt'; exit 1; fi
 
 # ============================================================================
@@ -563,20 +552,23 @@ docker-build:
 docker-build-all:
 	@echo "Building all Docker image variants..."
 	$(MAKE) docker-build VARIANT=full
+	$(MAKE) docker-build VARIANT=balanced
 	$(MAKE) docker-build VARIANT=slim
-	$(MAKE) docker-build VARIANT=alpine
+	$(MAKE) docker-build VARIANT=fast
 
 docker-build-local:
 	@echo "Building all Docker variants with 'local' tag for testing..."
 	@echo "Target architecture: $(TARGETARCH)"
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile -t jmo-security:local-full .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.balanced -t jmo-security:local-balanced .
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.slim -t jmo-security:local-slim .
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.alpine -t jmo-security:local-alpine .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.fast -t jmo-security:local-fast .
 	@echo ""
-	@echo "✅ Local Docker images built successfully:"
+	@echo "Local Docker images built successfully:"
 	@echo "  - jmo-security:local-full"
+	@echo "  - jmo-security:local-balanced"
 	@echo "  - jmo-security:local-slim"
-	@echo "  - jmo-security:local-alpine"
+	@echo "  - jmo-security:local-fast"
 	@echo ""
 	@echo "Test with: docker run --rm jmo-security:local-full --help"
 	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local make test-e2e"
