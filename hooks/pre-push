@@ -26,7 +26,6 @@ critical_modules=(
   "scripts.core.compliance_frameworks"
   "scripts.core.exceptions"
   "scripts.core.tool_runner"
-  "scripts.core.constants"
 )
 
 for module in "${critical_modules[@]}"; do
