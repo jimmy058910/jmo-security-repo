@@ -1,6 +1,8 @@
 """Tests for BaseScanner."""
 
+from dataclasses import asdict
 from pathlib import Path
+
 from scripts.cli.scan_jobs.base_scanner import BaseScanner, ScanResult
 from scripts.cli.scan_orchestrator import ScanConfig
 
@@ -108,3 +110,22 @@ def test_scanner_has_config():
 
     assert scanner.config == config
     assert scanner.config.tools == ["trivy", "syft"]
+
+
+def test_scan_result_dataclass_asdict():
+    """Test ScanResult can be converted to dict."""
+    result = ScanResult(
+        target_id="test-target",
+        target_type="repo",
+        tool_statuses={"trivy": True},
+        output_files={"trivy": Path("/tmp/trivy.json")},
+        errors=[],
+        duration=5.0,
+        metadata={"key": "value"},
+    )
+
+    result_dict = asdict(result)
+    assert result_dict["target_id"] == "test-target"
+    assert result_dict["target_type"] == "repo"
+    assert result_dict["tool_statuses"] == {"trivy": True}
+    assert result_dict["duration"] == 5.0

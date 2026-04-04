@@ -345,6 +345,72 @@ class TestIacScanner:
             assert trivy_def is not None
             assert "--severity" in trivy_def.command
 
+    def test_scan_iac_custom_find_tool_func(self, tmp_path):
+        """Test using custom find_tool_func"""
+        iac_file = tmp_path / "main.tf"
+        iac_file.write_text('resource "aws_s3_bucket" "test" {}')
+
+        def mock_find_tool(tool: str):
+            return f"/usr/bin/{tool}" if tool == "checkov" else None
+
+        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="checkov", status="success", attempts=1),
+            ]
+
+            iac_id, statuses = scan_iac_file(
+                iac_type="terraform",
+                iac_path=iac_file,
+                results_dir=tmp_path,
+                tools=["checkov", "trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+            )
+
+            assert "checkov" in statuses
+            assert "trivy" in statuses
+
+    def test_scan_iac_custom_write_stub_func(self, tmp_path):
+        """Test using custom write_stub_func"""
+        iac_file = tmp_path / "main.tf"
+        iac_file.write_text('resource "aws_s3_bucket" "test" {}')
+
+        stub_calls = []
+
+        def mock_write_stub(tool: str, path) -> None:
+            stub_calls.append((tool, path))
+
+        def mock_find_tool(tool: str):
+            return None  # No tools found
+
+        with patch("scripts.cli.scan_jobs.iac_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_iac_file(
+                iac_type="terraform",
+                iac_path=iac_file,
+                results_dir=tmp_path,
+                tools=["checkov", "trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            assert len(stub_calls) == 2
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
