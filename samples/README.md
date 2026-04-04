@@ -20,7 +20,7 @@ JMo Security supports 6 target types. This directory provides safe, ethical test
 ### Goals
 
 1. **No public app exposure** - All tests use public/local resources
-2. **Comprehensive coverage** - Test all 6 target types and all 12 tools
+2. **Comprehensive coverage** - Test all 6 target types and all 28 tools
 3. **Reproducible** - Anyone can run the same benchmarks
 4. **Ethical** - Only scan resources we own or have permission to test
 
@@ -203,7 +203,7 @@ jmo balanced \
   --gitlab-token YOUR_TOKEN \
   --gitlab-url https://gitlab.com
 
-# Tools used: Full repo scanner (10/12 tools)
+# Tools used: Full repo scanner (10/28 tools)
 ```
 
 ### 6. Kubernetes Clusters (k8s/)

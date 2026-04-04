@@ -253,38 +253,38 @@ All 28 tools benefit from universal compliance enrichment via [scripts/core/comp
 
 ## Matrix 5: Profiles x Tools x Target Types
 
-### 5.1: Fast Profile (8 tools, 5-10 min)
+### 5.1: Fast Profile (9 tools, 5-10 min)
 
 | Target Type | Tools Available | Coverage |
 |-------------|-----------------|----------|
-| **Repositories** | trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck | 7/8 (88%) |
-| **Container Images** | syft, trivy | 2/8 (25%) |
-| **IaC Files** | trivy, checkov | 2/8 (25%) |
-| **Web URLs** | nuclei | 1/8 (13%) |
-| **GitLab Repos** | trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck | 7/8 (88%) |
-| **Kubernetes** | trivy | 1/8 (13%) |
+| **Repositories** | trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck | 7/9 (78%) |
+| **Container Images** | syft, trivy | 2/9 (22%) |
+| **IaC Files** | trivy, checkov | 2/9 (22%) |
+| **Web URLs** | nuclei | 1/9 (11%) |
+| **GitLab Repos** | trufflehog, semgrep, syft, trivy, checkov, hadolint, shellcheck | 7/9 (78%) |
+| **Kubernetes** | trivy | 1/9 (11%) |
 
-### 5.2: Slim Profile (14 tools, 12-18 min)
+### 5.2: Slim Profile (13 tools, 12-18 min)
 
 | Target Type | Tools Available | Coverage |
 |-------------|-----------------|----------|
 | **Repositories** | Fast + horusec, dependency-check, grype | 10/13 (77%) |
-| **Container Images** | syft, trivy, grype | 3/14 (21%) |
-| **IaC Files** | trivy, checkov, prowler, kubescape | 4/14 (29%) |
-| **Web URLs** | nuclei | 1/14 (7%) |
-| **GitLab Repos** | Same as repos | 11/14 (79%) |
-| **Kubernetes** | trivy, prowler, kubescape | 3/14 (21%) |
+| **Container Images** | syft, trivy, grype | 3/13 (23%) |
+| **IaC Files** | trivy, checkov, prowler, kubescape | 4/13 (31%) |
+| **Web URLs** | nuclei | 1/13 (8%) |
+| **GitLab Repos** | Same as repos | 11/13 (85%) |
+| **Kubernetes** | trivy, prowler, kubescape | 3/13 (23%) |
 
-### 5.3: Balanced Profile (18 tools, 18-25 min)
+### 5.3: Balanced Profile (17 tools, 18-25 min)
 
 | Target Type | Tools Available | Coverage |
 |-------------|-----------------|----------|
-| **Repositories** | Slim + scancode, cdxgen, gosec | 14/18 (78%) |
-| **Container Images** | syft, trivy, grype, cdxgen | 4/18 (22%) |
-| **IaC Files** | trivy, checkov, prowler, kubescape | 4/18 (22%) |
-| **Web URLs** | nuclei, zap | 2/18 (11%) |
-| **GitLab Repos** | Same as repos | 14/18 (78%) |
-| **Kubernetes** | trivy, prowler, kubescape | 3/18 (17%) |
+| **Repositories** | Slim + scancode, cdxgen, gosec | 14/17 (82%) |
+| **Container Images** | syft, trivy, grype, cdxgen | 4/17 (24%) |
+| **IaC Files** | trivy, checkov, prowler, kubescape | 4/17 (24%) |
+| **Web URLs** | nuclei, zap | 2/17 (12%) |
+| **GitLab Repos** | Same as repos | 14/17 (82%) |
+| **Kubernetes** | trivy, prowler, kubescape | 3/17 (18%) |
 
 ### 5.4: Deep Profile (28 tools, 40-70 min)
 

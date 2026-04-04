@@ -1,6 +1,6 @@
 # JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
-# Base: Ubuntu 24.04 with 29 security tools pre-installed
-# Size: ~1.9 GB (optimized) | Tools: 29 (26 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
+# Base: Ubuntu 24.04 with 28 security tools pre-installed
+# Size: ~1.9 GB (optimized) | Tools: 28 (25 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
 
 #
@@ -177,7 +177,7 @@ FROM ubuntu:24.04 AS runtime
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.0)"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 28 tools (25 Docker-ready + OPA policy engine) (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
