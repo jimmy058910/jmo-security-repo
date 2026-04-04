@@ -171,10 +171,7 @@ omit = [
     "scripts/core/compliance_frameworks.py",
     # CLI entry points (tested via integration tests)
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    # Dashboard generator (standalone HTML builder)
-    "scripts/core/generate_dashboard.py",
     # MCP server - separate integration
     "scripts/jmo_mcp/*",
     # Email service requires SMTP infrastructure
@@ -201,9 +198,7 @@ exclude_lines = [
 ]
 omit = [
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    "scripts/core/generate_dashboard.py",
     "scripts/jmo_mcp/*",
     "scripts/core/email_service.py",
     "scripts/cli/wizard.py",
