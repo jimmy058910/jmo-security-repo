@@ -233,21 +233,6 @@ def large_database(tmp_path: Path) -> Path:
     return db_path
 
 
-@pytest.fixture
-def benchmark_context(tmp_path: Path) -> Dict[str, Any]:
-    """
-    Provide benchmark context with timing utilities.
-
-    Returns:
-        Dict with helper functions for timing and assertions
-    """
-    return {
-        "tmp_path": tmp_path,
-        "start_time": None,
-        "elapsed": None,
-    }
-
-
 def create_test_finding(index: int) -> Dict[str, Any]:
     """
     Create a single test finding with CommonFinding v1.2.0 schema.
