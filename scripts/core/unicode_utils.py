@@ -10,24 +10,57 @@ from __future__ import annotations
 import sys
 
 # Combined Unicode fallback mappings for cp1252 compatibility.
-# Merges all emoji→ASCII mappings used across the codebase.
+# Canonical superset merging all fallback dicts used across the codebase.
 UNICODE_FALLBACKS: dict[str, str] = {
-    # CLI / jmo.py
-    "\U0001f389": "[*]",  # Party popper
-    "\U0001f4e7": "[@]",  # Email
-    "\U0001f49a": "<3",  # Green heart
-    "\U0001f44d": "[+1]",  # Thumbs up
-    # Telemetry
-    "\U0001f4ca": "[*]",  # Chart
-    "\U0001f512": "[L]",  # Lock
-    "\U0001f310": "[W]",  # Globe
-    "\U0001f4a1": "[i]",  # Light bulb
-    # Shared
-    "\u2705": "[OK]",  # Check mark
-    "\u274c": "[X]",  # Cross mark
-    "\u26a0\ufe0f": "[!]",  # Warning
-    "\u2192": "->",  # Right arrow
-    "\u2022": "*",  # Bullet
+    # Box drawing — horizontal/vertical lines
+    "\u2500": "-",  # ─ Box drawing horizontal
+    "\u2501": "=",  # ━ Box drawing heavy horizontal
+    "\u2502": "|",  # │ Box drawing vertical
+    # Box drawing — corners and intersections
+    "\u250c": "+",  # ┌
+    "\u2510": "+",  # ┐
+    "\u2514": "+",  # └
+    "\u2518": "+",  # ┘
+    "\u251c": "+",  # ├
+    "\u2524": "+",  # ┤
+    "\u252c": "+",  # ┬
+    "\u2534": "+",  # ┴
+    "\u253c": "+",  # ┼
+    # Box drawing — double lines
+    "\u2550": "=",  # ═ Double horizontal
+    "\u2551": "|",  # ║ Double vertical
+    "\u2554": "+",  # ╔
+    "\u2557": "+",  # ╗
+    "\u255a": "+",  # ╚
+    "\u255d": "+",  # ╝
+    # Arrows
+    "\u2190": "<-",  # ← Left arrow
+    "\u2191": "^",  # ↑ Up arrow
+    "\u2192": "->",  # → Right arrow
+    "\u2193": "v",  # ↓ Down arrow
+    # Punctuation / symbols
+    "\u2022": "*",  # • Bullet
+    "\u2713": "[v]",  # ✓ Check mark small
+    "\u2717": "[x]",  # ✗ X mark
+    # Status / alert symbols
+    "\u2705": "[OK]",  # ✅ Check mark
+    "\u274c": "[X]",  # ❌ Cross mark
+    "\u26a0": "[!]",  # ⚠ Warning (without variation selector)
+    "\u26a0\ufe0f": "[!]",  # ⚠️ Warning (with VS-16)
+    # Emoji — CLI / jmo.py
+    "\U0001f389": "[*]",  # 🎉 Party popper
+    "\U0001f4e7": "[@]",  # 📧 Email
+    "\U0001f49a": "<3",  # 💚 Green heart
+    "\U0001f44d": "[+1]",  # 👍 Thumbs up
+    # Emoji — telemetry / core
+    "\U0001f4ca": "[#]",  # 📊 Chart (bar chart)
+    "\U0001f4c8": "[^]",  # 📈 Chart increasing
+    "\U0001f4c9": "[v]",  # 📉 Chart decreasing
+    "\U0001f512": "[L]",  # 🔒 Lock
+    "\U0001f310": "[W]",  # 🌐 Globe
+    "\U0001f4a1": "[i]",  # 💡 Light bulb
+    "\U0001f4d6": "[?]",  # 📖 Book
+    "\U0001f50d": "[?]",  # 🔍 Magnifying glass
 }
 
 
