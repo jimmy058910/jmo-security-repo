@@ -81,7 +81,6 @@ TOOL_TIME_ESTIMATES: dict[str, int] = {
     "grype": 40,
     "syft": 30,
     "checkov": 60,
-    "bearer": 50,
     "nuclei": 90,
     "noseyparker": 45,
     "bandit": 30,
