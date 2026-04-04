@@ -8,7 +8,7 @@
 **Dimensions:**
 
 - **6 Target Types:** Repositories, Container Images, IaC Files, Web URLs, GitLab Repos, Kubernetes Clusters
-- **28 Tools:** Organized across 4 profiles (fast: 9, slim: 14, balanced: 18, deep: 28)
+- **28 Tools:** Organized across 4 profiles (fast: 9, slim: 13, balanced: 17, deep: 28)
 - **3 OS Platforms:** Linux, macOS, WSL (Windows Subsystem for Linux)
 - **5 Execution Modes:** CLI (native), Docker (fast), Docker (slim), Docker (balanced), Docker (deep)
 - **6 Compliance Frameworks:** OWASP Top 10 2021, CWE Top 25 2024, CIS Controls v8.1, NIST CSF 2.0, PCI DSS 4.0, MITRE ATT&CK v16.1

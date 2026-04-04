@@ -2,7 +2,7 @@
 
 **Purpose:** Pre-release manual verification for features that cannot be fully automated.
 
-> **Note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have excellent automated coverage (5,000+ tests, 87% coverage) and are not duplicated here.
+> **Note:** This checklist focuses on interactive workflows, cross-platform edge cases, and commands with minimal automated test coverage. Commands like `scan`, `report`, `history`, `trends`, `diff`, `ci`, and `policy` have excellent automated coverage (8,000+ tests, 87% coverage) and are not duplicated here.
 
 **Related Documentation:**
 

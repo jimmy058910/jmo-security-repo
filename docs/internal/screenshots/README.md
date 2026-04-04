@@ -11,7 +11,7 @@ Saved under `docs/internal/screenshots/` by default:
 
 ## Prereqs
 
-- Python 3.8+ (your system has Python 3.8.10)
+- Python 3.12+ (your system has Python 3.12+)
 - A Chromium-based browser for headless capture:
   - Linux: `chromium` or `google-chrome` on PATH
   - macOS: `google-chrome`

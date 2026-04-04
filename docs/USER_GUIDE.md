@@ -735,7 +735,7 @@ jmo scan --repo ./app1 --image app1:latest --results-dir ./results
 **2. Use profiles for faster scanning:**
 
 ```bash
-# Fast profile for quick feedback (8 tools, 300s timeout)
+# Fast profile for quick feedback (9 tools, 300s timeout)
 jmo scan --image nginx:latest --profile-name fast
 
 # Deep profile for comprehensive audits (28 tools, 900s timeout)
@@ -2450,7 +2450,7 @@ jobs:
 
 **Goal:** Complete coverage for merge/release using **balanced profile**
 
-**Profile:** `balanced` (8 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, zap, nuclei)
+**Profile:** `balanced` (17 tools: trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck, prowler, kubescape, grype, horusec, dependency-check, zap, scancode, cdxgen, gosec)
 
 **Configuration:**
 

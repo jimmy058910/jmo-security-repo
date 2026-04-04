@@ -4,7 +4,7 @@
 
 This guide shows how to clone a set of repositories listed in a TSV file, ensure they are unshallowed, and run the full JMO security scan with all tools, including a Nosey Parker Docker fallback.
 
-Works on Linux/macOS with Git, Python 3.9+, and optional container runtime for Nosey Parker fallback.
+Works on Linux/macOS with Git, Python 3.12+, and optional container runtime for Nosey Parker fallback.
 
 ### What you'll get
 

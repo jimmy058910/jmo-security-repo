@@ -268,9 +268,9 @@ cat results/summaries/timings.json
 
 **Typical Scan Times:**
 
-- **fast** profile: 5-10 minutes (8 tools)
-- **slim** profile: 12-18 minutes (14 tools)
-- **balanced** profile: 18-25 minutes (18 tools)
+- **fast** profile: 5-10 minutes (9 tools)
+- **slim** profile: 12-18 minutes (13 tools)
+- **balanced** profile: 18-25 minutes (17 tools)
 - **deep** profile: 40-70 minutes (28 tools)
 
 ## Ethical Guidelines

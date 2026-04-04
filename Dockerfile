@@ -410,7 +410,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
 # Usage examples (documented in metadata):
-# Basic scan (deep profile, all 27 tools):
+# Basic scan (deep profile, all 28 tools):
 # docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-full scan --repo /scan --results /scan/results --profile deep
 #
 # CI mode with caching (30s faster on subsequent runs):
@@ -421,4 +421,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
 # - Phase 1 optimizations: Nuclei template filtering (65 MB), Python bytecode cleanup (40 MB), binary stripping (15 MB), Java cleanup (30 MB), Git metadata exclusion (5 MB)
 # - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
-# - Tool count: 12 → 27 tools (26 Docker-ready, 2 manual install)
+# - Tool count: 12 → 28 tools (25 Docker-ready, 3 manual install)
