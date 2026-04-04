@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "jmo-security": {
+      "command": "uv",
+      "args": ["run", "mcp", "dev", "scripts/jmo_mcp/jmo_server.py"],
+      "env": {
+        "MCP_RESULTS_DIR": "./results",
+        "MCP_REPO_ROOT": ".",
+        "JMO_MCP_RATE_LIMIT_ENABLED": "true",
+        "JMO_MCP_RATE_LIMIT_CAPACITY": "100",
+        "JMO_MCP_RATE_LIMIT_REFILL_RATE": "1.67"
+      },
+      "description": "JMo Security AI remediation orchestration"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"],
+      "description": "Chrome DevTools integration for browser automation and debugging"
+    }
+  }
+}
