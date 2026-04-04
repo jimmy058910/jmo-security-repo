@@ -60,6 +60,8 @@ dev = [
     "pytest-split>=0.9.0",
     "pytest-timeout>=2.3.0",
     "pytest-rerunfailures",
+    "pytest-xdist>=3.5.0",
+    "pytest-json-report>=1.5.0",
     "hypothesis",
     # Linting & formatting
     "ruff",
@@ -75,9 +77,6 @@ dev = [
     # Required for tests
     "jsonschema",
     "packaging",
-    # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
-    "scipy>=1.11.0,<1.16.0",
-    "numpy>=1.24.0,<2.3.0",
 ]
 
 [project.scripts]
