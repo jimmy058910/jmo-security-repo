@@ -25,17 +25,16 @@ v1.0.0 New Tools (17):
 15. cdxgen: SBOM and dependency analysis
 16. ScanCode: License and copyright scanner
 17. Kubescape: Kubernetes security scanner
-18. Bearer: Data security and privacy scanner
-19. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
-20. YARA: Malware detection
-21. Grype: Vulnerability scanner for containers/filesystems
-22. MobSF: Mobile Security Framework (Android/iOS)
-23. Lynis: System hardening and security auditing
-24. Trivy RBAC: Kubernetes RBAC security assessment
-25. Semgrep Secrets: Hardcoded credentials detection
-26. Horusec: Multi-language SAST (18+ languages)
-27. Dependency-Check: OWASP SCA for known vulnerabilities
-28. Akto: API Security testing (URL scanner only)
+18. Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
+19. YARA: Malware detection
+20. Grype: Vulnerability scanner for containers/filesystems
+21. MobSF: Mobile Security Framework (Android/iOS)
+22. Lynis: System hardening and security auditing
+23. Trivy RBAC: Kubernetes RBAC security assessment
+24. Semgrep Secrets: Hardcoded credentials detection
+25. Horusec: Multi-language SAST (18+ languages)
+26. Dependency-Check: OWASP SCA for known vulnerabilities
+27. Akto: API Security testing (URL scanner only)
 
 Special Tool Behaviors:
 - Nosey Parker: Multi-phase execution (init → scan → report) with automatic Docker fallback
@@ -859,37 +858,6 @@ def scan_repository(
         elif allow_missing_tools:
             _write_stub("kubescape", kubescape_out)
             statuses["kubescape"] = True
-
-    # Bearer: Data security and privacy scanner
-    if "bearer" in tools:
-        bearer_out = out_dir / "bearer.json"
-        bearer_path = _find_tool("bearer")
-        if bearer_path:
-            bearer_flags = get_tool_flags("bearer")
-            bearer_cmd = [
-                bearer_path,
-                "scan",
-                str(repo),
-                "--format",
-                "json",
-                "--output",
-                str(bearer_out),
-                *bearer_flags,
-            ]
-            tool_defs.append(
-                ToolDefinition(
-                    name="bearer",
-                    command=bearer_cmd,
-                    output_file=bearer_out,
-                    timeout=get_tool_timeout("bearer", timeout),
-                    retries=retries,
-                    ok_return_codes=(0, 1),
-                    capture_stdout=False,
-                )
-            )
-        elif allow_missing_tools:
-            _write_stub("bearer", bearer_out)
-            statuses["bearer"] = True
 
     # Prowler: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     # Note: Prowler scans cloud infrastructure, not code repositories

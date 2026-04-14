@@ -18,6 +18,10 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+from scripts.core.unicode_utils import (
+    UNICODE_FALLBACKS,
+)  # noqa: F401 - re-exported for wizard consumers
+
 if TYPE_CHECKING:
     from typing import Callable
 
@@ -34,20 +38,6 @@ def _get_colorize() -> Callable[[str, str], str]:
         _colorize = PromptHelper().colorize
     assert _colorize is not None  # For type checker
     return _colorize
-
-
-# Windows-safe Unicode fallback mappings for cp1252 compatibility
-UNICODE_FALLBACKS: dict[str, str] = {
-    "\U0001f4ca": "[#]",  # Chart (📊)
-    "\U0001f4d6": "[?]",  # Book (📖)
-    "\u26a0": "[!]",  # Warning (⚠)
-    "\u2705": "[OK]",  # Check mark (✅)
-    "\u274c": "[X]",  # Cross mark (❌)
-    "\u2717": "[x]",  # X mark (✗)
-    "\u2713": "[v]",  # Check mark small (✓)
-    "\u2022": "*",  # Bullet (•)
-    "\u2192": "->",  # Arrow (→)
-}
 
 
 def safe_print(text: str) -> None:

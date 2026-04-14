@@ -1,6 +1,6 @@
 # JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
-# Base: Ubuntu 24.04 with 29 security tools pre-installed
-# Size: ~1.9 GB (optimized) | Tools: 29 (26 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
+# Base: Ubuntu 24.04 with 28 security tools pre-installed
+# Size: ~1.9 GB (optimized) | Tools: 28 (25 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
 
 #
@@ -128,13 +128,6 @@ RUN OSV_VERSION="2.3.1" && \
     -o /usr/local/bin/osv-scanner && \
     chmod +x /usr/local/bin/osv-scanner
 
-# Download Bearer (Data Privacy + SAST)
-RUN BEARER_VERSION="2.0.1" && \
-    BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
-    -o /tmp/bearer.tar.gz && \
-    tar -xzf /tmp/bearer.tar.gz -C /usr/local/bin bearer && \
-    chmod +x /usr/local/bin/bearer
 
 # Download Lynis (System Hardening)
 RUN LYNIS_VERSION="3.1.3" && \
@@ -184,7 +177,7 @@ FROM ubuntu:24.04 AS runtime
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.0)"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 28 tools (25 Docker-ready + OPA policy engine) (v1.0.0)"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
@@ -299,7 +292,6 @@ COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/gosec /usr/local/bin/gosec
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
 COPY --from=builder /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
-COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
@@ -317,7 +309,6 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/gosec \
     /usr/local/bin/grype \
-    /usr/local/bin/bearer \
     /usr/local/bin/horusec \
     /usr/local/bin/opa \
     2>/dev/null || true
@@ -384,7 +375,6 @@ RUN echo "=== Verifying Docker-ready tools ===" && \
     kubescape version && \
     gosec --version && \
     grype version && \
-    bearer version && \
     lynis --version && \
     dependency-check --version && \
     horusec version && \
@@ -420,7 +410,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
 # Usage examples (documented in metadata):
-# Basic scan (deep profile, all 27 tools):
+# Basic scan (deep profile, all 28 tools):
 # docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-full scan --repo /scan --results /scan/results --profile deep
 #
 # CI mode with caching (30s faster on subsequent runs):
@@ -431,4 +421,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
 # - Phase 1 optimizations: Nuclei template filtering (65 MB), Python bytecode cleanup (40 MB), binary stripping (15 MB), Java cleanup (30 MB), Git metadata exclusion (5 MB)
 # - Volume mounting: Use -v trivy-cache:/root/.cache/trivy for persistent caching
-# - Tool count: 12 → 27 tools (26 Docker-ready, 2 manual install)
+# - Tool count: 12 → 28 tools (25 Docker-ready, 3 manual install)

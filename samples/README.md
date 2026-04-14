@@ -20,7 +20,7 @@ JMo Security supports 6 target types. This directory provides safe, ethical test
 ### Goals
 
 1. **No public app exposure** - All tests use public/local resources
-2. **Comprehensive coverage** - Test all 6 target types and all 12 tools
+2. **Comprehensive coverage** - Test all 6 target types and all 28 tools
 3. **Reproducible** - Anyone can run the same benchmarks
 4. **Ethical** - Only scan resources we own or have permission to test
 
@@ -203,7 +203,7 @@ jmo balanced \
   --gitlab-token YOUR_TOKEN \
   --gitlab-url https://gitlab.com
 
-# Tools used: Full repo scanner (10/12 tools)
+# Tools used: Full repo scanner (10/28 tools)
 ```
 
 ### 6. Kubernetes Clusters (k8s/)
@@ -268,9 +268,9 @@ cat results/summaries/timings.json
 
 **Typical Scan Times:**
 
-- **fast** profile: 5-10 minutes (8 tools)
-- **slim** profile: 12-18 minutes (14 tools)
-- **balanced** profile: 18-25 minutes (18 tools)
+- **fast** profile: 5-10 minutes (9 tools)
+- **slim** profile: 12-18 minutes (13 tools)
+- **balanced** profile: 18-25 minutes (17 tools)
 - **deep** profile: 40-70 minutes (28 tools)
 
 ## Ethical Guidelines

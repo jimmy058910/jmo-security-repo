@@ -434,11 +434,9 @@ class ToolInstaller:
             )
 
         # Warn about end-of-life tools
-        EOL_TOOLS = {
-            "bearer": (
-                "Bearer project is archived (EOL). v2.0.1 is the final release. "
-                "Consider Semgrep privacy rules (p/privacy, p/owasp-top-10) as a replacement."
-            ),
+        EOL_TOOLS: dict[str, str] = {
+            # Add tools here as they reach end-of-life, before full removal.
+            # Format: "tool_name": "Deprecation message for users"
         }
         if tool_name in EOL_TOOLS:
             logger.warning(f"[deprecation] {tool_name}: {EOL_TOOLS[tool_name]}")

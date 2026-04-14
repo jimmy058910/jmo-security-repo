@@ -103,7 +103,7 @@ ReleaseNotes: |-
 
   Unified Scan Profiles:
   - fast: 8 tools (trufflehog, semgrep, syft, trivy, checkov, hadolint, nuclei, shellcheck)
-  - slim: 14 tools (fast + prowler, kubescape, grype, bearer, horusec, dependency-check)
+  - slim: 13 tools (fast + prowler, kubescape, grype, horusec, dependency-check)
   - balanced: 18 tools (slim + zap, scancode, cdxgen, gosec)
   - deep: 28 tools (balanced + noseyparker, bandit, lynis, yara, falco, afl++, mobsf, akto)
 

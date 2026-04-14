@@ -2,6 +2,18 @@
 
 All notable changes to JMo Security will be documented in this file.
 
+## [1.0.1] - 2026-04-XX
+
+### Removed
+
+- **Bearer CLI** - Removed EOL Bearer security/privacy scanner (v2.0.1 final, project acquired by Cycode)
+  - Bearer's SAST security findings already covered by Semgrep
+  - Profile tool counts updated: slim (14→13), balanced (18→17), deep (29→28)
+
+### Added
+
+- **Tool Removal Guide** (`docs/TOOL_REMOVAL_GUIDE.md`) - Reusable 7-layer checklist for removing EOL tools
+
 ## [1.0.0 Alpha] - 2026-04-02
 
 ### Added

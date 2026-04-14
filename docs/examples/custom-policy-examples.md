@@ -319,7 +319,7 @@ violations contains violation if {
     finding := input.findings[_]
     finding.severity in ["HIGH", "MEDIUM"]
 
-    # Check license field (from scancode, bearer, or custom scanners)
+    # Check license field (from scancode or custom scanners)
     finding.license
     some license in copyleft_licenses
     contains(upper(finding.license), license)
@@ -345,7 +345,7 @@ message := msg if {
 
 ```bash
 # Scan with license compliance policy
-jmo scan --repo . --profile-name deep  # Includes scancode, bearer
+jmo scan --repo . --profile-name deep  # Includes scancode
 jmo report results/ --policy license-compliance --fail-on-policy-violation
 ```
 

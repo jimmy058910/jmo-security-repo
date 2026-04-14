@@ -52,20 +52,7 @@ from scripts.core.developer_attribution import (
     format_team_stats,
     load_team_mapping,
 )
-
-# Windows-safe Unicode fallback mappings
-UNICODE_FALLBACKS = {
-    "─": "-",
-    "━": "=",
-    "✅": "[OK]",
-    "❌": "[X]",
-    "🔍": "[?]",
-    "📊": "[#]",
-    "📈": "[^]",
-    "📉": "[v]",
-    "⚠️": "[!]",
-    "→": "->",
-}
+from scripts.core.unicode_utils import UNICODE_FALLBACKS
 
 
 def _can_encode_unicode() -> bool:

@@ -30,11 +30,9 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from ..constants import (
-    SCHEMA_VERSION_CURRENT,
-    FINGERPRINT_MESSAGE_MAX_LENGTH,
-    FINGERPRINT_HASH_LENGTH,
-)
+SCHEMA_VERSION_CURRENT = "1.2.0"
+FINGERPRINT_MESSAGE_MAX_LENGTH = 120  # First 120 chars of message
+FINGERPRINT_HASH_LENGTH = 16  # 16-char hex fingerprint
 
 # Re-export for backward compatibility
 CURRENT_SCHEMA_VERSION = SCHEMA_VERSION_CURRENT

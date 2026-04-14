@@ -60,6 +60,8 @@ dev = [
     "pytest-split>=0.9.0",
     "pytest-timeout>=2.3.0",
     "pytest-rerunfailures",
+    "pytest-xdist>=3.5.0",
+    "pytest-json-report>=1.5.0",
     "hypothesis",
     # Linting & formatting
     "ruff",
@@ -75,9 +77,6 @@ dev = [
     # Required for tests
     "jsonschema",
     "packaging",
-    # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
-    "scipy>=1.11.0,<1.16.0",
-    "numpy>=1.24.0,<2.3.0",
 ]
 
 [project.scripts]
@@ -171,10 +170,7 @@ omit = [
     "scripts/core/compliance_frameworks.py",
     # CLI entry points (tested via integration tests)
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    # Dashboard generator (standalone HTML builder)
-    "scripts/core/generate_dashboard.py",
     # MCP server - separate integration
     "scripts/jmo_mcp/*",
     # Email service requires SMTP infrastructure
@@ -201,9 +197,7 @@ exclude_lines = [
 ]
 omit = [
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    "scripts/core/generate_dashboard.py",
     "scripts/jmo_mcp/*",
     "scripts/core/email_service.py",
     "scripts/cli/wizard.py",

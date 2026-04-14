@@ -280,8 +280,8 @@ JMo Security provides **4 optimized Docker image variants** for different use ca
 | Variant | Tag | Size | Tools | Scan Time | Best For |
 |---------|-----|------|-------|-----------|----------|
 | **Deep** | `:deep`, `:latest` | ~1.97 GB | 28 | 40-70 min | Complete security audits, local development |
-| **Balanced** | `:balanced` | ~1.41 GB | 18 | 18-25 min | Production CI/CD, regular audits |
-| **Slim** | `:slim` | ~557 MB | 14 | 12-18 min | Cloud-focused, IaC, container security |
+| **Balanced** | `:balanced` | ~1.41 GB | 17 | 18-25 min | Production CI/CD, regular audits |
+| **Slim** | `:slim` | ~557 MB | 13 | 12-18 min | Cloud-focused, IaC, container security |
 | **Fast** | `:fast` | ~502 MB | 9 | 5-10 min | CI/CD gates, pre-commit hooks |
 
 **Notes:**
@@ -296,7 +296,7 @@ START: What is your primary use case?
 
 ├─ Complete security audit (pre-release, compliance)
 │  → Use DEEP variant (:deep)
-│     - 29 tools, 40-70 min scans
+│     - 28 tools, 40-70 min scans
 │     - Best for: Security teams, audits, compliance
 
 ├─ Production CI/CD (daily/weekly scans)
@@ -392,7 +392,6 @@ START: What is your primary use case?
 | **cdxgen** | SBOM | CycloneDX format |
 | **shellcheck** | Shell Linting | Bash/sh script analysis |
 | **MobSF** | Mobile Security | Manual install, Android/iOS |
-| **Bearer** | Security + Privacy | Data flow, OWASP risks |
 
 ---
 
@@ -407,13 +406,13 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Deep - Maximum coverage (29 tools, 26 Docker-ready)
+# Deep - Maximum coverage (28 tools, 25 Docker-ready)
 docker pull ghcr.io/jimmy058910/jmo-security:latest
 
-# Balanced - Production CI/CD (18 tools)
+# Balanced - Production CI/CD (17 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:balanced
 
-# Slim - Cloud/K8s focused (14 tools)
+# Slim - Cloud/K8s focused (13 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:slim
 
 # Fast - Quick validation (9 tools)
@@ -456,7 +455,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:balanced \
 ```
 
 **Time:** 18-25 minutes
-**Tools:** Fast + prowler, kubescape, grype, bearer, horusec, zap, scancode, cdxgen, gosec (18 tools)
+**Tools:** Fast + prowler, kubescape, grype, horusec, zap, scancode, cdxgen, gosec (17 tools)
 
 #### Deep Scan (Comprehensive)
 
@@ -466,7 +465,7 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
 ```
 
 **Time:** 40-70 minutes
-**Tools:** All 29 tools (26 Docker-ready + 3 manual installation)
+**Tools:** All 28 tools (25 Docker-ready + 3 manual installation)
 
 ### Scan Multiple Projects
 
@@ -1361,8 +1360,8 @@ docker run --rm --user $(id -u):$(id -g) \
 | Variant | Tools | Build Time | Use Case |
 |---------|-------|------------|----------|
 | Fast | 8 | 5-10 min | CI/CD gates, pre-commit |
-| Slim | 14 | 10-15 min | Cloud/IaC scanning |
-| Balanced | 18 | 18-25 min | Production audits |
+| Slim | 13 | 10-15 min | Cloud/IaC scanning |
+| Balanced | 17 | 18-25 min | Production audits |
 | Deep | 28 | 20-30 min | Comprehensive security |
 
 **Solutions:**

@@ -309,6 +309,111 @@ class TestImageScanner:
             assert syft_def is not None
             assert "-o" in syft_def.command
 
+    def test_scan_image_syft_stdout_capture(self, tmp_path):
+        """Test syft captures stdout for SBOM output"""
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}"
+
+        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="syft",
+                    status="success",
+                    stdout='{"artifacts": [{"name": "nginx"}]}',
+                    stderr="",
+                    returncode=0,
+                    duration=5.0,
+                    attempts=1,
+                    output_file=tmp_path / "nginx_latest" / "syft.json",
+                    capture_stdout=True,
+                    error_message="",
+                ),
+            ]
+
+            scan_image(
+                image="nginx:latest",
+                results_dir=tmp_path,
+                tools=["syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Verify syft configured with capture_stdout=True
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            syft_def = next((t for t in tool_defs if t.name == "syft"), None)
+            assert syft_def is not None
+            assert syft_def.capture_stdout is True
+
+    def test_scan_image_custom_find_tool_func(self, tmp_path):
+        """Test using custom find_tool_func"""
+
+        def mock_find_tool(tool: str):
+            return f"/custom/path/{tool}" if tool == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            image, statuses = scan_image(
+                image="nginx:latest",
+                results_dir=tmp_path,
+                tools=["trivy", "syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+            )
+
+            assert "trivy" in statuses
+            assert "syft" in statuses
+
+    def test_scan_image_custom_write_stub_func(self, tmp_path):
+        """Test using custom write_stub_func"""
+        stub_calls = []
+
+        def mock_write_stub(tool: str, path) -> None:
+            stub_calls.append((tool, path))
+
+        def mock_find_tool(tool: str):
+            return None  # No tools found
+
+        with patch("scripts.cli.scan_jobs.image_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_image(
+                image="nginx:latest",
+                results_dir=tmp_path,
+                tools=["trivy", "syft"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            assert len(stub_calls) == 2
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
