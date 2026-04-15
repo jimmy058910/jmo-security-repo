@@ -974,7 +974,7 @@ jobs:
 
       - name: Bump Homebrew formula
         if: steps.check_formula.outputs.exists == 'true'
-        uses: dawidd6/action-homebrew-bump-formula@v4
+        uses: dawidd6/action-homebrew-bump-formula@v7
         with:
           # Required: Personal Access Token with repo + workflow scopes
           # Store as repository secret: HOMEBREW_BUMP_TOKEN
