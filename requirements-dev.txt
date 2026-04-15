@@ -100,7 +100,7 @@ librt==0.8.1
     # via mypy
 markdown-it-py==4.0.0
     # via rich
-mcp[cli]==1.26.0
+mcp[cli]==1.27.0
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
