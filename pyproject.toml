@@ -76,8 +76,8 @@ dev = [
     "jsonschema",
     "packaging",
     # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
-    "scipy>=1.11.0,<1.16.0",
-    "numpy>=1.24.0,<2.3.0",
+    "scipy>=1.11.0,<1.18.0",
+    "numpy>=1.24.0,<2.5.0",
 ]
 
 [project.scripts]
