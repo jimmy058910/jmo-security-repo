@@ -50,6 +50,14 @@ jobs:
           # Tracking: https://github.com/jazzband/pip-tools/issues
           python -m pip install -U "pip<25.3" setuptools wheel pip-tools
           python -m piptools compile -o requirements-dev.txt requirements-dev.in
+
+          # pip-compile on Linux drops pywin32 because it evaluates
+          # `sys_platform == "win32"` at compile time. Re-inject it so
+          # the lockfile stays usable on Windows dev environments.
+          if ! grep -q "pywin32" requirements-dev.txt; then
+            sed -i '/^pyyaml==/i pywin32==311 ; sys_platform == "win32"\n    # via mcp' requirements-dev.txt
+          fi
+
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
 
       - name: Audit Python dependencies for vulnerabilities

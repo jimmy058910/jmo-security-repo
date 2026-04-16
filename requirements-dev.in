@@ -46,12 +46,10 @@ sigstore>=2.0.0  # Sigstore Python SDK for keyless signing (Fulcio + Rekor)
 cryptography>=41.0.0  # Cryptographic primitives for hashing and signing
 
 # Platform-specific transitive deps pinned as top-level to stabilize cross-platform
-# resolution. pip-compile on Linux will otherwise omit these, forcing CI to
-# sed-inject them into the lockfile (see history: .github/workflows/ci.yml).
+# resolution. pip-compile on Linux otherwise omits these from the lockfile.
 #
-# - pywin32: Windows-only, needed by mcp[cli] on win32 hosts
-# - colorama: transitive via bandit/click/pytest; omitted by Linux resolver
-# - pytz: transitive via croniter; omitted by Linux resolver
-pywin32 ; sys_platform == "win32"
+# Note: pywin32 cannot be pinned here — pip-compile evaluates the
+# `sys_platform == "win32"` marker at compile time and drops it on Linux.
+# It is sed-injected in CI instead (ci.yml, deps-compile freshness step).
 colorama
 pytz
