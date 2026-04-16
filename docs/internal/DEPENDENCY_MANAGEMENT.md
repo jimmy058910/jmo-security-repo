@@ -43,7 +43,7 @@ If `requirements-dev.txt` is compiled with an older Python while CI uses Python 
 
 ### Root Cause
 
-`pip-compile` uses the **active Python version** to resolve dependencies. Older Python versions have different available versions than Python 3.12+, leading to downgrades.
+`uv pip compile --universal --python-version 3.12` targets a fixed Python version regardless of the active interpreter. Older Python versions have different available versions than Python 3.12+, leading to downgrades.
 
 ---
 
@@ -111,7 +111,7 @@ Added to [.github/workflows/ci.yml](../.github/workflows/ci.yml):
 
 - name: Validate requirements-dev.txt Python version
 
-    python -m pip install pip-tools
+    pip install uv
     python scripts/dev/update_dependencies.py --validate
 ```text
 **This runs on every PR and push**, blocking merges if Python version is incorrect.
@@ -136,7 +136,7 @@ make deps-check-outdated
 
 # - black, ruff, mypy (dev tools)
 
-# - pip-tools (dependency management)
+# - uv (dependency management)
 
 ```text
 **Action if vulnerabilities found:**
@@ -238,7 +238,7 @@ git commit -m "deps: recompile with Python 3.12+ for v0.X.Y release"
 
 # Use Python 3.12
 
-python3.12 -m pip install pip-tools
+pip install uv
 python3.12 scripts/dev/update_dependencies.py --compile
 ```text
 
@@ -304,21 +304,21 @@ make deps-compile
 git diff requirements-dev.txt | grep -E "^\+bandit|^\+pytest-cov"
 ```text
 
-### Error: "pip-tools not installed"
+### Error: "uv not installed"
 
-**Cause:** `pip-tools` not available in active Python environment.
+**Cause:** `uv` not available in active Python environment.
 
 **Fix:**
 
 ```bash
 
-# Install for active Python
+# Install uv
 
-python3 -m pip install pip-tools
+pip install uv
 
 # Or specify Python version
 
-python3.12 -m pip install pip-tools
+python3.12 -m pip install uv
 ```text
 ---
 
@@ -423,7 +423,7 @@ The CI workflow **blocks releases** if dependencies are invalid:
 
 - name: Validate requirements-dev.txt Python version
 
-    python -m pip install pip-tools
+    pip install uv
     python scripts/dev/update_dependencies.py --validate
 ```text
 **Exit codes:**
@@ -492,14 +492,18 @@ sudo apt install python3.12
 
 ### Step 2: Update Your Workflow
 
-**Old workflow (pre-3.12):**
+**Old workflow (pre-uv):**
 ```bash
 python3 -m pip install pip-tools
 python3 -m piptools compile -o requirements-dev.txt requirements-dev.in
 ```text
-**New workflow (Python 3.12+):**
+**New workflow (uv):**
 ```bash
-python3.12 -m pip install pip-tools
+pip install uv
+uv pip compile --universal --python-version 3.12 requirements-dev.in -o requirements-dev.txt
+
+# OR use the script/Makefile
+
 python3.12 scripts/dev/update_dependencies.py --compile
 
 # OR use Makefile
@@ -558,7 +562,7 @@ make deps-validate
 - **CI Workflow:** [.github/workflows/ci.yml](../.github/workflows/ci.yml)
 - **Dependabot Config:** [.github/dependabot.yml](../.github/dependabot.yml)
 - **Makefile Targets:** [Makefile](../Makefile) (lines 24-30, 115-136)
-- **pip-tools Documentation:** <https://pip-tools.readthedocs.io/>
+- **uv Documentation:** <https://docs.astral.sh/uv/>
 
 ---
 

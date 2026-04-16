@@ -101,7 +101,7 @@ Once installed, hooks run automatically:
 $ git commit -m "deps: update pytest"
 [warn] Python 3.8 detected, re-executing with python3.12...
 [ok] Python 3.12 (meets requirement ≥3.12)
-[info] Running pip-compile (will preserve existing versions if compatible)
+[info] Running uv pip compile --universal --python-version 3.12 (will preserve existing versions if compatible)
 [ok] requirements-dev.txt compiled successfully
 [ok] No dependency conflicts detected
 ```
@@ -278,18 +278,18 @@ python3.12 --version
 make pre-commit-install
 ```
 
-### Error: "pip-tools not installed"
+### Error: "uv not installed"
 
-**Cause:** `pip-tools` not available in active Python environment.
+**Cause:** `uv` not available in active Python environment.
 
 **Fix:**
 
 ```bash
-# Install for Python 3.12
-python3.12 -m pip install --user pip-tools
+# Install uv
+pip install uv
 
 # Verify
-python3.12 -m piptools --version
+uv --version
 ```
 
 ### Error: "Cannot install package because of conflicting dependencies"

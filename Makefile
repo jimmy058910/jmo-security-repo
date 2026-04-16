@@ -25,13 +25,12 @@ help:
 	@echo "  analyze-completeness - Run repository completeness analyzer (doc-code drift detection)"
 	@echo "  dev-deps  - Install Python dev dependencies"
 	@echo "  upgrade-pip - Upgrade pip/setuptools/wheel in current Python env"
-	@echo "  deps-compile - Use pip-tools to compile requirements-dev.in -> requirements-dev.txt"
-	@echo "  deps-sync    - Use pip-tools to sync the environment to requirements-dev.txt"
-	@echo "  deps-refresh - Recompile + sync dev deps (pip-tools)"
+	@echo "  deps-compile - Use uv to compile requirements-dev.in -> requirements-dev.txt (universal, all platforms)"
+	@echo "  deps-sync    - Use uv to sync the environment to requirements-dev.txt"
+	@echo "  deps-refresh - Recompile + sync dev deps (uv)"
 	@echo "  deps-validate - Validate requirements-dev.txt Python version and conflicts"
 	@echo "  deps-upgrade  - Upgrade all dependencies to latest versions (use with caution)"
 	@echo "  deps-check-outdated - Check for outdated packages"
-	@echo "  uv-sync      - Sync dev deps with uv if installed (alternative to pip-tools)"
 	@echo "  pre-commit-install - Install git hooks (pre-commit)"
 	@echo "  pre-commit-run     - Run pre-commit on all files"
 	@echo "  install-git-hooks  - Install git hooks (pre-push with Python 3.11 support)"
@@ -200,13 +199,12 @@ upgrade-pip:
 	$(PY) -m pip install -U pip setuptools wheel
 
 deps-compile:
-	@echo "Note: Requires Python 3.12+ to match CI compilation (pip-tools uses active Python version)"
-	@$(PY) -m pip show pip-tools >/dev/null 2>&1 || $(PY) -m pip install pip-tools
-	@if [ -f requirements-dev.in ]; then $(PY) -m piptools compile -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv
+	@if [ -f requirements-dev.in ]; then uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
 
 deps-sync:
-	@$(PY) -m pip show pip-tools >/dev/null 2>&1 || $(PY) -m pip install pip-tools
-	@if [ -f requirements-dev.txt ]; then $(PY) -m piptools sync requirements-dev.txt; else echo 'requirements-dev.txt not found'; exit 1; fi
+	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv
+	@if [ -f requirements-dev.txt ]; then uv pip sync requirements-dev.txt; else echo 'requirements-dev.txt not found'; exit 1; fi
 
 deps-refresh: upgrade-pip deps-compile deps-sync
 
@@ -221,14 +219,6 @@ deps-upgrade:
 
 deps-check-outdated:
 	@$(PY) scripts/dev/update_dependencies.py --check-outdated
-
-uv-sync:
-	@if command -v uv >/dev/null 2>&1; then \
-		uv pip compile -o requirements-dev.txt requirements-dev.in; \
-		uv pip sync requirements-dev.txt; \
-	else \
-		echo 'uv not found. See https://docs.astral.sh/uv/'; exit 1; \
-	fi
 
 pre-commit-install:
 	@if command -v pre-commit >/dev/null 2>&1; then pre-commit install; else echo 'pre-commit not found. Run: make dev-deps'; fi

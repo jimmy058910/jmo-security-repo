@@ -45,11 +45,8 @@ numpy>=1.24.0,<2.3.0  # Explicitly constrain numpy for Python 3.10 support
 sigstore>=2.0.0  # Sigstore Python SDK for keyless signing (Fulcio + Rekor)
 cryptography>=41.0.0  # Cryptographic primitives for hashing and signing
 
-# Platform-specific transitive deps pinned as top-level to stabilize cross-platform
-# resolution. pip-compile on Linux otherwise omits these from the lockfile.
-#
-# Note: pywin32 cannot be pinned here — pip-compile evaluates the
-# `sys_platform == "win32"` marker at compile time and drops it on Linux.
-# It is sed-injected in CI instead (ci.yml, deps-compile freshness step).
+# Platform-specific transitive deps pinned as top-level to ensure they appear in the
+# lockfile. uv pip compile --universal preserves all platform markers natively,
+# including pywin32's sys_platform == "win32" marker (picked up from mcp).
 colorama
 pytz
