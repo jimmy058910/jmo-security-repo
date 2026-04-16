@@ -25,21 +25,13 @@ updates:
     commit-message:
       prefix: "deps(python)"
       include: "scope"
-    # Group minor/patch updates to reduce PR noise
+    # Group by risk tier to collapse PR volume:
+    # - python-minor-patch: non-breaking bumps (all deps, grouped weekly)
+    # - python-major: one PR per major bump (stay un-grouped so we can review each)
     groups:
-      development-dependencies:
+      python-minor-patch:
         patterns:
-          - "pytest*"
-          - "coverage*"
-          - "black*"
-          - "ruff*"
-          - "pre-commit*"
-        update-types:
-          - "minor"
-          - "patch"
-      testing-dependencies:
-        patterns:
-          - "pytest-*"
+          - "*"
         update-types:
           - "minor"
           - "patch"
@@ -77,13 +69,17 @@ updates:
     commit-message:
       prefix: "deps(actions)"
       include: "scope"
-    # Group patch updates for actions
+    # Group ALL action bumps (patch + minor + major) into one weekly PR.
+    # GitHub Actions tend to have stable APIs and bunch of tiny bumps — a single
+    # PR to review is dramatically lighter than 5-8 separate ones.
     groups:
       github-actions:
         patterns:
           - "*"
         update-types:
           - "patch"
+          - "minor"
+          - "major"
 
   # npm dependencies - scripts/dashboard
   - package-ecosystem: "npm"
@@ -111,6 +107,13 @@ updates:
       time: "09:00"
       timezone: "Etc/UTC"
     open-pull-requests-limit: 3
+    groups:
+      api-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
 # Important notes:
 # 1. Dependabot DOES NOT track binary tools (trivy, trufflehog, syft, etc.)

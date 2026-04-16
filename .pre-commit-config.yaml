@@ -143,3 +143,18 @@ repos:
           $PY scripts/dev/update_dependencies.py --compile ||
           { echo "ERROR: deps-compile requires Python 3.10+.
           Install python3.10, python3.11, or python3.12"; exit 1; }'
+
+  # Local hook: scan requirements-dev.txt for CVEs via pip-audit (OSV database).
+  # Matches CI's pip-audit step so CVE-introducing dep bumps fail locally before
+  # they reach CI (the 2026-04-15 Dependabot triage session hit 4 CVE cascades
+  # mid-flight; catching at commit time prevents that).
+  # Only runs when requirements files change — keeps normal commits fast.
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: pip-audit (CVE scan of requirements-dev.txt)
+        language: python
+        additional_dependencies: ["pip-audit>=2.9"]
+        entry: pip-audit -r requirements-dev.txt --progress-spinner=off
+        pass_filenames: false
+        files: ^requirements-dev\.(in|txt)$

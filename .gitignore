@@ -160,3 +160,9 @@ nightshift.yaml
 # Conductor orchestration files (local development artifacts)
 /conductor/
 tests/integration/juice_shop_fixture/
+
+# uv lockfile: the canonical dev-dep lockfile is requirements-dev.txt (pip-tools).
+# Tracking uv.lock duplicates resolution and makes Dependabot emit uv-group PRs
+# whose resolver diverges from the CI pip-tools resolver. Users who prefer uv
+# can regenerate their own local uv.lock from requirements-dev.in.
+uv.lock
