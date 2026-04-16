@@ -9,7 +9,7 @@
 version: 2
 
 updates:
-  # Python dependencies (requirements-dev.txt via pip-tools)
+  # Python dependencies (requirements-dev.txt via uv pip compile --universal)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:

@@ -74,22 +74,16 @@ make dev-deps   # re-installs latest unpinned dev deps from requirements-dev.txt
 
 Notes:
 
-- `requirements-dev.txt` is intentionally lightweight. For reproducible, pinned dev deps, this repo now includes a `requirements-dev.in` and Make targets for pip-tools and uv.
+- `requirements-dev.txt` is intentionally lightweight. For reproducible, pinned dev deps, this repo now includes a `requirements-dev.in` and Make targets for uv.
 
-### Reproducible dev deps (pip-tools or uv)
+### Reproducible dev deps (uv)
 
-Use pip-tools (default):
+Use uv:
 
 ```bash
 make upgrade-pip         # optional but recommended
-make deps-compile        # compile requirements-dev.in -> requirements-dev.txt
+make deps-compile        # compile requirements-dev.in -> requirements-dev.txt (via uv)
 make deps-sync           # sync your env to requirements-dev.txt (installs/removes as needed)
-```
-
-Or use uv (fast alternative) if installed:
-
-```bash
-make uv-sync
 ```
 
 CI note: Pull requests include an automated check that `requirements-dev.txt` matches `requirements-dev.in`. If it fails, run `make deps-compile` locally, commit the updated `requirements-dev.txt`, and push.
@@ -954,7 +948,7 @@ npx markdownlint-cli2 --fix "**/*.md" "#node_modules"
 requirements-dev.txt is out of date. Run: make deps-compile
 ```
 
-**Root Cause:** Local `pip-compile` uses absolute paths, CI uses relative paths.
+**Root Cause:** Local `uv pip compile --universal --python-version 3.12` uses absolute paths, CI uses relative paths.
 
 **Quick Fix:**
 
@@ -1026,7 +1020,7 @@ pre-commit run actionlint --files .github/workflows/ci.yml
 | Aspect | Local | CI (GitHub Actions) |
 |--------|-------|---------------------|
 | **Python paths** | `/home/user/...` | Relative paths only |
-| **pip-compile** | May use absolute paths | Always uses relative |
+| **uv pip compile** | May use absolute paths | Always uses relative |
 | **pre-commit cache** | `~/.cache/pre-commit` | Fresh on every run |
 | **Tools** | May have extras | Minimal environment |
 
