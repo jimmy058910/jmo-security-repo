@@ -44,3 +44,14 @@ numpy>=1.24.0,<2.3.0  # Explicitly constrain numpy for Python 3.10 support
 # SLSA Attestation dependencies (Feature #6: Supply Chain Attestation - v1.0.0)
 sigstore>=2.0.0  # Sigstore Python SDK for keyless signing (Fulcio + Rekor)
 cryptography>=41.0.0  # Cryptographic primitives for hashing and signing
+
+# Platform-specific transitive deps pinned as top-level to stabilize cross-platform
+# resolution. pip-compile on Linux will otherwise omit these, forcing CI to
+# sed-inject them into the lockfile (see history: .github/workflows/ci.yml).
+#
+# - pywin32: Windows-only, needed by mcp[cli] on win32 hosts
+# - colorama: transitive via bandit/click/pytest; omitted by Linux resolver
+# - pytz: transitive via croniter; omitted by Linux resolver
+pywin32 ; sys_platform == "win32"
+colorama
+pytz

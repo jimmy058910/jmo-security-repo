@@ -77,6 +77,7 @@ Once installed, hooks run automatically:
 #### Dependency Management
 
 1. **deps-compile** — Auto-compile requirements-dev.txt with Python 3.12+
+2. **pip-audit** — Scan requirements-dev.txt for known CVEs (OSV database)
 
 ---
 
@@ -453,9 +454,10 @@ repos:
 | shellcheck | *.sh | 2-5s | Yes |
 | actionlint | .github/workflows/*.yml | 3-8s | No |
 | deps-compile | requirements-dev.in | 30-60s | N/A |
+| pip-audit | requirements-dev.{in,txt} | 30-60s | N/A |
 
 **Total (typical commit):** 30-60 seconds
-**Total (deps update):** 60-90 seconds
+**Total (deps update):** 90-120 seconds (includes pip-audit network call)
 
 ### Speed Up Hooks
 

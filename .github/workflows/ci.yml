@@ -50,20 +50,6 @@ jobs:
           # Tracking: https://github.com/jazzband/pip-tools/issues
           python -m pip install -U "pip<25.3" setuptools wheel pip-tools
           python -m piptools compile -o requirements-dev.txt requirements-dev.in
-
-          # Re-add platform-specific deps that pip-compile on Linux omits.
-          # These are transitive deps resolved only on Windows but needed in
-          # the cross-platform lock file for Windows CI/dev environments.
-          if ! grep -q "pywin32" requirements-dev.txt; then
-            sed -i '/^pyyaml==/i pywin32==311 ; sys_platform == "win32"\n    # via mcp' requirements-dev.txt
-          fi
-          if ! grep -q "colorama" requirements-dev.txt; then
-            sed -i '/^coverage/i colorama==0.4.6\n    # via\n    #   bandit\n    #   click\n    #   pytest' requirements-dev.txt
-          fi
-          if ! grep -q "pytz" requirements-dev.txt; then
-            sed -i '/^pywin32/i pytz==2025.2\n    # via croniter' requirements-dev.txt
-          fi
-
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
 
       - name: Audit Python dependencies for vulnerabilities

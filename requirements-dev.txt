@@ -40,6 +40,7 @@ click==8.3.1
     #   uvicorn
 colorama==0.4.6
     # via
+    #   -r requirements-dev.in
     #   bandit
     #   click
     #   pytest
@@ -200,9 +201,11 @@ python-multipart==0.0.26
 pytokens==0.4.1
     # via black
 pytz==2025.2
-    # via croniter
+    # via -r requirements-dev.in
 pywin32==311 ; sys_platform == "win32"
-    # via mcp
+    # via
+    #   -r requirements-dev.in
+    #   mcp
 pyyaml==6.0.3
     # via
     #   -r requirements-dev.in
