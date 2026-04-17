@@ -2,7 +2,29 @@
 
 All notable changes to JMo Security will be documented in this file.
 
-## [1.0.0 Alpha] - 2026-04-02
+## [1.0.1] - 2026-04-16
+
+### Security
+
+- Patch CVE-2026-39892 (cryptography 46.0.7) — ships inside Docker images and PyPI wheel
+- Patch CVE-2026-33753 (rfc3161-client 1.0.6) — ships inside Docker images and PyPI wheel
+- Resolve 20 npm vulnerabilities in dashboard bundle (lodash, handlebars, rollup, esbuild, minimatch, glob, picomatch, js-yaml)
+
+### Changed
+
+- Migrate dependency resolution from pip-tools to `uv` (3-5x faster lockfile compilation, eliminates pywin32 sed-patch and pip<25.3 pin)
+- Bump mcp 1.26→1.27, pytest, ruff, mypy 1.20, types-requests, resend 4.8→6.10, axios
+- Bump GitHub Actions: `docker/login-action` v3→v4, `dawidd6/action-homebrew-bump-formula` v4→v7, `actions/github-script` v7→v8, `reviewdog/action-actionlint` → 1.72.0
+
+### Fixed
+
+- Dependabot infrastructure hardening: enable `uv.lock` tracking, pin platform deps, remove sed-patches, expand groups, add `pip-audit` pre-commit hook
+- CI badge check: add `dependabot/` to allowlist, fix `\r` in version parse (was silently breaking badge checks)
+- Scheduled e2e jobs: add `pip install -r requirements-dev.txt` to match `e2e-tool-integration` pattern (was causing `--json-report` to fail silently)
+- Tool contract test: update trufflehog contract for v3.91.1 output format
+- Remove dead `docs/archive/` link references in TEST.md and CHANGELOG.md historical entries
+
+## [1.0.0] - 2026-04-03
 
 ### Added
 
