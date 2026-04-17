@@ -10,7 +10,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jmogaming/jmo-security)](https://hub.docker.com/r/jmogaming/jmo-security)
 [![GitHub Stars](https://img.shields.io/github/stars/jimmy058910/jmo-security-repo?style=social)](https://github.com/jimmy058910/jmo-security-repo)
 
-**v1.0.0** | A terminal-first security audit toolkit orchestrating 28 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
+**v1.0.1** | A terminal-first security audit toolkit orchestrating 28 scanners with unified CLI, normalized outputs, and interactive HTML dashboard.
 
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
@@ -72,6 +72,8 @@ docker pull ghcr.io/jimmy058910/jmo-security:latest
 docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results --profile balanced --human-logs
 ```
+
+> **Registries:** GHCR (primary — `ghcr.io/jimmy058910/jmo-security`), Docker Hub (replicated — `jmogaming/jmo-security`), and ECR Public (replicated — `public.ecr.aws/m2d8u2k1/jmo-security`). See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
 
 ---
 

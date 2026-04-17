@@ -1,6 +1,6 @@
 # JMo Security — Telemetry Implementation Guide
 
-**Status:** ✅ Fully Implemented (Opt-Out Model, v0.7.1+)
+**Status:** ✅ Fully Implemented (Opt-Out Model, v1.0.0+)
 **Privacy Policy:** <https://jmotools.com/privacy>
 
 ---
@@ -120,7 +120,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 ```json
 {
   "event": "scan.started",
-  "version": "0.7.0",
+  "version": "1.0.1",
   "platform": "Linux",
   "python_version": "3.11",
   "anonymous_id": "uuid-v4-random",
@@ -154,7 +154,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 ```json
 {
   "event": "scan.completed",
-  "version": "0.7.0",
+  "version": "1.0.1",
   "platform": "macOS",
   "python_version": "3.12",
   "anonymous_id": "uuid-v4-random",
@@ -183,7 +183,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 ```json
 {
   "event": "tool.failed",
-  "version": "0.7.0",
+  "version": "1.0.1",
   "platform": "Linux",
   "python_version": "3.10",
   "anonymous_id": "uuid-v4-random",
@@ -210,7 +210,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 ```json
 {
   "event": "wizard.completed",
-  "version": "0.7.0",
+  "version": "1.0.1",
   "platform": "Linux",
   "python_version": "3.11",
   "anonymous_id": "uuid-v4-random",
@@ -237,7 +237,7 @@ JMo Security implements **opt-out, anonymous, privacy-respecting telemetry** to 
 ```json
 {
   "event": "report.generated",
-  "version": "0.7.0",
+  "version": "1.0.1",
   "platform": "macOS",
   "python_version": "3.12",
   "anonymous_id": "uuid-v4-random",
@@ -1093,7 +1093,7 @@ curl -X POST https://jmo-telemetry.your-account.workers.dev \
   -H "Content-Type: application/json" \
   -d '{
     "event": "scan.started",
-    "version": "0.8.0",
+    "version": "1.0.1",
     "platform": "Linux",
     "python_version": "3.11",
     "anonymous_id": "test-uuid",

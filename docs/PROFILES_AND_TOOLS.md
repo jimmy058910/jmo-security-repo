@@ -783,4 +783,4 @@ When adding or removing tools:
 
 ---
 
-**Last Updated:** January 2026 | **JMo Security v1.0.0**
+**Last Updated:** April 2026 | **JMo Security v1.0.1**

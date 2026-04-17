@@ -1,4 +1,4 @@
-# JMo Security Suite - Fast Docker Image (v1.0.0)
+# JMo Security Suite - Fast Docker Image (v1.0.1)
 # Base: Ubuntu 24.04 with 9 CI/CD gate tools (8 scanners + OPA)
 # Size: ~502 MB (optimized) | Tools: 9 (8 scanners + OPA) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
@@ -82,8 +82,8 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
-LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.1)"
+LABEL org.opencontainers.image.version="1.0.1"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -193,4 +193,4 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-fast scan --repo /scan --profile fast --fail-on HIGH
+# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.1-fast scan --repo /scan --profile fast --fail-on HIGH

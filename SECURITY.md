@@ -283,4 +283,4 @@ jmo tools update
 
 ---
 
-**Last Updated:** December 2025 | **JMo Security v1.0.0**
+**Last Updated:** April 2026 | **JMo Security v1.0.1**
