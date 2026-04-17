@@ -217,8 +217,6 @@ ls -la tests/e2e/fixtures/iac/
 ls -la tests/e2e/fixtures/python/
 ```
 
-For comprehensive test plan details, see [docs/archive/v0.6.0/COMPREHENSIVE_TEST_PLAN.md](docs/archive/v0.6.0/COMPREHENSIVE_TEST_PLAN.md).
-
 ## CI
 
 - GitHub Actions workflow `.github/workflows/ci.yml` enforces coverage ≥85%.

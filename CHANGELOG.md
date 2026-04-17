@@ -1192,7 +1192,6 @@ No action required for users. Version management is automated:
     - `scripts/core/reporters/html_reporter.py` - Added HTML context escaping (lines 31-37)
     - `tests/reporters/test_yaml_html_reporters.py` - Comprehensive escaping test (+109 lines)
     - `docs/DASHBOARD_BUG_FIX_v0.6.0.md` - Complete bug analysis and fix documentation
-  - See: [docs/archive/v0.6.0/DASHBOARD_BUG_FIX.md](docs/archive/v0.6.0/DASHBOARD_BUG_FIX.md) for full technical details
 
 **Problem Solved:**
 
@@ -1396,8 +1395,6 @@ No breaking changes. All new features are additive:
 
 **See Also:**
 
-- [docs/archive/v0.6.0/v0.6.0_IMPLEMENTATION_STATUS.md](docs/archive/v0.6.0/v0.6.0_IMPLEMENTATION_STATUS.md) - Complete implementation status
-- [docs/archive/follow-up-questions-answers.md](docs/archive/follow-up-questions-answers.md) - Scan target expansion research
 - [ROADMAP.md](ROADMAP.md) - Tier 1 scan targets planning
 
 ---
@@ -1552,7 +1549,6 @@ No breaking changes. Compliance enrichment is automatic and backward compatible:
 
 **See Also:**
 
-- [docs/archive/follow-up-questions-answers.md](docs/archive/follow-up-questions-answers.md) - Framework research and analysis
 - [ROADMAP.md](ROADMAP.md) - Compliance framework integration planning
 
 ---
