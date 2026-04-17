@@ -60,7 +60,7 @@ def _make_help_mock():
 
 def _make_mixed_mock(
     help_rc: int = 0,
-    version_stdout: str = "JMo Security v1.0.0",
+    version_stdout: str = "JMo Security v1.0.1",
     missing_arg_rc: int = 2,
     invalid_flag_rc: int = 2,
     mutex_rc: int = 2,
@@ -272,7 +272,7 @@ class TestQuickTierCheckCount:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -292,7 +292,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -303,7 +303,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -314,7 +314,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -325,7 +325,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             quick = validate_cli("quick")
@@ -337,7 +337,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             quick = validate_cli("quick")
@@ -459,7 +459,7 @@ class TestValidateCli:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.side_effect = _make_mixed_mock(
-                version_stdout="JMo Security v1.0.0"
+                version_stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -496,7 +496,7 @@ class TestFullTier:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("full")
@@ -508,7 +508,7 @@ class TestFullTier:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("full")
@@ -562,7 +562,7 @@ class TestFullTier:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
@@ -609,7 +609,7 @@ class TestErrorHandling:
                 call_count += 1
                 if call_count % 2 == 0:
                     raise subprocess.TimeoutExpired(cmd=cmd, timeout=30)
-                return _mock_completed(returncode=0, stdout="JMo Security v1.0.0")
+                return _mock_completed(returncode=0, stdout="JMo Security v1.0.1")
 
             mock_subprocess.run.side_effect = _alternating
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
@@ -832,7 +832,7 @@ class TestVersionChecks:
 
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             result = _check_version_flag()
             assert result.status == CheckStatus.PASS
@@ -858,7 +858,7 @@ class TestVersionChecks:
 
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             result = _check_version_semver_format()
             assert result.status == CheckStatus.PASS
@@ -890,7 +890,7 @@ class TestVersionChecks:
 
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             result = _check_version_matches_pyproject()
             # Should pass or skip depending on pyproject.toml location
@@ -975,7 +975,7 @@ class TestCheckTiming:
             "scripts.core.validators.cli_validator.subprocess"
         ) as mock_subprocess:
             mock_subprocess.run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.0"
+                returncode=0, stdout="JMo Security v1.0.1"
             )
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             result = validate_cli("quick")
