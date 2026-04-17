@@ -73,6 +73,8 @@ docker run --rm -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:latest \
   scan --repo /scan --results-dir /scan/results --profile balanced --human-logs
 ```
 
+> **Registries:** GHCR (primary — `ghcr.io/jimmy058910/jmo-security`), Docker Hub (replicated — `jmogaming/jmo-security`), and ECR Public (replicated — `public.ecr.aws/m2d8u2k1/jmo-security`). See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
+
 ---
 
 ## Security Tools

@@ -54,14 +54,14 @@ https://github.com/jimmy058910/jmo-security-repo/actions/workflows/automated-rel
 #    - Changelog entry: "Fix badge verification and add weekly tool updates"
 
 # 4. Wait for PR creation
-# PR title: "release: v0.7.2"
+# PR title: "release: v1.0.1"
 # PR body includes:
 #   - Summary of changes
-#   - Tool version updates (semgrep 1.99.0 → 1.140.0, etc.)
+#   - Tool version updates (e.g. semgrep version bump)
 #   - Pre-release checklist
 
 # 5. Review PR, merge when CI passes
-# 6. Tag v0.7.2 created automatically
+# 6. Tag v1.0.1 created automatically
 # 7. Release workflow publishes to PyPI and Docker Hub
 ```
 
@@ -661,15 +661,15 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 
    ```bash
    git add pyproject.toml CHANGELOG.md
-   git commit -m "release: v0.4.0"
+   git commit -m "release: v1.0.1"
    ```
 
 4. **Create and push the tag:**
 
    ```bash
-   git tag v0.4.0
+   git tag v1.0.1
    git push origin main
-   git push origin v0.4.0
+   git push origin v1.0.1
    ```
 
 5. **Monitor the Release workflow:**

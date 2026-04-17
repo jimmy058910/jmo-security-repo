@@ -15,16 +15,16 @@
 
 ### Option 1: Package Managers (30 seconds)
 
-> **Note:** Homebrew and WinGet packages are planned for a future release. See [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) for current installation methods, or use pip/Docker below.
+> **Note:** Homebrew (homebrew-core) and WinGet (microsoft/winget-pkgs) submissions are pending upstream review after each release. See [GitHub Releases](https://github.com/jimmy058910/jmo-security-repo/releases) to confirm availability for your version. In the meantime, use pip or Docker below, or see [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) for alternatives.
 
-**macOS / Linux (coming soon):**
+**macOS / Linux (Homebrew — submission pending):**
 
 ```bash
 brew install jmo-security
 jmo wizard
 ```
 
-**Windows (coming soon):**
+**Windows (WinGet — submission pending):**
 
 ```powershell
 winget install jmo.jmo-security
