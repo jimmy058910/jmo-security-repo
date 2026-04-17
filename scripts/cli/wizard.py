@@ -130,7 +130,7 @@ def _get_db_path() -> Path:
 
 
 # Version (from pyproject.toml)
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # Standardized error message templates for tool issues
 # These provide consistent, actionable guidance for different failure scenarios

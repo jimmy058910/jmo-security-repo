@@ -1,4 +1,4 @@
-# JMo Security Suite - Slim Docker Image (v1.0.0)
+# JMo Security Suite - Slim Docker Image (v1.0.1)
 # Base: Ubuntu 24.04 with 14 cloud-focused security tools + OPA
 # Size: ~557 MB (optimized) | Tools: 15 scanners (cloud CSPM + core SAST/SCA) | Multi-arch: amd64, arm64
 # v1.0.0: Slim variant - Cloud/K8s optimized (Prowler, Kubescape, Trivy, Checkov, etc.)
@@ -120,8 +120,8 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
-LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.0)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.1)"
+LABEL org.opencontainers.image.version="1.0.1"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -260,4 +260,4 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:1.0.0-slim scan --aws-account 123456789012 --profile cloud
+# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:1.0.1-slim scan --aws-account 123456789012 --profile cloud

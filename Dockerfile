@@ -1,4 +1,4 @@
-# JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.0)
+# JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.1)
 # Base: Ubuntu 24.04 with 29 security tools pre-installed
 # Size: ~1.9 GB (optimized) | Tools: 29 (26 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
@@ -184,8 +184,8 @@ FROM ubuntu:24.04 AS runtime
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.0)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.1)"
+LABEL org.opencontainers.image.version="1.0.1"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -421,11 +421,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Usage examples (documented in metadata):
 # Basic scan (deep profile, all 27 tools):
-# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-full scan --repo /scan --results /scan/results --profile deep
+# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.1-full scan --repo /scan --results /scan/results --profile deep
 #
 # CI mode with caching (30s faster on subsequent runs):
 # docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy -v grype-cache:/root/.cache/grype \
-#   ghcr.io/jimmy058910/jmo-security:1.0.0-full ci --repo /scan --fail-on HIGH --profile
+#   ghcr.io/jimmy058910/jmo-security:1.0.1-full ci --repo /scan --fail-on HIGH --profile
 #
 # v1.0.0 Optimizations:
 # - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)
