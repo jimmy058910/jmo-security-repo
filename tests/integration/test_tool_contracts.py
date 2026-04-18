@@ -82,10 +82,11 @@ TOOL_CONTRACTS: dict[str, dict[str, Any]] = {
     },
     "trufflehog": {
         "required_keys": [],  # Trufflehog uses NDJSON (one object per line)
-        "result_item_keys": [
-            "SourceMetadata",
-            "Verified",
-        ],  # Raw: absent for unverifiable patterns in v3.91+
+        # Schema fluctuates across minor versions (v3.91+ drops keys for
+        # unverifiable patterns; v3.94+ emits leaner records). The adapter
+        # uses defensive .get() fallbacks for every field, so the only real
+        # contract is "output is NDJSON we can json.loads() line-by-line".
+        "result_item_keys": [],
         "sample_target": "credential-patterns",
         "command": ["trufflehog", "filesystem", "{target}", "--json"],
         "is_ndjson": True,

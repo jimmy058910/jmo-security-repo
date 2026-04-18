@@ -3578,7 +3578,7 @@ def _open_results(args):
         for p in paths:
             try:
                 if opener == "start":
-                    os.startfile(str(p))  # nosec B606
+                    os.startfile(str(p))  # type: ignore[attr-defined,unused-ignore]  # nosec B606
                 else:
                     subprocess.Popen(  # nosec B603
                         [opener, str(p)],
