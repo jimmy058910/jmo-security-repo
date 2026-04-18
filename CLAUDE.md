@@ -439,6 +439,10 @@ Pre-Release Validation → PyPI Publish → Docker Build (8 parallel: 4 variants
 | Scheduled e2e jobs fail with "no test results" | Likely missing `pip install -r requirements-dev.txt` — compare against `e2e-tool-integration` job pattern |
 | Dependabot PR fails deps-compile freshness | CI uses `uv pip compile --universal`. If a Dependabot PR diverges, reset `requirements-dev.txt` to main and re-apply the bump: `uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in` |
 | Tool contract test fails after version bump | Automated version bumps can change output schemas. Run the tool against fixtures to verify, then update `result_item_keys` in `test_tool_contracts.py` |
+| Windows matrix job fails with `ParserError: Missing expression after unary operator '--'` | Multi-line `run:` block uses bash `\` line continuation; PowerShell (default on `windows-latest`) rejects it at parse time. Add `shell: bash` to the step. |
+| Non-root container can't write to mounted dir in CI (`PermissionError`) | GitHub runner UID (1001) ≠ container `USER jmo` UID (1000); bind mounts preserve host UID. Fix: `chmod 777` the host dir before mount, or add `--user $(id -u):$(id -g)` to `docker run`. |
+| `gh pr merge` refuses with "workflow scope" error | PR modifies `.github/workflows/*.yml`; `gh` token lacks `workflow` scope. Run `gh auth refresh -h github.com -s workflow` once, then retry. |
+| Workflow references a test file that doesn't exist | Path drift after a test reorg. Current security-test canonical locations: `tests/cli/test_path_sanitizers.py`, `tests/unit/test_archive_security.py`, `tests/unit/test_history_db_performance.py`. |
 
 ### Re-Tag Cycle (When Release Workflow Fails)
 
