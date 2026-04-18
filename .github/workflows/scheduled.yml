@@ -247,6 +247,10 @@ jobs:
       - name: Scan test repository with Docker
         run: |
           mkdir -p test-repo results
+          # Container runs as non-root USER jmo (UID 1000). The GitHub runner
+          # creates these directories as the runner user (UID 1001), so jmo
+          # cannot write to /results without a permission grant.
+          chmod 777 test-repo results
           echo "print('test')" > test-repo/test.py
           docker run --rm \
             -v "$PWD/test-repo:/scan" \
