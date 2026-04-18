@@ -601,3 +601,32 @@ pytest tests/performance/test_policy_performance.py -v -s
 3. [Enable CI policy gating](#4-enable-ci-policy-gating)
 4. [Write a custom policy](#custom-policy-authoring)
 5. [Integrate with your CI/CD pipeline](#cicd-integration)
+
+## Windows Troubleshooting
+
+### OPA not on PATH after installation
+
+On Windows, `choco install opa` or a manual binary install may not refresh the current shell's PATH. Symptoms: `opa version` returns "command not found" even though the binary exists.
+
+```powershell
+# Close the current terminal and open a new one, OR
+refreshenv                    # chocolatey helper
+# OR point JMo at the binary directly:
+$env:OPA_PATH = "C:\Program Files\opa\opa.exe"
+jmo ci --repo . --policy zero-secrets
+```
+
+### Rego file encoding issues
+
+If a custom `.rego` policy file fails to parse with "unexpected character" errors on Windows, check that the file uses LF line endings and UTF-8 encoding (not UTF-8-BOM):
+
+```powershell
+# Normalize line endings in PowerShell
+(Get-Content policies/custom.rego -Raw) -replace "`r`n","`n" | Set-Content -NoNewline -Encoding UTF8 policies/custom.rego
+```
+
+Git's `core.autocrlf=false` in a `.gitattributes` entry for `*.rego` prevents this from happening in the first place.
+
+---
+
+**Last Updated:** April 2026 | **JMo Security v1.0.1**

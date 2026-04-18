@@ -542,14 +542,43 @@ notifications={
 
 ## GitHub Actions Integration
 
-### Generate GitHub Actions Workflow
+### Generate GitHub Actions Workflow (Recommended)
+
+The `GitHubActionsGenerator` produces a complete workflow YAML from a `ScanSchedule` object:
 
 ```python
-# Coming soon - GitHub Actions generator planned for future release
-# Current workaround: Manually create .github/workflows/security-scan.yml
+from scripts.core.schedule_manager import ScheduleManager
+from scripts.core.workflow_generators.github_actions import GitHubActionsGenerator
+
+manager = ScheduleManager()
+generator = GitHubActionsGenerator()
+
+schedule = manager.get("weekly-scan")
+yaml_content = generator.generate(schedule)
+
+# Write to .github/workflows/jmo-nightly.yml
+with open(".github/workflows/jmo-nightly.yml", "w") as f:
+    f.write(yaml_content)
 ```
 
-### Manual GitHub Actions Workflow
+Or via the CLI export:
+
+```bash
+jmo schedule export weekly-scan --backend github-actions > .github/workflows/jmo-nightly.yml
+```
+
+### Generated Workflow Structure
+
+The generator emits a complete pipeline:
+
+- **Name:** `JMo Security Scan: <schedule-name>`
+- **Triggers:** cron schedule (from `spec.schedule`) + manual `workflow_dispatch`
+- **Permissions:** `contents: read`, `security-events: write` (required for SARIF upload)
+- **Job:** runs in the `ghcr.io/jimmy058910/jmo-security` container, checks out code, runs `jmo scan`, uploads SARIF, uploads results as artifacts, posts Slack notifications on success/failure (if configured in the schedule's `notifications` block)
+
+### Manual GitHub Actions Workflow (Advanced)
+
+If you want full control over the workflow without the generator, use this template as a starting point:
 
 ```yaml
 # .github/workflows/security-scan.yml
@@ -627,12 +656,9 @@ jobs:
 
 ## Local Cron Integration
 
-### Export Schedule as Shell Script
+### Shell Script Generation
 
-```python
-# Coming soon - Shell script generator planned for future release
-# Current workaround: Manually create scan script
-```
+A dedicated shell-script generator is not yet implemented (only `gitlab_ci.py` and `github_actions.py` ship in `scripts/core/workflow_generators/` today). For local cron, use the manual setup below — the pattern is simple enough that a generator would add minimal value.
 
 ### Manual Cron Setup
 
