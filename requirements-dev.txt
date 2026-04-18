@@ -256,7 +256,7 @@ typer==0.24.1
     # via mcp
 types-croniter==6.2.2.20260316
     # via -r requirements-dev.in
-types-pyyaml==6.0.12.20250915
+types-pyyaml==6.0.12.20260408
     # via -r requirements-dev.in
 types-requests==2.33.0.20260408
     # via -r requirements-dev.in
