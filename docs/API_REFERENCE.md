@@ -1,8 +1,12 @@
 # JMo Security API Reference
 
-**Programmatic access to trend analysis, developer attribution, and export functionality**
+**Programmatic access to trend analysis, developer attribution, MCP server, export functionality, and the history database.**
 
-This document provides comprehensive API documentation for developers who want to integrate JMo Security's trend analysis capabilities into custom applications, dashboards, or automation workflows.
+This document provides comprehensive API documentation for developers who want to integrate JMo Security's programmatic capabilities into custom applications, dashboards, IDE integrations, or automation workflows.
+
+## v1.0 API Stability
+
+All public APIs documented here are stable under semver for the v1.x line. Breaking changes will bump the major version. Additions (new methods, new optional parameters, new module-level helpers) may land in minor releases.
 
 ## Table of Contents
 
@@ -10,7 +14,9 @@ This document provides comprehensive API documentation for developers who want t
 2. [DeveloperAttribution API](#developerattribution-api)
 3. [Trend Exporters API](#trend-exporters-api)
 4. [Statistical Functions](#statistical-functions)
-5. [Usage Examples](#usage-examples)
+5. [MCP Server API](#mcp-server-api)
+6. [History DB Query API](#history-db-query-api)
+7. [Usage Examples](#usage-examples)
 
 ---
 
@@ -652,6 +658,170 @@ with TrendAnalyzer() as analyzer:
     analysis = analyzer.analyze_trends()
     export_for_dashboard(analysis, Path("dashboard-data.json"))
 ```
+
+---
+
+## MCP Server API
+
+**Module:** `scripts.jmo_mcp.jmo_server`
+
+**Purpose:** Expose JMo Security findings and operations to AI assistants (GitHub Copilot, Claude Code, Cline, etc.) via the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+**Transport:** stdio, HTTP, SSE. Run the server with:
+
+```bash
+pip install "jmo-security[mcp]"
+jmo mcp-server              # stdio mode (default, for IDE integrations)
+jmo mcp-server --http 8080  # HTTP mode (for web clients)
+```
+
+### Tools Exposed
+
+AI clients call these as MCP tools. Each is annotated with `@mcp.tool()` in `scripts/jmo_mcp/jmo_server.py` and documented here with its public contract.
+
+#### `get_security_findings(severity, tool, path, limit)`
+
+Retrieve findings from the most recent scan, with optional filters.
+
+**Parameters:**
+- `severity` (str, optional): Filter by one of `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`
+- `tool` (str, optional): Filter by tool name (e.g., `trivy`, `semgrep`)
+- `path` (str, optional): Filter by file path substring
+- `limit` (int, optional): Max findings to return (default: 50)
+
+**Returns:** List of CommonFinding-shaped dicts.
+
+**Example (Claude Code):**
+
+```text
+/mcp call get_security_findings severity=CRITICAL tool=semgrep limit=10
+```
+
+#### `apply_fix(finding_id, patch, dry_run)`
+
+Apply an AI-suggested patch to fix a finding.
+
+**Parameters:**
+- `finding_id` (str, required): Fingerprint of the finding to fix
+- `patch` (str, required): Unified diff to apply
+- `dry_run` (bool, default `True`): If True, preview without writing changes
+
+**Returns:** Dict with `success`, `files_changed`, `diff_preview`.
+
+**Safety:** always run with `dry_run=True` first — the server returns a preview so the AI (and you) can confirm before mutating files.
+
+#### `mark_resolved(finding_id, status, reason)`
+
+Mark a finding as fixed, false positive, or won't fix.
+
+**Parameters:**
+- `finding_id` (str, required): Fingerprint of the finding
+- `status` (str, required): One of `fixed`, `false_positive`, `wont_fix`
+- `reason` (str, optional): Human-readable explanation stored for audit
+
+#### `query_findings_db(sql, params)`
+
+Execute a read-only SQL query against the history database.
+
+**Parameters:**
+- `sql` (str, required): SQL query (SELECT only — writes are rejected)
+- `params` (list, optional): Parameterized query values
+
+**Returns:** List of row dicts.
+
+**Use case:** aggregate queries across multiple scans (e.g., "findings that reappeared 3+ scans in a row").
+
+#### `get_server_info()`
+
+Returns server metadata: version, loaded scan ID, supported transports, feature flags.
+
+### Resources Exposed
+
+MCP resources are read-only URIs the AI can dereference for context.
+
+#### `finding://{finding_id}`
+
+Get comprehensive context for a specific finding: full description, source code context (±20 lines around the location), compliance mappings, related findings, and remediation guidance.
+
+**Use case:** the AI sees a finding ID in a `get_security_findings` response and fetches `finding://<id>` to get enough context to propose a fix.
+
+### Security
+
+The MCP server ships with opt-in rate limiting and token-based auth for HTTP mode (see `scripts/jmo_mcp/utils/security.py`). stdio mode trusts the parent process. See [MCP_SETUP.md](MCP_SETUP.md) for client configuration.
+
+---
+
+## History DB Query API
+
+**Module:** `scripts.core.history_db`
+
+**Purpose:** Read and write the SQLite history database that stores scan results across runs. Used internally by `jmo history`, `jmo diff`, `jmo trend`, and the MCP server's `query_findings_db` tool. Also callable directly by user scripts.
+
+**Default location:** `.jmo/history.db` (relative to the current working directory).
+
+### Core Functions
+
+#### `get_connection(db_path)`
+
+Open a connection to the history database. Auto-initializes the schema if the file doesn't exist.
+
+```python
+from pathlib import Path
+from scripts.core.history_db import get_connection
+
+conn = get_connection(Path(".jmo/history.db"))
+```
+
+Returns a `sqlite3.Connection` with `row_factory = sqlite3.Row` so rows are dict-accessible.
+
+#### `get_findings_for_scan(conn, scan_id)`
+
+Retrieve all findings for a specific scan.
+
+```python
+from scripts.core.history_db import get_findings_for_scan
+
+findings = get_findings_for_scan(conn, scan_id="abc123")
+for f in findings:
+    print(f["severity"], f["rule_id"], f["file_path"])
+```
+
+**Returns:** `List[Dict[str, Any]]` — each dict is a CommonFinding row with flattened columns (severity, rule_id, tool, file_path, line, message, fingerprint, etc.).
+
+### Schema Overview
+
+The DB has three primary tables:
+
+- `scans` — one row per scan invocation (id, timestamp, branch, profile, target_type, tool counts)
+- `findings` — normalized findings from each scan (scan_id FK, severity, rule_id, fingerprint, location, raw_finding JSON blob)
+- `scan_metadata` — key-value metadata per scan (git SHA, author, CI run ID, etc.)
+
+For schema evolution notes and migration steps, see [HISTORY_GUIDE.md](HISTORY_GUIDE.md).
+
+### Custom Queries
+
+Use the `conn` object directly for ad-hoc queries:
+
+```python
+import sqlite3
+from scripts.core.history_db import get_connection
+
+conn = get_connection()
+cursor = conn.execute(
+    "SELECT severity, COUNT(*) FROM findings WHERE scan_id = ? GROUP BY severity",
+    ("abc123",),
+)
+for severity, count in cursor.fetchall():
+    print(f"{severity}: {count}")
+```
+
+Always use parameterized queries — the library intentionally does not expose a string-interpolation API.
+
+### Safety
+
+- The DB is single-writer: only one `jmo` process should hold a write lock at a time. If you see "database is locked", another process has the DB open. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#sqlite-database-is-locked).
+- Backups: `sqlite3 .jmo/history.db .backup /path/to/backup.db` before major operations.
+- Don't edit the DB with a general-purpose SQLite client while `jmo` is running — schema migrations are checked at connection time.
 
 ---
 
