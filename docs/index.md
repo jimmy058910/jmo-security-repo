@@ -40,6 +40,9 @@
 | Use policy-as-code | [Policy-as-Code Guide](POLICY_AS_CODE.md) |
 | Set up AI remediation | [MCP Setup](MCP_SETUP.md) |
 | Schedule automated scans | [Schedule Guide](SCHEDULE_GUIDE.md) |
+| Answer common questions | [FAQ](FAQ.md) |
+| Diagnose a specific problem | [Troubleshooting](TROUBLESHOOTING.md) |
+| Upgrade from an earlier version | [Upgrade Guide](../UPGRADE.md) |
 | Troubleshoot CI failures | [CI Troubleshooting](../CONTRIBUTING.md#ci-troubleshooting) |
 
 ---
@@ -54,6 +57,9 @@
 | [Quick Start](../QUICKSTART.md) | 5-minute installation guide |
 | [Docker Guide](DOCKER_README.md) | Docker installation, variants, CI/CD |
 | [Installation Guide](MANUAL_INSTALLATION.md) | Platform-specific installation (macOS, Windows, WSL, Linux) |
+| [FAQ](FAQ.md) | Common questions about installation, scanning, Docker, CI/CD |
+| [Troubleshooting](TROUBLESHOOTING.md) | Symptom-cause-fix guide for common problems |
+| [Upgrade Guide](../UPGRADE.md) | Migration from earlier releases to v1.0.x |
 
 ### Reference
 
@@ -183,4 +189,4 @@ JMo Security orchestrates 28 security scanners across 11 categories:
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** April 2026 | **JMo Security v1.0.1**
