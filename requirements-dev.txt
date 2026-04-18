@@ -73,7 +73,7 @@ httpx==0.28.1
     # via mcp
 httpx-sse==0.4.3
     # via mcp
-hypothesis==6.151.10
+hypothesis==6.152.1
     # via -r requirements-dev.in
 id==1.6.1
     # via sigstore
@@ -101,7 +101,7 @@ mcp==1.27.0
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
-mypy==1.20.0
+mypy==1.20.1
     # via -r requirements-dev.in
 mypy-extensions==1.1.0
     # via
@@ -113,7 +113,7 @@ numpy==2.2.6
     # via
     #   -r requirements-dev.in
     #   scipy
-packaging==26.0
+packaging==26.1
     # via
     #   -r requirements-dev.in
     #   black
@@ -224,7 +224,7 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.10
+ruff==0.15.11
     # via -r requirements-dev.in
 scipy==1.14.1
     # via -r requirements-dev.in
