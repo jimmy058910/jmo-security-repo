@@ -167,6 +167,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run unit tests
+        shell: bash
         run: |
           pytest tests/unit/ \
             --cov=scripts \
@@ -175,6 +176,7 @@ jobs:
             --maxfail=5
 
       - name: Run CLI tests
+        shell: bash
         run: |
           pytest tests/cli/ -v --maxfail=5
 
@@ -205,15 +207,15 @@ jobs:
 
       - name: Run security regression test suite
         run: |
-          pytest tests/e2e/test_security_hardening.py -v --tb=short
+          pytest \
+            tests/cli/test_path_sanitizers.py \
+            tests/unit/test_archive_security.py \
+            tests/unit/test_history_db_performance.py \
+            -v --tb=short
 
-      - name: Run SQL injection tests
+      - name: Run path traversal fuzz tests
         run: |
-          pytest tests/e2e/test_security_hardening.py::TestSQLInjectionPrevention -v
-
-      - name: Run path traversal tests
-        run: |
-          pytest tests/e2e/test_security_hardening.py::TestPathTraversalPrevention -v
+          pytest tests/cli/test_path_sanitizers.py::TestPathTraversalFuzzing -v
 
   nightly-docker-smoke:
     name: Docker Smoke Tests
@@ -245,6 +247,10 @@ jobs:
       - name: Scan test repository with Docker
         run: |
           mkdir -p test-repo results
+          # Container runs as non-root USER jmo (UID 1000). The GitHub runner
+          # creates these directories as the runner user (UID 1001), so jmo
+          # cannot write to /results without a permission grant.
+          chmod 777 test-repo results
           echo "print('test')" > test-repo/test.py
           docker run --rm \
             -v "$PWD/test-repo:/scan" \
