@@ -13,23 +13,18 @@
 
 ## Installation (Choose One)
 
-### Option 1: Package Managers (30 seconds)
+### Option 1: pip / pipx (30 seconds)
 
-> **Note:** Homebrew (homebrew-core) and WinGet (microsoft/winget-pkgs) submissions are pending upstream review after each release. See [GitHub Releases](https://github.com/jimmy058910/jmo-security-repo/releases) to confirm availability for your version. In the meantime, use pip or Docker below, or see [docs/MANUAL_INSTALLATION.md](docs/MANUAL_INSTALLATION.md) for alternatives.
-
-**macOS / Linux (Homebrew — submission pending):**
+**Recommended for most users.** Works on macOS, Linux, and Windows with Python 3.12+.
 
 ```bash
-brew install jmo-security
+pip install jmo-security
+# Or with pipx for an isolated install (recommended if you have pipx):
+pipx install jmo-security
 jmo wizard
 ```
 
-**Windows (WinGet — submission pending):**
-
-```powershell
-winget install jmo.jmo-security
-jmo wizard
-```
+macOS users with Homebrew: install pipx via `brew install pipx`, then `pipx install jmo-security`.
 
 ---
 
