@@ -79,7 +79,7 @@ jmo scan --gitlab-url https://gitlab.com/myorg/myrepo
 jmo scan --k8s
 ```
 
-You can combine multiple targets in one command.
+Target flags are mutually exclusive — pick one per `jmo scan` invocation. For multi-target workflows, chain separate scans into the same results directory (or use `--repos-dir` to iterate over a parent folder of repositories).
 
 ### How long do scans take?
 
@@ -97,10 +97,10 @@ per_tool:
     timeout: 600
 ```
 
-Or skip tools via CLI:
+Or skip tools via CLI (space-separated, not comma):
 
 ```bash
-jmo scan --repo . --skip-tools trivy,checkov
+jmo scan --repo . --skip-tools trivy checkov
 ```
 
 ### Why does my scan fail with "tool not found"?
