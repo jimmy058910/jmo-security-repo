@@ -1,4 +1,4 @@
-# JMo Security Suite - All-in-One Docker Image (Full/Deep - v1.0.1)
+# JMo Security Suite - All-in-One Docker Image (Deep - v1.0.2)
 # Base: Ubuntu 24.04 with 29 security tools pre-installed
 # Size: ~1.9 GB (optimized) | Tools: 29 (26 Docker-ready + 3 manual) | Multi-arch: amd64, arm64
 # Note: 3 tools require manual install outside Docker: MobSF, Akto, AFL++ (see docs/MANUAL_INSTALLATION.md)
@@ -183,9 +183,9 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 ARG TARGETARCH
 
-LABEL org.opencontainers.image.title="JMo Security Suite (Full)"
-LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.1)"
-LABEL org.opencontainers.image.version="1.0.1"
+LABEL org.opencontainers.image.title="JMo Security Suite (Deep)"
+LABEL org.opencontainers.image.description="Terminal-first security audit toolkit with 29 tools (26 Docker-ready + OPA policy engine) (v1.0.2)"
+LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -421,7 +421,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Usage examples (documented in metadata):
 # Basic scan (deep profile, all 27 tools):
-# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.1-full scan --repo /scan --results /scan/results --profile deep
+# docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.2-deep scan --repo /scan --results /scan/results --profile deep
 #
 # Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" \
 #   ghcr.io/jimmy058910/jmo-security:deep scan --repo /scan --profile deep --fail-on HIGH

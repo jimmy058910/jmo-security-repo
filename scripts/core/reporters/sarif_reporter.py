@@ -148,7 +148,7 @@ def to_sarif(findings: list[dict[str, Any]]) -> dict[str, Any]:
         results.append(result)
 
     # Read version from pyproject.toml if possible
-    version = "1.0.1"  # Default
+    version = "1.0.2"  # Default
     try:
         import tomllib
 

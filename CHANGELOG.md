@@ -2,6 +2,26 @@
 
 All notable changes to JMo Security will be documented in this file.
 
+## [1.0.2] - 2026-04-19
+
+### Fixed
+
+- **Docker tag publishing (user-facing regression)**: Release workflow now publishes the bare variant tags (`:deep`, `:balanced`, `:slim`, `:fast`, `:latest`) that every user-facing doc referenced. Previous releases only published versioned-with-suffix tags (`:1.0.1-full`, `:latest-full`), so `docker pull ghcr.io/jimmy058910/jmo-security:latest` returned "manifest unknown" on every release. Broken since v0.8.0.
+- **Docker variant naming consistency**: Renamed bare `Dockerfile` → `Dockerfile.deep` so every variant follows the same `Dockerfile.<variant>` convention. `jmo build` VARIANTS dict, `release.yml` matrix, `scheduled.yml` matrix, and `Makefile` all aligned on `deep` as the canonical name. One-release backward-compat alias: `:full` still resolves to `:deep` through v1.0.2, removed in the release after.
+- **Weekly CI red X**: `update_versions.py --check-latest` and `--check-outdated` now exit 0 when outdated tools are found (informational, not an error). The weekly `check-versions` job no longer fails on Sundays when tool updates are available. Existing `--create-issues` tracking still runs; a new `--fail-if-outdated` flag opts into the legacy strict-gating behavior for external CI scripts that depended on it.
+- **Windows cp1252 UnicodeDecodeError**: 5 tests on the `Cross-Platform Tests (windows-latest / Python 3.12 and 3.13)` matrix were crashing on emoji bytes written into fixtures. Added `encoding="utf-8"` to affected `read_text()` calls.
+- **`scheduled.yml:1038` shellcheck SC2170**: The `Lint (full pre-commit suite)` job on Docker-validation weekly runs has been failing because shellcheck flagged `-lt` with a quoted matrix-expansion RHS as numeric-vs-string comparison. Unquoted.
+- **Workflow shell-injection hygiene**: Pre-existing `yaml.github-actions.security.run-shell-injection` findings (CWE-78, HIGH) in three `release.yml` steps (`Bump version`, `Commit release changes`, `Summary`) migrated from `${{ inputs.X }}` / `${{ steps.X.outputs.Y }}` direct interpolation to `env:` blocks with `"$ENVVAR"` references.
+
+### Added
+
+- **`update_versions.py --classify` action**: New JSON output manifest with current, latest, semver bump level (`patch` / `minor` / `major` / `unknown`), and `critical` flag per tool. Foundation for upcoming aggressive auto-merge automation — patches/minors auto-PR, majors open an issue. Classifier treats 0.x pre-release versions and lossy normalization (akto `mini-testing-*`, `-stable` suffixes) as unsafe-to-auto-merge.
+
+### Notes
+
+- PyPI wheel and Docker images are both tagged `1.0.2`.
+- If you pin Dockerfiles by internal name (e.g., custom images using `FROM ghcr.io/jimmy058910/jmo-security:full`), migrate to `:deep` this cycle. `:full` alias will be removed in v1.0.3.
+
 ## [1.0.1] - 2026-04-16
 
 ### Security
