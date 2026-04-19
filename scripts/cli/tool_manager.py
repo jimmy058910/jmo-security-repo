@@ -804,6 +804,16 @@ class ToolManager:
         """
         Check all tools for a profile.
 
+        Each tool is checked in isolation — an exception from one
+        tool's check_tool() call (segfault in a native import, stray
+        OSError from a broken symlink, etc.) is converted to an
+        `installed=False` ToolStatus instead of propagating up and
+        killing the whole command. Without this guard, `jmo tools
+        check --profile deep` inside the Docker image can exit
+        silently (zero stdout, exit 1) when any one of the 29 tools
+        triggers an unexpected raise — the --json output never gets
+        emitted because json.dumps is never reached.
+
         Args:
             profile: Profile name ('fast', 'slim', 'balanced', 'deep')
 
@@ -811,7 +821,23 @@ class ToolManager:
             Dict mapping tool name to ToolStatus
         """
         tools = PROFILE_TOOLS.get(profile, [])
-        return {name: self.check_tool(name) for name in tools}
+        result: dict[str, ToolStatus] = {}
+        for name in tools:
+            try:
+                result[name] = self.check_tool(name)
+            except Exception as e:  # pragma: no cover — defensive
+                logger.warning(
+                    "check_tool(%r) raised %s: %s",
+                    name,
+                    type(e).__name__,
+                    e,
+                )
+                result[name] = ToolStatus(
+                    name=name,
+                    installed=False,
+                    install_hint=f"check failed: {type(e).__name__}: {e}",
+                )
+        return result
 
     def check_all_tools(self) -> dict[str, ToolStatus]:
         """Check status of all registered tools."""

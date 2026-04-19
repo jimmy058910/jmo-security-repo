@@ -1036,8 +1036,19 @@ jobs:
           # profile summaries where `installed` is an integer count, not a per-tool
           # boolean — the jq filter below would then match zero entries (jq is
           # strictly typed: `7 == true` is false).
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
-            tools check --profile ${{ matrix.profile }} --json > tools-check.json
+          # Capture stderr separately so a silent-exit bug (zero stdout, non-zero rc)
+          # emits a diagnosable error to the job log instead of just "exit code 1".
+          if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
+              tools check --profile ${{ matrix.profile }} --json \
+              > tools-check.json 2>tools-check.stderr.log; then
+            rc=$?
+            echo "::error::tools check --profile ${{ matrix.profile }} exited with rc=$rc"
+            echo "--- stderr ---"
+            cat tools-check.stderr.log
+            echo "--- stdout (tools-check.json) ---"
+            cat tools-check.json
+            exit "$rc"
+          fi
 
           # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
           INSTALLED=$(cat tools-check.json | jq '[.[] | select(.installed == true)] | length')
