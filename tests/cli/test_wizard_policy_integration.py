@@ -511,7 +511,7 @@ def test_export_violations_json(tmp_path):
         assert output_file.exists()
 
         # Check file contents
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         assert data["policy"] == "zero-secrets"
         assert data["passed"] is False
         assert data["violation_count"] == 1
@@ -552,7 +552,7 @@ def test_export_violations_markdown(tmp_path):
         assert output_file.exists()
 
         # Check file contents
-        content = output_file.read_text()
+        content = output_file.read_text(encoding="utf-8")
         assert "# Policy Violations: owasp-top-10" in content
         assert "❌ FAILED" in content
         assert "**Violations:** 1" in content
@@ -954,7 +954,7 @@ def test_display_policy_violations_interactive_export_markdown(tmp_path, capsys)
         assert md_file.exists()
 
         # Check content includes message
-        content = md_file.read_text()
+        content = md_file.read_text(encoding="utf-8")
         assert "Policy failed" in content
     finally:
         os.chdir(original_dir)

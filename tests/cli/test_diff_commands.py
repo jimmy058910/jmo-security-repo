@@ -294,7 +294,7 @@ def test_cli_directory_mode_md(sample_scan_directories, tmp_path):
     assert result == 0
     assert output_path.exists()
 
-    content = output_path.read_text()
+    content = output_path.read_text(encoding="utf-8")
     assert "# 🔍 Security Diff Report" in content
     assert "## 📊 Summary" in content
 
@@ -1251,7 +1251,7 @@ class TestCmdDiffOutputFormats:
 
         assert result == 0
         assert output_file.exists()
-        content = output_file.read_text()
+        content = output_file.read_text(encoding="utf-8")
         assert "<html" in content or "<!DOCTYPE" in content
 
     def test_cmd_diff_sarif_to_file(self, sample_scan_directories, tmp_path):
@@ -1275,7 +1275,7 @@ class TestCmdDiffOutputFormats:
 
         assert result == 0
         assert output_file.exists()
-        content = json.loads(output_file.read_text())
+        content = json.loads(output_file.read_text(encoding="utf-8"))
         # Verify SARIF schema (actual URL uses 'master' branch and 'Schemata' path)
         assert "$schema" in content
         assert "sarif-schema-2.1.0.json" in content["$schema"]
@@ -1306,7 +1306,7 @@ class TestCmdDiffFilters:
         assert result == 0
         assert output_file.exists()
 
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         # All findings should be CRITICAL or HIGH
         for finding in data.get("new_findings", []):
             assert finding["severity"] in ["CRITICAL", "HIGH"]
@@ -1333,7 +1333,7 @@ class TestCmdDiffFilters:
         assert result == 0
         assert output_file.exists()
 
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         # All findings should be from trivy
         for finding in data.get("new_findings", []):
             assert finding["tool"]["name"] == "trivy"
@@ -1360,7 +1360,7 @@ class TestCmdDiffFilters:
         assert result == 0
         assert output_file.exists()
 
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         # Should have new findings but empty resolved/modified
         assert "new_findings" in data
         assert len(data.get("resolved_findings", [])) == 0
@@ -1498,7 +1498,7 @@ class TestCmdDiffEdgeCases:
         assert result == 0
         assert output_file.exists()
 
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         # Modifications should be empty or not present
         assert len(data.get("modified_findings", [])) == 0
 
@@ -1524,7 +1524,7 @@ class TestCmdDiffEdgeCases:
         assert result == 0
         assert output_file.exists()
 
-        data = json.loads(output_file.read_text())
+        data = json.loads(output_file.read_text(encoding="utf-8"))
         # All findings should pass all filters
         for finding in data.get("new_findings", []):
             assert finding["severity"] in ["HIGH", "CRITICAL"]
