@@ -38,7 +38,7 @@ class TestCommandInjectionPrevention:
         wizard_path = (
             Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
         )
-        content = wizard_path.read_text()
+        content = wizard_path.read_text(encoding="utf-8")
 
         # Check that shell=False is used (and shell=True is removed)
         assert "shell=False" in content, "shell=False should be used for subprocess.run"
@@ -283,7 +283,7 @@ class TestRegressionTests:
         wizard_path = (
             Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
         )
-        content = wizard_path.read_text()
+        content = wizard_path.read_text(encoding="utf-8")
 
         # Count instances of shell=True in actual code (not comments, not nosec)
         code_lines = [
@@ -303,7 +303,7 @@ class TestRegressionTests:
         wizard_path = (
             Path(__file__).parent.parent.parent / "scripts" / "cli" / "wizard.py"
         )
-        content = wizard_path.read_text()
+        content = wizard_path.read_text(encoding="utf-8")
 
         # subprocess.run with shell=False is safe (no B602/B603 HIGH findings)
         assert "subprocess.run(" in content
