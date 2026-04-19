@@ -990,9 +990,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # expected_tools counts match scripts/core/tool_registry.py PROFILE_TOOLS
+          # expected_tools is the number of tools ACTUALLY in the Docker image
+          # (on amd64). For fast/slim/balanced, that equals PROFILE_TOOLS in
+          # scripts/core/tool_registry.py. For deep, subtract the 4 tools in
+          # MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco) which are listed
+          # in PROFILE_TOOLS["deep"] but intentionally not in the image —
+          # users install them manually (see docs/MANUAL_INSTALLATION.md).
           - variant: deep
-            expected_tools: 29
+            expected_tools: 25   # 29 profile - 4 manual-only = 25
             profile: deep
           - variant: balanced
             expected_tools: 18
@@ -1055,6 +1060,11 @@ jobs:
           const userId = req.query.id;
           const query = "SELECT * FROM users WHERE id = " + userId;
           EOF
+          # UID mismatch fix: GitHub runner is UID 1001, container USER jmo
+          # is UID 1000. Bind mounts preserve host UID, so without this chmod
+          # the container can't write /scan/results (PermissionError [Errno 13]).
+          # Safe because the mount source is a run-scoped tmp directory.
+          chmod 777 /tmp/test-repo
 
       - name: Run scan
         id: docker-scan
