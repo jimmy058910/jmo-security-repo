@@ -140,8 +140,8 @@ FROM ubuntu:24.04 AS runtime
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
-LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 19 scanners optimized for CI/CD pipelines (v1.0.1)"
-LABEL org.opencontainers.image.version="1.0.1"
+LABEL org.opencontainers.image.description="Production-ready security audit toolkit with 19 scanners optimized for CI/CD pipelines (v1.0.2)"
+LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"

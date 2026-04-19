@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 # Docker image configuration - use versioned tag for reproducibility
 # This should be updated with each release
 JMO_DOCKER_IMAGE = "ghcr.io/jimmy058910/jmo-security"
-JMO_DOCKER_TAG = "v1.0.1"  # Pin to release version, not :latest
+JMO_DOCKER_TAG = "v1.0.2"  # Pin to release version, not :latest
 JMO_DOCKER_IMAGE_FULL = f"{JMO_DOCKER_IMAGE}:{JMO_DOCKER_TAG}"
 
 
