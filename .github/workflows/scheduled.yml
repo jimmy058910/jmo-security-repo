@@ -990,17 +990,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # expected_tools counts match scripts/core/tool_registry.py PROFILE_TOOLS
           - variant: deep
-            expected_tools: 28
+            expected_tools: 29
             profile: deep
           - variant: balanced
             expected_tools: 18
             profile: balanced
           - variant: slim
             expected_tools: 14
-            profile: fast
+            profile: slim
           - variant: fast
-            expected_tools: 8
+            expected_tools: 9
             profile: fast
     # Run on Sunday 3AM schedule OR manual docker/all dispatch
     if: |
@@ -1026,10 +1027,14 @@ jobs:
         id: tools
         run: |
           echo "Checking tools in ${{ matrix.variant }} variant..."
+          # --profile is required: without it, `tools check --json` emits a dict of
+          # profile summaries where `installed` is an integer count, not a per-tool
+          # boolean — the jq filter below would then match zero entries (jq is
+          # strictly typed: `7 == true` is false).
           docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
-            tools check --json > tools-check.json
+            tools check --profile ${{ matrix.profile }} --json > tools-check.json
 
-          # Count installed tools
+          # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
           INSTALLED=$(cat tools-check.json | jq '[.[] | select(.installed == true)] | length')
           echo "installed_count=$INSTALLED" >> $GITHUB_OUTPUT
 
@@ -1037,7 +1042,8 @@ jobs:
 
           if [ "$INSTALLED" -lt ${{ matrix.expected_tools }} ]; then
             echo "::error::Tool count $INSTALLED is less than expected ${{ matrix.expected_tools }}"
-            cat tools-check.json | jq '.[] | select(.installed == false) | .name'
+            echo "Missing tools:"
+            cat tools-check.json | jq -r 'to_entries[] | select(.value.installed == false) | .key'
             exit 1
           fi
 
