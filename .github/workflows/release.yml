@@ -86,6 +86,8 @@ jobs:
 
       - name: Bump version in pyproject.toml
         id: bump
+        env:
+          VERSION_BUMP: ${{ inputs.version_bump }}
         run: |
           CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           echo "Current version: $CURRENT_VERSION"
@@ -93,8 +95,8 @@ jobs:
           # Parse version components
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION" || true
 
-          # Bump version based on input
-          case "${{ inputs.version_bump }}" in
+          # Bump version based on input (env var, not interpolated, to avoid shell injection)
+          case "$VERSION_BUMP" in
             major)
               MAJOR=$((MAJOR + 1))
               MINOR=0
@@ -164,14 +166,15 @@ jobs:
       - name: Commit release changes
         env:
           CHANGELOG_ENTRY: ${{ inputs.changelog_entry }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          VERSION_BUMP: ${{ inputs.version_bump }}
+          TOOLS_UPDATED: ${{ steps.tool_updates.outputs.tools_updated }}
         run: |
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-
           git add pyproject.toml CHANGELOG.md
 
-          # Add tool updates if any
-          if [[ "${{ steps.tool_updates.outputs.tools_updated }}" == "true" ]]; then
-            git add versions.yaml Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast
+          # Add tool updates if any (env var, not interpolated, to avoid shell injection)
+          if [[ "$TOOLS_UPDATED" == "true" ]]; then
+            git add versions.yaml Dockerfile.deep Dockerfile.balanced Dockerfile.slim Dockerfile.fast
           fi
 
           # Create commit
@@ -185,25 +188,28 @@ jobs:
           - All security tools updated to latest versions
           - CHANGELOG.md updated
 
-          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          Generated with Claude Code (https://claude.com/claude-code)
 
           Co-Authored-By: Claude <noreply@anthropic.com>
           COMMIT_MSG
 
-          # Substitute variables
-          sed -i "s/\$NEW_VERSION/${NEW_VERSION}/g" commit_message.txt
+          # Substitute variables via env (safer than GitHub-context interpolation in run:)
           printf '%s\n' \
             'import os,pathlib as PL' \
             'p=PL.Path("commit_message.txt")' \
-            'p.write_text(p.read_text().replace("$CHANGELOG_ENTRY",os.environ["CHANGELOG_ENTRY"]))' \
+            't=p.read_text()' \
+            't=t.replace("$NEW_VERSION",os.environ["NEW_VERSION"])' \
+            't=t.replace("$CHANGELOG_ENTRY",os.environ["CHANGELOG_ENTRY"])' \
+            't=t.replace("$VERSION_BUMP",os.environ["VERSION_BUMP"])' \
+            'p.write_text(t)' \
             | python3
-          sed -i "s/\$VERSION_BUMP/${{ inputs.version_bump }}/g" commit_message.txt
 
           git commit -F commit_message.txt
 
       - name: Push release branch
+        env:
+          BRANCH: ${{ steps.create_branch.outputs.branch }}
         run: |
-          BRANCH="${{ steps.create_branch.outputs.branch }}"
           git push origin "$BRANCH"
 
       - name: Create Pull Request
@@ -271,17 +277,18 @@ jobs:
             --label "release"
 
       - name: Summary
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          BRANCH: ${{ steps.create_branch.outputs.branch }}
+          VERSION_BUMP: ${{ inputs.version_bump }}
         run: |
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-          BRANCH="${{ steps.create_branch.outputs.branch }}"
-
           {
             echo "## Automated Release Summary"
             echo ""
-            echo "✅ **Release PR created successfully**"
+            echo "**Release PR created successfully**"
             echo ""
             echo "- **Version**: v${NEW_VERSION}"
-            echo "- **Type**: ${{ inputs.version_bump }}"
+            echo "- **Type**: ${VERSION_BUMP}"
             echo "- **Branch**: \`${BRANCH}\`"
             echo ""
             echo "### Next Steps"
@@ -467,7 +474,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [full, balanced, slim, fast]
+        variant: [deep, balanced, slim, fast]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -485,11 +492,9 @@ jobs:
       - name: Determine Dockerfile
         id: dockerfile
         run: |
-          if [ "${{ matrix.variant }}" = "full" ]; then
-            echo "file=Dockerfile" >> "$GITHUB_OUTPUT"
-          else
-            echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
-          fi
+          # After v1.0.2 every variant has its own Dockerfile.<variant> — no
+          # special case for the heavyweight image (which is now Dockerfile.deep).
+          echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push by digest
         id: build
@@ -526,7 +531,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [full, balanced, slim, fast]
+        variant: [deep, balanced, slim, fast]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -544,11 +549,9 @@ jobs:
       - name: Determine Dockerfile
         id: dockerfile
         run: |
-          if [ "${{ matrix.variant }}" = "full" ]; then
-            echo "file=Dockerfile" >> "$GITHUB_OUTPUT"
-          else
-            echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
-          fi
+          # After v1.0.2 every variant has its own Dockerfile.<variant> — no
+          # special case for the heavyweight image (which is now Dockerfile.deep).
+          echo "file=Dockerfile.${{ matrix.variant }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push by digest
         id: build
@@ -586,7 +589,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [full, balanced, slim, fast]
+        variant: [deep, balanced, slim, fast]
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -626,9 +629,16 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'full' }}
+            # Bare :latest points at the heavyweight `deep` variant on version-tag pushes.
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
+            # Bare :deep / :balanced / :slim / :fast (no version suffix) — the user-facing
+            # convenience tags referenced in FAQ, USER_GUIDE, DOCKER_README.
+            type=raw,value=${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # One-release backward-compat alias: keep :full pointing at :deep until users
+            # migrate. Remove this line in the release after v1.0.2.
+            type=raw,value=full,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
           flavor: |
-            suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'full' }}
+            suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'deep' }}
             latest=false
 
       - name: Download amd64 digest
@@ -789,7 +799,7 @@ jobs:
     if: always() && needs.docker-merge.result == 'success'
     strategy:
       matrix:
-        variant: [full, balanced, slim, fast]
+        variant: [deep, balanced, slim, fast]
     steps:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4

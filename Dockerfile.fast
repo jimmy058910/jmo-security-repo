@@ -193,5 +193,5 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:1.0.1-fast scan --repo /scan --profile fast --fail-on HIGH
+# Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast --fail-on HIGH
 # The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trend` work.

@@ -21,7 +21,7 @@ VARIANTS = {
     "fast": "Dockerfile.fast",
     "slim": "Dockerfile.slim",
     "balanced": "Dockerfile.balanced",
-    "deep": "Dockerfile",  # Base Dockerfile is the full/deep variant
+    "deep": "Dockerfile.deep",
 }
 
 # Default registry configuration

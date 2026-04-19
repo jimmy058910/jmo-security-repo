@@ -532,10 +532,11 @@ DOCKER_REGISTRY ?= ghcr.io
 DOCKER_ORG ?= jimmy058910
 DOCKER_IMAGE ?= jmo-security
 DOCKER_TAG ?= latest
-VARIANT ?= full
+VARIANT ?= deep
 
-# Determine Dockerfile based on variant
-DOCKERFILE := $(if $(filter full,$(VARIANT)),Dockerfile,Dockerfile.$(VARIANT))
+# Determine Dockerfile based on variant. After v1.0.2, every variant lives in
+# its own file — the heavyweight image is Dockerfile.deep, not bare Dockerfile.
+DOCKERFILE := Dockerfile.$(VARIANT)
 
 # Auto-detect target architecture (amd64 or arm64) for Docker builds
 # This ensures Alpine builds install semgrep/checkov on amd64
@@ -545,30 +546,30 @@ docker-build:
 	@echo "Building Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
 	@echo "Target architecture: $(TARGETARCH)"
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -f $(DOCKERFILE) -t $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) .
-	@if [ "$(VARIANT)" = "full" ]; then \
+	@if [ "$(VARIANT)" = "deep" ]; then \
 		docker tag $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT) $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
 		echo "Tagged as latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
 	fi
 
 docker-build-all:
 	@echo "Building all Docker image variants..."
-	$(MAKE) docker-build VARIANT=full
+	$(MAKE) docker-build VARIANT=deep
 	$(MAKE) docker-build VARIANT=slim
 	$(MAKE) docker-build VARIANT=alpine
 
 docker-build-local:
 	@echo "Building all Docker variants with 'local' tag for testing..."
 	@echo "Target architecture: $(TARGETARCH)"
-	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile -t jmo-security:local-full .
+	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.deep -t jmo-security:local-deep .
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.slim -t jmo-security:local-slim .
 	docker build --build-arg TARGETARCH=$(TARGETARCH) -f Dockerfile.alpine -t jmo-security:local-alpine .
 	@echo ""
-	@echo "✅ Local Docker images built successfully:"
-	@echo "  - jmo-security:local-full"
+	@echo "Local Docker images built successfully:"
+	@echo "  - jmo-security:local-deep"
 	@echo "  - jmo-security:local-slim"
 	@echo "  - jmo-security:local-alpine"
 	@echo ""
-	@echo "Test with: docker run --rm jmo-security:local-full --help"
+	@echo "Test with: docker run --rm jmo-security:local-deep --help"
 	@echo "Run E2E tests: DOCKER_IMAGE_BASE=jmo-security DOCKER_TAG=local make test-e2e"
 
 docker-test:
@@ -586,7 +587,7 @@ docker-test:
 docker-push:
 	@echo "Pushing Docker image: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)"
 	docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)-$(VARIANT)
-	@if [ "$(VARIANT)" = "full" ]; then \
+	@if [ "$(VARIANT)" = "deep" ]; then \
 		docker push $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG); \
 		echo "Pushed latest: $(DOCKER_REGISTRY)/$(DOCKER_ORG)/$(DOCKER_IMAGE):$(DOCKER_TAG)"; \
 	fi

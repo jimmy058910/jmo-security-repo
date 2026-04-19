@@ -56,7 +56,7 @@ except ImportError:
 # Paths
 REPO_ROOT = Path(__file__).parent.parent.parent
 VERSIONS_YAML = REPO_ROOT / "versions.yaml"
-DOCKERFILE = REPO_ROOT / "Dockerfile"
+DOCKERFILE = REPO_ROOT / "Dockerfile.deep"
 DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
 DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
 DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"

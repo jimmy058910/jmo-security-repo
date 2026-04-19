@@ -36,7 +36,7 @@ def test_variants_has_correct_dockerfiles():
     assert VARIANTS["fast"] == "Dockerfile.fast"
     assert VARIANTS["slim"] == "Dockerfile.slim"
     assert VARIANTS["balanced"] == "Dockerfile.balanced"
-    assert VARIANTS["deep"] == "Dockerfile"  # Base Dockerfile
+    assert VARIANTS["deep"] == "Dockerfile.deep"
 
 
 def test_default_registry():

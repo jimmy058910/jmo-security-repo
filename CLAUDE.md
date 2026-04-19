@@ -277,7 +277,7 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 | `scripts/core/adapters/*.py` | Tool output parsers (28 adapters) |
 | `jmo.yml` | Main configuration |
 | `versions.yaml` | Tool version registry |
-| `Dockerfile*` | Docker variants (main=deep, .fast, .slim, .balanced) |
+| `Dockerfile.*` | Docker variants: `Dockerfile.deep` (heavyweight, also tagged `:latest`), `.fast`, `.slim`, `.balanced` |
 
 ## Scan Profiles
 
@@ -290,7 +290,7 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 | `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
 | `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
 
-**Note:** Main `Dockerfile` = deep variant. See PROFILES_AND_TOOLS.md for complete tool lists.
+**Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags). See PROFILES_AND_TOOLS.md for complete tool lists.
 
 ## Development Guidelines
 

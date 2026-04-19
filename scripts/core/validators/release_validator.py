@@ -1618,7 +1618,7 @@ _QUICK_CHECKS: list[tuple[str, _CheckFn]] = [
 
 # Full tier additional Dockerfiles (4) + pip install (1) + entry point (1) = 6
 _DOCKERFILES = [
-    "Dockerfile",
+    "Dockerfile.deep",
     "Dockerfile.fast",
     "Dockerfile.slim",
     "Dockerfile.balanced",

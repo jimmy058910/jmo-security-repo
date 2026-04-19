@@ -108,7 +108,7 @@ jobs:
           git checkout -b "$BRANCH"
 
           # Stage changes
-          git add versions.yaml Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast \
+          git add versions.yaml Dockerfile.deep Dockerfile.balanced Dockerfile.slim Dockerfile.fast \
                  .pre-commit-config.yaml
           # Stage any files reformatted by updated hooks
           git add -u -- scripts/ tests/ hooks/
@@ -282,7 +282,7 @@ jobs:
         run: |
           # Extract Trivy versions from all 4 Dockerfiles
           # shellcheck disable=SC2252
-          TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile || echo "not_found")
+          TRIVY_FULL=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.deep || echo "not_found")
           # shellcheck disable=SC2252
           TRIVY_BALANCED=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.balanced || echo "not_found")
           # shellcheck disable=SC2252
@@ -291,7 +291,7 @@ jobs:
           TRIVY_FAST=$(grep -oP 'TRIVY_VERSION="\K[0-9.]+' Dockerfile.fast || echo "not_found")
 
           echo "Trivy versions found:"
-          echo "  Dockerfile:          $TRIVY_FULL"
+          echo "  Dockerfile.deep:     $TRIVY_FULL"
           echo "  Dockerfile.balanced: $TRIVY_BALANCED"
           echo "  Dockerfile.slim:     $TRIVY_SLIM"
           echo "  Dockerfile.fast:     $TRIVY_FAST"
@@ -327,7 +327,7 @@ jobs:
           ISSUES=0
 
           # Check for inline version patterns that should use variables
-          for dockerfile in Dockerfile Dockerfile.balanced Dockerfile.slim Dockerfile.fast; do
+          for dockerfile in Dockerfile.deep Dockerfile.balanced Dockerfile.slim Dockerfile.fast; do
             echo "Checking $dockerfile for hardcoded versions..."
 
             # Look for download URLs with hardcoded versions (bad pattern)
@@ -364,7 +364,7 @@ jobs:
           # Check if Python security tools have updates
           for tool in bandit semgrep checkov ruff; do
             echo "Checking $tool..."
-            CURRENT=$(grep -oP "${tool}==[0-9.]+" Dockerfile | head -n1 | cut -d'=' -f3 || echo "unknown")
+            CURRENT=$(grep -oP "${tool}==[0-9.]+" Dockerfile.deep | head -n1 | cut -d'=' -f3 || echo "unknown")
             LATEST=$(pip index versions "$tool" 2>/dev/null | grep -oP '(?<=Available versions: )[0-9.]+' | head -n1 || echo "unknown")
 
             echo "  Current: $CURRENT"

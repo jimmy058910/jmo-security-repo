@@ -260,4 +260,4 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:1.0.1-slim scan --aws-account 123456789012 --profile cloud
+# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:slim scan --aws-account 123456789012 --profile cloud
