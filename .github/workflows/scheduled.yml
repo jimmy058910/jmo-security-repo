@@ -1035,7 +1035,7 @@ jobs:
 
           echo "Installed tools: $INSTALLED (expected: ${{ matrix.expected_tools }})"
 
-          if [ "$INSTALLED" -lt "${{ matrix.expected_tools }}" ]; then
+          if [ "$INSTALLED" -lt ${{ matrix.expected_tools }} ]; then
             echo "::error::Tool count $INSTALLED is less than expected ${{ matrix.expected_tools }}"
             cat tools-check.json | jq '.[] | select(.installed == false) | .name'
             exit 1
