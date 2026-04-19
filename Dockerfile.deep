@@ -423,9 +423,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Basic scan (deep profile, all 27 tools):
 # docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.1-full scan --repo /scan --results /scan/results --profile deep
 #
+# Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" \
+#   ghcr.io/jimmy058910/jmo-security:deep scan --repo /scan --profile deep --fail-on HIGH
+# The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trend` work.
+#
 # CI mode with caching (30s faster on subsequent runs):
 # docker run --rm -v $(pwd):/scan -v trivy-cache:/root/.cache/trivy -v grype-cache:/root/.cache/grype \
-#   ghcr.io/jimmy058910/jmo-security:1.0.1-full ci --repo /scan --fail-on HIGH --profile
+#   ghcr.io/jimmy058910/jmo-security:deep ci --repo /scan --fail-on HIGH --profile
 #
 # v1.0.0 Optimizations:
 # - Multi-stage builds: Reduced image size by 21% (2.49 GB → 1.97 GB)

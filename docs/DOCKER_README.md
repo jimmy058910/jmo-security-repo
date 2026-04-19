@@ -407,8 +407,8 @@ START: What is your primary use case?
 ### Choosing a Variant
 
 ```bash
-# Deep - Maximum coverage (29 tools, 26 Docker-ready)
-docker pull ghcr.io/jimmy058910/jmo-security:latest
+# Deep - Maximum coverage (29 tools, 26 Docker-ready) — also published as :latest
+docker pull ghcr.io/jimmy058910/jmo-security:deep
 
 # Balanced - Production CI/CD (18 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:balanced
@@ -419,6 +419,8 @@ docker pull ghcr.io/jimmy058910/jmo-security:slim
 # Fast - Quick validation (9 tools)
 docker pull ghcr.io/jimmy058910/jmo-security:fast
 ```
+
+All tags are also published with version suffixes (e.g. `:1.0.2-deep`, `:1.0-deep`, `:1-deep`) for pinning in CI. For one release cycle, `:full` is kept as an alias for `:deep` so existing scripts don't break — use `:deep` going forward.
 
 ### Alpine Deprecation Notice
 
