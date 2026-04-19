@@ -625,18 +625,30 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
+          # NOTE on `suffix=`: the global `flavor: suffix=-<variant>` below gets applied
+          # to every tag type including type=raw and type=semver. For the bare-tag family
+          # (:latest, :deep, :balanced, :slim, :fast, :full, :1.0.2, :1.0, :1) we override
+          # with `suffix=` (empty) per-tag to produce bare tags instead of `:latest-deep`,
+          # `:deep-deep`, `:1.0.2-deep`. Without the override we get garbage like `:deep-deep`.
           tags: |
+            # Versioned-with-variant: suffix -<variant> applied via global flavor.
+            # Produces :1.0.2-deep, :1.0.2-balanced, :1.0.2-slim, :1.0.2-fast (and :1.0-*, :1-*).
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Bare :latest points at the heavyweight `deep` variant on version-tag pushes.
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
-            # Bare :deep / :balanced / :slim / :fast (no version suffix) — the user-facing
-            # convenience tags referenced in FAQ, USER_GUIDE, DOCKER_README.
-            type=raw,value=${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            # One-release backward-compat alias: keep :full pointing at :deep until users
-            # migrate. Remove this line in the release after v1.0.2.
-            type=raw,value=full,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
+            # Bare semver (no variant suffix) — only on the deep matrix job.
+            # Produces :1.0.2, :1.0, :1 — pin-friendly tags for CI.
+            type=semver,pattern={{version}},suffix=,enable=${{ matrix.variant == 'deep' }}
+            type=semver,pattern={{major}}.{{minor}},suffix=,enable=${{ matrix.variant == 'deep' }}
+            type=semver,pattern={{major}},suffix=,enable=${{ matrix.variant == 'deep' }}
+            # Bare :latest — points at the heavyweight deep variant.
+            type=raw,value=latest,suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
+            # Bare :deep / :balanced / :slim / :fast — user-facing convenience tags
+            # referenced in FAQ, USER_GUIDE, DOCKER_README.
+            type=raw,value=${{ matrix.variant }},suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # One-release backward-compat alias: :full points at :deep until users
+            # migrate off the old name. Remove in the release after v1.0.2.
+            type=raw,value=full,suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
           flavor: |
             suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'deep' }}
             latest=false
