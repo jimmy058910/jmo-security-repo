@@ -10,8 +10,14 @@ Usage:
   # Validate all versions exist upstream BEFORE building (RECOMMENDED)
   python3 scripts/dev/update_versions.py --validate
 
-  # Check for latest versions of all tools
+  # Check for latest versions of all tools (informational; exits 0 even if outdated)
   python3 scripts/dev/update_versions.py --check-latest
+
+  # Opt into strict gating: exit 1 if outdated tools are found
+  python3 scripts/dev/update_versions.py --check-latest --fail-if-outdated
+
+  # Emit JSON manifest with semver bump classification (for auto-PR automation)
+  python3 scripts/dev/update_versions.py --classify
 
   # Update specific tool
   python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
@@ -27,12 +33,14 @@ Usage:
 
 Requirements:
   - PyYAML: pip install pyyaml
-  - GitHub CLI (gh) for --check-latest and --create-issues
+  - packaging: pip install packaging (for semver bump classification)
+  - GitHub CLI (gh) for --create-issues
   - Internet connection for GitHub API access
 
 Exit codes:
-  0: Success
-  1: Validation errors or version mismatch detected
+  0: Success (outdated tools are informational, not an error — use
+     --fail-if-outdated for strict CI gating)
+  1: Validation errors OR strict-gating triggered OR real operational failure
   2: Missing dependencies
 """
 
@@ -51,6 +59,12 @@ try:
     import yaml
 except ImportError:
     print("ERROR: PyYAML not installed. Run: pip install pyyaml", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    from packaging.version import InvalidVersion, Version
+except ImportError:
+    print("ERROR: packaging not installed. Run: pip install packaging", file=sys.stderr)
     sys.exit(2)
 
 # Paths
@@ -88,6 +102,61 @@ def warn(msg: str) -> None:
 def err(msg: str) -> None:
     """Print error message."""
     print(f"{RED}[err]{NC} {msg}", file=sys.stderr)
+
+
+def _normalize_version(v: str) -> str:
+    """Strip leading `v`, trailing `-stable`/`-static`, and similar decorations."""
+    v = v.strip()
+    if v.lower().startswith("v"):
+        v = v[1:]
+    # akto uses "mini-testing-1.53.7" — take the last numeric-looking chunk.
+    parts = re.split(r"[-_/]", v)
+    for part in reversed(parts):
+        if re.match(r"^\d+(\.\d+)*", part):
+            return part
+    return v
+
+
+def classify_bump(current: str, latest: str) -> str:
+    """
+    Classify the semver bump level between two versions.
+
+    Returns one of: "patch", "minor", "major", "unknown".
+
+    Rules:
+    - No change → "patch" (safe default).
+    - Unparseable version → "unknown" (e.g. non-semver tags).
+    - 0.x → anything (or anything → 0.x): "major". Per semver, 0.x is
+      pre-release and any bump may be breaking, so auto-merge is unsafe.
+    - Prefix loss during normalization (e.g. akto `mini-testing-1.53.7` → `1.98.0`)
+      is treated as "unknown" — the rebranding context is lost.
+    - Else: compare major/minor/patch triples.
+
+    Callers should treat "unknown" and "major" as risky (require human review);
+    "patch" and "minor" are auto-merge candidates (with contract-test gating).
+    """
+    if current == latest:
+        return "patch"
+    normalized_current = _normalize_version(current)
+    normalized_latest = _normalize_version(latest)
+    # Detect lossy normalization (prefix/suffix discarded).
+    if normalized_current != current.strip().lstrip("v").lstrip("V"):
+        return "unknown"
+    if normalized_latest != latest.strip().lstrip("v").lstrip("V"):
+        return "unknown"
+    try:
+        cur = Version(normalized_current)
+        new = Version(normalized_latest)
+    except InvalidVersion:
+        return "unknown"
+    # 0.x is pre-1.0 territory where any change may be breaking.
+    if cur.major == 0 or new.major == 0:
+        return "major"
+    if new.major != cur.major:
+        return "major"
+    if new.minor != cur.minor:
+        return "minor"
+    return "patch"
 
 
 def load_versions() -> dict:
@@ -374,6 +443,49 @@ def check_latest_versions() -> dict[str, tuple[str, str, bool]]:
             warn(f"{tool}: Failed to check latest version")
 
     return results
+
+
+def _print_classification_json() -> int:
+    """
+    Emit a JSON manifest of all tools with their semver bump classification.
+
+    Output shape (to stdout, one blob — machine-readable for auto-PR workflows):
+
+        {
+          "bandit":   {"current": "1.9.3",    "latest": "1.9.4",  "level": "patch",   "critical": false},
+          "semgrep":  {"current": "1.151.0",  "latest": "1.159.0","level": "minor",   "critical": true},
+          "kubescape":{"current": "3.0.47",   "latest": "4.0.5",  "level": "major",   "critical": true},
+          "falco":    {"current": "0.0.0",    "latest": "0.43.1", "level": "unknown", "critical": false}
+        }
+
+    Bump levels "patch" and "minor" are typically safe to auto-merge (with
+    contract-test gating). "major" and "unknown" should open a tracking issue
+    for human review — adapter output schemas frequently break across majors.
+
+    Returns exit code 0 on success, non-zero only on genuine errors (missing
+    deps, unreadable versions.yaml). Outdated-ness is not an error.
+    """
+    versions = load_versions()
+    results = check_latest_versions()
+    manifest: dict[str, dict[str, Any]] = {}
+
+    for tool, (current, latest, _is_outdated) in results.items():
+        critical = False
+        for category in ("python_tools", "binary_tools", "special_tools"):
+            if tool in versions.get(category, {}):
+                critical = bool(versions[category][tool].get("critical", False))
+                break
+        manifest[tool] = {
+            "current": current,
+            "latest": latest,
+            "level": classify_bump(current, latest),
+            "critical": critical,
+        }
+
+    # Stable key order for deterministic diffing / testing.
+    ordered = {k: manifest[k] for k in sorted(manifest)}
+    print(json.dumps(ordered, indent=2))
+    return 0
 
 
 def update_tool_version(tool: str, new_version: str) -> bool:
@@ -842,6 +954,11 @@ def main() -> int:
         action="store_true",
         help="Validate all versions exist upstream (GitHub, PyPI, npm) before Docker build",
     )
+    group.add_argument(
+        "--classify",
+        action="store_true",
+        help="Emit JSON manifest of all tools with current, latest, semver bump level, and critical flag",
+    )
 
     parser.add_argument("--version", type=str, help="Version to set (used with --tool)")
     parser.add_argument(
@@ -858,6 +975,15 @@ def main() -> int:
         "--critical-only",
         action="store_true",
         help="Only update critical tools (used with --update-all)",
+    )
+    parser.add_argument(
+        "--fail-if-outdated",
+        action="store_true",
+        help=(
+            "Exit 1 when outdated tools are found (used with --check-latest or "
+            "--check-outdated). Default: exit 0 — outdated is informational, not "
+            "an error. Opt into strict gating with this flag."
+        ),
     )
 
     args = parser.parse_args()
@@ -878,10 +1004,15 @@ def main() -> int:
             outdated = sum(1 for _, _, is_outdated in results.values() if is_outdated)
             if outdated > 0:
                 warn(f"{outdated} tool(s) have updates available")
-                return 1
+                if args.fail_if_outdated:
+                    return 1
+                return 0
             else:
                 ok("All tools are up to date")
                 return 0
+
+        elif args.classify:
+            return _print_classification_json()
 
         elif args.tool:
             if update_tool_version(args.tool, args.version):
@@ -906,7 +1037,9 @@ def main() -> int:
             count = check_outdated_and_create_issues(args.create_issues)
             if count > 0:
                 warn(f"{count} outdated tool(s) found")
-                return 1
+                if args.fail_if_outdated:
+                    return 1
+                return 0
             else:
                 ok("All tools are up to date")
                 return 0
