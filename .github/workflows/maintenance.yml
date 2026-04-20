@@ -18,6 +18,7 @@ on:
     - cron: '0 0 * * 0'  # Sunday 00:00 UTC - tool updates
     - cron: '0 2 * * 0'  # Sunday 02:00 UTC - version checks
     - cron: '0 6 * * 1'  # Monday 06:00 UTC - repo completeness
+    - cron: '0 */6 * * *'  # Every 6h - soak-window auto-merge sweep
   workflow_dispatch:
     inputs:
       task:
@@ -25,12 +26,18 @@ on:
         required: false
         default: 'all'
         type: choice
-        options: [all, tool-update, version-check, completeness]
+        options: [all, tool-update, version-check, completeness, auto-merge]
       create_issues:
         description: 'Create GitHub issues for outdated tools (version-check task only)'
         required: false
         default: 'true'
         type: boolean
+      bump_level:
+        description: 'Bump level for auto-update-tools (cumulative: minor includes patch; major includes patch+minor)'
+        required: false
+        default: 'minor'
+        type: choice
+        options: [patch, minor, major, all]
 
 permissions:
   contents: write
@@ -79,11 +86,40 @@ jobs:
             echo "All tools already up-to-date"
           fi
 
-      - name: Update all tools to latest versions
+      - name: Capture classification manifest (before update)
+        # MUST run before --update-all, otherwise the manifest sees
+        # current==latest for every bumped tool and reports level=patch
+        # for all. The PR body reads this file so reviewers see the
+        # actual bump level of each change.
         if: steps.check.outputs.updates_available == 'true'
         run: |
-          echo "Updating all tools to latest versions..."
-          python3 scripts/dev/update_versions.py --update-all
+          python3 scripts/dev/update_versions.py --classify > classify_before.json
+          echo "Classification captured:"
+          cat classify_before.json
+
+      - name: Resolve bump level
+        id: level
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_BUMP_LEVEL: ${{ github.event.inputs.bump_level }}
+        run: |
+          # Default to 'minor' on cron — auto-PR patches+minors only, leave
+          # majors/unknowns for the tracking-issue dashboard. Dispatch overrides.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$DISPATCH_BUMP_LEVEL" ]; then
+            LEVEL="$DISPATCH_BUMP_LEVEL"
+          else
+            LEVEL="minor"
+          fi
+          echo "bump_level=$LEVEL" >> "$GITHUB_OUTPUT"
+          echo "Using bump level: $LEVEL"
+
+      - name: Update tools to latest versions (filtered by bump level)
+        if: steps.check.outputs.updates_available == 'true'
+        env:
+          BUMP_LEVEL: ${{ steps.level.outputs.bump_level }}
+        run: |
+          echo "Updating tools at bump level: $BUMP_LEVEL"
+          python3 scripts/dev/update_versions.py --update-all --level="$BUMP_LEVEL"
 
           echo ""
           echo "Syncing changes to Dockerfiles..."
@@ -142,71 +178,98 @@ jobs:
         if: steps.commit.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          BUMP_LEVEL: ${{ steps.level.outputs.bump_level }}
         run: |
-          BRANCH="${{ steps.commit.outputs.branch }}"
+          # Compose PR body with the pre-update classification manifest
+          # embedded. Reviewers see the exact bumps and their levels without
+          # having to diff versions.yaml by hand. The `classify_before.json`
+          # file is the one captured before --update-all ran.
+          {
+            echo "## Weekly Tool & Pre-commit Updates"
+            echo ""
+            echo "Bump level applied: \`$BUMP_LEVEL\` (cumulative — includes all lower levels)."
+            echo ""
+            echo "### What's Updated"
+            echo ""
+            echo "- **Security tools**: \`update_versions.py --update-all --level=$BUMP_LEVEL\`, Dockerfiles synced"
+            echo "- **Pre-commit hooks**: \`pre-commit autoupdate\`, formatting applied"
+            echo ""
+            echo "### Auto-Merge Policy"
+            echo ""
+            echo "Labeled \`auto-merge-ok\`. A separate soak-window job runs every 6 hours"
+            echo "and merges this PR once it is at least 24h old, all required status"
+            echo "checks (including \`tool-contract-tests\`) are green, and the"
+            echo "\`auto-merge-ok\` label is still present."
+            echo ""
+            echo "To cancel auto-merge, remove the \`auto-merge-ok\` label. To force an"
+            echo "immediate merge, run the workflow manually with \`task=auto-merge\` and"
+            echo "\`--min-age-hours 0\`."
+            echo ""
+            if [ -f classify_before.json ]; then
+              echo "<details><summary>Bumps in this PR (from \`--classify\`)</summary>"
+              echo ""
+              echo '```json'
+              cat classify_before.json
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            fi
+            echo "---"
+            echo ""
+            echo "**Automated PR** — Generated by maintenance workflow (tool-update task)"
+            echo "**Schedule**: Every Sunday at 00:00 UTC"
+            echo "**Workflow**: \`.github/workflows/maintenance.yml\`"
+          } > pr_body.txt
 
-          # Create PR body
-          cat > pr_body.txt << 'PR_BODY'
-          ## Weekly Tool & Pre-commit Updates
-
-          This PR automatically updates security tools and pre-commit hooks to their latest versions.
-
-          ### What's Updated
-
-          - **Security tools**: Updated via `update_versions.py --update-all`, Dockerfiles synced
-          - **Pre-commit hooks**: Updated via `pre-commit autoupdate`, formatting applied
-
-          ### Auto-Merge Policy
-
-          This PR will auto-merge if:
-          - All CI tests pass
-          - No conflicts with main branch
-          - Version consistency check passes
-
-          ---
-
-          **Automated PR** - Generated by maintenance workflow (tool-update task)
-          **Schedule**: Every Sunday at 00:00 UTC
-          **Workflow**: `.github/workflows/maintenance.yml`
-          PR_BODY
-
-          # Create PR
           gh pr create \
-            --title "chore(deps): weekly auto-update $(date +%Y-%m-%d)" \
+            --title "chore(deps): weekly auto-update $(date +%Y-%m-%d) (level=$BUMP_LEVEL)" \
             --body-file pr_body.txt \
             --base main \
             --head "$BRANCH" \
             --label "dependencies" \
-            --label "automated"
+            --label "automated" \
+            --label "auto-merge-ok"
 
-          # Enable auto-merge
-          PR_NUMBER=$(gh pr view "$BRANCH" --json number --jq '.number')
-          gh pr merge "$PR_NUMBER" --auto --squash
+          # NOTE: `gh pr merge --auto --squash` is intentionally NOT called
+          # here. The soak-window job (auto-merge-tool-bumps, cron */6h)
+          # owns the merge decision now — see docs/RELEASE.md.
 
       - name: Summary
         if: always()
+        env:
+          HAS_CHANGES: ${{ steps.commit.outputs.has_changes }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          BUMP_LEVEL: ${{ steps.level.outputs.bump_level }}
+          UPDATES_AVAILABLE: ${{ steps.check.outputs.updates_available }}
         run: |
           {
             echo "## Weekly Tool Update Summary"
             echo ""
+            echo "Bump level: \`${BUMP_LEVEL:-minor}\` (cumulative)"
+            echo ""
 
-            if [[ "${{ steps.commit.outputs.has_changes }}" == "true" ]]; then
-              echo "**Updates applied successfully**"
+            if [ "$HAS_CHANGES" = "true" ]; then
+              echo "**Pull request opened**"
               echo ""
-              echo "- Branch created: \`${{ steps.commit.outputs.branch }}\`"
-              echo "- Pull request created and set to auto-merge"
-              echo "- Will merge automatically when CI passes"
+              echo "- Branch: \`$BRANCH\`"
+              echo "- Labels: \`dependencies\`, \`automated\`, \`auto-merge-ok\`"
+              echo "- Soak window: 24h (soak job runs every 6 hours)"
+              echo "- Required gate: \`tool-contract-tests\` must pass"
               echo ""
-              if [[ "${{ steps.check.outputs.updates_available }}" == "true" ]]; then
-                echo "- Security tools: updated"
+              if [ "$UPDATES_AVAILABLE" = "true" ]; then
+                echo "- Security tools: updated at level \`${BUMP_LEVEL:-minor}\`"
               else
                 echo "- Security tools: already up-to-date"
               fi
               echo "- Pre-commit hooks: checked for updates"
             else
-              echo "**All tools and hooks already up-to-date**"
+              echo "**Nothing to merge**"
               echo ""
-              echo "No updates needed this week."
+              echo "Either all tools are already up-to-date, or all outstanding bumps"
+              echo "fall outside the \`${BUMP_LEVEL:-minor}\` level filter"
+              echo "(major/unknown bumps live in the tracking issue)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -527,3 +590,38 @@ jobs:
               repo: context.repo.repo,
               body: summary
             });
+
+  # ─── Soak-Window Auto-Merge ──────────────────────────────────────────────────
+  # Runs: every 6 hours (cron '0 */6 * * *') OR manual dispatch with task=auto-merge
+  #
+  # Finds open PRs labeled `dependencies,automated,auto-merge-ok`, and:
+  #   * merges any that are >= 24h old with all required checks green
+  #   * flips failures to `needs-review` with an explanatory comment
+  #   * leaves everything else alone
+  #
+  # The real decision logic lives in scripts/dev/auto_merge_tool_bumps.py and
+  # is unit-tested in tests/unit/test_auto_merge_tool_bumps.py.
+  auto-merge-tool-bumps:
+    name: Soak-window auto-merge for tool bumps
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.task == 'auto-merge')
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Run soak-window sweep
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/dev/auto_merge_tool_bumps.py --min-age-hours 24

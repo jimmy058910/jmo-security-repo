@@ -159,6 +159,71 @@ def classify_bump(current: str, latest: str) -> str:
     return "patch"
 
 
+# Cumulative bump-level inclusion. --level=minor means "include patch and minor".
+# "unknown" is only included under the explicit --level=all opt-in, because
+# synthetic version transitions (falco 0.0.0 -> 0.43.1, akto mini-testing-X -> 1.Y)
+# are the riskiest class and must not auto-merge.
+_LEVEL_INCLUDES: dict[str, frozenset[str]] = {
+    "patch": frozenset({"patch"}),
+    "minor": frozenset({"patch", "minor"}),
+    "major": frozenset({"patch", "minor", "major"}),
+    "all": frozenset({"patch", "minor", "major", "unknown"}),
+}
+
+
+def _lookup_critical(tool: str, versions: dict) -> bool:
+    """Return the critical flag for a tool from versions.yaml."""
+    for category in ("python_tools", "binary_tools", "special_tools"):
+        if tool in versions.get(category, {}):
+            return bool(versions[category][tool].get("critical", False))
+    return False
+
+
+def _select_tools_for_update(
+    results: dict[str, tuple[str, str, bool]],
+    versions: dict,
+    critical_only: bool,
+    level: str,
+) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str, str]]]:
+    """
+    Pick which outdated tools to update based on critical_only + bump level.
+
+    Args:
+        results: mapping from tool name to (current, latest, is_outdated)
+                 as emitted by check_latest_versions().
+        versions: parsed versions.yaml (for critical-flag lookup).
+        critical_only: if True, skip tools where critical is False.
+        level: one of _LEVEL_INCLUDES keys ("patch", "minor", "major", "all").
+
+    Returns:
+        (to_update, skipped) where
+          to_update = [(tool, current, latest), ...]
+          skipped   = [(tool, current, latest, reason), ...]
+    """
+    if level not in _LEVEL_INCLUDES:
+        raise ValueError(
+            f"Unknown bump level {level!r}; expected one of {sorted(_LEVEL_INCLUDES)}"
+        )
+    allowed_levels = _LEVEL_INCLUDES[level]
+
+    to_update: list[tuple[str, str, str]] = []
+    skipped: list[tuple[str, str, str, str]] = []
+
+    for tool, (current, latest, is_outdated) in results.items():
+        if not is_outdated:
+            continue
+        if critical_only and not _lookup_critical(tool, versions):
+            skipped.append((tool, current, latest, "non-critical"))
+            continue
+        bump_level = classify_bump(current, latest)
+        if bump_level not in allowed_levels:
+            skipped.append((tool, current, latest, f"level={bump_level}"))
+            continue
+        to_update.append((tool, current, latest))
+
+    return to_update, skipped
+
+
 def load_versions() -> dict:
     """Load versions.yaml."""
     if not VERSIONS_YAML.exists():
@@ -838,42 +903,44 @@ python3 scripts/dev/update_versions.py --sync
     return len(outdated_critical) + len(outdated_normal)
 
 
-def update_all_tools(critical_only: bool = False) -> int:
+def update_all_tools(
+    critical_only: bool = False,
+    level: str = "all",
+    dry_run: bool = False,
+) -> int:
     """
-    Update ALL tools to their latest versions automatically.
+    Update tools to their latest versions, optionally filtered by bump level.
 
     Args:
-        critical_only: If True, only update tools marked as critical
+        critical_only: If True, only update tools marked as critical.
+        level: Cumulative bump-level filter — "patch", "minor", "major", or
+               "all". "minor" includes patch+minor; "major" includes
+               patch+minor+major; "all" includes everything including
+               "unknown" (synthetic version transitions). Default "all"
+               preserves the pre-existing behaviour of this script.
+        dry_run: If True, report what would change without writing
+                 versions.yaml. Useful for verification and maintainer preview.
 
     Returns:
-        Number of tools updated (0 if all already up-to-date)
+        Number of tools updated (0 if all already up-to-date).
     """
     log("Checking for tool updates...")
     results = check_latest_versions()
     versions = load_versions()
 
-    updated_tools = []
-    failed_tools = []
-    skipped_tools = []
+    to_update, skipped_tools = _select_tools_for_update(
+        results, versions, critical_only=critical_only, level=level
+    )
 
-    for tool, (current, latest, is_outdated) in results.items():
-        if not is_outdated:
+    updated_tools: list[tuple[str, str, str]] = []
+    failed_tools: list[tuple[str, str, str]] = []
+
+    action_verb = "Would update" if dry_run else "Updating"
+    for tool, current, latest in to_update:
+        log(f"{action_verb} {tool}: {current} → {latest}")
+        if dry_run:
+            updated_tools.append((tool, current, latest))
             continue
-
-        # Check if tool is critical
-        is_critical = False
-        for category in ["python_tools", "binary_tools", "special_tools"]:
-            if tool in versions.get(category, {}):
-                is_critical = versions[category][tool].get("critical", False)
-                break
-
-        # Skip non-critical if flag set
-        if critical_only and not is_critical:
-            skipped_tools.append((tool, current, latest, "non-critical"))
-            continue
-
-        # Update the tool
-        log(f"Updating {tool}: {current} → {latest}")
         if update_tool_version(tool, latest):
             updated_tools.append((tool, current, latest))
             ok(f"✓ {tool} updated successfully")
@@ -884,7 +951,8 @@ def update_all_tools(critical_only: bool = False) -> int:
     # Print summary
     print("")
     if updated_tools:
-        ok(f"Successfully updated {len(updated_tools)} tool(s):")
+        summary_verb = "Would update" if dry_run else "Successfully updated"
+        ok(f"{summary_verb} {len(updated_tools)} tool(s):")
         for tool, old, new in updated_tools:
             print(f"  • {tool}: {old} → {new}")
 
@@ -894,14 +962,17 @@ def update_all_tools(critical_only: bool = False) -> int:
             print(f"  • {tool}: {old} → {new}")
 
     if skipped_tools:
-        log(
-            f"Skipped {len(skipped_tools)} non-critical tool(s) (use --all to include):"
-        )
+        log(f"Skipped {len(skipped_tools)} tool(s):")
         for tool, old, new, reason in skipped_tools:
             print(f"  • {tool}: {old} → {new} ({reason})")
 
     print("")
     if updated_tools:
+        if dry_run:
+            log(
+                "Dry run — versions.yaml was NOT modified. Re-run without --dry-run to apply."
+            )
+            return 0
         log("Next steps:")
         print("  1. Run: python3 scripts/dev/update_versions.py --sync")
         print("  2. Test: make docker-build")
@@ -969,12 +1040,27 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Check for changes without writing files (used with --sync)",
+        help=(
+            "Check for changes without writing files (used with --sync or "
+            "--update-all). With --update-all, prints which bumps would be "
+            "applied without modifying versions.yaml."
+        ),
     )
     parser.add_argument(
         "--critical-only",
         action="store_true",
         help="Only update critical tools (used with --update-all)",
+    )
+    parser.add_argument(
+        "--level",
+        choices=["patch", "minor", "major", "all"],
+        default="all",
+        help=(
+            "Cumulative bump-level filter for --update-all. 'patch' updates "
+            "patch bumps only; 'minor' includes patch+minor; 'major' includes "
+            "patch+minor+major (still excludes 'unknown'); 'all' includes "
+            "everything. Default: all. Used with --update-all."
+        ),
     )
     parser.add_argument(
         "--fail-if-outdated",
@@ -995,6 +1081,10 @@ def main() -> int:
 
     if args.create_issues and not args.check_outdated:
         err("--create-issues requires --check-outdated")
+        return 1
+
+    if args.level != "all" and not args.update_all:
+        err("--level requires --update-all")
         return 1
 
     # Execute commands
@@ -1045,12 +1135,15 @@ def main() -> int:
                 return 0
 
         elif args.update_all:
-            updated_count = update_all_tools(critical_only=args.critical_only)
-            if updated_count > 0:
+            updated_count = update_all_tools(
+                critical_only=args.critical_only,
+                level=args.level,
+                dry_run=args.dry_run,
+            )
+            if updated_count > 0 and not args.dry_run:
                 log(
                     "Don't forget to run: python3 scripts/dev/update_versions.py --sync"
                 )
-                return 0
             return 0
 
         elif args.validate:

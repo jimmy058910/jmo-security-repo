@@ -503,3 +503,87 @@ jobs:
       - name: Check shell formatting (shfmt -d)
         run: |
           shfmt -d -i 2 -ci -bn scripts/dev/*.sh scripts/core/*.sh 2>/dev/null || true
+
+  # Tool-output contract tests for PRs that bump tool versions.
+  #
+  # This job is a required status check for PRs labeled dependencies+automated
+  # (see docs/RELEASE.md -> "Tool-Version Auto-Merge"). It must ALWAYS run
+  # (so the required-check name stays stable for branch protection) but only
+  # does real work when versions.yaml or Dockerfile.* changed — other PRs get
+  # a trivial pass via the paths-filter step.
+  #
+  # Both the job key AND `name:` are pinned to `tool-contract-tests` so branch
+  # protection can match the exact string without surprises.
+  tool-contract-tests:
+    name: tool-contract-tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Detect version-affecting changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            versions:
+              - 'versions.yaml'
+              - 'Dockerfile.*'
+              - 'tests/integration/test_tool_contracts.py'
+
+      - name: Set up Python 3.12
+        if: steps.changes.outputs.versions == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install JMo Security and test dependencies
+        if: steps.changes.outputs.versions == 'true'
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e .
+          pip install -r requirements-dev.txt
+
+      - name: Install security tools for contract tests
+        if: steps.changes.outputs.versions == 'true'
+        run: |
+          # Same install block as scheduled.yml:tool-contract-tests — kept in
+          # sync manually. Any drift means the weekly and PR gates disagree.
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          pip install semgrep bandit checkov
+          wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          chmod +x /usr/local/bin/hadolint
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          sudo apt-get update && sudo apt-get install -y shellcheck
+
+          echo "Installed tools:"
+          trivy --version || echo "trivy not available"
+          semgrep --version || echo "semgrep not available"
+          bandit --version || echo "bandit not available"
+          hadolint --version || echo "hadolint not available"
+          trufflehog --version || echo "trufflehog not available"
+          checkov --version || echo "checkov not available"
+          shellcheck --version || echo "shellcheck not available"
+
+      - name: Run tool contract tests
+        if: steps.changes.outputs.versions == 'true'
+        env:
+          CI: "true"
+        run: |
+          pytest tests/integration/test_tool_contracts.py \
+            -v \
+            -m "requires_tools" \
+            --tb=short \
+            --timeout=300
+
+      - name: Summarize skip
+        if: steps.changes.outputs.versions != 'true'
+        run: |
+          echo "No version-affecting files changed — contract tests not required."
+          echo "Paths watched: versions.yaml, Dockerfile.*, tests/integration/test_tool_contracts.py"
