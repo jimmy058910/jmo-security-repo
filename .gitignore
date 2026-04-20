@@ -94,7 +94,15 @@ docs/COMPLETENESS_ANALYZER.md
 .mcp.json
 
 # Claude Code user-specific configuration (open-source project)
-.claude/
+# Use .claude/* (not .claude/) so specific subpaths can be re-included below.
+# Git cannot re-include files under a directory excluded with a trailing slash.
+.claude/*
+# Exception: path-scoped AI rules are shared conventions (subprocess security,
+# cross-platform testing, adapter patterns) that apply to all contributors.
+!.claude/rules/
+# Note: files already tracked under .claude/ (e.g. skills/INDEX.md,
+# skills/jmo-e2e-verify/SKILL.md) stay tracked because git does not
+# re-ignore paths that are already in the index.
 
 # Test scan result directories (local testing artifacts)
 test-juice-results/

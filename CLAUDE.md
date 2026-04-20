@@ -2,6 +2,8 @@
 
 Guidance for Claude Code when working with the JMo Security Audit Tool Suite repository.
 
+> **Path-scoped rules** live in [`.claude/rules/`](.claude/rules/). They load automatically when Claude touches files matching their `paths:` frontmatter. See the [Path-Scoped Rules](#path-scoped-rules) section below for the full index.
+
 ## Project Overview
 
 JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanners with unified CLI, normalized outputs, and HTML dashboard.
@@ -26,42 +28,15 @@ JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanne
 
 1. **Pre-commit Order:** Black MUST run before Ruff (see `.pre-commit-config.yaml`)
 2. **Test Coverage:** CI requires ≥85% (`pytest --cov-fail-under=85`)
-3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls
+3. **Subprocess Security:** NEVER use `shell=True` in subprocess calls. See [.claude/rules/python-safety.rules.md](.claude/rules/python-safety.rules.md)
 4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 5. **Path Security:** Validate all user paths against directory traversal
+6. **Cross-Platform Testing:** Tests MUST pass on Windows, Linux, macOS. See [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md)
 
 ### Before Every Commit
 
 ```bash
 make fmt && make lint && make test
-```
-
-### Plan Mode Format Rules
-
-When creating plans (via `/plan` or plan mode), follow these rules for scannable, actionable output:
-
-1. **Be extremely concise** - Sacrifice grammar for brevity. Use fragments, not sentences.
-2. **Single approach only** - Present your recommended solution, not all alternatives.
-3. **Include file paths** - List exact files to modify: `scripts/core/adapters/foo.py:45`
-4. **End with unresolved questions** - If any ambiguity remains, list questions at the end.
-
-**Good plan format:**
-
-```text
-## Changes
-- `scripts/cli/jmo.py:234` - add --timeout flag to scan command
-- `scripts/core/config.py:89` - add timeout to ScanConfig dataclass
-- `tests/unit/test_config.py` - add timeout validation tests
-
-## Unresolved
-- Default timeout value? (suggest 300s)
-```
-
-**Bad plan format:**
-
-```text
-I will modify the jmo.py file to add a new timeout flag. This flag will allow users to specify
-a custom timeout value for their scans. I'll also need to update the configuration system...
 ```
 
 ### Artifact Guardrails (CI blocks these)
@@ -100,36 +75,14 @@ a custom timeout value for their scans. I'll also need to update the configurati
 3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
    - Create GitHub issue with `tech-debt` or `enhancement` label
    - Add `# TODO(issue-#):` comment in code at the relevant location
-   - Document in `.claude/known-issues.md` with:
-     - Description of the issue
-     - Root cause analysis (if known)
-     - Proposed fix approach
-     - Priority (P0-P3)
+   - Document in `.claude/known-issues.md` with description, root cause, proposed fix, priority (P0-P3)
 
 4. **Never Ignore:** Warnings, deprecations, and flaky tests become bugs over time
 5. **Rule of Three:** If the same approach fails 3 times, stop and change something fundamental — different angle, fresh start, or escalate to the user
 
-**Example - Performance Test Thresholds (Simple Fix):**
+### Plan Mode Format
 
-```python
-# BAD: Arbitrary threshold without context
-assert elapsed < 0.05  # <50ms target
-
-# GOOD: Documented threshold with platform considerations
-assert elapsed < 0.2, f"Insert took {elapsed:.3f}s (target: <200ms)"
-# Note: Windows ~100-150ms, Linux ~30-50ms, threshold allows 4x variance
-```
-
-**Example - Complex Fix (Stop & Discuss):**
-
-```text
-Issue: Database queries are slow with 10k+ findings
-Options:
-  A) Add indexes (simple, may not scale)
-  B) Implement pagination (API change, better long-term)
-  C) Add caching layer (complex, best performance)
-Recommendation: B - discuss with user before proceeding
-```
+When creating plans (via `/plan` or plan mode): be extremely concise, present a single recommended approach, include exact file paths (e.g. `scripts/core/adapters/foo.py:45`), and end with unresolved questions if any ambiguity remains.
 
 ## Quick Reference
 
@@ -210,13 +163,9 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
 - `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (15 skills, 7 agents)
-
-**Persona guidelines:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (15 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
 ### Parallel Work: Agent Teams vs Subagents
-
-Choose the right parallelism strategy based on task characteristics:
 
 | Use **Agent Teams** when | Use **Subagents** when |
 |--------------------------|------------------------|
@@ -224,19 +173,10 @@ Choose the right parallelism strategy based on task characteristics:
 | Cross-layer changes (CLI + core + adapters + tests) | Quick searches, file reads, code exploration |
 | Competing hypotheses during debugging | Tasks where only the result matters |
 | Parallel code review (security + perf + coverage) | Sequential work with dependencies |
-| New feature implementation across multiple packages | One-off verification or validation |
 
 **Decision rule:** If teammates need to communicate findings with each other or coordinate across file boundaries, use agent teams. If work can be fire-and-forget with results reported back, use subagents.
 
-**Agent team best practices for this codebase:**
-
-- Assign file ownership: one teammate per module (e.g., `scripts/cli/`, `scripts/core/`, `tests/`)
-- Avoid two teammates editing the same file (overwrites silently)
-- Use delegate mode when the lead should only coordinate, not implement
-- Size tasks to produce a clear deliverable (a function, a test file, a review)
-- For adapter work: one teammate per adapter + its test file
-
-> **Note:** Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental feature).
+> Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json (experimental).
 
 ## Architecture Overview
 
@@ -255,11 +195,13 @@ scripts/
 │   ├── installers/  # Tool installation strategies (Strategy pattern)
 │   └── ui/          # UI components (progress reporters)
 ├── core/            # Core logic (normalize_and_report.py, config.py, history_db.py)
-│   ├── adapters/    # Tool parsers (plugin architecture with @adapter_plugin)
-│   └── reporters/   # Output formatters (JSON/MD/HTML/SARIF/CSV)
+│   ├── adapters/    # Tool parsers (see .claude/rules/adapters.rules.md)
+│   └── reporters/   # Output formatters (see .claude/rules/reporters.rules.md)
 └── dev/             # Helper scripts (update_versions.py)
 
-tests/               # 5,000+ tests across unit/adapters/reporters/integration
+tests/               # 8,000+ tests across unit/adapters/reporters/integration
+.github/workflows/   # CI/CD (see .claude/rules/release.rules.md)
+Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
 ```
 
 ### Key Files
@@ -292,59 +234,19 @@ tests/               # 5,000+ tests across unit/adapters/reporters/integration
 
 **Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags). See PROFILES_AND_TOOLS.md for complete tool lists.
 
-## Development Guidelines
+## Path-Scoped Rules
 
-### Adding New Tool Adapter
+Detailed guidelines for specific parts of the codebase. These load automatically when Claude touches matching files:
 
-1. Create `scripts/core/adapters/<tool>_adapter.py` with `@adapter_plugin` decorator
-2. **Use `safe_load_json_file()` from `scripts/core/adapters/common.py`** for consistent JSON loading
-3. **Use `map_tool_severity()` from `scripts/core/common_finding.py`** for severity normalization (add to `TOOL_SEVERITY_MAPPINGS` if tool has custom severity levels)
-4. Map tool output to CommonFinding schema
-5. Add test in `tests/adapters/test_<tool>_adapter.py`
-6. Update documentation
-
-**Naming Convention (CRITICAL):**
-
-- `PluginMetadata.name` must use **underscores**, matching the adapter filename (e.g., `dependency_check_adapter.py` → `name="dependency_check"`)
-- `PluginMetadata.tool_name` is the actual binary name (can use hyphens, e.g., `tool_name="dependency-check"`)
-
-**Important:** Adapters should NOT handle compliance enrichment. Return raw findings and let `normalize_and_report.py` handle enrichment centrally via `enrich_findings_with_compliance()`. This single-pass batch operation is more efficient than per-adapter enrichment.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed workflow.
-
-### Tool Invocation Security
-
-```python
-# CORRECT: List arguments (default shell=False)
-subprocess.run(["trivy", "image", image_name], capture_output=True)
-
-# WRONG: String with shell=True - SECURITY VULNERABILITY
-subprocess.run(f"trivy image {image_name}", shell=True)  # CWE-78
-```
-
-### Logging
-
-- JSON logs by default (stderr)
-- Human logs with `--human-logs`
-- Never log to stdout
-
-### Testing
-
-```bash
-# Recommended: Parallel execution (3-5x faster)
-make test-fast                                     # Fastest dev loop (no coverage)
-make test-parallel                                 # With coverage (CI-like)
-pytest -n auto tests/unit/                         # Direct pytest with parallelism
-
-# Manual pytest (sequential)
-pytest tests/unit/ -v                              # Unit tests
-pytest tests/adapters/ -v                          # Adapter tests
-pytest --cov=scripts --cov-report=term-missing     # With coverage
-```
-
-**Cross-Platform Testing (CRITICAL):** Tests MUST pass on Windows, Linux, and macOS. See below for platform-specific patterns.
-
-See [TEST.md](TEST.md) for complete testing guide.
+| Rule File | Applies To | Key Topics |
+|-----------|-----------|-----------|
+| [adapters.rules.md](.claude/rules/adapters.rules.md) | `scripts/core/adapters/`, `tests/adapters/` | New tool adapters, naming conventions, compliance enrichment |
+| [reporters.rules.md](.claude/rules/reporters.rules.md) | `scripts/core/reporters/`, `tests/reporters/` | Output reporters, CommonFinding normalization |
+| [python-safety.rules.md](.claude/rules/python-safety.rules.md) | All Python code | Subprocess security (CWE-78), secrets, logging |
+| [testing.rules.md](.claude/rules/testing.rules.md) | `tests/**/*.py` | Test organization, pytest patterns, mocking, coverage |
+| [testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md) | Windows/macOS/Linux tests | Path handling, hang prevention, platform skips |
+| [release.rules.md](.claude/rules/release.rules.md) | `.github/workflows/`, release scripts | CI/CD pipelines, version management, troubleshooting |
+| [docker.rules.md](.claude/rules/docker.rules.md) | `Dockerfile*`, container code | Volumes, multi-arch, registries, arm64 limitations |
 
 ## Configuration
 
@@ -354,8 +256,8 @@ See [TEST.md](TEST.md) for complete testing guide.
 |------|---------|
 | `jmo.yml` | Main JMo config (referenced throughout codebase) |
 | `jmo.suppress.yml` | Suppression rules |
-| `versions.yaml` | Tool versions (referenced by CI) |
-| `.pre-commit-config.yaml` | Pre-commit hooks |
+| `versions.yaml` | Tool versions (NEVER edit manually; use `update_versions.py`) |
+| `.pre-commit-config.yaml` | Pre-commit hooks (Black before Ruff) |
 
 ### jmo.yml Key Settings
 
@@ -372,122 +274,7 @@ See [TEST.md](TEST.md) for complete testing guide.
 
 See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration reference.
 
-## CI/CD & Release
-
-### GitHub Actions Example
-
-```yaml
-- run: jmo scan --repo . --results-dir results-baseline
-- run: jmo scan --repo . --results-dir results-current
-- run: jmo diff results-baseline/ results-current/ --format md > diff.md
-```
-
-### GitHub Actions Workflows
-
-4-workflow structure (consolidated from 8):
-
-| Workflow | File | Trigger | Purpose |
-|----------|------|---------|---------|
-| CI | `ci.yml` | PR / push to main | Lint, unit tests, adapter tests, coverage |
-| Scheduled | `scheduled.yml` | Cron / manual | Nightly e2e, tool update checks, security scans |
-| Release | `release.yml` | Tag push (`v*`) | Build images, publish to registries, GitHub release |
-| Maintenance | `maintenance.yml` | Manual / cron | Dependency updates, Docker image pruning |
-
-**Scheduled job pattern:** All `scheduled.yml` jobs that run pytest MUST include `pip install -r requirements-dev.txt` and `cache-dependency-path: requirements-dev.txt`. Reference pattern: `e2e-tool-integration` job (line ~660). Omitting dev deps causes `--json-report` to fail silently.
-
-### Release Process
-
-**CRITICAL:** All tools MUST be updated before release (CI enforces this).
-
-1. **Automated (Recommended):** GitHub Actions → Release workflow (tag push triggers `release.yml`)
-2. **Manual:** Update tools → bump version → tag → push
-3. **Hotfix to main:** Must go through PR (GitHub rulesets enforce `quick-checks`). Cannot push directly.
-
-See [docs/RELEASE.md](docs/RELEASE.md) for details.
-
-### Release Workflow Architecture (v1.0.0+)
-
-The release pipeline has 3 phases triggered by `v*` tag push:
-
-```text
-Pre-Release Validation → PyPI Publish → Docker Build (8 parallel: 4 variants × 2 arches)
-                                      → Homebrew (existence check, skip if not in homebrew-core)
-                                      → WinGet (existence check via GitHub API, skip if not in winget-pkgs)
-                                      → Badge Verify
-                         Docker Build → Docker Merge (4 parallel: create multi-arch manifests)
-                         Docker Merge → Docker Scan + Benchmarks + Docker Hub README
-```
-
-**Docker multi-arch builds use native runners (not QEMU):**
-- `docker-build-amd64`: `runs-on: ubuntu-latest` (native x86_64)
-- `docker-build-arm64`: `runs-on: ubuntu-24.04-arm` (native ARM)
-- `docker-merge`: downloads both digests, creates GHCR manifest via `imagetools create`, replicates to Docker Hub/ECR via `crane copy`
-
-**GHCR is the primary registry.** `imagetools create` targets GHCR only (cross-registry blob copy doesn't work). Docker Hub and ECR are replicated via `crane copy --platform all` with `continue-on-error: true`.
-
-### Release Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Tag push fails | Main has rulesets — must PR through CI, then tag |
-| Docker build cache stale | `gh cache delete --all --repo owner/repo` then re-tag |
-| scancode fails on arm64 | Expected — `extractcode-7z` has no arm64 wheel. Conditional install via `TARGETARCH` check |
-| Homebrew/WinGet fail on first release | Both have existence checks that skip gracefully. Submit initial manifests manually. |
-| `verify_badges.sh` fails on new branch types | Add branch prefix to allowlist at `scripts/dev/verify_badges.sh:100` (currently: dev, feature, refactor, hotfix, dependabot) |
-| `jmo validate` fails on Linux but passes locally | Platform-specific checks (e.g., `path-mixed-separators`) — guard with `sys.platform` |
-| Tool version 404 in Docker build | Run `python scripts/dev/update_versions.py --validate` to check all URLs, then `--sync` |
-| Scheduled e2e jobs fail with "no test results" | Likely missing `pip install -r requirements-dev.txt` — compare against `e2e-tool-integration` job pattern |
-| Dependabot PR fails deps-compile freshness | CI uses `uv pip compile --universal`. If a Dependabot PR diverges, reset `requirements-dev.txt` to main and re-apply the bump: `uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in` |
-| Tool contract test fails after version bump | Automated version bumps can change output schemas. Run the tool against fixtures to verify, then update `result_item_keys` in `test_tool_contracts.py` |
-| Windows matrix job fails with `ParserError: Missing expression after unary operator '--'` | Multi-line `run:` block uses bash `\` line continuation; PowerShell (default on `windows-latest`) rejects it at parse time. Add `shell: bash` to the step. |
-| Non-root container can't write to mounted dir in CI (`PermissionError`) | GitHub runner UID (1001) ≠ container `USER jmo` UID (1000); bind mounts preserve host UID. Fix: `chmod 777` the host dir before mount, or add `--user $(id -u):$(id -g)` to `docker run`. |
-| `gh pr merge` refuses with "workflow scope" error | PR modifies `.github/workflows/*.yml`; `gh` token lacks `workflow` scope. Run `gh auth refresh -h github.com -s workflow` once, then retry. |
-| Workflow references a test file that doesn't exist | Path drift after a test reorg. Current security-test canonical locations: `tests/cli/test_path_sanitizers.py`, `tests/unit/test_archive_security.py`, `tests/unit/test_history_db_performance.py`. |
-| `docker pull :<variant>` returns manifest unknown after release | `docker/metadata-action` `type=raw,value=<var>` inherits global `flavor: suffix=-X` and produces `X-X` instead of bare `X`. Add per-tag `suffix=` (empty) override. Same trap for bare semver (`:1.0.2`, `:1.0`, `:1`). Fixed in PR #305. |
-| `:full` vs `:deep` naming mismatch | Heavyweight Docker variant was named `full` in `release.yml` but `deep` in `scheduled.yml`, `jmo build` VARIANTS, and user docs. As of v1.0.2 the canonical name is `deep` everywhere and `Dockerfile` is renamed to `Dockerfile.deep`. `:full` alias kept for one release cycle then remove. |
-| `Validate <variant>` job shows "Installed tools: 0" | `tools check --json` without `--profile` emits profile-summary dicts where `installed` is an integer count; jq's `select(.installed == true)` evaluates `7 == true` as false (strictly typed). Pass `--profile ${{ matrix.profile }}` to get per-tool `{installed: bool}` shape. |
-| `tools check --profile deep` crashes silently (zero stdout, exit 1) | One of the 29 PROFILE_TOOLS entries raises an uncaught exception (yara native import segfault, scancode iterdir OSError, etc.) inside `ToolManager.check_profile` before `json.dumps` runs. Fixed in PR #308 by per-tool try/except guard. Always capture stderr separately in CI: `> out.json 2>err.log` so silent crashes are diagnosable. |
-| `Validate deep` counts 25 not 29 tools | `PROFILE_TOOLS["deep"]` (29) includes 4 entries in `MANUAL_INSTALL_TOOLS` (`tool_registry.py:160`): `akto`, `afl++`, `mobsf`, `falco` — these are intentionally NOT in the Docker image. `expected_tools` in `scheduled.yml` matrix should be `len(PROFILE_TOOLS) - 4` for `deep`. |
-| Pre-existing shell-injection findings in release.yml | Steps using `${{ inputs.X }}` or `${{ steps.X.outputs.Y }}` directly inside `run:` bash blocks are flagged by semgrep `yaml.github-actions.security.run-shell-injection` (CWE-78, HIGH). Fix: move to `env:` block, reference as `"$ENVVAR"`. Fixed across three sites in PR #303. |
-| Manual backfill of missing GHCR tags (e.g. after a release workflow bug) | Use `docker buildx imagetools create --tag <new> <existing>` — creates a tag alias pointing at the existing multi-arch manifest list. No rebuild, no blob upload. Requires `write:packages` scope; `gh auth refresh -s write:packages -h github.com` if your gh token lacks it, then `gh auth token \| docker login ghcr.io -u <user> --password-stdin`. |
-
-### Re-Tag Cycle (When Release Workflow Fails)
-
-```bash
-git tag -d v1.0.0 && git push origin :refs/tags/v1.0.0  # Delete tag
-# ... merge hotfix PR to main ...
-git checkout main && git pull origin main                 # Sync main
-git tag -a v1.0.0 -m "..." && git push origin v1.0.0     # Re-tag + push
-git checkout dev && git merge origin/main && git push origin dev  # Sync dev
-```
-
-## Docker & Registries
-
-### Volume Mounts (CRITICAL)
-
-```bash
-# MUST mount .jmo/history.db for scan persistence
-docker run -v $PWD/.jmo:/scan/.jmo -v $PWD:/scan ghcr.io/jimmy058910/jmo-security:balanced scan
-```
-
-### Container Registries
-
-| Registry | Image | Purpose |
-|----------|-------|---------|
-| **GHCR** (Primary) | `ghcr.io/jimmy058910/jmo-security` | CI/CD, unlimited pulls |
-| **Docker Hub** | `jmogaming/jmo-security` | Discoverability (replicated via `crane copy`) |
-| **ECR Public** | `public.ecr.aws/m2d8u2k1/jmo-security` | AWS users (replicated via `crane copy`) |
-
-### Docker arm64 Notes
-
-- `scancode-toolkit`: skipped on arm64 (`extractcode-7z` has no `linux/aarch64` wheel on PyPI)
-- `TARGETARCH` ARG must be re-declared in runtime stage (`FROM ... AS runtime` then `ARG TARGETARCH`)
-- arm64 builds use native `ubuntu-24.04-arm` runners (free for public repos)
-- If arm64 build fails, merge job creates amd64-only manifest (graceful degradation)
-
-See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidance.
-
-## Troubleshooting
+## Troubleshooting (Quick Lookup)
 
 | Issue | Solution |
 |-------|----------|
@@ -499,125 +286,7 @@ See [docs/DOCKER_README.md](docs/DOCKER_README.md) for registry selection guidan
 | SQLite locked | `jmo history vacuum` |
 | Docker persistence | Mount `.jmo/` volume |
 
-See [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting) for detailed solutions.
-
-## Platform Notes (Windows/WSL)
-
-### Path Handling
-
-- Use forward slashes in code (`path/to/file`), Windows handles both
-- Docker paths require POSIX format (`/c/Projects/...` or `/mnt/c/...`)
-
-### Docker Desktop
-
-- Enable WSL 2 backend for performance
-- Mount volumes: `-v "$(pwd):/scan"` works in Git Bash/WSL
-
-### Pre-commit
-
-- Install via pip, not system package manager
-- May need `git config core.autocrlf false` for line ending issues
-
-### Cross-Platform Testing Guidelines
-
-**Test Infrastructure (tests/conftest.py):**
-
-```python
-# Platform detection
-from tests.conftest import IS_WINDOWS, IS_LINUX, IS_MACOS
-
-# Skip decorators - use when tests require platform-specific features
-from tests.conftest import skip_on_windows, unix_only
-
-@skip_on_windows  # Skips on Windows with clear reason
-def test_unix_permissions():
-    pass
-
-# Error pattern matching
-from tests.conftest import is_command_not_found_error
-assert is_command_not_found_error(stderr)  # Works on all platforms
-
-# Subprocess mocking helpers
-from tests.conftest import mock_subprocess_success
-mock_run.return_value = mock_subprocess_success(returncode=0)
-```
-
-**Common Cross-Platform Issues:**
-
-| Issue | Windows Behavior | Solution |
-|-------|-----------------|----------|
-| `chmod` permissions | No effect (no Unix execute bits) | Skip test with `@skip_on_windows` |
-| Command not found errors | "cannot find the file specified" | Use `is_command_not_found_error()` |
-| Path separators | Uses backslashes `\` | Use `pathlib.Path` or forward slashes |
-| File locking | More aggressive locking | Close files before deletion |
-| Process spawning | Different error codes | Test for `!= 0` not specific codes |
-| HOME env variable | Windows uses `USERPROFILE`, not `HOME` | Use `Path.home()` or mock it (see below) |
-
-**HOME Directory Mocking (Cross-Platform):**
-
-```python
-# WRONG: Only works on Unix (HOME not set on Windows)
-monkeypatch.setenv("HOME", str(tmp_path))
-
-# CORRECT: Works on Windows, Linux, and macOS
-from pathlib import Path
-monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-```
-
-**Subprocess Testing Rules:**
-
-1. **ALWAYS mock `subprocess.run`** for tests calling external commands
-2. **Never assume tools exist** - mock `tool_exists()` and `find_tool()` together
-3. **Use `shell=False`** in production code (security requirement)
-4. **Verify mock signatures** - test `shell=False` explicitly
-
-```python
-# CORRECT: Mock both tool existence checks
-with (
-    patch("module.tool_exists", return_value=True),
-    patch("module.find_tool", return_value="/usr/bin/tool"),
-    patch("subprocess.run") as mock_run,
-):
-    mock_run.return_value = mock_subprocess_success()
-    # ... test code ...
-
-# WRONG: Missing find_tool mock causes None command
-with patch("module.tool_exists", return_value=True):
-    # find_tool returns None → command is None → hangs or crashes
-```
-
-**pytest-timeout Safety Net:**
-
-- All tests have 120s timeout (configurable in pyproject.toml)
-- Use `@pytest.mark.timeout(300)` for legitimately slow tests
-- Set `PYTEST_TIMEOUT=0` to disable during local debugging
-
-**Windows Test Hang Prevention (CRITICAL):**
-
-This project has a history of Windows CI hangs. Follow these rules to prevent them:
-
-| Rule | Why | Example |
-|------|-----|---------|
-| **Always use `timeout=` on `subprocess.run`** | No-timeout calls become orphan processes on Windows | `subprocess.run(cmd, timeout=60)` |
-| **Always mock `ToolInstaller`** in tests | Real installs spawn `cmd.exe`/`node.exe` that hang | `@patch("scripts.cli.tool_installer.ToolInstaller")` |
-| **Use `-p no:xdist` on Windows/macOS CI** | pytest-rerunfailures 16.x + xdist creates a socket server that deadlocks with pytest-timeout's thread cleanup | CI uses `-p no:xdist` in ci.yml |
-| **Use `join(timeout=N)` on threads** | Bare `.join()` blocks forever if thread hangs | `thread.join(timeout=10)` |
-| **Don't spawn >100 threads in tests** | Windows thread creation is expensive | Use `concurrent.futures` with `max_workers` |
-| **Mark real-tool tests `@pytest.mark.requires_tools`** | CI excludes these; tools aren't installed on runners | `-m "not requires_tools"` in CI |
-
-**Root cause pattern:** pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't work). When a subprocess hangs, the thread method can kill the Python test thread but NOT the child process. The child becomes an orphan, and `--reruns` retries the test, multiplying the hang time.
-
-**Windows CI architecture (ci.yml):**
-
-- Pinned to `windows-2022` (stable, D: drive available for fast I/O)
-- `TEMP=D:\Temp` set via CI step (up to 30% I/O speedup)
-- `-p no:xdist -p no:rerunfailures` disables plugins that cause socket deadlocks
-- `--timeout=60` per-test (halved from default 120s for faster failure detection)
-- `-m "not smoke and not requires_tools and not docker and not slow"` excludes tests that need tools, Docker, or are slow
-- Post-test `always()` step kills orphan processes via `Stop-Process`
-- `timeout-minutes: 15` hard job-level safety net
-
-**If Windows CI hangs:** Check for missing `timeout=` in subprocess calls, missing mocks for `ToolInstaller`/`subprocess.run`, bare `.join()` on threads, or tests that spawn real external tools without `@pytest.mark.requires_tools`.
+For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md). For Windows hang issues, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
 
 ## Documentation References
 
@@ -639,5 +308,3 @@ This project has a history of Windows CI hangs. Follow these rules to prevent th
 - Cross-tool dedup uses similarity clustering (configurable via `deduplication.similarity_threshold`, default: 0.65)
 - Only create documentation with long-term value; use `.claude/` for temporary work
 - **Scope Discipline:** When given a bounded task (e.g., "root directory files only", "just these 13 bugs"), stay strictly within that scope — do not expand to adjacent directories, related systems, or broader reorganizations unless explicitly asked
-
-For detailed information on any topic, refer to the documentation links above.
