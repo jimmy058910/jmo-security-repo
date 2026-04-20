@@ -9,6 +9,112 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 ---
 
+## Tool-Version Auto-Merge (between releases)
+
+Security tools bump constantly and cutting a release for every bump would
+be exhausting. Instead, the repo runs a three-layer tool-version automation
+stack that keeps `versions.yaml` + Dockerfiles fresh with minimal maintainer
+attention:
+
+- **Layer 1 — exit 0 on outdated.** The weekly version check reports
+  outdated tools but does not fail CI (outdated ≠ broken).
+- **Layer 2 — tracking issue dashboard.** `update_versions.py --check-outdated
+  --create-issues` opens/updates a single issue listing every outdated tool.
+- **Layer 3 — auto-PR + soak-window auto-merge.** The `auto-update-tools` job
+  opens a PR with patch+minor bumps. A separate job runs every 6 hours and
+  auto-merges the PR once it is ≥ 24 hours old with all required checks green.
+
+### What an auto-PR looks like
+
+Every Sunday at 00:00 UTC the `auto-update-tools` job (in
+`.github/workflows/maintenance.yml`) opens a PR like this:
+
+- **Title**: `chore(deps): weekly auto-update 2026-04-19 (level=minor)`
+- **Labels**: `dependencies`, `automated`, `auto-merge-ok`
+- **Body**: Embeds the `update_versions.py --classify` JSON so you can see
+  every bump and its semver classification (patch / minor / major / unknown)
+  in one block.
+- **Merge policy**: Not set to `--auto`. The soak-window job handles merging.
+
+Major and `unknown` bumps are left outdated — they appear as items in the
+weekly tracking issue (Layer 2) so you can investigate when you have time.
+
+### How auto-merge actually fires
+
+The `auto-merge-tool-bumps` job (cron `0 */6 * * *`) runs
+`scripts/dev/auto_merge_tool_bumps.py`, which for each open PR labeled
+`auto-merge-ok` decides:
+
+- **merge** — PR is ≥ 24h old, all required checks green → `gh pr merge --squash`
+- **flip** — A required check failed → remove `auto-merge-ok`, add
+  `needs-review`, post an explanatory comment.
+- **defer** — Anything else (soak window still active, checks running, the
+  maintainer removed `auto-merge-ok`).
+
+The decision logic is unit-tested in
+`tests/unit/test_auto_merge_tool_bumps.py`.
+
+### Cancel an auto-merge
+
+Remove the `auto-merge-ok` label from the PR. The soak job will never merge
+a PR without that label — full stop. Re-add it to resume.
+
+### Force immediate merge (verification / urgent)
+
+```bash
+# Dispatch the soak job manually with zero soak window
+gh workflow run maintenance.yml --ref main \
+  -f task=auto-merge
+```
+
+For a *truly* zero-wait test of the machinery, run the script locally:
+
+```bash
+python3 scripts/dev/auto_merge_tool_bumps.py --min-age-hours 0 --dry-run
+```
+
+### Manual dispatch with a specific bump level
+
+```bash
+# Just patches (safest)
+gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=patch
+
+# Patches + minors + majors (skips only 'unknown')
+gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=major
+
+# Everything including synthetic bumps (falco 0.0.0, akto mini-testing-X)
+gh workflow run maintenance.yml --ref main -f task=tool-update -f bump_level=all
+```
+
+### One-time branch-protection setup (required)
+
+The contract-test gate only has teeth when `tool-contract-tests` is a
+required status check:
+
+1. GitHub UI → Settings → Branches → `main` branch protection rule
+2. Under "Require status checks to pass before merging," search for and
+   add: **`tool-contract-tests`** (exact string — pinned via both
+   `jobs.tool-contract-tests:` key and `name: tool-contract-tests` in
+   `ci.yml`).
+3. Leave the other required checks (`quick-checks`, `test-sharded (*)`,
+   `lint-quick`, `coverage-aggregate`) in place.
+4. Save.
+
+> If `tool-contract-tests` does not appear in the required-checks
+> dropdown, open and close one PR that touches `versions.yaml` first.
+> GitHub only surfaces status checks in the UI after they have run at
+> least once.
+
+### Known transient behavior
+
+Weekly, a patch/minor bump opens **both** an auto-PR (Sun 00:00) and a
+tracking issue (Sun 02:00). This overlap lasts ~24-26 hours until the PR
+merges; the issue then auto-closes. Not a bug — the issue dashboard is a
+complete picture of outstanding work, and the overlap window is the
+trade-off for not filtering `--create-issues` by bump level.
+
+---
+
 ## Method 1: Automated Release (Recommended)
 
 **Use the automated-release workflow for one-click releases with guaranteed tool updates.**
