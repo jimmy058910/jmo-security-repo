@@ -36,6 +36,7 @@ reference when optimizing performance.
 
 import json
 import sqlite3
+import sys
 import time
 
 import pytest
@@ -208,6 +209,11 @@ def test_single_scan_insert_performance(perf_db, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.timeout(600)  # 10 minutes - creates 10k dirs, slow on Windows
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="10k mkdir+write+SQLite-insert on Windows NTFS exceeds 600s timeout; "
+    "test validates SQLite query perf and runs on Linux/macOS CI where I/O is predictable",
+)
 def test_history_list_performance_10k_scans(perf_db, tmp_path):
     """
     Test list_scans() performance with 10k scans (target: <500ms).

@@ -1051,15 +1051,15 @@ jobs:
           fi
 
           # Count installed tools (expected JSON shape: {tool_name: {installed: bool, ...}})
-          INSTALLED=$(cat tools-check.json | jq '[.[] | select(.installed == true)] | length')
-          echo "installed_count=$INSTALLED" >> $GITHUB_OUTPUT
+          INSTALLED=$(jq '[.[] | select(.installed == true)] | length' tools-check.json)
+          echo "installed_count=$INSTALLED" >> "$GITHUB_OUTPUT"
 
           echo "Installed tools: $INSTALLED (expected: ${{ matrix.expected_tools }})"
 
           if [ "$INSTALLED" -lt ${{ matrix.expected_tools }} ]; then
             echo "::error::Tool count $INSTALLED is less than expected ${{ matrix.expected_tools }}"
             echo "Missing tools:"
-            cat tools-check.json | jq -r 'to_entries[] | select(.value.installed == false) | .key'
+            jq -r 'to_entries[] | select(.value.installed == false) | .key' tools-check.json
             exit 1
           fi
 
@@ -1145,16 +1145,18 @@ jobs:
 
       - name: Generate summary
         run: |
-          echo "# Docker Validation Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Variant | Status | Tools |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "# Docker Validation Summary"
+            echo ""
+            echo "| Variant | Status | Tools |"
+            echo "|---------|--------|-------|"
 
-          for variant in deep balanced slim fast; do
-            if [ -f "artifacts/tools-check-$variant/tools-check.json" ]; then
-              TOOLS=$(cat "artifacts/tools-check-$variant/tools-check.json" | jq '[.[] | select(.installed == true)] | length')
-              echo "| $variant | :white_check_mark: | $TOOLS |" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "| $variant | :x: | N/A |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
+            for variant in deep balanced slim fast; do
+              if [ -f "artifacts/tools-check-$variant/tools-check.json" ]; then
+                TOOLS=$(jq '[.[] | select(.installed == true)] | length' "artifacts/tools-check-$variant/tools-check.json")
+                echo "| $variant | :white_check_mark: | $TOOLS |"
+              else
+                echo "| $variant | :x: | N/A |"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
