@@ -1,4 +1,4 @@
-# JMo Security Suite - Fast Docker Image (v1.0.0)
+# JMo Security Suite - Fast Docker Image (v1.0.1)
 # Base: Ubuntu 24.04 with 9 CI/CD gate tools (8 scanners + OPA)
 # Size: ~502 MB (optimized) | Tools: 9 (8 scanners + OPA) | Multi-arch: amd64, arm64
 # v1.0.0: Fast variant - CI/CD optimized for pre-commit checks and PR validation
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog
-RUN TRUFFLEHOG_VERSION="3.91.1" && \
+RUN TRUFFLEHOG_VERSION="3.94.3" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -29,14 +29,14 @@ RUN TRUFFLEHOG_VERSION="3.91.1" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.38.0" && \
+RUN SYFT_VERSION="1.42.4" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy
-RUN TRIVY_VERSION="0.69.3" && \
+RUN TRIVY_VERSION="0.70.0" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
@@ -82,8 +82,8 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
-LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.0)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.2)"
+LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -109,7 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.151.0 \
+    semgrep==1.159.0 \
     checkov==3.2.501 \
     ruff==0.15.2 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
@@ -193,4 +193,5 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:1.0.0-fast scan --repo /scan --profile fast --fail-on HIGH
+# Usage: docker run --rm -v "$(pwd)/.jmo:/scan/.jmo" -v "$(pwd):/scan" ghcr.io/jimmy058910/jmo-security:fast scan --repo /scan --profile fast --fail-on HIGH
+# The .jmo mount persists the SQLite history DB between runs so `jmo history`, `jmo diff`, and `jmo trend` work.

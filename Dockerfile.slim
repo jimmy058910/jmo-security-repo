@@ -1,4 +1,4 @@
-# JMo Security Suite - Slim Docker Image (v1.0.0)
+# JMo Security Suite - Slim Docker Image (v1.0.1)
 # Base: Ubuntu 24.04 with 14 cloud-focused security tools + OPA
 # Size: ~557 MB (optimized) | Tools: 15 scanners (cloud CSPM + core SAST/SCA) | Multi-arch: amd64, arm64
 # v1.0.0: Slim variant - Cloud/K8s optimized (Prowler, Kubescape, Trivy, Checkov, etc.)
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets)
-RUN TRUFFLEHOG_VERSION="3.91.1" && \
+RUN TRUFFLEHOG_VERSION="3.94.3" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -29,14 +29,14 @@ RUN TRUFFLEHOG_VERSION="3.91.1" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.38.0" && \
+RUN SYFT_VERSION="1.42.4" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy (SCA + Vuln)
-RUN TRIVY_VERSION="0.69.3" && \
+RUN TRIVY_VERSION="0.70.0" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
@@ -75,6 +75,13 @@ RUN GRYPE_VERSION="0.104.0" && \
     tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype && \
     chmod +x /usr/local/bin/grype
 
+# Download Bearer (Data Privacy)
+RUN BEARER_VERSION="2.0.1" && \
+    BEARER_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -sSL "https://github.com/bearer/bearer/releases/download/v${BEARER_VERSION}/bearer_${BEARER_VERSION}_linux_${BEARER_ARCH}.tar.gz" \
+    -o /tmp/bearer.tar.gz && \
+    tar -xzf /tmp/bearer.tar.gz -C /usr/local/bin bearer && \
+    chmod +x /usr/local/bin/bearer
 
 # Download Dependency-Check (License + SCA)
 RUN DC_VERSION="12.1.0" && \
@@ -113,8 +120,8 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 FROM ubuntu:24.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
-LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.0)"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.2)"
+LABEL org.opencontainers.image.version="1.0.2"
 LABEL org.opencontainers.image.authors="James Moceri <general@jmogaming.com>"
 LABEL org.opencontainers.image.url="https://jmotools.com"
 LABEL org.opencontainers.image.source="https://github.com/jimmy058910/jmo-security-repo"
@@ -149,7 +156,7 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Note: checkov and prowler have conflicting dependencies - install separately
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.151.0 \
+    semgrep==1.159.0 \
     checkov==3.2.501 \
     ruff==0.15.2 \
     yara-python==4.5.4 && \
@@ -170,6 +177,7 @@ COPY --from=builder /usr/local/bin/hadolint /usr/local/bin/hadolint
 COPY --from=builder /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY --from=builder /usr/local/bin/kubescape /usr/local/bin/kubescape
 COPY --from=builder /usr/local/bin/grype /usr/local/bin/grype
+COPY --from=builder /usr/local/bin/bearer /usr/local/bin/bearer
 COPY --from=builder /usr/local/bin/horusec /usr/local/bin/horusec
 COPY --from=builder /usr/local/bin/opa /usr/local/bin/opa
 COPY --from=builder /usr/local/bin/shellcheck /usr/local/bin/shellcheck
@@ -183,6 +191,7 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/nuclei \
     /usr/local/bin/kubescape \
     /usr/local/bin/grype \
+    /usr/local/bin/bearer \
     /usr/local/bin/horusec \
     /usr/local/bin/opa \
     2>/dev/null || true
@@ -222,6 +231,7 @@ RUN echo "=== Verifying 15 cloud-focused tools ===" && \
     prowler --version && \
     kubescape version && \
     grype version && \
+    bearer version && \
     dependency-check --version && \
     horusec version && \
     shellcheck --version && \
@@ -250,4 +260,4 @@ CMD ["--help"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD jmo --help > /dev/null || exit 1
 
-# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:1.0.0-slim scan --aws-account 123456789012 --profile cloud
+# Usage: docker run --rm -v ~/.aws:/root/.aws:ro ghcr.io/jimmy058910/jmo-security:slim scan --aws-account 123456789012 --profile cloud
