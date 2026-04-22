@@ -44,25 +44,21 @@ jobs:
           python scripts/dev/update_dependencies.py --validate
 
       - name: Check deps-compile freshness
-        # Skip on Dependabot PRs: Dependabot's pip resolver and uv emit
-        # structurally different (but functionally equivalent) lockfiles --
-        # different extras markers and platform_python_implementation guards.
-        # The freshness check exists to catch humans who forgot `make deps-compile`.
-        # Dependabot's lockfile is valid by construction; enforcing byte-for-byte
-        # match against uv output was a category error. Lockfile converges back
-        # to uv-canonical format naturally the next time a human regenerates.
+        # The freshness check is a PR-time validation: "did this PR author forget to
+        # run `make deps-compile`?" It has no purpose on push events (main is the
+        # source of truth) or workflow_dispatch. Dependabot-authored PRs are also
+        # excluded because Dependabot's pip resolver emits structurally different
+        # (but functionally equivalent) lockfiles from uv -- different extras
+        # markers, platform_python_implementation guards, etc. Enforcing byte-for-byte
+        # match against uv output on Dependabot output was a category error.
         #
-        # Two-condition guard because ci.yml triggers on both `push` and `pull_request`:
-        #   - On pull_request: `github.event.pull_request.user.login` is the PR author
-        #     ('dependabot[bot]' for Dependabot PRs)
-        #   - On push: `pull_request` context is empty; the branch ref is what identifies
-        #     a Dependabot-authored push (e.g., refs/heads/dependabot/pip/pytz-...).
-        # Without the push-event branch-ref check, Dependabot's force-push after a
-        # rebase still fails the freshness step under the `push:` trigger even though
-        # the `pull_request:` trigger's run is correctly skipped.
+        # Scoped to a single condition: pull_request events from non-Dependabot authors.
+        # This replaces the two-condition (user.login + github.ref) gate from PR #323,
+        # which missed push-to-main events that inherit Dependabot-format lockfiles
+        # after Dependabot PRs merge. See release.rules.md troubleshooting table.
         if: >-
-          !(github.event.pull_request.user.login == 'dependabot[bot]' ||
-            startsWith(github.ref, 'refs/heads/dependabot/'))
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
           python -m pip install uv
           uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in

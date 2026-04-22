@@ -391,7 +391,12 @@ jobs:
           PRE_COMMIT_HOME: ~/.cache/pre-commit
           # Skip bandit (already covered by make lint)
           # Skip yamllint to avoid validating external pre-commit cache files
-          SKIP: bandit,yamllint
+          # Skip deps-compile: PR-time validation only. On main (where scheduled.yml
+          # runs), the lockfile may be in Dependabot's pip-resolver format after
+          # Dependabot merges, which differs structurally from uv pip compile output.
+          # Enforcing canonical format on main was a category error (see PR #321 /
+          # #323 / the gate-simplification PR in release.rules.md).
+          SKIP: bandit,yamllint,deps-compile
         run: |
           pre-commit run --all-files --show-diff-on-failure
           # Run yamllint separately on our repo files only
