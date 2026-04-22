@@ -51,7 +51,18 @@ jobs:
         # Dependabot's lockfile is valid by construction; enforcing byte-for-byte
         # match against uv output was a category error. Lockfile converges back
         # to uv-canonical format naturally the next time a human regenerates.
-        if: github.event.pull_request.user.login != 'dependabot[bot]'
+        #
+        # Two-condition guard because ci.yml triggers on both `push` and `pull_request`:
+        #   - On pull_request: `github.event.pull_request.user.login` is the PR author
+        #     ('dependabot[bot]' for Dependabot PRs)
+        #   - On push: `pull_request` context is empty; the branch ref is what identifies
+        #     a Dependabot-authored push (e.g., refs/heads/dependabot/pip/pytz-...).
+        # Without the push-event branch-ref check, Dependabot's force-push after a
+        # rebase still fails the freshness step under the `push:` trigger even though
+        # the `pull_request:` trigger's run is correctly skipped.
+        if: >-
+          !(github.event.pull_request.user.login == 'dependabot[bot]' ||
+            startsWith(github.ref, 'refs/heads/dependabot/'))
         run: |
           python -m pip install uv
           uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in
