@@ -24,13 +24,15 @@ import pytest
 
 from tests.conftest import skip_on_windows
 
-# Docker image variants to test
+# Docker image variants to test.
+# expected_tools mirrors scheduled.yml validate-variants matrix (source of truth):
+# deep = PROFILE_TOOLS["deep"] (29) minus MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco).
 DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
 DOCKER_VARIANTS = [
-    pytest.param("deep", 28, id="deep"),
+    pytest.param("deep", 25, id="deep"),
     pytest.param("balanced", 18, id="balanced"),
     pytest.param("slim", 14, id="slim"),
-    pytest.param("fast", 8, id="fast"),
+    pytest.param("fast", 9, id="fast"),
 ]
 
 
@@ -83,33 +85,54 @@ class TestDockerVariants:
 
     @pytest.mark.parametrize("variant,expected_tools", DOCKER_VARIANTS)
     def test_docker_variant_tools(self, variant: str, expected_tools: int):
-        """Each Docker variant should have the expected minimum tool count."""
+        """Each Docker variant should have the expected minimum tool count.
+
+        Mirrors the scheduled.yml validate-variants pattern:
+          - Uses ``--profile <variant>`` so the output is the guarded per-tool
+            ``{name: {installed: bool, ...}}`` shape. Without ``--profile`` the
+            CLI returns a profile-summary dict with integer ``installed`` counts
+            that can't be iterated tool-by-tool (and the plain path has
+            historically hit the 120s subprocess timeout while fanning out
+            across all profiles).
+        """
         image = f"{DOCKER_REGISTRY}:{variant}"
 
-        # Ensure image exists
         if not image_exists(image):
             if not pull_image(image):
                 pytest.skip(f"Could not pull image: {image}")
 
-        # Run tools check
         result = subprocess.run(
-            ["docker", "run", "--rm", image, "tools", "check", "--json"],
+            [
+                "docker",
+                "run",
+                "--rm",
+                image,
+                "tools",
+                "check",
+                "--profile",
+                variant,
+                "--json",
+            ],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=180,
         )
 
         if result.returncode != 0:
-            pytest.fail(f"tools check failed: {result.stderr}")
+            pytest.fail(
+                f"tools check --profile {variant} failed (rc={result.returncode}): "
+                f"stderr={result.stderr[:500]} stdout={result.stdout[:500]}"
+            )
 
-        # Parse output
         try:
             tools = json.loads(result.stdout)
         except json.JSONDecodeError:
             pytest.fail(f"Invalid JSON output: {result.stdout[:500]}")
 
-        # Count installed tools
-        installed = sum(1 for t in tools if t.get("installed", False))
+        # Shape is {tool_name: {installed: bool, ...}} — iterate values, not keys.
+        installed = sum(
+            1 for status in tools.values() if status.get("installed", False)
+        )
 
         assert (
             installed >= expected_tools
