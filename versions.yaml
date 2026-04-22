@@ -7,7 +7,7 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.151.0
+    version: 1.159.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
@@ -66,7 +66,7 @@ python_tools:
       since v4.x)
 binary_tools:
   trufflehog:
-    version: 3.91.1
+    version: 3.94.3
     github_repo: trufflesecurity/trufflehog
     description: Verified secrets scanner (primary)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -87,7 +87,7 @@ binary_tools:
     update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
     critical: false
   syft:
-    version: 1.38.0
+    version: 1.42.4
     github_repo: anchore/syft
     description: SBOM generator
     release_pattern: syft_{version}_linux_{arch}.tar.gz
@@ -97,7 +97,7 @@ binary_tools:
     update_check: gh api repos/anchore/syft/releases/latest
     critical: true
   trivy:
-    version: 0.69.3
+    version: 0.70.0
     github_repo: aquasecurity/trivy
     description: Vulnerability/misconfig/secrets scanner
     release_pattern: trivy_{version}_Linux-{arch}.tar.gz
@@ -387,6 +387,25 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-04-21'
+  action: P0/P1 critical tool version updates
+  tools_updated:
+  - tool: trivy
+    old_version: 0.69.3
+    new_version: 0.70.0
+  - tool: trufflehog
+    old_version: 3.91.1
+    new_version: 3.94.3
+  - tool: semgrep
+    old_version: 1.151.0
+    new_version: 1.159.0
+  - tool: syft
+    old_version: 1.38.0
+    new_version: 1.42.4
+  updated_by: update_versions.py
+  notes: 'P0: trivy supply chain attack mitigation (safe v0.70.0); trufflehog exceeds
+    7-day critical window (was 3.91.1, Apr 8 release). P1: semgrep 8 versions behind;
+    syft 4 versions behind. Ref JMOAA-18.'
 - date: '2026-02-16'
   action: Automated version update
   tools_updated: []
