@@ -101,6 +101,11 @@ class TestDockerVariants:
             if not pull_image(image):
                 pytest.skip(f"Could not pull image: {image}")
 
+        # Timeout 600s matches pull_image's timeout and accommodates the deep variant's
+        # cold-start cost (25 tools each running their own --version subprocess inside
+        # the container; nightly runners often aren't image-cached, amplifying startup).
+        # Prior value of 180s was insufficient per run 24758090406 (Nightly Extended Tests,
+        # 2026-04-22) which hung on the deep variant and was killed by pytest-timeout.
         result = subprocess.run(
             [
                 "docker",
@@ -115,7 +120,7 @@ class TestDockerVariants:
             ],
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=600,
         )
 
         if result.returncode != 0:
