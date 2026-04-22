@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog
-RUN TRUFFLEHOG_VERSION="3.91.1" && \
+RUN TRUFFLEHOG_VERSION="3.94.3" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -29,14 +29,14 @@ RUN TRUFFLEHOG_VERSION="3.91.1" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft
-RUN SYFT_VERSION="1.38.0" && \
+RUN SYFT_VERSION="1.42.4" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy
-RUN TRIVY_VERSION="0.69.3" && \
+RUN TRIVY_VERSION="0.70.0" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
     curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
@@ -109,7 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.151.0 \
+    semgrep==1.159.0 \
     checkov==3.2.501 \
     ruff==0.15.2 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
