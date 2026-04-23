@@ -493,7 +493,10 @@ jobs:
 
       - name: Run pre-commit (quick checks)
         env:
-          PRE_COMMIT_HOME: ~/.cache/pre-commit
+          # Don't set PRE_COMMIT_HOME: YAML env: passes ~ literally (no shell expansion),
+          # so `~/.cache/pre-commit` becomes a literal directory under $PWD which defeats
+          # the cache action and litters the repo root. Pre-commit's default
+          # ($HOME/.cache/pre-commit on Linux) matches the cache action's path.
           # Skip formatters (black, ruff --fix, shfmt) - check-only via separate hooks
           SKIP: black,ruff,shfmt,bandit,mypy
         run: |
