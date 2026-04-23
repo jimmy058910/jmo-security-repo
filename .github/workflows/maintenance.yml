@@ -513,8 +513,8 @@ jobs:
           CRITICAL_COUNT=$(jq '.summary.critical_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json)
           TOTAL_COUNT=$(jq '.summary.total_issues' dev-only/REPO_COMPLETENESS_ANALYSIS.json)
 
-          echo "critical=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
-          echo "total=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+          echo "critical=$CRITICAL_COUNT" >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL_COUNT" >> "$GITHUB_OUTPUT"
 
           if [ "$CRITICAL_COUNT" -gt 0 ]; then
             echo "Found $CRITICAL_COUNT critical issues (total: $TOTAL_COUNT)"
