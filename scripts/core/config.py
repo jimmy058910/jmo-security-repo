@@ -217,7 +217,17 @@ def load_config(path: str | None) -> Config:
     if not path:
         return Config()
     p = Path(path)
-    if not p.exists():
+    # Python 3.12+ propagates PermissionError (and other OSErrors besides
+    # FileNotFoundError / NotADirectoryError) from Path.exists(). Treat any
+    # OSError on the probe as "config not accessible, use defaults" — this is
+    # consistent with the docstring's "Raises: None" contract and matches the
+    # behavior users got on 3.11-. Breaks when a jmo scan is invoked from a
+    # directory the process can't traverse (e.g., Docker bind mount with UID
+    # mismatch between host and container). See release.rules.md.
+    try:
+        if not p.exists():
+            return Config()
+    except OSError:
         return Config()
     if yaml is None:
         return Config()

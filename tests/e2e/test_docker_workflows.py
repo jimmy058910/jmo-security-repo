@@ -135,16 +135,21 @@ class TestDockerVariants:
             timeout=1150,
         )
 
-        if result.returncode != 0:
-            pytest.fail(
-                f"tools check --profile {variant} failed (rc={result.returncode}): "
-                f"stderr={result.stderr[:500]} stdout={result.stdout[:500]}"
-            )
-
+        # `tools check --json` (tool_commands.py:170-171) returns rc=1 when any
+        # tool reports installed=false. For the `deep` profile, 4 tools in
+        # PROFILE_TOOLS are in MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco)
+        # and intentionally NOT baked into the Docker image — so rc=1 is the
+        # expected outcome even for a correctly-built deep container. The real
+        # verification is the installed count assertion below. Only hard-fail
+        # here if we can't parse JSON (catastrophic failure).
         try:
             tools = json.loads(result.stdout)
         except json.JSONDecodeError:
-            pytest.fail(f"Invalid JSON output: {result.stdout[:500]}")
+            pytest.fail(
+                f"tools check --profile {variant} emitted invalid JSON "
+                f"(rc={result.returncode}): "
+                f"stderr={result.stderr[:500]} stdout={result.stdout[:500]}"
+            )
 
         # Shape is {tool_name: {installed: bool, ...}} — iterate values, not keys.
         installed = sum(
@@ -175,6 +180,20 @@ class TestDockerVariants:
 const userId = req.query.id;
 const query = "SELECT * FROM users WHERE id = " + userId;
 """)
+
+        # UID mismatch fix (mirrors scheduled.yml:1083 pattern):
+        # GitHub runners are UID 1001, container `USER jmo` is UID 1000. Bind
+        # mounts preserve host UID, so without world-accessible bits the
+        # container can't even stat files in /scan — which on Python 3.12+
+        # propagates as PermissionError from Path.exists() (the 3.12+
+        # pathlib behavior change). 0o777 is intentional: the container runs
+        # as "other" relative to the host UID and needs rwx to traverse, read
+        # source files, and create the results subdir. Safe because tmp_path
+        # is a pytest-managed, run-scoped directory destroyed after the test.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(src_dir), 0o777)
 
         # Determine profile based on variant
         profile = "fast" if variant in ["fast", "slim"] else variant
