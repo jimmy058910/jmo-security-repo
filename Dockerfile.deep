@@ -323,11 +323,18 @@ RUN strip /usr/local/bin/trufflehog \
     2>/dev/null || true
 
 # Create symlinks and wrapper scripts for easier invocation
-# ZAP and Dependency-Check work fine as symlinks
+# ZAP and Dependency-Check work fine as symlinks.
+# Dual-symlink dependency-check with both names: `dependency-check` (the common
+# user-facing name matching brew/apt packaging) AND `dependency-check.sh` (the
+# canonical upstream binary name that tool_registry.py:116 probes for). Without
+# the .sh alias, jmo's installation-status check looks for `dependency-check.sh`
+# on PATH, misses the bare symlink, and reports installed=false — which trips
+# test_docker_variant_tools[deep]'s count assertion.
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap && \
     ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
-    chmod +x /usr/local/bin/dependency-check
+    ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check.sh && \
+    chmod +x /usr/local/bin/dependency-check /usr/local/bin/dependency-check.sh
 
 # Lynis requires its include/db/plugins directories in specific locations.
 # It searches: /usr/local/include/lynis, /usr/local/lynis/include, /usr/share/lynis/include
