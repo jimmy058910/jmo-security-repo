@@ -278,8 +278,17 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
                 )
                 if file_result.returncode == 0:
                     print(f"File type: {file_result.stdout.strip()}")
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                pass  # 'file' command not available
+            except (
+                FileNotFoundError,
+                PermissionError,
+                subprocess.TimeoutExpired,
+                OSError,
+            ):
+                # 'file' command unavailable: missing (FileNotFoundError) on slim
+                # base images without the `file` package, or partial PATH match
+                # that resolves to a non-executable (PermissionError on execve).
+                # Catch the broader OSError umbrella to cover other edge cases.
+                pass
         else:
             print(f"Binary path: {colorize('NOT FOUND', 'red')}")
             print("\nThe tool binary could not be found in PATH or ~/.jmo/bin/")
