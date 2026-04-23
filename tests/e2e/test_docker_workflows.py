@@ -74,8 +74,18 @@ def pull_image(image: str) -> bool:
 @pytest.mark.docker
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.timeout(1200)
 class TestDockerVariants:
-    """End-to-end tests for Docker image variants."""
+    """End-to-end tests for Docker image variants.
+
+    Per-class ``@pytest.mark.timeout(1200)`` overrides the 120s default from
+    pyproject.toml. Deep variant cold-start (25 tools, each doing a --version
+    subprocess inside the container) routinely exceeds 10 minutes on unseeded
+    CI runners. Without this override, pytest-timeout's thread method kills
+    the test before any per-subprocess timeout can fire — prior fixes that
+    raised ``subprocess.run(timeout=...)`` were ineffective because pytest
+    pulled the plug first.
+    """
 
     @pytest.fixture(autouse=True)
     def check_docker(self):
@@ -101,11 +111,13 @@ class TestDockerVariants:
             if not pull_image(image):
                 pytest.skip(f"Could not pull image: {image}")
 
-        # Timeout 600s matches pull_image's timeout and accommodates the deep variant's
-        # cold-start cost (25 tools each running their own --version subprocess inside
-        # the container; nightly runners often aren't image-cached, amplifying startup).
-        # Prior value of 180s was insufficient per run 24758090406 (Nightly Extended Tests,
-        # 2026-04-22) which hung on the deep variant and was killed by pytest-timeout.
+        # Subprocess timeout is 1150s — slightly less than the class-level
+        # ``@pytest.mark.timeout(1200)`` so ``subprocess.TimeoutExpired`` fires
+        # with a real traceback before pytest-timeout's thread method kills the
+        # test with only a stack dump. Prior bumps to 180s (PR #320) and 600s
+        # (PR #327) were ineffective: pyproject.toml pins a 120s default, so
+        # pytest killed the test long before subprocess.run's timeout could
+        # fire. See release.rules.md troubleshooting entry.
         result = subprocess.run(
             [
                 "docker",
@@ -120,7 +132,7 @@ class TestDockerVariants:
             ],
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1150,
         )
 
         if result.returncode != 0:

@@ -194,6 +194,10 @@ jobs:
           COMMIT_MSG
 
           # Substitute variables via env (safer than GitHub-context interpolation in run:)
+          # shellcheck disable=SC2016
+          # SC2016 flags the "$NAME" literals below — correct: these are Python string
+          # tokens (fed to python3 via printf) that we INTENTIONALLY don't want the shell
+          # to expand. The actual substitution happens in Python via os.environ[].
           printf '%s\n' \
             'import os,pathlib as PL' \
             'p=PL.Path("commit_message.txt")' \
@@ -668,20 +672,25 @@ jobs:
 
       - name: Create GHCR multi-arch manifest
         working-directory: /tmp
+        env:
+          GHCR_IMAGE: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
         run: |
           DIGESTS=""
           for f in digests-amd64/*; do
-            DIGESTS="$DIGESTS ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}@sha256:$(basename $f)"
+            DIGESTS="$DIGESTS ${GHCR_IMAGE}@sha256:$(basename "$f")"
           done
           if [ -d digests-arm64 ] && [ "$(ls -A digests-arm64 2>/dev/null)" ]; then
             for f in digests-arm64/*; do
-              DIGESTS="$DIGESTS ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}@sha256:$(basename $f)"
+              DIGESTS="$DIGESTS ${GHCR_IMAGE}@sha256:$(basename "$f")"
             done
             echo "Merging amd64 + arm64 manifests"
           else
             echo "arm64 not available, creating amd64-only manifest"
           fi
           TAG_ARGS=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          # shellcheck disable=SC2086
+          # Intentional word splitting: TAG_ARGS is "-t img:a -t img:b ..." and
+          # DIGESTS is "ref1 ref2 ...". Both must split into separate args.
           docker buildx imagetools create $TAG_ARGS $DIGESTS
 
       # Replicate from GHCR to secondary registries using crane

@@ -1035,19 +1035,30 @@ jobs:
 
       - name: Verify tool installation
         id: tools
+        env:
+          # Route matrix values through env vars so shellcheck can statically
+          # analyze the script (actionlint replaces ${{ }} with opaque
+          # placeholders before invoking shellcheck, which triggers SC2170 on
+          # `-lt <placeholder>` regardless of quoting — prior PR #300's unquote
+          # hack never took effect for this reason).
+          # Also hardens against CWE-78 shell injection per release.rules.md.
+          VARIANT: ${{ matrix.variant }}
+          PROFILE: ${{ matrix.profile }}
+          EXPECTED_TOOLS: ${{ matrix.expected_tools }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }}
         run: |
-          echo "Checking tools in ${{ matrix.variant }} variant..."
+          echo "Checking tools in $VARIANT variant..."
           # --profile is required: without it, `tools check --json` emits a dict of
           # profile summaries where `installed` is an integer count, not a per-tool
           # boolean — the jq filter below would then match zero entries (jq is
           # strictly typed: `7 == true` is false).
           # Capture stderr separately so a silent-exit bug (zero stdout, non-zero rc)
           # emits a diagnosable error to the job log instead of just "exit code 1".
-          if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.variant }} \
-              tools check --profile ${{ matrix.profile }} --json \
+          if ! docker run --rm "$IMAGE_REF" \
+              tools check --profile "$PROFILE" --json \
               > tools-check.json 2>tools-check.stderr.log; then
             rc=$?
-            echo "::error::tools check --profile ${{ matrix.profile }} exited with rc=$rc"
+            echo "::error::tools check --profile $PROFILE exited with rc=$rc"
             echo "--- stderr ---"
             cat tools-check.stderr.log
             echo "--- stdout (tools-check.json) ---"
@@ -1059,10 +1070,10 @@ jobs:
           INSTALLED=$(jq '[.[] | select(.installed == true)] | length' tools-check.json)
           echo "installed_count=$INSTALLED" >> "$GITHUB_OUTPUT"
 
-          echo "Installed tools: $INSTALLED (expected: ${{ matrix.expected_tools }})"
+          echo "Installed tools: $INSTALLED (expected: $EXPECTED_TOOLS)"
 
-          if [ "$INSTALLED" -lt ${{ matrix.expected_tools }} ]; then
-            echo "::error::Tool count $INSTALLED is less than expected ${{ matrix.expected_tools }}"
+          if [ "$INSTALLED" -lt "$EXPECTED_TOOLS" ]; then
+            echo "::error::Tool count $INSTALLED is less than expected $EXPECTED_TOOLS"
             echo "Missing tools:"
             jq -r 'to_entries[] | select(.value.installed == false) | .key' tools-check.json
             exit 1
