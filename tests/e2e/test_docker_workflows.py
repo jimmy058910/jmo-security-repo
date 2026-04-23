@@ -156,9 +156,17 @@ class TestDockerVariants:
             1 for status in tools.values() if status.get("installed", False)
         )
 
-        assert (
-            installed >= expected_tools
-        ), f"{variant} variant has {installed} tools, expected at least {expected_tools}"
+        # On assertion failure, enumerate which tools report installed=false so
+        # the log shows the specific image-drift diagnosis instead of just a
+        # count mismatch. Saves a round-trip dispatch to identify the missing
+        # tool when PROFILE_TOOLS and the Dockerfile get out of sync.
+        missing_names = sorted(
+            name for name, status in tools.items() if not status.get("installed", False)
+        )
+        assert installed >= expected_tools, (
+            f"{variant} variant has {installed} tools, expected at least "
+            f"{expected_tools}. Tools reporting installed=false: {missing_names}"
+        )
 
     @pytest.mark.parametrize("variant,_expected_tools", DOCKER_VARIANTS)
     def test_docker_variant_scan(
