@@ -237,11 +237,16 @@ RUN strip /usr/local/bin/trufflehog \
     /usr/local/bin/opa \
     2>/dev/null || true
 
-# Create symlinks
+# Create symlinks.
+# Dual-symlink dependency-check: both `dependency-check` (user-facing) and
+# `dependency-check.sh` (what tool_registry.py:116 probes for). See Dockerfile.deep
+# for the full rationale — tests/e2e/test_docker_workflows.py assertion otherwise
+# counts dependency-check as uninstalled.
 RUN ln -s /opt/zaproxy/zap.sh /usr/local/bin/zap && \
     chmod +x /usr/local/bin/zap && \
     ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check && \
-    chmod +x /usr/local/bin/dependency-check
+    ln -s /opt/dependency-check-cli/bin/dependency-check.sh /usr/local/bin/dependency-check.sh && \
+    chmod +x /usr/local/bin/dependency-check /usr/local/bin/dependency-check.sh
 
 VOLUME ["/root/.cache/trivy", "/root/.cache/grype"]
 
