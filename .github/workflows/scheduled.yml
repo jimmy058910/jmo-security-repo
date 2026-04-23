@@ -388,7 +388,14 @@ jobs:
 
       - name: Run pre-commit (full suite, all hooks)
         env:
-          PRE_COMMIT_HOME: ~/.cache/pre-commit
+          # NOTE: Do NOT set PRE_COMMIT_HOME here. YAML's env: block passes the
+          # value literally (no shell ~ expansion), so `PRE_COMMIT_HOME: ~/.cache/pre-commit`
+          # would cause pre-commit to create a literal `./~/.cache/pre-commit/`
+          # directory at the repo root. That then (a) defeats the cache action
+          # at step ../Cache pre-commit environments (which uses `~/.cache/pre-commit`
+          # expanded by Node), and (b) makes the `yamllint -c .yamllint.yaml .`
+          # call below descend into third-party hook fixtures and fail. Letting
+          # pre-commit default to $HOME/.cache/pre-commit matches the cache step.
           # Skip bandit (already covered by make lint)
           # Skip yamllint to avoid validating external pre-commit cache files
           # Skip deps-compile: PR-time validation only. On main (where scheduled.yml
