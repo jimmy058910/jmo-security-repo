@@ -19,7 +19,7 @@ python_tools:
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.2
+    version: 0.15.11
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -387,6 +387,15 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-04-23'
+  action: Sync ruff version with requirements-dev.txt
+  tools_updated:
+  - tool: ruff
+    old_version: 0.15.2
+    new_version: 0.15.11
+  updated_by: update_versions.py
+  notes: 'P2 sync gap: pip-compile produced ruff==0.15.11 in requirements-dev.txt
+    while versions.yaml still referenced 0.15.2. Aligned to 0.15.11. Ref JMOAA-20.'
 - date: '2026-02-16'
   action: Automated version update
   tools_updated: []
