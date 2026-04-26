@@ -125,3 +125,57 @@ pytest-timeout uses `timeout_method = "thread"` on Windows (signal-based doesn't
 2. **Never assume tools exist** — mock `tool_exists()` and `find_tool()` together.
 3. **Use `shell=False`** in production code (security requirement).
 4. **Verify mock signatures** — test `shell=False` explicitly.
+
+## Docker Bind-Mount UID Mismatch (Linux CI)
+
+GitHub Actions runners use **UID 1001**. JMo Docker containers run as **`USER jmo` (UID 1000)** by default. Bind-mounted host directories preserve host ownership, so:
+
+- pytest's `tmp_path` is owned by UID 1001 with mode `0o700` (pytest default).
+- Container code runs as UID 1000, treated as "other" relative to host UID.
+- Without world-rwx bits, the container can't even `stat` mounted files → `EACCES`.
+- **On Python 3.12+, `Path.exists()` propagates `PermissionError`** instead of silently returning False (3.11 behavior). Any code path calling `Path.exists()` on a non-traversable mount crashes.
+
+**Fix pattern** for tests that bind-mount pytest `tmp_path`:
+
+```python
+def test_docker_thing(self, tmp_path: Path):
+    # Create test fixtures under tmp_path...
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "app.py").write_text("...")
+
+    # UID-mismatch fix (mirrors scheduled.yml:1083 pattern):
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(str(tmp_path), 0o777)
+    # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    os.chmod(str(src_dir), 0o777)
+
+    result = subprocess.run(
+        ["docker", "run", "--rm", "-v", f"{tmp_path}:/scan", ...],
+        ...
+    )
+```
+
+**Why `0o777` and not something tighter:**
+
+- `0o755` doesn't include write for "other" → container can't create result subdirs.
+- `0o757` works but visually unusual.
+- `0o777` is the established convention (matches `scheduled.yml:1083`).
+- Marked with `# nosemgrep:` because it's intentional test infrastructure on a run-scoped tmp dir.
+
+**Alternative when test doesn't fundamentally need non-root**: pass `--user 0:0` to docker run (run as root, traversal not blocked).
+
+**Variant: arbitrary UID (`--user $(id -u):$(id -g)`)** — semgrep, scancode, and other tools that write to `~/.cache` will fail because no `/etc/passwd` entry exists for that UID, so `HOME` resolves to `/`. Set `-e HOME=/tmp` explicitly so the container has a writable home.
+
+## Workflow Marker Filter Convention
+
+Pytest invocations in CI workflows should use this filter set (matches `ci.yml`):
+
+| Job | Filter | Includes |
+|------|--------|----------|
+| `ci.yml` quick-checks | `-m "not smoke and not requires_tools and not docker and not slow"` | Fast unit/cli/adapters/core tests |
+| `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Slow + non-tool-dependent + non-smoke (omit `not slow` to include slow tests) |
+| `scheduled.yml` E2E Tool Integration | `-m "requires_tools"` | Only real-tool tests (after installing tools) |
+| `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Tools available via PyPI install |
+
+**Why the filter matters**: Nightly Extended Tests fixes from 2026-04-26 added `-m "not requires_tools and not smoke"` after `pytest tests/` was running EVERY test including ones that need real tools (which the Nightly runner doesn't install). Without the filter, `test_advanced_targets.test_deep_profile_scan` (requires real scanners) and `test_released_package.test_cli_help_works` (requires `pip install jmo-security`) would fail by design.
