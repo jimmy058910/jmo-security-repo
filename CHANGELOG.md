@@ -4,6 +4,10 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+
+- **Bearer binary from `Dockerfile.deep`** (~80 MB stranded weight): Bearer was removed from `PROFILE_TOOLS` in PR #262 (April 2026 dead-code cleanup) but its binary install + COPY + version-probe + strip-list reference remained in `Dockerfile.deep`. Each `:deep` and `:1.x.x-deep` image since v1.0.2 has shipped Bearer as dead weight — no adapter, no profile entry, no way for users to invoke it via `jmo`. This PR removes all 4 references plus updates the file header (which still claimed "29 tools / 3 manual" — reality is 28 PROFILE_TOOLS / 24 in image / 4 manual-only). Image-size impact ≈ -80 MB uncompressed (well within `IMAGE_SIZE_RANGES` ±20% buffer; no test threshold update needed).
+
 ### Fixed
 
 - **Docker Smoke Tests intermittent failures (50% flake rate)**: Hardened all binary downloads in `Dockerfile.{deep,balanced,slim,fast}` against transient CDN failures. The v1.0.3 cycle saw repeated `tar: Error is not recoverable: gzip: stdin: not in gzip format` build failures — `curl -sSL` exited 0 on HTTP 4xx/5xx with HTML body, handing garbage to `tar -xzf`. Each release cycle triggered ~50 single-attempt downloads (4 variants × 2 architectures × ~6-10 binaries each); even a 0.5% CDN flake rate produced at least one failure most cycles.
