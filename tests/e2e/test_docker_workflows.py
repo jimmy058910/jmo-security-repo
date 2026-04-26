@@ -25,13 +25,20 @@ import pytest
 from tests.conftest import skip_on_windows
 
 # Docker image variants to test.
-# expected_tools mirrors scheduled.yml validate-variants matrix (source of truth):
-# deep = PROFILE_TOOLS["deep"] (29) minus MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco).
+# expected_tools mirrors scheduled.yml validate-variants matrix (source of truth).
+# Counts align with PROFILE_TOOLS in scripts/core/tool_registry.py minus
+# MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco) for variants that include them.
+# Post-v1.0.3 (dev → main reconciliation): bearer was removed from PROFILE_TOOLS,
+# so all variants that previously included bearer dropped by 1:
+#   deep:     29 → 28 in PROFILE_TOOLS, minus 4 manual = 24 expected installable
+#   balanced: 18 → 17 in PROFILE_TOOLS (no manual tools)
+#   slim:     14 → 13 in PROFILE_TOOLS (no manual tools)
+#   fast:      9 →  9 (bearer was never in fast)
 DOCKER_REGISTRY = "ghcr.io/jimmy058910/jmo-security"
 DOCKER_VARIANTS = [
-    pytest.param("deep", 25, id="deep"),
-    pytest.param("balanced", 18, id="balanced"),
-    pytest.param("slim", 14, id="slim"),
+    pytest.param("deep", 24, id="deep"),
+    pytest.param("balanced", 17, id="balanced"),
+    pytest.param("slim", 13, id="slim"),
     pytest.param("fast", 9, id="fast"),
 ]
 
@@ -466,6 +473,17 @@ class TestDockerNonRootExecution:
         src_dir = tmp_path / "src"
         src_dir.mkdir()
         (src_dir / "test.py").write_text("x = 1", encoding="utf-8")
+
+        # UID-mismatch fix (mirrors test_docker_variant_scan + scheduled.yml:1083):
+        # GitHub runners use UID 1001; this test mounts as `--user 1000:1000` (the
+        # `jmo` container user). Without world-accessible bits, the container's
+        # UID 1000 can't traverse the host-owned tmp_path → EACCES → which
+        # Python 3.12+ propagates from Path.exists() in scripts/core/config.py.
+        # Safe because tmp_path is a pytest-managed run-scoped directory.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(src_dir), 0o777)
 
         # Run as user 1000:1000
         result = subprocess.run(

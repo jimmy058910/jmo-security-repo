@@ -1006,14 +1006,19 @@ jobs:
           # MANUAL_INSTALL_TOOLS (akto, afl++, mobsf, falco) which are listed
           # in PROFILE_TOOLS["deep"] but intentionally not in the image —
           # users install them manually (see docs/MANUAL_INSTALLATION.md).
+          # Counts post-v1.0.3 (bearer removed from PROFILE_TOOLS in PR #339):
+          #   deep:     28 profile - 4 manual = 24 in image
+          #   balanced: 17 in profile (no manual tools)
+          #   slim:     13 in profile (no manual tools)
+          #   fast:      9 (unchanged)
           - variant: deep
-            expected_tools: 25   # 29 profile - 4 manual-only = 25
+            expected_tools: 24   # 28 profile - 4 manual-only = 24
             profile: deep
           - variant: balanced
             expected_tools: 17
             profile: balanced
           - variant: slim
-            expected_tools: 14
+            expected_tools: 13
             profile: slim
           - variant: fast
             expected_tools: 9
