@@ -22,8 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Download TruffleHog
 RUN TRUFFLEHOG_VERSION="3.94.3" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
+    gzip -t /tmp/trufflehog.tar.gz && \
     tar -xzf /tmp/trufflehog.tar.gz -C /tmp && \
     mv /tmp/trufflehog /usr/local/bin/trufflehog && \
     chmod +x /usr/local/bin/trufflehog
@@ -31,21 +32,23 @@ RUN TRUFFLEHOG_VERSION="3.94.3" && \
 # Download Syft
 RUN SYFT_VERSION="1.42.4" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
+    gzip -t /tmp/syft.tar.gz && \
     tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
 # Download Trivy
 RUN TRIVY_VERSION="0.70.0" && \
     TRIVY_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "ARM64" || echo "64bit") && \
-    curl -sSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
     -o /tmp/trivy.tar.gz && \
+    gzip -t /tmp/trivy.tar.gz && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
 # Download Hadolint
 RUN HADOLINT_VERSION="2.14.0" && \
     HADOLINT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x86_64") && \
-    curl -sSL "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-${HADOLINT_ARCH}" \
     -o /usr/local/bin/hadolint && \
     chmod +x /usr/local/bin/hadolint
 
@@ -53,8 +56,9 @@ RUN HADOLINT_VERSION="2.14.0" && \
 RUN NUCLEI_VERSION="3.7.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
-    wget -q "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    wget -q --tries=3 --waitretry=5 --timeout=600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
     -O /tmp/nuclei.zip && \
+    unzip -t /tmp/nuclei.zip > /dev/null && \
     unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
     chmod +x /usr/local/bin/nuclei && \
     rm /tmp/nuclei.zip && \
@@ -63,15 +67,16 @@ RUN NUCLEI_VERSION="3.7.0" && \
 # Download OPA (Policy-as-Code engine)
 RUN OPA_VERSION="1.12.0" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
-    curl -sSL "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
     chmod +x /usr/local/bin/opa
 
 # Download ShellCheck (pinned version instead of apt)
 RUN SHELLCHECK_VERSION="0.10.0" && \
     SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
-    curl -sSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
     -o /tmp/shellcheck.tar.xz && \
+    xz -t /tmp/shellcheck.tar.xz && \
     tar -xJf /tmp/shellcheck.tar.xz -C /tmp && \
     mv /tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck /usr/local/bin/shellcheck && \
     chmod +x /usr/local/bin/shellcheck
