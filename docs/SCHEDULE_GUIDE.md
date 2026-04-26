@@ -743,7 +743,7 @@ spec=ScheduleSpec(
     backend=BackendConfig(
         type="gitlab-ci",
         config={
-            "image": "ghcr.io/jimmy058910/jmo-security:latest-slim",
+            "image": "ghcr.io/jimmy058910/jmo-security:slim",
             "tags": ["docker", "linux"],
             "timeout": "1h",
             "retry": {"max": 2, "when": ["runner_system_failure"]}
