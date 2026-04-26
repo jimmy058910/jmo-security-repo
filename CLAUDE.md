@@ -294,6 +294,8 @@ For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/
 
 ### Recent Major Lessons (post-v1.0.3 stabilization, 2026-04-26)
 
+> ⚠️ **Active handoff for next session**: A planning doc at `dev-only/plans/2026-04-26-ci-yaml-architectural-rebuild.md` (also in auto-memory as `HANDOFF-ci-yaml-rebuild-2026-04-26.md`) catalogs what's still architecturally broken in CI/YAML and proposes a 3-phase rebuild. **If continuing CI/workflow work, read that handoff first** — this session was reactive, the next should be architectural.
+
 The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. Key takeaways now embedded in path-scoped rules:
 
 - **Bug archeology pattern**: `--maxfail=5` truncation hides deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers.
