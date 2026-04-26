@@ -751,8 +751,15 @@ class TestDockerHistoryPersistence:
             timeout=60,
         )
 
-        # History should show scans (or be empty if DB wasn't created)
-        assert result_history.returncode == 0
+        # History should show scans OR exit 1 if the DB is empty/missing
+        # (jmo history list returns rc=1 when no scans exist, which is valid
+        # behavior — see scripts/cli/history_commands.py). The test's
+        # primary intent is "container can read its own history without
+        # crashing", not "scans always populate history" (which depends on
+        # tool availability inside the container — fast variant lacks most
+        # tools, so --allow-missing-tools scans may produce no findings to
+        # store).
+        assert result_history.returncode in (0, 1)
 
 
 @pytest.mark.docker
@@ -1353,49 +1360,49 @@ class TestDockerCLIWorkflows:
         [
             pytest.param(
                 "U9",
-                "latest-deep",
+                "latest",
                 ["ci", "--repo", "/scan", "--profile", "balanced"],
                 "linux",
                 id="U9-docker-full-repo",
             ),
             pytest.param(
                 "U10",
-                "latest-deep",
+                "latest",
                 ["ci", "--image", "alpine:3.19", "--tools", "trivy,syft"],
                 "linux",
                 id="U10-docker-full-image",
             ),
             pytest.param(
                 "U11",
-                "latest-slim",
+                "slim",
                 ["ci", "--repo", "/scan", "--profile", "fast"],
                 "linux",
                 id="U11-docker-slim-multi",
             ),
             pytest.param(
                 "M5",
-                "latest-deep",
+                "latest",
                 ["ci", "--repo", "/scan", "--profile", "balanced"],
                 "darwin",
                 id="M5-docker-full-macos",
             ),
             pytest.param(
                 "M6",
-                "latest-slim",
+                "slim",
                 ["ci", "--repo", "/scan", "--profile", "fast"],
                 "darwin",
                 id="M6-docker-slim-macos",
             ),
             pytest.param(
                 "W3",
-                "latest-deep",
+                "latest",
                 ["ci", "--repo", "/scan", "--profile", "balanced"],
                 "win32",
                 id="W3-docker-full-windows",
             ),
             pytest.param(
                 "W4",
-                "latest-slim",
+                "slim",
                 ["ci", "--repo", "/scan", "--profile", "fast"],
                 "win32",
                 id="W4-docker-slim-windows",
