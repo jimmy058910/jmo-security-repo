@@ -530,6 +530,14 @@ class TestDockerNonRootExecution:
         uid = os.getuid() if hasattr(os, "getuid") else 1000
         gid = os.getgid() if hasattr(os, "getgid") else 1000
 
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+
+        # Set HOME=/tmp explicitly: with arbitrary --user UID:GID, no
+        # /etc/passwd entry exists for that UID, so HOME resolves to "/"
+        # and semgrep tries to write its cache to "/.semgrep" which fails
+        # with PermissionError. Pointing HOME at the world-writable /tmp
+        # gives semgrep (and any other tool with a cache) a writable home.
         result = subprocess.run(
             [
                 "docker",
@@ -537,6 +545,8 @@ class TestDockerNonRootExecution:
                 "--rm",
                 "--user",
                 f"{uid}:{gid}",
+                "-e",
+                "HOME=/tmp",
                 "-v",
                 f"{tmp_path}:/scan",
                 "-w",
@@ -661,6 +671,17 @@ class TestDockerHistoryPersistence:
         # Create sample code
         (tmp_path / "test.py").write_text("x = 1", encoding="utf-8")
 
+        # UID-mismatch + home-path fix:
+        # 1. The container runs as `USER jmo` (UID 1000), home at /home/jmo.
+        #    Mount the .jmo dir at /home/jmo/.jmo (NOT /root/.jmo — that's the
+        #    root user's home and jmo can't even write there).
+        # 2. tmp_path is owned by host runner UID 1001, mode 0o700; container
+        #    user can't traverse without world-rwx bits.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(jmo_dir), 0o777)
+
         # Run first scan
         subprocess.run(
             [
@@ -670,7 +691,7 @@ class TestDockerHistoryPersistence:
                 "-v",
                 f"{tmp_path}:/scan",
                 "-v",
-                f"{jmo_dir}:/root/.jmo",
+                f"{jmo_dir}:/home/jmo/.jmo",
                 "-w",
                 "/scan",
                 image,
@@ -695,7 +716,7 @@ class TestDockerHistoryPersistence:
                 "-v",
                 f"{tmp_path}:/scan",
                 "-v",
-                f"{jmo_dir}:/root/.jmo",
+                f"{jmo_dir}:/home/jmo/.jmo",
                 "-w",
                 "/scan",
                 image,
@@ -718,7 +739,7 @@ class TestDockerHistoryPersistence:
                 "run",
                 "--rm",
                 "-v",
-                f"{jmo_dir}:/root/.jmo",
+                f"{jmo_dir}:/home/jmo/.jmo",
                 image,
                 "history",
                 "list",
@@ -788,12 +809,20 @@ class TestDockerOutputFormats:
 
 
 # Image size ranges in MB (min, max) — allow generous tolerance for registry builds
-# Actual sizes will vary by build cache / layer optimization
+# Image size ranges match `docker image inspect --format={{.Size}}` output —
+# the UNCOMPRESSED total layer size on disk, not the compressed pull size.
+# (Compressed pull is typically 30-40% of uncompressed.)
+# Updated for v1.0.3 image content (run 24949522217 measured deep=6187MB,
+# balanced=5091MB). Buffer: ±20% to absorb tool-version drift between
+# releases without flaking tests.
 IMAGE_SIZE_RANGES = {
-    "deep": (1500, 3000),  # Deep/full: ~1.6-2.5 GB (most tools)
-    "balanced": (900, 2000),  # Balanced: ~1.0-1.8 GB
-    "slim": (700, 1600),  # Slim: ~0.8-1.5 GB (IaC/cloud focus)
-    "fast": (500, 1200),  # Fast: ~0.5-1.0 GB (fewest tools)
+    "deep": (
+        5000,
+        8500,
+    ),  # Deep: ~6-7 GB uncompressed (29 tools incl. JREs, scancode, opa)
+    "balanced": (4000, 7000),  # Balanced: ~5 GB uncompressed (17 tools)
+    "slim": (1500, 3500),  # Slim: ~2-3 GB uncompressed (13 tools, cloud-focused)
+    "fast": (1000, 3000),  # Fast: ~1.5-2.5 GB uncompressed (9 tools)
 }
 
 # Tools that are deep-profile-only (should NOT appear in lighter variants)

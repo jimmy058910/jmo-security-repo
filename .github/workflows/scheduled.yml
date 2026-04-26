@@ -78,6 +78,12 @@ jobs:
 
       - name: Run full test suite (including slow tests)
         run: |
+          # Exclude `requires_tools` tests: those need real security scanners
+          # installed on the runner (semgrep, trivy, gitleaks, etc.) and are
+          # exercised by the dedicated `e2e-tool-integration` job which
+          # installs them first. This Nightly Extended Tests job runs
+          # everything else (slow + non-tool-dependent) for comprehensive
+          # coverage. Convention matches ci.yml's `-m "not requires_tools"`.
           pytest tests/ \
             --cov=scripts \
             --cov-report=html \
@@ -85,7 +91,8 @@ jobs:
             --cov-report=xml \
             -v \
             --durations=20 \
-            --maxfail=5
+            --maxfail=5 \
+            -m "not requires_tools"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
