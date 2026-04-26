@@ -4,6 +4,10 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Internal
+
+- **SSOT drift guard for tool counts** (`tests/unit/test_profile_tools_count_drift.py`): New unit test asserts that `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS` AND `.github/workflows/scheduled.yml` `validate-variants` matrix BOTH equal `len(PROFILE_TOOLS[v]) - len(MANUAL_INSTALL_TOOLS & PROFILE_TOOLS[v])` for each variant, computed at runtime from `scripts/core/tool_registry.py`. A YAML matrix can't `import PROFILE_TOOLS`, so both downstream constants stay hardcoded but the test enforces their relationship at PR time. Catches the cascade-drift class that took 5 PRs (#343 → #344 → #345 → #346 → #347) to resolve in v1.0.3 after bearer was removed from PROFILE_TOOLS but the constants weren't updated together.
+
 ### Fixed
 
 - **Docker Smoke Tests intermittent failures (50% flake rate)**: Hardened all binary downloads in `Dockerfile.{deep,balanced,slim,fast}` against transient CDN failures. The v1.0.3 cycle saw repeated `tar: Error is not recoverable: gzip: stdin: not in gzip format` build failures — `curl -sSL` exited 0 on HTTP 4xx/5xx with HTML body, handing garbage to `tar -xzf`. Each release cycle triggered ~50 single-attempt downloads (4 variants × 2 architectures × ~6-10 binaries each); even a 0.5% CDN flake rate produced at least one failure most cycles.
