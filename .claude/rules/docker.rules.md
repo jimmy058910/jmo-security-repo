@@ -69,6 +69,44 @@ gh api users/jimmy058910/packages/container/jmo-security/versions \
   --jq '.[0:3] | .[] | .metadata.container.tags'
 ```
 
+## Download Hardening Convention (CRITICAL)
+
+Every binary download in `Dockerfile.*` builder stages MUST use these flags. A single missing flag produces the "tar: not in gzip format" cycle that broke v1.0.3 nightly Docker Smoke Tests repeatedly.
+
+**curl** (every invocation):
+
+```dockerfile
+curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "$URL" -o /path
+```
+
+| Flag | Purpose |
+|------|---------|
+| `-f` (`--fail`) | **Root-cause fix.** Without this, curl exits 0 on HTTP 4xx/5xx with HTML body, handing garbage to `tar -xzf`. |
+| `--retry 3 --retry-delay 5` | Bounded backoff for transient flakes. |
+| `--retry-all-errors` | Retry on any error (including timeout / connection-reset), not just HTTP 5xx. Requires curl 7.71+ (ubuntu 24.04 ships 8.5+). |
+| `--connect-timeout 30` | Bound DNS / TCP-handshake hangs. |
+| `--max-time 600` | Hard ceiling on total request time (10 min for slow CDNs). |
+
+**wget** (every invocation):
+
+```dockerfile
+wget -q --tries=3 --waitretry=5 --timeout=600 "$URL" -O /path
+```
+
+wget already exits non-zero on HTTP errors, so no `--fail` equivalent is needed.
+
+**Integrity check** (mandatory before extracting an archive — belt-and-suspenders for "200 with corrupt body" that even `--fail` can miss):
+
+```dockerfile
+gzip -t /tmp/foo.tar.gz && \      # before tar -xzf
+xz -t /tmp/foo.tar.xz && \         # before tar -xJf
+unzip -t /tmp/foo.zip > /dev/null  # before unzip
+```
+
+Binary-only downloads (no extraction step) don't need an integrity check — `--fail` plus the runtime version-check (`<tool> --version` in the verify stage) catches HTTP errors and serving-the-wrong-file mistakes.
+
+**Why this matters**: With ~50 binaries downloaded per release across 4 Dockerfile variants × 2 architectures, single-attempt downloads at even 0.5% CDN flake rate cause one transient failure most release cycles. The v1.0.3 cycle saw multiple Docker Smoke Test failures from this exact pattern (trufflehog, trivy, others — each different binary on different runs). Hardening landed in PR #349.
+
 ## Image Size Measurement Dimension
 
 Two different "size" dimensions exist for Docker images:
