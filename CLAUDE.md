@@ -8,9 +8,9 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.0 (Production Release)
+**Version:** v1.0.3 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
-**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs)
+**Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
 
 **Key v1.0 Features:**
 
@@ -285,8 +285,24 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 | CI failures | Check matrix tests, coverage, pre-commit |
 | SQLite locked | `jmo history vacuum` |
 | Docker persistence | Mount `.jmo/` volume |
+| Daily nightly fails — but visible failure count is exactly 5 | `--maxfail=5` truncation. Fix visible 5, dispatch nightly via `gh workflow run scheduled.yml --ref main -f task=nightly`, repeat. See `.claude/rules/testing.rules.md` "Bug Archeology" section. |
+| Code on main works but Docker images don't | Container code is whatever shipped in the last release tag. `scripts/cli/` and `scripts/core/` fixes don't propagate until next `v*` tag triggers `release.yml` and rebuilds GHCR images. Test-level fixes in `tests/` ARE effective immediately because pytest runs on the host. |
+| `PermissionError: [Errno 13]` from `Path.exists()` inside container | Python 3.12 changed `pathlib.Path.exists()` to propagate `PermissionError`. UID-mismatch on bind-mounted dir (host UID 1001 vs container `USER jmo` UID 1000) → EACCES. Fix in test: `os.chmod(tmp_path, 0o777)` before `docker run`. Fix in code: wrap `p.exists()` in `try/except OSError`. See `.claude/rules/testing.cross-platform.rules.md` "Docker Bind-Mount UID Mismatch". |
+| `expected_tools` count off by one after PROFILE_TOOLS change | Counts in `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS`, `DEEP_EXPECTED_TOOLS` lists, AND `.github/workflows/scheduled.yml` matrix all need cascading updates. Grep for the variant counts (`14`, `18`, `25`) across both directories simultaneously. |
 
-For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md). For Windows hang issues, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
+For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md) (now ~25 troubleshooting entries covering pytest-timeout traps, PRE_COMMIT_HOME literals, Python 3.12 OSError propagation, tag-naming conventions, dev↔main reconciliation, and more). For Windows hang issues + Docker UID-mismatch, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
+
+### Recent Major Lessons (post-v1.0.3 stabilization, 2026-04-26)
+
+The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. Key takeaways now embedded in path-scoped rules:
+
+- **Bug archeology pattern**: `--maxfail=5` truncation hides deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers.
+- **Tag schema**: `:latest` IS the deep variant. NO `:latest-deep`/`:latest-slim` tags exist. Verify with `gh api .../packages/container/.../versions`.
+- **CLI flag drift**: `jmo ci --profile` is a boolean (timing flag); profile selection uses `--profile-name`.
+- **Image size dimension**: `docker image inspect --format={{.Size}}` returns UNCOMPRESSED total layers, not compressed pull size. Off by 2-3×.
+- **`MANUAL_INSTALL_TOOLS` in test lists**: `afl-fuzz`/`mobsf`/`akto`/`falco` are in `PROFILE_TOOLS["deep"]` but NOT in any image. Tests checking for them in deep image fail by design.
+- **dev↔main divergence**: 41 commits sat on local `dev` for 11 days, eventually requiring careful audit + reconciliation merge (PR #339). Future-proof: regular `dev → main` cadence prevents this.
+- **Workflow filter convention**: Nightly Extended Tests must use `-m "not requires_tools and not smoke"` to avoid running tests that need real tools or the released PyPI package.
 
 ## Documentation References
 

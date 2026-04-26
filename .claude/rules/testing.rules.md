@@ -100,3 +100,38 @@ tests/
 ```
 
 **Reference:** [TEST.md](../../TEST.md) for the complete testing guide.
+
+## `--maxfail` Truncation & Bug Archeology
+
+The Nightly Extended Tests pytest invocation uses `--maxfail=5` to abort after 5 failures. **This creates a "bug archeology" pattern where deeper test failures are invisible until shallower ones are fixed.**
+
+When iterating on test fixes for nightly:
+
+1. Each fix-and-validate cycle reveals 0-5 NEW failures from deeper in pytest's alphabetical order — failures that were always there but masked by the truncation cutoff.
+2. Don't assume "it's just one bug left" until a clean run with 0 failures actually happens.
+3. Each layer typically takes its own targeted fix PR; the post-v1.0.3 stabilization went through 5 such layers (PRs #343 → #344 → #345 → #346 → #347).
+
+**Iterating efficiently** — manual workflow dispatch instead of waiting for cron:
+
+```bash
+# Trigger Nightly Extended Tests on demand (~12-15 min vs 24 h cron)
+gh workflow run scheduled.yml --ref main -f task=nightly
+
+# Watch for completion
+gh run list --workflow scheduled.yml --event workflow_dispatch --limit 1
+```
+
+The `task=nightly` input gates `nightly-extended-tests` and `lint-full` jobs in `scheduled.yml`. Other `task` choices: `e2e`, `performance`, `docker`, `all`.
+
+**Diagnosing a failure that masks deeper failures:** If output ends with `=== N failed in M.Ns ===` and N == 5, you're at the truncation cap. Fix the visible 5, dispatch again, repeat until N drops below 5 or hits 0.
+
+## Test Threshold Drift After Profile Changes
+
+When changing `PROFILE_TOOLS` (or `MANUAL_INSTALL_TOOLS`) in `scripts/core/tool_registry.py`, several test/workflow constants need cascading updates:
+
+- `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS` (per-variant `expected_tools` count)
+- `tests/e2e/test_docker_workflows.py::DEEP_EXPECTED_TOOLS`, `BALANCED_EXPECTED_TOOLS`, etc. (named tool lists)
+- `tests/e2e/test_docker_workflows.py::DEEP_ONLY_TOOLS` (tools that should NOT appear in lighter variants)
+- `.github/workflows/scheduled.yml`'s `validate-variants` matrix (`expected_tools: <N>`)
+
+Bearer's removal in PR #262 (April 2026) needed cascading updates that took multiple follow-up PRs to fully sync. **When changing `PROFILE_TOOLS`, grep for variant counts (`14`, `18`, `25`) and `expected_tools` simultaneously across `tests/` and `.github/workflows/`.**
