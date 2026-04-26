@@ -124,6 +124,12 @@ repos:
         files: ^(CLAUDE\.md|docs/)
         entry: python scripts/dev/check_doc_links.py
         pass_filenames: false
+      - id: yaml-env-tilde
+        name: "yaml-env-tilde (no literal ~/ in workflow env blocks)"
+        language: system
+        files: ^\.github/(workflows|actions)/.*\.ya?ml$
+        entry: python scripts/dev/check_yaml_env_tilde.py
+        pass_filenames: false
 
   # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes
   # IMPORTANT: Uses Python 3.10+ to match CI/CD environments (prevents version mismatches)
