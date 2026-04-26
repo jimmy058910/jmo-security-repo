@@ -169,13 +169,25 @@ def test_docker_thing(self, tmp_path: Path):
 
 ## Workflow Marker Filter Convention
 
-Pytest invocations in CI workflows should use this filter set (matches `ci.yml`):
+Pytest invocations in CI workflows use these filter sets. Each filter is tuned to match the runner environment's actual capabilities (which tools/packages are installed).
 
-| Job | Filter | Includes |
-|------|--------|----------|
-| `ci.yml` quick-checks | `-m "not smoke and not requires_tools and not docker and not slow"` | Fast unit/cli/adapters/core tests |
-| `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Slow + non-tool-dependent + non-smoke (omit `not slow` to include slow tests) |
-| `scheduled.yml` E2E Tool Integration | `-m "requires_tools"` | Only real-tool tests (after installing tools) |
-| `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Tools available via PyPI install |
+| Workflow:Job | Filter | Rationale |
+|---|---|---|
+| `ci.yml` quick-checks (sharded ×4) | `-m "not smoke and not requires_tools and not docker"` | Excludes tests needing PyPI release, real scanners, or Docker daemon. |
+| `ci.yml` Quick coverage check | `-m "not smoke and not requires_tools and not docker and not slow"` | Adds `not slow` for the coverage-only run (≥70% threshold). |
+| `ci.yml` tool-contract-tests | `-m "requires_tools"` | Tools installed via the `Install tools` step earlier in the job. |
+| `scheduled.yml` Nightly Extended | `-m "not requires_tools and not smoke"` | Includes slow tests intentionally (omit `not slow`) since nightly has the time budget. Excludes real-tool + smoke tests because runner doesn't install tools or install released package. |
+| `scheduled.yml` Tool Smoke Tests | `-m "smoke"` | Runs only `@pytest.mark.smoke` tests against released `jmo-security` PyPI package. |
+| `scheduled.yml` Integration matrix | `-m "integration and not slow"` | Per-component integration tests; `not slow` keeps matrix runtime bounded. |
+| `scheduled.yml` E2E (×2 jobs) | `-m "not docker"` | E2E tests that don't require local Docker daemon (Released Package + general E2E). |
+| `scheduled.yml` E2E real-tool scans | `-m "requires_tools"` | Real-tool tests after installing all profile tools. |
+| `scheduled.yml` Tool Integration matrix | `-m "requires_tools"` | Same as E2E real-tool scans, sharded. |
 
 **Why the filter matters**: Nightly Extended Tests fixes from 2026-04-26 added `-m "not requires_tools and not smoke"` after `pytest tests/` was running EVERY test including ones that need real tools (which the Nightly runner doesn't install). Without the filter, `test_advanced_targets.test_deep_profile_scan` (requires real scanners) and `test_released_package.test_cli_help_works` (requires `pip install jmo-security`) would fail by design.
+
+**Convention rules-of-thumb**:
+
+- **Always exclude `requires_tools` and `smoke`** unless the runner explicitly installs the prerequisite (real tool binaries or the released PyPI wheel).
+- **Always exclude `docker`** unless the runner has a Docker daemon (Linux runners do; macOS/Windows runners require setup).
+- **Include `slow`** only when the job has a generous timeout budget (nightly, full e2e). Exclude in PR-time CI (`ci.yml`).
+- **Use `-m "<marker>"` to RUN only that marker**'s tests after installing prerequisites; use `-m "not <marker>"` to EXCLUDE.
