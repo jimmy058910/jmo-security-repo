@@ -1361,7 +1361,7 @@ class TestDockerCLIWorkflows:
             pytest.param(
                 "U9",
                 "latest",
-                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
                 "linux",
                 id="U9-docker-full-repo",
             ),
@@ -1375,35 +1375,35 @@ class TestDockerCLIWorkflows:
             pytest.param(
                 "U11",
                 "slim",
-                ["ci", "--repo", "/scan", "--profile", "fast"],
+                ["ci", "--repo", "/scan", "--profile-name", "fast"],
                 "linux",
                 id="U11-docker-slim-multi",
             ),
             pytest.param(
                 "M5",
                 "latest",
-                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
                 "darwin",
                 id="M5-docker-full-macos",
             ),
             pytest.param(
                 "M6",
                 "slim",
-                ["ci", "--repo", "/scan", "--profile", "fast"],
+                ["ci", "--repo", "/scan", "--profile-name", "fast"],
                 "darwin",
                 id="M6-docker-slim-macos",
             ),
             pytest.param(
                 "W3",
                 "latest",
-                ["ci", "--repo", "/scan", "--profile", "balanced"],
+                ["ci", "--repo", "/scan", "--profile-name", "balanced"],
                 "win32",
                 id="W3-docker-full-windows",
             ),
             pytest.param(
                 "W4",
                 "slim",
-                ["ci", "--repo", "/scan", "--profile", "fast"],
+                ["ci", "--repo", "/scan", "--profile-name", "fast"],
                 "win32",
                 id="W4-docker-slim-windows",
             ),
@@ -1416,6 +1416,17 @@ class TestDockerCLIWorkflows:
 
         results_dir = tmp_path / "results"
         results_dir.mkdir()
+
+        # UID-mismatch fix: container runs as USER jmo (UID 1000), tmp_path
+        # is owned by host runner UID 1001 with 0o700 mode → container can't
+        # write /scan/results/individual-* subdirs (PermissionError on the
+        # mkdir(mode=0o700) call inside scan_orchestrator). chmod 0o777
+        # applies to both the parent tmp_path and the results_dir we just
+        # created so the container has full traversal + write.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(tmp_path), 0o777)
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(str(results_dir), 0o777)
 
         docker_cmd = [
             "docker",
