@@ -884,13 +884,26 @@ class TestVersionChecks:
             assert result.status == CheckStatus.PASS
 
     def test_version_matches_pyproject(self):
+        import tomllib
+        from pathlib import Path
         from scripts.core.validators.cli_validator import (
             _check_version_matches_pyproject,
         )
 
+        # Read the actual current version from pyproject.toml so the test
+        # tracks the canonical source of truth instead of hardcoding a
+        # specific version (which goes stale on every release bump).
+        repo_root = Path(__file__).parent.parent.parent
+        pyproject_path = repo_root / "pyproject.toml"
+        if pyproject_path.is_file():
+            with open(pyproject_path, "rb") as f:
+                current_version = tomllib.load(f)["project"]["version"]
+        else:
+            current_version = "1.0.3"  # fallback if pyproject not found in test context
+
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(
-                returncode=0, stdout="JMo Security v1.0.2"
+                returncode=0, stdout=f"JMo Security v{current_version}"
             )
             result = _check_version_matches_pyproject()
             # Should pass or skip depending on pyproject.toml location
