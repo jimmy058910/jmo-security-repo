@@ -2,7 +2,37 @@
 
 All notable changes to JMo Security will be documented in this file.
 
-## [1.0.2] - 2026-04-19
+## [1.0.3] - 2026-04-25
+
+### Fixed
+
+- **Daily Scheduled Tests failure cycle (multi-layer)**: Resolved every root cause behind the "every nightly fails" pattern that has plagued the project. Required four targeted PRs because each layer was masking the next:
+  - **`Nightly Extended Tests` pytest-timeout trap** (#330): pyproject.toml pins pytest-timeout to 120s globally. Prior fixes (#320 180s, #327 600s) bumped `subprocess.run(timeout=)` thinking it was the ceiling — pytest-timeout's thread method killed the test thread first, no `TimeoutExpired` ever fired. Diagnostic signature: stack-dump traceback + `+++ Timeout +++` banner. Fixed via `@pytest.mark.timeout(1200)` on `TestDockerVariants` class.
+  - **`Lint (full pre-commit suite)` actionlint findings** (#330): 4 pre-existing shellcheck issues (SC2086 in `maintenance.yml:516-517`, SC2016 in `release.yml:172`, SC2086 in `release.yml:671-685`, SC2170 in `scheduled.yml:1064`) accumulated unseen because `reviewdog/action-actionlint` defaults to `filter_mode: added` — only reports findings on PR-diff lines. Scheduled full-lint scans all files and surfaced the backlog. Fixed at source; SC2170 specifically required routing matrix values through `env:` block (PR #300's unquote hack never worked because actionlint substitutes `${{ }}` with placeholders before invoking shellcheck).
+  - **`PRE_COMMIT_HOME` literal-tilde bug** (#331): `env: PRE_COMMIT_HOME: ~/.cache/pre-commit` passes `~` literally — GitHub Actions `env:` does not shell-expand. Pre-commit created `$PWD/~/.cache/pre-commit/` literal directory at the repo root. Subsequent `yamllint -c .yamllint.yaml .` then descended into it and failed on third-party hook test fixtures. Also silently broke the `actions/cache` step (its Node action DOES expand `~`, so paths never matched — pre-commit cache has been ineffective for the life of both workflows).
+  - **Python 3.12 `Path.exists()` propagating PermissionError** (#332): `scripts/core/config.py:220` probes `jmo.yml` on every `jmo scan`. Python 3.12 changed `pathlib.Path.exists()` to propagate `PermissionError` (and other OSError subclasses besides `FileNotFoundError`/`NotADirectoryError`) instead of silently returning False. When jmo runs in Docker with a bind-mounted dir the container user can't traverse (UID mismatch), the scan crashed before doing anything. Fixed via `try/except OSError` to restore pre-3.12 behavior contract.
+  - **UID mismatch on test bind mounts** (#332): pytest `tmp_path` is created with UID 1001 (runner) and mode 0o700; container `USER jmo` is UID 1000. `os.chmod(tmp_path, 0o777)` before `docker run` matches the existing `scheduled.yml:1083` pattern.
+  - **`test_docker_variant_tools[deep]` rc=1 fast-fail logic bug** (#332): `tools check --json` returns rc=1 when any tool reports `installed=false`. Deep profile includes 4 `MANUAL_INSTALL_TOOLS` (akto, afl++, mobsf, falco) intentionally NOT in the Docker image, so rc=1 is the *correct* outcome. Removed the test's rc fast-fail; the existing count assertion (`installed >= expected_tools`) is the real verification.
+  - **`PermissionError` in `jmo tools debug` file-type probe** (#333): `tool_commands.py:281` only caught `FileNotFoundError` and `TimeoutExpired`. When slim/balanced base images don't have `file` package installed but PATH resolution surfaces a non-executable partial match, subprocess raises `PermissionError` on `execve`. Broadened catch to include `PermissionError` and `OSError`.
+  - **`dependency-check` reports `installed: false` in `:deep`/`:balanced`** (#335): `tool_registry.py:116` maps `dependency-check` → binary `dependency-check.sh` (upstream canonical name). Dockerfiles only symlinked the bare `dependency-check` name. PATH search for literal `.sh` couldn't match. Added second symlink with `.sh` suffix in both `Dockerfile.deep` and `Dockerfile.balanced`.
+
+### Changed
+
+- **Long-overdue `dev → main` reconciliation** (#339): Merged 41 unique commits from local `dev` (PR #262 dead-code cleanup + 11 days of refactor work) that had been sitting unmerged since April 14. After Option-3 careful audit:
+  - Removed `bearer_adapter.py`, `constants.py`, `generate_dashboard.py`, `memory.py`, `schema_utils.py`, `scan_progress.py` — all verified zero imports across the merged tree.
+  - Test suite consolidation: `tests/scan_jobs/*` → `tests/cli/test_*_scanner.py`; `tests/wizard_flows/*` → `tests/unit/test_wizard_*.py`.
+  - Removed `scipy` and `numpy` from dependencies (~100MB reduction): verified Mann-Kendall in `scripts/core/trend_analyzer.py` is pure-Python, scipy.stats was never used.
+  - Removed 5 unreferenced `.github/actions/*` composite actions, 6 unused dev helpers, deprecated `Dockerfile.alpine`.
+  - Restored `scripts/core/populate_targets.sh` because it's documented in `docs/USER_GUIDE.md` as an active user workflow.
+- **Coverage config**: Added `scripts/dev/*` to `[tool.coverage]` omit list. Dev/maintenance scripts (`update_versions.py`, `auto_merge_tool_bumps.py`, etc.) are not part of the JMo Security runtime — measuring them as user-shipping code distorted the metric.
+
+### Notes
+
+- All 6749 tests pass on the merged tree (unit/cli/adapters/core).
+- The Docker-image fixes from #332/#333/#335 are released to GHCR for the first time via this v1.0.3 tag — those code changes have been on main since 2026-04-23 but only propagate to the published `:deep`, `:balanced`, `:slim`, `:fast`, `:latest` images on a release tag push.
+- The `:full` backward-compat alias documented in v1.0.2 notes is retained for one more release cycle; planned removal in v1.0.4.
+
+
 
 ### Fixed
 
