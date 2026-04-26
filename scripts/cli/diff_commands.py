@@ -13,6 +13,7 @@ from scripts.core.reporters import (
     diff_html_reporter,
     diff_sarif_reporter,
 )
+from scripts.core.unicode_utils import UNICODE_FALLBACKS
 
 # Optional Rich library for enhanced terminal output
 try:
@@ -26,20 +27,6 @@ try:
 except ImportError:
     RICH_AVAILABLE = False
     console = None  # type: ignore[assignment]  # Graceful fallback when rich optional dep not installed
-
-
-# Windows-safe Unicode fallback mappings
-UNICODE_FALLBACKS = {
-    "─": "-",
-    "━": "=",
-    "✅": "[OK]",
-    "❌": "[X]",
-    "🔍": "[?]",
-    "📊": "[#]",
-    "📈": "[^]",
-    "📉": "[v]",
-    "⚠️": "[!]",
-}
 
 
 def _can_encode_unicode() -> bool:

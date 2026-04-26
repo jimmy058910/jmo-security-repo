@@ -31,7 +31,6 @@ EXPECTED_ADAPTERS = sorted(
         "aflplusplus",
         "akto",
         "bandit",
-        "bearer",
         "cdxgen",
         "checkov",
         "dependency_check",
@@ -59,7 +58,7 @@ EXPECTED_ADAPTERS = sorted(
     ]
 )
 
-EXPECTED_ADAPTER_COUNT = 28
+EXPECTED_ADAPTER_COUNT = 27
 
 # Standard severity levels
 STANDARD_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
@@ -2048,7 +2047,7 @@ def validate_scans(tier: str) -> CategoryResult:
     """Scan Correctness validator. Returns CategoryResult with name='Scan Correctness'.
 
     Args:
-        tier: "quick" for fast checks (60), "full" for all checks (72).
+        tier: "quick" for fast checks (80), "full" for all checks (92).
 
     Returns:
         CategoryResult with all check results.

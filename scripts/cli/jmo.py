@@ -1862,11 +1862,11 @@ Documentation: https://docs.jmotools.com
 
     # Beginner-friendly commands
     _add_wizard_args(sub)
-    _add_profile_args(sub, "fast", "Quick scan with 3 best-in-class tools (5-8 min)")
+    _add_profile_args(sub, "fast", "Quick scan with 9 best-in-class tools (5-10 min)")
     _add_profile_args(
-        sub, "balanced", "Balanced scan with 8 production-ready tools (15-20 min)"
+        sub, "balanced", "Balanced scan with 17 production-ready tools (18-25 min)"
     )
-    _add_profile_args(sub, "full", "Comprehensive scan with all 12 tools (30-60 min)")
+    _add_profile_args(sub, "full", "Comprehensive scan with all 28 tools (40-70 min)")
     _add_setup_args(sub)
 
     # Advanced commands

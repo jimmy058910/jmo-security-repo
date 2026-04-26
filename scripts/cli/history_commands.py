@@ -34,43 +34,7 @@ from scripts.core.history_db import (
 )
 from scripts.core.history_migrations import run_migrations, get_current_version
 from scripts.core.history_integrity import verify_database_integrity, recover_database
-
-# Windows-safe Unicode fallback mappings
-# Maps Unicode characters to ASCII alternatives for cp1252 compatibility
-UNICODE_FALLBACKS = {
-    "─": "-",  # Box drawing horizontal (U+2500)
-    "━": "=",  # Box drawing heavy horizontal (U+2501)
-    "│": "|",  # Box drawing vertical (U+2502)
-    "┌": "+",  # Box drawing corner
-    "┐": "+",
-    "└": "+",
-    "┘": "+",
-    "├": "+",
-    "┤": "+",
-    "┬": "+",
-    "┴": "+",
-    "┼": "+",
-    "═": "=",  # Double horizontal
-    "║": "|",  # Double vertical
-    "╔": "+",
-    "╗": "+",
-    "╚": "+",
-    "╝": "+",
-    "✅": "[OK]",  # Check mark (U+2705)
-    "❌": "[X]",  # Cross mark (U+274C)
-    "✓": "[v]",  # Check mark
-    "✗": "[x]",  # X mark
-    "🔍": "[?]",  # Magnifying glass (U+1F50D)
-    "📊": "[#]",  # Chart (U+1F4CA)
-    "📈": "[^]",  # Chart increasing
-    "📉": "[v]",  # Chart decreasing
-    "⚠️": "[!]",  # Warning
-    "•": "*",  # Bullet
-    "→": "->",  # Right arrow (U+2192)
-    "←": "<-",  # Left arrow (U+2190)
-    "↑": "^",  # Up arrow (U+2191)
-    "↓": "v",  # Down arrow (U+2193)
-}
+from scripts.core.unicode_utils import UNICODE_FALLBACKS
 
 
 def _can_encode_unicode() -> bool:

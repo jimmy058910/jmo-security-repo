@@ -196,20 +196,6 @@ binary_tools:
     update_check: gh api repos/google/osv-scanner/releases/latest
     critical: false
     notes: v1.0.0 - Uses Google OSV database for comprehensive vulnerability data
-  bearer:
-    # NOTE: Bearer project is archived (EOL). v2.0.1 is the FINAL release.
-    # No further updates will be published. Consider Semgrep privacy rules
-    # (p/privacy, p/owasp-top-10) as a replacement when issues arise.
-    version: 2.0.1
-    github_repo: Bearer/bearer
-    description: Data security and privacy scanner (GDPR/CCPA)
-    release_pattern: bearer_linux_{arch}
-    architectures:
-      amd64: amd64
-      arm64: arm64
-    update_check: gh api repos/Bearer/bearer/releases/latest
-    critical: false
-    notes: v1.0.0 - Data privacy and sensitive data flows
 special_tools:
   zap:
     version: 2.16.1
@@ -374,7 +360,6 @@ update_policies:
     - nuclei
     - gosec
     - grype
-    - bearer
     - scancode
     - cdxgen
     - lynis
@@ -671,14 +656,6 @@ version_history:
   tools_updated: []
   updated_by: update_versions.py
   notes: ''
-- date: '2025-11-17'
-  action: Updated bearer
-  tools_updated:
-  - tool: bearer
-    old_version: 1.50.0
-    new_version: 1.51.1
-  updated_by: update_versions.py
-  notes: Manual update via --tool flag
 - date: '2025-11-17'
   action: Automated version update
   tools_updated: []

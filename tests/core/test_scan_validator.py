@@ -97,16 +97,16 @@ class TestValidateScans:
         assert isinstance(result, CategoryResult)
         assert result.name == "Scan Correctness"
 
-    def test_quick_tier_has_80_checks(self):
-        # 6 adapter registry + 28 fixture parsing + 3 severity + 5 schema
-        # + 6 edge cases + 12 dedup + 8 compliance + 4 SBOM + 8 reporters = 80
+    def test_quick_tier_has_79_checks(self):
+        # 6 adapter registry + 27 fixture parsing + 3 severity + 5 schema
+        # + 6 edge cases + 12 dedup + 8 compliance + 4 SBOM + 8 reporters = 79
         result = validate_scans("quick")
-        assert result.total == 80, f"Expected 80 quick checks, got {result.total}"
+        assert result.total == 79, f"Expected 79 quick checks, got {result.total}"
 
-    def test_full_tier_has_92_checks(self):
-        # 80 quick + 12 full-tier = 92
+    def test_full_tier_has_91_checks(self):
+        # 79 quick + 12 full-tier = 91
         result = validate_scans("full")
-        assert result.total == 92, f"Expected 92 full checks, got {result.total}"
+        assert result.total == 91, f"Expected 91 full checks, got {result.total}"
 
     def test_full_tier_includes_quick_checks(self):
         quick = validate_scans("quick")
@@ -144,7 +144,7 @@ class TestValidateScans:
     def test_unknown_tier_treated_as_quick(self):
         """Unknown tier should run quick checks only (no full extras)."""
         result = validate_scans("unknown_tier")
-        assert result.total == 80
+        assert result.total == 79
 
 
 # ============================================================================
@@ -156,10 +156,10 @@ class TestConstants:
     """Tests for module-level constants."""
 
     def test_expected_adapter_count(self):
-        assert EXPECTED_ADAPTER_COUNT == 28
+        assert EXPECTED_ADAPTER_COUNT == 27
 
     def test_expected_adapters_list(self):
-        assert len(EXPECTED_ADAPTERS) == 28
+        assert len(EXPECTED_ADAPTERS) == 27
 
     def test_adapters_sorted(self):
         assert EXPECTED_ADAPTERS == sorted(EXPECTED_ADAPTERS)
@@ -283,8 +283,8 @@ class TestFixtureParsing:
         assert result.status == CheckStatus.ERROR
         assert "Import failed" in result.message
 
-    def test_all_28_adapters_have_parse_checks(self):
-        """All 28 expected adapters should produce valid checks."""
+    def test_all_27_adapters_have_parse_checks(self):
+        """All 27 expected adapters should produce valid checks."""
         for adapter_name in EXPECTED_ADAPTERS:
             check_fn = _make_adapter_parse_check(adapter_name)
             result = check_fn()

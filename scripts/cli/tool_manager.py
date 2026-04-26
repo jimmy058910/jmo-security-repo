@@ -85,7 +85,6 @@ VERSION_PATTERNS: dict[str, re.Pattern] = {
     "nuclei": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     "kubescape": re.compile(r"version is:\s*v?(\d+\.\d+\.\d+)", re.IGNORECASE),
     "trufflehog": re.compile(r"trufflehog\s+v?(\d+\.\d+\.\d+)"),
-    "bearer": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     "horusec": re.compile(r"Version:\s*v?(\d+\.\d+\.\d+)"),
     # shellcheck outputs: "ShellCheck - ...\nversion: 0.10.0\n..."
     # Match "version: X.Y.Z" or just plain "X.Y.Z" on a line
@@ -138,7 +137,6 @@ VERSION_COMMANDS: dict[str, list[str] | dict[str, list[str]]] = {
     "grype": ["grype", "version"],
     "syft": ["syft", "version"],
     "kubescape": ["kubescape", "version"],
-    "bearer": ["bearer", "version"],
     "horusec": ["horusec", "version"],
     "opa": ["opa", "version"],
     "falcoctl": ["falcoctl", "version"],
@@ -318,14 +316,6 @@ REMEDIATION_COMMANDS: dict[str, dict] = {
         },
         "jmo_install": "jmo tools install nuclei",
     },
-    "bearer": {
-        "install": {
-            "linux": "curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh",
-            "macos": "brew install bearer/tap/bearer",
-            "windows": "iwr -useb https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.ps1 | iex",
-        },
-        "jmo_install": "jmo tools install bearer",
-    },
     "horusec": {
         "install": {
             "linux": "curl -fsSL https://raw.githubusercontent.com/ZupIT/horusec/main/deployments/scripts/install.sh | bash -s latest",
@@ -415,12 +405,6 @@ PLATFORM_MANUAL_TOOLS: dict[str, dict[str, tuple[str, str]]] = {
         "windows": (
             "No Windows binaries available (Rust tool, Linux/macOS only)",
             "https://github.com/praetorian-inc/noseyparker",
-        ),
-    },
-    "bearer": {
-        "windows": (
-            "No Windows binaries available (use Docker or WSL)",
-            "https://github.com/Bearer/bearer",
         ),
     },
     # Linux-only tools (kernel requirements)

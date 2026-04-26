@@ -599,6 +599,191 @@ spec:
                 assert "env" in call_kwargs
                 assert call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "glpat-test"
 
+    def test_scan_gitlab_cleanup_exception(self, tmp_path):
+        """Test temp directory cleanup handles exceptions gracefully"""
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            with patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
+            ) as mock_scan_repo:
+                with patch(
+                    "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
+                ) as mock_discover:
+                    with patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"):
+                        with patch(
+                            "scripts.cli.scan_jobs.gitlab_scanner.shutil.rmtree"
+                        ) as mock_rmtree:
+                            mock_subprocess.return_value = MagicMock(returncode=0)
+                            mock_scan_repo.return_value = (
+                                "myrepo",
+                                {"trufflehog": True},
+                            )
+                            mock_discover.return_value = set()
+                            mock_rmtree.side_effect = OSError("Permission denied")
+
+                            gitlab_info = {
+                                "full_path": "mygroup/myrepo",
+                                "url": "https://gitlab.com",
+                                "token": "glpat-test",
+                                "repo": "myrepo",
+                                "group": "mygroup",
+                            }
+                            full_path, statuses = scan_gitlab_repo(
+                                gitlab_info=gitlab_info,
+                                results_dir=tmp_path,
+                                tools=["trufflehog"],
+                                timeout=600,
+                                retries=0,
+                                per_tool_config={},
+                                allow_missing_tools=False,
+                            )
+
+                            assert full_path == "mygroup/myrepo"
+                            assert statuses["trufflehog"] is True
+
+    def test_scan_gitlab_custom_tool_exists_func(self, tmp_path):
+        """Test using custom tool_exists_func"""
+
+        def mock_tool_exists(tool: str) -> bool:
+            return tool == "trufflehog"
+
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            with patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
+            ) as mock_scan_repo:
+                with patch(
+                    "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
+                ) as mock_discover:
+                    with patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"):
+                        mock_subprocess.return_value = MagicMock(returncode=0)
+                        mock_scan_repo.return_value = (
+                            "myrepo",
+                            {"trufflehog": True, "semgrep": True},
+                        )
+                        mock_discover.return_value = set()
+
+                        gitlab_info = {
+                            "full_path": "mygroup/myrepo",
+                            "url": "https://gitlab.com",
+                            "token": "glpat-test",
+                            "repo": "myrepo",
+                            "group": "mygroup",
+                        }
+                        full_path, statuses = scan_gitlab_repo(
+                            gitlab_info=gitlab_info,
+                            results_dir=tmp_path,
+                            tools=["trufflehog", "semgrep"],
+                            timeout=600,
+                            retries=0,
+                            per_tool_config={},
+                            allow_missing_tools=False,
+                            tool_exists_func=mock_tool_exists,
+                        )
+
+                        assert mock_scan_repo.called
+
+    def test_scan_gitlab_http_url(self, tmp_path):
+        """Test GitLab clone URL construction with HTTP (not HTTPS)"""
+        gitlab_info = {
+            "full_path": "mygroup/myrepo",
+            "url": "http://gitlab.internal.com",
+            "token": "glpat-test",
+            "repo": "myrepo",
+            "group": "mygroup",
+        }
+
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            with patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
+            ) as mock_scan_repo:
+                with patch(
+                    "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
+                ) as mock_discover:
+                    with patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"):
+                        mock_subprocess.return_value = MagicMock(returncode=0)
+                        mock_scan_repo.return_value = ("myrepo", {"trufflehog": True})
+                        mock_discover.return_value = set()
+
+                        scan_gitlab_repo(
+                            gitlab_info=gitlab_info,
+                            results_dir=tmp_path,
+                            tools=["trufflehog"],
+                            timeout=600,
+                            retries=0,
+                            per_tool_config={},
+                            allow_missing_tools=False,
+                        )
+
+                        clone_call = mock_subprocess.call_args[0][0]
+                        assert not any("glpat-test" in str(arg) for arg in clone_call)
+                        assert any(
+                            "http://gitlab.internal.com/mygroup/myrepo.git" in arg
+                            for arg in clone_call
+                        )
+                        call_kwargs = mock_subprocess.call_args[1]
+                        assert "env" in call_kwargs
+                        assert (
+                            call_kwargs["env"].get("GIT_ASKPASS_TOKEN") == "glpat-test"
+                        )
+
+    def test_scan_gitlab_image_scan_exception(self, tmp_path):
+        """Test handling of image scan exceptions"""
+        with patch(
+            "scripts.cli.scan_jobs.gitlab_scanner.subprocess.run"
+        ) as mock_subprocess:
+            with patch(
+                "scripts.cli.scan_jobs.gitlab_scanner.scan_repository"
+            ) as mock_scan_repo:
+                with patch(
+                    "scripts.cli.scan_jobs.gitlab_scanner._discover_container_images"
+                ) as mock_discover:
+                    with patch(
+                        "scripts.cli.scan_jobs.gitlab_scanner.scan_image"
+                    ) as mock_scan_image:
+                        with patch("scripts.cli.scan_jobs.gitlab_scanner.shutil.copy2"):
+                            mock_subprocess.return_value = MagicMock(returncode=0)
+                            mock_scan_repo.return_value = (
+                                "myrepo",
+                                {"trufflehog": True},
+                            )
+                            mock_discover.return_value = {
+                                "nginx:latest",
+                                "postgres:14",
+                            }
+                            mock_scan_image.side_effect = [
+                                ("nginx:latest", {"trivy": True, "syft": True}),
+                                RuntimeError("Image scan failed"),
+                            ]
+
+                            gitlab_info = {
+                                "full_path": "mygroup/myrepo",
+                                "url": "https://gitlab.com",
+                                "token": "glpat-test",
+                                "repo": "myrepo",
+                                "group": "mygroup",
+                            }
+                            full_path, statuses = scan_gitlab_repo(
+                                gitlab_info=gitlab_info,
+                                results_dir=tmp_path,
+                                tools=["trufflehog", "trivy", "syft"],
+                                timeout=600,
+                                retries=0,
+                                per_tool_config={},
+                                allow_missing_tools=False,
+                            )
+
+                            assert statuses["trufflehog"] is True
+                            assert (
+                                "image:nginx:latest:trivy" in statuses
+                                or "image:postgres:14:trivy" in statuses
+                            )
+                            assert mock_scan_image.call_count == 2
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

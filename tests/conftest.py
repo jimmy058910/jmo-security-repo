@@ -5,16 +5,12 @@ Shared pytest fixtures and utilities for JMo Security tests.
 This module provides:
 - Cross-platform Python executable detection
 - Platform-specific skip conditions
-- Subprocess mocking helpers
 - Common test utilities
 """
 
 import subprocess
 import sys
-from pathlib import Path
 from typing import List
-from unittest.mock import MagicMock
-
 import pytest
 
 # ============================================================================
@@ -131,42 +127,6 @@ def jmo_runner():
 
 
 # ============================================================================
-# Subprocess Mocking Helpers
-# ============================================================================
-
-
-def mock_subprocess_success(returncode: int = 0, stdout: str = "", stderr: str = ""):
-    """
-    Create a MagicMock configured as a successful subprocess.run result.
-
-    Usage:
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = mock_subprocess_success()
-            # ... test code ...
-
-    Args:
-        returncode: Exit code (0 = success)
-        stdout: Standard output
-        stderr: Standard error
-
-    Returns:
-        MagicMock configured as CompletedProcess
-    """
-    mock = MagicMock()
-    mock.returncode = returncode
-    mock.stdout = stdout
-    mock.stderr = stderr
-    return mock
-
-
-def mock_subprocess_failure(
-    returncode: int = 1, stdout: str = "", stderr: str = "Error"
-):
-    """Create a MagicMock configured as a failed subprocess.run result."""
-    return mock_subprocess_success(returncode=returncode, stdout=stdout, stderr=stderr)
-
-
-# ============================================================================
 # Cross-Platform Error Message Patterns
 # ============================================================================
 
@@ -196,85 +156,8 @@ def is_command_not_found_error(stderr: str) -> bool:
 
 
 # ============================================================================
-# Path Normalization Utilities
-# ============================================================================
-
-
-def normalize_path(path: str | Path) -> str:
-    """
-    Normalize a path for cross-platform comparison.
-
-    Converts backslashes to forward slashes and normalizes case on Windows.
-
-    Args:
-        path: Path string or Path object
-
-    Returns:
-        Normalized path string
-    """
-    normalized = str(path).replace("\\", "/")
-    if IS_WINDOWS:
-        normalized = normalized.lower()
-    return normalized
-
-
-# ============================================================================
 # Integration Test Fixtures
 # ============================================================================
-
-
-@pytest.fixture
-def sample_vulnerable_code(tmp_path: Path) -> Path:
-    """
-    Create a minimal vulnerable code sample for integration testing.
-
-    Creates JavaScript and Python files with intentional vulnerabilities
-    that should be detected by security tools.
-
-    Returns:
-        Path to the temporary directory containing vulnerable code
-    """
-    src_dir = tmp_path / "src"
-    src_dir.mkdir()
-
-    # JavaScript with SQL injection and XSS
-    (src_dir / "app.js").write_text("""
-const express = require('express');
-const app = express();
-
-app.get('/user', (req, res) => {
-    const userId = req.query.id;
-    // SQL Injection vulnerability
-    const query = "SELECT * FROM users WHERE id = " + userId;
-    db.query(query);
-});
-
-app.get('/search', (req, res) => {
-    const term = req.query.q;
-    // XSS vulnerability
-    res.send("<h1>Results for: " + term + "</h1>");
-});
-""")
-
-    # Python with hardcoded secret
-    (src_dir / "config.py").write_text("""
-# Hardcoded credentials
-API_KEY = "sk-1234567890abcdef1234567890abcdef"
-DATABASE_PASSWORD = "admin123"
-""")
-
-    # package.json for npm detection
-    (tmp_path / "package.json").write_text("""
-{
-  "name": "test-app",
-  "version": "1.0.0",
-  "dependencies": {
-    "lodash": "4.17.20"
-  }
-}
-""")
-
-    return tmp_path
 
 
 @pytest.fixture
@@ -295,10 +178,3 @@ def docker_available() -> bool:
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
-
-
-@pytest.fixture
-def skip_without_docker(docker_available: bool):
-    """Skip test if Docker is not available."""
-    if not docker_available:
-        pytest.skip("Docker not available")

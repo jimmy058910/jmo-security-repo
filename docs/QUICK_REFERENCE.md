@@ -7,13 +7,13 @@ Quick command reference for common operations.
 ## Scanning Commands
 
 ```bash
-# Fast scan (8 tools, 5-10 min)
+# Fast scan (9 tools, 5-10 min)
 jmo scan --repo . --profile-name fast
 
-# Slim scan (14 tools, 12-18 min)
+# Slim scan (13 tools, 12-18 min)
 jmo scan --repo . --profile-name slim
 
-# Balanced scan (18 tools, 18-25 min)
+# Balanced scan (17 tools, 18-25 min)
 jmo scan --repo . --profile-name balanced
 
 # Deep scan (28 tools, 40-70 min)
