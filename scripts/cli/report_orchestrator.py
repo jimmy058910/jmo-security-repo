@@ -38,7 +38,7 @@ from scripts.core.telemetry import (
 logger = logging.getLogger(__name__)
 
 # Version (from pyproject.toml)
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
