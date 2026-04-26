@@ -4,6 +4,10 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+
+- **Bearer binary from `Dockerfile.deep`** (~80 MB stranded weight): Bearer was removed from `PROFILE_TOOLS` in PR #262 (April 2026 dead-code cleanup) but its binary install + COPY + version-probe + strip-list reference remained in `Dockerfile.deep`. Each `:deep` and `:1.x.x-deep` image since v1.0.2 has shipped Bearer as dead weight — no adapter, no profile entry, no way for users to invoke it via `jmo`. This PR removes all 4 references plus updates the file header (which still claimed "29 tools / 3 manual" — reality is 28 PROFILE_TOOLS / 24 in image / 4 manual-only). Image-size impact ≈ -80 MB uncompressed (well within `IMAGE_SIZE_RANGES` ±20% buffer; no test threshold update needed).
+
 ### Internal
 
 - **SSOT drift guard for tool counts** (`tests/unit/test_profile_tools_count_drift.py`): New unit test asserts that `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS` AND `.github/workflows/scheduled.yml` `validate-variants` matrix BOTH equal `len(PROFILE_TOOLS[v]) - len(MANUAL_INSTALL_TOOLS & PROFILE_TOOLS[v])` for each variant, computed at runtime from `scripts/core/tool_registry.py`. A YAML matrix can't `import PROFILE_TOOLS`, so both downstream constants stay hardcoded but the test enforces their relationship at PR time. Catches the cascade-drift class that took 5 PRs (#343 → #344 → #345 → #346 → #347) to resolve in v1.0.3 after bearer was removed from PROFILE_TOOLS but the constants weren't updated together.
