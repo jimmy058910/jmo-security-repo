@@ -326,6 +326,112 @@ class TestUrlScanner:
             assert "-severity" in nuclei_def.command
             assert "critical,high" in nuclei_def.command
 
+    def test_scan_url_zap_command_selection(self, tmp_path):
+        """Test ZAP command selection (zap.sh vs zap)"""
+
+        def mock_find_tool(tool: str):
+            # Return path for zap.sh first, then zap as fallback
+            if tool == "zap.sh":
+                return "/usr/share/zap/zap.sh"
+            return None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="zap", status="success", attempts=1),
+            ]
+
+            scan_url(
+                url="https://example.com",
+                results_dir=tmp_path,
+                tools=["zap"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Verify ZAP tool was invoked with zap.sh path
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            zap_def = next((t for t in tool_defs if t.name == "zap"), None)
+            assert zap_def is not None
+            assert "/usr/share/zap/zap.sh" in zap_def.command[0]
+
+    def test_scan_url_akto_missing_tool_with_stub(self, tmp_path):
+        """Test Akto missing tool writes stub when allow_missing_tools=True"""
+
+        def mock_find_tool(tool: str):
+            return None if tool == "akto" else f"/usr/bin/{tool}"
+
+        with patch("scripts.cli.scan_jobs.url_scanner.write_stub") as mock_stub:
+            with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+                mock_runner = MagicMock()
+                MockRunner.return_value = mock_runner
+                mock_runner.run_all_parallel.return_value = []
+
+                url, statuses = scan_url(
+                    url="https://api.example.com",
+                    results_dir=tmp_path,
+                    tools=["akto"],
+                    timeout=600,
+                    retries=0,
+                    per_tool_config={},
+                    allow_missing_tools=True,
+                    find_tool_func=mock_find_tool,
+                )
+
+                # Stub should be written for missing Akto
+                assert statuses["akto"] is True
+                mock_stub.assert_called()
+
+    def test_scan_url_tool_not_found_error(self, tmp_path):
+        """Test handling of 'Tool not found' error from ToolRunner"""
+
+        def mock_find_tool(tool: str):
+            return "/usr/bin/zap.sh" if tool in ("zap.sh", "zap") else None
+
+        with patch("scripts.cli.scan_jobs.url_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="zap",
+                    status="error",
+                    stdout="",
+                    stderr="",
+                    returncode=127,
+                    duration=0.1,
+                    attempts=1,
+                    output_file=None,
+                    capture_stdout=False,
+                    error_message="Tool not found: zap",
+                ),
+            ]
+
+            url, statuses = scan_url(
+                url="https://example.com",
+                results_dir=tmp_path,
+                tools=["zap"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Should write stub for tool not found error
+            assert statuses["zap"] is True
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

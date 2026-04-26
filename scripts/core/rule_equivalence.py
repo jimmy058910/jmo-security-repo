@@ -161,25 +161,21 @@ RULE_EQUIVALENCE: dict[str, list[tuple[str, str]]] = {
         ("semgrep", "python.django.security.injection.sql.sql-injection"),
         ("semgrep", "python.sqlalchemy.security.sqlalchemy-execute-raw-query"),
         ("bandit", "B608"),
-        ("bearer", "python_sql_injection"),
     ],
     "code-xss": [
         ("semgrep", "python.django.security.injection.reflected-data-httpresponse"),
         ("semgrep", "javascript.browser.security.dom-based-xss"),
         ("bandit", "B320"),
-        ("bearer", "javascript_xss"),
     ],
     "code-command-injection": [
         ("semgrep", "python.lang.security.audit.dangerous-subprocess-use"),
         ("semgrep", "python.lang.security.audit.subprocess-shell-true"),
         ("bandit", "B602"),
         ("bandit", "B603"),
-        ("bearer", "python_os_command_injection"),
     ],
     "code-path-traversal": [
         ("semgrep", "python.lang.security.audit.path-traversal"),
         ("bandit", "B310"),
-        ("bearer", "python_path_traversal"),
     ],
     "code-hardcoded-password": [
         ("semgrep", "python.lang.security.audit.hardcoded-password"),

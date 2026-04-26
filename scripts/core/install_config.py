@@ -144,11 +144,6 @@ BINARY_URLS: dict[str, str | dict[str, str]] = {
     },
     "nuclei": "https://github.com/projectdiscovery/nuclei/releases/download/v{version}/nuclei_{version}_{os_lower}_{arch_amd}.zip",
     "gosec": "https://github.com/securego/gosec/releases/download/v{version}/gosec_{version}_{os_lower}_{arch_amd}.tar.gz",
-    # bearer: Windows uses .zip, Linux/macOS use .tar.gz
-    "bearer": {
-        "windows": "https://github.com/Bearer/bearer/releases/download/v{version}/bearer_{version}_windows_{arch_amd}.zip",
-        "default": "https://github.com/Bearer/bearer/releases/download/v{version}/bearer_{version}_{os_lower}_{arch_amd}.tar.gz",
-    },
     # horusec: lowercase "linux_amd64" (no version in filename)
     # Windows provides .exe directly, Linux/macOS provide binary without extension
     # Note: Windows uses "win" not "windows" in asset name (horusec_win_amd64.exe)

@@ -6,7 +6,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 ## Project Overview
 
-JMo Security is a terminal-first security audit toolkit orchestrating 28+ scanners with unified CLI, normalized outputs, and HTML dashboard.
+JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanners with unified CLI, normalized outputs, and HTML dashboard.
 
 **Version:** v1.0.0 (Production Release)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
@@ -102,7 +102,7 @@ make test-fast                         # Fast parallel tests (recommended for de
 | Command | Purpose |
 |---------|---------|
 | `jmo wizard` | Interactive setup wizard |
-| `jmo scan --profile balanced` | Production scan (18 tools, 18-25 min) |
+| `jmo scan --profile balanced` | Production scan (17 tools, 18-25 min) |
 | `jmo scan --image nginx:latest` | Container image scan |
 | `jmo report ./results` | Generate reports from scan |
 | `jmo ci --fail-on HIGH` | CI/CD mode with threshold |
@@ -216,7 +216,7 @@ Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
 | `scripts/core/schema_validator.py` | JSON schema validation for findings |
 | `scripts/core/install_config.py` | Installation URLs, timeouts, isolated tools config |
 | `docs/schemas/common_finding.v1.json` | CommonFinding JSON Schema (Draft 2020-12) |
-| `scripts/core/adapters/*.py` | Tool output parsers (28 adapters) |
+| `scripts/core/adapters/*.py` | Tool output parsers (27 adapters) |
 | `jmo.yml` | Main configuration |
 | `versions.yaml` | Tool version registry |
 | `Dockerfile.*` | Docker variants: `Dockerfile.deep` (heavyweight, also tagged `:latest`), `.fast`, `.slim`, `.balanced` |
@@ -228,9 +228,9 @@ Dockerfile.*         # 4 variants (see .claude/rules/docker.rules.md)
 | Profile | Tools | Time | Use Case | Docker Tag |
 |---------|-------|------|----------|------------|
 | `fast` | 9 | 5-10 min | Pre-commit, PR validation | `:fast` |
-| `slim` | 14 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
-| `balanced` | 18 | 18-25 min | Production scans, CI/CD | `:balanced` |
-| `deep` | 29 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
+| `slim` | 13 | 12-18 min | Cloud/IaC, AWS/Azure/GCP/K8s | `:slim` |
+| `balanced` | 17 | 18-25 min | Production scans, CI/CD | `:balanced` |
+| `deep` | 28 | 40-70 min | Compliance audits, pentests | `:deep` (default) |
 
 **Note:** The heavyweight image lives at `Dockerfile.deep` (also pulled via `:latest` and `:deep` bare tags). See PROFILES_AND_TOOLS.md for complete tool lists.
 

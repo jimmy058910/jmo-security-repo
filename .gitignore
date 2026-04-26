@@ -111,6 +111,9 @@ samples/fixtures/infra-demo/docker-test-results/
 # Skill Seekers analysis artifacts (local development, not for public repo)
 skill_seekers/
 
+# Paperclip local artifacts
+paperclip/
+
 # Hypothesis property-based testing cache (test artifacts, not source)
 .hypothesis/
 

@@ -579,8 +579,6 @@ jobs:
         env:
           TEST_REPO: https://github.com/juice-shop/juice-shop.git
           TEST_IMAGE: alpine:3.19
-          TEST_URL: http://testphp.vulnweb.com
-          RESULTS_BASE: /tmp/jmo-e2e-results-${{ github.run_id }}
         continue-on-error: true
 
       - name: Upload test results
@@ -1012,7 +1010,7 @@ jobs:
             expected_tools: 25   # 29 profile - 4 manual-only = 25
             profile: deep
           - variant: balanced
-            expected_tools: 18
+            expected_tools: 17
             profile: balanced
           - variant: slim
             expected_tools: 14

@@ -999,6 +999,128 @@ class TestRepositoryScanner:
             assert "__attempts__" in statuses
             assert statuses["__attempts__"]["semgrep-secrets"] == 3
 
+    def test_scan_repository_checkov_cicd_directory_handling(self, tmp_path):
+        """Test checkov-cicd special directory handling (temp dir + file move)"""
+        repo = tmp_path / "test-repo"
+        repo.mkdir()
+        (repo / "app.py").write_text("print('hello')")
+        workflows = repo / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").write_text("name: CI\non: [push]")
+
+        def mock_find_tool(tool: str):
+            return "/usr/bin/checkov" if tool == "checkov" else None
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            # Create the temp file that checkov would create
+            temp_dir = tmp_path / "test-repo" / "checkov-cicd-temp"
+            temp_dir.mkdir(parents=True)
+            temp_file = temp_dir / "results_json.json"
+            temp_file.write_text("{}")
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(
+                    tool="checkov-cicd",
+                    status="success",
+                    stdout="",
+                    stderr="",
+                    returncode=0,
+                    duration=5.0,
+                    attempts=1,
+                    output_file=temp_file,
+                    capture_stdout=False,
+                    error_message="",
+                ),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["checkov-cicd"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            assert statuses["checkov-cicd"] is True
+            # Verify final checkov-cicd.json exists after file move
+            final_file = tmp_path / "test-repo" / "checkov-cicd.json"
+            assert final_file.exists()
+
+    def test_scan_repository_custom_find_tool_func(self, tmp_path):
+        """Test using custom find_tool_func for testing"""
+        repo = tmp_path / "test-repo"
+        repo.mkdir()
+
+        def mock_find_tool(tool: str):
+            return "/usr/bin/trivy" if tool == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            name, statuses = scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["trivy", "semgrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Only trivy should run; semgrep should have stub written
+            assert "trivy" in statuses
+            assert "semgrep" in statuses
+
+    def test_scan_repository_custom_write_stub_func(self, tmp_path):
+        """Test using custom write_stub_func for testing"""
+        repo = tmp_path / "test-repo"
+        repo.mkdir()
+
+        stub_calls = []
+
+        def mock_write_stub(tool: str, path) -> None:
+            stub_calls.append((tool, path))
+
+        def mock_find_tool(tool: str):
+            return None  # No tools found
+
+        with patch("scripts.cli.scan_jobs.repository_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            scan_repository(
+                repo=repo,
+                results_dir=tmp_path,
+                tools=["trivy", "semgrep"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            assert len(stub_calls) == 2
+            assert any("trivy" in str(p) for _, p in stub_calls)
+            assert any("semgrep" in str(p) for _, p in stub_calls)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

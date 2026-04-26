@@ -52,11 +52,10 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "prowler",
         "kubescape",
         "grype",
-        "bearer",
         "horusec",
         "shellcheck",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 14 tools
+    ],  # 13 tools
     "balanced": [
         "trufflehog",
         "semgrep",
@@ -72,11 +71,10 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "cdxgen",
         "gosec",
         "grype",
-        "bearer",
         "horusec",
         "shellcheck",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 18 tools
+    ],  # 17 tools
     "deep": [
         "trufflehog",
         "noseyparker",
@@ -99,7 +97,6 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "gosec",
         "yara",
         "grype",
-        "bearer",
         "horusec",
         "dependency-check",
         "falco",
@@ -107,7 +104,7 @@ PROFILE_TOOLS: dict[str, list[str]] = {
         "mobsf",
         "lynis",
         "opa",  # Policy engine for policy-as-code evaluation
-    ],  # 29 tools
+    ],  # 28 tools
 }
 
 # Tool name normalization - maps jmo.yml names to binary names
@@ -180,7 +177,6 @@ TOOL_SCAN_TYPES: dict[str, set[str]] = {
         "cdxgen",
         "scancode",
         "kubescape",
-        "bearer",
         "prowler",
         "yara",
         "grype",
@@ -221,7 +217,6 @@ TOOL_SCAN_TYPES: dict[str, set[str]] = {
         "cdxgen",
         "scancode",
         "kubescape",
-        "bearer",
         "prowler",
         "yara",
         "grype",
@@ -293,12 +288,6 @@ TOOL_PLATFORM_REQUIREMENTS: dict[str, dict] = {
         "platforms": ["linux", "macos"],
         "docker_image": "ghcr.io/praetorian-inc/noseyparker",
         "reason": "Rust binary not available for Windows",
-        "workarounds": ["docker", "wsl2"],
-    },
-    "bearer": {
-        "platforms": ["linux", "macos"],
-        "docker_image": "bearer/bearer",
-        "reason": "Go binary not available for Windows",
         "workarounds": ["docker", "wsl2"],
     },
     # All platforms but with requirements

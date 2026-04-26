@@ -24,15 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, cast
 
 from scripts.core.policy_engine import PolicyEngine
+from scripts.core.unicode_utils import UNICODE_FALLBACKS as _UNICODE_FALLBACKS
 
 logger = logging.getLogger(__name__)
-
-
-# Windows-safe Unicode fallback mappings for cp1252 compatibility
-_UNICODE_FALLBACKS = {
-    "✅": "[OK]",  # Check mark
-    "❌": "[X]",  # Cross mark
-}
 
 
 def _safe_print(text: str) -> None:

@@ -313,10 +313,3 @@ CMD ["python", "src/app.py"]
     binary_file.write_bytes(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09")
 
     return repo_root
-
-
-@pytest.fixture
-def mock_mcp_server():
-    """Mock FastMCP server for testing tools/resources."""
-    # This will be used for integration tests when we mock the MCP framework
-    pass

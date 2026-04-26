@@ -164,23 +164,6 @@ class TestBinaryURLPatterns:
             "gosec_2.21.4_linux_amd64.tar.gz"
         )
 
-    def test_bearer_url_x86_64(self):
-        """Test bearer URL for x86_64 Linux."""
-        url = BINARY_URLS["bearer"]["default"].format(
-            version="1.51.1",
-            os="Linux",
-            os_lower="linux",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-unknown-linux-gnu",
-        )
-        assert url == (
-            "https://github.com/Bearer/bearer/releases/download/v1.51.1/"
-            "bearer_1.51.1_linux_amd64.tar.gz"
-        )
-
     def test_noseyparker_url_x86_64(self):
         """Test noseyparker URL for x86_64 Linux (Rust target triple)."""
         url = BINARY_URLS["noseyparker"].format(
@@ -317,23 +300,6 @@ class TestBinaryURLPatterns:
         assert url == (
             "https://github.com/trufflesecurity/trufflehog/releases/download/v3.88.0/"
             "trufflehog_3.88.0_windows_amd64.zip"
-        )
-
-    def test_bearer_url_windows(self):
-        """Test bearer URL for Windows (.zip format)."""
-        url = BINARY_URLS["bearer"]["windows"].format(
-            version="1.51.1",
-            os="Windows",
-            os_lower="windows",
-            arch="x86_64",
-            arch_amd="amd64",
-            arch_aarch="x86_64",
-            trivy_arch="64bit",
-            rust_arch="x86_64-pc-windows-msvc",
-        )
-        assert url == (
-            "https://github.com/Bearer/bearer/releases/download/v1.51.1/"
-            "bearer_1.51.1_windows_amd64.zip"
         )
 
     def test_horusec_url_windows(self):

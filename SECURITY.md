@@ -83,7 +83,7 @@ We provide **four Docker image variants** matching our scan profiles:
 
 ### 2. **Balanced** (`ghcr.io/jimmy058910/jmo-security:balanced`)
 
-- **Tools:** 18 tools
+- **Tools:** 17 tools
 - **Image Size:** ~1.41 GB
 - **Scan Time:** 18-25 minutes
 - **Vulnerabilities:** Medium-high count
@@ -91,7 +91,7 @@ We provide **four Docker image variants** matching our scan profiles:
 
 ### 3. **Slim** (`ghcr.io/jimmy058910/jmo-security:slim`)
 
-- **Tools:** 14 tools
+- **Tools:** 13 tools
 - **Image Size:** ~557 MB
 - **Scan Time:** 12-18 minutes
 - **Vulnerabilities:** Medium count
@@ -99,7 +99,7 @@ We provide **four Docker image variants** matching our scan profiles:
 
 ### 4. **Fast** (`ghcr.io/jimmy058910/jmo-security:fast`)
 
-- **Tools:** 8 tools
+- **Tools:** 9 tools
 - **Image Size:** ~502 MB
 - **Scan Time:** 5-10 minutes
 - **Vulnerabilities:** Lowest count (minimal attack surface)

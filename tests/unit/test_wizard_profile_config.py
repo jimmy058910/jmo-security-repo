@@ -40,9 +40,9 @@ class TestProfiles:
 
     def test_profile_tool_counts(self):
         assert len(PROFILES["fast"]["tools"]) == 9
-        assert len(PROFILES["slim"]["tools"]) == 14
-        assert len(PROFILES["balanced"]["tools"]) == 18
-        assert len(PROFILES["deep"]["tools"]) == 29
+        assert len(PROFILES["slim"]["tools"]) == 13
+        assert len(PROFILES["balanced"]["tools"]) == 17
+        assert len(PROFILES["deep"]["tools"]) == 28
 
 
 class TestCalculateTimeEstimate:

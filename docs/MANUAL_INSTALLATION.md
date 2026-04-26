@@ -214,21 +214,6 @@ brew install nuclei
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 ```
 
-**Bearer** (Privacy/PII scanning - Linux/macOS only):
-
-```bash
-# macOS
-brew install bearer/tap/bearer
-
-# Linux
-curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh
-
-# Windows: Use Docker
-docker run --rm -v "$PWD:/scan" bearer/bearer scan /scan
-```
-
-> **Note:** Bearer is not available natively on Windows. Use Docker mode or WSL2 for full support.
-
 #### Java-Based Tools (Dependency-Check, ZAP)
 
 Several tools require **Java 11+** (Java 17+ recommended):
@@ -287,7 +272,6 @@ jmo tools install dependency-check
 | Nuclei | ✅ | ✅ | ✅ | ✅ |
 | Bandit | ✅ | ✅ | ✅ | ✅ |
 | OWASP ZAP | ✅ | ✅ | ✅ | ✅ |
-| Bearer | ✅ | ✅ | ❌ | ✅ |
 | Nosey Parker | ❌ | ✅ | ❌ | ✅ |
 | Falco | ❌ | ✅ | ❌ | ✅ |
 | AFL++ | ❌ | ✅ | ❌ | Manual |
@@ -299,11 +283,10 @@ jmo tools install dependency-check
 > **Wizard behavior:** When running `jmo wizard`, platform-incompatible tools are automatically skipped with explanatory messages. For example, on Windows:
 >
 > ```text
-> ~ Skipped on windows (5 tools):
+> ~ Skipped on windows (4 tools):
 >   ~ falco: Requires Linux kernel module
 >   ~ afl++: Requires Linux kernel features
 >   ~ noseyparker: Rust binary not available for Windows
->   ~ bearer: Go binary not available for Windows
 >   ~ mobsf: Complex setup (Docker recommended)
 > ```
 

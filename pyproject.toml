@@ -60,6 +60,8 @@ dev = [
     "pytest-split>=0.9.0",
     "pytest-timeout>=2.3.0",
     "pytest-rerunfailures",
+    "pytest-xdist>=3.5.0",
+    "pytest-json-report>=1.5.0",
     "hypothesis",
     # Linting & formatting
     "ruff",
@@ -75,9 +77,6 @@ dev = [
     # Required for tests
     "jsonschema",
     "packaging",
-    # Trend analysis (scipy/numpy - upper bounds prevent breaking API changes)
-    "scipy>=1.11.0,<1.18.0",
-    "numpy>=1.24.0,<2.5.0",
 ]
 
 [project.scripts]
@@ -171,10 +170,7 @@ omit = [
     "scripts/core/compliance_frameworks.py",
     # CLI entry points (tested via integration tests)
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    # Dashboard generator (standalone HTML builder)
-    "scripts/core/generate_dashboard.py",
     # MCP server - separate integration
     "scripts/jmo_mcp/*",
     # Email service requires SMTP infrastructure
@@ -186,6 +182,13 @@ omit = [
     "scripts/core/policy_engine.py",
     # Path sanitizers utility
     "scripts/cli/path_sanitizers.py",
+    # Dev/maintenance scripts: standalone CLI tools used by maintainers
+    # (update_versions, auto_merge_tool_bumps, generate_baseline, etc.).
+    # Not imported by runtime code, not shipped to users via the JMo
+    # Security CLI. Counting them as "runtime coverage" was distorting
+    # the metric — these are tooling for the project's release/dev
+    # workflow, not the security-audit tool itself.
+    "scripts/dev/*",
 ]
 
 [tool.coverage.report]
@@ -201,15 +204,14 @@ exclude_lines = [
 ]
 omit = [
     "scripts/cli/jmo.py",
-    "scripts/cli/jmotools.py",
     "scripts/cli/clone_from_tsv.py",
-    "scripts/core/generate_dashboard.py",
     "scripts/jmo_mcp/*",
     "scripts/core/email_service.py",
     "scripts/cli/wizard.py",
     "scripts/cli/wizard_flows/policy_flow.py",
     "scripts/core/policy_engine.py",
     "scripts/cli/path_sanitizers.py",
+    "scripts/dev/*",
 ]
 
 [tool.ruff]

@@ -359,6 +359,234 @@ class TestK8sScanner:
             assert "--severity" in trivy_def.command
             assert "CRITICAL" in trivy_def.command
 
+    def test_scan_k8s_current_context(self, tmp_path):
+        """Test K8s scanning with current context (no --context flag added)"""
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            k8s_info = {
+                "context": "current",
+                "namespace": "default",
+                "all_namespaces": "False",
+            }
+
+            scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Verify trivy command does NOT include --context flag
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
+            assert "--context" not in trivy_def.command
+
+    def test_scan_k8s_specific_namespace(self, tmp_path):
+        """Test K8s scanning with specific (non-default) namespace includes -n flag"""
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            k8s_info = {
+                "context": "prod",
+                "namespace": "monitoring",
+                "all_namespaces": "False",
+            }
+
+            scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
+            assert "-n" in trivy_def.command
+            assert "monitoring" in trivy_def.command
+
+    def test_scan_k8s_default_namespace_no_n_flag(self, tmp_path):
+        """Test K8s scanning with default namespace does NOT add -n flag"""
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            k8s_info = {
+                "context": "prod",
+                "namespace": "default",
+                "all_namespaces": "False",
+            }
+
+            scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            MockRunner.assert_called_once()
+            args, kwargs = MockRunner.call_args
+            tool_defs = kwargs.get("tools") or (args[0] if args else [])
+            trivy_def = next((t for t in tool_defs if t.name == "trivy"), None)
+            assert trivy_def is not None
+            assert "-n" not in trivy_def.command
+
+    def test_scan_k8s_sanitized_directory_special_chars(self, tmp_path):
+        """Test directory name sanitization for context/namespace with special chars"""
+        k8s_results_dir = tmp_path / "individual-k8s"
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            k8s_info = {
+                "context": "prod/west",
+                "namespace": "app*",
+                "all_namespaces": "False",
+            }
+
+            scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=k8s_results_dir,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=False,
+                find_tool_func=mock_find_tool,
+            )
+
+            # Verify sanitized directory created (/ -> _, * -> all)
+            sanitized_dir = k8s_results_dir / "prod_west_appall"
+            assert sanitized_dir.exists()
+
+    def test_scan_k8s_custom_find_tool_func(self, tmp_path):
+        """Test using custom find_tool_func"""
+
+        def mock_find_tool(tool_name):
+            return f"/usr/bin/{tool_name}" if tool_name == "trivy" else None
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+
+            from scripts.core.tool_runner import ToolResult
+
+            mock_runner.run_all_parallel.return_value = [
+                ToolResult(tool="trivy", status="success", attempts=1),
+            ]
+
+            k8s_info = {
+                "context": "prod",
+                "namespace": "default",
+            }
+
+            identifier, statuses = scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+            )
+
+            assert "trivy" in statuses
+
+    def test_scan_k8s_custom_write_stub_func(self, tmp_path):
+        """Test using custom write_stub_func"""
+        stub_calls = []
+
+        def mock_find_tool(tool_name):
+            return None  # No tools found
+
+        def mock_write_stub(tool: str, path) -> None:
+            stub_calls.append((tool, path))
+
+        with patch("scripts.cli.scan_jobs.k8s_scanner.ToolRunner") as MockRunner:
+            mock_runner = MagicMock()
+            MockRunner.return_value = mock_runner
+            mock_runner.run_all_parallel.return_value = []
+
+            k8s_info = {
+                "context": "prod",
+                "namespace": "default",
+            }
+
+            scan_k8s_resource(
+                k8s_info=k8s_info,
+                results_dir=tmp_path,
+                tools=["trivy"],
+                timeout=600,
+                retries=0,
+                per_tool_config={},
+                allow_missing_tools=True,
+                find_tool_func=mock_find_tool,
+                write_stub_func=mock_write_stub,
+            )
+
+            assert len(stub_calls) == 1
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -129,12 +129,6 @@ mkdir -p /downloads
 ) &
 
 (
-  echo "Downloading Bearer..."
-  curl -sSL "https://github.com/bearer/bearer/releases/download/v1.51.1/bearer_1.51.1_linux_${ARCH_AMD64_ARM64}.tar.gz" \
-    -o /downloads/bearer.tar.gz
-) &
-
-(
   echo "Downloading Horusec..."
   curl -sSL "https://github.com/ZupIT/horusec/releases/download/v2.8.0/horusec_linux_${ARCH_AMD64_ARM64}" \
     -o /downloads/horusec
@@ -194,7 +188,6 @@ tar -xzf /downloads/syft.tar.gz -C /usr/local/bin syft
 tar -xzf /downloads/trivy.tar.gz -C /usr/local/bin trivy
 tar -xzf /downloads/gosec.tar.gz -C /usr/local/bin gosec
 tar -xzf /downloads/grype.tar.gz -C /usr/local/bin grype
-tar -xzf /downloads/bearer.tar.gz -C /usr/local/bin bearer
 tar -xzf /downloads/falcoctl.tar.gz -C /usr/local/bin falcoctl
 tar -xzf /downloads/noseyparker.tar.gz -C /tmp && mv /tmp/bin/noseyparker /usr/local/bin/
 

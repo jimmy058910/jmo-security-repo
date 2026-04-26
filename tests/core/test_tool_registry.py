@@ -210,5 +210,5 @@ class TestIntegration:
         """Deep profile on Windows should have fewer tools than Linux."""
         windows_count = len(get_tools_for_profile_filtered("deep", "windows"))
         linux_count = len(get_tools_for_profile_filtered("deep", "linux"))
-        # Windows should have fewer (missing falco, afl++, noseyparker, bearer)
+        # Windows should have fewer (missing falco, afl++, noseyparker)
         assert windows_count < linux_count
