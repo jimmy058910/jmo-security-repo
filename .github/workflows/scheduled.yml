@@ -97,10 +97,80 @@ jobs:
             --cov-report=html \
             --cov-report=term-missing \
             --cov-report=xml \
+            --json-report \
+            --json-report-file=pytest-report.json \
             -v \
             --durations=20 \
-            --maxfail=5 \
+            --maxfail=20 \
             -m "not requires_tools and not smoke"
+
+      - name: Summarize pytest failures
+        if: always()
+        shell: bash
+        # Bumped --maxfail from 5 to 20 in 2026-04 to break the bug-archeology
+        # cycle (post-v1.0.3 stabilization needed 5 successive PRs to drill past
+        # truncation). This step renders the full failure list to the run's
+        # Summary tab so future archeology cycles see all failures at once.
+        # See .claude/rules/testing.rules.md "Bug Archeology" for context.
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report_path = Path("pytest-report.json")
+          if not report_path.exists():
+              print("# Nightly Extended Tests — Summary unavailable")
+              print()
+              print("`pytest-report.json` was not produced (pytest may have crashed).")
+              raise SystemExit
+
+          data = json.loads(report_path.read_text())
+          summary = data.get("summary", {})
+          tests = data.get("tests", [])
+          failed = [t for t in tests if t.get("outcome") == "failed"]
+          errors = [t for t in tests if t.get("outcome") == "error"]
+
+          total = summary.get("total", len(tests))
+          n_pass = summary.get("passed", 0)
+          n_fail = summary.get("failed", len(failed))
+          n_error = summary.get("error", len(errors))
+          duration = data.get("duration", 0)
+
+          print("# Nightly Extended Tests — Run Summary")
+          print()
+          print(
+              f"**{total} collected, {n_pass} passed, {n_fail} failed, "
+              f"{n_error} errors, {duration:.0f}s.**"
+          )
+          print()
+
+          combined = failed + errors
+          if not combined:
+              print(":white_check_mark: All tests passed.")
+              raise SystemExit
+
+          # Cap per-failure output to keep the Summary tab under GHA's ~1MB cap.
+          MAX_LISTED = 50
+          listed = combined[:MAX_LISTED]
+          for t in listed:
+              nodeid = t.get("nodeid", "?")
+              outcome = t.get("outcome", "?")
+              call = t.get("call") or {}
+              msg = (call.get("longrepr") or t.get("longrepr") or "(no traceback captured)")
+              if isinstance(msg, dict):
+                  msg = msg.get("reprcrash", {}).get("message", str(msg))
+              msg_str = str(msg)[:2000]
+              print(f"## `{nodeid}` ({outcome})")
+              print()
+              print("```")
+              print(msg_str)
+              print("```")
+              print()
+
+          if len(combined) > MAX_LISTED:
+              hidden = len(combined) - MAX_LISTED
+              print(f"_… {hidden} more failure(s) truncated. See pytest-report.json artifact for the full list._")
+          PY
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -149,6 +219,7 @@ jobs:
             htmlcov/
             coverage.xml
             trufflehog-results.json
+            pytest-report.json
           retention-days: 7
 
   nightly-cross-platform:
@@ -193,13 +264,13 @@ jobs:
             --cov=scripts \
             --cov-report=term-missing \
             -v \
-            --maxfail=5 \
+            --maxfail=20 \
             -m "not slow"
 
       - name: Run CLI tests
         shell: bash
         run: |
-          pytest tests/cli/ -v --maxfail=5 -m "not slow"
+          pytest tests/cli/ -v --maxfail=20 -m "not slow"
 
   nightly-security-regression:
     name: Security Regression Tests
