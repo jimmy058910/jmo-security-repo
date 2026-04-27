@@ -2,6 +2,12 @@
 
 All notable changes to JMo Security will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **`Performance Benchmarks` job missing `pytest-benchmark` dependency**: The job in `.github/workflows/scheduled.yml` (lines 1030, 1048) and helper `scripts/dev/compare_benchmarks.py` use `pytest --benchmark-json=...` and `--benchmark-only` flags from the `pytest-benchmark` plugin, but the plugin was never declared as a dev dependency. Every Performance Benchmarks invocation has failed with `error: unrecognized arguments: --benchmark-json=...` since the job was added. Verified failing in `task=all` dispatch run `24977082358` (post-v1.0.4 — 23/24 jobs green except this one). Added `pytest-benchmark>=4.0.0` to `requirements-dev.in`, regenerated lockfile via `uv pip compile` (resolved to `pytest-benchmark==5.2.3` + transitive `py-cpuinfo==9.0.0`).
+
 ## [1.0.4] - 2026-04-27
 
 ### Summary

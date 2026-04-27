@@ -131,6 +131,8 @@ pluggy==1.6.0
     #   pytest-cov
 pre-commit==4.6.0
     # via -r requirements-dev.in
+py-cpuinfo==9.0.0
+    # via pytest-benchmark
 pyasn1==0.6.3
     # via sigstore
 pycparser==3.0 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
@@ -159,6 +161,7 @@ pyopenssl==26.0.0
 pytest==9.0.3
     # via
     #   -r requirements-dev.in
+    #   pytest-benchmark
     #   pytest-cov
     #   pytest-json-report
     #   pytest-metadata
@@ -166,6 +169,8 @@ pytest==9.0.3
     #   pytest-split
     #   pytest-timeout
     #   pytest-xdist
+pytest-benchmark==5.2.3
+    # via -r requirements-dev.in
 pytest-cov==7.1.0
     # via -r requirements-dev.in
 pytest-json-report==1.5.0
