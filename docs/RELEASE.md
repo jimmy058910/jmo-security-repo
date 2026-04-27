@@ -788,8 +788,8 @@ docker run --rm --platform linux/amd64 jmogaming/jmo-security:latest --help
 6. **Verify the release:**
 
    ```bash
-   # Wait a few minutes for PyPI to update, then:
-   pip install --upgrade jmo-security==0.4.0
+   # Wait a few minutes for PyPI to update, then (substitute the version you just tagged):
+   pip install --upgrade jmo-security==1.0.4
    jmo --version
    jmo --help
    ```

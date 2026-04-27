@@ -22,7 +22,7 @@ Usage:
   # Update specific tool
   python3 scripts/dev/update_versions.py --tool trivy --version 0.68.0
 
-  # Sync all Dockerfiles and install_tools.sh from versions.yaml
+  # Sync all Dockerfiles AND .github/workflows/*.yml env: blocks from versions.yaml
   python3 scripts/dev/update_versions.py --sync
 
   # Generate version consistency report
@@ -75,6 +75,7 @@ DOCKERFILE_BALANCED = REPO_ROOT / "Dockerfile.balanced"
 DOCKERFILE_SLIM = REPO_ROOT / "Dockerfile.slim"
 DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
+WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
 # ANSI colors
 BLUE = "\033[0;34m"
@@ -598,12 +599,29 @@ def update_tool_version(tool: str, new_version: str) -> bool:
 
 
 def sync_dockerfiles(dry_run: bool = False) -> bool:
-    """Sync all Dockerfiles with versions from versions.yaml."""
+    """Sync Dockerfiles AND .github/workflows/*.yml `env:` blocks with versions.yaml.
+
+    Two file families are kept in sync:
+
+    1. Dockerfiles (`Dockerfile.{deep,balanced,slim,fast}`) — shell-style
+       `TOOL_VERSION="X.Y.Z"` (no whitespace around `=`).
+    2. GitHub Actions workflows (`.github/workflows/*.yml`) — YAML mapping form
+       `TOOL_VERSION: "X.Y.Z"` (colon + single space). Pinned env: blocks were
+       added in PR #358 to harden tool installs against upstream `install.sh`
+       GitHub-API "latest" lookup flakes; both files must move together when
+       `versions.yaml` is bumped.
+
+    The two regex patterns are kept distinct because a single permissive
+    pattern that matched both forms would risk corrupting YAML structure.
+    """
     versions = load_versions()
     all_success = True
     changes_needed = False
 
-    log("Syncing Dockerfiles with versions.yaml..." + (" (dry-run)" if dry_run else ""))
+    log(
+        "Syncing Dockerfiles + workflows with versions.yaml..."
+        + (" (dry-run)" if dry_run else "")
+    )
 
     # Build version mapping
     version_map = {}
@@ -654,8 +672,36 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         else:
             ok(f"{dockerfile_path.name} already in sync")
 
+    # Update workflow env: blocks (e.g., TRIVY_VERSION: "0.70.0")
+    workflow_files = (
+        sorted(WORKFLOWS_DIR.glob("*.yml")) if WORKFLOWS_DIR.exists() else []
+    )
+    for workflow_path in workflow_files:
+        content = workflow_path.read_text()
+        original_content = content
+
+        for tool, version in version_map.items():
+            # Pattern: `<indent>TOOL_VERSION: "X.Y.Z"` (canonical YAML — single
+            # space after colon, double-quoted value). yamllint enforces the
+            # canonical spacing so we normalize on replace.
+            pattern = rf'{tool}_VERSION:\s+"[0-9.]+"'
+            replacement = f'{tool}_VERSION: "{version}"'
+            content = re.sub(pattern, replacement, content)
+
+        if content != original_content:
+            changes_needed = True
+            if dry_run:
+                warn(
+                    f".github/workflows/{workflow_path.name} needs updates (dry-run, not writing)"
+                )
+            else:
+                workflow_path.write_text(content)
+                ok(f"Updated .github/workflows/{workflow_path.name}")
+        else:
+            ok(f".github/workflows/{workflow_path.name} already in sync")
+
     if dry_run and changes_needed:
-        err("Dockerfiles are out of sync with versions.yaml")
+        err("Dockerfiles or workflows are out of sync with versions.yaml")
         return False
 
     return all_success
@@ -1005,7 +1051,9 @@ def main() -> int:
         "--tool", type=str, help="Tool name to update (requires --version)"
     )
     group.add_argument(
-        "--sync", action="store_true", help="Sync Dockerfiles with versions.yaml"
+        "--sync",
+        action="store_true",
+        help="Sync Dockerfiles AND .github/workflows/*.yml env: blocks with versions.yaml",
     )
     group.add_argument(
         "--report", action="store_true", help="Generate version consistency report"

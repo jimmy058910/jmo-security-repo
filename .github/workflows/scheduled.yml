@@ -183,17 +183,23 @@ jobs:
 
       - name: Run unit tests
         shell: bash
+        # Exclude `slow` to prevent perf-threshold flakes on slower GHA runners
+        # (especially Windows, which is 2-3x slower for filesystem I/O than Linux).
+        # Replaces tactical `@pytest.mark.skipif(sys.platform == "win32", ...)` decorators
+        # added in PR #362 with the broader marker-filter pattern documented in
+        # .claude/rules/testing.cross-platform.rules.md "Workflow Marker Filter Convention".
         run: |
           pytest tests/unit/ \
             --cov=scripts \
             --cov-report=term-missing \
             -v \
-            --maxfail=5
+            --maxfail=5 \
+            -m "not slow"
 
       - name: Run CLI tests
         shell: bash
         run: |
-          pytest tests/cli/ -v --maxfail=5
+          pytest tests/cli/ -v --maxfail=5 -m "not slow"
 
   nightly-security-regression:
     name: Security Regression Tests

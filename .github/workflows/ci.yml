@@ -374,7 +374,61 @@ jobs:
           python3 << 'EOF'
           import xml.etree.ElementTree as ET
           import glob
+          import re
           import sys
+
+          # Helpers for branch-coverage merging (extends PR #357's line-rate fix).
+          # `condition-coverage` from coverage.py is "X% (covered/total)";
+          # `missing-branches` is a comma-separated list of branch targets
+          # (line numbers) — OMITTED entirely when nothing is missing, never
+          # emitted as an empty string. So absent attribute means "all
+          # branches covered on this line in this shard".
+
+          def parse_missing_branches(s):
+              if not s:
+                  return set()
+              return {b.strip() for b in s.split(',') if b.strip()}
+
+          def parse_condition_total(s):
+              # Returns the `total` from "X% (covered/total)"; 0 if not parseable.
+              if not s:
+                  return 0
+              m = re.search(r'\((\d+)/(\d+)\)', s)
+              return int(m.group(2)) if m else 0
+
+          def merge_branch_attrs(existing, incoming):
+              """Update `existing` <line> in-place with the union of branch
+              coverage data from `incoming`. A branch counts as covered in the
+              merged output if covered in EITHER shard, equivalent to:
+                  union_missing = existing_missing ∩ incoming_missing
+              Total branch count is the same in both shards (same source code);
+              we take max defensively in case one shard skipped the line.
+              """
+              if existing.get('branch') != 'true' and incoming.get('branch') != 'true':
+                  return
+              existing_missing = parse_missing_branches(existing.get('missing-branches', ''))
+              incoming_missing = parse_missing_branches(incoming.get('missing-branches', ''))
+              union_missing = existing_missing & incoming_missing  # intersection: missing in BOTH
+              total = max(
+                  parse_condition_total(existing.get('condition-coverage', '')),
+                  parse_condition_total(incoming.get('condition-coverage', '')),
+              )
+              if total <= 0:
+                  return
+              covered = total - len(union_missing)
+              pct = (covered / total) * 100
+              existing.set('branch', 'true')
+              existing.set('condition-coverage', f"{pct:.0f}% ({covered}/{total})")
+              if union_missing:
+                  # Lex sort handles coverage.py's non-numeric branch targets
+                  # (e.g. "exit" when a branch leaves the function); int() sort
+                  # raises ValueError on those and would silently abort the
+                  # outer per-file try/except, dropping the whole shard's merge.
+                  existing.set('missing-branches', ','.join(sorted(union_missing)))
+              elif 'missing-branches' in existing.attrib:
+                  # Fully covered after merge — drop the attribute to match
+                  # coverage.py's emission convention (it omits, doesn't empty).
+                  del existing.attrib['missing-branches']
 
           def merge_coverage_xml(files, output):
               """Merge multiple coverage XML files into one."""
@@ -417,7 +471,8 @@ jobs:
                       if filename not in merged_files:
                           merged_files[filename] = cls
                       else:
-                          # Merge line coverage: OR the hits per line number
+                          # Merge line coverage: OR the hits per line number,
+                          # AND union the per-line branch coverage.
                           existing_lines = {l.get('number'): l for l in merged_files[filename].findall('.//line')}
                           for line in cls.findall('.//line'):
                               line_num = line.get('number')
@@ -426,6 +481,8 @@ jobs:
                                   existing_hits = int(existing_lines[line_num].get('hits', 0))
                                   new_hits = int(line.get('hits', 0))
                                   existing_lines[line_num].set('hits', str(max(existing_hits, new_hits)))
+                                  # Union branch coverage on the same line.
+                                  merge_branch_attrs(existing_lines[line_num], line)
                               else:
                                   # Line only in the new shard — append to the merged class's <lines>
                                   lines_elem = merged_files[filename].find('lines')
@@ -464,19 +521,33 @@ jobs:
                   base_root.set('lines-valid', str(total_lines))
                   base_root.set('lines-covered', str(covered_lines))
                   print(f"📊 Aggregate: {covered_lines}/{total_lines} lines covered = {rate * 100:.2f}%")
-              # NOTE: Branch coverage (`branch = true` in pyproject.toml) produces
-              # `branch-rate`, `branches-valid`, `branches-covered` root attrs and
-              # `condition-coverage` per `<line branch="true">`. Those remain stale
-              # at shard-1's values because correct branch merging requires
-              # parsing each shard's `missing-branches` per line and intersecting
-              # them — `condition-coverage` is a percentage, not a bitmask, so
-              # naive max-percentage merging is wrong (shard-1 covers branches
-              # A+B at 50%, shard-2 covers B+C at 50% — true union is A+B+C =
-              # 75%). The threshold check below only uses `line-rate`, so this
-              # doesn't affect CI gating; Codecov re-derives line coverage from
-              # `<line>` elements and gets correct aggregates there. Branch-rate
-              # in the merged coverage.xml is a known limitation — track via
-              # follow-up if branch-coverage thresholds become a CI requirement.
+
+              # Recompute aggregate branch-rate from merged <line branch="true">
+              # condition-coverage attributes. Each merged line has already had
+              # its missing-branches set-intersected across shards by
+              # merge_branch_attrs, so the per-line covered/total counts are
+              # correct unions. Summing them gives the true aggregate. Without
+              # this pass, branch-rate/branches-valid/branches-covered remain at
+              # shard-1's standalone values (the same scope-limit that PR #357
+              # left for line-rate's sibling attrs). The CI threshold check only
+              # uses line-rate, so this is currently informational; if a future
+              # branch-coverage threshold is added, it'll read true aggregates.
+              total_branches = covered_branches = 0
+              for line in base_root.findall('.//line'):
+                  if line.get('branch') != 'true':
+                      continue
+                  cc = line.get('condition-coverage', '')
+                  m = re.search(r'\((\d+)/(\d+)\)', cc)
+                  if not m:
+                      continue
+                  covered_branches += int(m.group(1))
+                  total_branches += int(m.group(2))
+              if total_branches:
+                  branch_rate = covered_branches / total_branches
+                  base_root.set('branch-rate', f"{branch_rate:.4f}")
+                  base_root.set('branches-valid', str(total_branches))
+                  base_root.set('branches-covered', str(covered_branches))
+                  print(f"📊 Branches: {covered_branches}/{total_branches} branches covered = {branch_rate * 100:.2f}%")
 
               # Write merged output
               base_tree.write(output, encoding='unicode', xml_declaration=True)
