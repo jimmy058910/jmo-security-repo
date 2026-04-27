@@ -4,6 +4,12 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-04-27
+
+### Summary
+
+Quality-of-life follow-up to v1.0.4's CI/YAML rebuild. Closes the 5 deferred items from the v1.0.4 release notes plus 4 new items surfaced during post-release verification, bundled across 2 PRs (#371 + #373). No new features — every change improves a rough edge: clearer `jmo tools check` output (manual-install tools now distinct from missing), faster bug-archeology cycles in nightly tests (`--maxfail` 5→20 + `$GITHUB_STEP_SUMMARY` failure rollup), accurate aggregate branch coverage (completes PR #357's scope-limit), fixed `Performance Benchmarks` job missing `pytest-benchmark` dep, atomic version sync across `Dockerfiles` + workflows, and removal of the deprecated `:full` Docker tag alias.
+
 ### Changed
 
 - **`jmo tools check` now distinguishes manual-install tools from genuinely missing tools across all output paths**: 4 tools in `PROFILE_TOOLS["deep"]` (`afl++`, `mobsf`, `akto`, `falco`) are intentionally NOT in the auto-install set — they require manual installation due to platform/size constraints (documented in `docs/MANUAL_INSTALLATION.md`). Pre-fix, every `jmo tools check` invocation lumped these in the red "7 tool(s) missing" line, conflating "you forgot to install this" with "this is expected to be absent in containerized usage". Now:
