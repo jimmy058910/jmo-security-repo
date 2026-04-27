@@ -8,7 +8,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.4 (latest released — see CHANGELOG.md for full history)
+**Version:** v1.0.5 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
 
@@ -293,28 +293,32 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md) (now ~25 troubleshooting entries covering pytest-timeout traps, PRE_COMMIT_HOME literals, Python 3.12 OSError propagation, tag-naming conventions, dev↔main reconciliation, and more). For Windows hang issues + Docker UID-mismatch, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
 
-### Recent Major Lessons (post-v1.0.3 stabilization + v1.0.4 release, 2026-04-26 → 2026-04-27)
+### Recent Major Lessons (v1.0.4 → v1.0.5 quick-wins cycle, 2026-04-26 → 2026-04-27)
 
 The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. v1.0.4 then shipped the Dockerfile download hardening (PR #350) to GHCR images for the first time, plus root-cause fixes for two more long-standing issues:
 
 - **Coverage merge silent no-op** (PR #357): `coverage-aggregate` job's merge function had been a complete no-op since pytest-split was introduced — `hasattr(elem, '__iter__')` returns False for ElementTree Elements. Threshold was reading shard-1 in isolation (~68-72%) instead of true aggregate (~88%).
 - **CI install hardening** (PR #358): Extended PR #350's Dockerfile convention to all 14 `curl <upstream>/install.sh | sh` sites in workflows. Pinned to `versions.yaml`.
-- **v1.0.4 release pipeline** went **22/22 success, 8/8 Docker builds with zero retries** — first clean release in the project's history (prior baseline: ~50% smoke flake rate).
+- **v1.0.4 release pipeline** went **22/22 success, 8/8 Docker builds with zero retries** — first clean release in the project's history (prior baseline: ~50% smoke flake rate). **v1.0.5 then matched it: 22/22 + 8/8, zero retries, second consecutive clean release.**
 
-Post-release verification (PRs #361, #362) surfaced 2 latent bugs that had been masked by the chronic flake noise:
+Post-v1.0.4 verification (PRs #361, #362) surfaced 2 latent bugs that had been masked by the chronic flake noise; these landed in **v1.0.5 quick-wins** (PRs #371, #373):
 
 - **Missing `pytest-benchmark` dep** (PR #361): Performance Benchmarks job in scheduled.yml had been broken since added.
-- **Windows perf-test flakes** (PR #362): 2 hardcoded perf thresholds didn't account for GHA Windows runner slowness; matched sibling skip pattern.
+- **Windows perf-test flakes** (PR #362 → broader-pattern fix in #371): 2 hardcoded perf thresholds didn't account for GHA Windows runner slowness; superseded by `-m "not slow"` filter on `nightly-cross-platform`.
+- **Branch coverage merge scope-limit** (#371): Per-line union math + root recompute completed PR #357's line-rate fix.
+- **`jmo tools check` MANUAL state** (#373): 4 `MANUAL_INSTALL_TOOLS` (afl++/mobsf/akto/falco) now render distinctly from MISSING in all output paths (table, summary, JSON `manual_install: bool`). Architecture: `MANUAL = "manual"` added to `ToolStatusType` enum + `manual_install: bool = False` field on `ToolStatus`, threading through existing `_derive_status_type` / `STATUS_COLORS` / `status_text` rendering.
+- **`--maxfail` 5→20 bump + `$GITHUB_STEP_SUMMARY` failure rollup** (#373): nightly-extended-tests's truncation cap was 0.06% of suite. New `Summarize pytest failures` step renders all caught failures (capped 50 entries) into the run's Summary tab so future archeology cycles see everything at once.
 
 Key takeaways now embedded in path-scoped rules:
 
-- **Bug archeology pattern**: `--maxfail=5` truncation hides deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers.
-- **Tag schema**: `:latest` IS the deep variant. NO `:latest-deep`/`:latest-slim` tags exist. Verify with `gh api .../packages/container/.../versions`.
+- **Bug archeology pattern**: `--maxfail=5` truncation hid deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers in v1.0.3. v1.0.5 mitigated via cap bump + Step Summary rollup.
+- **Tag schema**: `:latest` IS the deep variant. NO `:latest-deep`/`:latest-slim` tags exist. NO `:full` alias (removed in v1.0.5). Verify with `gh api .../packages/container/.../versions`.
 - **CLI flag drift**: `jmo ci --profile` is a boolean (timing flag); profile selection uses `--profile-name`.
 - **Image size dimension**: `docker image inspect --format={{.Size}}` returns UNCOMPRESSED total layers, not compressed pull size. Off by 2-3×.
-- **`MANUAL_INSTALL_TOOLS` in test lists**: `afl-fuzz`/`mobsf`/`akto`/`falco` are in `PROFILE_TOOLS["deep"]` but NOT in any image. Tests checking for them in deep image fail by design.
-- **dev↔main divergence**: 41 commits sat on local `dev` for 11 days, eventually requiring careful audit + reconciliation merge (PR #339). Future-proof: regular `dev → main` cadence prevents this.
-- **Workflow filter convention**: Nightly Extended Tests must use `-m "not requires_tools and not smoke"` to avoid running tests that need real tools or the released PyPI package.
+- **`MANUAL_INSTALL_TOOLS` UX**: 4 tools (afl-fuzz/mobsf/akto/falco) are in `PROFILE_TOOLS["deep"]` but intentionally NOT in any image — they need manual install. Since v1.0.5, `jmo tools check` distinguishes them visually (cyan MANUAL vs red MISSING) and via `manual_install` JSON field. rc=1 semantics preserved per PR #332's deep-container test pattern.
+- **dev↔main divergence**: 41 commits sat on local `dev` for 11 days, eventually requiring careful audit + reconciliation merge (PR #339). Future-proof: regular `dev → main` cadence + `/merge-pr` skill (PR #372) automate it.
+- **Workflow filter convention**: Nightly Extended Tests must use `-m "not requires_tools and not smoke"`. Cross-platform jobs use `-m "not slow"` (broader pattern from #371, supersedes per-test `skipif(sys.platform=="win32")`).
+- **2-PR release cadence**: PR #371/#373 (content) → PR #374 (release-prep with version bumps + CHANGELOG header). Keeps review surface clean: content commits separate from mechanical version bumps.
 
 ## Documentation References
 
