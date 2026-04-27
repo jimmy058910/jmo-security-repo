@@ -49,6 +49,7 @@ class ToolStatusType(Enum):
     OUTDATED = "outdated"  # Yellow - works but old version
     SKIPPED = "skipped"  # Yellow - not applicable for platform/mode
     MISSING = "missing"  # Red - not installed but could be
+    MANUAL = "manual"  # Cyan - requires manual installation (intentionally absent in containers)
     FAILED = "failed"  # Red - installed but broken
     CRASH = "crash"  # Red - startup crash detected
 
@@ -59,6 +60,7 @@ STATUS_COLORS: dict[ToolStatusType, str] = {
     ToolStatusType.OUTDATED: "yellow",
     ToolStatusType.SKIPPED: "yellow",
     ToolStatusType.MISSING: "red",
+    ToolStatusType.MANUAL: "cyan",
     ToolStatusType.FAILED: "red",
     ToolStatusType.CRASH: "bold red",
 }
@@ -70,6 +72,7 @@ STATUS_ICONS: dict[ToolStatusType, str] = {
     ToolStatusType.OUTDATED: "!",
     ToolStatusType.SKIPPED: "~",
     ToolStatusType.MISSING: "X",
+    ToolStatusType.MANUAL: "M",  # Requires manual installation (intentional absence)
     ToolStatusType.FAILED: "!",  # Installed but can't execute
     ToolStatusType.CRASH: "!!",
 }
@@ -567,6 +570,8 @@ class ToolStatus:
     version_error: str | None = None  # Reason version couldn't be determined
     # Chunk 3: Status type for UX improvements
     status_type: ToolStatusType = ToolStatusType.OK
+    # v1.0.5: tool requires manual installation (excluded from auto-install profiles)
+    manual_install: bool = False
 
     def __post_init__(self) -> None:
         """Initialize mutable defaults and derive status_type if not set."""
@@ -582,7 +587,9 @@ class ToolStatus:
     def _derive_status_type(self) -> ToolStatusType:
         """Derive status type from other fields."""
         if not self.installed:
-            return ToolStatusType.MISSING
+            return (
+                ToolStatusType.MANUAL if self.manual_install else ToolStatusType.MISSING
+            )
         if self.version_error:
             return ToolStatusType.CRASH
         if not self.execution_ready:
@@ -609,6 +616,7 @@ class ToolStatus:
             ToolStatusType.OUTDATED: "OUTDATED",
             ToolStatusType.SKIPPED: "SKIPPED",
             ToolStatusType.MISSING: "MISSING",
+            ToolStatusType.MANUAL: "MANUAL",
             ToolStatusType.FAILED: "NOT READY",
             ToolStatusType.CRASH: "STARTUP CRASH",
         }
@@ -782,6 +790,7 @@ class ToolManager:
             execution_warning=execution_warning,
             missing_deps=missing_deps,
             version_error=version_error,  # Phase 4
+            manual_install=tool_name in MANUAL_INSTALL_TOOLS,
         )
 
     def check_profile(self, profile: str) -> dict[str, ToolStatus]:
@@ -820,6 +829,7 @@ class ToolManager:
                     name=name,
                     installed=False,
                     install_hint=f"check failed: {type(e).__name__}: {e}",
+                    manual_install=name in MANUAL_INSTALL_TOOLS,
                 )
         return result
 
@@ -872,12 +882,18 @@ class ToolManager:
             profile: Profile name
 
         Returns:
-            Dict with total, installed, execution_ready, missing, outdated counts
+            Dict with total, installed, execution_ready, missing, outdated counts.
+            v1.0.5 adds `real_missing` (auto-installable but absent) and
+            `manual_install_missing` (in MANUAL_INSTALL_TOOLS, intentionally
+            absent in containers); `missing` retains its existing meaning
+            (real_missing + manual_install_missing) for back-compat.
         """
         statuses = self.check_profile(profile)
         installed = [s for s in statuses.values() if s.installed]
         execution_ready = [s for s in statuses.values() if s.execution_ready]
         missing = [s for s in statuses.values() if not s.installed]
+        real_missing = [s for s in missing if not s.manual_install]
+        manual_install_missing = [s for s in missing if s.manual_install]
         not_ready = [
             s for s in statuses.values() if s.installed and not s.execution_ready
         ]
@@ -895,6 +911,8 @@ class ToolManager:
             "installed": len(installed),
             "execution_ready": len(execution_ready),
             "missing": len(missing),
+            "real_missing": len(real_missing),
+            "manual_install_missing": len(manual_install_missing),
             "not_ready": len(not_ready),
             "outdated": len(outdated),
             "critical_outdated": len(critical_outdated),
@@ -1809,18 +1827,23 @@ def print_tool_status_table(
     print(header)
     print("-" * len(header))
 
-    # Sort tools: missing first, then outdated, then OK
+    # Sort tools: missing first (actionable), manual-install next (informational),
+    # then outdated, then OK.
     def sort_key(item):
         name, status = item
-        if not status.installed:
+        if not status.installed and not status.manual_install:
             return (0, name)
-        if status.is_outdated:
+        if not status.installed and status.manual_install:
             return (1, name)
-        return (2, name)
+        if status.is_outdated:
+            return (2, name)
+        return (3, name)
 
     for name, status in sorted(statuses.items(), key=sort_key):
         # Format status with color
-        if not status.installed:
+        if not status.installed and status.manual_install:
+            status_str = colorize("MANUAL", "cyan")
+        elif not status.installed:
             status_str = colorize("MISSING", "red")
         elif status.is_outdated:
             critical = " [!]" if status.is_critical else ""
@@ -1836,7 +1859,10 @@ def print_tool_status_table(
         )
 
         if show_hints and not status.installed:
-            print(f"  -> {status.install_hint}")
+            if status.manual_install:
+                print("  -> Manual install required (see docs/MANUAL_INSTALLATION.md)")
+            else:
+                print(f"  -> {status.install_hint}")
 
 
 def print_profile_summary(
@@ -1862,13 +1888,22 @@ def print_profile_summary(
         summary = manager.get_profile_summary(profile)
         total = summary["total"]
         installed = summary["installed"]
+        # v1.0.5: distinguish auto-installable missing from manual-install absent
+        real_missing = summary.get("real_missing", summary.get("missing", 0))
+        manual_missing = summary.get("manual_install_missing", 0)
 
         if summary["ready"]:
             status = colorize("Ready", "green")
-        elif summary["missing"] <= 3:
-            status = colorize(f"{summary['missing']} missing", "yellow")
+        elif real_missing == 0 and manual_missing > 0:
+            status = colorize(f"{manual_missing} manual", "cyan")
+        elif real_missing <= 3:
+            status = colorize(f"{real_missing} missing", "yellow")
+            if manual_missing > 0:
+                status += colorize(f" + {manual_missing} manual", "cyan")
         else:
-            status = colorize(f"{summary['missing']} missing", "red")
+            status = colorize(f"{real_missing} missing", "red")
+            if manual_missing > 0:
+                status += colorize(f" + {manual_missing} manual", "cyan")
 
         print(f"{profile:<12}  {total:<10}  {installed:<10}  {status}")
 

@@ -370,7 +370,8 @@ Manage security tool installation and updates.
 | OK | ✅ | Tool installed and ready to use |
 | OUTDATED | ⚠️ | Newer version available (still functional) |
 | SKIPPED | 🚫 | Not applicable for current platform/mode |
-| MISSING | ❌ | Not installed but can be installed |
+| MISSING | ❌ | Not installed but can be auto-installed via `jmo tools install` |
+| MANUAL | ℹ️ | Requires manual installation — see [docs/MANUAL_INSTALLATION.md](MANUAL_INSTALLATION.md) (afl++, akto, falco, mobsf) |
 | FAILED | 💥 | Installed but broken (startup crash, missing deps) |
 
 Example output:
@@ -381,6 +382,20 @@ Balanced profile: 17 tools
   ⚠️ 2 outdated (run 'jmo tools update' when convenient)
   ❌ 2 not installed (scancode, zap)
 ```
+
+**JSON output structure** (`--json`):
+
+Each tool in the per-tool dict carries:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `installed` | bool | Binary found on PATH |
+| `installed_version` | string \| null | Detected version |
+| `expected_version` | string \| null | Pinned expected version from `versions.yaml` |
+| `is_outdated` | bool | Installed version is older than expected |
+| `is_critical` | bool | Tool is marked critical for the profile |
+| `binary_path` | string \| null | Absolute path to the discovered binary |
+| `manual_install` | bool | Tool requires manual installation (added v1.0.5) — when `installed=false` AND `manual_install=true`, the tool is intentionally absent in containerized usage rather than truly missing |
 
 **jmo tools install**
 

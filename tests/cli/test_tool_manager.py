@@ -639,12 +639,14 @@ def test_get_profile_summary():
     installed_status.execution_ready = True
     installed_status.is_outdated = False
     installed_status.is_critical = False
+    installed_status.manual_install = False
 
     missing_status = MagicMock()
     missing_status.installed = False
     missing_status.execution_ready = False
     missing_status.is_outdated = False
     missing_status.is_critical = False
+    missing_status.manual_install = False
 
     manager = ToolManager()
 
@@ -658,6 +660,37 @@ def test_get_profile_summary():
     assert summary["total"] == 2
     assert summary["installed"] == 1
     assert summary["missing"] == 1
+
+
+def test_get_profile_summary_distinguishes_manual_install():
+    """v1.0.5: get_profile_summary splits missing into real_missing + manual_install_missing."""
+    from scripts.cli.tool_manager import ToolManager
+
+    real_miss = MagicMock()
+    real_miss.installed = False
+    real_miss.execution_ready = False
+    real_miss.is_outdated = False
+    real_miss.is_critical = False
+    real_miss.manual_install = False
+
+    manual_miss = MagicMock()
+    manual_miss.installed = False
+    manual_miss.execution_ready = False
+    manual_miss.is_outdated = False
+    manual_miss.is_critical = False
+    manual_miss.manual_install = True
+
+    manager = ToolManager()
+    with patch.object(
+        manager,
+        "check_profile",
+        return_value={"prowler": real_miss, "akto": manual_miss},
+    ):
+        summary = manager.get_profile_summary("deep")
+
+    assert summary["missing"] == 2  # union, back-compat
+    assert summary["real_missing"] == 1
+    assert summary["manual_install_missing"] == 1
 
 
 # ========== Category 10: Version Drift ==========
@@ -838,6 +871,53 @@ def test_print_tool_status_table():
     assert mock_print.call_count >= 3
 
 
+def test_print_tool_status_table_renders_manual_state():
+    """Manual-install tools render as MANUAL with distinct hint."""
+    from scripts.cli.tool_manager import ToolStatus, print_tool_status_table
+
+    statuses = {
+        "prowler": ToolStatus(
+            name="prowler",
+            installed=False,
+            install_hint="pip install prowler",
+            manual_install=False,
+        ),
+        "mobsf": ToolStatus(
+            name="mobsf",
+            installed=False,
+            expected_version="4.4.2",
+            manual_install=True,
+        ),
+    }
+
+    captured: list[str] = []
+    with patch(
+        "builtins.print",
+        side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+    ):
+        print_tool_status_table(statuses, show_hints=True)
+
+    output = "\n".join(captured)
+    assert "MANUAL" in output  # status text rendered
+    assert "Manual install required" in output  # distinct hint
+    assert "docs/MANUAL_INSTALLATION.md" in output
+    assert "MISSING" in output  # prowler still rendered as MISSING
+
+
+def test_tool_status_derives_manual_status_type():
+    """ToolStatus(installed=False, manual_install=True) -> ToolStatusType.MANUAL."""
+    from scripts.cli.tool_manager import ToolStatus, ToolStatusType
+
+    manual = ToolStatus(name="akto", installed=False, manual_install=True)
+    real_missing = ToolStatus(name="prowler", installed=False, manual_install=False)
+
+    assert manual.status_type == ToolStatusType.MANUAL
+    assert manual.status_text == "MANUAL"
+    assert manual.status_color == "cyan"
+    assert real_missing.status_type == ToolStatusType.MISSING
+    assert real_missing.status_text == "MISSING"
+
+
 def test_print_profile_summary():
     """Test print_profile_summary outputs profile info."""
     from scripts.cli.tool_manager import print_profile_summary
@@ -849,6 +929,8 @@ def test_print_profile_summary():
         "installed": 6,
         "execution_ready": 6,
         "missing": 2,
+        "real_missing": 2,
+        "manual_install_missing": 0,
         "not_ready": 0,
         "outdated": 0,
         "critical_outdated": 0,
@@ -861,6 +943,60 @@ def test_print_profile_summary():
 
     # Should print summary
     assert mock_print.call_count >= 1
+
+
+def test_print_profile_summary_renders_manual_split():
+    """v1.0.5: deep profile shows 'N missing + M manual' when both exist."""
+    from scripts.cli.tool_manager import print_profile_summary
+
+    mock_manager = MagicMock()
+
+    def summary_for(profile: str) -> dict:
+        # Only "deep" has manual_install tools in real config; mock that shape.
+        if profile == "deep":
+            return {
+                "profile": "deep",
+                "total": 28,
+                "installed": 21,
+                "execution_ready": 21,
+                "missing": 7,
+                "real_missing": 3,
+                "manual_install_missing": 4,
+                "not_ready": 0,
+                "outdated": 0,
+                "critical_outdated": 0,
+                "ready": False,
+                "warnings": [],
+            }
+        return {
+            "profile": profile,
+            "total": 9,
+            "installed": 9,
+            "execution_ready": 9,
+            "missing": 0,
+            "real_missing": 0,
+            "manual_install_missing": 0,
+            "not_ready": 0,
+            "outdated": 0,
+            "critical_outdated": 0,
+            "ready": True,
+            "warnings": [],
+        }
+
+    mock_manager.get_profile_summary.side_effect = summary_for
+
+    captured: list[str] = []
+    with patch(
+        "builtins.print",
+        side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+    ):
+        print_profile_summary(mock_manager)
+
+    output = "\n".join(captured)
+    assert "3 missing" in output
+    assert "4 manual" in output
+    # Non-deep profiles shouldn't have the "+ manual" suffix
+    assert "Ready" in output
 
 
 def test_get_missing_tools_for_scan():

@@ -163,6 +163,7 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
                 "is_outdated": s.is_outdated,
                 "is_critical": s.is_critical,
                 "binary_path": s.binary_path,
+                "manual_install": s.manual_install,
             }
             for name, s in statuses.items()
         }
@@ -174,18 +175,44 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
     print(f"\n{title}\n")
     print_tool_status_table(statuses, colorize, show_hints=True)
 
-    # Summary
-    missing = [s for s in statuses.values() if not s.installed]
+    # Summary — distinguish auto-installable missing from manual-install tools
+    real_missing = [
+        s for s in statuses.values() if not s.installed and not s.manual_install
+    ]
+    manual_missing = [
+        s for s in statuses.values() if not s.installed and s.manual_install
+    ]
     outdated = [s for s in statuses.values() if s.is_outdated]
 
     print()
-    if missing:
-        print(colorize(f"{len(missing)} tool(s) missing", "red"))
+    if real_missing:
+        print(colorize(f"{len(real_missing)} tool(s) missing", "red"))
         print(
             "Run `jmo tools install"
             + (f" --profile {profile}" if profile else "")
             + "` to install"
         )
+        if manual_missing:
+            print(
+                colorize(
+                    f"{len(manual_missing)} tool(s) require manual install",
+                    "cyan",
+                )
+            )
+            print("  See: docs/MANUAL_INSTALLATION.md")
+        return 1
+
+    if manual_missing:
+        print(
+            colorize(
+                f"{len(manual_missing)} tool(s) require manual install",
+                "cyan",
+            )
+        )
+        print("  See: docs/MANUAL_INSTALLATION.md")
+        # rc=1 retained for parity with prior behavior — manual-install tools count
+        # as "not all profile tools available". Tests that need to distinguish should
+        # parse JSON output where `manual_install: true` is now exposed per-tool.
         return 1
 
     if outdated:
@@ -196,7 +223,7 @@ def cmd_tools_check(args: argparse.Namespace) -> int:
         print(colorize(msg, "yellow"))
         print("Run `jmo tools update` to update")
 
-    if not missing and not outdated:
+    if not real_missing and not manual_missing and not outdated:
         print(colorize("All tools installed and up to date!", "green"))
 
     return 0
