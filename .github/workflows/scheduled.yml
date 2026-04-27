@@ -72,8 +72,16 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install security tools
+        env:
+          TRUFFLEHOG_VERSION: "3.94.3"  # Pin per versions.yaml — see release.rules.md
         run: |
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
           pip install bandit
 
       - name: Run full test suite (including slow tests)
@@ -295,25 +303,55 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install balanced profile tools
+        env:
+          # Pinned to versions.yaml. Update both files together when bumping.
+          # Avoids upstream install.sh GitHub-API "latest" lookups that have
+          # flaked in CI (see PR #350 + release.rules.md).
+          TRIVY_VERSION: "0.70.0"
+          GRYPE_VERSION: "0.104.0"
+          SYFT_VERSION: "1.42.4"
+          TRUFFLEHOG_VERSION: "3.94.3"
+          HADOLINT_VERSION: "2.14.0"
         run: |
           # Install tools needed for smoke tests
           # Core SAST/SCA tools
           pip install semgrep checkov
 
           # Trivy - vulnerability scanner
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          gzip -t /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
           # Grype - SCA
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/grype.tar.gz
+          gzip -t /tmp/grype.tar.gz
+          tar -xzf /tmp/grype.tar.gz -C /usr/local/bin grype
+          chmod +x /usr/local/bin/grype
 
           # Syft - SBOM
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/syft.tar.gz
+          gzip -t /tmp/syft.tar.gz
+          tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
 
           # TruffleHog - secrets
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
 
           # Hadolint - Dockerfile linter
-          wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
+            -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
 
           # ShellCheck - shell linter
@@ -446,11 +484,19 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install minimal security tools
+        env:
+          TRUFFLEHOG_VERSION: "3.94.3"  # Pin per versions.yaml — see release.rules.md
         run: |
           # Install semgrep for SAST testing
           pip install semgrep
           # Install trufflehog for secrets testing
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
 
       - name: Run integration tests (not slow)
         run: |
@@ -698,15 +744,28 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install security tools for integration tests
+        env:
+          TRIVY_VERSION: "0.70.0"  # Pin per versions.yaml
+          TRUFFLEHOG_VERSION: "3.94.3"
         run: |
           # Semgrep - for SQL injection detection tests
           pip install semgrep
 
           # Trivy - for CVE detection tests
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          gzip -t /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
           # TruffleHog - for secret detection tests
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
 
           # Checkov - for IaC tests
           pip install checkov
@@ -769,10 +828,21 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install security tools for contract tests
+        env:
+          # Pinned to versions.yaml — kept in sync with ci.yml's
+          # tool-contract-tests block. Any drift means the weekly and
+          # PR gates disagree.
+          TRIVY_VERSION: "0.70.0"
+          TRUFFLEHOG_VERSION: "3.94.3"
+          HADOLINT_VERSION: "2.14.0"
         run: |
           # Install tools needed for contract validation
           # Trivy - vulnerability scanner
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          gzip -t /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
 
           # Semgrep - SAST scanner
           pip install semgrep
@@ -781,11 +851,19 @@ jobs:
           pip install bandit
 
           # Hadolint - Dockerfile linter
-          wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
+            -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
 
           # TruffleHog - secrets scanner
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
 
           # Checkov - IaC scanner
           pip install checkov
