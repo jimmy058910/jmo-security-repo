@@ -90,6 +90,13 @@ def large_findings_set():
 # ============================================================================
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows GitHub Actions runners exhibit highly variable file-system "
+    "performance (8s target observed at 20+s in CI). Mirrors the same skip "
+    "pattern as test_single_scan_insert_performance. Test runs reliably on "
+    "Linux/macOS CI to catch regressions.",
+)
 def test_large_scan_storage_performance(perf_db, large_findings_set, tmp_path):
     """
     Test storing scan with 10,000 findings.
@@ -97,14 +104,15 @@ def test_large_scan_storage_performance(perf_db, large_findings_set, tmp_path):
     Performance targets:
     - Ideal: <500ms (Linux CI)
     - Acceptable: <2s (macOS, fast Windows)
-    - Cross-platform threshold: <8s (all platforms including slow Windows)
+    - Cross-platform threshold: <8s (Linux/macOS — Windows skipped, see decorator)
 
     Note: Performance varies significantly across platforms:
     - Fast CI (Linux): ~400-500ms
     - macOS 3.11 CI: ~695ms
     - Windows dev machines: ~800-1500ms typical, 3-5s on heavy I/O
+    - Windows GitHub Actions: 15-25s observed (skipped via skipif)
 
-    Threshold set to 8s to accommodate all platforms while catching major regressions.
+    Threshold set to 8s to accommodate Linux/macOS while catching major regressions.
     """
     # Create results directory
     results_dir = tmp_path / "results_large"
