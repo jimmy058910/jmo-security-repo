@@ -79,7 +79,19 @@ jobs:
 
       - name: "Secrets scan (TruffleHog)"
         run: |
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          # Pinned install (versions.yaml). The upstream install.sh calls
+          # GitHub's API to discover the "latest" tag and has flaked in CI
+          # ("unable to find ''" errors). See PR #350 + release.rules.md
+          # "CI install hardening" entry. Mirror of the Dockerfile.deep
+          # download pattern (--fail + retry + integrity check). Short
+          # local var `v` keeps the URL line within yamllint's 140-char limit.
+          v="3.94.3"  # trufflehog version per versions.yaml
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
           trufflehog filesystem . --json --exclude-paths .trufflehog-exclude.txt --only-verified > trufflehog-results.json || true
           VERIFIED=$(jq -r 'select(.Verified == true)' trufflehog-results.json 2>/dev/null | wc -l || echo "0")
           if [ "$VERIFIED" -gt 0 ]; then
@@ -580,14 +592,34 @@ jobs:
 
       - name: Install security tools for contract tests
         if: steps.changes.outputs.versions == 'true'
+        env:
+          # Pinned to versions.yaml. Update both files together when bumping.
+          TRIVY_VERSION: "0.70.0"
+          TRUFFLEHOG_VERSION: "3.94.3"
+          HADOLINT_VERSION: "2.14.0"
         run: |
           # Same install block as scheduled.yml:tool-contract-tests — kept in
           # sync manually. Any drift means the weekly and PR gates disagree.
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          # All downloads pinned + hardened (--fail + retry + integrity)
+          # to avoid the upstream install.sh GitHub API flake. See PR #350
+          # and release.rules.md "CI install hardening".
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          gzip -t /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy
           pip install semgrep bandit checkov
-          wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64" \
+            -o /usr/local/bin/hadolint
           chmod +x /usr/local/bin/hadolint
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
           sudo apt-get update && sudo apt-get install -y shellcheck
 
           echo "Installed tools:"

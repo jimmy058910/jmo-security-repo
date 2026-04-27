@@ -328,9 +328,17 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install security tools (for pre-release checks)
+        env:
+          TRUFFLEHOG_VERSION: "3.94.3"  # Pin per versions.yaml — see release.rules.md
         run: |
           # Install TruffleHog for secrets scanning
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+          v="$TRUFFLEHOG_VERSION"  # short alias to keep URL line under 140 chars
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/v${v}/trufflehog_${v}_linux_amd64.tar.gz" \
+            -o /tmp/trufflehog.tar.gz
+          gzip -t /tmp/trufflehog.tar.gz
+          tar -xzf /tmp/trufflehog.tar.gz -C /usr/local/bin trufflehog
+          chmod +x /usr/local/bin/trufflehog
 
           # Install Bandit for security audit
           pip install bandit
