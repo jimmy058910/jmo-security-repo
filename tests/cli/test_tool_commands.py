@@ -282,6 +282,7 @@ def test_cmd_tools_check_missing_tools_returns_error():
     mock_status.installed = False  # Missing
     mock_status.is_outdated = False
     mock_status.is_critical = False
+    mock_status.manual_install = False  # Real-missing, not manual
 
     mock_manager = MagicMock()
     mock_manager.check_tool.return_value = mock_status
@@ -300,6 +301,139 @@ def test_cmd_tools_check_missing_tools_returns_error():
                 with patch("builtins.print"):
                     result = cmd_tools_check(args)
 
+    assert result == 1
+
+
+def test_cmd_tools_check_manual_install_field_in_json():
+    """Test cmd_tools_check JSON output exposes the manual_install field."""
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.cli.tool_manager import ToolStatus
+
+    real_status = ToolStatus(
+        name="trivy",
+        installed=True,
+        installed_version="0.70.0",
+        expected_version="0.70.0",
+        manual_install=False,
+    )
+    manual_status = ToolStatus(
+        name="mobsf",
+        installed=False,
+        expected_version="4.4.2",
+        manual_install=True,
+    )
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = [real_status, manual_status]
+
+    args = argparse.Namespace(
+        tools=["trivy", "mobsf"],
+        profile=None,
+        json=True,
+    )
+
+    captured: list[str] = []
+    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        ):
+            result = cmd_tools_check(args)
+
+    payload = json.loads("\n".join(captured))
+    assert payload["trivy"]["manual_install"] is False
+    assert payload["mobsf"]["manual_install"] is True
+    assert result == 1  # mobsf still triggers rc=1 (not installed)
+
+
+def test_cmd_tools_check_summary_distinguishes_missing_from_manual():
+    """Test cmd_tools_check summary lines distinguish auto-installable from manual."""
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.cli.tool_manager import ToolStatus
+
+    real_missing = ToolStatus(
+        name="prowler",
+        installed=False,
+        expected_version="5.18.2",
+        install_hint="pip install prowler",
+        manual_install=False,
+    )
+    manual_missing = ToolStatus(
+        name="akto",
+        installed=False,
+        expected_version="mini-testing-1.53.7",
+        manual_install=True,
+    )
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = [real_missing, manual_missing]
+
+    args = argparse.Namespace(
+        tools=["prowler", "akto"],
+        profile=None,
+        json=False,
+    )
+
+    captured: list[str] = []
+    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch("scripts.cli.tool_commands.print_tool_status_table"):
+            with patch(
+                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
+            ):
+                with patch(
+                    "builtins.print",
+                    side_effect=lambda *a, **k: captured.append(
+                        " ".join(str(x) for x in a)
+                    ),
+                ):
+                    result = cmd_tools_check(args)
+
+    summary_text = "\n".join(captured)
+    assert "1 tool(s) missing" in summary_text
+    assert "1 tool(s) require manual install" in summary_text
+    assert "docs/MANUAL_INSTALLATION.md" in summary_text
+    assert result == 1  # rc=1 retained
+
+
+def test_cmd_tools_check_only_manual_missing_returns_one_with_distinct_message():
+    """When only manual-install tools are missing, rc=1 with the manual-only summary."""
+    from scripts.cli.tool_commands import cmd_tools_check
+    from scripts.cli.tool_manager import ToolStatus
+
+    manual_only = ToolStatus(
+        name="falco",
+        installed=False,
+        expected_version="0.0.0",
+        manual_install=True,
+    )
+
+    mock_manager = MagicMock()
+    mock_manager.check_tool.side_effect = [manual_only]
+
+    args = argparse.Namespace(
+        tools=["falco"],
+        profile=None,
+        json=False,
+    )
+
+    captured: list[str] = []
+    with patch("scripts.cli.tool_commands.ToolManager", return_value=mock_manager):
+        with patch("scripts.cli.tool_commands.print_tool_status_table"):
+            with patch(
+                "scripts.cli.tool_commands.colorize", side_effect=lambda x, _: x
+            ):
+                with patch(
+                    "builtins.print",
+                    side_effect=lambda *a, **k: captured.append(
+                        " ".join(str(x) for x in a)
+                    ),
+                ):
+                    result = cmd_tools_check(args)
+
+    summary_text = "\n".join(captured)
+    # No "missing" line (only manual tools to report)
+    assert "1 tool(s) missing" not in summary_text
+    assert "1 tool(s) require manual install" in summary_text
     assert result == 1
 
 
@@ -1501,6 +1635,7 @@ class TestCmdToolsCheckComprehensive:
         mock_status.is_outdated = False
         mock_status.is_critical = False
         mock_status.binary_path = "/usr/local/bin/trivy"
+        mock_status.manual_install = False  # v1.0.5: required for JSON serialization
 
         mock_manager = MagicMock()
         mock_manager.check_profile.return_value = {"trivy": mock_status}

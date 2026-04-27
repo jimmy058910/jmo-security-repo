@@ -103,13 +103,19 @@ tests/
 
 ## `--maxfail` Truncation & Bug Archeology
 
-The Nightly Extended Tests pytest invocation uses `--maxfail=5` to abort after 5 failures. **This creates a "bug archeology" pattern where deeper test failures are invisible until shallower ones are fixed.**
+The Nightly Extended Tests pytest invocation uses `--maxfail=20` (raised from 5 in v1.0.5; cross-platform jobs likewise). **This historically created a "bug archeology" pattern where deeper test failures were invisible until shallower ones were fixed** — most acute at the lower threshold.
 
 When iterating on test fixes for nightly:
 
-1. Each fix-and-validate cycle reveals 0-5 NEW failures from deeper in pytest's alphabetical order — failures that were always there but masked by the truncation cutoff.
+1. Each fix-and-validate cycle can reveal NEW failures from deeper in pytest's alphabetical order — failures that were always there but masked by the truncation cutoff.
 2. Don't assume "it's just one bug left" until a clean run with 0 failures actually happens.
-3. Each layer typically takes its own targeted fix PR; the post-v1.0.3 stabilization went through 5 such layers (PRs #343 → #344 → #345 → #346 → #347).
+3. Each layer typically takes its own targeted fix PR; the post-v1.0.3 stabilization went through 5 such layers at `--maxfail=5` (PRs #343 → #344 → #345 → #346 → #347). v1.0.5 raised the cap to 20 to make this much rarer in practice.
+
+**v1.0.5 mitigations** (PR shipping `--maxfail=20`):
+
+- Added `--json-report --json-report-file=pytest-report.json` to nightly-extended-tests.
+- Added a `Summarize pytest failures` step that renders the full failure list (capped at 50 entries to fit GHA's ~1MB Summary cap) into the run's `$GITHUB_STEP_SUMMARY`. So when truncation does happen, every caught failure is still visible in one place with its traceback.
+- `pytest-report.json` is now also archived in the `nightly-test-results-${{ github.run_id }}` artifact bundle for fully post-hoc analysis.
 
 **Iterating efficiently** — manual workflow dispatch instead of waiting for cron:
 
@@ -123,7 +129,7 @@ gh run list --workflow scheduled.yml --event workflow_dispatch --limit 1
 
 The `task=nightly` input gates `nightly-extended-tests` and `lint-full` jobs in `scheduled.yml`. Other `task` choices: `e2e`, `performance`, `docker`, `all`.
 
-**Diagnosing a failure that masks deeper failures:** If output ends with `=== N failed in M.Ns ===` and N == 5, you're at the truncation cap. Fix the visible 5, dispatch again, repeat until N drops below 5 or hits 0.
+**Diagnosing a truncated run:** If pytest output ends with `=== N failed in M.Ns ===` and N == 20 (or 5 on smoke / 3 on requires_tools), you're at the truncation cap. The Summary tab on the run page should list all N captured failures. Fix the visible ones, dispatch again, repeat until N drops below the cap or hits 0.
 
 ## Test Threshold Drift After Profile Changes
 
