@@ -2,7 +2,11 @@
 
 All notable changes to JMo Security will be documented in this file.
 
-## [Unreleased]
+## [1.0.4] - 2026-04-27
+
+### Summary
+
+CI/YAML architectural rebuild release. Ships PR #350's Dockerfile download hardening to GHCR images for the first time (every prior release had the broken single-attempt `curl -sSL` pattern; ~50% Docker Smoke Tests flake rate is now eliminated). Plus a root-cause fix for the sharded coverage merge that has been silently reporting only shard-1's coverage since pytest-split was introduced.
 
 ### Fixed
 
@@ -13,6 +17,14 @@ All notable changes to JMo Security will be documented in this file.
   - **What this means historically**: every "coverage" number reported by the `coverage-aggregate` job since the sharded-coverage refactor has been shard-1's individual coverage, not the aggregate. The 71.6% baseline was shard-1; the 68.7% "drop" in PR #355 was shard-1's value drifting after `pytest-split --splitting-algorithm least_duration` reshuffled tests when PRs #351/#353/#354 added new test files. No actual coverage was lost. The Codecov upload (`codecov-action@v5.5.2`) parses `<line>` elements directly and so was reporting accurate aggregate numbers — only the local threshold check was broken.
   - **Threshold restored 68% → 70%** (the band-aid from #355 is now removed; true aggregate coverage with the CI marker filters is ~88%, well above 70%). Lessons captured in `.claude/rules/release.rules.md`.
   - **Known scope limit**: branch coverage (`branch = true` in `pyproject.toml`) produces `branch-rate`/`branches-valid`/`branches-covered` root attrs and `condition-coverage` per `<line branch="true">`. Those remain stale at shard-1's values because correct branch merging requires parsing each shard's `missing-branches` per line and intersecting them — `condition-coverage` is a percentage, not a bitmask, so naive max-percentage merging is wrong (shard-1 covers branches A+B at 50%, shard-2 covers B+C at 50%; true union is A+B+C = 75%). The threshold check only uses `line-rate`, so this doesn't affect CI gating; Codecov re-derives line coverage from `<line>` elements and gets correct aggregates there. If a future requirement adds a branch-coverage threshold, extend the recompute to merge `missing-branches` per line.
+
+- **Docker Smoke Tests intermittent failures (50% flake rate)**: Hardened all binary downloads in `Dockerfile.{deep,balanced,slim,fast}` against transient CDN failures. The v1.0.3 cycle saw repeated `tar: Error is not recoverable: gzip: stdin: not in gzip format` build failures — `curl -sSL` exited 0 on HTTP 4xx/5xx with HTML body, handing garbage to `tar -xzf`. Each release cycle triggered ~50 single-attempt downloads (4 variants × 2 architectures × ~6-10 binaries each); even a 0.5% CDN flake rate produced at least one failure most cycles.
+  - **Root-cause flag**: All `curl` invocations now use `-fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`. The `-f`/`--fail` flag is the actual fix — it makes curl exit non-zero on HTTP errors instead of accepting an HTML error page as the response body.
+  - **Retry on transient flakes**: All `wget` invocations now use `--tries=3 --waitretry=5 --timeout=600`. wget already exits non-zero on HTTP errors so no `--fail` equivalent is needed.
+  - **Integrity belt-and-suspenders**: Every archive extraction is now preceded by an integrity check — `gzip -t` for `.tar.gz`, `xz -t` for `.tar.xz`, `unzip -t` for `.zip`. Catches the rare case of "200 with corrupt body" (partial download, mid-stream truncation) that `--fail` cannot detect because the HTTP layer reported success.
+  - **Coverage**: 41 curl invocations + 9 wget invocations now hardened across all 4 Dockerfiles. 34 archive extractions now integrity-checked. Convention is documented in `.claude/rules/docker.rules.md` "Download Hardening Convention". This fix is shipping to GHCR images for the FIRST TIME with v1.0.4 — every prior `:1.0.x-*` image had the broken single-attempt pattern.
+
+- **3 user-facing docs referenced unpublished `:latest-<variant>` tags**: `TEST.md:206`, `tests/e2e/README.md:197` both used `docker pull ghcr.io/jimmy058910/jmo-security:latest-full` (would fail with "manifest unknown" because `:latest-full` doesn't exist — `:latest` IS the deep variant). `docs/SCHEDULE_GUIDE.md:746` used `:latest-slim` in a GitLab CI example (would also fail; bare variant tag `:slim` is the canonical reference). All three corrected. New `tests/unit/test_docker_tag_pattern_drift.py` enforces this at PR time so future regressions are caught before merge — `.claude/rules/docker.rules.md` already documented the canonical schema, but documentation alone didn't catch these specific bugs.
 
 ### Removed
 
@@ -25,16 +37,6 @@ All notable changes to JMo Security will be documented in this file.
 - **Workflow marker filter convention expanded** in `.claude/rules/testing.cross-platform.rules.md` from 4 to 9 documented filter patterns. Previous table missed `ci.yml` Quick coverage check (adds `not slow`), `ci.yml` tool-contract-tests (`requires_tools`), `scheduled.yml` Integration matrix (`integration and not slow`), and `scheduled.yml` E2E `not docker` filters. Added rules-of-thumb for when to include/exclude each marker.
 
 - **SSOT drift guard for tool counts** (`tests/unit/test_profile_tools_count_drift.py`): New unit test asserts that `tests/e2e/test_docker_workflows.py::DOCKER_VARIANTS` AND `.github/workflows/scheduled.yml` `validate-variants` matrix BOTH equal `len(PROFILE_TOOLS[v]) - len(MANUAL_INSTALL_TOOLS & PROFILE_TOOLS[v])` for each variant, computed at runtime from `scripts/core/tool_registry.py`. A YAML matrix can't `import PROFILE_TOOLS`, so both downstream constants stay hardcoded but the test enforces their relationship at PR time. Catches the cascade-drift class that took 5 PRs (#343 → #344 → #345 → #346 → #347) to resolve in v1.0.3 after bearer was removed from PROFILE_TOOLS but the constants weren't updated together.
-
-### Fixed
-
-- **3 user-facing docs referenced unpublished `:latest-<variant>` tags**: `TEST.md:206`, `tests/e2e/README.md:197` both used `docker pull ghcr.io/jimmy058910/jmo-security:latest-full` (would fail with "manifest unknown" because `:latest-full` doesn't exist — `:latest` IS the deep variant). `docs/SCHEDULE_GUIDE.md:746` used `:latest-slim` in a GitLab CI example (would also fail; bare variant tag `:slim` is the canonical reference). All three corrected. New `tests/unit/test_docker_tag_pattern_drift.py` enforces this at PR time so future regressions are caught before merge — `.claude/rules/docker.rules.md` already documented the canonical schema, but documentation alone didn't catch these specific bugs.
-
-- **Docker Smoke Tests intermittent failures (50% flake rate)**: Hardened all binary downloads in `Dockerfile.{deep,balanced,slim,fast}` against transient CDN failures. The v1.0.3 cycle saw repeated `tar: Error is not recoverable: gzip: stdin: not in gzip format` build failures — `curl -sSL` exited 0 on HTTP 4xx/5xx with HTML body, handing garbage to `tar -xzf`. Each release cycle triggered ~50 single-attempt downloads (4 variants × 2 architectures × ~6-10 binaries each); even a 0.5% CDN flake rate produced at least one failure most cycles.
-  - **Root-cause flag**: All `curl` invocations now use `-fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600`. The `-f`/`--fail` flag is the actual fix — it makes curl exit non-zero on HTTP errors instead of accepting an HTML error page as the response body.
-  - **Retry on transient flakes**: All `wget` invocations now use `--tries=3 --waitretry=5 --timeout=600`. wget already exits non-zero on HTTP errors so no `--fail` equivalent is needed.
-  - **Integrity belt-and-suspenders**: Every archive extraction is now preceded by an integrity check — `gzip -t` for `.tar.gz`, `xz -t` for `.tar.xz`, `unzip -t` for `.zip`. Catches the rare case of "200 with corrupt body" (partial download, mid-stream truncation) that `--fail` cannot detect because the HTTP layer reported success.
-  - **Coverage**: 41 curl invocations + 9 wget invocations now hardened across all 4 Dockerfiles. 34 archive extractions now integrity-checked. Convention is documented in `.claude/rules/docker.rules.md` "Download Hardening Convention".
 
 ## [1.0.3] - 2026-04-25
 

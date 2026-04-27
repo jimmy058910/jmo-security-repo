@@ -899,7 +899,7 @@ class TestVersionChecks:
             with open(pyproject_path, "rb") as f:
                 current_version = tomllib.load(f)["project"]["version"]
         else:
-            current_version = "1.0.3"  # fallback if pyproject not found in test context
+            current_version = "1.0.4"  # fallback if pyproject not found in test context
 
         with patch("scripts.core.validators.cli_validator._run_jmo") as mock_run:
             mock_run.return_value = _mock_completed(
