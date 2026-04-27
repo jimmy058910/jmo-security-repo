@@ -464,6 +464,19 @@ jobs:
                   base_root.set('lines-valid', str(total_lines))
                   base_root.set('lines-covered', str(covered_lines))
                   print(f"📊 Aggregate: {covered_lines}/{total_lines} lines covered = {rate * 100:.2f}%")
+              # NOTE: Branch coverage (`branch = true` in pyproject.toml) produces
+              # `branch-rate`, `branches-valid`, `branches-covered` root attrs and
+              # `condition-coverage` per `<line branch="true">`. Those remain stale
+              # at shard-1's values because correct branch merging requires
+              # parsing each shard's `missing-branches` per line and intersecting
+              # them — `condition-coverage` is a percentage, not a bitmask, so
+              # naive max-percentage merging is wrong (shard-1 covers branches
+              # A+B at 50%, shard-2 covers B+C at 50% — true union is A+B+C =
+              # 75%). The threshold check below only uses `line-rate`, so this
+              # doesn't affect CI gating; Codecov re-derives line coverage from
+              # `<line>` elements and gets correct aggregates there. Branch-rate
+              # in the merged coverage.xml is a known limitation — track via
+              # follow-up if branch-coverage thresholds become a CI requirement.
 
               # Write merged output
               base_tree.write(output, encoding='unicode', xml_declaration=True)
