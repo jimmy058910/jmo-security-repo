@@ -86,6 +86,7 @@ Agent definitions are in [.claude/agents/](../agents/).
 | [Community Manager](community-manager/SKILL.md) | `/community-manager` | Track community engagement |
 | [Skill Optimizer](jmo-skill-optimizer/SKILL.md) | `/jmo-skill-optimizer` | Review and upgrade skills |
 | [E2E Verify](jmo-e2e-verify/SKILL.md) | `/jmo-e2e-verify [quick\|full\|visual\|scan-only]` | AI-orchestrated e2e verification with parallel sub-agents, failure analysis, and visual dashboard inspection |
+| [Merge PR](merge-pr/SKILL.md) | `/merge-pr [PR-title-override]` | Push branch, open PR to main, watch CI, squash-merge, sync dev, cleanup local + remote |
 
 ---
 

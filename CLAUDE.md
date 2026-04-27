@@ -163,7 +163,7 @@ JMo Security includes agents, skills, and an MCP server for AI-assisted developm
 - `/jmo-ci-debugger` - Debug CI/CD pipeline failures
 - `/jmo-e2e-verify` - AI-driven e2e verification with parallel sub-agents
 
-**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (15 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
+**Full documentation:** [.claude/skills/INDEX.md](.claude/skills/INDEX.md) (16 skills, 7 agents) | **Personas:** [.claude/PERSONA_GUIDELINES.md](.claude/PERSONA_GUIDELINES.md)
 
 ### Parallel Work: Agent Teams vs Subagents
 
