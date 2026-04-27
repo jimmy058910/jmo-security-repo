@@ -395,28 +395,42 @@ jobs:
               merged_files = {}
 
               def process_package(pkg):
-                  """Extract file data from a package element."""
-                  classes = pkg.find('classes') or pkg.findall('class')
-                  if hasattr(classes, '__iter__'):
-                      for cls in classes:
-                          filename = cls.get('filename')
-                          if filename:
-                              if filename not in merged_files:
-                                  merged_files[filename] = cls
+                  """Extract file data from a package element.
+
+                  Uses pkg.findall('.//class') to locate <class> elements
+                  regardless of whether they're nested under <classes> (cobertura
+                  default) or direct children of <package>. The previous
+                  implementation tried to detect both via
+                  `pkg.find('classes') or pkg.findall('class')` and a downstream
+                  `hasattr(classes, '__iter__')` guard — but ElementTree's
+                  Element type uses the legacy __getitem__ iteration protocol
+                  (no __iter__ dunder), so the hasattr check returned False
+                  whenever the cobertura <classes> wrapper was present, silently
+                  skipping the entire merge. Result: coverage.xml was a copy of
+                  shard-1's XML, and the threshold read shard-1's coverage in
+                  isolation (~68-72%) instead of the true aggregate (~88%).
+                  """
+                  for cls in pkg.findall('.//class'):
+                      filename = cls.get('filename')
+                      if not filename:
+                          continue
+                      if filename not in merged_files:
+                          merged_files[filename] = cls
+                      else:
+                          # Merge line coverage: OR the hits per line number
+                          existing_lines = {l.get('number'): l for l in merged_files[filename].findall('.//line')}
+                          for line in cls.findall('.//line'):
+                              line_num = line.get('number')
+                              if line_num in existing_lines:
+                                  # Same line in both shards — take max hits (covered in any shard = covered)
+                                  existing_hits = int(existing_lines[line_num].get('hits', 0))
+                                  new_hits = int(line.get('hits', 0))
+                                  existing_lines[line_num].set('hits', str(max(existing_hits, new_hits)))
                               else:
-                                  # Merge line coverage
-                                  existing_lines = {l.get('number'): l for l in merged_files[filename].findall('.//line')}
-                                  for line in cls.findall('.//line'):
-                                      line_num = line.get('number')
-                                      if line_num in existing_lines:
-                                          # OR the hits (covered in any shard = covered)
-                                          existing_hits = int(existing_lines[line_num].get('hits', 0))
-                                          new_hits = int(line.get('hits', 0))
-                                          existing_lines[line_num].set('hits', str(max(existing_hits, new_hits)))
-                                      else:
-                                          lines_elem = merged_files[filename].find('lines')
-                                          if lines_elem is not None:
-                                              lines_elem.append(line)
+                                  # Line only in the new shard — append to the merged class's <lines>
+                                  lines_elem = merged_files[filename].find('lines')
+                                  if lines_elem is not None:
+                                      lines_elem.append(line)
 
               # Process all packages in base
               for pkg in base_root.findall('.//package'):
@@ -431,6 +445,25 @@ jobs:
                           process_package(pkg)
                   except Exception as e:
                       print(f"Warning: Could not process {f}: {e}")
+
+              # Recompute aggregate line-rate from merged <line> hits.
+              # The merge above OR's hits across shards but the root <coverage>
+              # element's line-rate/lines-valid/lines-covered attributes still
+              # reflect shard-1's standalone values. Without this recomputation
+              # the threshold check downstream reads shard-1's coverage in
+              # isolation (~68-72%) instead of the true merged aggregate (~88%).
+              # See PR #355 / CHANGELOG for the empirical investigation.
+              total_lines = covered_lines = 0
+              for line in base_root.findall('.//line'):
+                  total_lines += 1
+                  if int(line.get('hits', 0)) > 0:
+                      covered_lines += 1
+              if total_lines:
+                  rate = covered_lines / total_lines
+                  base_root.set('line-rate', f"{rate:.4f}")
+                  base_root.set('lines-valid', str(total_lines))
+                  base_root.set('lines-covered', str(covered_lines))
+                  print(f"📊 Aggregate: {covered_lines}/{total_lines} lines covered = {rate * 100:.2f}%")
 
               # Write merged output
               base_tree.write(output, encoding='unicode', xml_declaration=True)
@@ -458,23 +491,18 @@ jobs:
 
           print(f"📊 Combined coverage: {coverage_pct:.1f}%")
 
-          # CI threshold is 68% (excludes requires_tools/docker/smoke tests).
-          # Lowered from 70% on 2026-04-26 after the post-v1.0.3 architectural
-          # rebuild (PRs #350-#354) saw aggregate sharded coverage drop from
-          # 71.6% to 68.7% on main without any scripts/ source changes —
-          # only test files were added (PR #351, #353, #354). Likely cause:
-          # pytest-split's `least_duration` algorithm shifted shard
-          # distribution after new tests landed, displacing some coverage
-          # from the measured set. Full 85% coverage is still enforced via
-          # `make test` (sequential, full suite). TODO(post-v1.0.4):
-          # investigate root cause — either rebalance shards or move the
-          # cross-test-file constants (DOCKER_VARIANTS) to a constants
-          # module so test imports don't pull heavy modules into scope.
-          if coverage_pct < 68:
-              print(f"❌ Coverage {coverage_pct:.1f}% is below 68% CI threshold")
+          # CI threshold is 70% (excludes requires_tools/docker/smoke tests).
+          # The aggregate XML merge in the previous step recomputes line-rate
+          # from merged <line> hits, so this reads true aggregate coverage
+          # rather than shard-1's standalone value (which was the source of
+          # the spurious "drop from 71.6% to 68.7%" investigated in PR #355).
+          # Full 85% coverage is still enforced via `make test` (sequential,
+          # full suite without filtered markers).
+          if coverage_pct < 70:
+              print(f"❌ Coverage {coverage_pct:.1f}% is below 70% CI threshold")
               sys.exit(1)
           else:
-              print(f"✅ Coverage {coverage_pct:.1f}% meets 68% CI threshold")
+              print(f"✅ Coverage {coverage_pct:.1f}% meets 70% CI threshold")
           EOF
 
       - name: Upload coverage to Codecov
