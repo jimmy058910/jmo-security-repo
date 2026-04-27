@@ -8,7 +8,7 @@ Guidance for Claude Code when working with the JMo Security Audit Tool Suite rep
 
 JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanners with unified CLI, normalized outputs, and HTML dashboard.
 
-**Version:** v1.0.3 (latest released — see CHANGELOG.md for full history)
+**Version:** v1.0.4 (latest released — see CHANGELOG.md for full history)
 **Philosophy:** Two-phase architecture: scan (invoke tools) → report (normalize, dedupe, output)
 **Test Coverage:** 8,000+ tests, 87% coverage, CI requires ≥85% (sharded across 4 parallel jobs); CI quick threshold 70% (excludes slow/docker/requires_tools/smoke)
 
@@ -293,11 +293,20 @@ See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for complete configuration referenc
 
 For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/release.rules.md) (now ~25 troubleshooting entries covering pytest-timeout traps, PRE_COMMIT_HOME literals, Python 3.12 OSError propagation, tag-naming conventions, dev↔main reconciliation, and more). For Windows hang issues + Docker UID-mismatch, see [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md). For contributing-specific CI troubleshooting, see [CONTRIBUTING.md#ci-troubleshooting](CONTRIBUTING.md#ci-troubleshooting).
 
-### Recent Major Lessons (post-v1.0.3 stabilization, 2026-04-26)
+### Recent Major Lessons (post-v1.0.3 stabilization + v1.0.4 release, 2026-04-26 → 2026-04-27)
 
-> ⚠️ **Active handoff for next session**: A planning doc at `dev-only/plans/2026-04-26-tasks-10-11-then-v1.0.4-handoff.md` covers what's still TODO before v1.0.4: (Task #10) restore coverage threshold 70% after band-aid lowering, (Task #11) harden Trivy install in `tool-contract-tests` (extend PR #350 hardening convention to CI installs), then (v1.0.4 release) cut the tag to ship Phase 2 fixes to GHCR images. **If continuing this work, read that handoff first.**
+The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. v1.0.4 then shipped the Dockerfile download hardening (PR #350) to GHCR images for the first time, plus root-cause fixes for two more long-standing issues:
 
-The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. Key takeaways now embedded in path-scoped rules:
+- **Coverage merge silent no-op** (PR #357): `coverage-aggregate` job's merge function had been a complete no-op since pytest-split was introduced — `hasattr(elem, '__iter__')` returns False for ElementTree Elements. Threshold was reading shard-1 in isolation (~68-72%) instead of true aggregate (~88%).
+- **CI install hardening** (PR #358): Extended PR #350's Dockerfile convention to all 14 `curl <upstream>/install.sh | sh` sites in workflows. Pinned to `versions.yaml`.
+- **v1.0.4 release pipeline** went **22/22 success, 8/8 Docker builds with zero retries** — first clean release in the project's history (prior baseline: ~50% smoke flake rate).
+
+Post-release verification (PRs #361, #362) surfaced 2 latent bugs that had been masked by the chronic flake noise:
+
+- **Missing `pytest-benchmark` dep** (PR #361): Performance Benchmarks job in scheduled.yml had been broken since added.
+- **Windows perf-test flakes** (PR #362): 2 hardcoded perf thresholds didn't account for GHA Windows runner slowness; matched sibling skip pattern.
+
+Key takeaways now embedded in path-scoped rules:
 
 - **Bug archeology pattern**: `--maxfail=5` truncation hides deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers.
 - **Tag schema**: `:latest` IS the deep variant. NO `:latest-deep`/`:latest-slim` tags exist. Verify with `gh api .../packages/container/.../versions`.
