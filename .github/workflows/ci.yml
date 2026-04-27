@@ -420,7 +420,11 @@ jobs:
               existing.set('branch', 'true')
               existing.set('condition-coverage', f"{pct:.0f}% ({covered}/{total})")
               if union_missing:
-                  existing.set('missing-branches', ','.join(sorted(union_missing, key=lambda b: int(b))))
+                  # Lex sort handles coverage.py's non-numeric branch targets
+                  # (e.g. "exit" when a branch leaves the function); int() sort
+                  # raises ValueError on those and would silently abort the
+                  # outer per-file try/except, dropping the whole shard's merge.
+                  existing.set('missing-branches', ','.join(sorted(union_missing)))
               elif 'missing-branches' in existing.attrib:
                   # Fully covered after merge — drop the attribute to match
                   # coverage.py's emission convention (it omits, doesn't empty).
