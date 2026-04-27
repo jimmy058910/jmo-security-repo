@@ -607,7 +607,7 @@ jobs:
           images: ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}
           # NOTE on `suffix=`: the global `flavor: suffix=-<variant>` below gets applied
           # to every tag type including type=raw and type=semver. For the bare-tag family
-          # (:latest, :deep, :balanced, :slim, :fast, :full, :1.0.2, :1.0, :1) we override
+          # (:latest, :deep, :balanced, :slim, :fast, :1.0.2, :1.0, :1) we override
           # with `suffix=` (empty) per-tag to produce bare tags instead of `:latest-deep`,
           # `:deep-deep`, `:1.0.2-deep`. Without the override we get garbage like `:deep-deep`.
           tags: |
@@ -626,9 +626,6 @@ jobs:
             # Bare :deep / :balanced / :slim / :fast — user-facing convenience tags
             # referenced in FAQ, USER_GUIDE, DOCKER_README.
             type=raw,value=${{ matrix.variant }},suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            # One-release backward-compat alias: :full points at :deep until users
-            # migrate off the old name. Remove in the release after v1.0.2.
-            type=raw,value=full,suffix=,enable=${{ startsWith(github.ref, 'refs/tags/v') && matrix.variant == 'deep' }}
           flavor: |
             suffix=-${{ matrix.variant }},onlatest=${{ matrix.variant != 'deep' }}
             latest=false
@@ -745,7 +742,7 @@ jobs:
             echo "|---------|--------------|--------------|---------------------|"
           } > size-comparison.md
 
-          for VARIANT in full balanced slim fast; do
+          for VARIANT in deep balanced slim fast; do
             TAG="${{ steps.tag.outputs.value }}-${VARIANT}"
             IMAGE="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${TAG}"
 
@@ -767,7 +764,7 @@ jobs:
           {
             echo ""
             echo "**v1.0.0 Target Sizes (Phase 1 Optimizations):**"
-            echo "- Full: ~1.97 GB (26 Docker-ready tools, 155 MB savings)"
+            echo "- Deep: ~1.97 GB (26 Docker-ready tools, 155 MB savings)"
             echo "- Balanced: ~1.41 GB (21 tools, production CI/CD)"
             echo "- Slim: ~557 MB (15 tools, cloud-focused)"
             echo "- Fast: ~502 MB (8 tools, CI/CD gate)"
