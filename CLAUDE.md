@@ -295,6 +295,8 @@ For release-specific issues, see [.claude/rules/release.rules.md](.claude/rules/
 
 ### Recent Major Lessons (post-v1.0.3 stabilization, 2026-04-26)
 
+> ⚠️ **Active handoff for next session**: A planning doc at `dev-only/plans/2026-04-26-tasks-10-11-then-v1.0.4-handoff.md` covers what's still TODO before v1.0.4: (Task #10) restore coverage threshold 70% after band-aid lowering, (Task #11) harden Trivy install in `tool-contract-tests` (extend PR #350 hardening convention to CI installs), then (v1.0.4 release) cut the tag to ship Phase 2 fixes to GHCR images. **If continuing this work, read that handoff first.**
+
 The v1.0.3 release cycle exposed multiple layered bugs that had been latent for several releases. Key takeaways now embedded in path-scoped rules:
 
 - **Bug archeology pattern**: `--maxfail=5` truncation hides deeper failures. Required 5 successive PRs (#343 → #347) to dig through all layers.
