@@ -87,13 +87,7 @@ curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --m
 | `--connect-timeout 30` | Bound DNS / TCP-handshake hangs. |
 | `--max-time 600` | Hard ceiling on total request time (10 min for slow CDNs). |
 
-**wget** (every invocation):
-
-```dockerfile
-wget -q --tries=3 --waitretry=5 --timeout=600 "$URL" -O /path
-```
-
-wget already exits non-zero on HTTP errors, so no `--fail` equivalent is needed.
+**Do not use wget for new downloads.** wget exits non-zero on HTTP errors but **does NOT retry on them by default** — `--tries=N` only covers connection failures. To get curl-equivalent behavior with wget, you'd need `--retry-on-http-error=429,500,502,503,504`, which is easy to forget. The post-v1.0.5 nightly cycle hit this when nuclei's release URL returned a transient HTTP error: `wget --tries=3` did not retry, the build failed, and curl with `--retry-all-errors` would have recovered. PR #350 hardened all `curl` calls but missed 9 `wget` invocations spanning nuclei / ZAP / dependency-check across all 4 Dockerfiles; the follow-up PR converts every download to the curl pattern above and adds `tests/unit/test_dockerfile_download_hardening.py` as a drift guard against re-introducing wget in builder stages.
 
 **Integrity check** (mandatory before extracting an archive — belt-and-suspenders for "200 with corrupt body" that even `--fail` can miss):
 
