@@ -84,8 +84,8 @@ RUN NP_VERSION="0.24.0" && \
 
 # Download OWASP ZAP (DAST)
 RUN ZAP_VERSION="2.16.1" && \
-    wget -q --tries=3 --waitretry=5 --timeout=600 "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
-    -O /tmp/zap.tar.gz && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
+    -o /tmp/zap.tar.gz && \
     gzip -t /tmp/zap.tar.gz && \
     tar -xzf /tmp/zap.tar.gz -C /opt && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
@@ -94,8 +94,8 @@ RUN ZAP_VERSION="2.16.1" && \
 RUN NUCLEI_VERSION="3.7.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
-    wget -q --tries=3 --waitretry=5 --timeout=600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
-    -O /tmp/nuclei.zip && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
+    -o /tmp/nuclei.zip && \
     unzip -t /tmp/nuclei.zip > /dev/null && \
     unzip -q /tmp/nuclei.zip -d /usr/local/bin && \
     chmod +x /usr/local/bin/nuclei && \
@@ -148,8 +148,8 @@ RUN LYNIS_VERSION="3.1.3" && \
 
 # Download OWASP Dependency-Check (SCA + License)
 RUN DC_VERSION="12.1.0" && \
-    wget -q --tries=3 --waitretry=5 --timeout=600 "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
-    -O /tmp/dependency-check.zip && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/jeremylong/DependencyCheck/releases/download/v${DC_VERSION}/dependency-check-${DC_VERSION}-release.zip" \
+    -o /tmp/dependency-check.zip && \
     unzip -t /tmp/dependency-check.zip > /dev/null && \
     unzip -q /tmp/dependency-check.zip -d /opt && \
     mv /opt/dependency-check /opt/dependency-check-cli && \
