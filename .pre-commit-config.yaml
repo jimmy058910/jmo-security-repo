@@ -116,19 +116,19 @@ repos:
         language: system
         types: [python]
         files: ^scripts/(core|jmo_mcp)/
-        entry: python scripts/dev/check_import_direction.py
+        entry: python3 scripts/dev/check_import_direction.py
         pass_filenames: false
       - id: doc-links
         name: doc-links (validate documentation links)
         language: system
         files: ^(CLAUDE\.md|docs/)
-        entry: python scripts/dev/check_doc_links.py
+        entry: python3 scripts/dev/check_doc_links.py
         pass_filenames: false
       - id: yaml-env-tilde
         name: "yaml-env-tilde (no literal ~/ in workflow env blocks)"
         language: system
         files: ^\.github/(workflows|actions)/.*\.ya?ml$
-        entry: python scripts/dev/check_yaml_env_tilde.py
+        entry: python3 scripts/dev/check_yaml_env_tilde.py
         pass_filenames: false
 
   # Local hook: keep requirements-dev.txt fresh when requirements-dev.in changes

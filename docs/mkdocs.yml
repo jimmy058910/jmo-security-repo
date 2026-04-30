@@ -12,7 +12,7 @@ repo_url: https://github.com/jimmy058910/jmo-security-repo
 edit_uri: edit/main/docs/
 
 # Copyright
-copyright: Copyright &copy; 2024-2025 JMo Gaming LLC
+copyright: Copyright &copy; 2024-2026 JMo Gaming LLC
 
 # Theme
 theme:
@@ -60,9 +60,26 @@ markdown_extensions:
 # Navigation structure
 nav:
   - Home: index.md
-  - User Guide: USER_GUIDE.md
-  - Docker Guide: DOCKER_README.md
-  - Schedule Guide: SCHEDULE_GUIDE.md
+  - Getting Started:
+      - User Guide: USER_GUIDE.md
+      - Docker Guide: DOCKER_README.md
+      - Installation: MANUAL_INSTALLATION.md
+      - FAQ: FAQ.md
+  - Scanning:
+      - Profiles and Tools: PROFILES_AND_TOOLS.md
+      - Scan Optimization: SCAN_OPTIMIZATION.md
+      - Results Guide: RESULTS_GUIDE.md
+      - Diff Guide: DIFF_GUIDE.md
+      - Trends Guide: TRENDS_GUIDE.md
+      - History Guide: HISTORY_GUIDE.md
+      - Schedule Guide: SCHEDULE_GUIDE.md
+  - Compliance & Policy:
+      - Policy-as-Code: POLICY_AS_CODE.md
+      - SLSA Attestation: SLSA_GUIDE.md
+  - Integrations:
+      - MCP / AI Remediation: MCP_SETUP.md
+      - Claude Code: integrations/CLAUDE_CODE.md
+      - GitHub Copilot: integrations/GITHUB_COPILOT.md
   - Examples:
       - Overview: examples/README.md
       - Wizard Examples: examples/wizard-examples.md
@@ -71,6 +88,7 @@ nav:
       - Version Management: VERSION_MANAGEMENT.md
       - Telemetry: TELEMETRY.md
       - Release Process: RELEASE.md
+      - Troubleshooting: TROUBLESHOOTING.md
 
 # Plugins
 plugins:
@@ -79,12 +97,29 @@ plugins:
 # Extra
 extra:
   social:
+    - icon: fontawesome/solid/house
+      link: https://jmotools.com
+      name: JMo Security home
     - icon: fontawesome/brands/github
       link: https://github.com/jimmy058910
+      name: GitHub
     - icon: fontawesome/brands/twitter
       link: https://twitter.com/jmosecurity
+      name: X/Twitter
     - icon: fontawesome/solid/paper-plane
       link: https://jmotools.com/subscribe.html
+      name: Subscribe
+    - icon: fontawesome/solid/blog
+      link: https://blog.jmotools.com
+      name: Blog
+  meta:
+    - name: keywords
+      content: >-
+        security scanner, SAST, DAST, SCA, secrets detection, compliance automation,
+        OWASP, NIST CSF, CIS, PCI DSS, MITRE ATT&CK, open source,
+        DevSecOps, CI/CD, Python, jmo-security, 28 scanners
+    - name: author
+      content: "JMo Gaming LLC"
   analytics:
     provider: google
     property: !ENV GOOGLE_ANALYTICS_KEY
