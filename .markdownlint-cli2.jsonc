@@ -23,6 +23,7 @@
   "ignores": [
     "results-*/**",
     ".playwright-mcp/**",
-    "node_modules/**"
+    "node_modules/**",
+    "paperclip/**"
   ]
 }
