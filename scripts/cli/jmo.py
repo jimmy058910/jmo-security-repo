@@ -2268,34 +2268,49 @@ def _collect_email_opt_in(args) -> None:
     config_path.parent.mkdir(exist_ok=True)
 
     if email and "@" in email:
-        # Attempt to send welcome email (fails silently if resend not installed)
+        # Subscribe (audience + welcome). Fails silently if resend
+        # unavailable or API unreachable — never blocks CLI.
         try:
-            from scripts.core.email_service import send_welcome_email, validate_email
+            from scripts.core.email_service import (
+                subscribe_to_newsletter,
+                validate_email,
+            )
 
             if validate_email(email):
-                success = send_welcome_email(email, source="cli")
+                subscribed, welcomed = subscribe_to_newsletter(email, source="cli")
 
-                # Save to config
+                # Track pending_subscription so a future `jmo subscribe --retry`
+                # can re-attempt the audience add when offline at signup time.
                 import yaml
 
                 config = {
                     "email": email,
                     "email_opt_in": True,
                     "onboarding_completed": True,
+                    "pending_subscription": not subscribed,
                 }
                 with open(config_path, "w") as f:
                     yaml.dump(config, f)
 
-                if success:
+                if subscribed and welcomed:
                     _safe_print(
                         "\n✅ Thanks! Check your inbox for a welcome message.\n"
                     )
+                elif subscribed:
+                    _safe_print(
+                        "\n✅ You're subscribed. (Welcome email failed — you'll"
+                        " still receive newsletters.)\n"
+                    )
                 else:
-                    _safe_print("\n✅ Thanks! You're all set.\n")
+                    # Audience add failed — saved locally, retry path available.
+                    _safe_print(
+                        "\n✅ Thanks! Saved your address. Run "
+                        "`jmo subscribe` later to finish signup.\n"
+                    )
                     _log(
                         args,
                         "DEBUG",
-                        "Email collection succeeded but welcome email not sent (resend may not be configured)",
+                        "Email saved locally but Resend unreachable; pending retry",
                     )
             else:
                 _safe_print("\n❌ Invalid email address. Skipping...\n")

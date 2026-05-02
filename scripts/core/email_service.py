@@ -53,6 +53,13 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 # Override with JMO_FROM_EMAIL env var if needed
 FROM_EMAIL = os.getenv("JMO_FROM_EMAIL", "marketing@jmotools.com")
 
+# Canonical audience for the "JMo Updates" newsletter. CLI signup touchpoints
+# (first-run prompt, `jmo wizard` end-of-flow, `jmo subscribe`) push contacts
+# here so they land in the same audience that scripts/core/newsletter_broadcast.py
+# targets when sending release digests.
+JMO_UPDATES_AUDIENCE_ID = "fb900b6d-10de-4171-97df-e4e5eebf20fd"
+RESEND_AUDIENCE_ID = os.getenv("RESEND_AUDIENCE_ID", JMO_UPDATES_AUDIENCE_ID)
+
 # Email templates
 WELCOME_EMAIL_HTML = """
 <!DOCTYPE html>
@@ -334,6 +341,110 @@ def send_welcome_email(
         # Log error for debugging
         logger.error("Email send failed: %s", e, exc_info=True)
         return False
+
+
+def add_contact_to_audience(
+    email: str,
+    audience_id: str = "",
+    source: Literal["cli", "wizard", "subscribe", "dashboard", "website"] = "cli",
+) -> bool:
+    """Add an email to a Resend audience (idempotent on the API side).
+
+    This is the load-bearing call that ensures CLI signups receive the
+    broadcast newsletter sends emitted by scripts/core/newsletter_broadcast.py.
+    Without it, send_welcome_email() only fires a transactional welcome —
+    the user never lands in the audience and never receives subsequent
+    broadcasts.
+
+    Args:
+        email: Subscriber email address.
+        audience_id: Resend audience UUID. Falls back to RESEND_AUDIENCE_ID
+            (which itself defaults to JMO_UPDATES_AUDIENCE_ID).
+        source: Where the signup originated (for analytics). The Resend
+            Contacts API does not accept arbitrary tags, so source is
+            recorded only via the welcome email's tag set.
+
+    Returns:
+        True on success, False on any failure (silent — must not block CLI).
+
+    Note:
+        Resend's Contacts.create is idempotent on email — calling it twice
+        for the same address returns the existing contact, so we never need
+        to "check before insert".
+    """
+    if not RESEND_AVAILABLE:
+        return False
+    if not RESEND_API_KEY:
+        return False
+
+    target_audience = audience_id or RESEND_AUDIENCE_ID
+    if not target_audience:
+        return False
+
+    resend.api_key = RESEND_API_KEY
+
+    try:
+        params = {
+            "email": email,
+            "audience_id": target_audience,
+            "unsubscribed": False,
+        }
+        response = resend.Contacts.create(params)
+    except Exception as exc:  # Acceptable: must not block CLI workflow
+        logger.error("Resend Contacts.create failed (source=%s): %s", source, exc)
+        return False
+
+    # Resend returns dict-with-id on success
+    if isinstance(response, dict):
+        return bool(response.get("id"))
+    return bool(getattr(response, "id", None))
+
+
+def subscribe_to_newsletter(
+    email: str,
+    source: Literal["cli", "wizard", "subscribe", "dashboard", "website"] = "cli",
+    *,
+    audience_id: str = "",
+    send_welcome: bool = True,
+) -> tuple[bool, bool]:
+    """Add a contact to the newsletter audience and send a welcome email.
+
+    This is the top-level helper CLI signup surfaces should call. It composes
+    add_contact_to_audience() (the load-bearing addition that JMOAA-45's
+    broadcast pipeline needs) with the existing send_welcome_email() so a
+    single call covers both responsibilities.
+
+    Args:
+        email: Subscriber email address.
+        source: Origin label for analytics (cli / wizard / subscribe / etc.).
+        audience_id: Resend audience UUID override (defaults to
+            RESEND_AUDIENCE_ID / JMO_UPDATES_AUDIENCE_ID).
+        send_welcome: If True (default), also send the transactional welcome
+            email. Set False when the caller wants to add to the audience
+            only (e.g. silent re-subscribe, retry path).
+
+    Returns:
+        (subscribed, welcomed) — two booleans. `subscribed` reflects whether
+        the contact was added to the audience; `welcomed` reflects whether
+        the welcome email was sent. Either may fail independently (e.g.
+        Resend Contacts API succeeds but email send hits a rate limit), so
+        callers can react granularly.
+    """
+    # cast cli/wizard/subscribe sources back to send_welcome_email's narrower
+    # Literal — the welcome-email API only knows cli/dashboard/website
+    welcome_source: Literal["cli", "dashboard", "website"]
+    if source in ("wizard", "subscribe", "cli"):
+        welcome_source = "cli"
+    elif source == "dashboard":
+        welcome_source = "dashboard"
+    else:
+        welcome_source = "website"
+
+    subscribed = add_contact_to_audience(email, audience_id=audience_id, source=source)
+    welcomed = (
+        send_welcome_email(email, source=welcome_source) if send_welcome else False
+    )
+    return subscribed, welcomed
 
 
 def validate_email(email: str) -> bool:
