@@ -15,6 +15,7 @@
 [![Newsletter](https://img.shields.io/badge/Newsletter-Subscribe-667eea)](https://jmotools.com/subscribe.html)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/jmogaming)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github&logoColor=white)](https://github.com/sponsors/jimmy058910)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-5865f2?logo=github&logoColor=white)](https://github.com/jimmy058910/jmo-security-repo/discussions)
 
 ---
 
