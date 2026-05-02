@@ -62,7 +62,14 @@ def db_with_sample_scans(temp_db):
 
     scan_ids = []
     current_time = int(time.time())  # Capture current time for consistent mocking
-    base_time = current_time - (30 * 86400)  # 30 days ago
+    # 28 days, NOT 30 — `test_get_compliance_trend` queries with `days=30`, and the
+    # production code at history_db.py:3232-3234 captures its own `time.time()` when
+    # the query runs. Any elapsed time between fixture init (these inserts) and the
+    # query (test body) advances the cutoff, evicting a scan placed exactly at
+    # `current_time - 30d`. Windows GHA runners are slow enough that this races
+    # deterministically (failure surface: nightly Scheduled Tests, run 25242314516).
+    # 2-day safety margin keeps all 5 scans (28/21/14/7/0 days ago) inside `days=30`.
+    base_time = current_time - (28 * 86400)
 
     for i in range(5):
         # Create scan metadata
