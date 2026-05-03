@@ -188,8 +188,8 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Note: checkov and prowler have conflicting dependencies - install separately
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.159.0 \
-    checkov==3.2.501 \
+    semgrep==1.161.0 \
+    checkov==3.2.526 \
     ruff==0.15.2 \
     yara-python==4.5.4 && \
     python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
