@@ -1,0 +1,181 @@
+<!--
+  JMo Security — site footer (reference implementation)
+
+  Drop-in footer for jmotools.com and any first-party web surface.
+  Consumes ../tokens.css. No external font loads, no analytics, no trackers —
+  the privacy posture matters as much as the visual design (see IDENTITY.md §4).
+
+  Usage:
+    1. Include ../tokens.css before this fragment
+    2. Paste this <footer> at the bottom of your <body>
+    3. Update the year and links if needed (kept inline, not from a CMS)
+-->
+
+<footer class="jmo-footer" role="contentinfo" aria-labelledby="jmo-footer-heading">
+  <h2 id="jmo-footer-heading" class="jmo-sr-only">Site footer</h2>
+
+  <div class="jmo-footer__inner">
+
+    <div class="jmo-footer__brand">
+      <a href="/" class="jmo-footer__brand-link" aria-label="JMo Security home">
+        <strong class="jmo-footer__wordmark">JMo Security</strong>
+      </a>
+      <p class="jmo-footer__tagline">
+        Terminal-first security audit toolkit. 28 scanners, one report.
+        Local-first, no SaaS, no telemetry.
+      </p>
+    </div>
+
+    <nav class="jmo-footer__nav" aria-label="Footer">
+      <div class="jmo-footer__col">
+        <h3 class="jmo-footer__col-heading">Product</h3>
+        <ul class="jmo-footer__list">
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/docs/quickstart">Quickstart</a></li>
+          <li><a href="/docs/profiles">Scan profiles</a></li>
+          <li><a href="https://github.com/jimmy058910/jmo-security-repo/releases">Releases</a></li>
+        </ul>
+      </div>
+      <div class="jmo-footer__col">
+        <h3 class="jmo-footer__col-heading">Community</h3>
+        <ul class="jmo-footer__list">
+          <li><a href="https://github.com/jimmy058910/jmo-security-repo">GitHub</a></li>
+          <li><a href="https://github.com/jimmy058910/jmo-security-repo/discussions">Discussions</a></li>
+          <li><a href="https://github.com/jimmy058910/jmo-security-repo/issues">Issues</a></li>
+          <li><a href="https://blog.jmotools.com">Blog</a></li>
+        </ul>
+      </div>
+      <div class="jmo-footer__col">
+        <h3 class="jmo-footer__col-heading">Support</h3>
+        <ul class="jmo-footer__list">
+          <li><a href="https://ko-fi.com/jmosecurity">Ko-fi</a></li>
+          <li><a href="https://github.com/sponsors/jimmy058910">GitHub Sponsors</a></li>
+          <li><a href="/security">Security disclosure</a></li>
+          <li><a href="/license">License (MIT)</a></li>
+        </ul>
+      </div>
+    </nav>
+
+  </div>
+
+  <div class="jmo-footer__legal">
+    <p>
+      &copy; <span class="jmo-footer__year">2026</span> JMo Security.
+      Built by a SOC engineer who got tired of stitching together five different tools.
+    </p>
+    <p class="jmo-footer__meta">
+      No tracking. No telemetry. No analytics on this page.
+    </p>
+  </div>
+</footer>
+
+<style>
+  /*
+   * Scoped to .jmo-footer to stay safe alongside whatever the host page already
+   * loads. Token references resolve from ../tokens.css.
+   */
+
+  .jmo-sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0);
+    white-space: nowrap; border: 0;
+  }
+
+  .jmo-footer {
+    background: var(--jmo-neutral-900);
+    color: var(--jmo-neutral-200);
+    font-family: var(--jmo-font-sans);
+    font-size: var(--jmo-text-sm);
+    line-height: var(--jmo-leading-relaxed);
+    padding: var(--jmo-space-12) var(--jmo-space-6) var(--jmo-space-6);
+  }
+
+  .jmo-footer__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    gap: var(--jmo-space-12);
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 768px) {
+    .jmo-footer__inner {
+      grid-template-columns: 1.4fr 2fr;
+    }
+  }
+
+  .jmo-footer__brand-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .jmo-footer__wordmark {
+    color: var(--jmo-neutral-50);
+    font-size: var(--jmo-text-lg);
+    font-weight: var(--jmo-weight-bold);
+    letter-spacing: 0.01em;
+  }
+
+  .jmo-footer__tagline {
+    color: var(--jmo-neutral-300);
+    margin: var(--jmo-space-3) 0 0;
+    max-width: 36ch;
+  }
+
+  .jmo-footer__nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--jmo-space-8);
+  }
+
+  @media (max-width: 480px) {
+    .jmo-footer__nav { grid-template-columns: 1fr; }
+  }
+
+  .jmo-footer__col-heading {
+    color: var(--jmo-neutral-100);
+    font-size: var(--jmo-text-sm);
+    font-weight: var(--jmo-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 var(--jmo-space-3);
+  }
+
+  .jmo-footer__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: var(--jmo-space-2);
+  }
+
+  .jmo-footer__list a {
+    color: var(--jmo-neutral-300);
+    text-decoration: none;
+    transition: color var(--jmo-duration-fast) var(--jmo-easing-standard);
+  }
+
+  .jmo-footer__list a:hover,
+  .jmo-footer__list a:focus-visible {
+    color: var(--jmo-brand-accent);
+    text-decoration: underline;
+  }
+
+  .jmo-footer__legal {
+    max-width: 1200px;
+    margin: var(--jmo-space-12) auto 0;
+    padding-top: var(--jmo-space-6);
+    border-top: 1px solid var(--jmo-neutral-800);
+    color: var(--jmo-neutral-500);
+    font-size: var(--jmo-text-xs);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--jmo-space-3);
+  }
+
+  .jmo-footer__legal p { margin: 0; }
+  .jmo-footer__meta { color: var(--jmo-neutral-700); }
+</style>
