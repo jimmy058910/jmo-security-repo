@@ -174,6 +174,20 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
+      - name: Ensure auto-merge-ok label exists
+        # Self-healing: `gh pr create --label auto-merge-ok` hard-fails if the
+        # label is missing from the repo, which broke the weekly tool-update
+        # cron silently for 2+ Sundays in a row before being noticed. `--force`
+        # creates if missing, updates if present — idempotent + cheap.
+        if: steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create 'auto-merge-ok' \
+            --description 'PR eligible for soak-window auto-merge (24h soak, requires green CI)' \
+            --color '0E8A16' \
+            --force
+
       - name: Create Pull Request
         if: steps.commit.outputs.has_changes == 'true'
         env:
@@ -301,7 +315,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          # `packaging` is required by update_versions.py for semver bump
+          # classification (--check-latest fails fast with 'packaging not
+          # installed' otherwise). Match auto-update-tools job above.
+          pip install pyyaml packaging
 
       - name: Authenticate GitHub CLI
         run: |
