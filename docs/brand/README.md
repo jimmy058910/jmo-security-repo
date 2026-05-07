@@ -38,5 +38,5 @@ Tokens are versioned alongside the codebase. There is no separate brand release 
 |-------|--------|
 | 1 — Foundation spec + tokens | done (this commit) |
 | 2 — Reference templates (footer, email chrome) | done (this commit) |
-| 3 — Logo system (SVG variants, favicon set, social) | pending — see [JMOAA-55](/JMOAA/issues/JMOAA-55) |
-| 4 — Adoption (dashboard reads tokens, jmotools.com adopts) | pending — Tier 2/3 work |
+| 3 — Logo system (SVG variants, favicon set, social) | pending — tracked at [JMOAA-56](/JMOAA/issues/JMOAA-56) |
+| 4 — Adoption (dashboard reads tokens, jmotools.com adopts) | pending — tracked at [JMOAA-57](/JMOAA/issues/JMOAA-57) (Tier 3) |
