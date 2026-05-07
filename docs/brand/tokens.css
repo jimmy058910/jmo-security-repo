@@ -1,0 +1,141 @@
+/*
+ * JMo Security — design tokens
+ *
+ * Single source of truth for color, typography, spacing, and motion.
+ * Spec: ../IDENTITY.md
+ *
+ * Consumers: scripts/dashboard, jmotools.com, email templates, signup forms.
+ * Do not hardcode values that exist as tokens here. Add a token first, then use it.
+ */
+
+:root {
+  /* ---------- Severity (load-bearing — match scanner output) ---------- */
+  --jmo-severity-critical: #d32f2f;
+  --jmo-severity-high:     #f57c00;
+  --jmo-severity-medium:   #fbc02d;
+  --jmo-severity-low:      #7cb342;
+  --jmo-severity-info:     #757575;
+
+  /* ---------- Brand primary ---------- */
+  --jmo-brand-primary:      #1976d2;
+  --jmo-brand-primary-dark: #0d47a1; /* logo navy */
+  --jmo-brand-accent:       #42a5f5;
+
+  /* ---------- Neutrals ---------- */
+  --jmo-neutral-50:  #fafafa;
+  --jmo-neutral-100: #f5f5f5;
+  --jmo-neutral-200: #eeeeee;
+  --jmo-neutral-300: #e0e0e0;
+  --jmo-neutral-500: #9e9e9e;
+  --jmo-neutral-700: #616161;
+  --jmo-neutral-800: #424242;
+  --jmo-neutral-900: #212121;
+  --jmo-neutral-950: #121212;
+
+  /* ---------- Semantic UI (distinct from severity) ---------- */
+  --jmo-ui-success: #2e7d32;
+  --jmo-ui-warning: #ed6c02;
+  --jmo-ui-error:   #c62828;
+  --jmo-ui-info:    #0288d1;
+
+  /* ---------- Light-mode surface assignments ---------- */
+  --jmo-bg:           var(--jmo-neutral-50);
+  --jmo-bg-raised:    #ffffff;
+  --jmo-border:       var(--jmo-neutral-300);
+  --jmo-border-subtle:var(--jmo-neutral-200);
+  --jmo-text:         var(--jmo-neutral-800);
+  --jmo-text-muted:   var(--jmo-neutral-700);
+  --jmo-text-subtle:  var(--jmo-neutral-500);
+  --jmo-link:         var(--jmo-brand-primary);
+  --jmo-link-hover:   var(--jmo-brand-primary-dark);
+
+  /* ---------- Typography ---------- */
+  --jmo-font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Helvetica Neue', sans-serif;
+  --jmo-font-mono:
+    ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono',
+    'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  --jmo-font-display: var(--jmo-font-sans);
+
+  --jmo-text-xs:   12px;
+  --jmo-text-sm:   14px;
+  --jmo-text-base: 16px;
+  --jmo-text-lg:   20px;
+  --jmo-text-xl:   24px;
+  --jmo-text-2xl:  30px;
+  --jmo-text-3xl:  38px;
+
+  --jmo-leading-tight:    1.2;
+  --jmo-leading-snug:     1.3;
+  --jmo-leading-normal:   1.5;
+  --jmo-leading-relaxed:  1.6;
+
+  --jmo-weight-regular:  400;
+  --jmo-weight-medium:   500;
+  --jmo-weight-semibold: 600;
+  --jmo-weight-bold:     700;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --jmo-space-1:  4px;
+  --jmo-space-2:  8px;
+  --jmo-space-3:  12px;
+  --jmo-space-4:  16px;
+  --jmo-space-6:  24px;
+  --jmo-space-8:  32px;
+  --jmo-space-12: 48px;
+  --jmo-space-16: 64px;
+
+  /* ---------- Radius ---------- */
+  --jmo-radius-sm:  4px;
+  --jmo-radius-md:  8px;
+  --jmo-radius-lg:  12px;
+  --jmo-radius-full: 9999px;
+
+  /* ---------- Shadow ---------- */
+  --jmo-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --jmo-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --jmo-shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.10);
+
+  /* ---------- Motion (kept tight; respect prefers-reduced-motion) ---------- */
+  --jmo-duration-fast:   120ms;
+  --jmo-duration-normal: 200ms;
+  --jmo-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Dark-mode overrides ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --jmo-bg:           var(--jmo-neutral-900);
+    --jmo-bg-raised:    var(--jmo-neutral-800);
+    --jmo-border:       var(--jmo-neutral-700);
+    --jmo-border-subtle:var(--jmo-neutral-800);
+    --jmo-text:         var(--jmo-neutral-100);
+    --jmo-text-muted:   var(--jmo-neutral-300);
+    --jmo-text-subtle:  var(--jmo-neutral-500);
+    --jmo-link:         var(--jmo-brand-accent);
+    --jmo-link-hover:   var(--jmo-brand-primary);
+  }
+}
+
+/* Class-based dark mode (matches dashboard's tailwind config) */
+:root.dark,
+.dark {
+  --jmo-bg:           var(--jmo-neutral-900);
+  --jmo-bg-raised:    var(--jmo-neutral-800);
+  --jmo-border:       var(--jmo-neutral-700);
+  --jmo-border-subtle:var(--jmo-neutral-800);
+  --jmo-text:         var(--jmo-neutral-100);
+  --jmo-text-muted:   var(--jmo-neutral-300);
+  --jmo-text-subtle:  var(--jmo-neutral-500);
+  --jmo-link:         var(--jmo-brand-accent);
+  --jmo-link-hover:   var(--jmo-brand-primary);
+}
+
+/* Respect motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --jmo-duration-fast:   0ms;
+    --jmo-duration-normal: 0ms;
+  }
+}
