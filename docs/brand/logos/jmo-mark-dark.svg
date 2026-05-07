@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 190" width="560" height="190" role="img" aria-label="JMo Security — full logo lockup, dark variant">
+  <title>JMo Security</title>
+  <!--
+    Dark variant — for use on dark/navy/terminal backgrounds.
+    Background is transparent; place on #0d47a1 or #212121 surface.
+
+    Color changes vs. jmo-mark.svg:
+      - JM wordmark: #ffffff  (was #0d47a1)
+      - Tagline:     #ffffff  (was #0d47a1)
+      - Ring:        #ffffff  (was #0d47a1 — visible against dark bg)
+      - Lens fill:   #42a5f5  (unchanged — accent blue works on dark)
+      - Handle:      #9e9e9e  (unchanged)
+      - Padlock:     #ffffff  (unchanged)
+  -->
+
+  <!-- ── Magnifying glass ─────────────────────────────────── -->
+  <line x1="322" y1="122" x2="384" y2="184"
+        stroke="#9e9e9e" stroke-width="22" stroke-linecap="round"/>
+
+  <circle cx="276" cy="76" r="62" fill="#42a5f5"/>
+
+  <circle cx="276" cy="76" r="62"
+          fill="none" stroke="#ffffff" stroke-width="16"/>
+
+  <path d="M256,82 L256,60 A20,20 0 0,1 296,60 L296,82"
+        fill="none" stroke="#ffffff" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="249" y="74" width="54" height="40" rx="6" fill="#ffffff"/>
+
+  <circle cx="276" cy="91" r="7" fill="#42a5f5"/>
+  <rect x="273" y="91" width="6" height="11" rx="2" fill="#42a5f5"/>
+
+  <!-- ── JM wordmark (white) ───────────────────────────── -->
+  <text x="15" y="140"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="130" fill="#ffffff">JM</text>
+
+  <!-- ── Tagline (white) ──────────────────────────────── -->
+  <text x="15" y="182"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="18" fill="#ffffff"
+        letter-spacing="3.5" textLength="365" lengthAdjust="spacing">SECURITY AUDIT TOOL SUITE</text>
+</svg>
