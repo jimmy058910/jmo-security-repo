@@ -8,13 +8,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        // JMo Security brand colors (severity-based)
-        critical: '#d32f2f',
-        high: '#f57c00',
-        medium: '#fbc02d',
-        low: '#7cb342',
-        info: '#757575',
-        primary: '#1976d2',
+        // Sourced from docs/brand/tokens.css — do not hardcode hex here
+        critical: 'var(--jmo-severity-critical)',
+        high: 'var(--jmo-severity-high)',
+        medium: 'var(--jmo-severity-medium)',
+        low: 'var(--jmo-severity-low)',
+        info: 'var(--jmo-severity-info)',
+        primary: 'var(--jmo-brand-primary)',
       },
     },
   },
