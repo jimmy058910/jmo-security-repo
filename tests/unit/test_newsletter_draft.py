@@ -42,29 +42,53 @@ Smaller follow-up.
 - Edge case in parser
 """
 
-MIN_TEMPLATE = """\
-<html>
+# Minimal chrome that exercises all {{var}} placeholders the generator maps.
+MIN_CHROME = """\
+<!DOCTYPE html>
+<html lang="en">
+<head><title>{{subject}}</title></head>
 <body>
+<div style="display:none;">{{preheader}}</div>
+<table>
+  <tr>
+    <td>JMo Security</td>
+    <td>{{issue_label}}</td>
+  </tr>
+  <tr>
+    <td>
+      <!--CONTENT-->
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="{{unsubscribe_url}}">Unsubscribe</a>
+      <a href="{{preferences_url}}">Preferences</a>
+      <p>{{sender_address}}</p>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+
+# Newsletter body only — injected into MIN_CHROME at build time.
+MIN_TEMPLATE = """\
 <p>Hey {{{first_name|there}}},</p>
 <h1>${headline}</h1>
 <div>${meta_line}</div>
 <div class="badge">${badge_label}</div>
-<title>${subject}</title>
 <section>${release_body_html}</section>
 ${customer_story_block}
 <a href="${primary_cta_url}">${primary_cta_label}</a>
-<a href="{{{unsubscribe}}}">Unsubscribe</a>
-</body>
-</html>
 """
 
 
 @pytest.fixture
 def repo_root(tmp_path: Path) -> Path:
-    """Build a tiny pretend-repo with a CHANGELOG and template."""
+    """Build a tiny pretend-repo with a CHANGELOG, template body, and chrome."""
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG_FIXTURE, encoding="utf-8")
-    template_path = tmp_path / "template.html"
-    template_path.write_text(MIN_TEMPLATE, encoding="utf-8")
+    (tmp_path / "template.html").write_text(MIN_TEMPLATE, encoding="utf-8")
+    (tmp_path / "chrome.html").write_text(MIN_CHROME, encoding="utf-8")
     return tmp_path
 
 
@@ -145,19 +169,20 @@ def test_inline_md_escapes_html_first():
 
 def test_inline_md_supports_bold_code_links():
     out = dg._inline_md("**bold** with `code` and [link](https://example.com)")
-    assert "<strong>bold</strong>" in out
-    assert "<code>code</code>" in out
-    assert '<a href="https://example.com">link</a>' in out
+    assert "<strong" in out and "bold</strong>" in out
+    assert "<code" in out and "code</code>" in out
+    assert 'href="https://example.com"' in out and ">link</a>" in out
 
 
 def test_markdown_to_email_html_handles_bullets():
     md = "### Heading\n\n- one\n- two\n\nplain paragraph"
     out = dg._markdown_to_email_html(md)
-    assert "<h2>Heading</h2>" in out
-    assert "<ul>" in out
-    assert "<li>one</li>" in out
-    assert "<li>two</li>" in out
-    assert "<p>plain paragraph</p>" in out
+    assert "Heading</h2>" in out
+    assert "<h2" in out
+    assert "<ul" in out
+    assert "one</li>" in out
+    assert "two</li>" in out
+    assert "plain paragraph</p>" in out
 
 
 def test_html_to_plain_text_strips_tags_and_renders_links():
@@ -180,6 +205,7 @@ def test_generate_draft_default_release_only(repo_root: Path, tmp_path: Path):
         output_dir=out_dir,
         repo_root=repo_root,
         template_path=repo_root / "template.html",
+        chrome_path=repo_root / "chrome.html",
         include_customer_story=False,
     )
     assert draft.version == "2.0.0"
@@ -206,6 +232,7 @@ def test_generate_draft_with_customer_story(repo_root: Path, tmp_path: Path):
         output_dir=tmp_path / "drafts",
         repo_root=repo_root,
         template_path=repo_root / "template.html",
+        chrome_path=repo_root / "chrome.html",
         customer_story_path=story_path,
     )
     assert "Customer Story" in draft.html
@@ -219,6 +246,7 @@ def test_generate_draft_missing_story_silently_omits(repo_root: Path, tmp_path: 
         output_dir=tmp_path / "drafts",
         repo_root=repo_root,
         template_path=repo_root / "template.html",
+        chrome_path=repo_root / "chrome.html",
         customer_story_path=tmp_path / "does-not-exist.md",
     )
     assert "Customer Story" not in draft.html
@@ -229,6 +257,7 @@ def test_generate_draft_date_range(repo_root: Path, tmp_path: Path):
         output_dir=tmp_path / "drafts",
         repo_root=repo_root,
         template_path=repo_root / "template.html",
+        chrome_path=repo_root / "chrome.html",
         date_range_start=datetime.date(2026, 4, 1),
         date_range_end=datetime.date(2026, 7, 1),
         include_customer_story=False,
@@ -243,6 +272,7 @@ def test_generate_draft_pinned_version(repo_root: Path, tmp_path: Path):
         output_dir=tmp_path / "drafts",
         repo_root=repo_root,
         template_path=repo_root / "template.html",
+        chrome_path=repo_root / "chrome.html",
         version="1.9.0",
         include_customer_story=False,
     )
@@ -256,6 +286,7 @@ def test_generate_draft_empty_date_range_raises(repo_root: Path, tmp_path: Path)
             output_dir=tmp_path / "drafts",
             repo_root=repo_root,
             template_path=repo_root / "template.html",
+            chrome_path=repo_root / "chrome.html",
             date_range_start=datetime.date(2030, 1, 1),
             date_range_end=datetime.date(2030, 12, 31),
             include_customer_story=False,
