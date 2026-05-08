@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 160" width="420" height="160" role="img" aria-label="JMo Security wordmark">
+  <title>JMo Security</title>
+  <!--
+    Horizontal wordmark — JMO mark without tagline.
+    Use for: inline mentions, nav bars, compact headers, footer credits.
+    Minimum recommended render height: 32px.
+  -->
+
+  <!-- ── Magnifying glass ─────────────────────────────────── -->
+  <!-- Handle at 45° — viewBox extended to 420×160 to accommodate -->
+  <line x1="322" y1="122" x2="356" y2="156"
+        stroke="#9e9e9e" stroke-width="22" stroke-linecap="round"/>
+
+  <circle cx="276" cy="76" r="62" fill="#42a5f5"/>
+
+  <circle cx="276" cy="76" r="62"
+          fill="none" stroke="#0d47a1" stroke-width="16"/>
+
+  <path d="M256,82 L256,60 A20,20 0 0,1 296,60 L296,82"
+        fill="none" stroke="#ffffff" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="249" y="74" width="54" height="40" rx="6" fill="#ffffff"/>
+
+  <circle cx="276" cy="91" r="7" fill="#42a5f5"/>
+  <rect x="273" y="91" width="6" height="11" rx="2" fill="#42a5f5"/>
+
+  <!-- ── JM wordmark ─────────────────────────────────────── -->
+  <text x="15" y="120"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="112" fill="#0d47a1">JM</text>
+</svg>
