@@ -15,7 +15,7 @@
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.8",
     "lucide-react": "^1.14.0",
-    "react": "^18.2.0",
+    "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^2.15.4"
   },
@@ -28,7 +28,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^30.0.0",
-    "@types/react": "^18.2.56",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.3.0",
     "autoprefixer": "^10.5.0",
