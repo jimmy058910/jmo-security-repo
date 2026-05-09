@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 275" width="300" height="275" role="img" aria-label="JMo Security stacked wordmark">
+  <title>JMo Security</title>
+  <!--
+    Vertical (stacked) wordmark — icon centered above text.
+    Use for: narrow sidebars, mobile splash screens, square thumbnails.
+    Minimum recommended render height: 80px.
+  -->
+
+  <!-- ── Magnifying glass icon (centered, scaled for vertical layout) ── -->
+  <!-- Handle -->
+  <line x1="206" y1="148" x2="268" y2="210"
+        stroke="#9e9e9e" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Lens fill -->
+  <circle cx="150" cy="92" r="76" fill="#42a5f5"/>
+
+  <!-- Outer ring -->
+  <circle cx="150" cy="92" r="76"
+          fill="none" stroke="#0d47a1" stroke-width="14"/>
+
+  <!-- Padlock shackle -->
+  <path d="M122,100 L122,74 A28,28 0 0,1 178,74 L178,100"
+        fill="none" stroke="#ffffff" stroke-width="12"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Padlock body -->
+  <rect x="114" y="92" width="72" height="50" rx="7" fill="#ffffff"/>
+
+  <!-- Keyhole -->
+  <circle cx="150" cy="112" r="9" fill="#42a5f5"/>
+  <rect x="147" y="112" width="6" height="14" rx="2" fill="#42a5f5"/>
+
+  <!-- ── JMO text (centered below icon) ───────────────── -->
+  <text x="150" y="222"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="72" fill="#0d47a1"
+        text-anchor="middle">JMO</text>
+
+  <!-- ── Tagline ────────────────────────────────────────── -->
+  <text x="150" y="255"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="13" fill="#0d47a1"
+        text-anchor="middle" letter-spacing="2.5">SECURITY AUDIT TOOL SUITE</text>
+</svg>

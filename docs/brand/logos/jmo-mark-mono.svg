@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 190" width="560" height="190" role="img" aria-label="JMo Security — monochrome logo lockup">
+  <title>JMo Security</title>
+  <!--
+    Monochrome variant — single color (#0d47a1 navy) on white/light.
+    Use for: embossed/foil printing, single-ink contexts, laser engraving.
+
+    To use in white on dark: set fill/stroke to #ffffff and place on navy bg.
+
+    All fills and strokes use one color only.
+    The padlock is rendered as outline cutouts (transparent fill, navy stroke).
+  -->
+
+  <!-- ── Magnifying glass ─────────────────────────────────── -->
+  <!-- Handle -->
+  <line x1="322" y1="122" x2="384" y2="184"
+        stroke="#0d47a1" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- Lens: navy fill (magnifying glass circle) -->
+  <circle cx="276" cy="76" r="62" fill="#0d47a1"/>
+
+  <!-- Inner cutout area (white) to show padlock inside -->
+  <circle cx="276" cy="76" r="46" fill="#ffffff"/>
+
+  <!-- Padlock shackle (navy) — drawn on white cutout -->
+  <path d="M256,82 L256,60 A20,20 0 0,1 296,60 L296,82"
+        fill="none" stroke="#0d47a1" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Padlock body (navy outline) -->
+  <rect x="249" y="74" width="54" height="40" rx="6"
+        fill="#0d47a1"/>
+
+  <!-- Keyhole cutout (white) -->
+  <circle cx="276" cy="91" r="7" fill="#ffffff"/>
+  <rect x="273" y="91" width="6" height="11" rx="2" fill="#ffffff"/>
+
+  <!-- ── JM wordmark ─────────────────────────────────────── -->
+  <text x="15" y="140"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="130" fill="#0d47a1">JM</text>
+
+  <!-- ── Tagline ────────────────────────────────────────── -->
+  <text x="15" y="182"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="18" fill="#0d47a1"
+        letter-spacing="3.5" textLength="365" lengthAdjust="spacing">SECURITY AUDIT TOOL SUITE</text>
+</svg>

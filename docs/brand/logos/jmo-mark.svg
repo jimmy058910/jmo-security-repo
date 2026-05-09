@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 190" width="560" height="190" role="img" aria-label="JMo Security — full logo lockup">
+  <title>JMo Security</title>
+  <!--
+    Primary lockup — color on light/white backgrounds.
+
+    Colors reference docs/brand/tokens.css:
+      brand-primary-dark (#0d47a1) — navy text, ring
+      brand-accent       (#42a5f5) — lens fill, keyhole
+      neutral-500        (#9e9e9e) — handle
+      white              (#ffffff) — padlock
+
+    The "O" in JMO is the magnifying-glass mark.
+    Text uses system bold sans; convert to outlines in a vector editor
+    if rendering environment does not guarantee Arial Black / Helvetica Neue.
+  -->
+
+  <!-- ── Magnifying glass ─────────────────────────────────── -->
+  <!-- Handle (behind lens + ring) -->
+  <line x1="322" y1="122" x2="384" y2="184"
+        stroke="#9e9e9e" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- Lens fill -->
+  <circle cx="276" cy="76" r="62" fill="#42a5f5"/>
+
+  <!-- Outer ring -->
+  <circle cx="276" cy="76" r="62"
+          fill="none" stroke="#0d47a1" stroke-width="16"/>
+
+  <!-- Padlock shackle (drawn before body) -->
+  <!--   Arc: CW (sweep=1) from left post to right post → upward peak     -->
+  <path d="M256,82 L256,60 A20,20 0 0,1 296,60 L296,82"
+        fill="none" stroke="#ffffff" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Padlock body -->
+  <rect x="249" y="74" width="54" height="40" rx="6" fill="#ffffff"/>
+
+  <!-- Keyhole -->
+  <circle cx="276" cy="91" r="7" fill="#42a5f5"/>
+  <rect x="273" y="91" width="6" height="11" rx="2" fill="#42a5f5"/>
+
+  <!-- ── JM wordmark ─────────────────────────────────────── -->
+  <text x="15" y="140"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="900" font-size="130" fill="#0d47a1">JM</text>
+
+  <!-- ── Tagline ────────────────────────────────────────── -->
+  <text x="15" y="182"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="18" fill="#0d47a1"
+        letter-spacing="3.5" textLength="365" lengthAdjust="spacing">SECURITY AUDIT TOOL SUITE</text>
+</svg>

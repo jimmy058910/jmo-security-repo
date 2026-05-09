@@ -618,3 +618,265 @@ def test_validate_email_domain_parts():
     # Domain with TLD should be valid
     assert validate_email("user@localhost.local") is True
     assert validate_email("user@domain.com") is True
+
+
+# ========== Category 11: add_contact_to_audience (JMOAA-52) ==========
+
+
+class MockResendContacts:
+    """Mock Resend Contacts API."""
+
+    def __init__(self, should_fail: bool = False, exception: Exception | None = None):
+        self.should_fail = should_fail
+        self.exception = exception
+        self.last_params: dict[str, Any] | None = None
+
+    def create(self, params: dict[str, Any]):
+        self.last_params = params
+        if self.exception:
+            raise self.exception
+        if self.should_fail:
+            return {}
+        return {"id": "contact-test-id"}
+
+
+def test_add_contact_to_audience_success():
+    """Adds the email to the canonical Resend audience."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        contacts = MockResendContacts()
+        mock_resend.Contacts = contacts
+
+        from scripts.core.email_service import add_contact_to_audience
+
+        result = add_contact_to_audience("user@example.com", source="cli")
+
+        assert result is True
+        assert contacts.last_params == {
+            "email": "user@example.com",
+            "audience_id": "aud-default",
+            "unsubscribed": False,
+        }
+
+
+def test_add_contact_to_audience_explicit_id_overrides_env():
+    """Explicit audience_id takes precedence over RESEND_AUDIENCE_ID."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        contacts = MockResendContacts()
+        mock_resend.Contacts = contacts
+
+        from scripts.core.email_service import add_contact_to_audience
+
+        add_contact_to_audience(
+            "user@example.com", audience_id="aud-override", source="wizard"
+        )
+
+        assert contacts.last_params is not None
+        assert contacts.last_params["audience_id"] == "aud-override"
+
+
+def test_add_contact_to_audience_resend_unavailable():
+    """Returns False when resend package not installed."""
+    with patch("scripts.core.email_service.RESEND_AVAILABLE", False):
+        from scripts.core.email_service import add_contact_to_audience
+
+        assert add_contact_to_audience("user@example.com") is False
+
+
+def test_add_contact_to_audience_no_api_key():
+    """Returns False when API key missing — never raises."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", ""),
+    ):
+        from scripts.core.email_service import add_contact_to_audience
+
+        assert add_contact_to_audience("user@example.com") is False
+
+
+def test_add_contact_to_audience_offline_failure():
+    """Connection errors swallowed — returns False without raising."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        contacts = MockResendContacts(exception=ConnectionError("offline"))
+        mock_resend.Contacts = contacts
+
+        from scripts.core.email_service import add_contact_to_audience
+
+        assert add_contact_to_audience("user@example.com") is False
+
+
+def test_add_contact_to_audience_no_audience_id():
+    """Returns False when no audience id resolves (env empty + arg empty)."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", ""),
+    ):
+        from scripts.core.email_service import add_contact_to_audience
+
+        assert add_contact_to_audience("user@example.com") is False
+
+
+def test_add_contact_to_audience_response_object_with_id():
+    """Accepts SDK responses that expose `.id` attribute instead of dict key."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        response_obj = type("ContactResponse", (), {"id": "contact-attr"})()
+        mock_resend.Contacts.create = MagicMock(return_value=response_obj)
+
+        from scripts.core.email_service import add_contact_to_audience
+
+        assert add_contact_to_audience("user@example.com") is True
+
+
+def test_default_audience_id_is_jmo_updates():
+    """JMO_UPDATES_AUDIENCE_ID stays pinned to the broadcast pipeline target."""
+    from scripts.core.email_service import JMO_UPDATES_AUDIENCE_ID
+
+    # If this constant changes, scripts/core/newsletter_broadcast.py
+    # signups will land in a different audience than the broadcast send
+    # targets — silently breaking the JMOAA-45 ↔ JMOAA-52 loop.
+    assert JMO_UPDATES_AUDIENCE_ID == "fb900b6d-10de-4171-97df-e4e5eebf20fd"
+
+
+# ========== Category 12: subscribe_to_newsletter orchestration (JMOAA-52) ==========
+
+
+def test_subscribe_to_newsletter_both_succeed():
+    """Happy path: contact added AND welcome email sent."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        mock_resend.Contacts = MockResendContacts()
+        mock_resend.Emails = MockResendEmails()
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribed, welcomed = subscribe_to_newsletter("user@example.com", source="cli")
+        assert subscribed is True
+        assert welcomed is True
+
+
+def test_subscribe_to_newsletter_audience_succeeds_email_fails():
+    """Audience add succeeds but welcome email fails — partial success."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        mock_resend.Contacts = MockResendContacts()
+        mock_resend.Emails = MockResendEmails(exception=Exception("rate limit"))
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribed, welcomed = subscribe_to_newsletter("user@example.com")
+        assert subscribed is True
+        assert welcomed is False
+
+
+def test_subscribe_to_newsletter_offline_both_fail():
+    """Network down — both calls fail, neither raises."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        mock_resend.Contacts = MockResendContacts(exception=ConnectionError("offline"))
+        mock_resend.Emails = MockResendEmails(exception=ConnectionError("offline"))
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribed, welcomed = subscribe_to_newsletter("user@example.com")
+        assert subscribed is False
+        assert welcomed is False
+
+
+def test_subscribe_to_newsletter_skip_welcome():
+    """send_welcome=False adds to audience without sending email — used by retry path."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        contacts = MockResendContacts()
+        emails = MockResendEmails()
+        mock_resend.Contacts = contacts
+        mock_resend.Emails = emails
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribed, welcomed = subscribe_to_newsletter(
+            "user@example.com", send_welcome=False
+        )
+        assert subscribed is True
+        assert welcomed is False
+        assert emails.last_params is None  # never called
+
+
+def test_subscribe_to_newsletter_source_mapping():
+    """CLI-specific sources (cli/wizard/subscribe) collapse to 'cli' for welcome."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        emails = MockResendEmails()
+        mock_resend.Contacts = MockResendContacts()
+        mock_resend.Emails = emails
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribe_to_newsletter("u@example.com", source="wizard")
+
+        assert emails.last_params is not None
+        source_tag = next(
+            t for t in emails.last_params["tags"] if t["name"] == "source"
+        )
+        assert source_tag["value"] == "cli"
+
+
+def test_subscribe_to_newsletter_dashboard_source_preserved():
+    """dashboard/website sources flow through to welcome email tagging unchanged."""
+    with (
+        patch("scripts.core.email_service.RESEND_AVAILABLE", True),
+        patch("scripts.core.email_service.RESEND_API_KEY", "re_test_key"),
+        patch("scripts.core.email_service.RESEND_AUDIENCE_ID", "aud-default"),
+        patch("scripts.core.email_service.resend") as mock_resend,
+    ):
+        emails = MockResendEmails()
+        mock_resend.Contacts = MockResendContacts()
+        mock_resend.Emails = emails
+
+        from scripts.core.email_service import subscribe_to_newsletter
+
+        subscribe_to_newsletter("u@example.com", source="dashboard")
+
+        source_tag = next(
+            t for t in emails.last_params["tags"] if t["name"] == "source"
+        )
+        assert source_tag["value"] == "dashboard"

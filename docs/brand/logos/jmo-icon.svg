@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="JMo Security icon — magnifying glass with padlock">
+  <title>JMo Security</title>
+  <!--
+    Colors reference docs/brand/tokens.css
+      brand-primary-dark (#0d47a1)  — ring
+      brand-accent       (#42a5f5)  — lens fill, keyhole
+      neutral-500        (#9e9e9e)  — handle
+      white              (#ffffff)  — padlock
+  -->
+
+  <!-- Handle (drawn first; ring and lens drawn on top) -->
+  <line x1="172" y1="172" x2="244" y2="244"
+        stroke="#9e9e9e" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- Lens fill -->
+  <circle cx="112" cy="112" r="96" fill="#42a5f5"/>
+
+  <!-- Outer ring -->
+  <circle cx="112" cy="112" r="96"
+          fill="none" stroke="#0d47a1" stroke-width="18"/>
+
+  <!-- Padlock shackle (drawn before body; body covers the base of the posts) -->
+  <!--   Posts: x=84 and x=140, rising from y=128 to y=96                   -->
+  <!--   Arc:   semicircle CW (sweep=1) → upward peak at (112, 68)          -->
+  <path d="M84,128 L84,96 A28,28 0 0,1 140,96 L140,128"
+        fill="none" stroke="#ffffff" stroke-width="14"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Padlock body (covers lower posts) -->
+  <rect x="76" y="118" width="72" height="54" rx="8" fill="#ffffff"/>
+
+  <!-- Keyhole: circle + slot -->
+  <circle cx="112" cy="138" r="9" fill="#42a5f5"/>
+  <rect x="109" y="138" width="6" height="16" rx="2" fill="#42a5f5"/>
+</svg>
