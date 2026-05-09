@@ -11,7 +11,7 @@
   "dependencies": {
     "express": "^4.22.1",
     "cors": "^2.8.5",
-    "express-rate-limit": "^8.4.1",
+    "express-rate-limit": "^8.5.1",
     "resend": "^6.12.2"
   },
   "devDependencies": {
