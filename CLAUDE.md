@@ -32,6 +32,7 @@ JMo Security is a terminal-first security audit toolkit orchestrating 27+ scanne
 4. **Conventional Commits:** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `perf:`, `ci:`
 5. **Path Security:** Validate all user paths against directory traversal
 6. **Cross-Platform Testing:** Tests MUST pass on Windows, Linux, macOS. See [.claude/rules/testing.cross-platform.rules.md](.claude/rules/testing.cross-platform.rules.md)
+7. **Git Configuration:** Refines the Bash-tool default ("NEVER update the git config"). **Never** modify identity (`user.*`), signing (`commit.gpgsign`, `gpg.*`), commit templates (`commit.template`), or merge/rebase behavior (`pull.rebase`, `merge.*`, `rebase.*`) without explicit user authorization. **Permitted to unblock standard tooling**: routine repo-local unsets that restore values already equal to their default (e.g. `git config --unset core.hooksPath` when it points to `.git/hooks`, which lets `pre-commit install --install-hooks` proceed). When in doubt, ask first.
 
 ### Before Every Commit
 
