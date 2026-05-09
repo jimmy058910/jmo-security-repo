@@ -1,0 +1,10 @@
+# CODEOWNERS — auto-requests review from listed owners on PRs touching matching paths.
+# https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Single-maintainer project today: catch-all to the repository owner.
+# When the project gains co-maintainers, add path-scoped lines above the catch-all,
+# e.g.:
+#   /scripts/core/adapters/  @jimmy058910 @some-other-maintainer
+#   /scripts/dashboard/      @jimmy058910 @frontend-maintainer
+
+* @jimmy058910
