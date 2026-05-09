@@ -70,7 +70,42 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_TEMPLATE = PACKAGE_DIR / "template.html"
+DEFAULT_CHROME = REPO_ROOT / "docs/brand/templates/email-chrome.html"
 DEFAULT_CUSTOMER_STORY = REPO_ROOT / "dev-only" / "customer-stories" / "active.md"
+
+# Inline style constants — values derived from docs/brand/tokens.css.
+# Inlined here because email clients strip <style> blocks.
+_EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
+_H2_STYLE = (
+    f"font-size:15px;color:#1976d2;text-transform:uppercase;letter-spacing:0.5px;"
+    f"margin:28px 0 10px;border-bottom:1px solid #eeeeee;padding-bottom:6px;"
+    f"font-family:{_EMAIL_FONT};"
+)
+_P_STYLE = f"margin:0 0 14px;font-size:15px;color:#424242;font-family:{_EMAIL_FONT};"
+_UL_STYLE = "padding-left:20px;margin:0 0 14px;"
+_LI_STYLE = f"margin-bottom:8px;font-size:15px;color:#424242;font-family:{_EMAIL_FONT};"
+_STRONG_STYLE = "color:#212121;"
+_CODE_STYLE = (
+    "font-family:ui-monospace,'SF Mono','Cascadia Code',monospace;"
+    "background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:13px;"
+)
+_A_STYLE = "color:#1976d2;text-decoration:none;"
+
+# Chrome {{var}} → string.Template ${var} mapping.
+# Send-time Resend placeholders become {{{triple-brace}}} which string.Template ignores.
+_CHROME_VAR_MAP = (
+    ("{{unsubscribe_url}}", "{{{unsubscribe}}}"),
+    ("{{preferences_url}}", "{{{preferences_url}}}"),
+    ("{{subject}}", "${subject}"),
+    ("{{preheader}}", "${preheader}"),
+    ("{{issue_label}}", "${issue_label}"),
+    ("{{sender_address}}", "${sender_address}"),
+)
+
+SENDER_ADDRESS_PLACEHOLDER = (
+    "JMo Security Tools &middot; open-source project &middot; "
+    '<a href="https://jmotools.com" style="color:#616161;">jmotools.com</a>'
+)
 
 
 @dataclass(frozen=True)
@@ -108,6 +143,7 @@ def generate_draft(
     customer_story_path: Optional[Path] = None,
     version: Optional[str] = None,
     template_path: Optional[Path] = None,
+    chrome_path: Optional[Path] = None,
     repo_root: Optional[Path] = None,
     include_customer_story: bool = True,
 ) -> NewsletterDraft:
@@ -126,8 +162,10 @@ def generate_draft(
     """
     repo = repo_root or REPO_ROOT
     template = template_path or DEFAULT_TEMPLATE
+    chrome = chrome_path or DEFAULT_CHROME
 
-    template_text = template.read_text(encoding="utf-8")
+    template_body = template.read_text(encoding="utf-8")
+    chrome_text = chrome.read_text(encoding="utf-8")
     changelog_text = (repo / "CHANGELOG.md").read_text(encoding="utf-8")
 
     if version:
@@ -171,8 +209,26 @@ def generate_draft(
     )
     badge_label = "Release Notes" if len(entries) == 1 else "Release Round-Up"
 
-    rendered_html = string.Template(template_text).substitute(
+    preheader = _build_preheader(primary, entries)
+    issue_label = (
+        f"v{primary.version}" if len(entries) == 1 else _multi_version_label(entries)
+    )
+
+    # Merge newsletter body into chrome content slot (standalone line only —
+    # the chrome file comment also contains the slot marker inline).
+    combined = re.sub(
+        r"(?m)^\s*<!--CONTENT-->\s*$",
+        lambda _: template_body,
+        chrome_text,
+        count=1,
+    )
+    for old, new in _CHROME_VAR_MAP:
+        combined = combined.replace(old, new)
+
+    rendered_html = string.Template(combined).substitute(
         subject=html.escape(subject),
+        preheader=html.escape(preheader),
+        issue_label=html.escape(issue_label),
         badge_label=html.escape(badge_label),
         headline=html.escape(f"JMo Security v{headline_version}"),
         meta_line=_meta_line(entries),
@@ -182,6 +238,7 @@ def generate_draft(
             f"https://github.com/jimmy058910/jmo-security-repo/releases/tag/v{primary.version}"
         ),
         primary_cta_label=f"View v{primary.version} on GitHub",
+        sender_address=SENDER_ADDRESS_PLACEHOLDER,
     )
 
     plain_text = _html_to_plain_text(rendered_html)
@@ -299,21 +356,21 @@ def _markdown_to_email_html(md: str) -> str:
             if in_list:
                 out.append("</ul>")
                 in_list = False
-            out.append(f"<h2>{html.escape(line[4:].strip())}</h2>")
+            out.append(f'<h2 style="{_H2_STYLE}">{html.escape(line[4:].strip())}</h2>')
             continue
 
         if line.startswith("## "):
             if in_list:
                 out.append("</ul>")
                 in_list = False
-            out.append(f"<h2>{html.escape(line[3:].strip())}</h2>")
+            out.append(f'<h2 style="{_H2_STYLE}">{html.escape(line[3:].strip())}</h2>')
             continue
 
         if line.startswith("- ") or line.startswith("* "):
             if not in_list:
-                out.append("<ul>")
+                out.append(f'<ul style="{_UL_STYLE}">')
                 in_list = True
-            out.append(f"  <li>{_inline_md(line[2:])}</li>")
+            out.append(f'  <li style="{_LI_STYLE}">{_inline_md(line[2:])}</li>')
             continue
 
         if not line.strip():
@@ -330,7 +387,7 @@ def _markdown_to_email_html(md: str) -> str:
 
         text = _inline_md(line.strip())
         if text:
-            out.append(f"<p>{text}</p>")
+            out.append(f'<p style="{_P_STYLE}">{text}</p>')
 
     if in_list:
         out.append("</ul>")
@@ -341,9 +398,21 @@ def _markdown_to_email_html(md: str) -> str:
 def _inline_md(text: str) -> str:
     """Apply inline markdown (bold, code, links) to an already-escaped fragment."""
     text = html.escape(text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
-    text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", r'<a href="\2">\1</a>', text)
+    text = re.sub(
+        r"\*\*(.+?)\*\*",
+        rf'<strong style="{_STRONG_STYLE}">\1</strong>',
+        text,
+    )
+    text = re.sub(
+        r"`([^`]+)`",
+        rf'<code style="{_CODE_STYLE}">\1</code>',
+        text,
+    )
+    text = re.sub(
+        r"\[([^\]]+)\]\(([^)\s]+)\)",
+        rf'<a href="\2" style="{_A_STYLE}">\1</a>',
+        text,
+    )
     return text
 
 
@@ -356,7 +425,7 @@ def _render_customer_story_block(story_md: Optional[str]) -> str:
     if not story_md or not story_md.strip():
         return ""
     body_html = _markdown_to_email_html(story_md)
-    return f"<h2>Customer Story</h2>\n{body_html}\n"
+    return f'<h2 style="{_H2_STYLE}">Customer Story</h2>\n{body_html}\n'
 
 
 def _extract_customer_quote(story_md: Optional[str]) -> Optional[str]:
@@ -429,6 +498,15 @@ def _multi_version_label(entries: list[ReleaseEntry]) -> str:
     return f"{entries[-1].version} \u2192 {entries[0].version}"
 
 
+def _build_preheader(primary: ReleaseEntry, entries: list[ReleaseEntry]) -> str:
+    """Build hidden inbox-preview text (kept under ~90 chars)."""
+    if len(entries) == 1:
+        tag = _first_subsection_title(primary.raw_markdown) or "what's new"
+        return f"JMo Security v{primary.version} is out \u2014 {tag}"
+    versions = _multi_version_label(entries)
+    return f"JMo Security {versions} \u2014 catch up on what shipped"
+
+
 # ---------------------------------------------------------------------------
 # HTML -> plain text fallback
 # ---------------------------------------------------------------------------
@@ -452,6 +530,9 @@ _BLOCK_TAGS_TO_NEWLINE = (
 def _html_to_plain_text(rendered_html: str) -> str:
     """Best-effort HTML -> plain-text conversion for the email fallback body."""
     text = rendered_html
+    text = re.sub(
+        r"<!--[\s\S]*?-->", "", text
+    )  # strip HTML comments (e.g. chrome header)
     text = re.sub(r"<style[\s\S]*?</style>", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<head[\s\S]*?</head>", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<script[\s\S]*?</script>", "", text, flags=re.IGNORECASE)

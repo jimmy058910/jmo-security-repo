@@ -1,141 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      line-height: 1.65;
-      color: #1a202c;
-      max-width: 620px;
-      margin: 0 auto;
-      padding: 24px 16px;
-      background: #f7fafc;
-    }
-    .card {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 32px 36px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
-    }
-    .greeting {
-      font-size: 15px;
-      color: #2d3748;
-      margin-bottom: 18px;
-    }
-    .badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
-      padding: 4px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
-      margin-bottom: 16px;
-    }
-    h1 { font-size: 24px; margin: 0 0 6px 0; color: #1a202c; }
-    .meta { font-size: 13px; color: #718096; margin-bottom: 24px; }
-    h2 {
-      font-size: 15px;
-      color: #667eea;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 28px 0 10px;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 6px;
-    }
-    p { margin: 0 0 14px; font-size: 15px; }
-    ul { padding-left: 20px; margin: 0 0 14px; }
-    li { margin-bottom: 8px; font-size: 15px; }
-    strong { color: #2d3748; }
-    code {
-      background: #edf2f7;
-      color: #553c9a;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Menlo', 'Courier New', monospace;
-      font-size: 13px;
-    }
-    blockquote {
-      border-left: 3px solid #667eea;
-      margin: 12px 0 16px;
-      padding: 6px 16px;
-      background: #f7fafc;
-      color: #2d3748;
-      font-style: italic;
-    }
-    blockquote .attribution {
-      display: block;
-      margin-top: 8px;
-      font-size: 13px;
-      font-style: normal;
-      color: #718096;
-    }
-    .cta-row { text-align: center; margin: 32px 0 20px; }
-    .cta {
-      background: #667eea;
-      color: #ffffff !important;
-      padding: 12px 28px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 15px;
-      display: inline-block;
-    }
-    .cta-secondary {
-      background: transparent;
-      color: #667eea !important;
-      border: 1px solid #cbd5e0;
-      margin-left: 6px;
-    }
-    .footer {
-      margin-top: 28px;
-      font-size: 12px;
-      color: #a0aec0;
-      text-align: center;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 20px;
-    }
-    .footer a { color: #a0aec0; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <p class="greeting">Hey {{{first_name|there}}},</p>
+<!--
+  Newsletter body content — injected into docs/brand/templates/email-chrome.html at build time.
 
-    <div class="badge">${badge_label}</div>
-    <h1>${headline}</h1>
-    <div class="meta">${meta_line}</div>
+  Build-time placeholders (dollar-brace format — Python string.Template, filled by draft_generator.py):
+    subject, preheader, issue_label, badge_label, headline, meta_line,
+    release_body_html, customer_story_block, primary_cta_url, primary_cta_label,
+    sender_address
 
-    <h2>What's New</h2>
-    ${release_body_html}
+  Send-time placeholders (triple-brace format — Resend hydrates per-recipient at broadcast time):
+    first_name|there           — personalized greeting fallback
+    unsubscribe_url and preferences_url live in the chrome footer — do not duplicate here.
 
-    ${customer_story_block}
+  Inline styles only. Gmail and most mobile clients strip <style> blocks.
+  All color values are inlined from docs/brand/tokens.css:
+    --jmo-brand-primary:      #1976d2
+    --jmo-brand-primary-dark: #0d47a1
+    --jmo-neutral-800:        #424242  (body text)
+    --jmo-neutral-900:        #212121  (headings / strong)
+    --jmo-neutral-500:        #9e9e9e  (muted)
+    --jmo-neutral-200:        #eeeeee  (dividers)
+    --jmo-neutral-100:        #f5f5f5  (code bg)
 
-    <h2>Help Spread the Word</h2>
-    <p>JMo Security is open source and built in the open. If it has saved you a few hours of stitching scanners together, the best ways to support the project are:</p>
-    <ul>
-      <li><strong>Star the repo</strong> &mdash; signal-boosts visibility for other practitioners.</li>
-      <li><strong>File an issue or contribute</strong> &mdash; new tool adapters, dashboard polish, and docs are all great first PRs.</li>
-      <li><strong>Share a war story</strong> &mdash; reply to this email if JMo caught something interesting; we feature reader stories in future digests.</li>
-    </ul>
+  Severity callout colors (token-sourced — no new hardcoded hex values):
+    critical: color:#d32f2f;font-weight:600   (--jmo-severity-critical)
+    high:     color:#f57c00;font-weight:600   (--jmo-severity-high)
+    medium:   color:#fbc02d;font-weight:600   (--jmo-severity-medium, use sparingly on white)
+    low:      color:#7cb342;font-weight:600   (--jmo-severity-low)
+    info:     color:#757575                   (--jmo-severity-info)
+-->
 
-    <div class="cta-row">
-      <a class="cta" href="${primary_cta_url}">${primary_cta_label}</a>
-      <a class="cta cta-secondary" href="https://github.com/jimmy058910/jmo-security-repo">Star on GitHub</a>
-    </div>
+        <!-- Greeting -->
+        <p style="font-size:15px;color:#424242;margin:0 0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          Hey {{{first_name|there}}},
+        </p>
 
-    <div class="footer">
-      <p>
-        You're receiving this because you subscribed at jmotools.com.<br>
-        <a href="{{{unsubscribe}}}">Unsubscribe</a> &nbsp;&middot;&nbsp;
-        <a href="https://jmotools.com">jmotools.com</a> &nbsp;&middot;&nbsp;
-        <a href="https://github.com/jimmy058910/jmo-security-repo">GitHub</a>
-      </p>
-    </div>
-  </div>
-</body>
-</html>
+        <!-- Badge -->
+        <p style="margin:0 0 10px;">
+          <span style="display:inline-block;background-color:#0d47a1;color:#ffffff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:0.3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            ${badge_label}
+          </span>
+        </p>
+
+        <!-- Headline -->
+        <h1 style="font-size:24px;font-weight:700;color:#212121;margin:0 0 6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          ${headline}
+        </h1>
+
+        <!-- Meta line (release date + changelog link) -->
+        <p style="font-size:13px;color:#757575;margin:0 0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          ${meta_line}
+        </p>
+
+        <!-- Release notes section -->
+        <h2 style="font-size:15px;color:#1976d2;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 10px;border-bottom:1px solid #eeeeee;padding-bottom:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          What&#8217;s New
+        </h2>
+
+        ${release_body_html}
+
+        ${customer_story_block}
+
+        <!-- Community CTA -->
+        <h2 style="font-size:15px;color:#1976d2;text-transform:uppercase;letter-spacing:0.5px;margin:28px 0 10px;border-bottom:1px solid #eeeeee;padding-bottom:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          Help Spread the Word
+        </h2>
+
+        <p style="margin:0 0 14px;font-size:15px;color:#424242;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+          JMo Security is open source and built in the open. If it has saved you a few hours of stitching scanners together, the best ways to support the project are:
+        </p>
+
+        <ul style="padding-left:20px;margin:0 0 14px;">
+          <li style="margin-bottom:8px;font-size:15px;color:#424242;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            <strong style="color:#212121;">Star the repo</strong> &mdash; signal-boosts visibility for other practitioners.
+          </li>
+          <li style="margin-bottom:8px;font-size:15px;color:#424242;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            <strong style="color:#212121;">File an issue or contribute</strong> &mdash; new tool adapters, dashboard polish, and docs are all great first PRs.
+          </li>
+          <li style="margin-bottom:8px;font-size:15px;color:#424242;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            <strong style="color:#212121;">Share a war story</strong> &mdash; reply to this email if JMo caught something interesting; we feature reader stories in future digests.
+          </li>
+        </ul>
+
+        <!-- CTA buttons — table-based for email client compatibility -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 20px;">
+          <tr>
+            <td style="padding-right:8px;">
+              <a href="${primary_cta_url}"
+                 style="display:inline-block;background-color:#1976d2;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                ${primary_cta_label}
+              </a>
+            </td>
+            <td>
+              <a href="https://github.com/jimmy058910/jmo-security-repo"
+                 style="display:inline-block;background-color:#ffffff;color:#1976d2;border:1px solid #e0e0e0;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                Star on GitHub
+              </a>
+            </td>
+          </tr>
+        </table>
