@@ -4,10 +4,7 @@
 
 **DO NOT** create public GitHub issues for security vulnerabilities.
 
-Instead, please report security issues privately via:
-
-- **Email:** [security contact - update with your email]
-- **GitHub Security Advisories:** <https://github.com/jimmy058910/jmo-security-repo/security/advisories/new>
+Please report security issues privately via [GitHub Security Advisories](https://github.com/jimmy058910/jmo-security-repo/security/advisories/new). This creates a private report visible only to maintainers and triggers GitHub's standard CVE coordination workflow.
 
 We aim to respond to security reports within **48 hours** and provide a fix within **7 days** for critical vulnerabilities.
 
