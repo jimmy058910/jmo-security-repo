@@ -250,6 +250,24 @@ jobs:
           # here. The soak-window job (auto-merge-tool-bumps, cron */6h)
           # owns the merge decision now — see docs/RELEASE.md.
 
+      - name: Clean up branch if PR creation failed
+        # Transactional cleanup: if `git push origin "$BRANCH"` succeeded but
+        # `gh pr create` failed downstream, the branch is orphaned remotely
+        # with no PR pointing at it. Run 25615768624 (2026-05-10) hit this:
+        # branch `auto-update-deps-20260510` got pushed but PR creation failed,
+        # leaving stranded state until manual cleanup. Delete the orphan so
+        # next week's run starts from a clean slate.
+        if: failure() && steps.commit.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+        run: |
+          if [ -n "$BRANCH" ]; then
+            echo "PR creation failed — deleting orphan branch '$BRANCH'"
+            git push origin --delete "$BRANCH" || \
+              echo "::warning::Could not delete branch '$BRANCH' — manual cleanup may be needed"
+          fi
+
       - name: Summary
         if: always()
         env:
