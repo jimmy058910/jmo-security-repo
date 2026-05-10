@@ -114,8 +114,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.159.0 \
-    checkov==3.2.501 \
+    semgrep==1.162.0 \
+    checkov==3.2.527 \
     ruff==0.15.2 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
