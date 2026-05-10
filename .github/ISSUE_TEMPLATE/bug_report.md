@@ -11,27 +11,65 @@ labels: bug
 
 A clear and concise description of what the bug is.
 
-## To Reproduce
+## Reproduction
 
-Steps to reproduce the behavior:
+### How are you running JMo?
 
-1. ...
-2. ...
+- [ ] Installed CLI (`pip install jmo-security`)
+- [ ] From source (`pip install -e .`)
+- [ ] Docker (`ghcr.io/jimmy058910/jmo-security:<tag>` — please specify tag)
+- [ ] Other (specify):
+
+### Exact command
+
+```bash
+# paste the full command, e.g. `jmo scan --profile balanced --repo .`
+```
+
+### Scan profile (if applicable)
+
+- [ ] `fast`
+- [ ] `slim`
+- [ ] `balanced`
+- [ ] `deep`
+- [ ] Custom profile (paste relevant `jmo.yml` snippet below)
+- [ ] Not applicable
+
+### What was scanned?
+
+- Target type (repo / image / cloud / etc.):
+- Public example or sanitized minimal repro (if shareable):
 
 ## Expected behavior
 
 A clear and concise description of what you expected to happen.
 
-## Screenshots / Logs
+## Actual behavior
 
-If applicable, add screenshots or logs to help explain your problem.
+What actually happened? Include the exact error message if any.
+
+## Logs / Output
+
+<!-- markdownlint-disable MD033 -->
+<details>
+<summary>Click to expand</summary>
+
+```text
+# paste relevant output here. If long, prefer attaching a file.
+# For tool-runner errors, include the contents of results/individual-<type>/<tool>.stderr.log.
+```
+
+</details>
+<!-- markdownlint-enable MD033 -->
 
 ## Environment
 
-- OS: [e.g., Ubuntu 22.04, macOS 14]
-- Python: `python3 --version`
-- CLI version (jmo --version if installed):
+- OS: <!-- e.g., Ubuntu 24.04, macOS 14.5, Windows 11 -->
+- Python: <!-- output of `python --version` -->
+- JMo version: <!-- output of `jmo --version` -->
+- Docker (if applicable): <!-- output of `docker --version` -->
+- Tools installed (if relevant): <!-- output of `jmo tools check --json` (truncated to relevant tools is fine) -->
 
 ## Additional context
 
-Add any other context about the problem here.
+Add any other context about the problem here — recent changes, suspected root cause, or related issues.

@@ -1,0 +1,63 @@
+# Configuration for actions/labeler@v6
+# https://github.com/actions/labeler
+#
+# Auto-applies labels to PRs based on file paths changed. The label set
+# tracks the existing repo label inventory (see `gh api repos/.../labels`).
+# Labels referenced here MUST already exist in the repo or labeler will skip
+# them silently.
+#
+# Convention: use `changed-files` with `any-glob-to-any-file` (the v6 syntax)
+# so a PR touching multiple areas gets all relevant labels.
+
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/**/*.py"
+          - "tests/**/*.py"
+          - "pyproject.toml"
+          - "requirements*.txt"
+          - "uv.lock"
+
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "Dockerfile*"
+          - ".dockerignore"
+          - "docker-compose*.yml"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+
+github_actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+javascript:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/dashboard/**"
+          - "scripts/api/**"
+          - "**/*.js"
+          - "**/*.jsx"
+          - "**/*.ts"
+          - "**/*.tsx"
+          - "**/package.json"
+          - "**/package-lock.json"
+
+testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - "conftest.py"
+          - "**/conftest.py"

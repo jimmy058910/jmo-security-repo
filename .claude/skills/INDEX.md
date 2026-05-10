@@ -1,6 +1,6 @@
 # JMo Security - AI Tooling Ecosystem
 
-JMo Security includes a comprehensive AI tooling ecosystem: **15 skills**, **7 agents**, and an **MCP server** for AI-assisted security development.
+JMo Security includes a comprehensive AI tooling ecosystem: **20 skills**, **7 agents**, and an **MCP server** for AI-assisted security development.
 
 ## MCP Server (Security Findings API)
 
@@ -87,6 +87,10 @@ Agent definitions are in [.claude/agents/](../agents/).
 | [Skill Optimizer](jmo-skill-optimizer/SKILL.md) | `/jmo-skill-optimizer` | Review and upgrade skills |
 | [E2E Verify](jmo-e2e-verify/SKILL.md) | `/jmo-e2e-verify [quick\|full\|visual\|scan-only]` | AI-orchestrated e2e verification with parallel sub-agents, failure analysis, and visual dashboard inspection |
 | [Merge PR](merge-pr/SKILL.md) | `/merge-pr [PR-title-override]` | Push branch, open PR to main, watch CI, squash-merge, sync dev, cleanup local + remote |
+| [Dependabot Triage](jmo-dependabot-triage/SKILL.md) | `/jmo-dependabot-triage [--dry-run\|--execute]` | Sweep open Dependabot PRs + security alerts; classify merge/close/dismiss/defer; project-policy-aware (no auto-merge, conservative bumps) |
+| [Issue Triage](jmo-issue-triage/SKILL.md) | `/jmo-issue-triage [--dry-run\|--execute]` | Sweep manual bug/enhancement/tech-debt/docs issues; classify READY-TO-WORK / NEEDS-INFO / ROADMAP-TRACKING / STALE-NEGLECTED / DUPLICATE |
+| [Tool Update Triage](jmo-tool-update-triage/SKILL.md) | `/jmo-tool-update-triage [--dry-run\|--execute]` | Sweep `app/github-actions` tool-version update issues; classify BATCH-MINOR / MAJOR-BUMP-READABLE / MAJOR-BUMP-MIGRATION / MANUAL-TOOL / PLACEHOLDER-CURRENT |
+| [Roadmap Sync](jmo-roadmap-sync/SKILL.md) | `/jmo-roadmap-sync [--dry-run\|--execute]` | Align ROADMAP.md, `phase-*` labels, and the GitHub Project board after releases or quarterly reviews |
 
 ---
 
@@ -137,4 +141,4 @@ These workflows describe how skills compose together for end-to-end features.
 
 ---
 
-**Skills Count:** 15 | **Agents:** 7 | **MCP Tools:** 4
+**Skills Count:** 20 | **Agents:** 7 | **MCP Tools:** 4
