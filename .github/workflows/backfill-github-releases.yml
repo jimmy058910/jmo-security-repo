@@ -1,0 +1,51 @@
+---
+name: Backfill GitHub Releases (one-shot)
+# Run once after JMOAA-50 merges to create Releases for v1.0.0–v1.0.5.
+# Safe to re-run: skips any tag that already has a GitHub Release.
+# Archive or delete this workflow after all 6 releases are confirmed.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    name: Backfill v1.0.0–v1.0.5 GitHub Releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Backfill releases from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for TAG in v1.0.0 v1.0.1 v1.0.2 v1.0.3 v1.0.4 v1.0.5; do
+            echo ""
+            echo "=== Processing $TAG ==="
+
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              echo "$TAG release already exists — skipping"
+              continue
+            fi
+
+            python3 scripts/dev/generate_release_notes.py "$TAG" > /tmp/raw-notes.txt || {
+              echo "ERROR: Failed to generate notes for $TAG — skipping"
+              continue
+            }
+            sed -n '/^# Release/,$p' /tmp/raw-notes.txt > /tmp/release-notes.md
+
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file /tmp/release-notes.md \
+              --verify-tag
+
+            echo "Created GitHub Release: $TAG"
+          done
+          echo ""
+          echo "Backfill complete."

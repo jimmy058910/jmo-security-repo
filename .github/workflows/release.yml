@@ -864,6 +864,41 @@ jobs:
           echo "2. Add secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN"
           echo "3. Set repository variable DOCKERHUB_ENABLED=true"
 
+  # Create GitHub Release from CHANGELOG.md notes
+  # Runs after PyPI publish and Docker manifest merge so the release page links
+  # to an already-available package and Docker image.
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [pypi-publish, docker-merge]
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.pypi-publish.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          python3 scripts/dev/generate_release_notes.py "$TAG" > /tmp/raw-notes.txt
+          # Extract from the "# Release" heading onwards (strips diagnostic print lines)
+          sed -n '/^# Release/,$p' /tmp/raw-notes.txt > /tmp/release-notes.md
+          echo "Preview (first 20 lines):"
+          head -20 /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release-notes.md \
+            --verify-tag
+
   # Verify PyPI badges auto-update correctly after release
   # NOTE: This job is non-blocking (continue-on-error: true) to prevent badge
   # caching from blocking the entire release. Badges will update within 15-30
