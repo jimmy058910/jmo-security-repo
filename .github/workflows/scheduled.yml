@@ -9,14 +9,16 @@ name: Scheduled Tests
 #   - 2AM UTC daily: Nightly extended tests
 #   - 4AM UTC weekdays: E2E comprehensive tests
 #   - 3AM UTC Sunday: Docker variant validation
+#   - 1PM UTC Monday: Weekly backlog summary (after weekend Dependabot batch)
 #
 # Manual dispatch allows running any test suite on demand
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # 2AM UTC daily - nightly tests
-    - cron: '0 4 * * 1-5' # 4AM UTC Mon-Fri - E2E tests
-    - cron: '0 3 * * 0'   # 3AM UTC Sunday - Docker validation
+    - cron: '0 2 * * *'    # 2AM UTC daily - nightly tests
+    - cron: '0 4 * * 1-5'  # 4AM UTC Mon-Fri - E2E tests
+    - cron: '0 3 * * 0'    # 3AM UTC Sunday - Docker validation
+    - cron: '0 13 * * 1'   # 1PM UTC Monday - weekly backlog visibility
   workflow_dispatch:
     # checkov:skip=CKV_GHA_7: Manual test execution requires task selection for targeted testing
     inputs:
@@ -28,6 +30,7 @@ on:
           - e2e
           - performance
           - docker
+          - backlog
           - all
         default: 'all'
 
@@ -1347,4 +1350,96 @@ jobs:
                 echo "| $variant | :x: | N/A |"
               fi
             done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ==============================================================================
+  # WEEKLY BACKLOG SUMMARY
+  # Runs Monday 1PM UTC (after weekend Dependabot batch settles).
+  # Posts a visibility-only snapshot of Issues / PRs / Dependabot alerts to
+  # the workflow run's Step Summary. No actions taken; the human triages
+  # via the relevant skill (jmo-issue-triage / jmo-dependabot-triage /
+  # jmo-tool-update-triage). Solo-dev longevity bias: visibility, not bots.
+  # ==============================================================================
+  backlog-summary:
+    name: Weekly Backlog Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 13 * * 1') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'backlog' || github.event.inputs.task == 'all'))
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      security-events: read
+    steps:
+      - name: Collect backlog metrics
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Open Dependabot security alerts (requires security_events scope)
+          ALERTS_OPEN=$(gh api "repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+            --jq 'length' 2>/dev/null || echo "0")
+          ALERTS_CRIT=$(gh api "repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+            --jq '[.[] | select(.security_advisory.severity == "critical")] | length' 2>/dev/null || echo "0")
+          ALERTS_HIGH=$(gh api "repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+            --jq '[.[] | select(.security_advisory.severity == "high")] | length' 2>/dev/null || echo "0")
+
+          # Open PRs by author class
+          PRS_TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')
+          PRS_DEPENDABOT=$(gh pr list --repo "$REPO" --state open --search "author:app/dependabot" --json number --jq 'length')
+          PRS_HUMAN=$((PRS_TOTAL - PRS_DEPENDABOT))
+
+          # Open issues by category
+          ISSUES_TOTAL=$(gh issue list --repo "$REPO" --state open --limit 200 --json number --jq 'length')
+          ISSUES_TOOL_UPDATE=$(gh issue list --repo "$REPO" --state open --limit 200 \
+            --search "author:app/github-actions" --json number --jq 'length')
+          ISSUES_BUG=$(gh issue list --repo "$REPO" --state open --label bug --limit 200 --json number --jq 'length')
+          ISSUES_ENH=$(gh issue list --repo "$REPO" --state open --label enhancement --limit 200 --json number --jq 'length')
+          ISSUES_TECHDEBT=$(gh issue list --repo "$REPO" --state open --label technical-debt --limit 200 --json number --jq 'length')
+          ISSUES_GFI=$(gh issue list --repo "$REPO" --state open --label "good first issue" --limit 200 --json number --jq 'length')
+
+          # Stale PR detection (open >14 days)
+          PRS_STALE=$(gh pr list --repo "$REPO" --state open --json number,createdAt \
+            --jq "[.[] | select(((now - (.createdAt | fromdate)) / 86400) > 14)] | length")
+
+          {
+            echo "# :clipboard: Weekly Backlog Summary"
+            echo ""
+            echo "Generated $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo ""
+            echo "## :shield: Security"
+            echo ""
+            echo "| Metric | Count | Triage Skill |"
+            echo "|--------|-------|--------------|"
+            echo "| Dependabot alerts (open, total) | **$ALERTS_OPEN** | \`/jmo-dependabot-triage\` |"
+            echo "| Dependabot alerts (critical) | $ALERTS_CRIT | \`/jmo-dependabot-triage\` |"
+            echo "| Dependabot alerts (high) | $ALERTS_HIGH | \`/jmo-dependabot-triage\` |"
+            echo ""
+            echo "## :twisted_rightwards_arrows: Pull Requests"
+            echo ""
+            echo "| Metric | Count | Notes |"
+            echo "|--------|-------|-------|"
+            echo "| Open PRs (total) | **$PRS_TOTAL** | |"
+            echo "| Open PRs (Dependabot) | $PRS_DEPENDABOT | \`/jmo-dependabot-triage\` |"
+            echo "| Open PRs (human authors) | $PRS_HUMAN | Manual review |"
+            echo "| Stale PRs (>14 days open) | $PRS_STALE | Investigate / close |"
+            echo ""
+            echo "## :memo: Issues"
+            echo ""
+            echo "| Metric | Count | Triage Skill |"
+            echo "|--------|-------|--------------|"
+            echo "| Open issues (total) | **$ISSUES_TOTAL** | |"
+            echo "| Tool-update issues (\`app/github-actions\`) | $ISSUES_TOOL_UPDATE | \`/jmo-tool-update-triage\` |"
+            echo "| \`bug\` | $ISSUES_BUG | \`/jmo-issue-triage\` |"
+            echo "| \`enhancement\` | $ISSUES_ENH | \`/jmo-issue-triage\` |"
+            echo "| \`technical-debt\` | $ISSUES_TECHDEBT | \`/jmo-issue-triage\` |"
+            echo "| \`good first issue\` | $ISSUES_GFI | Curate more if <5 |"
+            echo ""
+            echo "---"
+            echo ""
+            echo "_This is a visibility-only snapshot. No automated actions taken — invoke the relevant triage skill for hands-on review._"
           } >> "$GITHUB_STEP_SUMMARY"

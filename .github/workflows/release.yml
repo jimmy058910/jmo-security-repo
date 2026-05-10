@@ -899,6 +899,58 @@ jobs:
             --notes-file /tmp/release-notes.md \
             --verify-tag
 
+      - name: Post release announcement to GitHub Discussions
+        # Posts a thin announcement to the Discussions "Announcements" category
+        # so subscribed community members get notified of new releases. The
+        # full release notes live on the Release page (linked from the post).
+        # Non-blocking: a missing Announcements category or other API edge
+        # case shouldn't fail the release.
+        if: success()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF##*/}"
+
+          # Resolve the "Announcements" category ID. If absent, skip gracefully.
+          CATEGORY_ID=$(gh api "repos/$REPO/discussions/categories" \
+            --jq '.[] | select(.name == "Announcements") | .id' 2>/dev/null || echo "")
+
+          if [ -z "$CATEGORY_ID" ]; then
+            echo "::notice::Announcements category not found in Discussions — skipping post."
+            exit 0
+          fi
+
+          RELEASE_URL="https://github.com/$REPO/releases/tag/$TAG"
+          DOCKER_TAG="ghcr.io/${REPO}:${TAG#v}"
+
+          BODY=$(cat <<EOF
+          # JMo Security $TAG is out :tada:
+
+          The full release notes (PyPI + Docker availability, breaking changes, fixes) live on the [Release page]($RELEASE_URL).
+
+          ## TL;DR
+
+          - **PyPI**: \`pip install jmo-security==${TAG#v}\`
+          - **Docker** (deep variant): \`docker pull $DOCKER_TAG\`
+          - **Other variants**: \`:fast\`, \`:slim\`, \`:balanced\`
+
+          ## Feedback
+
+          Issues and ideas welcome — open one [here](https://github.com/$REPO/issues/new/choose) or share your experience in this thread.
+          EOF
+          )
+
+          gh api "repos/$REPO/discussions" \
+            -f title="Release $TAG" \
+            -f body="$BODY" \
+            -f category_id="$CATEGORY_ID" \
+            >/dev/null && \
+            echo "Announcement posted to Discussions." || \
+            echo "::warning::Discussion post failed — continuing."
+
   # Verify PyPI badges auto-update correctly after release
   # NOTE: This job is non-blocking (continue-on-error: true) to prevent badge
   # caching from blocking the entire release. Badges will update within 15-30
