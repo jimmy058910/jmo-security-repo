@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download 15 cloud-focused tools
 #
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG TARGETARCH
 
@@ -117,7 +117,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Cloud-optimized with 15 tools
 #
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Slim)"
 LABEL org.opencontainers.image.description="Cloud-optimized security toolkit with 15 scanners + OPA for AWS/Azure/GCP/K8s (v1.0.2)"

@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download 9 fast tools (8 scanners + OPA)
 #
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG TARGETARCH
 
@@ -84,7 +84,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Minimal CI/CD environment with 9 tools
 #
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Fast)"
 LABEL org.opencontainers.image.description="Fast CI/CD security gate with 8 core scanners optimized for speed (v1.0.2)"

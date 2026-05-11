@@ -6,7 +6,7 @@
 #
 # Stage 1: Builder - Download and extract 19 tools
 #
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG TARGETARCH
 
@@ -138,7 +138,7 @@ RUN SHELLCHECK_VERSION="0.10.0" && \
 #
 # Stage 2: Runtime - Production-ready runtime with 19 tools
 #
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 ARG TARGETARCH
 
 LABEL org.opencontainers.image.title="JMo Security Suite (Balanced)"
