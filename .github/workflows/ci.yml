@@ -656,6 +656,64 @@ jobs:
         run: |
           shfmt -d -i 2 -ci -bn scripts/dev/*.sh scripts/core/*.sh 2>/dev/null || true
 
+  # Dashboard build smoke test — guards against silent breakage when dashboard
+  # deps are bumped (Dependabot or otherwise). PR-time CI did not exercise the
+  # dashboard build path historically; PR #456 (rollup-plugin-visualizer v7)
+  # exposed this gap by showing CLEAN status while actually requiring Node 22
+  # (CI was pinned to Node 20). Tracked in #461.
+  #
+  # Same pattern as tool-contract-tests: always runs (stable required-check
+  # name for future branch protection), but only does real work when
+  # scripts/dashboard/** actually changed. The build path uses `tsc && vite
+  # build` per scripts/dashboard/package.json:"build", which is the same path
+  # the release pipeline bundles, so build success here implies release
+  # bundleability.
+  #
+  # NOTE: `npm test` is intentionally NOT included here. 2 of 147 jest tests
+  # currently fail under the present component state (pagination drift on
+  # FindingsTable.test.tsx); tracked separately so this smoke job stays
+  # unblocked. See follow-up issue.
+  dashboard-smoke:
+    name: dashboard-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Detect dashboard changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            dashboard:
+              - 'scripts/dashboard/**'
+
+      - name: Set up Node.js 22
+        if: steps.changes.outputs.dashboard == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: scripts/dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        if: steps.changes.outputs.dashboard == 'true'
+        working-directory: scripts/dashboard
+        run: npm ci
+
+      - name: Build dashboard (tsc && vite build)
+        if: steps.changes.outputs.dashboard == 'true'
+        working-directory: scripts/dashboard
+        run: npm run build
+
+      - name: Skip note (no dashboard changes)
+        if: steps.changes.outputs.dashboard != 'true'
+        run: echo "No scripts/dashboard/** changes detected; skipping dashboard build smoke."
+
   # Tool-output contract tests for PRs that bump tool versions.
   #
   # This job is a required status check for PRs labeled dependencies+automated
