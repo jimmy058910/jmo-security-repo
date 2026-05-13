@@ -74,7 +74,7 @@ make fmt && make lint && make test
    - **Action:** Present the issue, options, and recommendation before proceeding
 
 3. **Document If Deferring:** If fix requires significant research/refactoring but isn't blocking:
-   - Create GitHub issue with `tech-debt` or `enhancement` label
+   - Create GitHub issue with `technical-debt` or `enhancement` label
    - Add `# TODO(issue-#):` comment in code at the relevant location
    - Document in `.claude/known-issues.md` with description, root cause, proposed fix, priority (P0-P3)
 
