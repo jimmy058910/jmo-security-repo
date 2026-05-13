@@ -69,7 +69,7 @@ httpx==0.28.1
     # via mcp
 httpx-sse==0.4.3
     # via mcp
-hypothesis==6.152.4
+hypothesis==6.152.6
     # via -r requirements-dev.in
 id==1.6.1
     # via sigstore
@@ -93,7 +93,7 @@ librt==0.8.1
     # via mypy
 markdown-it-py==4.0.0
     # via rich
-mcp[cli]==1.27.0
+mcp[cli]==1.27.1
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
@@ -204,7 +204,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.1
+requests==2.34.0
     # via sigstore
 rfc3161-client==1.0.6
     # via sigstore
@@ -247,13 +247,13 @@ tuf==6.0.0
     # via sigstore
 typer==0.24.1
     # via mcp
-types-croniter==6.2.2.20260408
+types-croniter==6.2.2.20260508
     # via -r requirements-dev.in
-types-pyyaml==6.0.12.20260408
+types-pyyaml==6.0.12.20260510
     # via -r requirements-dev.in
-types-requests==2.33.0.20260503
+types-requests==2.33.0.20260508
     # via -r requirements-dev.in
-types-tabulate==0.10.0.20260408
+types-tabulate==0.10.0.20260508
     # via -r requirements-dev.in
 typing-extensions==4.15.0
     # via
