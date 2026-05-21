@@ -31,6 +31,7 @@ export default {
           jsx: 'react-jsx',
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
+          ignoreDeprecations: '6.0',
         },
       },
     ],
