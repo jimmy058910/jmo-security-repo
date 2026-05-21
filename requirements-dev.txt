@@ -16,7 +16,7 @@ attrs==26.1.0
     #   referencing
 bandit==1.9.4
     # via -r requirements-dev.in
-black==26.3.1
+black==26.5.0
     # via -r requirements-dev.in
 certifi==2026.2.25
     # via
@@ -73,13 +73,13 @@ httpx==0.28.1
     # via mcp
 httpx-sse==0.4.3
     # via mcp
-hypothesis==6.152.6
+hypothesis==6.152.7
     # via -r requirements-dev.in
 id==1.6.1
     # via sigstore
 identify==2.6.18
     # via pre-commit
-idna==3.11
+idna==3.15
     # via
     #   anyio
     #   email-validator
@@ -177,7 +177,7 @@ pytest-json-report==1.5.0
     # via -r requirements-dev.in
 pytest-metadata==3.1.1
     # via pytest-json-report
-pytest-rerunfailures==16.1
+pytest-rerunfailures==16.2
     # via -r requirements-dev.in
 pytest-split==0.11.0
     # via -r requirements-dev.in
@@ -210,7 +210,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.34.0
+requests==2.34.2
     # via sigstore
 rfc3161-client==1.0.6
     # via sigstore
@@ -225,7 +225,7 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.12
+ruff==0.15.13
     # via -r requirements-dev.in
 securesystemslib==1.3.1
     # via tuf
@@ -255,9 +255,9 @@ typer==0.24.1
     # via mcp
 types-croniter==6.2.2.20260508
     # via -r requirements-dev.in
-types-pyyaml==6.0.12.20260510
+types-pyyaml==6.0.12.20260518
     # via -r requirements-dev.in
-types-requests==2.33.0.20260508
+types-requests==2.33.0.20260518
     # via -r requirements-dev.in
 types-tabulate==0.10.0.20260508
     # via -r requirements-dev.in
