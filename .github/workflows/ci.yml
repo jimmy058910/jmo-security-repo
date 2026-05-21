@@ -69,7 +69,16 @@ jobs:
           pip install pip-audit
           # Audit dependencies for known vulnerabilities (CVEs)
           # Uses OSV database for comprehensive vulnerability coverage
-          pip-audit -r requirements-dev.txt --progress-spinner=off || {
+          #
+          # Ignored advisories (with reasoning):
+          # - PYSEC-2025-183 (CVE-2025-45768): "pyjwt weak encryption" — DISPUTED
+          #   by the maintainer ("key length is chosen by the application that
+          #   uses the library"); no fix version exists; pyjwt is a transitive
+          #   dev-only dep via `mcp` (requirements-dev.txt), not used in
+          #   production paths. Source:
+          #   https://api.osv.dev/v1/vulns/PYSEC-2025-183
+          pip-audit -r requirements-dev.txt --progress-spinner=off \
+            --ignore-vuln PYSEC-2025-183 || {
             echo "::warning::Vulnerable dependencies detected. Review and update."
             exit 1
           }
