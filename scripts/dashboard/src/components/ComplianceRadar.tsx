@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts'
+import type { TooltipValueType } from 'recharts'
 import { Shield } from 'lucide-react'
 import { CommonFinding } from '../types/findings'
 
@@ -219,7 +220,7 @@ export default function ComplianceRadar({ findings }: ComplianceRadarProps) {
               borderRadius: '6px',
               color: '#F3F4F6',
             }}
-            formatter={(value: any) => [`${value}%`, 'Coverage']}
+            formatter={(value: TooltipValueType | undefined) => [`${value ?? ''}%`, 'Coverage']}
           />
           <Radar
             name="Coverage"

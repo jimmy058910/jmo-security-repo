@@ -11,13 +11,37 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import type { TooltipContentProps, TooltipValueType } from 'recharts'
+import type { NameType } from 'recharts/types/component/DefaultTooltipContent'
 import { TrendingUp, TrendingDown, Minus, BarChart3 } from 'lucide-react'
-import { ScanMetadata, CommonFinding, TrendAnalysis } from '../types/findings'
+import { ScanMetadata, CommonFinding, TrendAnalysis, TopRule } from '../types/findings'
 import { computeTrendAnalysis } from '../utils/trendAnalysis'
 
 interface TrendsPanelProps {
   scans: ScanMetadata[]
   allFindings: Map<string, CommonFinding[]>
+}
+
+const RuleTooltip = ({ active, payload }: TooltipContentProps<TooltipValueType, NameType>) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload as TopRule
+    return (
+      <div
+        style={{
+          backgroundColor: '#1F2937',
+          border: '1px solid #374151',
+          borderRadius: '6px',
+          color: '#F3F4F6',
+          padding: '8px 12px',
+        }}
+      >
+        <div>Count: {data.count}</div>
+        <div>Severity: {data.severity}</div>
+        <div>Tool: {data.tool}</div>
+      </div>
+    )
+  }
+  return null
 }
 
 /**
@@ -220,24 +244,7 @@ export default function TrendsPanel({ scans, allFindings }: TrendsPanelProps) {
               style={{ fontSize: '11px' }}
               width={120}
             />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1F2937',
-                border: '1px solid #374151',
-                borderRadius: '6px',
-                color: '#F3F4F6',
-              }}
-              formatter={(value: any, _name: string, props: any) => {
-                const { severity, tool } = props.payload
-                return [
-                  <div key="tooltip">
-                    <div>Count: {value}</div>
-                    <div>Severity: {severity}</div>
-                    <div>Tool: {tool}</div>
-                  </div>,
-                ]
-              }}
-            />
+            <Tooltip content={RuleTooltip} />
             <Bar
               dataKey="count"
               fill="#3B82F6"
