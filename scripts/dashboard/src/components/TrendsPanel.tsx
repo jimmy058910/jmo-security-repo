@@ -11,8 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import type { TooltipContentProps, TooltipValueType } from 'recharts'
-import type { NameType } from 'recharts/types/component/DefaultTooltipContent'
+import type { TooltipContentProps } from 'recharts'
 import { TrendingUp, TrendingDown, Minus, BarChart3 } from 'lucide-react'
 import { ScanMetadata, CommonFinding, TrendAnalysis, TopRule } from '../types/findings'
 import { computeTrendAnalysis } from '../utils/trendAnalysis'
@@ -22,7 +21,7 @@ interface TrendsPanelProps {
   allFindings: Map<string, CommonFinding[]>
 }
 
-const RuleTooltip = ({ active, payload }: TooltipContentProps<TooltipValueType, NameType>) => {
+const RuleTooltip = ({ active, payload }: TooltipContentProps) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload as TopRule
     return (
