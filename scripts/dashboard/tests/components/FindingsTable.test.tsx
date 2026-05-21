@@ -177,8 +177,8 @@ describe('FindingsTable', () => {
       const rows = screen.getAllByRole('row')
       const firstDataRow = rows[1]
 
-      // Priority 30 should be first (ascending)
-      expect(within(firstDataRow).getByText('30')).toBeInTheDocument()
+      // Priority 90 should be first (DESC default for priority column)
+      expect(within(firstDataRow).getByText('90')).toBeInTheDocument()
     })
 
     it('should sort by ruleId when rule column clicked', () => {
@@ -445,8 +445,8 @@ describe('FindingsTable', () => {
       render(<FindingsTable findings={findings} />)
 
       const rows = screen.getAllByRole('row')
-      // 100 findings × 1 row each + 1 header row = 101 rows (when not expanded)
-      expect(rows.length).toBe(101)
+      // pageSize defaults to 25; first page shows 25 data rows + 1 header row = 26
+      expect(rows.length).toBe(26)
     })
   })
 })
