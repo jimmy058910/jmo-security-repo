@@ -40,7 +40,7 @@ jobs:
 
       - name: Validate requirements-dev.txt Python version
         run: |
-          python -m pip install uv
+          python -m pip install uv==0.11.15  # pinned: matches lockfile regen version (companion to PR #488)
           python scripts/dev/update_dependencies.py --validate
 
       - name: Check deps-compile freshness
@@ -60,7 +60,7 @@ jobs:
           github.event_name == 'pull_request' &&
           github.event.pull_request.user.login != 'dependabot[bot]'
         run: |
-          python -m pip install uv
+          python -m pip install uv==0.11.15  # pinned: matches lockfile regen version (companion to PR #488)
           uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in
           git diff --exit-code -- requirements-dev.txt || (echo "requirements-dev.txt is out of date. Run: make deps-compile" && exit 1)
 
@@ -677,11 +677,6 @@ jobs:
   # build` per scripts/dashboard/package.json:"build", which is the same path
   # the release pipeline bundles, so build success here implies release
   # bundleability.
-  #
-  # NOTE: `npm test` is intentionally NOT included here. 2 of 147 jest tests
-  # currently fail under the present component state (pagination drift on
-  # FindingsTable.test.tsx); tracked separately so this smoke job stays
-  # unblocked. See follow-up issue.
   dashboard-smoke:
     name: dashboard-smoke
     runs-on: ubuntu-latest
@@ -718,6 +713,11 @@ jobs:
         if: steps.changes.outputs.dashboard == 'true'
         working-directory: scripts/dashboard
         run: npm run build
+
+      - name: Test dashboard (jest)
+        if: steps.changes.outputs.dashboard == 'true'
+        working-directory: scripts/dashboard
+        run: npm test
 
       - name: Skip note (no dashboard changes)
         if: steps.changes.outputs.dashboard != 'true'
