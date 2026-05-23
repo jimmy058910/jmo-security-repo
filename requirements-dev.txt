@@ -243,7 +243,7 @@ sortedcontainers==2.4.0
     # via hypothesis
 sse-starlette==3.3.4
     # via mcp
-starlette==1.0.0
+starlette==1.0.1
     # via
     #   mcp
     #   sse-starlette
