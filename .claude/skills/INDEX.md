@@ -1,6 +1,6 @@
 # JMo Security - AI Tooling Ecosystem
 
-JMo Security includes a comprehensive AI tooling ecosystem: **20 skills**, **7 agents**, and an **MCP server** for AI-assisted security development.
+JMo Security includes a comprehensive AI tooling ecosystem: **21 skills**, **7 agents**, and an **MCP server** for AI-assisted security development.
 
 ## MCP Server (Security Findings API)
 
@@ -51,7 +51,7 @@ For MCP setup, see [docs/MCP_SETUP.md](../../docs/MCP_SETUP.md).
 
 ## Key Agents
 
-Agents are invoked naturally in conversation. They run autonomously to complete specialized tasks.
+Agents are invoked naturally in conversation. Each one completes a specialized task end-to-end in a single invocation, then reports back; they do not pause mid-task for confirmation.
 
 | Agent | Purpose | When to Use |
 |-------|---------|-------------|
@@ -91,6 +91,7 @@ Agent definitions are in [.claude/agents/](../agents/).
 | [Issue Triage](jmo-issue-triage/SKILL.md) | `/jmo-issue-triage [--dry-run\|--execute]` | Sweep manual bug/enhancement/tech-debt/docs issues; classify READY-TO-WORK / NEEDS-INFO / ROADMAP-TRACKING / STALE-NEGLECTED / DUPLICATE |
 | [Tool Update Triage](jmo-tool-update-triage/SKILL.md) | `/jmo-tool-update-triage [--dry-run\|--execute]` | Sweep `app/github-actions` tool-version update issues; classify BATCH-MINOR / MAJOR-BUMP-READABLE / MAJOR-BUMP-MIGRATION / MANUAL-TOOL / PLACEHOLDER-CURRENT |
 | [Roadmap Sync](jmo-roadmap-sync/SKILL.md) | `/jmo-roadmap-sync [--dry-run\|--execute]` | Align ROADMAP.md, `phase-*` labels, and the GitHub Project board after releases or quarterly reviews |
+| [Maintenance Monday](maintenance-monday/SKILL.md) | `/maintenance-monday [--dry-run\|--execute]` | Orchestrate all three triage skills (issue + Dependabot + tool-update) in one consolidated plan with per-section approval. Weekly cadence. |
 
 ---
 
@@ -130,6 +131,12 @@ These workflows describe how skills compose together for end-to-end features.
 2. `/jmo-refactoring-assistant` — Extract classes, split files
 3. `/jmo-test-fabricator` — Update tests, maintain 85%+ coverage
 4. `/jmo-documentation-updater` — Update architecture docs
+
+### Weekly Maintenance (Consolidated Triage)
+
+1. `/maintenance-monday` — Discover backlog across all three triage scopes (manual issues, Dependabot PRs, tool-version issues), present one consolidated plan with per-section approval, execute approved sections
+
+The super-skill is preferred over invoking the three child skills sequentially when the whole backlog is being reviewed. To pick at a single scope, invoke the child skill (`/jmo-issue-triage`, `/jmo-dependabot-triage`, or `/jmo-tool-update-triage`) directly.
 
 ---
 
