@@ -107,6 +107,8 @@ The three child skills have a structural gap: `jmo-dependabot-triage` scopes to 
 
 This blind spot is not hypothetical — it caused a chronic CI failure. On a **personal-account repo**, a PR opened by a workflow's `GITHUB_TOKEN` cannot satisfy a required `quick-checks` status (GitHub recursion-prevention means the check never runs) and the token cannot be granted a ruleset bypass (Integration bypass actors are organization-only — the API returns HTTP 422). Such a PR is permanently `BLOCKED`, the soak-window auto-merge cron can't merge it, and — before the fix — that crashed `maintenance.yml` every 6h. As of the fail-soft fix in `auto_merge_tool_bumps.py`, the cron now flips these to `needs-review` and stays green, but the PR still needs a **maintainer's admin-merge**. Section D surfaces them so that admin-merge happens during the Monday sweep instead of accumulating unseen.
 
+**One-time prerequisite for admin-merge (do this once, then it works forever):** Rulesets do NOT auto-exempt repository admins the way legacy branch protection did. With an empty `bypass_actors` list, even the owner's `gh pr merge --admin` fails with `Repository rule violations found — Required status check "quick-checks" is expected`. To enable admin-merge, add the **Repository admin** role to the ruleset's bypass list once: **Settings → Rules → Rulesets → "Protect main branch (minimal)" → Bypass list → Add bypass → Repository admin → Always** (or via API: `bypass_actors: [{actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always"}]`). After that, `gh pr merge <n> --squash --admin --delete-branch` works (plain merge still reports "base branch policy prohibits" — you must pass `--admin` to invoke the bypass, even as a bypass actor). This was configured for this repo on 2026-05-26.
+
 ## Workflow Steps
 
 ### Step 1: Discovery (read-only, sequential)
@@ -219,6 +221,8 @@ For Sections A/B/C, invoke the corresponding child skill with `--execute` in the
 
   ! gh pr merge <n> --squash --admin --delete-branch
   ```
+
+  This requires the one-time Repository-admin bypass-actor setup from Rule 6 (done 2026-05-26). If the command fails with `Required status check "quick-checks" is expected`, the bypass actor is missing — point the user to the Rule 6 setup step first. Also re-check the PR's diff before recommending the merge: an auto-update PR can carry a bump the user deliberately deferred (e.g. a pre-commit hook rev jumping a major version like mypy 1.x → 2.x, tracked in a `technical-debt` issue). If so, classify it `BOT-PR-FAILING`-adjacent: flag the deferred bump, recommend closing/regenerating rather than merging.
 
 - **`FAILING-CRON`** / **`BOT-PR-FAILING`** → do not fix workflow or script bugs inline. Report the failure with its run URL and recommend `/jmo-ci-debugger`. Routing, not repairing, keeps Section D's blast radius bounded.
 - **`TRANSIENT-FLAKE`** → no action; note it as self-resolved.
