@@ -1715,22 +1715,49 @@ Threading and performance:
 - Scan workers: precedence is CLI/profile threads > JMO_THREADS env > config default > auto.
 - Report workers: set via `--threads` (preferred) or config; the aggregator will also suggest `recommended_threads` in `timings.json` based on CPU count.
 
-## Suppressions
+## Handling False Positives
 
-You can suppress specific finding IDs during report/ci. The reporter looks for `jmo.suppress.yml` first in `results/` and then in the current working directory.
+Use `jmo.suppress.yml` when a scanner finding is known to be safe, accepted, or
+outside the scope of the current audit. Keep this file in the repository root so
+the same triage decisions apply to local scans, CI, and reviewer workflows. The
+reporter also checks `<results_dir>/jmo.suppress.yml` first, then falls back to
+`./jmo.suppress.yml` in the current working directory.
 
-File format:
+Every suppression should include a clear `reason`. Add `expires` for temporary
+exceptions so old decisions are reviewed again.
 
 ```yaml
 suppressions:
+  # Suppress one exact finding fingerprint.
+  - id: "trivy|CVE-2024-1234|package.json|0|abc123"
+    reason: "False positive: package is only used by a non-deployed fixture"
+    expires: "2025-12-31"
 
-  - id: abcdef1234567890
-    reason: false positive (hashing rule)
-    expires: 2025-12-31   # optional ISO date; omit to never expire
+  # Suppress a noisy rule only for test files.
+  - path: "tests/*"
+    ruleId: "B101"
+    reason: "Assert statements are expected in tests"
 
-  - id: 9999deadbeef
-    reason: accepted risk for demo
+  # Suppress one rule in a specific workflow file and line range.
+  - path: ".github/workflows/e2e-comprehensive-tests.yml"
+    ruleId: "run-shell-injection"
+    line: [74, 86]
+    reason: "Read-only display of CI metadata in a sandboxed workflow"
+    expires: "2025-09-30"
+
+  # Suppress a severity bucket in archived docs or sample material.
+  - path: "docs/archive/*"
+    severity: "HIGH"
+    reason: "Archived examples are retained for documentation history only"
 ```
+
+Use the narrowest rule that fits:
+
+- Prefer `id` for a single finding fingerprint.
+- Use `ruleId` with `path` when the rule is only false-positive noise in one area.
+- Use `line` only when the finding is tied to a stable file location.
+- Use `severity` sparingly and scope it with `path`.
+- Keep `expires` on accepted-risk or temporary suppressions.
 
 Behavior:
 
@@ -1738,7 +1765,10 @@ Behavior:
 - A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
 - The tool automatically detects which key (`suppressions` or `suppress`) is present in your config.
 
-Search order for the suppression file is: `<results_dir>/jmo.suppress.yml` first, then `./jmo.suppress.yml` in the current working directory.
+For dashboard-based triage, use the [HTML dashboard triage workflow](#6-triage-workflow):
+filter findings, select rows, use the bulk action to mark them as "False
+Positive", add a reason, then export `triage.json`. Copy reviewed decisions into
+`jmo.suppress.yml` when they should be versioned with the repository.
 
 ## SARIF and HTML dashboard
 
