@@ -297,7 +297,7 @@ def _add_report_args(subparsers: argparse._SubParsersAction) -> Any:
     rp.add_argument(
         "--profile",
         action="store_true",
-        help="Collect per-tool timing and write timings.json",
+        help="Collect per-tool timing and write timings.json (for profile SELECTION use --profile-name on scan/ci)",
     )
     rp.add_argument(
         "--threads",
@@ -335,7 +335,9 @@ def _add_ci_args(subparsers: argparse._SubParsersAction) -> Any:
         help="Severity threshold to exit non-zero (for report)",
     )
     cp.add_argument(
-        "--profile", action="store_true", help="Collect timings.json during report"
+        "--profile",
+        action="store_true",
+        help="Collect timings.json during report (for profile SELECTION use --profile-name)",
     )
     cp.add_argument(
         "--policy",
