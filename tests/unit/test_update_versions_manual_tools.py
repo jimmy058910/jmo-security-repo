@@ -136,3 +136,39 @@ def test_only_manual_outdated_creates_no_issues():
 
     assert count == 2  # both manual tools counted as outdated
     assert created_titles == []  # but no issues filed
+
+
+def test_lingering_manual_issue_is_swept_closed():
+    """A pre-existing 'Update <manual-tool>' issue must be auto-closed (self-healing).
+
+    The superseded-issue sweep now includes manual tools, so issues filed before
+    this behavior change get closed and never re-created.
+    """
+    closed_numbers: list[str] = []
+
+    def _run(cmd, *args, **kwargs):
+        result = MagicMock(spec=subprocess.CompletedProcess)
+        result.returncode = 0
+        result.stdout = ""
+        if "list" in cmd:
+            # An old manual-tool issue is still open.
+            result.stdout = '[{"number": 529, "title": "Update falco to v0.43.1"}]'
+        elif "close" in cmd:
+            closed_numbers.append(cmd[cmd.index("close") + 1])
+        elif "create" in cmd:  # pragma: no cover - manual tools never create
+            raise AssertionError("manual tool must not create an issue")
+        return result
+
+    fake_results = {"falco": ("0.0.0", "0.43.1", True)}
+    fake_versions = {"python_tools": {}, "binary_tools": {}, "special_tools": {}}
+
+    with (
+        patch.object(
+            update_versions, "check_latest_versions", return_value=fake_results
+        ),
+        patch.object(update_versions, "load_versions", return_value=fake_versions),
+        patch.object(update_versions.subprocess, "run", side_effect=_run),
+    ):
+        update_versions.check_outdated_and_create_issues(create_issues=True)
+
+    assert "529" in closed_numbers
