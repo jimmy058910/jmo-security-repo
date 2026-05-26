@@ -1731,32 +1731,23 @@ suppressions:
   # Suppress one exact finding fingerprint.
   - id: "trivy|CVE-2024-1234|package.json|0|abc123"
     reason: "False positive: package is only used by a non-deployed fixture"
-    expires: "2025-12-31"
+    expires: "<FUTURE_DATE>"
 
-  # Suppress a noisy rule only for test files.
-  - path: "tests/*"
-    ruleId: "B101"
-    reason: "Assert statements are expected in tests"
-
-  # Suppress one rule in a specific workflow file and line range.
-  - path: ".github/workflows/e2e-comprehensive-tests.yml"
-    ruleId: "run-shell-injection"
-    line: [74, 86]
-    reason: "Read-only display of CI metadata in a sandboxed workflow"
-    expires: "2025-09-30"
-
-  # Suppress a severity bucket in archived docs or sample material.
-  - path: "docs/archive/*"
-    severity: "HIGH"
-    reason: "Archived examples are retained for documentation history only"
+  # Suppress another exact finding fingerprint without an expiration.
+  - id: "semgrep|python.lang.security.audit.dangerous-subprocess-use|scripts/demo.py|42"
+    reason: "Accepted risk: demo fixture is never executed in production"
 ```
 
-Use the narrowest rule that fits:
+Current behavior is exact `id` matching only. `load_suppressions()` parses the
+`id`, `reason`, and optional `expires` fields, and `filter_suppressed()` removes
+active findings whose `id` exactly matches a suppression entry. Fields such as
+`path`, `ruleId`, `line`, and `severity` are not selectors today; add loader and
+filter support before documenting them as supported suppression keys.
 
-- Prefer `id` for a single finding fingerprint.
-- Use `ruleId` with `path` when the rule is only false-positive noise in one area.
-- Use `line` only when the finding is tied to a stable file location.
-- Use `severity` sparingly and scope it with `path`.
+Use the narrowest supported entry that fits:
+
+- Copy the exact finding `id` from JSON, SARIF, or dashboard output.
+- Keep one suppression entry per reviewed finding fingerprint.
 - Keep `expires` on accepted-risk or temporary suppressions.
 
 Behavior:
