@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 USER_GUIDE = ROOT / "docs" / "USER_GUIDE.md"
@@ -8,8 +10,15 @@ USER_GUIDE = ROOT / "docs" / "USER_GUIDE.md"
 def _handling_false_positives_section() -> str:
     text = USER_GUIDE.read_text(encoding="utf-8")
     start = text.index("## Handling False Positives")
-    end = text.index("\n## ", start + 1)
+    end = text.find("\n## ", start + 1)
+    if end == -1:
+        end = len(text)
     return text[start:end]
+
+
+def _suppression_yaml_example() -> str:
+    section = _handling_false_positives_section()
+    return section.split("```yaml", 1)[1].split("```", 1)[0]
 
 
 def test_false_positive_suppression_examples_match_id_only_behavior():
@@ -23,8 +32,9 @@ def test_false_positive_suppression_examples_match_id_only_behavior():
     assert "load_suppressions()" in section
     assert "filter_suppressed()" in section
 
-    example = section.split("```yaml", 1)[1].split("```", 1)[0]
-    assert "path:" not in example
-    assert "ruleId:" not in example
-    assert "line:" not in example
-    assert "severity:" not in example
+
+@pytest.mark.parametrize("unsupported_key", ["path:", "ruleId:", "line:", "severity:"])
+def test_false_positive_example_omits_unsupported_selector_keys(unsupported_key):
+    example = _suppression_yaml_example()
+
+    assert unsupported_key not in example
