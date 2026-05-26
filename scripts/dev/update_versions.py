@@ -77,6 +77,20 @@ DOCKERFILE_FAST = REPO_ROOT / "Dockerfile.fast"
 INSTALL_TOOLS = REPO_ROOT / "scripts" / "dev" / "install_tools.sh"
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
+# Tools that require manual installation (platform limitations) and are
+# intentionally NOT baked into any Docker image. They carry synthetic versions
+# in versions.yaml (e.g. falco 0.0.0), so they ALWAYS read as "outdated" and
+# would otherwise spawn a fresh "Update <tool>" issue every weekly check-versions
+# cron run. We skip GitHub issue creation for them (the version delta is still
+# surfaced in --check-latest / --report output) to stop the recurring churn.
+#
+# Source of truth: scripts/core/tool_registry.py MANUAL_INSTALL_TOOLS. This is a
+# deliberate local mirror because scripts/dev/update_versions.py runs in CI
+# (maintenance.yml check-versions) WITHOUT `pip install -e .`, so importing the
+# scripts.core package is not reliably available there. A drift-guard unit test
+# (tests/unit/test_update_versions_manual_tools.py) asserts the two stay in sync.
+MANUAL_INSTALL_TOOLS: frozenset[str] = frozenset({"falco", "afl++", "mobsf", "akto"})
+
 # ANSI colors
 BLUE = "\033[0;34m"
 GREEN = "\033[0;32m"
@@ -817,10 +831,19 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
 
     outdated_critical = []
     outdated_normal = []
+    outdated_manual = []
 
     # Categorize outdated tools
     for tool, (current, latest, is_outdated) in results.items():
         if not is_outdated:
+            continue
+
+        # Manual-install tools are never baked into images and can't be
+        # auto-updated; filing a weekly issue for them is pure noise (they
+        # always read as outdated). Surface the version delta in the log but
+        # don't create an issue. See MANUAL_INSTALL_TOOLS comment above.
+        if tool in MANUAL_INSTALL_TOOLS:
+            outdated_manual.append((tool, current, latest))
             continue
 
         # Check if tool is critical
@@ -846,11 +869,24 @@ def check_outdated_and_create_issues(create_issues: bool = False) -> int:
         for tool, current, latest in outdated_normal:
             log(f"  - {tool}: {current} → {latest}")
 
+    if outdated_manual:
+        log(
+            f"Found {len(outdated_manual)} outdated MANUAL-install tools "
+            "(no issue filed; install manually):"
+        )
+        for tool, current, latest in outdated_manual:
+            log(f"  - MANUAL: {tool}: {current} → {latest}")
+
     # Create GitHub issues if requested
-    if create_issues and (outdated_critical or outdated_normal):
+    if create_issues and (outdated_critical or outdated_normal or outdated_manual):
         log("Closing superseded version update issues before creating new ones...")
+        # Include manual tools in the sweep so any lingering "Update <manual-tool>"
+        # issues (filed before we stopped creating them) get auto-closed and are
+        # never re-filed — keeps the fix self-healing without manual cleanup.
         _close_superseded_version_issues(
-            [t for t, _, _ in outdated_critical] + [t for t, _, _ in outdated_normal]
+            [t for t, _, _ in outdated_critical]
+            + [t for t, _, _ in outdated_normal]
+            + [t for t, _, _ in outdated_manual]
         )
         log("Creating GitHub issues for outdated tools...")
 
@@ -946,7 +982,9 @@ python3 scripts/dev/update_versions.py --sync
             except subprocess.CalledProcessError:
                 warn(f"Failed to create issue for {tool}")
 
-    return len(outdated_critical) + len(outdated_normal)
+    # Manual tools are counted as outdated (messaging/`--fail-if-outdated`
+    # stay honest) even though no issue is filed for them.
+    return len(outdated_critical) + len(outdated_normal) + len(outdated_manual)
 
 
 def update_all_tools(
