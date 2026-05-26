@@ -7,7 +7,11 @@ on outdated, Layer 2 = --create-issues dashboard, Layer 3 = auto-PR + soak
 auto-merge). It runs on a cron schedule every 6 hours and takes three actions:
 
   * merge — PR is >= min_age_hours old, has label auto-merge-ok, and all
-    required status checks are green. Squash-merge it.
+    required status checks are green. Squash-merge it. If the merge is refused
+    by branch protection the cron can't satisfy (a required `quick-checks`
+    context that never runs on GITHUB_TOKEN-authored PRs, with no ruleset
+    bypass available on personal repos), the PR is flipped to needs-review for
+    a maintainer's admin-merge rather than crashing the job.
   * flip  — PR has label auto-merge-ok but a required status check failed.
     Remove auto-merge-ok, add needs-review, post an explanatory comment so
     the maintainer sees the failed check on the next dashboard scan.
@@ -35,6 +39,25 @@ from datetime import datetime, timezone
 from typing import Literal
 
 Action = Literal["merge", "defer", "flip"]
+
+# Outcome of an attempted squash-merge. "blocked" means the PR is green per its
+# status rollup but branch protection refused the merge — the standard
+# personal-repo constraint where a required `quick-checks` context can never run
+# on a PR authored by the workflow GITHUB_TOKEN (GitHub recursion-prevention),
+# and the token cannot be granted a ruleset bypass (Integration bypass actors
+# are org-only). We surface those for manual admin-merge instead of crashing.
+MergeOutcome = Literal["merged", "blocked"]
+
+# Substrings in `gh pr merge` stderr that indicate a *permanent* branch-protection
+# block rather than a transient error. Matched case-insensitively.
+_BLOCKED_STDERR_MARKERS = (
+    "not mergeable",
+    "is blocked",
+    "required status check",
+    "branch protection",
+    "changes must be made through",
+    "at least 1 approving review",
+)
 
 # Conclusions that mean "this check definitively failed". We treat all of
 # these as blocking — a cancelled or timed-out required check is just as
@@ -126,13 +149,77 @@ def list_candidate_prs() -> list[dict]:
     return data
 
 
-def merge_pr(number: int, dry_run: bool) -> None:
+def _is_permanent_block(stderr: str) -> bool:
+    """True if `gh pr merge` stderr signals a branch-protection block we cannot
+    clear automatically (vs. a transient/network error worth retrying)."""
+    lowered = stderr.lower()
+    return any(marker in lowered for marker in _BLOCKED_STDERR_MARKERS)
+
+
+def merge_pr(number: int, dry_run: bool) -> MergeOutcome:
+    """Attempt a squash-merge.
+
+    Returns:
+        "merged"  — the PR was merged (or would be, in dry-run).
+        "blocked" — all reported checks were green but branch protection
+                    refused the merge. The caller flips the PR to needs-review
+                    so a maintainer can admin-merge it; the cron stays green.
+
+    Raises:
+        subprocess.CalledProcessError — on a transient/unknown failure, so the
+        next cron cycle retries instead of silently abandoning the PR.
+    """
     print(f"[auto-merge] PR #{number}: merge (squash)")
     if dry_run:
-        return
-    subprocess.run(
+        return "merged"
+    result = subprocess.run(
         ["gh", "pr", "merge", str(number), "--squash", "--delete-branch"],
-        check=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode == 0:
+        return "merged"
+    if _is_permanent_block(result.stderr or ""):
+        print(
+            f"[auto-merge] PR #{number}: merge refused by branch protection "
+            f"(stderr: {(result.stderr or '').strip()})",
+            file=sys.stderr,
+        )
+        return "blocked"
+    # Unknown / transient failure (network, API throttle, branch conflict mid-run).
+    # Re-raise so main() exits non-zero and the next 6h cron cycle retries.
+    raise subprocess.CalledProcessError(
+        result.returncode, result.args, result.stdout, result.stderr
+    )
+
+
+def _ensure_label(name: str, color: str, description: str) -> None:
+    """Idempotently upsert a label before `--add-label` references it.
+
+    `gh pr edit --add-label X` hard-fails if X doesn't exist in the repo — the
+    PR #396 failure class that silently broke the weekly automation. The
+    soak-window job's PR-creation sibling self-heals `auto-merge-ok`, but
+    nothing created `needs-review`, so every flip would crash the cron here.
+    `gh label create --force` upserts; check=False keeps label bookkeeping from
+    ever being the thing that turns the job red.
+    """
+    subprocess.run(
+        [
+            "gh",
+            "label",
+            "create",
+            name,
+            "--color",
+            color,
+            "--description",
+            description,
+            "--force",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
 
 
@@ -147,6 +234,9 @@ def flip_pr_label(number: int, failed_checks: list[str], dry_run: bool) -> None:
     print(f"[auto-merge] PR #{number}: flip label (failed: {names})")
     if dry_run:
         return
+    _ensure_label(
+        NEEDS_REVIEW_LABEL, "d93f0b", "Auto-merge paused; needs a maintainer's review"
+    )
     subprocess.run(
         [
             "gh",
@@ -159,10 +249,60 @@ def flip_pr_label(number: int, failed_checks: list[str], dry_run: bool) -> None:
             NEEDS_REVIEW_LABEL,
         ],
         check=True,
+        timeout=60,
     )
     subprocess.run(
         ["gh", "pr", "comment", str(number), "--body", comment],
         check=True,
+        timeout=60,
+    )
+
+
+def flip_blocked_pr(number: int, dry_run: bool) -> None:
+    """Flip a green-but-unmergeable PR to needs-review with an actionable comment.
+
+    Distinct from `flip_pr_label`: there no check *failed* — the merge was
+    refused by branch protection that the cron's GITHUB_TOKEN can't satisfy or
+    bypass. Removing `auto-merge-ok` also stops the next cron cycle from
+    re-attempting (and thrashing) the same doomed merge every 6 hours.
+    """
+    comment = (
+        "Auto-merge can't complete this PR. All reported status checks are "
+        "green, but the `main` branch-protection ruleset requires the "
+        "`quick-checks` context — and that context never runs on a PR authored "
+        "by the workflow `GITHUB_TOKEN` (GitHub's recursion-prevention). On a "
+        "personal-account repo the token also can't be granted a ruleset bypass "
+        "(Integration bypass actors are organization-only). "
+        f"Label flipped from `{AUTO_MERGE_LABEL}` to `{NEEDS_REVIEW_LABEL}`. "
+        "A maintainer can complete it with an admin-merge:\n\n"
+        f"```\ngh pr merge {number} --squash --admin --delete-branch\n```\n\n"
+        "The weekly `/maintenance-monday` sweep (Section D) also surfaces these "
+        "for batch review."
+    )
+    print(f"[auto-merge] PR #{number}: flip to needs-review (merge blocked)")
+    if dry_run:
+        return
+    _ensure_label(
+        NEEDS_REVIEW_LABEL, "d93f0b", "Auto-merge paused; needs a maintainer's review"
+    )
+    subprocess.run(
+        [
+            "gh",
+            "pr",
+            "edit",
+            str(number),
+            "--remove-label",
+            AUTO_MERGE_LABEL,
+            "--add-label",
+            NEEDS_REVIEW_LABEL,
+        ],
+        check=True,
+        timeout=60,
+    )
+    subprocess.run(
+        ["gh", "pr", "comment", str(number), "--body", comment],
+        check=True,
+        timeout=60,
     )
 
 
@@ -206,7 +346,10 @@ def main() -> int:
         action = should_merge(pr, now, args.min_age_hours)
         number = int(pr["number"])
         if action == "merge":
-            merge_pr(number, dry_run=args.dry_run)
+            if merge_pr(number, dry_run=args.dry_run) == "blocked":
+                # Green rollup but branch protection refused — surface for a
+                # maintainer's admin-merge instead of crashing the cron job.
+                flip_blocked_pr(number, dry_run=args.dry_run)
         elif action == "flip":
             flip_pr_label(number, _failed_check_names(pr), dry_run=args.dry_run)
         else:

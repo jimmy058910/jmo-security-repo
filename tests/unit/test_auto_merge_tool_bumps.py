@@ -16,10 +16,14 @@ PRs, so the fabricated-PR test suite covers each axis explicitly.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
+
+import pytest
 
 
 def _load_module():
@@ -171,3 +175,95 @@ def test_zero_soak_window_merges_immediately() -> None:
         checks=[{"name": "ci", "conclusion": "SUCCESS"}],
     )
     assert should_merge(pr, NOW, min_age_hours=0) == "merge"
+
+
+# --- merge_pr() outcome handling ------------------------------------------
+#
+# should_merge() decides intent from the status rollup, but whether the merge
+# actually lands is only knowable at `gh pr merge` time: a required check that
+# never ran (the personal-repo GITHUB_TOKEN constraint) isn't in the rollup, so
+# the rollup looks green yet the merge is refused. merge_pr() must distinguish
+# that permanent block (surface for manual admin-merge, keep the cron green)
+# from a transient failure (re-raise so the next cron cycle retries).
+
+
+def _completed(returncode: int, *, stderr: str = "", stdout: str = ""):
+    return subprocess.CompletedProcess(
+        args=["gh", "pr", "merge"], returncode=returncode, stdout=stdout, stderr=stderr
+    )
+
+
+def test_merge_pr_dry_run_reports_merged_without_calling_gh() -> None:
+    with patch("subprocess.run") as mock_run:
+        assert auto_merge.merge_pr(42, dry_run=True) == "merged"
+    mock_run.assert_not_called()
+
+
+def test_merge_pr_success_returns_merged() -> None:
+    with patch("subprocess.run", return_value=_completed(0)) as mock_run:
+        assert auto_merge.merge_pr(42, dry_run=False) == "merged"
+    mock_run.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Pull request is not mergeable: the base branch policy prohibits the merge.",
+        "GraphQL: Changes must be made through a pull request. (mergePullRequest)",
+        "1 required status check is expected. (quick-checks)",
+        "merge is blocked by branch protection rules",
+        "At least 1 approving review is required by reviewers with write access.",
+    ],
+)
+def test_merge_pr_permanent_block_returns_blocked(stderr: str) -> None:
+    """Branch-protection refusals are classified as 'blocked', not raised."""
+    with patch("subprocess.run", return_value=_completed(1, stderr=stderr)):
+        assert auto_merge.merge_pr(42, dry_run=False) == "blocked"
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "error connecting to api.github.com: timeout",
+        "HTTP 502: Bad Gateway",
+        "",  # opaque non-zero exit with no recognizable marker → transient
+    ],
+)
+def test_merge_pr_transient_failure_reraises(stderr: str) -> None:
+    """Unknown/transient failures must re-raise so the next cron cycle retries."""
+    with patch("subprocess.run", return_value=_completed(1, stderr=stderr)):
+        with pytest.raises(subprocess.CalledProcessError):
+            auto_merge.merge_pr(42, dry_run=False)
+
+
+def test_flip_blocked_pr_removes_label_and_comments() -> None:
+    """A blocked PR self-heals the label, relabels needs-review, and comments."""
+    with patch("subprocess.run", return_value=_completed(0)) as mock_run:
+        auto_merge.flip_blocked_pr(494, dry_run=False)
+    # Three gh calls: ensure-label (self-heal), edit (relabel), comment.
+    assert mock_run.call_count == 3
+    create_args = mock_run.call_args_list[0].args[0]
+    assert create_args[:3] == ["gh", "label", "create"]
+    assert auto_merge.NEEDS_REVIEW_LABEL in create_args
+    assert "--force" in create_args  # idempotent upsert, never the red-maker
+    edit_args = mock_run.call_args_list[1].args[0]
+    assert "edit" in edit_args
+    assert "--remove-label" in edit_args
+    assert auto_merge.AUTO_MERGE_LABEL in edit_args
+    assert auto_merge.NEEDS_REVIEW_LABEL in edit_args
+    comment_body = mock_run.call_args_list[2].args[0][-1]
+    # Comment must hand the maintainer the exact admin-merge command.
+    assert "gh pr merge 494 --squash --admin" in comment_body
+
+
+def test_ensure_label_never_raises_on_failure() -> None:
+    """Label bookkeeping must never be the thing that crashes the cron."""
+    # check=False means a non-zero `gh label create` is swallowed, not raised.
+    with patch("subprocess.run", return_value=_completed(1, stderr="boom")):
+        auto_merge._ensure_label("needs-review", "d93f0b", "desc")  # no exception
+
+
+def test_flip_blocked_pr_dry_run_makes_no_gh_calls() -> None:
+    with patch("subprocess.run") as mock_run:
+        auto_merge.flip_blocked_pr(494, dry_run=True)
+    mock_run.assert_not_called()
