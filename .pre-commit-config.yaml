@@ -167,6 +167,8 @@ repos:
         # advisory, no fix version, transitive dev-only via mcp. Mirrors
         # the same ignore applied in .github/workflows/ci.yml's pip-audit
         # step. See that file for the full reasoning + OSV link.
-        entry: pip-audit -r requirements-dev.txt --progress-spinner=off --ignore-vuln PYSEC-2025-183
+        # GHSA-qp9x-wp8f-qgjj (tuf, CVSS 4.0): fix in tuf 7.0.0 not adoptable
+        # while sigstore caps tuf<7. Tracking: #539.
+        entry: pip-audit -r requirements-dev.txt --progress-spinner=off --ignore-vuln PYSEC-2025-183 --ignore-vuln GHSA-qp9x-wp8f-qgjj
         pass_filenames: false
         files: ^requirements-dev\.(in|txt)$
