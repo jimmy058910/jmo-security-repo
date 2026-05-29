@@ -1715,22 +1715,41 @@ Threading and performance:
 - Scan workers: precedence is CLI/profile threads > JMO_THREADS env > config default > auto.
 - Report workers: set via `--threads` (preferred) or config; the aggregator will also suggest `recommended_threads` in `timings.json` based on CPU count.
 
-## Suppressions
+## Handling False Positives
 
-You can suppress specific finding IDs during report/ci. The reporter looks for `jmo.suppress.yml` first in `results/` and then in the current working directory.
+Use `jmo.suppress.yml` when a scanner finding is known to be safe, accepted, or
+outside the scope of the current audit. Keep this file in the repository root so
+the same triage decisions apply to local scans, CI, and reviewer workflows. The
+reporter also checks `<results_dir>/jmo.suppress.yml` first, then falls back to
+`./jmo.suppress.yml` in the current working directory.
 
-File format:
+Every suppression should include a clear `reason`. Add `expires` for temporary
+exceptions so old decisions are reviewed again.
 
 ```yaml
 suppressions:
+  # Suppress one exact finding fingerprint (16-char id from JSON/SARIF/dashboard).
+  - id: "a1b2c3d4e5f6a7b8"
+    reason: "False positive: package is only used by a non-deployed fixture"
+    expires: "<FUTURE_DATE>"
 
-  - id: abcdef1234567890
-    reason: false positive (hashing rule)
-    expires: 2025-12-31   # optional ISO date; omit to never expire
-
-  - id: 9999deadbeef
-    reason: accepted risk for demo
+  # Suppress another exact finding fingerprint without an expiration.
+  - id: "9f8e7d6c5b4a3210"
+    reason: "Accepted risk: demo fixture is never executed in production"
 ```
+
+Current behavior is exact `id` matching only. `load_suppressions()` parses the
+`id`, `reason`, and optional `expires` fields, and `filter_suppressed()` removes
+active findings whose `id` exactly matches a suppression entry. Fields such as
+`path`, `ruleId`, `line`, and `severity` are not currently supported as
+selectors. Suppression by path or rule is tracked as a future enhancement
+(see issue #538).
+
+Use the narrowest supported entry that fits:
+
+- Copy the exact finding `id` from JSON, SARIF, or dashboard output.
+- Keep one suppression entry per reviewed finding fingerprint.
+- Keep `expires` on accepted-risk or temporary suppressions.
 
 Behavior:
 
@@ -1738,7 +1757,10 @@ Behavior:
 - A suppression summary (`SUPPRESSIONS.md`) is written alongside summaries listing the filtered IDs.
 - The tool automatically detects which key (`suppressions` or `suppress`) is present in your config.
 
-Search order for the suppression file is: `<results_dir>/jmo.suppress.yml` first, then `./jmo.suppress.yml` in the current working directory.
+For dashboard-based triage, use the [HTML dashboard triage workflow](#6-triage-workflow):
+filter findings, select rows, use the bulk action to mark them as "False
+Positive", add a reason, then export `triage.json`. Copy reviewed decisions into
+`jmo.suppress.yml` when they should be versioned with the repository.
 
 ## SARIF and HTML dashboard
 
