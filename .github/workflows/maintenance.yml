@@ -599,7 +599,12 @@ jobs:
           echo "No critical issues found (total: $TOTAL_COUNT)"
 
       - name: Post summary to PR
-        if: github.event_name == 'pull_request'
+        # Skip on fork PRs: GitHub grants fork-PR runs a read-only GITHUB_TOKEN,
+        # so issue-comment creation fails with HttpError 403 ("Resource not
+        # accessible by integration") and reds-X the whole job for every
+        # external contribution. Internal-branch PRs still get the comment; the
+        # full analysis is always available via the uploaded artifact above.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
         uses: actions/github-script@v9
         with:
           script: |
