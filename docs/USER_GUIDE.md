@@ -1728,21 +1728,22 @@ exceptions so old decisions are reviewed again.
 
 ```yaml
 suppressions:
-  # Suppress one exact finding fingerprint.
-  - id: "trivy|CVE-2024-1234|package.json|0|abc123"
+  # Suppress one exact finding fingerprint (16-char id from JSON/SARIF/dashboard).
+  - id: "a1b2c3d4e5f6a7b8"
     reason: "False positive: package is only used by a non-deployed fixture"
     expires: "<FUTURE_DATE>"
 
   # Suppress another exact finding fingerprint without an expiration.
-  - id: "semgrep|python.lang.security.audit.dangerous-subprocess-use|scripts/demo.py|42"
+  - id: "9f8e7d6c5b4a3210"
     reason: "Accepted risk: demo fixture is never executed in production"
 ```
 
 Current behavior is exact `id` matching only. `load_suppressions()` parses the
 `id`, `reason`, and optional `expires` fields, and `filter_suppressed()` removes
 active findings whose `id` exactly matches a suppression entry. Fields such as
-`path`, `ruleId`, `line`, and `severity` are not selectors today; add loader and
-filter support before documenting them as supported suppression keys.
+`path`, `ruleId`, `line`, and `severity` are not currently supported as
+selectors. Suppression by path or rule is tracked as a future enhancement
+(see issue #538).
 
 Use the narrowest supported entry that fits:
 
