@@ -245,7 +245,7 @@ def load_versions() -> dict:
         err(f"versions.yaml not found at {VERSIONS_YAML}")
         sys.exit(1)
 
-    with open(VERSIONS_YAML) as f:
+    with open(VERSIONS_YAML, encoding="utf-8") as f:
         data: dict[Any, Any] = yaml.safe_load(f) or {}
         return data
 
@@ -269,7 +269,7 @@ def save_versions(data: dict) -> None:
 
     # newline="\n" forces LF on all platforms; without it Windows text-mode
     # writes emit CRLF for every line, producing a full-file false diff (#555).
-    with open(VERSIONS_YAML, "w", newline="\n") as f:
+    with open(VERSIONS_YAML, "w", encoding="utf-8", newline="\n") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
@@ -662,7 +662,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
             warn(f"{dockerfile_path.name} not found, skipping")
             continue
 
-        content = dockerfile_path.read_text()
+        content = dockerfile_path.read_text(encoding="utf-8")
         original_content = content
 
         # Replace version variables
@@ -684,7 +684,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
                 warn(f"{dockerfile_path.name} needs updates (dry-run, not writing)")
             else:
                 # newline="\n": keep LF on Windows (see #555).
-                dockerfile_path.write_text(content, newline="\n")
+                dockerfile_path.write_text(content, encoding="utf-8", newline="\n")
                 ok(f"Updated {dockerfile_path.name}")
         else:
             ok(f"{dockerfile_path.name} already in sync")
@@ -694,7 +694,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
         sorted(WORKFLOWS_DIR.glob("*.yml")) if WORKFLOWS_DIR.exists() else []
     )
     for workflow_path in workflow_files:
-        content = workflow_path.read_text()
+        content = workflow_path.read_text(encoding="utf-8")
         original_content = content
 
         for tool, version in version_map.items():
@@ -713,7 +713,7 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
                 )
             else:
                 # newline="\n": keep LF on Windows (see #555).
-                workflow_path.write_text(content, newline="\n")
+                workflow_path.write_text(content, encoding="utf-8", newline="\n")
                 ok(f"Updated .github/workflows/{workflow_path.name}")
         else:
             ok(f".github/workflows/{workflow_path.name} already in sync")
