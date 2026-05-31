@@ -250,11 +250,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.4 && \
     echo "✓ bandit installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.163.0 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.164.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.529 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.2.530 && \
     checkov --version && \
     echo "✓ checkov installed"
 
