@@ -53,7 +53,7 @@ RUN HADOLINT_VERSION="2.14.0" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download Nuclei (minimal templates for fast scans)
-RUN NUCLEI_VERSION="3.7.0" && \
+RUN NUCLEI_VERSION="3.8.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -72,7 +72,7 @@ RUN OPA_VERSION="1.12.0" && \
     chmod +x /usr/local/bin/opa
 
 # Download ShellCheck (pinned version instead of apt)
-RUN SHELLCHECK_VERSION="0.10.0" && \
+RUN SHELLCHECK_VERSION="0.11.0" && \
     SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
     -o /tmp/shellcheck.tar.xz && \
@@ -116,7 +116,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.164.0 \
     checkov==3.2.530 \
-    ruff==0.15.2 \
+    ruff==0.15.15 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 

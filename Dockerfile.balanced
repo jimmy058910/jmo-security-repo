@@ -61,7 +61,7 @@ RUN ZAP_VERSION="2.16.1" && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
 # Download Nuclei (DAST + API Security)
-RUN NUCLEI_VERSION="3.7.0" && \
+RUN NUCLEI_VERSION="3.8.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -84,7 +84,7 @@ RUN KUBESCAPE_VERSION="3.0.47" && \
     chmod +x /usr/local/bin/kubescape
 
 # Download Gosec (Go SAST)
-RUN GOSEC_VERSION="2.22.10" && \
+RUN GOSEC_VERSION="2.26.1" && \
     GOSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/securego/gosec/releases/download/v${GOSEC_VERSION}/gosec_${GOSEC_VERSION}_linux_${GOSEC_ARCH}.tar.gz" \
     -o /tmp/gosec.tar.gz && \
@@ -93,7 +93,7 @@ RUN GOSEC_VERSION="2.22.10" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.104.0" && \
+RUN GRYPE_VERSION="0.112.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -126,7 +126,7 @@ RUN OPA_VERSION="1.12.0" && \
     chmod +x /usr/local/bin/opa
 
 # Download ShellCheck (pinned version instead of apt)
-RUN SHELLCHECK_VERSION="0.10.0" && \
+RUN SHELLCHECK_VERSION="0.11.0" && \
     SHELLCHECK_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${SHELLCHECK_ARCH}.tar.xz" \
     -o /tmp/shellcheck.tar.xz && \
@@ -190,7 +190,7 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     semgrep==1.164.0 \
     checkov==3.2.530 \
-    ruff==0.15.2 \
+    ruff==0.15.15 \
     yara-python==4.5.4 && \
     python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
