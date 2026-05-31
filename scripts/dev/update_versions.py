@@ -267,7 +267,9 @@ def save_versions(data: dict) -> None:
         },
     )
 
-    with open(VERSIONS_YAML, "w") as f:
+    # newline="\n" forces LF on all platforms; without it Windows text-mode
+    # writes emit CRLF for every line, producing a full-file false diff (#555).
+    with open(VERSIONS_YAML, "w", newline="\n") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
 
@@ -681,7 +683,8 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
             if dry_run:
                 warn(f"{dockerfile_path.name} needs updates (dry-run, not writing)")
             else:
-                dockerfile_path.write_text(content)
+                # newline="\n": keep LF on Windows (see #555).
+                dockerfile_path.write_text(content, newline="\n")
                 ok(f"Updated {dockerfile_path.name}")
         else:
             ok(f"{dockerfile_path.name} already in sync")
@@ -709,7 +712,8 @@ def sync_dockerfiles(dry_run: bool = False) -> bool:
                     f".github/workflows/{workflow_path.name} needs updates (dry-run, not writing)"
                 )
             else:
-                workflow_path.write_text(content)
+                # newline="\n": keep LF on Windows (see #555).
+                workflow_path.write_text(content, newline="\n")
                 ok(f"Updated .github/workflows/{workflow_path.name}")
         else:
             ok(f".github/workflows/{workflow_path.name} already in sync")
