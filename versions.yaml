@@ -19,7 +19,7 @@ python_tools:
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.2
+    version: 0.15.15
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -121,7 +121,7 @@ binary_tools:
     critical: false
     brew_package: hadolint
   falcoctl:
-    version: 0.12.2
+    version: 0.13.0
     github_repo: falcosecurity/falcoctl
     description: Falco CLI for static analysis
     release_pattern: falcoctl_{version}_linux_{arch}.tar.gz
@@ -131,7 +131,7 @@ binary_tools:
     update_check: gh api repos/falcosecurity/falcoctl/releases/latest
     critical: false
   shfmt:
-    version: 3.12.0
+    version: 3.13.1
     github_repo: mvdan/sh
     description: Shell formatter
     release_pattern: shfmt_v{version}_linux_{arch}
@@ -141,7 +141,7 @@ binary_tools:
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
   nuclei:
-    version: 3.7.0
+    version: 3.8.0
     github_repo: projectdiscovery/nuclei
     description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
     release_pattern: nuclei_{version}_linux_{arch}.zip
@@ -164,7 +164,7 @@ binary_tools:
     critical: true
     notes: v1.0.0 - K8s hardening and compliance
   gosec:
-    version: 2.22.10
+    version: 2.26.1
     github_repo: securego/gosec
     description: Go security analyzer
     release_pattern: gosec_{version}_linux_{arch}.tar.gz
@@ -175,7 +175,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.104.0
+    version: 0.112.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -186,7 +186,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
   osv-scanner:
-    version: 2.3.1
+    version: 2.3.8
     github_repo: google/osv-scanner
     description: Google OSV vulnerability scanner
     release_pattern: osv-scanner_linux_{arch}
@@ -246,7 +246,7 @@ special_tools:
       '
     docker_ready: false
   yara:
-    version: 4.5.4
+    version: 4.5.5
     pypi_package: yara-python
     github_repo: VirusTotal/yara
     description: Malware pattern detection
@@ -295,7 +295,7 @@ special_tools:
     critical: true
     notes: 'v1.0.0 - Policy-as-Code feature (Feature #5)'
   shellcheck:
-    version: 0.10.0
+    version: 0.11.0
     github_repo: koalaman/shellcheck
     description: Static analysis for shell scripts
     release_pattern: shellcheck-v{version}.linux.{arch}.tar.xz
@@ -372,6 +372,123 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated shellcheck
+  tools_updated:
+  - tool: shellcheck
+    old_version: 0.10.0
+    new_version: 0.11.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated yara
+  tools_updated:
+  - tool: yara
+    old_version: 4.5.4
+    new_version: 4.5.5
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated osv-scanner
+  tools_updated:
+  - tool: osv-scanner
+    old_version: 2.3.1
+    new_version: 2.3.8
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.104.0
+    new_version: 0.112.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated gosec
+  tools_updated:
+  - tool: gosec
+    old_version: 2.22.10
+    new_version: 2.26.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated nuclei
+  tools_updated:
+  - tool: nuclei
+    old_version: 3.7.0
+    new_version: 3.8.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated shfmt
+  tools_updated:
+  - tool: shfmt
+    old_version: 3.12.0
+    new_version: 3.13.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated falcoctl
+  tools_updated:
+  - tool: falcoctl
+    old_version: 0.12.2
+    new_version: 0.13.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-05-31'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-05-31'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.15.2
+    new_version: 0.15.15
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-05-31'
   action: Automated version update
   tools_updated: []
