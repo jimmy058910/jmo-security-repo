@@ -331,8 +331,6 @@ Key takeaways now embedded in path-scoped rules:
 
 **Internal (Dev-Only):** `dev-only/` - Plans, archive, and internal documentation (not published)
 
-**Plans:** [dev-only/plans/README.md](dev-only/plans/README.md)
-
 ## Notes
 
 - Agent threads reset cwd between bash calls - use absolute paths
