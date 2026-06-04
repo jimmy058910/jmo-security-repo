@@ -500,7 +500,6 @@ jmo diff --scan abc123 --scan def456 --format json
 - [GitHub Actions Example](github-actions-diff.yml)
 - [GitLab CI Example](gitlab-ci-diff.yml)
 - [USER_GUIDE.md - Diff Command Reference](../USER_GUIDE.md#jmo-diff)
-- [DIFF_ENGINE.md](../../dev-only/archive/feature-plans/DIFF_ENGINE.md)
 
 ---
 

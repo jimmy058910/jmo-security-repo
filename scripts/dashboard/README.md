@@ -297,4 +297,3 @@ See [../../LICENSE](../../LICENSE) for project license.
 
 - **Issues**: <https://github.com/jimmy058910/jmo-security-repo/issues>
 - **Docs**: [../../docs/](../../docs/)
-- **Implementation Plan**: [../../dev-only/archive/feature-plans/REACT_DASHBOARD.md](../../dev-only/archive/feature-plans/REACT_DASHBOARD.md)
