@@ -138,8 +138,18 @@ scripts/api/.vercel/
 # Cryptographic keys and certificates (security-critical files)
 *.pem
 *.key
+# Secret/credential files: broad net by design. A committed secret is permanent
+# in git history (false negative = catastrophic); a wrongly-ignored SOURCE file
+# is visible and recoverable (false positive = cheap). Re-include source-code
+# extensions so adapters/tests/policies (semgrep_secrets_adapter.py,
+# zero-secrets.rego, test_secrets_management.py) aren't silently dropped, while
+# real secret DATA files (.json/.yaml/.env/.txt) stay ignored.
 *secret*
 *credentials*
+!*secret*.py
+!*secret*.rego
+!*credentials*.py
+!*credentials*.rego
 
 # Metrics collection output (maintainer-only, contains sensitive analytics)
 /metrics/
