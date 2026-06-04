@@ -261,8 +261,6 @@ Remember to update CHANGELOG.md with user-facing changes.
    - **PyPI issues:** Resolved automatically when you publish the new release (uses current README.md)
    - **Docker Hub issues:** Update DOCKER_HUB_README.md before release, ensure DOCKERHUB_ENABLED=true
 
-   **Documentation:** See [dev-only/README_CONSISTENCY.md](../dev-only/archive/README_CONSISTENCY.md) for complete guide.
-
 6. **Run pre-release validation:**
 
    ```bash

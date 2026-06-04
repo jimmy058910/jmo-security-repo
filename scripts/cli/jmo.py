@@ -1352,8 +1352,6 @@ Usage Examples:
 
     # Show insights
     jmo trends insights
-
-See: dev-only/archive/feature-plans/TREND_ANALYSIS.md for complete documentation.
         """,
     )
     trends_subparsers = trends_parser.add_subparsers(dest="trends_command")
