@@ -1,0 +1,23 @@
+---
+# Hadolint configuration for JMo Security Dockerfiles
+# See https://github.com/hadolint/hadolint#configure
+
+ignored:
+  # DL3008: Pin versions in apt-get install.
+  # Intentionally unpinned — Ubuntu 24.04 base images receive security
+  # updates via apt; pinning would freeze vulnerable package versions.
+  - DL3008
+
+  # DL3059: Multiple consecutive RUN instructions.
+  # Intentional for build clarity, caching granularity, and per-tool
+  # error isolation across multi-stage Dockerfiles.
+  - DL3059
+
+  # DL4006: Set the SHELL option -o pipefail before RUN with a pipe.
+  # NodeSource install script (curl | bash) is a vendor-recommended
+  # pattern used in Dockerfile.balanced and Dockerfile.deep.
+  - DL4006
+
+  # SC1091: Not following sourced file (ShellCheck via hadolint).
+  # ShellCheck cannot resolve dynamic/external sources inside Docker.
+  - SC1091

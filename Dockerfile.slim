@@ -211,8 +211,7 @@ COPY . /opt/jmo-security/
 RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
 # Install JMo (minimal, no reporting extras for slim variant)
-RUN cd /opt/jmo-security && \
-    python3 -m pip install --no-cache-dir --break-system-packages -e . && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages -e /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
