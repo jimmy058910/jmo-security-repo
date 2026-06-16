@@ -147,7 +147,7 @@ repos:
             if command -v "$p" >/dev/null 2>&1 && "$p" --version >/dev/null 2>&1; then PY="$p"; break; fi;
           done;
           [ -z "$PY" ] && { echo "ERROR: Python not found"; exit 1; };
-          $PY -m pip install --quiet uv 2>/dev/null || true;
+          $PY -m pip install --quiet uv==0.11.15 2>/dev/null || true;
           $PY scripts/dev/update_dependencies.py --compile ||
           { echo "ERROR: deps-compile requires Python 3.10+.
           Install python3.10, python3.11, or python3.12"; exit 1; }'
