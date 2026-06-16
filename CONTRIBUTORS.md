@@ -8,9 +8,9 @@ Listed in chronological order of first contribution:
 
 ### @iclectic
 
-- **Hadolint Dockerfile Linting Integration** ([#2](https://github.com/jimmy058910/jmo-security-repo/pull/2))
-  - Added Hadolint to CI for Dockerfile best practices validation
-  - Integrated linting checks for all 3 Docker variants (full/slim/alpine)
+- **Hadolint Dockerfile Linting Integration** ([#2](https://github.com/jimmy058910/jmo-security-repo/pull/2), [#572](https://github.com/jimmy058910/jmo-security-repo/pull/572), closes [#85](https://github.com/jimmy058910/jmo-security-repo/issues/85))
+  - Added Hadolint linting to the `quick-checks` CI gate for all 4 Docker variants (fast/slim/balanced/deep)
+  - Authored `.hadolint.yaml` with documented rule suppressions and fixed DL3003 across all Dockerfiles
   - Impact: Improved container security and build quality
 
 ### @ADITYABHURAN
@@ -20,6 +20,12 @@ Listed in chronological order of first contribution:
   - Python-based validation using Microsoft SARIF SDK schema
   - Optimized CI by moving validation to quick-checks job (6x efficiency gain)
   - Impact: Ensures SARIF output compliance with industry standards
+
+### @xzlknr
+
+- **"Choosing a Profile" Decision Guide** ([#571](https://github.com/jimmy058910/jmo-security-repo/pull/571), closes [#531](https://github.com/jimmy058910/jmo-security-repo/issues/531))
+  - Added a scenario-to-profile decision table to `docs/PROFILES_AND_TOOLS.md` (fast/slim/balanced/deep) with time-cost tradeoffs
+  - Impact: Helps new users pick the right scan profile quickly
 
 ## How to Contribute
 
