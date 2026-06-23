@@ -45,3 +45,8 @@ cat results/summaries/timings.json
 ```
 
 <!-- Removed ai-search private examples to keep public docs neutral. -->
+
+## 6) Worked example: scanning a single Python package
+
+Step-by-step walkthrough using the `fast` profile — install tools, scan, report, and open the dashboard.
+See [Worked example: scanning a single Python package](../USER_GUIDE.md#worked-example-scanning-a-single-python-package) in the User Guide.

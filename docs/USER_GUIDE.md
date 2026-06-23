@@ -157,7 +157,7 @@ jmo scan --repos-dir ~/repos --allow-missing-tools
 
 Tip: You can also run `jmo tools install` to install the security scanners for your profile, and `jmo tools check` to verify your setup.
 
-### Worked example: scanning a single Python package
+## Worked example: scanning a single Python package
 
 This walkthrough scans a single local Python project end-to-end using the `fast` profile, then generates a report and opens the HTML dashboard. It assumes you already have JMo installed (see [Quick start](#quick-start-2-minutes)).
 
@@ -191,11 +191,11 @@ Not all 9 fast-profile tools produce findings for every project. JMo uses conten
 | **Semgrep** | Static analysis for Python security issues (SQL injection, insecure deserialization, etc.) |
 | **Syft** | Generates a Software Bill of Materials (SBOM) from `requirements.txt` / `pyproject.toml` |
 | **Trivy** | Checks Python dependencies for known CVEs |
-| **Checkov** | Scans any IaC files if present (Terraform, CloudFormation, Dockerfiles) |
+| **Checkov** | Scans any IaC files if present (Terraform, CloudFormation) |
 | **Hadolint** | Lints Dockerfiles — only fires if a `Dockerfile` exists in the repo |
 | **ShellCheck** | Analyses shell scripts — only fires if `.sh` files exist |
-| **Nuclei** | Skipped for local repos (targets live URLs) |
-| **OPA** | Policy engine — evaluates any `.rego` policy files |
+| **Nuclei** | Skipped for local repos (targets live URLs and APIs) |
+| **`opa`** | Policy engine — evaluates any `.rego` policy files, if present |
 
 Tools that find no applicable files write an empty stub so reporting still works. See [Content-Triggered Tool Execution](PROFILES_AND_TOOLS.md#content-triggered-tool-execution) for the full matrix.
 
@@ -211,28 +211,7 @@ The `--profile` flag writes a `timings.json` file showing how long each tool too
 
 **4. Inspect the results**
 
-After the report step, your `results/` directory looks like this:
-
-```text
-results/
-├── individual-repos/
-│   └── my-python-app/
-│       ├── trufflehog.json      # Raw secrets scan output
-│       ├── semgrep.json         # Raw SAST output
-│       ├── syft.json            # SBOM
-│       ├── trivy.json           # Dependency vulnerabilities
-│       ├── checkov.json         # IaC findings (or empty stub)
-│       ├── hadolint.json        # Dockerfile lint (or empty stub)
-│       └── shellcheck.json      # Shell analysis (or empty stub)
-└── summaries/
-    ├── findings.json            # All findings, normalised and deduplicated
-    ├── SUMMARY.md               # Human-readable severity breakdown
-    ├── dashboard.html           # Interactive HTML dashboard
-    ├── findings.sarif           # SARIF 2.1.0 for IDE/GitHub integration
-    ├── findings.yaml            # YAML output (if PyYAML installed)
-    ├── findings.csv             # Spreadsheet-friendly export
-    └── timings.json             # Per-tool timing data (from --profile)
-```
+Raw tool output lands in `results/individual-repos/<repo>/` and unified summaries in `results/summaries/`. See [Output overview](#output-overview) for the full file list and format details.
 
 **5. Open the dashboard**
 
