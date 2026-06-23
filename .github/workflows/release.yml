@@ -53,7 +53,7 @@ jobs:
       release_branch: ${{ steps.create_branch.outputs.branch }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -312,7 +312,7 @@ jobs:
     timeout-minutes: 10  # Increased from 5 to accommodate full test suite
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -392,7 +392,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -457,7 +457,7 @@ jobs:
         variant: [deep, balanced, slim, fast]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -514,7 +514,7 @@ jobs:
         variant: [deep, balanced, slim, fast]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -850,7 +850,7 @@ jobs:
       (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Update Docker Hub description
         # Requires secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (PAT with read/write/delete scope)
@@ -886,7 +886,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -973,7 +973,7 @@ jobs:
     continue-on-error: true  # Don't block release on badge caching issues
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Wait for PyPI to propagate with retries
         run: |

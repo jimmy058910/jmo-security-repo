@@ -59,7 +59,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -240,7 +240,7 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -285,7 +285,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -322,7 +322,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Pre-pull BuildKit image (best-effort retry; mitigates Docker Hub timeouts)
         continue-on-error: true
@@ -382,7 +382,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -501,7 +501,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v6
@@ -563,7 +563,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'nightly' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -681,7 +681,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -782,7 +782,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -838,7 +838,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -922,7 +922,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -1021,7 +1021,7 @@ jobs:
       github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'e2e' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - uses: ./.github/actions/setup-python-jmo
 
@@ -1113,7 +1113,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && (github.event.inputs.task == 'performance' || github.event.inputs.task == 'all')
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -1225,7 +1225,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Log in to Container Registry
         uses: docker/login-action@v4
