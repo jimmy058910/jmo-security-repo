@@ -13,8 +13,8 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@radix-ui/react-tooltip": "^1.2.9",
-    "lucide-react": "^1.17.0",
+    "@radix-ui/react-tooltip": "^1.2.10",
+    "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "recharts": "^3.8.1"
