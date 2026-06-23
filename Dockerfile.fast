@@ -53,7 +53,7 @@ RUN HADOLINT_VERSION="2.14.0" && \
     chmod +x /usr/local/bin/hadolint
 
 # Download Nuclei (minimal templates for fast scans)
-RUN NUCLEI_VERSION="3.8.0" && \
+RUN NUCLEI_VERSION="3.9.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -114,9 +114,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python tools (minimal for fast variant)
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.164.0 \
-    checkov==3.2.530 \
-    ruff==0.15.15 \
+    semgrep==1.167.0 \
+    checkov==3.3.1 \
+    ruff==0.15.17 \
     && find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 
@@ -157,8 +157,7 @@ COPY . /opt/jmo-security/
 RUN cp /opt/jmo-security/jmo.yml /scan/jmo.yml
 
 # Install JMo (minimal, no reporting extras)
-RUN cd /opt/jmo-security && \
-    python3 -m pip install --no-cache-dir --break-system-packages -e . && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages -e /opt/jmo-security && \
     find /usr/local/lib/python3* -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
     find /usr/local/lib/python3* -type f -name '*.pyc' -delete 2>/dev/null || true
 

@@ -7,19 +7,19 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.164.0
+    version: 1.167.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.2.530
+    version: 3.3.1
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.15
+    version: 0.15.17
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -57,7 +57,7 @@ python_tools:
       '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.28.1
+    version: 5.30.3
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -141,7 +141,7 @@ binary_tools:
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
   nuclei:
-    version: 3.8.0
+    version: 3.9.0
     github_repo: projectdiscovery/nuclei
     description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
     release_pattern: nuclei_{version}_linux_{arch}.zip
@@ -164,7 +164,7 @@ binary_tools:
     critical: true
     notes: v1.0.0 - K8s hardening and compliance
   gosec:
-    version: 2.26.1
+    version: 2.27.1
     github_repo: securego/gosec
     description: Go security analyzer
     release_pattern: gosec_{version}_linux_{arch}.tar.gz
@@ -175,7 +175,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.112.0
+    version: 0.114.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -372,6 +372,123 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-06-21'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-21'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.30.1
+    new_version: 5.30.3
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-21'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-21'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.166.0
+    new_version: 1.167.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-16'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.112.0
+    new_version: 0.114.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-16'
+  action: Updated gosec
+  tools_updated:
+  - tool: gosec
+    old_version: 2.26.1
+    new_version: 2.27.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-16'
+  action: Updated nuclei
+  tools_updated:
+  - tool: nuclei
+    old_version: 3.8.0
+    new_version: 3.9.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-16'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.15.15
+    new_version: 0.15.17
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-14'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-14'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.28.1
+    new_version: 5.30.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-14'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-14'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.2.530
+    new_version: 3.3.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-14'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-14'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.164.0
+    new_version: 1.166.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-05-31'
   action: Automated version update
   tools_updated: []

@@ -198,7 +198,7 @@ upgrade-pip:
 	$(PY) -m pip install -U pip setuptools wheel
 
 deps-compile:
-	@command -v uv >/dev/null 2>&1 || $(PY) -m pip install uv
+	@$(PY) -m pip install -q uv==0.11.15  # pinned: matches ci.yml deps-compile (PR #488)
 	@if [ -f requirements-dev.in ]; then uv pip compile --universal --python-version 3.12 -o requirements-dev.txt requirements-dev.in; else echo 'requirements-dev.in not found'; exit 1; fi
 
 deps-sync:

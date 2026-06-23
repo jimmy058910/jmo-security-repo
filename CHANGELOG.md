@@ -4,6 +4,18 @@ All notable changes to JMo Security will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **"Choosing a Profile" decision guide** in `docs/PROFILES_AND_TOOLS.md` — a scenario-to-profile table (fast/slim/balanced/deep) with time-cost tradeoffs so new users can pick a scan profile at a glance. Thanks @xzlknr! ([#571](https://github.com/jimmy058910/jmo-security-repo/pull/571), closes [#531](https://github.com/jimmy058910/jmo-security-repo/issues/531))
+
+### Fixed
+
+- **Dev-dependency CVEs failing the `quick-checks` pip-audit gate** — bumped `cryptography` 46.0.7→48.0.1 (GHSA-537c-gmf6-5ccf), `starlette` 1.0.1→1.3.1 (CVE-2026-48817/48818/54282/54283), and `python-multipart` 0.0.27→0.0.32 (CVE-2026-53538/53539/53540), with a `sigstore` 4.2.0→4.3.0 / `pyopenssl` 26.0.0→26.2.0 cascade. These transitive deps of the optional `mcp`/`attestation` extras were failing `pip-audit` on every open PR; regenerated `requirements-dev.txt` via pinned `uv==0.11.15`. ([#580](https://github.com/jimmy058910/jmo-security-repo/pull/580))
+
+### Internal
+
+- **Hadolint Dockerfile linting in CI** — the `quick-checks` job now lints all 4 Dockerfiles (fast/slim/balanced/deep) via `hadolint/hadolint-action@v3.1.0` (`failure-threshold: warning`), with a `.hadolint.yaml` suppression config (DL3008/DL3059/DL4006/SC1091, documented) and DL3003 fixes across all Dockerfiles. Thanks @iclectic! ([#572](https://github.com/jimmy058910/jmo-security-repo/pull/572), closes [#85](https://github.com/jimmy058910/jmo-security-repo/issues/85))
+
 ## [1.0.5] - 2026-04-27
 
 ### Summary

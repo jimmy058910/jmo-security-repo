@@ -44,7 +44,7 @@ coverage==7.13.5
     # via pytest-cov
 croniter==6.2.2
     # via -r requirements-dev.in
-cryptography==46.0.7
+cryptography==48.0.1
     # via
     #   -r requirements-dev.in
     #   pyjwt
@@ -73,7 +73,7 @@ httpx==0.28.1
     # via mcp
 httpx-sse==0.4.3
     # via mcp
-hypothesis==6.152.9
+hypothesis==6.155.3
     # via -r requirements-dev.in
 id==1.6.1
     # via sigstore
@@ -97,7 +97,7 @@ librt==0.8.1 ; platform_python_implementation != 'PyPy'
     # via mypy
 markdown-it-py==4.0.0
     # via rich
-mcp==1.27.1
+mcp==1.27.2
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
@@ -146,7 +146,7 @@ pydantic==2.12.5
     #   sigstore-rekor-types
 pydantic-core==2.41.5
     # via pydantic
-pydantic-settings==2.13.1
+pydantic-settings==2.14.2
     # via mcp
 pygments==2.20.0
     # via
@@ -156,9 +156,9 @@ pyjwt==2.13.0
     # via
     #   mcp
     #   sigstore
-pyopenssl==26.0.0
+pyopenssl==26.2.0
     # via sigstore
-pytest==9.0.3
+pytest==9.1.0
     # via
     #   -r requirements-dev.in
     #   pytest-benchmark
@@ -193,13 +193,15 @@ python-dotenv==1.2.2
     # via
     #   mcp
     #   pydantic-settings
-python-multipart==0.0.27
-    # via mcp
+python-multipart==0.0.32
+    # via
+    #   -r requirements-dev.in
+    #   mcp
 pytokens==0.4.1
     # via black
 pytz==2026.2
     # via -r requirements-dev.in
-pywin32==311 ; sys_platform == 'win32'
+pywin32==312 ; sys_platform == 'win32'
     # via mcp
 pyyaml==6.0.3
     # via
@@ -225,13 +227,13 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.14
+ruff==0.15.17
     # via -r requirements-dev.in
 securesystemslib==1.3.1
     # via tuf
 shellingham==1.5.4
     # via typer
-sigstore==4.2.0
+sigstore==4.3.0
     # via -r requirements-dev.in
 sigstore-models==0.0.6
     # via sigstore
@@ -243,8 +245,9 @@ sortedcontainers==2.4.0
     # via hypothesis
 sse-starlette==3.3.4
     # via mcp
-starlette==1.0.1
+starlette==1.3.1
     # via
+    #   -r requirements-dev.in
     #   mcp
     #   sse-starlette
 stevedore==5.7.0

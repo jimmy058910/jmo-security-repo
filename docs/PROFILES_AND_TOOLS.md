@@ -7,6 +7,7 @@ This document is the authoritative reference for which tools are included in eac
 ## Table of Contents
 
 - [Quick Reference](#quick-reference)
+- [Choosing a Profile](#choosing-a-profile)
 - [Profile Overview](#profile-overview)
 - [Profile Tool Lists](#profile-tool-lists)
 - [Tool Categories](#tool-categories)
@@ -40,6 +41,19 @@ docker run -v $(pwd):/scan ghcr.io/jimmy058910/jmo-security:balanced scan
 pip install jmo-security
 jmo tools install --profile balanced
 ```
+
+---
+
+## Choosing a Profile
+
+| Scenario | Start with | Time cost | Why |
+|----------|------------|-----------|-----|
+| Pre-commit or PR validation | `fast` | 5-10 min | Gives quick feedback for local checks and pull requests. |
+| Cloud or IaC-heavy repository | `slim` | 12-18 min | Adds AWS, Azure, GCP, Kubernetes, and extra SCA/SAST coverage without the full deep scan cost. |
+| CI, release gates, or production scanning | `balanced` | 18-25 min | Provides broader production-ready coverage while staying practical for routine pipelines. |
+| Compliance audit or pentest prep | `deep` | 40-70 min | Maximizes coverage for high-assurance reviews, with the highest runtime and first-run setup cost. |
+
+If you are unsure, start with `balanced` for CI or `fast` for local validation, then move up only when the extra coverage matches the review goal.
 
 ---
 
