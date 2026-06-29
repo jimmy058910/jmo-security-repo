@@ -93,7 +93,7 @@ RUN GOSEC_VERSION="2.27.1" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.114.0" && \
+RUN GRYPE_VERSION="0.115.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
