@@ -23,6 +23,7 @@ from .constants import (
     FULCIO_URL_STAGING,
     REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
+    OIDC_ISSUER_URL_PRODUCTION,
     ATTESTATION_TIMEOUT,
     REKOR_TIMEOUT,
 )
@@ -163,9 +164,11 @@ class SigstoreSigner:
             # Use sigstore-python's built-in OAuth flow
             from sigstore.oidc import Issuer
 
-            issuer = Issuer.production()
+            issuer = Issuer(OIDC_ISSUER_URL_PRODUCTION)
             token = issuer.identity_token()
-            return str(token.value)
+            # sigstore 4.x: IdentityToken dropped .value; the raw token is
+            # exposed via __str__.
+            return str(token)
         except (
             Exception
         ) as e:  # Acceptable: re-raises after logging — OIDC failure is fatal for signing
