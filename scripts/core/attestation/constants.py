@@ -31,6 +31,11 @@ REKOR_URL_PRODUCTION = "https://rekor.sigstore.dev"
 FULCIO_URL_STAGING = "https://fulcio.sigstage.dev"
 REKOR_URL_STAGING = "https://rekor.sigstage.dev"
 
+# OIDC OAuth issuer for interactive/local keyless signing.
+# sigstore-python 4.x removed the Issuer.production() classmethod, so the
+# production issuer URL must be passed to Issuer(base_url) explicitly.
+OIDC_ISSUER_URL_PRODUCTION = "https://oauth2.sigstore.dev/auth"
+
 # Default URLs (production)
 FULCIO_URL = FULCIO_URL_PRODUCTION
 REKOR_URL = REKOR_URL_PRODUCTION
