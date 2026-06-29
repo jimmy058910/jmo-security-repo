@@ -175,7 +175,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.114.0
+    version: 0.115.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -186,7 +186,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
   osv-scanner:
-    version: 2.3.8
+    version: 2.4.0
     github_repo: google/osv-scanner
     description: Google OSV vulnerability scanner
     release_pattern: osv-scanner_linux_{arch}
@@ -372,6 +372,32 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-06-29'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-29'
+  action: Updated osv-scanner
+  tools_updated:
+  - tool: osv-scanner
+    old_version: 2.3.8
+    new_version: 2.4.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-29'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-29'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.114.0
+    new_version: 0.115.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-06-28'
   action: Automated version update
   tools_updated: []
