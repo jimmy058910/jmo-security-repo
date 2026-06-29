@@ -258,7 +258,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.2
     checkov --version && \
     echo "✓ checkov installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.17 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages ruff==0.15.20 && \
     echo "✓ ruff installed"
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages yara-python==4.5.4 && \
