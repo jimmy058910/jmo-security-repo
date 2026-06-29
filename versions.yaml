@@ -7,19 +7,19 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.167.0
+    version: 1.168.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.3.1
+    version: 3.3.2
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
     critical: true
   ruff:
-    version: 0.15.17
+    version: 0.15.20
     pypi_package: ruff
     description: Python linter and formatter
     update_check: pip index versions ruff
@@ -57,7 +57,7 @@ python_tools:
       '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.30.3
+    version: 5.31.1
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -175,7 +175,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Go-specific SAST
   grype:
-    version: 0.114.0
+    version: 0.115.0
     github_repo: anchore/grype
     description: Vulnerability scanner for containers/filesystems
     release_pattern: grype_{version}_linux_{arch}.tar.gz
@@ -186,7 +186,7 @@ binary_tools:
     critical: false
     notes: v1.0.0 - Dual scanning with Trivy (Anchore DB)
   osv-scanner:
-    version: 2.3.8
+    version: 2.4.0
     github_repo: google/osv-scanner
     description: Google OSV vulnerability scanner
     release_pattern: osv-scanner_linux_{arch}
@@ -372,6 +372,84 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-06-29'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-29'
+  action: Updated ruff
+  tools_updated:
+  - tool: ruff
+    old_version: 0.15.17
+    new_version: 0.15.20
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-29'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-29'
+  action: Updated osv-scanner
+  tools_updated:
+  - tool: osv-scanner
+    old_version: 2.3.8
+    new_version: 2.4.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-29'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-29'
+  action: Updated grype
+  tools_updated:
+  - tool: grype
+    old_version: 0.114.0
+    new_version: 0.115.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-28'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.30.3
+    new_version: 5.31.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-28'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.3.1
+    new_version: 3.3.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-06-28'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-06-28'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.167.0
+    new_version: 1.168.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-06-21'
   action: Automated version update
   tools_updated: []

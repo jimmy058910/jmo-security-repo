@@ -177,12 +177,17 @@ class TestOIDCTokenAcquisition:
         """Test local OIDC token acquisition via OAuth flow."""
         signer = SigstoreSigner()
 
-        # Mock sigstore-python OAuth flow
+        # Mock sigstore-python OAuth flow. sigstore 4.x changed this API in
+        # two ways: Issuer.production() was removed (signer now calls
+        # Issuer(base_url)), and IdentityToken dropped .value in favor of
+        # __str__() for the raw token. Mock the constructor (return_value) and
+        # the token's str(), so this test fails if the code regresses to
+        # Issuer.production() or token.value.
         mock_issuer = MagicMock()
         mock_token = MagicMock()
-        mock_token.value = "local_oauth_token_xyz"
+        mock_token.__str__.return_value = "local_oauth_token_xyz"
         mock_issuer.identity_token.return_value = mock_token
-        mock_issuer_class.production.return_value = mock_issuer
+        mock_issuer_class.return_value = mock_issuer
 
         token = signer._get_local_oidc_token()
 
@@ -194,8 +199,8 @@ class TestOIDCTokenAcquisition:
         """Test local OIDC token acquisition failure."""
         signer = SigstoreSigner()
 
-        # Mock OAuth flow failure
-        mock_issuer_class.production.side_effect = Exception("OAuth failed")
+        # Mock OAuth flow failure (Issuer constructor raises)
+        mock_issuer_class.side_effect = Exception("OAuth failed")
 
         with pytest.raises(Exception, match="OAuth failed"):
             signer._get_local_oidc_token()

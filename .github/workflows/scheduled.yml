@@ -403,7 +403,7 @@ jobs:
           # Avoids upstream install.sh GitHub-API "latest" lookups that have
           # flaked in CI (see PR #350 + release.rules.md).
           TRIVY_VERSION: "0.70.0"
-          GRYPE_VERSION: "0.114.0"
+          GRYPE_VERSION: "0.115.0"
           SYFT_VERSION: "1.42.4"
           TRUFFLEHOG_VERSION: "3.94.3"
           HADOLINT_VERSION: "2.14.0"
