@@ -1,5 +1,13 @@
 # TruffleHog Exclusion Patterns
-# Paths to exclude from secret scanning
+# Paths to exclude from secret scanning.
+#
+# IMPORTANT: `trufflehog --exclude-paths` expects Go (RE2) REGEX patterns,
+# one per line, matched (unanchored) against each file path -- NOT shell
+# globs. A leading "*" (e.g. "*.md") is an invalid regex; trufflehog then
+# fails to build the filter ("could not create exclude rules"), aborts the
+# ENTIRE scan, and -- because the CI step swallows the exit code -- silently
+# disables secret scanning. Use "\.md$" instead of "*.md", "name.*" instead
+# of "name*", and escape literal dots in directory names ("\.venv/").
 
 # Test fixtures and example data (may contain intentional test secrets)
 tests/
@@ -10,60 +18,60 @@ examples/
 # Documentation and archives
 docs/
 dev-only/
-*.md
-*.txt
+\.md$
+\.txt$
 
 # Build artifacts and dependencies
 node_modules/
-.venv/
+\.venv/
 venv/
-venv-*/
-.eggs/
+venv-.*/
+\.eggs/
 dist/
 build/
-*.egg-info/
+\.egg-info/
 __pycache__/
-*.pyc
-*.pyo
+\.pyc$
+\.pyo$
 
 # IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+\.vscode/
+\.idea/
+\.swp$
+\.swo$
+~$
 
 # Git and version control
-.git/
-.gitignore
-.gitattributes
+\.git/
+\.gitignore$
+\.gitattributes$
 
 # Package lock files (may contain registry URLs that trigger false positives)
-package-lock.json
-poetry.lock
-Pipfile.lock
-requirements*.txt
+package-lock\.json$
+poetry\.lock$
+Pipfile\.lock$
+requirements.*\.txt$
 
 # Docker and CI/CD configs (may contain example credentials)
-Dockerfile*
-docker-compose*.yml
-.github/
-.gitlab-ci.yml
+Dockerfile.*
+docker-compose.*\.yml$
+\.github/
+\.gitlab-ci\.yml$
 
 # Coverage and test reports
 htmlcov/
-.coverage
+\.coverage$
 coverage/
-.pytest_cache/
+\.pytest_cache/
 
 # Results and logs
 results/
-.jmo/
-*.log
+\.jmo/
+\.log$
 
 # Binary and compiled files
-*.so
-*.dylib
-*.dll
-*.exe
-*.bin
+\.so$
+\.dylib$
+\.dll$
+\.exe$
+\.bin$
