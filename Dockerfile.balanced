@@ -93,7 +93,7 @@ RUN GOSEC_VERSION="2.27.1" && \
     chmod +x /usr/local/bin/gosec
 
 # Download Grype (SCA + Vuln - Anchore)
-RUN GRYPE_VERSION="0.114.0" && \
+RUN GRYPE_VERSION="0.115.0" && \
     GRYPE_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_${GRYPE_ARCH}.tar.gz" \
     -o /tmp/grype.tar.gz && \
@@ -188,8 +188,8 @@ RUN rm -rf /usr/lib/jvm/java-17-openjdk-*/man \
 # Note: checkov and prowler have conflicting dependencies - install separately
 # Note: Ubuntu 24.04 ships pip 24.0/setuptools 68.1/wheel 0.42 (sufficient, skip upgrade)
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    semgrep==1.167.0 \
-    checkov==3.3.1 \
+    semgrep==1.168.0 \
+    checkov==3.3.2 \
     ruff==0.15.17 \
     yara-python==4.5.4 && \
     python3 -m pip install --no-cache-dir --break-system-packages prowler==5.18.2 && \
