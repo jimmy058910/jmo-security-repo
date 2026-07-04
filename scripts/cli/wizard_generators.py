@@ -561,7 +561,6 @@ services:
       --human-logs
     environment:
       - JMO_THREADS=auto
-      - JMO_TELEMETRY_DISABLE=1
 
   jmo-report:
     image: {JMO_DOCKER_IMAGE_FULL}
@@ -638,5 +637,4 @@ services:
       --human-logs
     environment:
       - JMO_THREADS=auto
-      - JMO_TELEMETRY_DISABLE=1
 """

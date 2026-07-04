@@ -468,7 +468,6 @@ def test_generate_docker_compose_default_workflow():
     assert "--repo /scan" in result
     assert "--profile balanced" in result
     assert "JMO_THREADS=auto" in result
-    assert "JMO_TELEMETRY_DISABLE=1" in result
 
 
 def test_generate_docker_compose_stack_workflow():

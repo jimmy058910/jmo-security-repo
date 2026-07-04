@@ -306,7 +306,6 @@ ls -la .jmo/history.db
 | Variable | Purpose | Default | Required For |
 |----------|---------|---------|--------------|
 | `JMO_ENCRYPTION_KEY` | Fernet encryption key (base64) | Not set | `--encrypt-findings` |
-| `JMO_TELEMETRY` | Enable/disable telemetry | `0` (disabled) | Telemetry opt-in |
 
 **Generating encryption keys:**
 
