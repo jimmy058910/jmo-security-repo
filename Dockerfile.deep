@@ -254,7 +254,7 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.168
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.2 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.6 && \
     checkov --version && \
     echo "✓ checkov installed"
 
