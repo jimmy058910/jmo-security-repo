@@ -13,7 +13,7 @@ python_tools:
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.3.2
+    version: 3.3.6
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -57,7 +57,7 @@ python_tools:
       '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.31.1
+    version: 5.32.0
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -372,6 +372,32 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-07-05'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-05'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.31.1
+    new_version: 5.32.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-05'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-05'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.3.2
+    new_version: 3.3.6
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-06-29'
   action: Automated version update
   tools_updated: []
