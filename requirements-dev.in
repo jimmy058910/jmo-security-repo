@@ -37,6 +37,9 @@ mcp[cli]>=1.0.0  # Official Anthropic MCP SDK with FastMCP framework
 #   python-multipart>=0.0.31: CVE-2026-53538/53539/53540
 starlette>=1.3.1
 python-multipart>=0.0.31
+# Security floor for click (transitive via black + mcp[cli]'s typer), pip-audit fixable CVE:
+#   click>=8.3.3: PYSEC-2026-2132 (fix for the click 8.3.1 advisory)
+click>=8.3.3
 
 # Policy-as-Code dependencies (Feature #5: Policy-as-Code)
 # Note: OPA binary installed separately via scripts/dev/install_tools.sh

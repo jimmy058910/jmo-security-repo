@@ -207,5 +207,3 @@ policy:
     binary: opa                   # Path to OPA binary
     version: ">=0.70.0"           # Minimum OPA version
     timeout: 30                   # Policy evaluation timeout (seconds)
-telemetry:
-  enabled: true

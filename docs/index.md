@@ -87,7 +87,6 @@
 |----------|---------|
 | [Policy-as-Code](POLICY_AS_CODE.md) | OPA-based security policies |
 | [Schedule Guide](SCHEDULE_GUIDE.md) | Automated scan scheduling |
-| [Telemetry](TELEMETRY.md) | Privacy-first usage analytics |
 
 ### Advanced Features
 
