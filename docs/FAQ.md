@@ -109,7 +109,7 @@ The scanner binary isn't on your `PATH`. Run `jmo tools check` to see which tool
 
 ### Does JMo Security send data anywhere?
 
-By default, no data leaves your machine. Optional telemetry (opt-out model) collects anonymous usage counts; opt-out with `JMO_TELEMETRY_OPTOUT=1`. See [docs/TELEMETRY.md](TELEMETRY.md) for the full data model and [jmotools.com/privacy](https://jmotools.com/privacy) for policy.
+No. JMo Security collects no telemetry and phones home to nothing — all scanning runs locally and no data leaves your machine. See [jmotools.com/privacy](https://jmotools.com/privacy) for the full policy.
 
 ---
 

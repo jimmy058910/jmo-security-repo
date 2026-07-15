@@ -149,10 +149,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_profile")
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_with_profile_preset(
         self,
-        mock_banner: MagicMock,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
@@ -176,10 +174,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_profile")
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_with_target_preset(
         self,
-        mock_banner: MagicMock,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
@@ -212,10 +208,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_profile")
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_with_image_target(
         self,
-        mock_banner: MagicMock,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
@@ -239,10 +233,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_profile")
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_with_advanced_options(
         self,
-        mock_banner: MagicMock,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
@@ -272,10 +264,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.execute_scan")
     @patch("scripts.cli.wizard._check_policy_tools")
     @patch("scripts.cli.wizard.check_tools_for_profile")
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_native_mode_preset(
         self,
-        mock_banner: MagicMock,
         mock_tools: MagicMock,
         mock_policy: MagicMock,
         mock_scan: MagicMock,
@@ -301,10 +291,8 @@ class TestWizardWithPresets:
     @patch("scripts.cli.wizard.check_tools_for_profile")
     @patch("scripts.cli.wizard._check_docker_running", return_value=True)
     @patch("scripts.cli.wizard._detect_docker", return_value=True)
-    @patch("scripts.core.telemetry.should_show_telemetry_banner", return_value=False)
     def test_wizard_docker_mode_preset(
         self,
-        mock_banner: MagicMock,
         mock_docker: MagicMock,
         mock_docker_running: MagicMock,
         mock_tools: MagicMock,

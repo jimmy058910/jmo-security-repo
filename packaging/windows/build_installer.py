@@ -347,7 +347,6 @@ hiddenimports = [
     'scripts.core.cron_installer',
     'scripts.core.workflow_generators.github_actions',
     'scripts.core.workflow_generators.gitlab_ci',
-    'scripts.core.telemetry',
     'scripts.core.exceptions',
     'yaml',
     'pyyaml',

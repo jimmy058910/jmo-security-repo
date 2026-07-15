@@ -86,7 +86,6 @@ nav:
       - Slack Notifications: examples/slack-notifications.md
   - Advanced:
       - Version Management: VERSION_MANAGEMENT.md
-      - Telemetry: TELEMETRY.md
       - Release Process: RELEASE.md
       - Troubleshooting: TROUBLESHOOTING.md
 

@@ -16,6 +16,10 @@ All notable changes to JMo Security will be documented in this file.
 
 - **Hadolint Dockerfile linting in CI** — the `quick-checks` job now lints all 4 Dockerfiles (fast/slim/balanced/deep) via `hadolint/hadolint-action@v3.1.0` (`failure-threshold: warning`), with a `.hadolint.yaml` suppression config (DL3008/DL3059/DL4006/SC1091, documented) and DL3003 fixes across all Dockerfiles. Thanks @iclectic! ([#572](https://github.com/jimmy058910/jmo-security-repo/pull/572), closes [#85](https://github.com/jimmy058910/jmo-security-repo/issues/85))
 
+### Removed
+
+- **Anonymous usage telemetry (the opt-out GitHub Gist pipeline) has been removed entirely.** The `scripts/core/telemetry.py` client, the `wizard_flows/telemetry_helper.py` module, the first-run "we collect anonymous usage data" banner, the wizard opt-in prompt, and the `telemetry:` block in `jmo.yml` are all gone; the CLI no longer emits any events or reads the `JMO_TELEMETRY_*` environment variables. The pipeline shipped events by `PATCH`ing a maintainer-owned GitHub Gist, which — because only a gist's owner can write to it — could never collect data from real users: the only events it ever recorded were the maintainer's own pre-release dev runs. Removing it closes a standing accuracy gap (the tool advertised collection it could not perform) and makes the project's "local-first, no telemetry" brand promise literally true. Project adoption is now tracked solely through external signals (PyPI, Docker Hub, GitHub stars/traffic) via `scripts/dev/collect_metrics.sh`, which was made `jq`-independent in the same change. See `docs/superpowers/specs/2026-07-04-telemetry-retirement-and-serverless-design.md` for the full rationale and a design for an optional future serverless replacement.
+
 ## [1.0.5] - 2026-04-27
 
 ### Summary
