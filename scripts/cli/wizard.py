@@ -50,9 +50,6 @@ from scripts.cli.wizard_flows.target_configurators import (
     configure_gitlab_target as _configure_gitlab,
     configure_k8s_target as _configure_k8s,
 )
-from scripts.cli.wizard_flows.telemetry_helper import (
-    send_wizard_telemetry,
-)
 
 # Phase 1 refactor: Import from new modules
 from scripts.cli.wizard_flows.config_models import (
@@ -744,9 +741,7 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
         # Both Docker and native execution use subprocess for consistency and security
         command_list = generate_command_list(config)
 
-        # Prevent double telemetry banner: wizard shows it, subprocess shouldn't
         env = os.environ.copy()
-        env["JMO_TELEMETRY_SHOWN"] = "1"
 
         result = subprocess.run(
             command_list,
@@ -809,7 +804,6 @@ def execute_scan(config: WizardConfig, yes: bool = False) -> int:
         return 1
 
 
-# Telemetry functions now imported from telemetry_helper module
 # Tool checking functions now imported from tool_checker module (Phase 2 refactor)
 
 
@@ -866,25 +860,12 @@ def run_wizard(
     Returns:
         Exit code
     """
-    import time
-
-    from scripts.core.telemetry import (
-        should_show_telemetry_banner,
-        show_telemetry_banner,
-    )
-
     # Set custom db_path for this wizard run (via WizardConfig class method)
     WizardConfig.set_db_path(db_path)
-
-    wizard_start_time = time.time()
 
     _print_header("JMo Security Wizard")
     print("Welcome! This wizard will guide you through your first security scan.")
     print("Press Ctrl+C at any time to cancel.")
-
-    # Show telemetry banner on first 3 wizard runs (opt-out model)
-    if should_show_telemetry_banner():
-        show_telemetry_banner(mode="wizard")
 
     config = WizardConfig()
 
@@ -1013,9 +994,6 @@ def run_wizard(
             content = generate_makefile_target(config, command)
             Path(emit_make).write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_make}")
-            send_wizard_telemetry(
-                wizard_start_time, config, __version__, artifact_type="makefile"
-            )
             return 0
 
         if emit_script:
@@ -1034,9 +1012,6 @@ def run_wizard(
             except OSError:
                 pass  # Windows doesn't support Unix permissions
             print(f"\n{_colorize('Generated:', 'green')} {emit_script}")
-            send_wizard_telemetry(
-                wizard_start_time, config, __version__, artifact_type="shell"
-            )
             return 0
 
         if emit_gha:
@@ -1045,9 +1020,6 @@ def run_wizard(
             gha_path.parent.mkdir(parents=True, exist_ok=True)
             gha_path.write_text(content)
             print(f"\n{_colorize('Generated:', 'green')} {emit_gha}")
-            send_wizard_telemetry(
-                wizard_start_time, config, __version__, artifact_type="gha"
-            )
             return 0
 
         # Execute scan
@@ -1164,9 +1136,6 @@ def run_wizard(
                 # 2. Trend analysis
                 offer_trend_analysis_after_scan(config.results_dir)
 
-        send_wizard_telemetry(
-            wizard_start_time, config, __version__, artifact_type=None
-        )
         return result
 
     except KeyboardInterrupt:

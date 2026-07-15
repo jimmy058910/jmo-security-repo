@@ -33,7 +33,6 @@ open results/summaries/dashboard.html
 - 📊 **Unified Reporting**: JSON, Markdown, HTML dashboard, SARIF, YAML, compliance reports
 - ⚡ **Parallel Execution**: Scan multiple targets simultaneously with auto-detected CPU threads
 - 🎨 **4 Docker Variants**: Fast (9 tools, 5-10 min), Balanced (17 tools, 18-25 min), Slim (13 tools, cloud-focused), Deep (28 tools, 40-70 min)
-- 🔒 **Privacy-First Telemetry**: Anonymous usage analytics (opt-out model)
 - 📈 **Real-Time Progress**: Live scan progress with ETA estimation
 
 ## What's New in v1.0.0 (February 2026)

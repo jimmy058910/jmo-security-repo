@@ -60,10 +60,6 @@ Public API:
     Flow Classes:
         - BaseWizardFlow: Base class for wizard flows
         - RepoFlow, EntireStackFlow, CICDFlow, DeploymentFlow, DependencyFlow
-
-    Telemetry:
-        - send_wizard_telemetry: Send telemetry for wizard runs
-        - prompt_telemetry_opt_in: Telemetry opt-in prompt
 """
 
 from __future__ import annotations
@@ -113,13 +109,6 @@ from .policy_flow import (
     display_policy_violations_interactive as display_policy_violations_interactive,
 )
 from .policy_flow import policy_evaluation_menu as policy_evaluation_menu
-
-# ==============================================================================
-# Telemetry Helper (existing - newly exported)
-# ==============================================================================
-from .telemetry_helper import prompt_telemetry_opt_in as prompt_telemetry_opt_in
-from .telemetry_helper import save_telemetry_preference as save_telemetry_preference
-from .telemetry_helper import send_wizard_telemetry as send_wizard_telemetry
 
 # ==============================================================================
 # Phase 1: Configuration Models
@@ -221,10 +210,6 @@ __all__ = [
     "configure_k8s_target",
     # Command Builder
     "build_command_parts",
-    # Telemetry
-    "send_wizard_telemetry",
-    "prompt_telemetry_opt_in",
-    "save_telemetry_preference",
     # Policy Flow
     "policy_evaluation_menu",
     "display_policy_violations_interactive",
