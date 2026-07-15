@@ -202,26 +202,8 @@
             <p><strong>Email Storage:</strong> Emails are stored securely via <a href="https://resend.com" target="_blank" style="color: #667eea;">Resend</a>, a GDPR-compliant email service provider. Resend's privacy policy: <a href="https://resend.com/legal/privacy-policy" target="_blank" style="color: #667eea;">resend.com/legal/privacy-policy</a></p>
         </div>
 
-        <h3>2.2 Usage Telemetry (Coming Soon - Opt-Out Available)</h3>
-        <p>In future releases, we plan to collect anonymous usage statistics to improve the tool:</p>
-        <ul>
-            <li>Installation method (pip, Docker, native)</li>
-            <li>Profile usage (fast, balanced, deep)</li>
-            <li>Scan frequency and duration</li>
-            <li>Tool execution success/failure rates</li>
-            <li>Error messages (sanitized, no sensitive data)</li>
-        </ul>
-
-        <p><strong>Telemetry Opt-Out:</strong></p>
-        <p>You can disable telemetry anytime with:</p>
-        <ul>
-            <li>Environment variable: <code>export JMO_TELEMETRY=false</code></li>
-            <li>Config file: Add <code>telemetry_enabled: false</code> to <code>~/.jmo/config.yml</code></li>
-        </ul>
-
-        <div class="highlight-box">
-            <p><strong>Telemetry Provider:</strong> We will use <a href="https://posthog.com" target="_blank" style="color: #667eea;">PostHog</a>, an open-source analytics platform with strong privacy controls. PostHog privacy: <a href="https://posthog.com/privacy" target="_blank" style="color: #667eea;">posthog.com/privacy</a></p>
-        </div>
+        <h3>2.2 Usage Telemetry</h3>
+        <p>JMo Security does <strong>not</strong> collect usage telemetry. The CLI does not phone home — all scanning runs locally and no usage data is transmitted anywhere.</p>
 
         <h3>2.3 What We DO NOT Collect</h3>
         <p><strong>We explicitly DO NOT collect:</strong></p>
@@ -267,7 +249,7 @@
         <p>All security scan data remains on YOUR machine:</p>
         <ul>
             <li><strong>Results Directory:</strong> <code>./results/</code> - All scan findings stored locally</li>
-            <li><strong>Config File:</strong> <code>~/.jmo/config.yml</code> - User preferences (email, scan count, telemetry opt-out)</li>
+            <li><strong>Config File:</strong> <code>~/.jmo/config.yml</code> - User preferences (email, scan count)</li>
         </ul>
 
         <p><strong>We do NOT upload your scan results to any server.</strong></p>
@@ -279,15 +261,6 @@
             <li>🔒 Encryption at rest (AES-256)</li>
             <li>🌍 GDPR compliance (EU data residency available)</li>
             <li>🛡️ SOC 2 Type II certified infrastructure</li>
-        </ul>
-
-        <h3>4.3 Telemetry Storage (PostHog - Future)</h3>
-        <p>Anonymous usage statistics will be stored via PostHog:</p>
-        <ul>
-            <li>Self-hosted option available for enterprise users</li>
-            <li>GDPR compliant with EU data residency</li>
-            <li>Open-source platform (audit the code)</li>
-            <li>No cross-site tracking</li>
         </ul>
 
         <h2>5. Your Rights (GDPR & CCPA)</h2>
@@ -306,7 +279,6 @@
         <p>You can opt-out of:</p>
         <ul>
             <li><strong>Email:</strong> Unsubscribe link in every email</li>
-            <li><strong>Telemetry:</strong> <code>export JMO_TELEMETRY=false</code></li>
         </ul>
 
         <h3>5.4 Right to Portability</h3>

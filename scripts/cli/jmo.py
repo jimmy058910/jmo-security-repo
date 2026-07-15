@@ -28,15 +28,6 @@ from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
 from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
 from scripts.cli.policy_commands import cmd_policy
 
-# Telemetry
-from scripts.core.telemetry import (
-    send_event,
-    bucket_duration,
-    bucket_findings,
-    bucket_targets,
-    detect_ci_environment,
-    infer_scan_frequency,
-)
 from scripts.core.unicode_utils import (
     safe_print as _safe_print,
     UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
@@ -2776,24 +2767,12 @@ def cmd_scan(args) -> int:
     REFACTORED VERSION: Uses scan_orchestrator and scan_jobs modules for clean separation.
     Complexity reduced from 321 to ~15 (95% improvement).
     """
-    # Track scan start time for telemetry
     import time
-
-    from scripts.core.telemetry import (
-        should_show_telemetry_banner,
-        show_telemetry_banner,
-    )
 
     # Clear tool warning deduplication tracker at scan start (Fix 1.3 - Issue #3)
     from scripts.cli.scan_utils import clear_tool_warnings
 
     clear_tool_warnings()
-
-    scan_start_time = time.time()
-
-    # Show telemetry banner on first 3 scans (opt-out model)
-    if should_show_telemetry_banner():
-        show_telemetry_banner(mode="cli")
 
     # Check for critical tool updates (non-blocking warning)
     _warn_critical_updates()
@@ -2867,11 +2846,6 @@ def cmd_scan(args) -> int:
     # Log scan targets summary
     _log(args, "INFO", f"Scan targets: {targets.summary()}")
 
-    # Send scan.started telemetry event
-    mode = "wizard" if getattr(args, "from_wizard", False) else "cli"
-    if os.environ.get("DOCKER_CONTAINER") == "1":
-        mode = "docker"
-
     profile_name = (
         getattr(args, "profile_name", None) or cfg.default_profile or "custom"
     )
@@ -2882,41 +2856,6 @@ def cmd_scan(args) -> int:
         + len(targets.urls)
         + len(targets.gitlab_repos)
         + len(targets.k8s_resources)
-    )
-    num_target_types = sum(
-        [
-            len(targets.repos) > 0,
-            len(targets.images) > 0,
-            len(targets.iac_files) > 0,
-            len(targets.urls) > 0,
-            len(targets.gitlab_repos) > 0,
-            len(targets.k8s_resources) > 0,
-        ]
-    )
-
-    send_event(
-        "scan.started",
-        {
-            "mode": mode,
-            "profile": profile_name,
-            "tools": tools,
-            "target_types": {
-                "repos": len(targets.repos),
-                "images": len(targets.images),
-                "urls": len(targets.urls),
-                "iac": len(targets.iac_files),
-                "gitlab": len(targets.gitlab_repos),
-                "k8s": len(targets.k8s_resources),
-            },
-            # Business metrics
-            "ci_detected": detect_ci_environment(),
-            "multi_target_scan": num_target_types > 1,
-            "compliance_usage": True,  # Always enabled in v0.5.1+
-            "total_targets_bucket": bucket_targets(total_targets),
-            "scan_frequency_hint": infer_scan_frequency(),
-        },
-        {},
-        version=__version__,
     )
 
     # Setup results directories for each target type
@@ -3087,7 +3026,7 @@ def cmd_scan(args) -> int:
         # Execute scans with Rich progress context
         try:
             with rich_progress:
-                all_results = orchestrator.scan_all(
+                orchestrator.scan_all(
                     targets,
                     per_tool_config,
                     progress_callback=rich_progress.update,
@@ -3124,7 +3063,7 @@ def cmd_scan(args) -> int:
 
         # Execute scans via orchestrator (replaces 158 lines of inline logic)
         try:
-            all_results = orchestrator.scan_all(
+            orchestrator.scan_all(
                 targets,
                 per_tool_config,
                 progress_callback,
@@ -3145,27 +3084,6 @@ def cmd_scan(args) -> int:
 
     # Show Ko-Fi support reminder
     _show_kofi_reminder(args)
-
-    # Send scan.completed telemetry event
-    scan_duration = time.time() - scan_start_time
-    tools_succeeded = sum(1 for _, statuses in all_results if any(statuses.values()))
-    tools_failed = sum(1 for _, statuses in all_results if not all(statuses.values()))
-
-    send_event(
-        "scan.completed",
-        {
-            "mode": mode,
-            "profile": profile_name,
-            "duration_bucket": bucket_duration(scan_duration),
-            "tools_succeeded": tools_succeeded,
-            "tools_failed": tools_failed,
-            "total_findings_bucket": bucket_findings(
-                0
-            ),  # Will be counted in report phase
-        },
-        {},
-        version=__version__,
-    )
 
     _log(args, "INFO", f"Scan complete. Results written to {results_dir}")
 

@@ -29,11 +29,6 @@ from scripts.core.suppress import (
     load_suppressions,
     SuppressionSummary,
 )
-from scripts.core.telemetry import (
-    send_event,
-    bucket_findings,
-    send_policy_evaluation_event,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -268,12 +263,9 @@ def cmd_report(args, _log_fn) -> int:
                 f"Evaluating {len(policy_names)} policies: {', '.join(policy_names)}",
             )
 
-            # Measure policy evaluation time for telemetry
-            policy_start = time.perf_counter()
             policy_results = evaluate_policies(
                 findings, policy_names, builtin_dir, user_dir
             )
-            policy_duration_ms = (time.perf_counter() - policy_start) * 1000
 
             if policy_results:
                 write_policy_report(policy_results, out_dir / "POLICY_REPORT.md")
@@ -287,15 +279,6 @@ def cmd_report(args, _log_fn) -> int:
                     args,
                     "INFO",
                     f"Policy evaluation complete: {passed}/{len(policy_results)} passed, {failed} failed",
-                )
-
-                # Send policy evaluation telemetry event (privacy-preserving)
-                send_policy_evaluation_event(
-                    policy_names,
-                    policy_results,
-                    policy_duration_ms,
-                    cfg.__dict__,
-                    __version__,
                 )
 
                 # Fail if violations and fail_on_violation=True (check both CLI and config)
@@ -385,33 +368,6 @@ def cmd_report(args, _log_fn) -> int:
     # Determine exit code
     threshold = args.fail_on if args.fail_on is not None else cfg.fail_on
     code = fail_code(threshold, counts)
-
-    # Send report.generated telemetry event
-    output_formats = []
-    if getattr(args, "json", False) or "json" in cfg.outputs:
-        output_formats.append("json")
-    if getattr(args, "md", False) or "md" in cfg.outputs:
-        output_formats.append("md")
-    if getattr(args, "html", False) or "html" in cfg.outputs:
-        output_formats.append("html")
-    if getattr(args, "simple_html", False) or "simple-html" in cfg.outputs:
-        output_formats.append("simple-html")
-    if getattr(args, "sarif", False) or "sarif" in cfg.outputs:
-        output_formats.append("sarif")
-    if getattr(args, "yaml", False) or "yaml" in cfg.outputs:
-        output_formats.append("yaml")
-
-    send_event(
-        "report.generated",
-        {
-            "output_formats": output_formats,
-            "findings_bucket": bucket_findings(len(findings)),
-            "suppressions_used": sup_file is not None and sup_file.exists(),
-            "compliance_enabled": True,  # Always enabled in v0.5.1+
-        },
-        {},
-        version=__version__,
-    )
 
     _log_fn(
         args,
