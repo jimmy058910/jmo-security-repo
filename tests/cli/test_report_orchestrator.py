@@ -14,7 +14,6 @@ Coverage targets:
 - Profiling data
 - Environment restoration
 - Severity counting and exit codes
-- Telemetry events
 - History database storage
 """
 
@@ -211,8 +210,7 @@ def test_cmd_report_results_dir_normalization(tmp_path, mock_config, minimal_arg
             ):
                 with patch("scripts.cli.report_orchestrator.write_json"):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            rc = cmd_report(minimal_args, mock_log)
+                        rc = cmd_report(minimal_args, mock_log)
 
     # Should use results_dir_opt (highest priority)
     # Verify output directory created under results_dir_opt
@@ -240,8 +238,7 @@ def test_cmd_report_creates_output_directory(tmp_path, mock_config, minimal_args
             ):
                 with patch("scripts.cli.report_orchestrator.write_json"):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Verify custom output directory created
     assert (tmp_path / "custom-out").exists()
@@ -274,12 +271,11 @@ def test_cmd_report_profiling_environment_setup(tmp_path, mock_config, minimal_a
                 ):
                     with patch("scripts.cli.report_orchestrator.write_json"):
                         with patch("scripts.cli.report_orchestrator.write_markdown"):
-                            with patch("scripts.cli.report_orchestrator.send_event"):
-                                # Verify environment set during execution
-                                def check_env(*args, **kwargs):
-                                    assert os.getenv("JMO_PROFILE") == "1"
-                                    assert os.getenv("JMO_THREADS") == "8"
-                                    return []
+                            # Verify environment set during execution
+                            def check_env(*args, **kwargs):
+                                assert os.getenv("JMO_PROFILE") == "1"
+                                assert os.getenv("JMO_THREADS") == "8"
+                                return []
 
                                 with patch(
                                     "scripts.cli.report_orchestrator.gather_results",
@@ -353,10 +349,7 @@ def test_cmd_report_gathers_findings_and_applies_suppressions(
                             with patch(
                                 "scripts.cli.report_orchestrator.write_suppression_report"
                             ) as mock_sup_report:
-                                with patch(
-                                    "scripts.cli.report_orchestrator.send_event"
-                                ):
-                                    cmd_report(minimal_args, mock_log)
+                                cmd_report(minimal_args, mock_log)
 
     # Verify suppression report written
     assert mock_sup_report.called
@@ -401,10 +394,7 @@ def test_cmd_report_writes_all_output_formats(tmp_path, mock_config, minimal_arg
                                         with patch(
                                             "scripts.cli.report_orchestrator.write_csv"
                                         ) as mock_csv:
-                                            with patch(
-                                                "scripts.cli.report_orchestrator.send_event"
-                                            ):
-                                                cmd_report(minimal_args, mock_log)
+                                            cmd_report(minimal_args, mock_log)
 
     # Verify all output formats written
     assert mock_json.called
@@ -439,8 +429,7 @@ def test_cmd_report_yaml_runtime_error_handling(tmp_path, mock_config, minimal_a
                     "scripts.cli.report_orchestrator.write_yaml",
                     side_effect=RuntimeError("PyYAML not installed"),
                 ):
-                    with patch("scripts.cli.report_orchestrator.send_event"):
-                        cmd_report(minimal_args, mock_log)
+                    cmd_report(minimal_args, mock_log)
 
     # Verify DEBUG log for YAML unavailable
     assert any("YAML reporter unavailable" in str(c) for c in mock_log.call_args_list)
@@ -471,8 +460,7 @@ def test_cmd_report_writes_compliance_reports(tmp_path, mock_config, minimal_arg
                         with patch(
                             "scripts.cli.report_orchestrator.write_attack_navigator_json"
                         ) as mock_attack:
-                            with patch("scripts.cli.report_orchestrator.send_event"):
-                                cmd_report(minimal_args, mock_log)
+                            cmd_report(minimal_args, mock_log)
 
     assert mock_compliance.called
     assert mock_pci.called
@@ -501,8 +489,7 @@ def test_cmd_report_compliance_report_error_handling(
                     "scripts.cli.report_orchestrator.write_compliance_summary",
                     side_effect=OSError("Disk full"),
                 ):
-                    with patch("scripts.cli.report_orchestrator.send_event"):
-                        cmd_report(minimal_args, mock_log)
+                    cmd_report(minimal_args, mock_log)
 
     # Should not crash, just log DEBUG
     assert any(
@@ -543,13 +530,7 @@ def test_cmd_report_policy_evaluation_cli_args(tmp_path, mock_config, minimal_ar
                             with patch(
                                 "scripts.core.reporters.policy_reporter.write_policy_summary_md"
                             ):
-                                with patch(
-                                    "scripts.cli.report_orchestrator.send_policy_evaluation_event"
-                                ):
-                                    with patch(
-                                        "scripts.cli.report_orchestrator.send_event"
-                                    ):
-                                        cmd_report(minimal_args, mock_log)
+                                cmd_report(minimal_args, mock_log)
 
     assert mock_policy_report.called
 
@@ -591,13 +572,7 @@ def test_cmd_report_policy_evaluation_config(tmp_path, mock_config, minimal_args
                             with patch(
                                 "scripts.core.reporters.policy_reporter.write_policy_summary_md"
                             ):
-                                with patch(
-                                    "scripts.cli.report_orchestrator.send_policy_evaluation_event"
-                                ):
-                                    with patch(
-                                        "scripts.cli.report_orchestrator.send_event"
-                                    ):
-                                        cmd_report(minimal_args, mock_log)
+                                cmd_report(minimal_args, mock_log)
 
     assert any("Using policies from config" in str(c) for c in mock_log.call_args_list)
 
@@ -642,13 +617,7 @@ def test_cmd_report_policy_fail_on_violation(tmp_path, mock_config, minimal_args
                             with patch(
                                 "scripts.core.reporters.policy_reporter.write_policy_summary_md"
                             ):
-                                with patch(
-                                    "scripts.cli.report_orchestrator.send_policy_evaluation_event"
-                                ):
-                                    with patch(
-                                        "scripts.cli.report_orchestrator.send_event"
-                                    ):
-                                        rc = cmd_report(minimal_args, mock_log)
+                                rc = cmd_report(minimal_args, mock_log)
 
     assert rc == 1
 
@@ -679,8 +648,7 @@ def test_cmd_report_severity_threshold_exit_code(tmp_path, mock_config, minimal_
             ):
                 with patch("scripts.cli.report_orchestrator.write_json"):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            rc = cmd_report(minimal_args, mock_log)
+                        rc = cmd_report(minimal_args, mock_log)
 
     assert rc == 1
 
@@ -709,39 +677,10 @@ def test_cmd_report_history_database_storage(tmp_path, mock_config, minimal_args
                             "scripts.core.history_db.store_scan",
                             return_value="scan-id-123",
                         ) as mock_store:
-                            with patch("scripts.cli.report_orchestrator.send_event"):
-                                cmd_report(minimal_args, mock_log)
+                            cmd_report(minimal_args, mock_log)
 
     assert mock_store.called
     assert any("Stored scan in history" in str(c) for c in mock_log.call_args_list)
-
-
-def test_cmd_report_telemetry_event(tmp_path, mock_config, minimal_args):
-    """Test cmd_report sends telemetry event."""
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-    minimal_args.results_dir_pos = str(results_dir)
-
-    mock_log = MagicMock()
-
-    with patch(
-        "scripts.cli.report_orchestrator.load_config_with_env_overrides",
-        return_value=mock_config,
-    ):
-        with patch("scripts.cli.report_orchestrator.gather_results", return_value=[]):
-            with patch(
-                "scripts.cli.report_orchestrator.load_suppressions", return_value={}
-            ):
-                with patch("scripts.cli.report_orchestrator.write_json"):
-                    with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch(
-                            "scripts.cli.report_orchestrator.send_event"
-                        ) as mock_send:
-                            cmd_report(minimal_args, mock_log)
-
-    assert mock_send.called
-    # Verify event name
-    assert mock_send.call_args[0][0] == "report.generated"
 
 
 def test_cmd_report_profiling_data_written(tmp_path, mock_config, minimal_args):
@@ -763,8 +702,7 @@ def test_cmd_report_profiling_data_written(tmp_path, mock_config, minimal_args):
             ):
                 with patch("scripts.cli.report_orchestrator.write_json"):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Verify timings.json created
     timings_file = results_dir / "summaries" / "timings.json"
@@ -825,8 +763,7 @@ def test_cmd_report_reads_profile_from_scan_metadata(
                     side_effect=capture_metadata,
                 ):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Verify profile is "deep" from scan metadata, not "balanced" from config
     assert captured_metadata.get("profile") == "deep"
@@ -880,8 +817,7 @@ def test_cmd_report_reads_tools_from_scan_metadata(tmp_path, mock_config, minima
                     side_effect=capture_metadata,
                 ):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Verify all 4 tools from scan metadata are included, not just trivy
     assert set(captured_metadata.get("tools", [])) == {
@@ -921,8 +857,7 @@ def test_cmd_report_falls_back_to_config_profile(tmp_path, mock_config, minimal_
                     side_effect=capture_metadata,
                 ):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Should fall back to config default_profile
     assert captured_metadata.get("profile") == "balanced"
@@ -960,8 +895,7 @@ def test_cmd_report_handles_corrupt_scan_metadata(tmp_path, mock_config, minimal
                     side_effect=capture_metadata,
                 ):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Should gracefully fall back to config default_profile
     assert captured_metadata.get("profile") == "balanced"
@@ -1003,8 +937,7 @@ def test_cmd_report_infers_tools_from_findings_without_metadata(
                     side_effect=capture_metadata,
                 ):
                     with patch("scripts.cli.report_orchestrator.write_markdown"):
-                        with patch("scripts.cli.report_orchestrator.send_event"):
-                            cmd_report(minimal_args, mock_log)
+                        cmd_report(minimal_args, mock_log)
 
     # Should infer tools from findings
     assert set(captured_metadata.get("tools", [])) == {"semgrep", "trivy"}

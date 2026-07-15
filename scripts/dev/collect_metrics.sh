@@ -2,26 +2,22 @@
 # JMo Security — Weekly Metrics Collection Script
 #
 # Purpose:
-#   Collect metrics from GitHub, PyPI, Docker Hub, and telemetry systems
-#   for tracking project growth and adoption.
+#   Collect adoption metrics from GitHub, PyPI, and Docker Hub for tracking
+#   project growth. These are the real, external "in the wild" signals.
 #
 # Usage:
 #   ./scripts/dev/collect_metrics.sh [--date YYYY-MM-DD]
 #
 # Output:
-#   Writes JSON files to metrics/ directory (gitignored)
+#   Writes JSON files + a markdown summary to metrics/ (gitignored)
 #
 # Requirements:
-#   - gh (GitHub CLI) authenticated
-#   - curl, jq
-#   - Environment variables (optional):
-#     - JMO_TELEMETRY_GIST_ID (for telemetry collection)
+#   - gh (GitHub CLI) authenticated  — uses gh's built-in --jq (no standalone jq)
+#   - curl
+#   - python3 (or python) — used to parse PyPI/Docker Hub JSON
 #
 # Example:
-#   # Collect today's metrics
 #   ./scripts/dev/collect_metrics.sh
-#
-#   # Collect metrics for specific date
 #   ./scripts/dev/collect_metrics.sh --date 2025-10-23
 
 set -euo pipefail
@@ -31,7 +27,6 @@ REPO_OWNER="jimmy058910"
 REPO_NAME="jmo-security-repo"
 PYPI_PACKAGE="jmo-security"
 DOCKER_REPO="jmogaming/jmo-security"
-GIST_ID="${JMO_TELEMETRY_GIST_ID:-fc897ef9a7f7ed40d001410fa369a1e1}"
 
 # Parse command-line arguments
 DATE="${1:-$(date +%Y-%m-%d)}"
@@ -42,6 +37,9 @@ fi
 # Create metrics directory
 METRICS_DIR="metrics"
 mkdir -p "$METRICS_DIR"
+
+# Python interpreter (used for PyPI/Docker JSON parsing; no standalone jq needed)
+PY="$(command -v python3 || command -v python || true)"
 
 # Color output
 GREEN='\033[0;32m'
@@ -62,6 +60,16 @@ error() {
   echo -e "${RED}[ERROR]${NC} $*" >&2
 }
 
+# Extract a value from a JSON file using python.
+#   json_get <file> <python-expression-on-`d`>
+# Example: json_get pypi.json "d['data']['last_week']"
+json_get() {
+  "$PY" -c "import json,sys
+d=json.load(open(sys.argv[1], encoding='utf-8'))
+v=$2
+print('' if v is None else v)" "$1"
+}
+
 # Check dependencies
 check_deps() {
   local missing=()
@@ -74,21 +82,21 @@ check_deps() {
     missing+=("curl")
   fi
 
-  if ! command -v jq &>/dev/null; then
-    missing+=("jq")
+  if [[ -z $PY ]]; then
+    missing+=("python3 (or python)")
   fi
 
   if [[ ${#missing[@]} -gt 0 ]]; then
     error "Missing required dependencies: ${missing[*]}"
     echo ""
     echo "Install with:"
-    echo "  macOS:  brew install gh curl jq"
-    echo "  Ubuntu: sudo apt-get install gh curl jq"
+    echo "  macOS:  brew install gh curl python3"
+    echo "  Ubuntu: sudo apt-get install gh curl python3"
     exit 1
   fi
 }
 
-# Collect GitHub repository stats
+# Collect GitHub repository stats (uses gh's built-in --jq)
 collect_github_repo() {
   log "Collecting GitHub repository stats..."
 
@@ -148,20 +156,19 @@ collect_github_clones() {
   fi
 }
 
-# Collect PyPI download statistics
+# Collect PyPI download statistics (curl + python, no jq)
 collect_pypi_downloads() {
   log "Collecting PyPI download statistics..."
 
   local output="$METRICS_DIR/pypi-downloads-$DATE.json"
 
-  if curl -sf "https://pypistats.org/api/packages/$PYPI_PACKAGE/recent" >"$output"; then
+  if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 120 \
+    "https://pypistats.org/api/packages/$PYPI_PACKAGE/recent" >"$output"; then
     log "✅ Saved to $output"
 
-    # Print summary
-    local last_week
-    last_week=$(jq -r '.data.last_week' "$output")
-    local last_month
-    last_month=$(jq -r '.data.last_month' "$output")
+    local last_week last_month
+    last_week=$(json_get "$output" "d['data']['last_week']")
+    last_month=$(json_get "$output" "d['data']['last_month']")
     log "   Last week: $last_week downloads | Last month: $last_month downloads"
   else
     error "Failed to collect PyPI stats"
@@ -169,64 +176,31 @@ collect_pypi_downloads() {
   fi
 }
 
-# Collect Docker Hub statistics
+# Collect Docker Hub statistics (curl + python, no jq)
 collect_docker_hub() {
   log "Collecting Docker Hub statistics..."
 
   local output="$METRICS_DIR/docker-hub-$DATE.json"
+  local raw="$METRICS_DIR/docker-hub-raw-$DATE.json"
 
-  if curl -sf "https://hub.docker.com/v2/repositories/$DOCKER_REPO" |
-    jq '{
-           name: .name,
-           pull_count: .pull_count,
-           star_count: .star_count,
-           description: .description,
-           last_updated: .last_updated,
-           is_automated: .is_automated
-       }' >"$output"; then
+  if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 120 \
+    "https://hub.docker.com/v2/repositories/$DOCKER_REPO" >"$raw"; then
+    # Reshape to the canonical field set using python
+    "$PY" -c "import json,sys
+d=json.load(open(sys.argv[1], encoding='utf-8'))
+keys=['name','pull_count','star_count','description','last_updated','is_automated']
+json.dump({k: d.get(k) for k in keys}, open(sys.argv[2],'w',encoding='utf-8'), indent=2)" "$raw" "$output"
+    rm -f "$raw"
     log "✅ Saved to $output"
 
-    # Print summary
-    local pulls
-    pulls=$(jq -r '.pull_count' "$output")
-    local stars
-    stars=$(jq -r '.star_count' "$output")
+    local pulls stars
+    pulls=$(json_get "$output" "d['pull_count']")
+    stars=$(json_get "$output" "d['star_count']")
     log "   Pulls: $pulls | Stars: $stars"
   else
+    rm -f "$raw"
     error "Failed to collect Docker Hub stats"
     return 1
-  fi
-}
-
-# Collect telemetry events from GitHub Gist
-collect_telemetry() {
-  log "Collecting telemetry events from GitHub Gist..."
-
-  local output="$METRICS_DIR/telemetry-events-$DATE.jsonl"
-
-  if [[ -z $GIST_ID ]]; then
-    warn "JMO_TELEMETRY_GIST_ID not set, skipping telemetry collection"
-    return 0
-  fi
-
-  if gh gist view "$GIST_ID" --raw >"$output" 2>/dev/null; then
-    log "✅ Saved to $output"
-
-    # Count events
-    local event_count
-    event_count=$(wc -l <"$output" | tr -d ' ')
-    log "   Total events: $event_count"
-
-    # Count by event type
-    if [[ $event_count -gt 0 ]]; then
-      log "   Event types:"
-      jq -r '.event' "$output" | sort | uniq -c | while read -r count event; do
-        log "     - $event: $count"
-      done
-    fi
-  else
-    warn "Failed to collect telemetry (check GIST_ID and gh auth)"
-    return 0 # Non-fatal
   fi
 }
 
@@ -252,9 +226,9 @@ EOF
   # Add GitHub stats
   if [[ -f "$METRICS_DIR/github-repo-$DATE.json" ]]; then
     cat >>"$summary" <<EOF
-- **Stars:** $(jq -r '.stars' "$METRICS_DIR/github-repo-$DATE.json")
-- **Forks:** $(jq -r '.forks' "$METRICS_DIR/github-repo-$DATE.json")
-- **Open Issues:** $(jq -r '.open_issues' "$METRICS_DIR/github-repo-$DATE.json")
+- **Stars:** $(json_get "$METRICS_DIR/github-repo-$DATE.json" "d['stars']")
+- **Forks:** $(json_get "$METRICS_DIR/github-repo-$DATE.json" "d['forks']")
+- **Open Issues:** $(json_get "$METRICS_DIR/github-repo-$DATE.json" "d['open_issues']")
 
 EOF
   fi
@@ -263,8 +237,8 @@ EOF
   if [[ -f "$METRICS_DIR/github-traffic-$DATE.json" ]]; then
     cat >>"$summary" <<EOF
 **Traffic (Last 14 Days):**
-- **Total Views:** $(jq -r '.total_views' "$METRICS_DIR/github-traffic-$DATE.json")
-- **Unique Visitors:** $(jq -r '.unique_visitors' "$METRICS_DIR/github-traffic-$DATE.json")
+- **Total Views:** $(json_get "$METRICS_DIR/github-traffic-$DATE.json" "d['total_views']")
+- **Unique Visitors:** $(json_get "$METRICS_DIR/github-traffic-$DATE.json" "d['unique_visitors']")
 
 EOF
   fi
@@ -273,8 +247,10 @@ EOF
   if [[ -f "$METRICS_DIR/github-clones-$DATE.json" ]]; then
     cat >>"$summary" <<EOF
 **Clones (Last 14 Days):**
-- **Total Clones:** $(jq -r '.total_clones' "$METRICS_DIR/github-clones-$DATE.json")
-- **Unique Cloners:** $(jq -r '.unique_cloners' "$METRICS_DIR/github-clones-$DATE.json")
+- **Total Clones:** $(json_get "$METRICS_DIR/github-clones-$DATE.json" "d['total_clones']")
+- **Unique Cloners:** $(json_get "$METRICS_DIR/github-clones-$DATE.json" "d['unique_cloners']")
+
+_Note: clones are dominated by this repo's own CI; treat as an automation-noise metric._
 
 EOF
   fi
@@ -286,8 +262,8 @@ EOF
 
 ## PyPI Package
 
-- **Last Week:** $(jq -r '.data.last_week' "$METRICS_DIR/pypi-downloads-$DATE.json") downloads
-- **Last Month:** $(jq -r '.data.last_month' "$METRICS_DIR/pypi-downloads-$DATE.json") downloads
+- **Last Week:** $(json_get "$METRICS_DIR/pypi-downloads-$DATE.json" "d['data']['last_week']") downloads
+- **Last Month:** $(json_get "$METRICS_DIR/pypi-downloads-$DATE.json" "d['data']['last_month']") downloads
 
 EOF
   fi
@@ -299,39 +275,11 @@ EOF
 
 ## Docker Hub
 
-- **Pull Count:** $(jq -r '.pull_count' "$METRICS_DIR/docker-hub-$DATE.json")
-- **Stars:** $(jq -r '.star_count' "$METRICS_DIR/docker-hub-$DATE.json")
-- **Last Updated:** $(jq -r '.last_updated' "$METRICS_DIR/docker-hub-$DATE.json")
+- **Pull Count:** $(json_get "$METRICS_DIR/docker-hub-$DATE.json" "d['pull_count']")
+- **Stars:** $(json_get "$METRICS_DIR/docker-hub-$DATE.json" "d['star_count']")
+- **Last Updated:** $(json_get "$METRICS_DIR/docker-hub-$DATE.json" "d['last_updated']")
 
 EOF
-  fi
-
-  # Add telemetry stats
-  if [[ -f "$METRICS_DIR/telemetry-events-$DATE.jsonl" ]]; then
-    local event_count
-    event_count=$(wc -l <"$METRICS_DIR/telemetry-events-$DATE.jsonl" | tr -d ' ')
-
-    cat >>"$summary" <<EOF
----
-
-## Telemetry
-
-- **Total Events:** $event_count
-
-EOF
-
-    if [[ $event_count -gt 0 ]]; then
-      cat >>"$summary" <<EOF
-**Event Types:**
-
-\`\`\`
-EOF
-      jq -r '.event' "$METRICS_DIR/telemetry-events-$DATE.jsonl" | sort | uniq -c >>"$summary"
-      cat >>"$summary" <<EOF
-\`\`\`
-
-EOF
-    fi
   fi
 
   cat >>"$summary" <<EOF
@@ -359,13 +307,12 @@ main() {
   # Check dependencies
   check_deps
 
-  # Collect metrics
+  # Collect metrics (five real external sources)
   collect_github_repo
   collect_github_traffic
   collect_github_clones
   collect_pypi_downloads
   collect_docker_hub
-  collect_telemetry
 
   # Generate summary
   generate_summary
