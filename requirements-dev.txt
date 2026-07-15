@@ -10,6 +10,8 @@ anyio==4.13.0
     #   mcp
     #   sse-starlette
     #   starlette
+ast-serialize==0.6.0
+    # via mypy
 attrs==26.1.0
     # via
     #   jsonschema
@@ -94,7 +96,7 @@ jsonschema==4.26.0
     #   mcp
 jsonschema-specifications==2025.9.1
     # via jsonschema
-librt==0.8.1 ; platform_python_implementation != 'PyPy'
+librt==0.13.0 ; platform_python_implementation != 'PyPy'
     # via mypy
 markdown-it-py==4.0.0
     # via rich
@@ -102,7 +104,7 @@ mcp==1.28.1
     # via -r requirements-dev.in
 mdurl==0.1.2
     # via markdown-it-py
-mypy==1.20.2
+mypy==2.3.0
     # via -r requirements-dev.in
 mypy-extensions==1.1.0
     # via
