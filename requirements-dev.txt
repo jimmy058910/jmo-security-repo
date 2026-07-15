@@ -29,8 +29,9 @@ cfgv==3.5.0
     # via pre-commit
 charset-normalizer==3.4.6
     # via requests
-click==8.3.1
+click==8.4.2
     # via
+    #   -r requirements-dev.in
     #   black
     #   typer
     #   uvicorn
