@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Download TruffleHog (Secrets - Verified)
-RUN TRUFFLEHOG_VERSION="3.94.3" && \
+RUN TRUFFLEHOG_VERSION="3.95.9" && \
     TRUFFLEHOG_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TRUFFLEHOG_ARCH}.tar.gz" \
     -o /tmp/trufflehog.tar.gz && \
@@ -34,7 +34,7 @@ RUN TRUFFLEHOG_VERSION="3.94.3" && \
     chmod +x /usr/local/bin/trufflehog
 
 # Download Syft (SBOM)
-RUN SYFT_VERSION="1.42.4" && \
+RUN SYFT_VERSION="1.46.0" && \
     SYFT_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${SYFT_ARCH}.tar.gz" \
     -o /tmp/syft.tar.gz && \
@@ -83,7 +83,7 @@ RUN NP_VERSION="0.24.0" && \
     chmod +x /usr/local/bin/noseyparker
 
 # Download OWASP ZAP (DAST)
-RUN ZAP_VERSION="2.16.1" && \
+RUN ZAP_VERSION="2.17.0" && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/zaproxy/zaproxy/releases/download/v${ZAP_VERSION}/ZAP_${ZAP_VERSION}_Linux.tar.gz" \
     -o /tmp/zap.tar.gz && \
     gzip -t /tmp/zap.tar.gz && \
@@ -91,7 +91,7 @@ RUN ZAP_VERSION="2.16.1" && \
     mv /opt/ZAP_${ZAP_VERSION} /opt/zaproxy
 
 # Download Nuclei (DAST + API Security)
-RUN NUCLEI_VERSION="3.9.0" && \
+RUN NUCLEI_VERSION="3.11.0" && \
     TARGETARCH=$(dpkg --print-architecture) && \
     NUCLEI_ARCH=$(case ${TARGETARCH} in amd64) echo "amd64";; arm64) echo "arm64";; *) echo "amd64";; esac) && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NUCLEI_ARCH}.zip" \
@@ -114,7 +114,7 @@ RUN KUBESCAPE_VERSION="3.0.47" && \
     chmod +x /usr/local/bin/kubescape
 
 # Download Gosec (Go SAST)
-RUN GOSEC_VERSION="2.27.1" && \
+RUN GOSEC_VERSION="2.28.0" && \
     GOSEC_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/securego/gosec/releases/download/v${GOSEC_VERSION}/gosec_${GOSEC_VERSION}_linux_${GOSEC_ARCH}.tar.gz" \
     -o /tmp/gosec.tar.gz && \
@@ -163,7 +163,7 @@ RUN HORUSEC_VERSION="2.8.0" && \
     chmod +x /usr/local/bin/horusec
 
 # Download OPA (Policy-as-Code engine)
-RUN OPA_VERSION="1.12.0" && \
+RUN OPA_VERSION="1.18.2" && \
     OPA_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors --connect-timeout 30 --max-time 600 "https://github.com/open-policy-agent/opa/releases/download/v${OPA_VERSION}/opa_linux_${OPA_ARCH}_static" \
     -o /usr/local/bin/opa && \
@@ -250,11 +250,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --no-cache-dir --break-system-packages bandit==1.9.4 && \
     echo "✓ bandit installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.168.0 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages semgrep==1.170.0 && \
     semgrep --version && \
     echo "✓ semgrep installed"
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.6 && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages checkov==3.3.8 && \
     checkov --version && \
     echo "✓ checkov installed"
 
