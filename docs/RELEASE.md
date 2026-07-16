@@ -9,6 +9,32 @@ This project publishes to PyPI via GitHub Actions on git tags of the form `v*` u
 
 ---
 
+## ⭐ Release Playbook — read this first
+
+**For a normal release, use Method 1 (Automated Release) below.** From GitHub Actions → **Automated Release** → *Run workflow* with a bump type + changelog entry. It updates all tools, bumps the version (all 3 version files), updates the CHANGELOG, syncs Dockerfiles, and opens a `release: vX.Y.Z` PR; **merging that PR auto-creates the tag and fires the full release.** Because its commit subject starts with `release: v`, it automatically sidesteps the badge-check trap (gotcha #1). Prefer this for ~95% of releases.
+
+**Use Method 2 (Manual) only when you're already mid-manual work** — e.g. a CVE-hotfix cycle where you've hand-merged fixes and the version is already bumped on `main`. This is how **v1.0.6** shipped; it works but has sharp edges — follow the gotchas below.
+
+### The release, end-to-end (both methods)
+
+1. **Get `main` green & current** — merge all intended PRs; confirm `dev` == `main`; tools reasonably current (Method 1 handles tools for you).
+2. **Bump + CHANGELOG.** Method 1 does this. Manual: bump the version in **all three** files — `pyproject.toml`, `scripts/cli/jmo.py` (`__version__`), `scripts/jmo_mcp/__init__.py` (`__version__`) — and move CHANGELOG `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD`.
+3. **Merge the release-prep PR to `main`** (Method 1 auto-tags here; Method 2, you tag next).
+4. **Tag & push:** `git fetch origin && git tag -a vX.Y.Z origin/main -m "vX.Y.Z" && git push origin vX.Y.Z`. The tag-push fires `release.yml`: **Pre-Release Validation → PyPI publish → 8 Docker builds (4 variants × 2 arches) → multi-arch merge → GitHub release → badge verify.** (Tagging `origin/main` directly works even if your local tree is dirty.)
+5. **Post-release:** confirm PyPI shows the new version; **rerun the pre-tag `main` CI run** so its badge check re-reads PyPI and goes green (gotcha #1); resync `dev` == `main`.
+
+> **One file, two triggers.** `release.yml` runs on **`workflow_dispatch`** (Method 1's `prepare-release`: bump + tools + PR) **and** on **tag push `v*`** (build + publish). **Never `workflow_dispatch` after a manual bump** — `prepare-release` bumps again, double-incrementing the version.
+
+### Release gotchas (hard-won, v1.0.6 manual cycle)
+
+1. **`verify_badges.sh` is chicken-and-egg on a version bump.** It compares `pyproject.toml` against **live PyPI**, so a bumped-but-unpublished version *fails* the `quick-checks` badge step by design (it prints "Action needed: Tag and release"). It auto-skips when: the latest commit subject starts with `release: v`, HEAD is a `vX.Y.Z` tag, or the branch prefix is allowlisted (`dev|feature|refactor|hotfix|dependabot|chore|release|release-prep` — `scripts/dev/verify_badges.sh:100`). **Manual-release tips:** put release-prep work on a `release-prep/…` or `chore/…` branch (skips on the PR), and after the release publishes, **rerun the pre-tag `main` CI run** (`gh run rerun <id>`) so the badge check re-reads PyPI and turns green. Until then `main` shows red on *only* the badge check — expected, not broken.
+2. **The tag-push gate is `jmo validate --tier quick` (`release.yml`), which exits non-zero → aborts the release.** Run it locally *before* tagging — but **install `requirements-dev.txt` (pinned `black` + `ruff` + `jsonschema`) in that venv first**, or it false-fails the black/ruff checks and reports a bogus `NO-GO`. A clean pass reads `Verdict: GO`. (The "quick" tier is offline/structural; it does *not* hard-check tool currency, so a slightly-stale tool backlog won't block a tag.)
+3. **`deps-compile` pre-commit needs Python 3.12 + `PYTHONUTF8=1` on Windows.** Bare `python3` may resolve to 3.11 (fails the ≥3.12 check), and `update_dependencies.py` prints a `≥` that crashes the cp1252 console. Recipe: `py -3.12 -m venv <v>` → `<v>/Scripts/python -m pip install uv==0.11.15` → prepend `<v>/Scripts` to `PATH` → `export PYTHONUTF8=1` before `git commit`. Compile from the **branch worktree**, not a dirty `main` checkout (wrong cwd drifts the `# via` annotations → "files modified by this hook").
+4. **`update_versions.py --update-all --level=minor` skips `0.x` tools.** It classifies any bump to a `0.y.z` tool (e.g. `ruff`, `trivy`) as "major" and skips it alongside the true majors. Always run **`--validate`** after `--sync` to confirm every bumped tool's download URL resolves *before* tagging — a bad URL passes PR CI but breaks the **Docker build on release** (images build only on the `v*` tag, not on PRs). Distinguish *new* failures from baseline noise (`cdxgen` PyPI-checker quirk, `falco` `0.0.0` placeholder fail on `main` too).
+5. **Resync `dev` after every squash-merge.** `dev` mirrors `main`. Normal case fast-forwards: `git push origin origin/main:dev`. After promoting a *dev-ahead* branch, the two diverge — resync with a lease guard: `git push --force-with-lease=dev:<old-sha> origin origin/main:dev`.
+
+---
+
 ## Tool-Version Auto-Merge (between releases)
 
 Security tools bump constantly and cutting a release for every bump would
