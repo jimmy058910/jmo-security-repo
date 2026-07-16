@@ -23,7 +23,7 @@ black
 pyyaml
 jsonschema
 pre-commit
-mypy
+mypy>=2.2.0  # adopt mypy 2.x — sandbox-verified 0 errors on scripts/ (supersedes #634, #487)
 types-PyYAML
 types-tabulate
 types-requests
