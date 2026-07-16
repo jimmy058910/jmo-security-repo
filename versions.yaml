@@ -7,13 +7,13 @@ python_tools:
     update_check: pip index versions bandit
     critical: false
   semgrep:
-    version: 1.168.0
+    version: 1.170.0
     pypi_package: semgrep
     description: Multi-language SAST scanner
     update_check: pip index versions semgrep
     critical: true
   checkov:
-    version: 3.3.6
+    version: 3.3.8
     pypi_package: checkov
     description: IaC security scanner
     update_check: pip index versions checkov
@@ -57,7 +57,7 @@ python_tools:
       '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.32.0
+    version: 5.34.0
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -66,7 +66,7 @@ python_tools:
       since v4.x)
 binary_tools:
   trufflehog:
-    version: 3.94.3
+    version: 3.95.9
     github_repo: trufflesecurity/trufflehog
     description: Verified secrets scanner (primary)
     release_pattern: trufflehog_{version}_linux_{arch}.tar.gz
@@ -87,7 +87,7 @@ binary_tools:
     update_check: gh api repos/praetorian-inc/noseyparker/releases/latest
     critical: false
   syft:
-    version: 1.42.4
+    version: 1.46.0
     github_repo: anchore/syft
     description: SBOM generator
     release_pattern: syft_{version}_linux_{arch}.tar.gz
@@ -141,7 +141,7 @@ binary_tools:
     update_check: gh api repos/mvdan/sh/releases/latest
     critical: false
   nuclei:
-    version: 3.9.0
+    version: 3.11.0
     github_repo: projectdiscovery/nuclei
     description: Fast vulnerability scanner with 4000+ templates (DAST/API security)
     release_pattern: nuclei_{version}_linux_{arch}.zip
@@ -164,7 +164,7 @@ binary_tools:
     critical: true
     notes: v1.0.0 - K8s hardening and compliance
   gosec:
-    version: 2.27.1
+    version: 2.28.0
     github_repo: securego/gosec
     description: Go security analyzer
     release_pattern: gosec_{version}_linux_{arch}.tar.gz
@@ -198,7 +198,7 @@ binary_tools:
     notes: v1.0.0 - Uses Google OSV database for comprehensive vulnerability data
 special_tools:
   zap:
-    version: 2.16.1
+    version: 2.17.0
     github_repo: zaproxy/zaproxy
     description: OWASP ZAP - Dynamic Application Security Testing
     release_pattern: ZAP_{version}_Linux.tar.gz
@@ -219,7 +219,7 @@ special_tools:
 
       '
   mobsf:
-    version: 4.4.2
+    version: 4.5.1
     github_repo: MobSF/Mobile-Security-Framework-MobSF
     description: Mobile Security Framework (Android/iOS SAST/DAST)
     release_pattern: v{version}.tar.gz
@@ -284,7 +284,7 @@ special_tools:
     critical: false
     notes: v1.0.0 - Alternative SAST for broad language coverage
   opa:
-    version: 1.12.0
+    version: 1.18.2
     github_repo: open-policy-agent/opa
     description: Open Policy Agent (policy-as-code engine)
     release_pattern: opa_linux_{arch}_static
@@ -372,6 +372,136 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated opa
+  tools_updated:
+  - tool: opa
+    old_version: 1.12.0
+    new_version: 1.18.2
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated mobsf
+  tools_updated:
+  - tool: mobsf
+    old_version: 4.4.2
+    new_version: 4.5.1
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated zap
+  tools_updated:
+  - tool: zap
+    old_version: 2.16.1
+    new_version: 2.17.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated gosec
+  tools_updated:
+  - tool: gosec
+    old_version: 2.27.1
+    new_version: 2.28.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated nuclei
+  tools_updated:
+  - tool: nuclei
+    old_version: 3.9.0
+    new_version: 3.11.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated syft
+  tools_updated:
+  - tool: syft
+    old_version: 1.42.4
+    new_version: 1.46.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated trufflehog
+  tools_updated:
+  - tool: trufflehog
+    old_version: 3.94.3
+    new_version: 3.95.9
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.32.0
+    new_version: 5.34.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated checkov
+  tools_updated:
+  - tool: checkov
+    old_version: 3.3.6
+    new_version: 3.3.8
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
+- date: '2026-07-16'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-16'
+  action: Updated semgrep
+  tools_updated:
+  - tool: semgrep
+    old_version: 1.168.0
+    new_version: 1.170.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-07-05'
   action: Automated version update
   tools_updated: []
