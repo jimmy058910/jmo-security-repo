@@ -57,7 +57,7 @@ python_tools:
       '
     installation: git clone (pinned version) or apt-get install lynis
   prowler:
-    version: 5.34.0
+    version: 5.35.0
     pypi_package: prowler
     description: Multi-cloud CSPM (AWS/Azure/GCP/K8s)
     update_check: pip index versions prowler
@@ -372,6 +372,19 @@ update_policies:
   automated_check_schedule: Weekly (Sunday 00:00 UTC)
   manual_review_schedule: First Monday of each month
 version_history:
+- date: '2026-07-19'
+  action: Automated version update
+  tools_updated: []
+  updated_by: update_versions.py
+  notes: ''
+- date: '2026-07-19'
+  action: Updated prowler
+  tools_updated:
+  - tool: prowler
+    old_version: 5.34.0
+    new_version: 5.35.0
+  updated_by: update_versions.py
+  notes: Manual update via --tool flag
 - date: '2026-07-16'
   action: Automated version update
   tools_updated: []
