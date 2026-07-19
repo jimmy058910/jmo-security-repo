@@ -116,6 +116,9 @@ skill_seekers/
 graphify-out/
 .graphifyignore
 
+# Impeccable design-skill local working artifacts (maintainer's personal tooling)
+.impeccable/
+
 # Paperclip local artifacts
 paperclip/
 
@@ -179,9 +182,6 @@ e2e-screenshots/
 
 # Serena MCP auto-generated project config
 .serena/
-
-# Nightshift automation config (symlink to dev-only/infrastructure/nightshift.yaml)
-nightshift.yaml
 
 # Conductor orchestration files (local development artifacts)
 /conductor/
