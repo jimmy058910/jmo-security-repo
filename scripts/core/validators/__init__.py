@@ -7,9 +7,9 @@ for the 4 validator categories (CLI, Scan, Platform, Release).
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
 
 # Category name -> short key mapping for --category filter
 CATEGORY_KEYS: dict[str, str] = {

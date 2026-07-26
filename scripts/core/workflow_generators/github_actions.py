@@ -18,7 +18,6 @@ class GitHubActionsGenerator:
 
     def __init__(self):
         """Initialize the generator."""
-        pass
 
     def generate(self, schedule: ScanSchedule) -> str:
         """Generate complete GitHub Actions workflow YAML.

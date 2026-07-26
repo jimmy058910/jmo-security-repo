@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import threading
 
-
 from scripts.cli.installers.models import InstallResult
 from scripts.cli.ui.progress import (
     ParallelInstallProgress,

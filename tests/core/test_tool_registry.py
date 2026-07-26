@@ -8,8 +8,8 @@ from scripts.core.tool_registry import (
     PROFILE_TOOLS,
     TOOL_PLATFORM_REQUIREMENTS,
     get_platform_status,
-    get_tools_for_profile_filtered,
     get_skipped_tools_for_profile,
+    get_tools_for_profile_filtered,
 )
 
 

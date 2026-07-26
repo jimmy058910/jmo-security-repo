@@ -48,8 +48,9 @@ Version: 1.1.0
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 # Import rapidfuzz for fast fuzzy string matching
 try:
@@ -1118,7 +1119,7 @@ class LSHSignatureGenerator:
         """
         import hashlib
 
-        to_hash = f"{band}:{content}".encode("utf-8")
+        to_hash = f"{band}:{content}".encode()
         # MD5 used for hash bucketing, not security (LSH similarity detection)
         return hashlib.md5(to_hash, usedforsecurity=False).hexdigest()[:8]
 

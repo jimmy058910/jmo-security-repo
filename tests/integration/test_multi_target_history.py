@@ -19,7 +19,7 @@ import sys
 
 import pytest
 
-from scripts.cli.jmo import cmd_scan, cmd_report
+from scripts.cli.jmo import cmd_report, cmd_scan
 from scripts.core.history_db import get_connection, list_scans
 
 

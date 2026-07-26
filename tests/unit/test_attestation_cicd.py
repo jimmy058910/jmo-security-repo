@@ -16,10 +16,10 @@ Test Coverage:
 import json
 import os
 import sys
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
-from pathlib import Path
-from unittest.mock import patch, Mock
 
 # ============================================================================
 # Test Class 1: CI Environment Detection (7 tests)
@@ -598,8 +598,9 @@ class TestCICDPerformance:
     )
     def test_attestation_generation_under_500ms(self, tmp_path):
         """Test attestation generation completes in <500ms."""
-        from scripts.core.attestation import ProvenanceGenerator
         import time
+
+        from scripts.core.attestation import ProvenanceGenerator
 
         findings_path = tmp_path / "findings.json"
         findings_path.write_text(json.dumps({"findings": [{"id": "TEST-001"}] * 100}))

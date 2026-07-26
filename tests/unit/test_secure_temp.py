@@ -11,21 +11,17 @@ import platform
 import shutil
 import stat
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
 from scripts.core.secure_temp import (
-    secure_temp_dir,
-    secure_temp_file,
-    get_temp_dir_permissions,
-    is_secure_permissions,
     DIR_PERMISSIONS,
     FILE_PERMISSIONS,
+    get_temp_dir_permissions,
+    is_secure_permissions,
+    secure_temp_dir,
+    secure_temp_file,
 )
-
-if TYPE_CHECKING:
-    pass
 
 # Skip permission tests on Windows where Unix permission model doesn't apply
 IS_WINDOWS = platform.system() == "Windows"
@@ -398,7 +394,7 @@ class TestCleanupFailurePaths:
             close_calls.append(fd)
             raise OSError("Bad file descriptor")
 
-        _original_chmod = os.chmod  # noqa: F841
+        _original_chmod = os.chmod
 
         def failing_chmod(path, mode):
             # Fail on first call (the temp file chmod)

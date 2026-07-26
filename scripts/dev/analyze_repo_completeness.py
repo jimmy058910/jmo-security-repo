@@ -19,7 +19,6 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
 
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -30,7 +29,7 @@ class RepositoryAnalyzer:
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
-        self.findings: Dict[str, List] = {
+        self.findings: dict[str, list] = {
             "undocumented_features": [],
             "doc_code_drift": [],
             "missing_docs": [],
@@ -48,7 +47,7 @@ class RepositoryAnalyzer:
             "documented_in_user_guide": 0,
         }
 
-    def analyze(self) -> Dict:
+    def analyze(self) -> dict:
         """Run comprehensive analysis."""
         print("🔍 Starting JMo Security Repository Analysis...")
         print()
@@ -88,9 +87,9 @@ class RepositoryAnalyzer:
 
         return self._generate_report()
 
-    def _extract_python_apis(self) -> Dict[str, Dict]:
+    def _extract_python_apis(self) -> dict[str, dict]:
         """Extract all public APIs from Python files."""
-        apis: Dict[str, Dict] = defaultdict(
+        apis: dict[str, dict] = defaultdict(
             lambda: {"functions": [], "classes": [], "cli_commands": []}
         )
 
@@ -155,7 +154,7 @@ class RepositoryAnalyzer:
 
         return dict(apis)
 
-    def _extract_cli_commands(self, jmo_content: str) -> List[Dict]:
+    def _extract_cli_commands(self, jmo_content: str) -> list[dict]:
         """Extract CLI commands and subcommands from jmo.py."""
         commands = []
 
@@ -170,7 +169,7 @@ class RepositoryAnalyzer:
 
         return commands
 
-    def _parse_documentation(self) -> Dict[str, str]:
+    def _parse_documentation(self) -> dict[str, str]:
         """Parse all documentation files."""
         docs = {}
 
@@ -195,7 +194,7 @@ class RepositoryAnalyzer:
 
         return docs
 
-    def _detect_undocumented_features(self, apis: Dict, docs: Dict[str, str]) -> None:
+    def _detect_undocumented_features(self, apis: dict, docs: dict[str, str]) -> None:
         """Detect features in code that aren't documented."""
         all_doc_text = " ".join(docs.values()).lower()
 
@@ -359,7 +358,7 @@ class RepositoryAnalyzer:
                     }
                 )
 
-    def _map_test_coverage(self, apis: Dict) -> None:
+    def _map_test_coverage(self, apis: dict) -> None:
         """Map test files to implementation files with flexible matching."""
         test_files = list((self.repo_root / "tests").rglob("test_*.py"))
 
@@ -430,7 +429,7 @@ class RepositoryAnalyzer:
                     break
 
         # Check for untested implementation files with smarter matching
-        for file_path in apis.keys():
+        for file_path in apis:
             # Skip if already has tests
             if file_path in impl_to_tests:
                 continue
@@ -685,7 +684,7 @@ class RepositoryAnalyzer:
                 }
             )
 
-    def _generate_report(self) -> Dict:
+    def _generate_report(self) -> dict:
         """Generate final report."""
         return {
             "metadata": {

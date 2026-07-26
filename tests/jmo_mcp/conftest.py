@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+
 import pytest
 
 # Check if MCP dependencies are available (requires pydantic v2+ and mcp[cli])
@@ -21,10 +22,9 @@ _MCP_SKIP_REASON = "MCP SDK unavailable"
 
 try:
     # MCP requires pydantic v2+ (which has TypeAdapter)
-    from pydantic import TypeAdapter  # noqa: F401
-
     # Try importing the actual MCP module
     from mcp.server.fastmcp import FastMCP  # noqa: F401
+    from pydantic import TypeAdapter  # noqa: F401
 
     _MCP_AVAILABLE = True
 except ImportError as e:

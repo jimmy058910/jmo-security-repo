@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 import scripts.core.normalize_and_report as nr
 
 
@@ -616,7 +615,6 @@ class TestAflPlusPlusHandling:
 
         def mock_get(name):
             adapter_requested.append(name)
-            return None  # No adapter found (will be logged as warning)
 
         # Mock registry.get
         nr.get_plugin_registry()  # Verify accessible before mocking

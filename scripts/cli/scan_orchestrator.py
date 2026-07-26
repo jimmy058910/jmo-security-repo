@@ -22,8 +22,8 @@ from pathlib import Path
 from typing import Any
 
 from scripts.core.config import RetryConfig
-from scripts.core.validation import validate_url, validate_container_image
 from scripts.core.tool_registry import filter_tools_for_scan_type
+from scripts.core.validation import validate_container_image, validate_url
 
 logger = logging.getLogger(__name__)
 
@@ -668,13 +668,14 @@ class ScanOrchestrator:
             List of (target_name, statuses_dict) tuples for all scanned targets
         """
         from concurrent.futures import ThreadPoolExecutor
+
         from scripts.cli.scan_jobs import (
-            scan_repository,
-            scan_image,
-            scan_iac_file,
-            scan_url,
             scan_gitlab_repo,
+            scan_iac_file,
+            scan_image,
             scan_k8s_resource,
+            scan_repository,
+            scan_url,
         )
 
         all_results = []

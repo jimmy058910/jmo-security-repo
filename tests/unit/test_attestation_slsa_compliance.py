@@ -18,9 +18,9 @@ SLSA Level 2 Requirements:
 Test Coverage: 25 tests for SLSA Level 2 validation
 """
 
-import json
 import hashlib
-from unittest.mock import patch, Mock
+import json
+from unittest.mock import Mock, patch
 
 # ============================================================================
 # Test Class 1: Provenance Existence (5 tests)
@@ -683,9 +683,9 @@ class TestSLSAComplianceChecker:
     def test_full_slsa_level_2_compliance(self, mock_run, tmp_path):
         """Test full SLSA Level 2 compliance workflow."""
         from scripts.core.attestation import (
+            AttestationVerifier,
             ProvenanceGenerator,
             SigstoreSigner,
-            AttestationVerifier,
         )
 
         # 1. Generate provenance

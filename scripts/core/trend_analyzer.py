@@ -16,15 +16,15 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from scripts.core.history_db import (
+    DEFAULT_DB_PATH,
     get_connection,
     get_scan_by_id,
     list_scans,
-    DEFAULT_DB_PATH,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class TrendAnalyzer:
             db_path: Path to SQLite history database
         """
         self.db_path = db_path
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
 
     def __enter__(self):
         """Context manager entry."""
@@ -70,10 +70,10 @@ class TrendAnalyzer:
     def analyze_trends(
         self,
         branch: str = "main",
-        days: Optional[int] = None,
-        scan_ids: Optional[List[str]] = None,
-        last_n: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        days: int | None = None,
+        scan_ids: list[str] | None = None,
+        last_n: int | None = None,
+    ) -> dict[str, Any]:
         """
         Analyze security trends over time.
 
@@ -139,7 +139,7 @@ class TrendAnalyzer:
                     "start": scans[0]["timestamp_iso"],
                     "end": scans[-1]["timestamp_iso"],
                 },
-                "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+                "analysis_timestamp": datetime.now(UTC).isoformat(),
             },
             "scans": [
                 {
@@ -165,10 +165,10 @@ class TrendAnalyzer:
     def _get_scans(
         self,
         branch: str,
-        days: Optional[int],
-        scan_ids: Optional[List[str]],
-        last_n: Optional[int],
-    ) -> List[Dict[str, Any]]:
+        days: int | None,
+        scan_ids: list[str] | None,
+        last_n: int | None,
+    ) -> list[dict[str, Any]]:
         """
         Get scans based on filters.
 
@@ -220,7 +220,7 @@ class TrendAnalyzer:
         scans.sort(key=lambda s: s["timestamp"])
         return scans
 
-    def _calculate_severity_trends(self, scans: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _calculate_severity_trends(self, scans: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Calculate severity trends over time.
 
@@ -248,8 +248,8 @@ class TrendAnalyzer:
         }
 
     def _compute_improvement_metrics(
-        self, scans: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, scans: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """
         Compute improvement metrics comparing first and last scan.
 
@@ -328,8 +328,8 @@ class TrendAnalyzer:
         }
 
     def _get_top_rules(
-        self, scans: List[Dict[str, Any]], limit: int = 10
-    ) -> List[Dict[str, Any]]:
+        self, scans: list[dict[str, Any]], limit: int = 10
+    ) -> list[dict[str, Any]]:
         """
         Get top rules across all scans.
 
@@ -372,7 +372,7 @@ class TrendAnalyzer:
             for row in cursor.fetchall()
         ]
 
-    def _detect_regressions(self, scans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _detect_regressions(self, scans: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Detect regressions (severity increases) between consecutive scans.
 
@@ -430,11 +430,11 @@ class TrendAnalyzer:
 
     def _generate_insights(
         self,
-        scans: List[Dict[str, Any]],
-        severity_trends: Dict[str, Any],
-        improvement_metrics: Dict[str, Any],
-        regressions: List[Dict[str, Any]],
-    ) -> List[str]:
+        scans: list[dict[str, Any]],
+        severity_trends: dict[str, Any],
+        improvement_metrics: dict[str, Any],
+        regressions: list[dict[str, Any]],
+    ) -> list[str]:
         """
         Generate automated insights from trend data.
 
@@ -511,7 +511,7 @@ class TrendAnalyzer:
 
         return insights
 
-    def _calculate_security_score(self, scans: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _calculate_security_score(self, scans: list[dict[str, Any]]) -> dict[str, Any]:
         """
         Calculate security posture score (0-100) based on latest scan.
 
@@ -587,7 +587,7 @@ class TrendAnalyzer:
 # ============================================================================
 
 
-def mann_kendall_test(data: List[float]) -> Tuple[str, float, float]:
+def mann_kendall_test(data: list[float]) -> tuple[str, float, float]:
     """
     Perform Mann-Kendall trend test for statistical validation.
 
@@ -685,8 +685,8 @@ def _standard_normal_cdf(x: float) -> float:
 
 
 def validate_trend_significance(
-    severity_trends: Dict[str, List[int]],
-) -> Dict[str, Dict[str, Any]]:
+    severity_trends: dict[str, list[int]],
+) -> dict[str, dict[str, Any]]:
     """
     Validate statistical significance of severity trends using Mann-Kendall test.
 
@@ -738,7 +738,7 @@ def validate_trend_significance(
 # ============================================================================
 
 
-def format_trend_summary(analysis: Dict[str, Any], verbose: bool = False) -> str:
+def format_trend_summary(analysis: dict[str, Any], verbose: bool = False) -> str:
     """
     Format trend analysis as human-readable text.
 

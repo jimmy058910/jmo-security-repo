@@ -1189,7 +1189,7 @@ def map_rule_to_owasp_top10_2021(tool_name: str, rule_id: str) -> list[str]:
                 )
 
     # Check for wildcard match
-    if "*" in tool_mappings and tool_mappings["*"]:
+    if tool_mappings.get("*"):
         wildcard_mapping = tool_mappings["*"]
         return (
             list(wildcard_mapping)

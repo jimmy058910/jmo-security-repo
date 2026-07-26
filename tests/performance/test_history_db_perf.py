@@ -17,7 +17,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -34,7 +34,7 @@ from .conftest import create_test_finding
 
 
 def test_store_scan_1000_findings_fast(
-    tmp_path: Path, benchmark_findings: List[Dict[str, Any]]
+    tmp_path: Path, benchmark_findings: list[dict[str, Any]]
 ):
     """
     Performance Test 1: Store 1000 findings in <2 seconds.
@@ -335,7 +335,7 @@ def test_index_usage_verified(large_database: Path):
 
 # Benchmark test (optional - for CI/local profiling)
 @pytest.mark.benchmark
-def test_benchmark_suite(tmp_path: Path, benchmark_findings: List[Dict[str, Any]]):
+def test_benchmark_suite(tmp_path: Path, benchmark_findings: list[dict[str, Any]]):
     """
     Comprehensive benchmark suite for performance profiling.
 

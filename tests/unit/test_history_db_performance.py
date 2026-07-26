@@ -42,15 +42,15 @@ import time
 import pytest
 
 from scripts.core.history_db import (
-    init_database,
-    store_scan,
-    list_scans,
-    get_scan_by_id,
-    get_connection,
     batch_insert_findings,
     batch_insert_findings_optimized,
-    upsert_findings_batch,
+    get_connection,
+    get_scan_by_id,
+    init_database,
+    list_scans,
     recalculate_scan_counts,
+    store_scan,
+    upsert_findings_batch,
 )
 
 # ============================================================================

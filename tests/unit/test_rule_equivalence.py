@@ -15,8 +15,8 @@ import pytest
 
 from scripts.core.rule_equivalence import (
     RULE_EQUIVALENCE,
-    get_canonical_rule_id,
     are_rules_equivalent,
+    get_canonical_rule_id,
 )
 
 

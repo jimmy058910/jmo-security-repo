@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -80,8 +80,9 @@ def test_yaml_import_error_handling():
 
     try:
         # Force reimport of yaml_reporter to trigger ImportError handler
-        import scripts.core.reporters.yaml_reporter as ymod
         import importlib
+
+        import scripts.core.reporters.yaml_reporter as ymod
 
         importlib.reload(ymod)
 

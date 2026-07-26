@@ -13,9 +13,9 @@ from __future__ import annotations
 import json
 import random
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 
@@ -27,7 +27,7 @@ from scripts.core.history_db import (
 
 
 @pytest.fixture
-def benchmark_findings() -> List[Dict[str, Any]]:
+def benchmark_findings() -> list[dict[str, Any]]:
     """
     Generate 1000 realistic findings for benchmarking.
 
@@ -124,7 +124,7 @@ def large_database(tmp_path: Path) -> Path:
     ]
 
     # Base timestamp (180 days ago)
-    base_time = datetime.now(timezone.utc) - timedelta(days=180)
+    base_time = datetime.now(UTC) - timedelta(days=180)
 
     print(f"\nGenerating 10k scans in {db_path}...")
     start = time.time()
@@ -233,7 +233,7 @@ def large_database(tmp_path: Path) -> Path:
     return db_path
 
 
-def create_test_finding(index: int) -> Dict[str, Any]:
+def create_test_finding(index: int) -> dict[str, Any]:
     """
     Create a single test finding with CommonFinding v1.2.0 schema.
 

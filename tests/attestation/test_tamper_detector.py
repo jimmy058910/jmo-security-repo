@@ -9,13 +9,14 @@ Tests the TamperDetector class which detects:
 """
 
 import json
+from datetime import UTC, datetime
 from unittest.mock import patch
-from datetime import datetime, timezone
+
 from scripts.core.attestation.tamper_detector import (
     TamperDetector,
     TamperIndicator,
-    TamperSeverity,
     TamperIndicatorType,
+    TamperSeverity,
 )
 
 
@@ -52,7 +53,7 @@ class TestTimestampAnomalies:
         detector = TamperDetector()
 
         # Mock current time
-        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
         mock_datetime.now.return_value = now
         mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -89,7 +90,7 @@ class TestTimestampAnomalies:
         detector = TamperDetector()
 
         # Mock current time
-        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
         mock_datetime.now.return_value = now
         mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -182,7 +183,7 @@ class TestTimestampAnomalies:
         detector = TamperDetector(max_age_days=90)
 
         # Mock current time
-        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
         mock_datetime.now.return_value = now
         mock_datetime.fromisoformat = datetime.fromisoformat
 
@@ -905,7 +906,7 @@ class TestCheckAll:
         detector = TamperDetector()
 
         # Mock current time
-        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
         mock_datetime.now.return_value = now
         mock_datetime.fromisoformat = datetime.fromisoformat
 

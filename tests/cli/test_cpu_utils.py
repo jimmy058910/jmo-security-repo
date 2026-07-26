@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Tests for scripts/cli/cpu_utils.py - CPU detection and thread optimization."""
 
-import pytest
 from unittest.mock import patch
 
-from scripts.cli.cpu_utils import get_cpu_count, auto_detect_threads
+import pytest
+
+from scripts.cli.cpu_utils import auto_detect_threads, get_cpu_count
 
 
 class TestGetCpuCount:

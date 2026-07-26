@@ -12,12 +12,10 @@ from __future__ import annotations
 import subprocess
 import urllib.error
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 # Suppress Pyright import warning - module exists at runtime
 # pyright: reportMissingImports=false
-
 from scripts.cli.wizard_flows.validators import (
     check_docker_running,
     detect_docker,
@@ -26,10 +24,6 @@ from scripts.cli.wizard_flows.validators import (
     validate_path,
     validate_url,
 )
-
-if TYPE_CHECKING:
-    pass
-
 
 # =============================================================================
 # validate_path() tests - Lines 26-39

@@ -22,15 +22,15 @@ Tests the new metadata wrapper structure for JSON/YAML outputs:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
 from scripts.core.reporters.basic_reporter import (
-    write_json,
-    _get_jmo_version,
     _generate_metadata,
+    _get_jmo_version,
+    write_json,
 )
 
 # ============================================================================

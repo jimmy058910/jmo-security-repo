@@ -21,7 +21,7 @@ cryptography_fernet = pytest.importorskip(
     "cryptography.fernet", reason="cryptography.fernet required for encryption tests"
 )
 
-from scripts.core.history_db import (  # noqa: E402
+from scripts.core.history_db import (
     decrypt_raw_finding,
     encrypt_raw_finding,
 )

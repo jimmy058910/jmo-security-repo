@@ -21,10 +21,7 @@ import logging
 import shlex
 import subprocess  # nosec B404 - CLI needs subprocess
 import sys
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -716,8 +713,8 @@ def _auto_fix_tools(
     if missing_deps:
         # Import dependency installation functions (lazy import to avoid circular deps)
         from scripts.cli.tool_installer import (
-            install_dependency,
             get_manual_dependency_command,
+            install_dependency,
         )
         from scripts.core.install_config import DEPENDENCY_DISPLAY_NAMES
 

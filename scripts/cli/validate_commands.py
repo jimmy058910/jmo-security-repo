@@ -10,7 +10,6 @@ import argparse
 import json
 import platform
 import sys
-from typing import TYPE_CHECKING
 
 from scripts.core.validators import (
     CategoryResult,
@@ -18,9 +17,6 @@ from scripts.core.validators import (
     ValidatorFn,
     run_validators,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 def _get_validators() -> list[ValidatorFn]:

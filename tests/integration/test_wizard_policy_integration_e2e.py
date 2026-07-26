@@ -87,9 +87,10 @@ def sample_repo(tmp_path):
 
 def test_wizard_policy_integration_with_cli_flags(tmp_path):
     """Test wizard policy integration with CLI --policy flags using direct function call."""
+    import argparse
+
     from scripts.cli.wizard import offer_policy_evaluation_after_scan
     from scripts.core.policy_engine import PolicyResult
-    import argparse
 
     results_dir = tmp_path / "results"
 
@@ -146,8 +147,9 @@ def test_wizard_policy_integration_with_cli_flags(tmp_path):
 
 def test_wizard_policy_integration_skip_policies_flag(tmp_path):
     """Test wizard policy integration with --skip-policies flag."""
-    from scripts.cli.wizard import offer_policy_evaluation_after_scan
     import argparse
+
+    from scripts.cli.wizard import offer_policy_evaluation_after_scan
 
     results_dir = tmp_path / "results"
 
@@ -232,8 +234,9 @@ def test_wizard_policy_integration_interactive_mode(tmp_path, sample_jmo_yml):
 
 def test_wizard_policy_integration_no_findings(tmp_path):
     """Test wizard policy integration when no findings exist."""
-    from scripts.cli.wizard import offer_policy_evaluation_after_scan
     import argparse
+
+    from scripts.cli.wizard import offer_policy_evaluation_after_scan
 
     results_dir = tmp_path / "results"
 
@@ -248,8 +251,9 @@ def test_wizard_policy_integration_no_findings(tmp_path):
 
 def test_wizard_policy_integration_empty_findings(tmp_path):
     """Test wizard policy integration with empty findings list."""
-    from scripts.cli.wizard import offer_policy_evaluation_after_scan
     import argparse
+
+    from scripts.cli.wizard import offer_policy_evaluation_after_scan
 
     results_dir = tmp_path / "results"
 
@@ -270,8 +274,9 @@ def test_wizard_policy_integration_empty_findings(tmp_path):
 
 def test_wizard_policy_integration_policy_evaluation_error(tmp_path):
     """Test wizard policy integration when policy evaluation fails."""
-    from scripts.cli.wizard import offer_policy_evaluation_after_scan
     import argparse
+
+    from scripts.cli.wizard import offer_policy_evaluation_after_scan
 
     results_dir = tmp_path / "results"
 

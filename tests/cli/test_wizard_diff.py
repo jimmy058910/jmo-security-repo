@@ -91,11 +91,10 @@ class TestRunDiffWizardDirectoryMode:
             "y",  # Confirm execution
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         assert mock_cmd_diff.called
@@ -155,11 +154,10 @@ class TestRunDiffWizardDirectoryMode:
             "y",  # Confirm
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         # Verify JSON format was selected
@@ -183,11 +181,10 @@ class TestRunDiffWizardDirectoryMode:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -212,11 +209,10 @@ class TestRunDiffWizardDirectoryMode:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -369,9 +365,9 @@ class TestRunDiffWizardHistoryMode:
 
     def test_diff_wizard_history_mode_insufficient_scans(self, tmp_path):
         """Test diff wizard when < 2 scans in history."""
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create DB with only 1 scan
         db_path = tmp_path / ".jmo" / "history.db"
@@ -445,9 +441,9 @@ class TestRunDiffWizardErrorHandling:
 
     def test_diff_wizard_keyboard_interrupt_during_selection(self, tmp_path):
         """Test diff wizard handles KeyboardInterrupt during scan selection."""
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create DB with scans matching the real schema
         db_path = tmp_path / ".jmo" / "history.db"
@@ -538,11 +534,10 @@ class TestRunDiffWizardErrorHandling:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=1
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=1
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 1
         assert mock_cmd_diff.called
@@ -588,11 +583,10 @@ class TestRunDiffWizardOutputFormats:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -615,11 +609,10 @@ class TestRunDiffWizardOutputFormats:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff", return_value=0
+        ) as mock_cmd_diff:
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -743,12 +736,11 @@ class TestRunDiffWizardExceptionHandling:
         ]
 
         # Make cmd_diff raise a generic exception (not KeyboardInterrupt)
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
-                "scripts.cli.diff_commands.cmd_diff",
-                side_effect=RuntimeError("Database connection failed"),
-            ):
-                result = run_diff_wizard()
+        with patch("builtins.input", side_effect=inputs), patch(
+            "scripts.cli.diff_commands.cmd_diff",
+            side_effect=RuntimeError("Database connection failed"),
+        ):
+            result = run_diff_wizard()
 
         # Generic exception should return error code 1 (not 130 for interrupt)
         assert result == 1
@@ -782,9 +774,9 @@ class TestRunDiffWizardExceptionHandling:
         The ValueError catch at line 180/197 re-raises KeyboardInterrupt,
         returning exit code 130.
         """
-        from scripts.cli.wizard import run_diff_wizard
-
         import sqlite3
+
+        from scripts.cli.wizard import run_diff_wizard
 
         # Create valid DB with proper schema
         db_path = tmp_path / ".jmo" / "history.db"

@@ -32,7 +32,6 @@ class JmoSecurityException(Exception):
     propagate normally.
     """
 
-    pass
 
 
 class ToolNotFoundException(JmoSecurityException):
@@ -243,12 +242,12 @@ class ToolExecutionException(JmoSecurityException):
 
 
 __all__ = [
-    "JmoSecurityException",
-    "ToolNotFoundException",
-    "OPANotFoundException",
     "AdapterParseException",
-    "FingerprintCollisionException",
     "ComplianceMappingException",
     "ConfigurationException",
+    "FingerprintCollisionException",
+    "JmoSecurityException",
+    "OPANotFoundException",
     "ToolExecutionException",
+    "ToolNotFoundException",
 ]

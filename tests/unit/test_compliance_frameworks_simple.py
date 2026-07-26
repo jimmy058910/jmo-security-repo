@@ -7,15 +7,15 @@ iac, dast, runtime, container) rather than traditional framework IDs.
 """
 
 from scripts.core.compliance_frameworks import (
-    CWE_TOP_25_2024,
-    CWE_TO_OWASP_TOP10_2021,
     CIS_CONTROLS_V8_1,
-    NIST_CSF_2_0,
-    CWE_TO_NIST_CSF_2_0,
-    PCI_DSS_4_0,
-    CWE_TO_PCI_DSS_4_0,
-    MITRE_ATTACK,
     CWE_TO_MITRE_ATTACK,
+    CWE_TO_NIST_CSF_2_0,
+    CWE_TO_OWASP_TOP10_2021,
+    CWE_TO_PCI_DSS_4_0,
+    CWE_TOP_25_2024,
+    MITRE_ATTACK,
+    NIST_CSF_2_0,
+    PCI_DSS_4_0,
 )
 
 # ========== Category 1: CWE Top 25 2024 Validation ==========

@@ -13,12 +13,10 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable
-
-from scripts.core.tool_utils import find_tool, tool_exists
 
 from scripts.core.tool_registry import (
     CONTENT_TRIGGERED_TOOLS,
@@ -33,6 +31,7 @@ from scripts.core.tool_registry import (
     get_skipped_tools_for_profile,
     get_tools_for_profile_filtered,
 )
+from scripts.core.tool_utils import find_tool, tool_exists
 
 logger = logging.getLogger(__name__)
 
@@ -1093,8 +1092,8 @@ class ToolManager:
         # This ensures tools with pip conflicts (prowler, scancode) use
         # their isolated venv executables instead of any system version
         # Note: Lazy import to avoid circular dependency with tool_installer
-        from scripts.core.paths import get_isolated_tool_path
         from scripts.core.install_config import ISOLATED_TOOLS
+        from scripts.core.paths import get_isolated_tool_path
 
         tool_name = binary_name.removesuffix(".exe")  # Normalize for lookup
         if tool_name in ISOLATED_TOOLS:
@@ -1258,8 +1257,8 @@ class ToolManager:
             - (None, error) - startup crash detected (Phase 4)
         """
         # Check if this is an isolated venv tool - use special execution
-        from scripts.core.paths import get_isolated_venv_path, get_isolated_tool_path
         from scripts.core.install_config import ISOLATED_TOOLS
+        from scripts.core.paths import get_isolated_tool_path, get_isolated_venv_path
 
         use_isolated_venv = False
         isolated_tool_path = None
@@ -1378,7 +1377,7 @@ class ToolManager:
             # Fallback: Parse version from directory name (scancode-toolkit-vX.Y.Z)
             for parent in [scancode_dir, scancode_dir.parent]:
                 match = re.search(
-                    r"scancode-toolkit-v?(\d+\.\d+\.\d+)", parent.name, re.I
+                    r"scancode-toolkit-v?(\d+\.\d+\.\d+)", parent.name, re.IGNORECASE
                 )
                 if match:
                     return (match.group(1), None)
@@ -1814,10 +1813,10 @@ def print_tool_status_table(
         show_hints: Whether to show installation hints for missing tools
     """
     if colorize is None:
-        colorize = lambda text, _color: text  # noqa: E731
+        colorize = lambda text, _color: text
 
     # Calculate column widths
-    name_width = max(len(name) for name in statuses.keys())
+    name_width = max(len(name) for name in statuses)
     name_width = max(name_width, 15)
 
     # Header
@@ -1877,7 +1876,7 @@ def print_profile_summary(
         colorize: Optional colorize function
     """
     if colorize is None:
-        colorize = lambda text, _color: text  # noqa: E731
+        colorize = lambda text, _color: text
 
     print("\nProfile Summary:")
     print("-" * 50)

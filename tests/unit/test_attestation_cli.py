@@ -18,9 +18,9 @@ Coverage Target: 100% (45/45 tests)
 """
 
 import json
+from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from argparse import Namespace
 
 import pytest
 
@@ -31,6 +31,7 @@ class TestAttestCommandParsing:
     def test_attest_command_exists(self, monkeypatch):
         """Test that 'attest' subcommand is registered."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json"])
@@ -41,6 +42,7 @@ class TestAttestCommandParsing:
     def test_attest_with_output_flag(self, monkeypatch):
         """Test --output flag for custom attestation path."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -54,6 +56,7 @@ class TestAttestCommandParsing:
     def test_attest_with_tools_flag(self, monkeypatch):
         """Test --tools flag for specifying tools used."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -67,6 +70,7 @@ class TestAttestCommandParsing:
     def test_attest_with_scan_args_flag(self, monkeypatch):
         """Test --scan-args flag for providing scan context."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -80,6 +84,7 @@ class TestAttestCommandParsing:
     def test_attest_with_sign_flag(self, monkeypatch):
         """Test --sign flag for Sigstore signing."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json", "--sign"])
@@ -89,6 +94,7 @@ class TestAttestCommandParsing:
     def test_attest_with_rekor_flag(self, monkeypatch):
         """Test --rekor flag for transparency log upload."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(sys, "argv", ["jmo", "attest", "findings.json", "--rekor"])
@@ -102,6 +108,7 @@ class TestVerifyCommandParsing:
     def test_verify_command_exists(self, monkeypatch):
         """Test that 'verify' subcommand is registered."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(sys, "argv", ["jmo", "verify", "findings.json"])
@@ -112,6 +119,7 @@ class TestVerifyCommandParsing:
     def test_verify_with_attestation_flag(self, monkeypatch):
         """Test --attestation flag for custom attestation path."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -125,6 +133,7 @@ class TestVerifyCommandParsing:
     def test_verify_with_rekor_check_flag(self, monkeypatch):
         """Test --rekor-check flag for transparency log verification."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -136,6 +145,7 @@ class TestVerifyCommandParsing:
     def test_verify_with_policy_flag(self, monkeypatch):
         """Test --policy flag for additional verification rules."""
         import sys
+
         from scripts.cli.jmo import parse_args
 
         monkeypatch.setattr(
@@ -441,8 +451,9 @@ class TestVerifierClass:
 
     def test_verifier_computes_digest(self, tmp_path):
         """Test digest computation for verification."""
-        from scripts.core.attestation.verifier import AttestationVerifier
         import hashlib
+
+        from scripts.core.attestation.verifier import AttestationVerifier
 
         # Create test file
         test_file = tmp_path / "test.json"
@@ -472,8 +483,9 @@ class TestVerifierClass:
 
     def test_verifier_matches_correct_digest(self, tmp_path):
         """Test that verifier accepts correct digest."""
-        from scripts.core.attestation.verifier import AttestationVerifier
         import hashlib
+
+        from scripts.core.attestation.verifier import AttestationVerifier
 
         test_file = tmp_path / "test.json"
         test_content = b'{"test": "data"}'
@@ -570,8 +582,9 @@ class TestAttestationStorage:
 
     def test_load_attestation_from_history_db(self):
         """Test loading attestation from SQLite database."""
-        from scripts.core.history_db import load_attestation
         import time
+
+        from scripts.core.history_db import load_attestation
 
         scan_id = "scan-abc123"
 

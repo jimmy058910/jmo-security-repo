@@ -25,9 +25,9 @@ from scripts.core.reporters.simple_html_reporter import write_simple_html
 from scripts.core.reporters.suppression_reporter import write_suppression_report
 from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.suppress import (
+    SuppressionSummary,
     filter_suppressed_with_summary,
     load_suppressions,
-    SuppressionSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def cmd_report(args, _log_fn) -> int:
     if args.threads is not None:
         os.environ["JMO_THREADS"] = str(max(1, args.threads))
     elif prev_threads is None and getattr(cfg, "threads", None) is not None:
-        os.environ["JMO_THREADS"] = str(max(1, int(getattr(cfg, "threads"))))
+        os.environ["JMO_THREADS"] = str(max(1, int(cfg.threads)))
 
     # Gather and process findings
     start = time.perf_counter()
@@ -122,8 +122,9 @@ def cmd_report(args, _log_fn) -> int:
             _log_fn(args, "INFO", suppression_summary.debt_label)
 
     # Generate metadata for v1.0.0 output format
-    from scripts.core.reporters.basic_reporter import _generate_metadata
     import uuid
+
+    from scripts.core.reporters.basic_reporter import _generate_metadata
 
     # Collect scan metadata
     scan_id = str(uuid.uuid4())
@@ -249,8 +250,8 @@ def cmd_report(args, _log_fn) -> int:
         try:
             from scripts.core.reporters.policy_reporter import (
                 evaluate_policies,
-                write_policy_report,
                 write_policy_json,
+                write_policy_report,
                 write_policy_summary_md,
             )
 

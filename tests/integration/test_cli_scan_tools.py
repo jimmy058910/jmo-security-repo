@@ -32,8 +32,8 @@ def test_scan_each_tool_happy_paths(tmp_path: Path, monkeypatch):
         "bandit",
     ]
 
-    import subprocess
     import shutil
+    import subprocess
     from unittest.mock import MagicMock
 
     for t in tools:

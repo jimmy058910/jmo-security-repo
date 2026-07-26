@@ -1,8 +1,7 @@
 import json
 import sys
-from pathlib import Path
-
 import types
+from pathlib import Path
 
 import scripts.core.normalize_and_report as nr
 
@@ -244,7 +243,7 @@ def test_dedupe_keeps_single(tmp_path: Path, monkeypatch):
     # Use trufflehog.json (gitleaks removed in v0.5.0)
     _write(repo / "trufflehog.json", "[]")
 
-    def dup(_plugin_class, _path, profiling=False):  # noqa: ARG001
+    def dup(_plugin_class, _path, profiling=False):
         return [
             {"id": "DUP", "schemaVersion": "1.0.0"},
             {"id": "DUP", "schemaVersion": "1.0.0"},

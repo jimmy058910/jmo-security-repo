@@ -4,11 +4,12 @@ These tests cover branch partials not exercised by integration tests.
 """
 
 import yaml
+
 from scripts.core.schedule_manager import (
+    JobTemplateSpec,
     ScanSchedule,
     ScheduleMetadata,
     ScheduleSpec,
-    JobTemplateSpec,
 )
 from scripts.core.workflow_generators.gitlab_ci import GitLabCIGenerator
 

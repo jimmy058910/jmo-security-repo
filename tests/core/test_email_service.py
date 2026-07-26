@@ -260,6 +260,7 @@ def test_resend_api_key_from_env():
     """Test RESEND_API_KEY loaded from environment."""
     with patch.dict(os.environ, {"RESEND_API_KEY": "re_custom_key_123"}):
         import importlib
+
         import scripts.core.email_service
 
         importlib.reload(scripts.core.email_service)
@@ -552,12 +553,12 @@ def test_send_welcome_email_api_returns_empty_dict():
 
 def test_email_templates_no_python_placeholders():
     """Test that email templates don't have unfilled Python placeholders."""
-    from scripts.core.email_service import WELCOME_EMAIL_HTML, WELCOME_EMAIL_TEXT
-
     # Should not contain Python f-string or .format() placeholders
     # Note: CSS/JS braces are fine, just check for Python-style {var} patterns
     # Look for patterns like {variable} or {0} but not CSS like { color: }
     import re
+
+    from scripts.core.email_service import WELCOME_EMAIL_HTML, WELCOME_EMAIL_TEXT
 
     # Check for Python placeholder patterns (word surrounded by braces, no spaces/colons)
     python_placeholder_pattern = r"\{\w+\}"
@@ -576,14 +577,14 @@ def test_email_templates_no_python_placeholders():
 def test_email_service_module_imports():
     """Test that all module imports work correctly."""
     from scripts.core.email_service import (
-        RESEND_AVAILABLE,
-        RESEND_API_KEY,
         FROM_EMAIL,
+        RESEND_API_KEY,
+        RESEND_AVAILABLE,
         WELCOME_EMAIL_HTML,
         WELCOME_EMAIL_TEXT,
+        get_subscriber_count,
         send_welcome_email,
         validate_email,
-        get_subscriber_count,
     )
 
     # Verify all exports are available

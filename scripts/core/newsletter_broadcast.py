@@ -45,7 +45,6 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ try:
 
     RESEND_AVAILABLE = True
 except ImportError:
-    resend = None  # noqa: F841
+    resend = None
     RESEND_AVAILABLE = False
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
@@ -77,7 +76,7 @@ def create_broadcast(
     *,
     from_email: str = FROM_EMAIL,
     from_name: str = FROM_NAME,
-    reply_to: Optional[str] = None,
+    reply_to: str | None = None,
 ) -> str:
     """Create a draft broadcast in Resend.
 
@@ -179,7 +178,7 @@ def list_audiences() -> list[dict]:
 
 
 def build_release_digest_html(
-    version: Optional[str] = None, days: int = 7
+    version: str | None = None, days: int = 7
 ) -> tuple[str, str]:
     """Build an HTML email digest from pyproject.toml version + CHANGELOG.
 
@@ -227,7 +226,7 @@ def _extract_changelog_section(version: str) -> str:
     return match.group(1).strip()
 
 
-def _extract_release_date(section: str) -> Optional[str]:
+def _extract_release_date(section: str) -> str | None:
     match = re.search(r"\d{4}-\d{2}-\d{2}", section)
     return match.group(0) if match else None
 
@@ -434,7 +433,7 @@ def _check_sdk() -> None:
         )
 
 
-def _extract_id(response: object) -> Optional[str]:
+def _extract_id(response: object) -> str | None:
     if isinstance(response, dict):
         return response.get("id")
     return getattr(response, "id", None)
@@ -513,7 +512,7 @@ Examples:
     return parser
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = _build_parser()
     args = parser.parse_args(argv)

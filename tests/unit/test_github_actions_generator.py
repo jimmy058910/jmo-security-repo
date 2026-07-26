@@ -17,11 +17,11 @@ import pytest
 import yaml
 
 from scripts.core.schedule_manager import (
+    BackendConfig,
+    JobTemplateSpec,
     ScanSchedule,
     ScheduleMetadata,
     ScheduleSpec,
-    BackendConfig,
-    JobTemplateSpec,
 )
 from scripts.core.workflow_generators.github_actions import GitHubActionsGenerator
 

@@ -30,13 +30,13 @@ from scripts.core.install_config import (
     ISOLATED_TOOLS,
     PIP_INSTALL_TIMEOUT_SECONDS,
 )
-from scripts.core.paths import get_isolated_venv_path, get_isolated_tool_path
-from scripts.core.validation import validate_version, sanitize_subprocess_output
+from scripts.core.paths import get_isolated_tool_path, get_isolated_venv_path
+from scripts.core.validation import sanitize_subprocess_output, validate_version
 
 if TYPE_CHECKING:
-    from scripts.core.tool_registry import ToolInfo, ToolRegistry
     from scripts.cli.tool_manager import ToolManager
     from scripts.cli.ui.progress import ParallelInstallProgress
+    from scripts.core.tool_registry import ToolInfo, ToolRegistry
 
 logger = logging.getLogger(__name__)
 

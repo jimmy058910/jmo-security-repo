@@ -16,63 +16,61 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import time
+import zipfile
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Iterator
 
 import requests
-import tarfile
-import zipfile
-
-from scripts.core.secure_temp import secure_temp_dir
-from scripts.core.tool_utils import find_tool, tool_exists
-
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-    TimeElapsedColumn,
     TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
 )
 
-from scripts.core.tool_registry import (
-    ToolInfo,
-    ToolRegistry,
-    TOOL_VARIANTS,
-    detect_platform,
-)
+from scripts.cli.installers.models import InstallProgress, InstallResult
 from scripts.cli.tool_manager import ToolManager
-from scripts.core.validation import (
-    validate_version,
-    validate_tool_name,
-    sanitize_subprocess_output,
-)
-from scripts.core.install_config import (
-    INSTALL_PRIORITIES,
-    SPECIAL_INSTALL,
-    EXTRACT_APP_URLS,
-    BINARY_URLS,
-    INSTALL_SCRIPTS,
-    ISOLATED_TOOLS,
-    DEPENDENCY_INSTALL_COMMANDS,
-    DEPENDENCY_VERIFY_COMMANDS,
-    DEPENDENCY_MANUAL_COMMANDS,
-)
-from scripts.core.paths import (
-    get_isolated_venv_path,
-    get_isolated_tool_path,
-)
+from scripts.cli.ui.progress import ParallelInstallProgress
 from scripts.core.archive_security import (
     safe_tar_extract,
     safe_zip_extract,
 )
-from scripts.cli.installers.models import InstallResult, InstallProgress
-from scripts.cli.ui.progress import ParallelInstallProgress
+from scripts.core.install_config import (
+    BINARY_URLS,
+    DEPENDENCY_INSTALL_COMMANDS,
+    DEPENDENCY_MANUAL_COMMANDS,
+    DEPENDENCY_VERIFY_COMMANDS,
+    EXTRACT_APP_URLS,
+    INSTALL_PRIORITIES,
+    INSTALL_SCRIPTS,
+    ISOLATED_TOOLS,
+    SPECIAL_INSTALL,
+)
+from scripts.core.paths import (
+    get_isolated_tool_path,
+    get_isolated_venv_path,
+)
+from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.tool_registry import (
+    TOOL_VARIANTS,
+    ToolInfo,
+    ToolRegistry,
+    detect_platform,
+)
+from scripts.core.tool_utils import find_tool, tool_exists
+from scripts.core.validation import (
+    sanitize_subprocess_output,
+    validate_tool_name,
+    validate_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1456,8 +1454,7 @@ class ToolInstaller:
             response.raise_for_status()
 
             with open(output_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                f.writelines(response.iter_content(chunk_size=8192))
 
             return True
 
@@ -2613,7 +2610,7 @@ def print_install_progress(
 ) -> None:
     """Print installation progress summary."""
     if colorize is None:
-        colorize = lambda text, color: text  # noqa: E731
+        colorize = lambda text, color: text
 
     print("\nInstallation Summary:")
     print("-" * 50)

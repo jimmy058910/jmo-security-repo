@@ -16,11 +16,11 @@ from pathlib import Path
 import pytest
 
 from scripts.core.reporters.csv_reporter import (
-    write_csv,
-    DEFAULT_COLUMNS,
     COMPLIANCE_COLUMNS,
+    DEFAULT_COLUMNS,
     FULL_COLUMNS,
     _extract_row,
+    write_csv,
 )
 
 # ============================================================================

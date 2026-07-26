@@ -12,16 +12,16 @@ import json
 import pytest
 
 from scripts.cli.trend_formatters import (
-    format_terminal_report,
-    format_json_report,
-    format_html_report,
-    format_comparison,
     _create_sparkline,
+    _format_improvement_metrics,
+    _format_insights,
+    _format_regressions,
     _format_security_score,
     _format_severity_trends,
-    _format_improvement_metrics,
-    _format_regressions,
-    _format_insights,
+    format_comparison,
+    format_html_report,
+    format_json_report,
+    format_terminal_report,
 )
 
 # ============================================================================

@@ -11,8 +11,10 @@ Tests cover:
 - Defense-in-depth validation
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from scripts.cli.path_sanitizers import (
     _sanitize_path_component,
     _validate_output_path,

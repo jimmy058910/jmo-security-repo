@@ -5,15 +5,16 @@ Tests the ProvenanceGenerator class which creates complete SLSA provenance
 documents (in-toto statements) without signing.
 """
 
-import json
 import hashlib
+import json
 from unittest.mock import patch
-from scripts.core.attestation.provenance import ProvenanceGenerator
+
 from scripts.core.attestation.constants import (
-    SLSA_VERSION,
     INTOTO_VERSION,
     JMO_BUILD_TYPE,
+    SLSA_VERSION,
 )
+from scripts.core.attestation.provenance import ProvenanceGenerator
 
 
 class TestProvenanceGeneratorInit:

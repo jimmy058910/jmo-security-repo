@@ -218,8 +218,8 @@ class TestCheckToolsForProfile:
         mock_print_step,
     ):
         """Non-interactive (yes) mode should continue with available tools."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         # Setup mocks
         mock_detect_platform.return_value = "linux"
@@ -292,13 +292,12 @@ class TestCheckToolsForProfile:
         with patch(
             "scripts.cli.tool_manager.ToolManager",
             side_effect=ImportError("Module not available"),
-        ):
-            with patch("builtins.print"):
-                should_continue, available = check_tools_for_profile(
-                    profile="fast",
-                    yes=False,
-                    use_docker=False,
-                )
+        ), patch("builtins.print"):
+            should_continue, available = check_tools_for_profile(
+                profile="fast",
+                yes=False,
+                use_docker=False,
+            )
 
         # Should continue with empty available list
         assert should_continue is True
@@ -663,9 +662,8 @@ class TestInstallOpaTool:
         with patch(
             "scripts.cli.tool_installer.ToolInstaller",
             side_effect=ImportError("Not available"),
-        ):
-            with patch("builtins.print"):
-                should_continue, policies_enabled = _install_opa_tool()
+        ), patch("builtins.print"):
+            should_continue, policies_enabled = _install_opa_tool()
 
         assert should_continue is True
         assert policies_enabled is False
@@ -969,8 +967,8 @@ class TestInteractiveChoices:
         mock_auto_fix,
     ):
         """Choice 1 triggers auto-fix."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         # Setup
         mock_detect_platform.return_value = "linux"
@@ -1033,8 +1031,8 @@ class TestInteractiveChoices:
         mock_print_step,
     ):
         """Choice 2 continues with available tools only."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
@@ -1096,8 +1094,8 @@ class TestInteractiveChoices:
         mock_print_step,
     ):
         """Choice 4 cancels the wizard."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_colorize.return_value = lambda text, color: text
@@ -1171,8 +1169,8 @@ class TestCrashDetection:
         capsys,
     ):
         """Tool with startup crash should display crash info."""
-        from scripts.cli.wizard import check_tools_for_profile
         from scripts.cli.tool_manager import ToolStatusType
+        from scripts.cli.wizard import check_tools_for_profile
 
         mock_detect_platform.return_value = "linux"
         mock_get_filtered.return_value = ["checkov"]
@@ -1478,14 +1476,13 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 3: cancel
-        with patch("builtins.print"):
-            with patch("builtins.input", return_value="3"):
-                should_continue, available = _auto_fix_tools(
-                    fix_info=fix_info,
-                    platform="linux",
-                    profile="fast",
-                    available=["trivy"],
-                )
+        with patch("builtins.print"), patch("builtins.input", return_value="3"):
+            should_continue, available = _auto_fix_tools(
+                fix_info=fix_info,
+                platform="linux",
+                profile="fast",
+                available=["trivy"],
+            )
 
         assert should_continue is False
         # Original available should be returned

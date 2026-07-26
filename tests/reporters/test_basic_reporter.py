@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from scripts.core.reporters.basic_reporter import (
+    _get_category_summary,
+    _get_remediation_priorities,
+    _get_severity_emoji,
+    _get_top_issue_summary,
+    _truncate_path,
     to_markdown_summary,
     write_json,
-    _get_severity_emoji,
-    _truncate_path,
-    _get_top_issue_summary,
-    _get_remediation_priorities,
-    _get_category_summary,
 )
 
 

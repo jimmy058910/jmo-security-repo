@@ -12,10 +12,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
-from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstaller
 from scripts.cli.installers.base import InstallMethod
 from scripts.cli.installers.models import InstallResult
+from scripts.cli.installers.pip_installer import IsolatedPipInstaller, PipInstaller
 
 # ========== Helpers ==========
 
@@ -324,15 +323,14 @@ class TestIsolatedPipInstallerInstall:
         with patch(
             "scripts.cli.installers.pip_installer.ISOLATED_TOOLS",
             {"semgrep": {"package": "semgrep"}},
-        ):
-            with patch.object(installer, "_install_in_venv") as mock_venv:
-                mock_venv.return_value = InstallResult(
-                    tool_name="semgrep", success=True
-                )
-                installer.install("semgrep", make_tool_info("semgrep"))
-                # Verify package spec was passed
-                mock_venv.assert_called_once()
-                assert "semgrep==" in mock_venv.call_args[0][1]
+        ), patch.object(installer, "_install_in_venv") as mock_venv:
+            mock_venv.return_value = InstallResult(
+                tool_name="semgrep", success=True
+            )
+            installer.install("semgrep", make_tool_info("semgrep"))
+            # Verify package spec was passed
+            mock_venv.assert_called_once()
+            assert "semgrep==" in mock_venv.call_args[0][1]
 
 
 # ========== IsolatedPipInstaller: _install_in_venv() ==========

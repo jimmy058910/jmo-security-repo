@@ -3,13 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
-
-from scripts.core.tool_utils import tool_exists
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
 from scripts.cli.wizard_flows.validators import (
@@ -18,6 +13,7 @@ from scripts.cli.wizard_flows.validators import (
     validate_path,
     validate_url,
 )
+from scripts.core.tool_utils import tool_exists
 
 # Shared prompter instance
 _prompter = PromptHelper()

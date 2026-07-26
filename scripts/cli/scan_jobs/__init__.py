@@ -17,18 +17,18 @@ These scanners integrate with:
 - ScanOrchestrator (scripts/cli/scan_orchestrator.py) for target discovery
 """
 
-from .repository_scanner import scan_repository
-from .image_scanner import scan_image
-from .iac_scanner import scan_iac_file
-from .url_scanner import scan_url
 from .gitlab_scanner import scan_gitlab_repo
+from .iac_scanner import scan_iac_file
+from .image_scanner import scan_image
 from .k8s_scanner import scan_k8s_resource
+from .repository_scanner import scan_repository
+from .url_scanner import scan_url
 
 __all__ = [
-    "scan_repository",
-    "scan_image",
-    "scan_iac_file",
-    "scan_url",
     "scan_gitlab_repo",
+    "scan_iac_file",
+    "scan_image",
     "scan_k8s_resource",
+    "scan_repository",
+    "scan_url",
 ]

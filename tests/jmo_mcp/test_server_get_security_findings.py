@@ -48,6 +48,7 @@ def mock_env(mock_findings_file, monkeypatch):
 
     # Reload module to apply new environment
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)
@@ -250,6 +251,7 @@ def test_get_security_findings_missing_findings_file(tmp_path, monkeypatch):
 
     # Reload module to apply new environment
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)
@@ -271,6 +273,7 @@ def test_get_security_findings_empty_findings_file(tmp_path, monkeypatch):
     monkeypatch.setenv("JMO_MCP_RATE_LIMIT_ENABLED", "false")
 
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)
@@ -295,6 +298,7 @@ def test_get_security_findings_rate_limit_enforcement(mock_findings_file, monkey
     monkeypatch.setenv("JMO_MCP_RATE_LIMIT_REFILL_RATE", "0.1")  # Slow refill
 
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)

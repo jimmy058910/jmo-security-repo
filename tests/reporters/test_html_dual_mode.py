@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.reporters.html_reporter import write_html, INLINE_THRESHOLD
+from scripts.core.reporters.html_reporter import INLINE_THRESHOLD, write_html
 
 
 def test_inline_mode_small_dataset(tmp_path: Path):

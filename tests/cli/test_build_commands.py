@@ -130,12 +130,11 @@ def test_check_docker_timeout():
     """Test _check_docker returns False on timeout."""
     from scripts.cli.build_commands import _check_docker
 
-    with patch("shutil.which", return_value="/usr/bin/docker"):
-        with patch(
-            "subprocess.run",
-            side_effect=subprocess.TimeoutExpired(cmd="docker info", timeout=10),
-        ):
-            assert _check_docker() is False
+    with patch("shutil.which", return_value="/usr/bin/docker"), patch(
+        "subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="docker info", timeout=10),
+    ):
+        assert _check_docker() is False
 
 
 def test_check_docker_exception():
@@ -602,7 +601,7 @@ def test_add_build_args_has_local_flag():
 
 def test_add_build_args_default_values():
     """Test add_build_args has correct default values."""
-    from scripts.cli.build_commands import add_build_args, DEFAULT_REGISTRY, DEFAULT_ORG
+    from scripts.cli.build_commands import DEFAULT_ORG, DEFAULT_REGISTRY, add_build_args
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()

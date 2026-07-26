@@ -311,7 +311,7 @@ def test_toolmanager_check_tool_outdated():
 
 def test_toolmanager_check_profile():
     """Test check_profile checks all tools in profile."""
-    from scripts.cli.tool_manager import ToolManager, PROFILE_TOOLS
+    from scripts.cli.tool_manager import PROFILE_TOOLS, ToolManager
 
     mock_status = MagicMock()
     mock_status.installed = True
@@ -1172,6 +1172,7 @@ class TestGetToolVersion:
     def test_get_version_timeout(self):
         """Test version detection handles timeout."""
         import subprocess
+
         from scripts.cli.tool_manager import ToolManager
 
         manager = ToolManager()

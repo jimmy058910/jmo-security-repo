@@ -15,19 +15,18 @@ import json
 import os
 import time
 
-
 from scripts.cli.scan_session import (
+    SESSION_VERSION,
     ScanSession,
     TargetRecord,
     ToolRecord,
-    SESSION_VERSION,
+    _atomic_write_json,
     compute_config_hash,
     delete_session,
     format_session_summary,
     load_session,
     save_session,
     validate_session_results,
-    _atomic_write_json,
 )
 
 # ── ToolRecord ──────────────────────────────────────────────────

@@ -63,7 +63,6 @@ import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +125,8 @@ class NewsletterDraft:
     text: str
     version: str
     release_date: str
-    html_path: Optional[Path] = None
-    text_path: Optional[Path] = None
+    html_path: Path | None = None
+    text_path: Path | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -137,14 +136,14 @@ class NewsletterDraft:
 
 def generate_draft(
     *,
-    output_dir: Optional[Path] = None,
-    date_range_start: Optional[datetime.date] = None,
-    date_range_end: Optional[datetime.date] = None,
-    customer_story_path: Optional[Path] = None,
-    version: Optional[str] = None,
-    template_path: Optional[Path] = None,
-    chrome_path: Optional[Path] = None,
-    repo_root: Optional[Path] = None,
+    output_dir: Path | None = None,
+    date_range_start: datetime.date | None = None,
+    date_range_end: datetime.date | None = None,
+    customer_story_path: Path | None = None,
+    version: str | None = None,
+    template_path: Path | None = None,
+    chrome_path: Path | None = None,
+    repo_root: Path | None = None,
     include_customer_story: bool = True,
 ) -> NewsletterDraft:
     """Build a newsletter draft and optionally write the HTML + text files.
@@ -243,8 +242,8 @@ def generate_draft(
 
     plain_text = _html_to_plain_text(rendered_html)
 
-    html_path: Optional[Path] = None
-    text_path: Optional[Path] = None
+    html_path: Path | None = None
+    text_path: Path | None = None
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         slug = primary.version.replace(".", "_")
@@ -308,8 +307,8 @@ def _extract_release_by_version(changelog_text: str, version: str) -> ReleaseEnt
 def _extract_releases_by_date_range(
     changelog_text: str,
     *,
-    start: Optional[datetime.date],
-    end: Optional[datetime.date],
+    start: datetime.date | None,
+    end: datetime.date | None,
 ) -> list[ReleaseEntry]:
     out: list[ReleaseEntry] = []
     for entry in _iter_release_entries(changelog_text):
@@ -421,14 +420,14 @@ def _inline_md(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _render_customer_story_block(story_md: Optional[str]) -> str:
+def _render_customer_story_block(story_md: str | None) -> str:
     if not story_md or not story_md.strip():
         return ""
     body_html = _markdown_to_email_html(story_md)
     return f'<h2 style="{_H2_STYLE}">Customer Story</h2>\n{body_html}\n'
 
 
-def _extract_customer_quote(story_md: Optional[str]) -> Optional[str]:
+def _extract_customer_quote(story_md: str | None) -> str | None:
     """Return a short subject-line-friendly quote pulled from the story.
 
     Strategy: first markdown blockquote line (``>``), trimmed to ~60 chars.
@@ -461,14 +460,14 @@ def _truncate_subject_fragment(text: str, max_len: int = 60) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_subject(primary: ReleaseEntry, customer_quote: Optional[str]) -> str:
+def _build_subject(primary: ReleaseEntry, customer_quote: str | None) -> str:
     if customer_quote:
         return f"JMo v{primary.version} released \u2014 {customer_quote}"
     fallback_tagline = _first_subsection_title(primary.raw_markdown) or "what's new"
     return f"JMo v{primary.version} released \u2014 {fallback_tagline}"
 
 
-def _first_subsection_title(release_md: str) -> Optional[str]:
+def _first_subsection_title(release_md: str) -> str | None:
     for line in release_md.splitlines():
         if line.startswith("### "):
             return line[4:].strip()
@@ -616,7 +615,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = _build_parser().parse_args(argv)
 

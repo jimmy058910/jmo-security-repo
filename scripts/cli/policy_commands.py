@@ -21,7 +21,7 @@ import logging
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, cast
 
 from scripts.core.policy_engine import PolicyEngine
 from scripts.core.unicode_utils import UNICODE_FALLBACKS as _UNICODE_FALLBACKS
@@ -132,8 +132,8 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
         print(f"Built-in Policies ({len(builtin_policies)}):")
         print("=" * 80)
         for policy_obj in builtin_policies:
-            policy = cast(Dict[str, Any], policy_obj)
-            meta = cast(Dict[str, Any], policy["metadata"])
+            policy = cast(dict[str, Any], policy_obj)
+            meta = cast(dict[str, Any], policy["metadata"])
             policy_name = str(policy["name"])
             version = meta.get("version", "unknown")
             desc = meta.get("description", "No description")
@@ -145,8 +145,8 @@ def cmd_policy_list(args: argparse.Namespace) -> int:
         print(f"User Policies ({len(user_policies)}):")
         print("=" * 80)
         for policy_obj in user_policies:
-            policy = cast(Dict[str, Any], policy_obj)
-            meta = cast(Dict[str, Any], policy["metadata"])
+            policy = cast(dict[str, Any], policy_obj)
+            meta = cast(dict[str, Any], policy["metadata"])
             policy_name = str(policy["name"])
             version = meta.get("version", "unknown")
             desc = meta.get("description", "No description")

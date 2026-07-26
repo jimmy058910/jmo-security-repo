@@ -1,8 +1,8 @@
 import os
 import platform
+import sys
 import types
 from pathlib import Path
-import sys
 
 import pytest
 
@@ -49,16 +49,16 @@ def test_cmd_scan_signal_stop(tmp_path: Path, monkeypatch):
     # Monkeypatch signal.signal to immediately invoke handler once to set stop flag
     captured = {"handler": None}
 
-    def fake_signal(sig, handler):  # noqa: ARG001
+    def fake_signal(sig, handler):
         # Record and invoke once to simulate interrupt before jobs submit
         captured["handler"] = handler
         try:
             handler(2, None)
-        except Exception as _e:  # noqa: F841 - intentional swallow for test simulation
+        except Exception as _e:
             # In tests we intentionally swallow errors from handler invocation
             # to simulate an interrupt being handled gracefully.
-            return None
-        return None
+            return
+        return
 
     # Ensure that the import inside cmd_scan picks up our fake module
     monkeypatch.setitem(

@@ -707,7 +707,7 @@ registry.example.com:5000/myapp:v1.0.0
 
 def test_helper_functions_dont_modify_args():
     """Test that helper functions don't modify args object."""
-    from scripts.cli.jmo import _iter_images, _iter_iac_files, _iter_urls
+    from scripts.cli.jmo import _iter_iac_files, _iter_images, _iter_urls
 
     args = create_mock_args(image="nginx:latest", url="https://example.com")
 
@@ -735,7 +735,7 @@ def test_multiple_helper_calls_consistent():
 
 def test_all_helpers_with_empty_args():
     """Test all helpers with completely empty args."""
-    from scripts.cli.jmo import _iter_images, _iter_iac_files, _iter_urls
+    from scripts.cli.jmo import _iter_iac_files, _iter_images, _iter_urls
 
     args = create_mock_args()
 

@@ -11,7 +11,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from scripts.cli.tool_manager import (
     ToolManager,
@@ -21,9 +20,6 @@ from scripts.cli.tool_manager import (
 )
 from scripts.core.paths import clean_isolated_venvs
 from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
-
-if TYPE_CHECKING:
-    pass
 
 
 # ANSI color codes for terminal output
@@ -248,11 +244,12 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
     """
     import platform
     import subprocess
+
     from scripts.cli.tool_manager import (
-        ToolManager,
         VERSION_COMMANDS,
         VERSION_PATTERNS,
         VERSION_TIMEOUTS,
+        ToolManager,
     )
 
     tools = getattr(args, "tools", None) or []
@@ -367,12 +364,12 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
             print(f"Exit code: {result.returncode}")
             print(f"\nstdout ({len(result.stdout)} chars):")
             if result.stdout:
-                print(f"  {repr(result.stdout[:500])}")
+                print(f"  {result.stdout[:500]!r}")
             else:
                 print("  (empty)")
             print(f"\nstderr ({len(result.stderr)} chars):")
             if result.stderr:
-                print(f"  {repr(result.stderr[:500])}")
+                print(f"  {result.stderr[:500]!r}")
             else:
                 print("  (empty)")
 
@@ -592,8 +589,8 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
     # Actually update (reinstall with force)
     from scripts.cli.tool_installer import (
-        ToolInstaller,
         InstallProgress,
+        ToolInstaller,
         print_install_progress,
     )
 

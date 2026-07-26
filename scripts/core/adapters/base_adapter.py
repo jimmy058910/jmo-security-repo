@@ -132,7 +132,6 @@ class BaseAdapter(ABC):
                     data = json.load(f)
                 return data.get("results", [])
         """
-        pass
 
     @abstractmethod
     def _extract_finding(self, raw: dict[str, Any]) -> dict[str, Any]:
@@ -178,7 +177,6 @@ class BaseAdapter(ABC):
                     }
                 }
         """
-        pass
 
     def _generate_fingerprint(self, finding: dict[str, Any]) -> str:
         """

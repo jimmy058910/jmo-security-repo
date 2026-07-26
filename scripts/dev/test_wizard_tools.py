@@ -20,26 +20,22 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 # Add project root to path for imports
 _project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(_project_root))
 
 # Imports after path setup (noqa for linter)
-from scripts.cli.tool_installer import (  # noqa: E402
+from scripts.cli.tool_installer import (
     ISOLATED_TOOLS,
     get_isolated_tool_path,
     get_isolated_venv_path,
 )
-from scripts.cli.tool_manager import (  # noqa: E402
+from scripts.cli.tool_manager import (
     PLATFORM_MANUAL_TOOLS,
     ToolManager,
 )
-from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry  # noqa: E402
-
-if TYPE_CHECKING:
-    pass
+from scripts.core.tool_registry import PROFILE_TOOLS, ToolRegistry
 
 
 @dataclass

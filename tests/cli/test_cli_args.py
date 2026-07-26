@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import sys
+import types
 from pathlib import Path
 
-import types
-
-from scripts.cli.jmo import parse_args, cmd_report
+from scripts.cli.jmo import cmd_report, parse_args
 
 
 def test_report_optional_results_dir_mapping(monkeypatch, tmp_path):

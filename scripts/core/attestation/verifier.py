@@ -5,13 +5,13 @@ This module provides verification functionality for SLSA attestations,
 including tamper detection and digest validation.
 """
 
-import json
 import hashlib
-import subprocess
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field
+import json
 import logging
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from .constants import (
     REKOR_URL,
@@ -27,14 +27,14 @@ class VerificationResult:
     """Result of attestation verification."""
 
     is_valid: bool
-    subject_name: Optional[str] = None
-    subject_digest: Optional[str] = None
-    builder_id: Optional[str] = None
-    build_time: Optional[str] = None
-    rekor_entry: Optional[str] = None
-    error_message: Optional[str] = None
+    subject_name: str | None = None
+    subject_digest: str | None = None
+    builder_id: str | None = None
+    build_time: str | None = None
+    rekor_entry: str | None = None
+    error_message: str | None = None
     tamper_detected: bool = False
-    tamper_indicators: List[TamperIndicator] = field(default_factory=list)
+    tamper_indicators: list[TamperIndicator] = field(default_factory=list)
 
 
 class AttestationVerifier:
@@ -42,7 +42,7 @@ class AttestationVerifier:
 
     def __init__(
         self,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
         enable_tamper_detection: bool = True,
         max_age_days: int = 90,
     ):
@@ -80,7 +80,7 @@ class AttestationVerifier:
         return hash_obj.hexdigest()
 
     def _verify_subject_digest(
-        self, subject_path: str, expected_digests: Dict[str, str]
+        self, subject_path: str, expected_digests: dict[str, str]
     ) -> bool:
         """
         Verify subject file matches expected digests (multi-hash support).
@@ -111,10 +111,10 @@ class AttestationVerifier:
         self,
         subject_path: str,
         attestation_path: str,
-        signature_path: Optional[str] = None,
+        signature_path: str | None = None,
         check_rekor: bool = False,
-        policy_path: Optional[str] = None,
-        historical_attestations: Optional[List[str]] = None,
+        policy_path: str | None = None,
+        historical_attestations: list[str] | None = None,
     ) -> VerificationResult:
         """Verify attestation for a subject.
 

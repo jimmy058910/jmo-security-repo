@@ -22,6 +22,7 @@ import argparse
 import csv
 import subprocess  # nosec B404 - this CLI intentionally shells out to git
 import sys
+from datetime import UTC
 from pathlib import Path
 
 
@@ -38,10 +39,10 @@ def log(msg: str, level: str = "INFO", human: bool = True) -> None:
         sys.stderr.write(f"{color}{level:5}{reset} {msg}\n")
     else:
         import json
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         rec = {
-            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "level": level,
             "msg": msg,
         }
@@ -152,8 +153,7 @@ def clone_or_update(url: str, dest_root: Path) -> Path | None:
         # stem like github.com/owner/repo(.git)
         parts = stem.split("/")
         owner, repo = parts[-2], parts[-1]
-        if repo.endswith(".git"):
-            repo = repo[:-4]
+        repo = repo.removesuffix(".git")
     except Exception:
         owner, repo = "misc", url.replace("://", "_").replace("/", "-")
     target = dest_root / owner / repo

@@ -46,10 +46,10 @@ class TestHistoryWorkflow:
 
         # Store scan using history_db module
         from scripts.core.history_db import (
-            store_scan,
             get_connection,
-            list_scans,
             get_findings_for_scan,
+            list_scans,
+            store_scan,
         )
 
         scan_id = store_scan(
@@ -86,7 +86,7 @@ class TestHistoryWorkflow:
 
         db_path = tmp_path / ".jmo" / "history.db"
 
-        from scripts.core.history_db import store_scan, get_connection, list_scans
+        from scripts.core.history_db import get_connection, list_scans, store_scan
 
         # Store 3 scans with different finding counts
         scan_ids = []
@@ -141,10 +141,10 @@ class TestHistoryWorkflow:
         db_path = tmp_path / ".jmo" / "history.db"
 
         from scripts.core.history_db import (
-            store_scan,
             get_connection,
             list_scans,
             prune_old_scans,
+            store_scan,
         )
 
         # Store 2 scans

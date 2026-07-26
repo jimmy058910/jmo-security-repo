@@ -13,7 +13,6 @@ Architecture Note:
 from pathlib import Path
 from unittest.mock import patch
 
-
 from scripts.cli.wizard_flows.dependency_flow import DependencyFlow
 from scripts.cli.wizard_flows.deployment_flow import DeploymentFlow
 

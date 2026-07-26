@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING
 
 from scripts.core.unicode_utils import (
     UNICODE_FALLBACKS,
-)  # noqa: F401 - re-exported for wizard consumers
+)
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
 # Import colorize from PromptHelper lazily to avoid import cycles at module load
 _colorize: Callable[[str, str], str] | None = None

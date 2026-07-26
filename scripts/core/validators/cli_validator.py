@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 from scripts.core.validators import (
     CategoryResult,
@@ -367,7 +367,6 @@ def _check_version_matches_pyproject() -> CheckResult | None:
     # Read pyproject.toml version
     try:
         import tomllib
-
         from pathlib import Path
 
         # Walk up from scripts/core/validators to find pyproject.toml

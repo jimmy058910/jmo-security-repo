@@ -16,30 +16,30 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
 from croniter import croniter
 
+from scripts.core.cron_installer import (
+    CronInstaller,
+    CronInstallError,
+    CronNotAvailableError,
+    UnsupportedPlatformError,
+)
 from scripts.core.schedule_manager import (
-    ScheduleManager,
+    BackendConfig,
+    JobTemplateSpec,
     ScanSchedule,
+    ScheduleManager,
     ScheduleMetadata,
     ScheduleSpec,
     ScheduleStatus,
-    BackendConfig,
-    JobTemplateSpec,
 )
 from scripts.core.workflow_generators import (
     GitHubActionsGenerator,
     GitLabCIGenerator,
-)
-from scripts.core.cron_installer import (
-    CronInstaller,
-    UnsupportedPlatformError,
-    CronNotAvailableError,
-    CronInstallError,
 )
 
 
@@ -150,7 +150,7 @@ def _cmd_schedule_create(args, manager: ScheduleManager) -> int:
             name=args.name,
             labels=labels,
             annotations=annotations,
-            creationTimestamp=datetime.now(timezone.utc)
+            creationTimestamp=datetime.now(UTC)
             .isoformat()
             .replace("+00:00", "Z"),
         ),

@@ -12,8 +12,9 @@ enforces rate limiting only.
 """
 
 import os
-import pytest
 from unittest import mock
+
+import pytest
 
 # Import the decorator and configuration
 from scripts.jmo_mcp.jmo_server import require_auth_and_rate_limit

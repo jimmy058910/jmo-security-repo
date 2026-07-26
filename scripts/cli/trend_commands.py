@@ -21,36 +21,35 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Optional
 
-from scripts.core.history_db import (
-    get_connection,
-    get_scan_by_id,
-    get_findings_for_scan,
-    compute_diff,
-    DEFAULT_DB_PATH,
-)
-from scripts.core.trend_analyzer import (
-    TrendAnalyzer,
-    validate_trend_significance,
-)
 from scripts.cli.trend_formatters import (
-    format_terminal_report,
-    format_json_report,
-    format_html_report,
     format_comparison,
-)
-from scripts.core.trend_exporters import (
-    export_to_csv,
-    export_to_prometheus,
-    export_to_grafana,
-    export_for_dashboard,
+    format_html_report,
+    format_json_report,
+    format_terminal_report,
 )
 from scripts.core.developer_attribution import (
     DeveloperAttribution,
     format_developer_stats,
     format_team_stats,
     load_team_mapping,
+)
+from scripts.core.history_db import (
+    DEFAULT_DB_PATH,
+    compute_diff,
+    get_connection,
+    get_findings_for_scan,
+    get_scan_by_id,
+)
+from scripts.core.trend_analyzer import (
+    TrendAnalyzer,
+    validate_trend_significance,
+)
+from scripts.core.trend_exporters import (
+    export_for_dashboard,
+    export_to_csv,
+    export_to_grafana,
+    export_to_prometheus,
 )
 from scripts.core.unicode_utils import UNICODE_FALLBACKS
 
@@ -886,7 +885,7 @@ def cmd_trends_developers(args) -> int:
             def __init__(self, connection):
                 self.conn = connection
 
-            def get_finding_by_fingerprint(self, fp: str) -> Optional[Dict]:
+            def get_finding_by_fingerprint(self, fp: str) -> dict | None:
                 """Get finding details by fingerprint."""
                 cursor = self.conn.execute(
                     """

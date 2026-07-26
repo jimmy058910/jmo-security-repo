@@ -69,9 +69,9 @@ See Also:
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from scripts.core.diff_engine import DiffResult
 
@@ -114,11 +114,11 @@ def write_json_diff(diff: DiffResult, out_path: Path) -> None:
           "modified_findings": [...]
         }
     """
-    output: Dict[str, Any] = {
+    output: dict[str, Any] = {
         "meta": {
             "diff_version": "1.0.0",
             "jmo_version": _get_jmo_version(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "baseline": {
                 "source_type": diff.baseline_source.source_type,
                 "path": diff.baseline_source.path,

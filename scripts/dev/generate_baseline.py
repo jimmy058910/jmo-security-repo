@@ -37,7 +37,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -278,7 +278,7 @@ def generate_baseline(
             "metadata": {
                 "target": f"{target}/{target}" if target in KNOWN_TARGETS else target,
                 "version": version,
-                "generated": datetime.now(timezone.utc).isoformat(),
+                "generated": datetime.now(UTC).isoformat(),
                 "profile": profile,
                 "tools_used": sorted(tools_used),
                 "notes": f"Auto-generated baseline from {len(findings)} findings",

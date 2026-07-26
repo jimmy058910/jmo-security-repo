@@ -25,10 +25,10 @@ import subprocess
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -336,7 +336,7 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
             )
             if cursor.fetchone()[0] == 0:
                 now = int(time.time())
-                now_iso = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+                now_iso = datetime.fromtimestamp(now, tz=UTC).isoformat()
                 cursor.execute(
                     "INSERT INTO schema_version (version, applied_at, applied_at_iso) VALUES (?, ?, ?)",
                     (SCHEMA_VERSION, now, now_iso),
@@ -351,7 +351,7 @@ def init_database(db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.close()
 
 
-def get_git_context(repo_path: Path) -> Dict[str, Any]:
+def get_git_context(repo_path: Path) -> dict[str, Any]:
     """
     Extract Git metadata for scan.
 
@@ -457,7 +457,7 @@ def detect_target_type(results_dir: Path) -> str:
         return "unknown"
 
 
-def collect_targets(results_dir: Path) -> List[str]:
+def collect_targets(results_dir: Path) -> list[str]:
     """
     Collect target names from results directory.
 
@@ -628,9 +628,10 @@ def encrypt_raw_finding(raw_json: str) -> str:
         True
     """
     try:
-        from cryptography.fernet import Fernet
         import base64
         import hashlib
+
+        from cryptography.fernet import Fernet
     except ImportError as e:
         raise ImportError(
             "cryptography library required for encryption. "
@@ -680,9 +681,10 @@ def decrypt_raw_finding(encrypted_str: str) -> str:
         '{"secret": "data"}'
     """
     try:
-        from cryptography.fernet import Fernet
         import base64
         import hashlib
+
+        from cryptography.fernet import Fernet
     except ImportError as e:
         raise ImportError(
             "cryptography library required for decryption. "
@@ -778,13 +780,13 @@ def _enforce_database_permissions(db_path: Path) -> None:
 def store_scan(
     results_dir: Path,
     profile: str,
-    tools: List[str],
+    tools: list[str],
     db_path: Path = DEFAULT_DB_PATH,
-    commit_hash: Optional[str] = None,
-    branch: Optional[str] = None,
-    tag: Optional[str] = None,
+    commit_hash: str | None = None,
+    branch: str | None = None,
+    tag: str | None = None,
     jmo_version: str = "1.0.0",
-    duration_seconds: Optional[float] = None,
+    duration_seconds: float | None = None,
     no_store_raw: bool = False,
     encrypt_findings: bool = False,
     collect_metadata: bool = False,
@@ -857,7 +859,7 @@ def store_scan(
 
     # Current timestamp
     now = int(time.time())
-    now_iso = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+    now_iso = datetime.fromtimestamp(now, tz=UTC).isoformat()
 
     # Detect target type
     target_type = detect_target_type(results_dir)
@@ -1131,7 +1133,7 @@ def store_scan(
         conn.close()
 
 
-def get_scan_by_id(conn: sqlite3.Connection, scan_id: str) -> Optional[Dict[str, Any]]:
+def get_scan_by_id(conn: sqlite3.Connection, scan_id: str) -> dict[str, Any] | None:
     """
     Retrieve scan metadata by ID.
 
@@ -1161,11 +1163,11 @@ def get_scan_by_id(conn: sqlite3.Connection, scan_id: str) -> Optional[Dict[str,
 
 def list_scans(
     conn: sqlite3.Connection,
-    branch: Optional[str] = None,
-    profile: Optional[str] = None,
-    since: Optional[int] = None,
+    branch: str | None = None,
+    profile: str | None = None,
+    since: int | None = None,
     limit: int = 50,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     List scans with optional filters.
 
@@ -1215,7 +1217,7 @@ def list_scans(
 
 def list_recent_scans(
     db_path: Path = DEFAULT_DB_PATH, limit: int = 50
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     List recent scans (convenience wrapper for wizard).
 
@@ -1236,8 +1238,8 @@ def list_recent_scans(
 def get_findings_for_scan(
     conn: sqlite3.Connection,
     scan_id: str,
-    severity: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    severity: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Retrieve all findings for a specific scan.
 
@@ -1269,7 +1271,7 @@ def compute_diff(
     conn: sqlite3.Connection,
     scan_id_1: str,
     scan_id_2: str,
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """
     Compare two scans and identify new, resolved, and unchanged findings.
 
@@ -1323,7 +1325,7 @@ def get_trend_summary(
     conn: sqlite3.Connection,
     branch: str,
     days: int = 30,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Analyze security trends for a branch over time.
 
@@ -1448,7 +1450,7 @@ def get_trend_summary(
     }
 
 
-def get_database_stats(conn: sqlite3.Connection) -> Dict[str, Any]:
+def get_database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
     """
     Get database statistics.
 
@@ -1584,7 +1586,7 @@ def prune_old_scans(
 
 
 def batch_insert_findings(
-    conn: sqlite3.Connection, scan_id: str, findings: List[Dict[str, Any]]
+    conn: sqlite3.Connection, scan_id: str, findings: list[dict[str, Any]]
 ) -> None:
     """
     Efficiently insert findings in batches using executemany.
@@ -1647,7 +1649,7 @@ def batch_insert_findings(
         )
 
 
-def recalculate_scan_counts(conn: sqlite3.Connection, scan_id: str) -> Dict[str, int]:
+def recalculate_scan_counts(conn: sqlite3.Connection, scan_id: str) -> dict[str, int]:
     """
     Recalculate and update finding counts for a scan in a single SQL statement.
 
@@ -1731,7 +1733,7 @@ def recalculate_scan_counts(conn: sqlite3.Connection, scan_id: str) -> Dict[str,
 def upsert_findings_batch(
     conn: sqlite3.Connection,
     scan_id: str,
-    findings: List[Dict[str, Any]],
+    findings: list[dict[str, Any]],
     update_counts: bool = True,
 ) -> int:
     """
@@ -1817,7 +1819,7 @@ def upsert_findings_batch(
 def batch_insert_findings_optimized(
     conn: sqlite3.Connection,
     scan_id: str,
-    findings: List[Dict[str, Any]],
+    findings: list[dict[str, Any]],
     chunk_size: int = 1000,
 ) -> int:
     """
@@ -1946,7 +1948,7 @@ def get_query_plan(conn: sqlite3.Connection, query: str) -> str:
     return "\n".join(lines)
 
 
-def optimize_database(db_path: Path) -> Dict[str, Any]:
+def optimize_database(db_path: Path) -> dict[str, Any]:
     """
     Run full optimization suite: VACUUM, ANALYZE, verify indices.
 
@@ -2024,7 +2026,7 @@ def optimize_database(db_path: Path) -> Dict[str, Any]:
 
 
 @lru_cache(maxsize=128)
-def get_scan_by_id_cached(db_path: Path, scan_id: str) -> Optional[Dict[str, Any]]:
+def get_scan_by_id_cached(db_path: Path, scan_id: str) -> dict[str, Any] | None:
     """
     Cached scan lookup for repeated queries.
 
@@ -2063,7 +2065,7 @@ def get_scan_by_id_cached(db_path: Path, scan_id: str) -> Optional[Dict[str, Any
 
 
 @lru_cache(maxsize=256)
-def get_database_stats_cached(db_path: Path) -> Dict[str, Any]:
+def get_database_stats_cached(db_path: Path) -> dict[str, Any]:
     """
     Cached database statistics for dashboard and reports.
 
@@ -2124,7 +2126,7 @@ def clear_caches() -> None:
 
 def get_dashboard_summary(
     conn: sqlite3.Connection, scan_id: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Get dashboard-ready summary for a scan (React Dashboard integration).
 
@@ -2247,7 +2249,7 @@ def get_dashboard_summary(
 
 def get_timeline_data(
     conn: sqlite3.Connection, branch: str, days: int = 30
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Get time-series data for charting severity trends (React Dashboard Recharts integration).
 
@@ -2334,8 +2336,8 @@ def get_timeline_data(
 
 
 def get_finding_details_batch(
-    conn: sqlite3.Connection, fingerprints: List[str]
-) -> List[Dict[str, Any]]:
+    conn: sqlite3.Connection, fingerprints: list[str]
+) -> list[dict[str, Any]]:
     """
     Batch fetch finding details for drill-down views (React Dashboard lazy loading).
 
@@ -2382,8 +2384,8 @@ def get_finding_details_batch(
 def search_findings(
     conn: sqlite3.Connection,
     query: str,
-    filters: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+    filters: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """
     Full-text search across findings (React Dashboard search functionality).
 
@@ -2517,7 +2519,7 @@ def search_findings(
 
 def get_finding_context(
     conn: sqlite3.Connection, fingerprint: str
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Get full context for AI remediation (MCP Server integration).
 
@@ -2694,7 +2696,7 @@ def get_finding_context(
 
 def get_scan_diff_for_ai(
     conn: sqlite3.Connection, scan_id_1: str, scan_id_2: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     AI-friendly diff format for remediation suggestions (MCP Server integration).
 
@@ -2840,7 +2842,7 @@ def get_scan_diff_for_ai(
 
 def get_recurring_findings(
     conn: sqlite3.Connection, branch: str, min_occurrences: int = 3
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Find findings that keep reappearing (MCP Server: prioritize these for remediation).
 
@@ -2939,7 +2941,7 @@ def get_recurring_findings(
 
 def get_compliance_summary(
     conn: sqlite3.Connection, scan_id: str, framework: str = "all"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get compliance summary for one or all frameworks (Compliance Dashboard integration).
 
@@ -3027,7 +3029,7 @@ def get_compliance_summary(
     # Helper function to aggregate by category
     def aggregate_framework(findings_list, framework_field):
         """Aggregate findings by framework categories."""
-        category_data: Dict[str, Dict[str, Any]] = {}
+        category_data: dict[str, dict[str, Any]] = {}
         for finding in findings_list:
             framework_json = finding.get(framework_field)
             if not framework_json:
@@ -3157,7 +3159,7 @@ def get_compliance_summary(
 
 def get_compliance_trend(
     conn: sqlite3.Connection, branch: str, framework: str, days: int = 30
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Track compliance improvements over time for a specific framework.
 
@@ -3408,10 +3410,10 @@ def migrate_add_attestations_table():
 
 def store_attestation(
     scan_id: str,
-    attestation: Dict[str, Any],
-    signature_path: Optional[str] = None,
-    certificate_path: Optional[str] = None,
-    rekor_entry: Optional[str] = None,
+    attestation: dict[str, Any],
+    signature_path: str | None = None,
+    certificate_path: str | None = None,
+    rekor_entry: str | None = None,
     rekor_published: bool = False,
 ) -> None:
     """Store attestation in database.
@@ -3456,7 +3458,7 @@ def store_attestation(
     logger.info(f"Attestation stored for scan {scan_id}")
 
 
-def load_attestation(scan_id: str) -> Optional[Dict[str, Any]]:
+def load_attestation(scan_id: str) -> dict[str, Any] | None:
     """Load attestation from database.
 
     Args:
@@ -3499,7 +3501,7 @@ def load_attestation(scan_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def get_attestation_coverage(days: int = 30) -> Dict[str, Any]:
+def get_attestation_coverage(days: int = 30) -> dict[str, Any]:
     """Get attestation coverage statistics.
 
     Calculates what percentage of scans have attestations, and how many

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from scripts.cli.report_orchestrator import fail_code
 from scripts.core.config import load_config
 from scripts.core.reporters.yaml_reporter import write_yaml
-from scripts.cli.report_orchestrator import fail_code
 
 
 def test_load_config_missing_file(tmp_path: Path):

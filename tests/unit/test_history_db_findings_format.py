@@ -7,7 +7,6 @@ directly rather than a dict with 'findings' key.
 
 import json
 
-
 from scripts.core.history_db import get_connection, init_database, store_scan
 
 

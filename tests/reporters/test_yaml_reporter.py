@@ -18,7 +18,7 @@ Coverage targets:
 import json
 import logging
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 import yaml
@@ -302,7 +302,7 @@ def test_yaml_import_error_handling():
     """Test module loads gracefully when yaml import fails."""
     # This test verifies the ImportError handling at module import time
     # We can't directly trigger it, but we verify the module handles it
-    import scripts.core.reporters.yaml_reporter as yaml_reporter
+    from scripts.core.reporters import yaml_reporter
 
     # If yaml is None (import failed), write_yaml should raise RuntimeError
     # If yaml exists, this test documents the import error handling exists
@@ -329,7 +329,7 @@ def test_schema_validation_exception_handling(tmp_path, sample_findings, caplog)
         mock_schema_path = MagicMock()
         mock_schema_path.exists.return_value = True
         # Make open() raise an exception
-        mock_schema_path.open.side_effect = IOError("Schema file corrupted")
+        mock_schema_path.open.side_effect = OSError("Schema file corrupted")
 
         mock_output_path = MagicMock()
         mock_output_path.parent.mkdir = MagicMock()

@@ -18,8 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-from scripts.core.history_db import init_database, get_connection
+from scripts.core.history_db import get_connection, init_database
 
 
 def run_jmo(*args: str, input_text: str = None):

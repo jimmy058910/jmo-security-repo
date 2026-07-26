@@ -47,7 +47,7 @@ import logging
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -413,7 +413,7 @@ def generate_golden_files(tool_name: str, update: bool = False) -> bool:
     metadata = {
         "tool": tool_name,
         "version": version,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "sample_dir": config["sample_dir"],
         "finding_count": len(expected_findings),
         "raw_output_hash": hashlib.sha256(raw_output_path.read_bytes()).hexdigest()[

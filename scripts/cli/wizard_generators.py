@@ -12,10 +12,7 @@ Functions:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
-
-if TYPE_CHECKING:
-    pass
+from typing import Any, cast
 
 # Docker image configuration - use versioned tag for reproducibility
 # This should be updated with each release

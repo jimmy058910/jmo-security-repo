@@ -21,7 +21,7 @@ import io
 import sys
 import threading
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -218,7 +218,7 @@ class RichScanProgressTracker:
             border_style="blue",
         )
 
-    def __enter__(self) -> "RichScanProgressTracker":
+    def __enter__(self) -> RichScanProgressTracker:
         """Start the live display."""
         self._start_time = time.time()
         self._live = Live(
@@ -230,7 +230,7 @@ class RichScanProgressTracker:
         self._live.__enter__()
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         """Stop the live display."""
         if self._live:
             self._live.__exit__(*args)
@@ -247,7 +247,7 @@ class RichScanProgressTracker:
         self._start_time = time.time()
 
     def update(
-        self, target_type: str, target_name: str, elapsed: float = 1.0  # noqa: ARG002
+        self, target_type: str, target_name: str, elapsed: float = 1.0
     ) -> None:
         """Update progress after completing a target scan.
 
@@ -290,12 +290,12 @@ class RichScanProgressTracker:
         self,
         tool_name: str,
         status: str,
-        findings_count: int = 0,  # noqa: ARG002
+        findings_count: int = 0,
         *,
         message: str = "",
         attempt: int = 1,
         max_attempts: int = 1,
-        **kwargs,  # noqa: ARG002 - Forward compatibility
+        **kwargs,
     ) -> None:
         """Update progress when a tool starts or completes.
 
@@ -390,7 +390,7 @@ def create_progress_tracker(
     total_targets: int,
     total_tools: int,
     args: Namespace | None = None,
-    use_rich: bool = True,  # noqa: ARG001 - Reserved for future fallback mode
+    use_rich: bool = True,
 ) -> RichScanProgressTracker:
     """Factory function to create a progress tracker.
 

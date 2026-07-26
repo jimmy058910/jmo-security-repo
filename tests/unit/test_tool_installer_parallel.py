@@ -16,8 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 from scripts.cli.tool_installer import (
-    InstallResult,
     InstallProgress,
+    InstallResult,
     ParallelInstallProgress,
 )
 
@@ -230,22 +230,21 @@ class TestBatchPipInstall:
             ToolInstaller,
             "registry",
             new_callable=lambda: property(lambda self: mock_registry),
+        ), patch.object(
+            ToolInstaller,
+            "manager",
+            new_callable=lambda: property(lambda self: mock_manager),
         ):
-            with patch.object(
-                ToolInstaller,
-                "manager",
-                new_callable=lambda: property(lambda self: mock_manager),
-            ):
-                installer = ToolInstaller.__new__(ToolInstaller)
-                installer._registry = mock_registry
-                installer._manager = mock_manager
+            installer = ToolInstaller.__new__(ToolInstaller)
+            installer._registry = mock_registry
+            installer._manager = mock_manager
 
-                progress = ParallelInstallProgress(total=2)
-                results = installer._batch_pip_install(["tool1", "tool2"], progress)
+            progress = ParallelInstallProgress(total=2)
+            results = installer._batch_pip_install(["tool1", "tool2"], progress)
 
-                assert len(results) == 2
-                assert all(r.success for r in results)
-                assert all(r.method == "pip_batch" for r in results)
+            assert len(results) == 2
+            assert all(r.success for r in results)
+            assert all(r.method == "pip_batch" for r in results)
 
     @patch("scripts.cli.tool_installer.subprocess.run")
     def test_batch_pip_install_fallback_on_failure(self, mock_run):
@@ -392,6 +391,7 @@ class TestDownloadWithRequests:
     def test_timeout_handling(self, mock_get):
         """Test timeout error handling."""
         import requests
+
         from scripts.cli.tool_installer import ToolInstaller
 
         mock_get.side_effect = requests.exceptions.Timeout()
@@ -409,6 +409,7 @@ class TestDownloadWithRequests:
     def test_http_error_handling(self, mock_get):
         """Test HTTP error handling."""
         import requests
+
         from scripts.cli.tool_installer import ToolInstaller
 
         mock_get.side_effect = requests.exceptions.HTTPError("404 Not Found")

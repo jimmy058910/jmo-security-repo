@@ -15,21 +15,22 @@ Mark tests with @pytest.mark.benchmark for CI filtering.
 import json
 import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any
 
 import pytest
+
+from scripts.core.diff_engine import DiffEngine
 
 # Import core modules
 from scripts.core.history_db import (
     get_connection,
+    get_scan_by_id,
     init_database,
     store_scan,
-    get_scan_by_id,
 )
-from scripts.core.diff_engine import DiffEngine
-from scripts.core.trend_analyzer import TrendAnalyzer
-from scripts.core.reporters.html_reporter import write_html
 from scripts.core.normalize_and_report import _cluster_cross_tool_duplicates
+from scripts.core.reporters.html_reporter import write_html
+from scripts.core.trend_analyzer import TrendAnalyzer
 
 # ============================================================================
 # Test Fixtures and Helper Functions
@@ -44,7 +45,7 @@ def create_test_finding(
     path: str = "app.py",
     line: int = 42,
     message: str = "Cross-site scripting vulnerability detected",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a test finding with CommonFinding v1.2.0 schema."""
     if fingerprint is None:
         fingerprint = f"fp-{tool}-{rule_id}-{path}-{line}"
@@ -78,7 +79,7 @@ def create_test_scan(
     scan_id: str = None,
     profile: str = "balanced",
     commit_hash: str = "abc123",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a test scan with findings for performance testing."""
     if scan_id is None:
         scan_id = f"scan-{int(time.time() * 1000)}"
@@ -122,7 +123,7 @@ def create_test_scan(
 
 def create_findings_for_diff(
     count: int = 1000, new_count: int = 0, fixed_count: int = 0
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Create findings for diff engine testing.
 
     Args:
@@ -164,7 +165,7 @@ def create_findings_for_diff(
     return findings
 
 
-def create_clusterable_findings(count: int = 1000) -> List[Dict[str, Any]]:
+def create_clusterable_findings(count: int = 1000) -> list[dict[str, Any]]:
     """Create findings with some duplicates across tools for clustering.
 
     Creates findings where ~30% are duplicates detected by multiple tools.

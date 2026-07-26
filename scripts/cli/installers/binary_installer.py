@@ -23,12 +23,11 @@ import subprocess
 import tarfile
 import time
 import zipfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterator
-
-from scripts.core.secure_temp import secure_temp_dir
+from typing import TYPE_CHECKING
 
 from scripts.cli.installers.base import (
     BaseInstaller,
@@ -38,18 +37,19 @@ from scripts.cli.installers.base import (
 )
 from scripts.cli.installers.models import InstallResult
 from scripts.core.archive_security import safe_tar_extract, safe_zip_extract
-from scripts.core.tool_utils import tool_exists
 from scripts.core.install_config import (
     BINARY_URLS,
-    DOWNLOAD_TIMEOUT_SECONDS,
     CLEANUP_RETRY_BACKOFF_FACTOR,
+    DOWNLOAD_TIMEOUT_SECONDS,
     MAX_CLEANUP_RETRIES,
 )
-from scripts.core.validation import validate_version, sanitize_subprocess_output
+from scripts.core.secure_temp import secure_temp_dir
+from scripts.core.tool_utils import tool_exists
+from scripts.core.validation import sanitize_subprocess_output, validate_version
 
 if TYPE_CHECKING:
-    from scripts.core.tool_registry import ToolInfo
     from scripts.cli.tool_manager import ToolManager
+    from scripts.core.tool_registry import ToolInfo
 
 logger = logging.getLogger(__name__)
 

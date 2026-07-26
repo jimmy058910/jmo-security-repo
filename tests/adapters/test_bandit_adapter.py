@@ -13,7 +13,6 @@ Tests cover:
 import json
 from pathlib import Path
 
-
 from scripts.core.adapters.bandit_adapter import BanditAdapter
 
 

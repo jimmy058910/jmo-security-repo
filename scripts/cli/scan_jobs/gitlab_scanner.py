@@ -37,16 +37,18 @@ from __future__ import annotations
 import logging
 import os
 import re
-import subprocess
 import shutil
-import yaml
+import subprocess
 from pathlib import Path
 
-from .repository_scanner import scan_repository
-from .image_scanner import scan_image
+import yaml
+
 from scripts.core.config import RetryConfig
 from scripts.core.secure_temp import secure_temp_dir
 from scripts.core.validation import sanitize_subprocess_output
+
+from .image_scanner import scan_image
+from .repository_scanner import scan_repository
 
 logger = logging.getLogger(__name__)
 
