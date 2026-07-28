@@ -220,9 +220,9 @@ def _load_scancode_internal(path: str | Path) -> list[dict[str, Any]]:
                     "tags": ["license-compliance", "spdx"],
                     "context": {
                         "license_expression": license_expr,
-                        "detection_id": detection_id if detection_id else None,
+                        "detection_id": detection_id or None,
                         "match_score": max_score if max_score > 0 else None,
-                        "rule_identifier": rule_id if rule_id else None,
+                        "rule_identifier": rule_id or None,
                     },
                     "raw": detection,
                 }

@@ -463,7 +463,7 @@ class TestProcessTerminationRecovery:
 
         try:
             # Simulate interrupt during operation
-            raise KeyboardInterrupt()
+            raise KeyboardInterrupt
         except KeyboardInterrupt:
             tracker.cleanup()
         finally:

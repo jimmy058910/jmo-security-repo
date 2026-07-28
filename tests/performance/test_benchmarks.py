@@ -38,7 +38,7 @@ from scripts.core.trend_analyzer import TrendAnalyzer
 
 
 def create_test_finding(
-    fingerprint: str = None,
+    fingerprint: str | None = None,
     severity: str = "MEDIUM",
     tool: str = "trivy",
     rule_id: str = "CWE-79",
@@ -76,7 +76,7 @@ def create_test_finding(
 
 def create_test_scan(
     finding_count: int = 100,
-    scan_id: str = None,
+    scan_id: str | None = None,
     profile: str = "balanced",
     commit_hash: str = "abc123",
 ) -> dict[str, Any]:

@@ -145,7 +145,7 @@ def _process_zap_instance(
             "startLine": 0,
         },
         "remediation": solution.strip() if solution else "",
-        "references": refs if refs else None,
+        "references": refs or None,
         "tags": tags,
         "context": {
             "uri": uri,

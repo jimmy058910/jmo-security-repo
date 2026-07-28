@@ -153,8 +153,7 @@ def clone_or_update(url: str, dest_root: Path) -> Path | None:
         # stem like github.com/owner/repo(.git)
         parts = stem.split("/")
         owner, repo = parts[-2], parts[-1]
-        if repo.endswith(".git"):
-            repo = repo[:-4]
+        repo = repo.removesuffix(".git")
     except Exception:
         owner, repo = "misc", url.replace("://", "_").replace("/", "-")
     target = dest_root / owner / repo

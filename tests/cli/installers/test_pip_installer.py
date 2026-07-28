@@ -320,18 +320,18 @@ class TestIsolatedPipInstallerInstall:
         """Test install uses package from ISOLATED_TOOLS config."""
         runner = make_runner(returncode=0)
         installer = IsolatedPipInstaller(subprocess_runner=runner)
-        with patch(
-            "scripts.cli.installers.pip_installer.ISOLATED_TOOLS",
-            {"semgrep": {"package": "semgrep"}},
+        with (
+            patch(
+                "scripts.cli.installers.pip_installer.ISOLATED_TOOLS",
+                {"semgrep": {"package": "semgrep"}},
+            ),
+            patch.object(installer, "_install_in_venv") as mock_venv,
         ):
-            with patch.object(installer, "_install_in_venv") as mock_venv:
-                mock_venv.return_value = InstallResult(
-                    tool_name="semgrep", success=True
-                )
-                installer.install("semgrep", make_tool_info("semgrep"))
-                # Verify package spec was passed
-                mock_venv.assert_called_once()
-                assert "semgrep==" in mock_venv.call_args[0][1]
+            mock_venv.return_value = InstallResult(tool_name="semgrep", success=True)
+            installer.install("semgrep", make_tool_info("semgrep"))
+            # Verify package spec was passed
+            mock_venv.assert_called_once()
+            assert "semgrep==" in mock_venv.call_args[0][1]
 
 
 # ========== IsolatedPipInstaller: _install_in_venv() ==========

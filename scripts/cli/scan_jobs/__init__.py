@@ -25,10 +25,10 @@ from .repository_scanner import scan_repository
 from .url_scanner import scan_url
 
 __all__ = [
-    "scan_repository",
-    "scan_image",
-    "scan_iac_file",
-    "scan_url",
     "scan_gitlab_repo",
+    "scan_iac_file",
+    "scan_image",
     "scan_k8s_resource",
+    "scan_repository",
+    "scan_url",
 ]

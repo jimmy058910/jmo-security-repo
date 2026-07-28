@@ -241,12 +241,12 @@ class ToolExecutionException(JmoSecurityException):
 
 
 __all__ = [
-    "JmoSecurityException",
-    "ToolNotFoundException",
-    "OPANotFoundException",
     "AdapterParseException",
-    "FingerprintCollisionException",
     "ComplianceMappingException",
     "ConfigurationException",
+    "FingerprintCollisionException",
+    "JmoSecurityException",
+    "OPANotFoundException",
     "ToolExecutionException",
+    "ToolNotFoundException",
 ]

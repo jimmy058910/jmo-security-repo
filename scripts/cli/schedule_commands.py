@@ -213,7 +213,7 @@ def _cmd_schedule_list(args, manager: ScheduleManager) -> int:
             label_filters[key.strip()] = value.strip()
 
     # Get all schedules
-    schedules = manager.list(labels=label_filters if label_filters else None)
+    schedules = manager.list(labels=label_filters or None)
 
     # Apply label filtering (already done above via labels parameter)
     if label_filters:
@@ -296,7 +296,7 @@ def _cmd_schedule_export(args, manager: ScheduleManager) -> int:
         return 1
 
     # Determine backend
-    backend = args.backend if args.backend else schedule.spec.backend.type
+    backend = args.backend or schedule.spec.backend.type
 
     # Generate workflow
     generator: GitHubActionsGenerator | GitLabCIGenerator

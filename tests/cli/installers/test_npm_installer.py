@@ -101,15 +101,17 @@ class TestNpmInstallerInstall:
     def test_node_version_check_failure(self):
         """Test install fails when Node.js version too old."""
         installer = NpmInstaller(subprocess_runner=make_runner())
-        with patch("shutil.which", return_value="/usr/bin/npm"):
-            with patch.object(
+        with (
+            patch("shutil.which", return_value="/usr/bin/npm"),
+            patch.object(
                 installer,
                 "_check_node_version",
                 return_value="cdxgen requires Node.js 18+",
-            ):
-                result = installer.install("cdxgen", make_tool_info())
-                assert result.success is False
-                assert "Node.js 18" in result.message
+            ),
+        ):
+            result = installer.install("cdxgen", make_tool_info())
+            assert result.success is False
+            assert "Node.js 18" in result.message
 
     def test_no_npm_package_defined(self):
         """Test install fails when no npm package defined."""
@@ -241,12 +243,12 @@ class TestCheckNodeVersion:
     def test_timeout_during_version_check(self):
         """Test proceeds on timeout."""
         installer = NpmInstaller()
-        with patch("shutil.which", return_value="/usr/bin/node"):
-            with patch(
-                "subprocess.run", side_effect=subprocess.TimeoutExpired("node", 10)
-            ):
-                result = installer._check_node_version("cdxgen")
-                assert result is None
+        with (
+            patch("shutil.which", return_value="/usr/bin/node"),
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("node", 10)),
+        ):
+            result = installer._check_node_version("cdxgen")
+            assert result is None
 
 
 # ========== Category 4: batch_install() ==========
@@ -284,15 +286,17 @@ class TestNpmInstallerBatchInstall:
         """Test batch skips tools failing Node.js version check."""
         runner = make_runner(returncode=0)
         installer = NpmInstaller(subprocess_runner=runner)
-        with patch("shutil.which", return_value="/usr/bin/npm"):
-            with patch.object(
+        with (
+            patch("shutil.which", return_value="/usr/bin/npm"),
+            patch.object(
                 installer, "_check_node_version", return_value="Node.js 18+ required"
-            ):
-                tools = [("cdxgen", make_tool_info())]
-                results = installer.batch_install(tools)
-                assert len(results) >= 1
-                assert not results[0].success
-                assert "Node.js" in results[0].message
+            ),
+        ):
+            tools = [("cdxgen", make_tool_info())]
+            results = installer.batch_install(tools)
+            assert len(results) >= 1
+            assert not results[0].success
+            assert "Node.js" in results[0].message
 
     def test_batch_empty_packages(self):
         """Test batch with no valid packages."""

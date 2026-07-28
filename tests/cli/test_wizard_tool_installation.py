@@ -270,19 +270,19 @@ class TestInstallMissingToolsInteractive:
         """Test handling ImportError when ToolInstaller not available."""
         from scripts.cli.wizard import _install_missing_tools_interactive
 
-        with patch(
-            "scripts.cli.tool_installer.ToolInstaller",
-            side_effect=ImportError("Module not found"),
-        ):
-            with patch("builtins.print"):
-                with patch(
-                    "builtins.input", return_value="y"
-                ):  # User chooses to continue
-                    should_continue, available = _install_missing_tools_interactive(
-                        missing=[MockToolStatus("semgrep")],
-                        profile="balanced",
-                        available=[],
-                    )
+        with (
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                side_effect=ImportError("Module not found"),
+            ),
+            patch("builtins.print"),
+            patch("builtins.input", return_value="y"),
+        ):  # User chooses to continue
+            should_continue, available = _install_missing_tools_interactive(
+                missing=[MockToolStatus("semgrep")],
+                profile="balanced",
+                available=[],
+            )
 
         # Function should handle the error and ask to continue
         assert (

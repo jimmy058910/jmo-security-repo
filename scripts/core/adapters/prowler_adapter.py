@@ -171,10 +171,10 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
         remediation_url = str(finding_data.get("RemediationUrl", ""))
 
         # Build message
-        message = status_extended if status_extended else check_title
+        message = status_extended or check_title
 
         # Build location path (use resource ARN or ID)
-        location_path = resource_arn if resource_arn else resource_id
+        location_path = resource_arn or resource_id
         if not location_path:
             location_path = f"{provider}/{service_name}/{check_id}"
 
@@ -200,7 +200,7 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
             "ruleId": check_id,
             "title": check_title,
             "message": message,
-            "description": description if description else check_title,
+            "description": description or check_title,
             "severity": severity,
             "tool": {
                 "name": "prowler",
@@ -210,7 +210,7 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
                 "path": location_path,
                 "startLine": 0,  # Cloud resources don't have line numbers
             },
-            "remediation": remediation_code if remediation_code else risk,
+            "remediation": remediation_code or risk,
             "references": references,
             "tags": tags,
             "context": {
@@ -218,13 +218,13 @@ def _load_prowler_internal(path: str | Path) -> list[dict[str, Any]]:
                 "check_type": check_type,
                 "service_name": service_name,
                 "provider": provider,
-                "account_uid": account_uid if account_uid else None,
-                "region": region if region else None,
-                "resource_id": resource_id if resource_id else None,
-                "resource_arn": resource_arn if resource_arn else None,
-                "resource_type": resource_type if resource_type else None,
-                "resource_details": resource_details if resource_details else None,
-                "risk": risk if risk else None,
+                "account_uid": account_uid or None,
+                "region": region or None,
+                "resource_id": resource_id or None,
+                "resource_arn": resource_arn or None,
+                "resource_type": resource_type or None,
+                "resource_details": resource_details or None,
+                "risk": risk or None,
             },
             "raw": finding_data,
         }

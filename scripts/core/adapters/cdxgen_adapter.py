@@ -206,7 +206,7 @@ def _load_cdxgen_internal(path: str | Path) -> list[dict[str, Any]]:
 
         # Generate stable fingerprint
         # Use purl if available, otherwise name@version
-        component_id = purl if purl else f"{comp_name}@{comp_version}"
+        component_id = purl or f"{comp_name}@{comp_version}"
         fid = fingerprint("cdxgen", "SBOM.COMPONENT", component_id, 0, message)
 
         # Build finding dict
@@ -233,11 +233,11 @@ def _load_cdxgen_internal(path: str | Path) -> list[dict[str, Any]]:
                 "component_name": comp_name,
                 "component_version": comp_version,
                 "component_type": comp_type,
-                "purl": purl if purl else None,
-                "bom_ref": bom_ref if bom_ref else None,
+                "purl": purl or None,
+                "bom_ref": bom_ref or None,
                 "licenses": licenses,
-                "hashes": hashes if hashes else None,
-                "supplier": supplier if supplier else None,
+                "hashes": hashes or None,
+                "supplier": supplier or None,
                 "spec_version": spec_version,
             },
             "raw": comp,

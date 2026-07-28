@@ -275,12 +275,12 @@ def _load_semgrep_secrets_internal(path: str | Path) -> list[dict[str, Any]]:
             "remediation": remediation,
             "references": references,
             "tags": tags,
-            "risk": risk if risk else None,
+            "risk": risk or None,
             "context": {
                 "check_id": check_id,
                 "cwe": f"CWE-{cwe}" if cwe else None,
-                "owasp": owasp if owasp else None,
-                "metadata": metadata if metadata else None,
+                "owasp": owasp or None,
+                "metadata": metadata or None,
             },
             "raw": r,
         }

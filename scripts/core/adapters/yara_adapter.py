@@ -254,10 +254,10 @@ def _load_yara_internal(path: str | Path) -> list[dict[str, Any]]:
             "context": {
                 "rule_name": rule_name,
                 "namespace": namespace,
-                "author": author if author else None,
+                "author": author or None,
                 "rule_tags": rule_tags,
                 "matched_strings_count": len(strings_matched),
-                "matched_strings": strings_matched if strings_matched else None,
+                "matched_strings": strings_matched or None,
             },
             "raw": match,
         }

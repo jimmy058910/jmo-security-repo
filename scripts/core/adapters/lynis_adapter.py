@@ -169,10 +169,10 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
             finding = {
                 "schemaVersion": "1.2.0",
                 "id": fid,
-                "ruleId": test_id if test_id else "lynis-warning",
+                "ruleId": test_id or "lynis-warning",
                 "title": title,
                 "message": message,
-                "description": details if details else message,
+                "description": details or message,
                 "severity": "HIGH",  # Warnings are high severity
                 "tool": {
                     "name": "lynis",
@@ -184,17 +184,16 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
                 },
                 "remediation": (
                     details
-                    if details
-                    else "Review the security warning and apply recommended hardening measures"
+                    or "Review the security warning and apply recommended hardening measures"
                 ),
                 "references": references,
                 "tags": tags,
                 "context": {
-                    "test_id": test_id if test_id else None,
+                    "test_id": test_id or None,
                     "finding_type": "warning",
                     "hostname": hostname,
                     "os": os_name,
-                    "os_version": os_version if os_version else None,
+                    "os_version": os_version or None,
                 },
                 "raw": warning,
             }
@@ -233,10 +232,10 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
             finding = {
                 "schemaVersion": "1.2.0",
                 "id": fid,
-                "ruleId": test_id if test_id else "lynis-suggestion",
+                "ruleId": test_id or "lynis-suggestion",
                 "title": title,
                 "message": message,
-                "description": details if details else message,
+                "description": details or message,
                 "severity": "MEDIUM",  # Suggestions are medium severity
                 "tool": {
                     "name": "lynis",
@@ -248,17 +247,16 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
                 },
                 "remediation": (
                     details
-                    if details
-                    else "Review the security suggestion and consider implementing the recommended improvement"
+                    or "Review the security suggestion and consider implementing the recommended improvement"
                 ),
                 "references": references,
                 "tags": tags,
                 "context": {
-                    "test_id": test_id if test_id else None,
+                    "test_id": test_id or None,
                     "finding_type": "suggestion",
                     "hostname": hostname,
                     "os": os_name,
-                    "os_version": os_version if os_version else None,
+                    "os_version": os_version or None,
                 },
                 "raw": suggestion,
             }
@@ -302,7 +300,7 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
             finding = {
                 "schemaVersion": "1.2.0",
                 "id": fid,
-                "ruleId": cve if cve else vuln_id,
+                "ruleId": cve or vuln_id,
                 "title": title,
                 "message": message,
                 "description": message,
@@ -323,13 +321,13 @@ def _load_lynis_internal(path: str | Path) -> list[dict[str, Any]]:
                 "references": references,
                 "tags": tags,
                 "context": {
-                    "vulnerability_id": vuln_id if vuln_id else None,
-                    "cve": cve if cve else None,
+                    "vulnerability_id": vuln_id or None,
+                    "cve": cve or None,
                     "finding_type": "vulnerability",
                     "hostname": hostname,
-                    "package": package if package else None,
+                    "package": package or None,
                     "os": os_name,
-                    "os_version": os_version if os_version else None,
+                    "os_version": os_version or None,
                 },
                 "raw": vulnerability,
             }

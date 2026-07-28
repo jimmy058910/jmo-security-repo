@@ -331,8 +331,7 @@ def send_welcome_email(
         return bool(
             response
             and (
-                isinstance(response, dict)
-                and "id" in response
+                (isinstance(response, dict) and "id" in response)
                 or hasattr(response, "id")
             )
         )

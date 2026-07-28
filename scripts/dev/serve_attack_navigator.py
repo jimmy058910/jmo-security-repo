@@ -276,14 +276,14 @@ def serve_and_open(json_file: Path):
         print(f"✓ Server running at: {url}")
         print(f"✓ Layer file: {json_file}")
         print(f"✓ Techniques: {len(layer_data.get('techniques', []))}")
-        print("")
+        print()
         print("Opening browser...")
 
         # Open browser
         time.sleep(1)
         webbrowser.open(url)
 
-        print("")
+        print()
         print("Press Ctrl+C to stop server")
         print("=" * 60)
 
@@ -303,7 +303,7 @@ def main():
     # Validate file
     if not json_file.exists():
         print(f"❌ Error: File not found: {json_file}")
-        print("")
+        print()
         print(
             "Usage: python3 scripts/dev/serve_attack_navigator.py [attack-navigator.json]"
         )

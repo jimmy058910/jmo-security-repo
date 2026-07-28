@@ -162,10 +162,10 @@ class TestConstants:
         assert len(EXPECTED_ADAPTERS) == 27
 
     def test_adapters_sorted(self):
-        assert EXPECTED_ADAPTERS == sorted(EXPECTED_ADAPTERS)
+        assert sorted(EXPECTED_ADAPTERS) == EXPECTED_ADAPTERS
 
     def test_standard_severities(self):
-        assert STANDARD_SEVERITIES == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+        assert {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"} == STANDARD_SEVERITIES
 
     def test_known_adapters_in_list(self):
         for adapter in ["bandit", "trivy", "semgrep", "grype", "zap"]:

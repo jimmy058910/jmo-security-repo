@@ -541,7 +541,7 @@ class PromptHelper:
             prompt = f"{question}: "
 
         response = input(prompt).strip()
-        return response if response else default
+        return response or default
 
     def confirm(self, message: str) -> bool:
         """Confirm action with yes/no prompt.

@@ -21,7 +21,7 @@ from pathlib import Path
 from scripts.core.history_db import get_connection, init_database
 
 
-def run_jmo(*args: str, input_text: str = None):
+def run_jmo(*args: str, input_text: str | None = None):
     """
     Run jmo CLI with given arguments.
 

@@ -130,12 +130,14 @@ def test_check_docker_timeout():
     """Test _check_docker returns False on timeout."""
     from scripts.cli.build_commands import _check_docker
 
-    with patch("shutil.which", return_value="/usr/bin/docker"):
-        with patch(
+    with (
+        patch("shutil.which", return_value="/usr/bin/docker"),
+        patch(
             "subprocess.run",
             side_effect=subprocess.TimeoutExpired(cmd="docker info", timeout=10),
-        ):
-            assert _check_docker() is False
+        ),
+    ):
+        assert _check_docker() is False
 
 
 def test_check_docker_exception():

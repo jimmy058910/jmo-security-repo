@@ -429,7 +429,7 @@ class RepositoryAnalyzer:
                     break
 
         # Check for untested implementation files with smarter matching
-        for file_path in apis.keys():
+        for file_path in apis:
             # Skip if already has tests
             if file_path in impl_to_tests:
                 continue

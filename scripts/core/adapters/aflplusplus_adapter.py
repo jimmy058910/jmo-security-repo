@@ -221,7 +221,7 @@ def _load_aflplusplus_internal(path: str | Path) -> list[dict[str, Any]]:
             title += f" [{classification}]"
 
         # Create location from input file
-        location_path = input_file if input_file else f"fuzzing/{target}"
+        location_path = input_file or f"fuzzing/{target}"
 
         # Create unique fingerprint
         rule_id = f"AFL-{crash_type}"

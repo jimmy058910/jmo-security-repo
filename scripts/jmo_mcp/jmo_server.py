@@ -436,7 +436,7 @@ def mark_resolved(
 
         logger.info(
             f"mark_resolved: {finding_id} → {resolution} "
-            f"(comment: {comment if comment else 'none'})"
+            f"(comment: {comment or 'none'})"
         )
 
         return {

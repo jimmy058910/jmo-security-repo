@@ -245,9 +245,9 @@ def check_pip_conflicts() -> tuple[bool, list[str]]:
 
             for conflict in conflicts:
                 conflict_lower = conflict.lower()
-                if any(pkg in conflict_lower for pkg in ISOLATED_VENV_PACKAGES):
-                    safe_conflicts.append(conflict)
-                elif any(pkg in conflict_lower for pkg in DEV_ONLY_PACKAGES):
+                if any(pkg in conflict_lower for pkg in ISOLATED_VENV_PACKAGES) or any(
+                    pkg in conflict_lower for pkg in DEV_ONLY_PACKAGES
+                ):
                     safe_conflicts.append(conflict)
                 else:
                     real_conflicts.append(conflict)

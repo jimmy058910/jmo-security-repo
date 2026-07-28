@@ -368,12 +368,12 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
             print(f"Exit code: {result.returncode}")
             print(f"\nstdout ({len(result.stdout)} chars):")
             if result.stdout:
-                print(f"  {repr(result.stdout[:500])}")
+                print(f"  {result.stdout[:500]!r}")
             else:
                 print("  (empty)")
             print(f"\nstderr ({len(result.stderr)} chars):")
             if result.stderr:
-                print(f"  {repr(result.stderr[:500])}")
+                print(f"  {result.stderr[:500]!r}")
             else:
                 print("  (empty)")
 

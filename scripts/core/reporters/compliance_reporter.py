@@ -255,7 +255,7 @@ def write_attack_navigator_json(
 
             # Use subtechnique if available, else main technique
             sub_id = mapping.get("subtechnique", "")
-            display_id = sub_id if sub_id else tech_id
+            display_id = sub_id or tech_id
 
             technique_counts[display_id] += 1
 

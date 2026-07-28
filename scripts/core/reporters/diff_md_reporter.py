@@ -264,10 +264,10 @@ def _write_finding_details(md: StringIO, finding: dict) -> None:
     compliance = finding.get("compliance", {})
     if compliance:
         md.write("**Compliance:**\n")
-        if "owaspTop10_2021" in compliance and compliance["owaspTop10_2021"]:
+        if compliance.get("owaspTop10_2021"):
             owasp = ", ".join(compliance["owaspTop10_2021"])
             md.write(f"- OWASP Top 10 2021: {owasp}\n")
-        if "cweTop25_2024" in compliance and compliance["cweTop25_2024"]:
+        if compliance.get("cweTop25_2024"):
             cwe_items = compliance["cweTop25_2024"]
             if cwe_items:
                 cwe_id = (

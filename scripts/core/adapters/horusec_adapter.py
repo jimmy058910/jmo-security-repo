@@ -161,12 +161,10 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
         severity = normalize_severity(severity_raw)
 
         # Build message
-        message = (
-            details if details else f"Security vulnerability detected: {vuln_type}"
-        )
+        message = details or f"Security vulnerability detected: {vuln_type}"
 
         # Build title
-        title = vuln_type if vuln_type else vuln_id
+        title = vuln_type or vuln_id
 
         # Generate stable fingerprint
         fid = fingerprint("horusec", vuln_id or vuln_type, file_path, line, message)
@@ -200,15 +198,14 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
         # Build remediation
         remediation = (
             details
-            if details
-            else "Review and remediate the identified security vulnerability according to OWASP best practices."
+            or "Review and remediate the identified security vulnerability according to OWASP best practices."
         )
 
         # Build finding dict
         finding = {
             "schemaVersion": "1.2.0",
             "id": fid,
-            "ruleId": vuln_id if vuln_id else vuln_type,
+            "ruleId": vuln_id or vuln_type,
             "title": title,
             "message": message,
             "description": details,
@@ -225,10 +222,10 @@ def _load_horusec_internal(path: str | Path) -> list[dict[str, Any]]:
             "references": references,
             "tags": tags,
             "context": {
-                "vulnerability_id": vuln_id if vuln_id else None,
-                "security_tool": security_tool if security_tool else None,
-                "vulnerability_type": vuln_type if vuln_type else None,
-                "code_snippet": code_snippet if code_snippet else None,
+                "vulnerability_id": vuln_id or None,
+                "security_tool": security_tool or None,
+                "vulnerability_type": vuln_type or None,
+                "code_snippet": code_snippet or None,
             },
             "raw": vuln,
         }
