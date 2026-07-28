@@ -12,10 +12,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
-from scripts.cli.installers.pip_installer import PipInstaller, IsolatedPipInstaller
 from scripts.cli.installers.base import InstallMethod
 from scripts.cli.installers.models import InstallResult
+from scripts.cli.installers.pip_installer import IsolatedPipInstaller, PipInstaller
 
 # ========== Helpers ==========
 

@@ -35,7 +35,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 Action = Literal["merge", "defer", "flip"]
@@ -345,7 +345,7 @@ def main() -> int:
         # Silent exit — cron runs every 6h and most runs will find nothing.
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for pr in prs:
         action = should_merge(pr, now, args.min_age_hours)
         number = int(pr["number"])

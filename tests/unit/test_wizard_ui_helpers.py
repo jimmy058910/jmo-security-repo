@@ -10,14 +10,13 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 from scripts.cli.wizard_flows.ui_helpers import (
     UNICODE_FALLBACKS,
-    safe_print,
-    prompt_text,
     prompt_choice,
+    prompt_text,
+    safe_print,
     select_mode,
 )
 

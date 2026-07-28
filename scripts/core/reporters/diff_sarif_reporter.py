@@ -84,7 +84,7 @@ See Also:
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from scripts.core.diff_engine import DiffResult
 
@@ -244,7 +244,7 @@ def _map_severity_to_sarif(severity: str) -> str:
     return "note"
 
 
-def _convert_location_to_sarif(location: Dict[str, Any]) -> Dict[str, Any]:
+def _convert_location_to_sarif(location: dict[str, Any]) -> dict[str, Any]:
     """
     Convert CommonFinding location to SARIF physicalLocation.
 

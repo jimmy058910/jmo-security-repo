@@ -16,8 +16,8 @@ Test Strategy (TDD):
 Coverage Target: 100% (25/25 tests)
 """
 
-import json
 import hashlib
+import json
 import tempfile
 import time
 from pathlib import Path
@@ -31,7 +31,7 @@ class TestProvenanceModels:
 
     def test_subject_model(self):
         """Test Subject model with multiple digest algorithms."""
-        from scripts.core.attestation.models import Subject, Digest
+        from scripts.core.attestation.models import Digest, Subject
 
         # Create digest with SHA-256, SHA-384, SHA-512
         digest = Digest(sha256="abc123...", sha384="def456...", sha512="ghi789...")
@@ -65,7 +65,7 @@ class TestProvenanceModels:
 
     def test_run_details_model(self):
         """Test RunDetails model."""
-        from scripts.core.attestation.models import RunDetails, Builder, Metadata
+        from scripts.core.attestation.models import Builder, Metadata, RunDetails
 
         builder = Builder(
             id="https://github.com/jimmy058910/jmo-security-repo",
@@ -86,9 +86,9 @@ class TestProvenanceModels:
     def test_intoto_statement_model(self):
         """Test complete in-toto statement structure."""
         from scripts.core.attestation.models import (
+            Digest,
             InTotoStatement,
             Subject,
-            Digest,
         )
 
         # Create minimal statement
@@ -184,8 +184,9 @@ class TestVersionDetection:
 
     def test_python_version_detection(self):
         """Test Python version detection."""
-        from scripts.core.attestation.provenance import ProvenanceGenerator
         import sys
+
+        from scripts.core.attestation.provenance import ProvenanceGenerator
 
         generator = ProvenanceGenerator()
         python_version = generator._get_python_version()

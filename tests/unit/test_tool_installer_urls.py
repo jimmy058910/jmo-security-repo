@@ -13,8 +13,8 @@ import pytest
 
 from scripts.core.install_config import (
     BINARY_URLS,
-    INSTALL_SCRIPTS,
     INSTALL_PRIORITIES,
+    INSTALL_SCRIPTS,
 )
 
 
@@ -458,8 +458,9 @@ class TestSpecialToolHandling:
 
     def test_yara_version_command_uses_python(self):
         """Verify yara version check uses Python import, not CLI."""
-        from scripts.cli.tool_manager import VERSION_COMMANDS
         import sys
+
+        from scripts.cli.tool_manager import VERSION_COMMANDS
 
         yara_cmd = VERSION_COMMANDS.get("yara", [])
         # Should use Python to check import, not 'yara --version'

@@ -25,92 +25,103 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from scripts.core.exceptions import ToolExecutionException
 from scripts.cli.cpu_utils import get_cpu_count
-from scripts.cli.wizard_generators import (
-    generate_github_actions,
-    generate_makefile_target,
-    generate_shell_script,
-)
 from scripts.cli.wizard_flows.base_flow import PromptHelper, TargetDetector
-from scripts.cli.wizard_flows.validators import (
-    validate_path,
-    validate_url,
-    detect_iac_type,
-    validate_k8s_context,
-    detect_docker,
-    check_docker_running,
-)
 from scripts.cli.wizard_flows.command_builder import build_command_parts
-from scripts.cli.wizard_flows.target_configurators import (
-    configure_repo_target as _configure_repo,
-    configure_image_target as _configure_image,
-    configure_iac_target as _configure_iac,
-    configure_url_target as _configure_url,
-    configure_gitlab_target as _configure_gitlab,
-    configure_k8s_target as _configure_k8s,
-)
 
 # Phase 1 refactor: Import from new modules
 from scripts.cli.wizard_flows.config_models import (
     TargetConfig,
     WizardConfig,
 )
+
+# Phase 4 refactor: Import diff wizard from diff_flow module
+# Re-exported for backward compatibility with tests
+from scripts.cli.wizard_flows.diff_flow import (
+    DiffArgs,  # noqa: F401
+    run_diff_wizard_impl,
+)
 from scripts.cli.wizard_flows.profile_config import (
     PROFILES,
-    WIZARD_TOTAL_STEPS,
     TOOL_TIME_ESTIMATES,  # noqa: F401 - re-exported for backward compat
+    WIZARD_TOTAL_STEPS,
     calculate_time_estimate,
     format_time_range,
 )
-from scripts.cli.wizard_flows.ui_helpers import (
-    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,  # noqa: F401 - re-exported for tests
-    safe_print as _safe_print,
-    prompt_text as _prompt_text,
-    prompt_choice as _prompt_choice,
-    select_mode as _select_mode,
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_gitlab_target as _configure_gitlab,
+)
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_iac_target as _configure_iac,
+)
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_image_target as _configure_image,
+)
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_k8s_target as _configure_k8s,
+)
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_repo_target as _configure_repo,
+)
+from scripts.cli.wizard_flows.target_configurators import (
+    configure_url_target as _configure_url,
 )
 
 # Phase 2 refactor: Import tool checking from tool_checker module
 # Used functions
-from scripts.cli.wizard_flows.tool_checker import (
-    check_tools_for_profile,
-    _check_policy_tools,
-)
-
 # Re-exported for backward compatibility with tests
 from scripts.cli.wizard_flows.tool_checker import (  # noqa: F401
     _auto_fix_tools,
-    _show_all_fix_commands,
+    _check_policy_tools,
     _collect_missing_dependencies,
     _install_missing_tools_interactive,
     _install_opa_tool,
+    _show_all_fix_commands,
+    check_tools_for_profile,
 )
 
 # Phase 3 refactor: Import trend analysis from trend_flow module
 # Used functions
-from scripts.cli.wizard_flows.trend_flow import (
-    offer_trend_analysis_after_scan,
-    _run_trend_command_interactive,
-)
-
 # Re-exported for backward compatibility with tests
 from scripts.cli.wizard_flows.trend_flow import (  # noqa: F401
-    explore_trends_interactive,
-    _compare_scans_interactive,
-    _export_trends_interactive,
-    _explain_metrics_interactive,
-    TrendArgs,
     CompareArgs,
+    TrendArgs,
+    _compare_scans_interactive,
+    _explain_metrics_interactive,
+    _export_trends_interactive,
+    _run_trend_command_interactive,
+    explore_trends_interactive,
+    offer_trend_analysis_after_scan,
 )
-
-# Phase 4 refactor: Import diff wizard from diff_flow module
-from scripts.cli.wizard_flows.diff_flow import (
-    run_diff_wizard_impl,
+from scripts.cli.wizard_flows.ui_helpers import (
+    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,  # noqa: F401 - re-exported for tests
 )
-
-# Re-exported for backward compatibility with tests
-from scripts.cli.wizard_flows.diff_flow import DiffArgs  # noqa: F401
+from scripts.cli.wizard_flows.ui_helpers import (
+    prompt_choice as _prompt_choice,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    prompt_text as _prompt_text,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    safe_print as _safe_print,
+)
+from scripts.cli.wizard_flows.ui_helpers import (
+    select_mode as _select_mode,
+)
+from scripts.cli.wizard_flows.validators import (
+    check_docker_running,
+    detect_docker,
+    detect_iac_type,
+    validate_k8s_context,
+    validate_path,
+    validate_url,
+)
+from scripts.cli.wizard_generators import (
+    generate_github_actions,
+    generate_makefile_target,
+    generate_shell_script,
+)
+from scripts.core.exceptions import ToolExecutionException
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1003,7 +1014,7 @@ def run_wizard(
             try:
                 script_path.parent.mkdir(parents=True, exist_ok=True)
                 script_path.write_text(content)
-            except (OSError, IOError) as e:
+            except OSError as e:
                 print(f"Error: Could not write to {emit_script}: {e}")
                 return 1
             # Set execute permission (no effect on Windows, which lacks Unix permission bits)
@@ -1066,11 +1077,11 @@ def run_wizard(
                                 print(
                                     _colorize("\n📊 Exporting trend reports...", "blue")
                                 )
-                                from scripts.core.trend_analyzer import TrendAnalyzer
                                 from scripts.cli.trend_formatters import (
                                     format_html_report,
                                     format_json_report,
                                 )
+                                from scripts.core.trend_analyzer import TrendAnalyzer
 
                                 analyzer = TrendAnalyzer(history_db_path)
                                 report = analyzer.analyze_trends(last_n=30)
@@ -1165,8 +1176,8 @@ def offer_policy_evaluation_after_scan(results_dir: str, profile: str, args) -> 
         profile: Scan profile name (fast/balanced/deep)
         args: Parsed CLI arguments with policy flags
     """
-    from pathlib import Path
     import json
+    from pathlib import Path
 
     # Check if user explicitly skipped policies via CLI
     if getattr(args, "skip_policies", False):

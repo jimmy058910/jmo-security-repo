@@ -28,9 +28,9 @@ from scripts.core.tool_utils import find_tool
 from scripts.core.validation import sanitize_subprocess_output
 
 if TYPE_CHECKING:
-    from scripts.core.tool_registry import ToolInfo
     from scripts.cli.tool_manager import ToolManager
     from scripts.cli.ui.progress import ParallelInstallProgress
+    from scripts.core.tool_registry import ToolInfo
 
 logger = logging.getLogger(__name__)
 

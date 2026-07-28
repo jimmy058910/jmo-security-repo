@@ -4,13 +4,15 @@ Unit tests for scripts/cli/scan_orchestrator.py
 Tests the ScanOrchestrator class extracted from cmd_scan() as part of PHASE 1 refactoring.
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from scripts.cli.scan_orchestrator import (
-    ScanTargets,
     ScanConfig,
     ScanOrchestrator,
+    ScanTargets,
     _detect_msys_path_mangling,
 )
 

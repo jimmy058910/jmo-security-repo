@@ -72,35 +72,25 @@ from .base_flow import BaseWizardFlow as BaseWizardFlow
 from .base_flow import PromptHelper as PromptHelper
 from .base_flow import TargetDetector as TargetDetector
 from .cicd_flow import CICDFlow as CICDFlow
-from .dependency_flow import DependencyFlow as DependencyFlow
-from .deployment_flow import DeploymentFlow as DeploymentFlow
-from .repo_flow import RepoFlow as RepoFlow
-from .stack_flow import EntireStackFlow as EntireStackFlow
-
-# ==============================================================================
-# Validators (existing - newly exported)
-# ==============================================================================
-from .validators import check_docker_running as check_docker_running
-from .validators import detect_docker as detect_docker
-from .validators import detect_iac_type as detect_iac_type
-from .validators import validate_k8s_context as validate_k8s_context
-from .validators import validate_path as validate_path
-from .validators import validate_url as validate_url
-
-# ==============================================================================
-# Target Configurators (existing - newly exported)
-# ==============================================================================
-from .target_configurators import configure_gitlab_target as configure_gitlab_target
-from .target_configurators import configure_iac_target as configure_iac_target
-from .target_configurators import configure_image_target as configure_image_target
-from .target_configurators import configure_k8s_target as configure_k8s_target
-from .target_configurators import configure_repo_target as configure_repo_target
-from .target_configurators import configure_url_target as configure_url_target
 
 # ==============================================================================
 # Command Builder (existing - newly exported)
 # ==============================================================================
 from .command_builder import build_command_parts as build_command_parts
+
+# ==============================================================================
+# Phase 1: Configuration Models
+# ==============================================================================
+from .config_models import TargetConfig as TargetConfig
+from .config_models import WizardConfig as WizardConfig
+from .dependency_flow import DependencyFlow as DependencyFlow
+from .deployment_flow import DeploymentFlow as DeploymentFlow
+
+# ==============================================================================
+# Phase 4: Diff Flow
+# ==============================================================================
+from .diff_flow import DiffArgs as DiffArgs
+from .diff_flow import run_diff_wizard_impl as run_diff_wizard_impl
 
 # ==============================================================================
 # Policy Flow (existing - newly exported)
@@ -109,12 +99,6 @@ from .policy_flow import (
     display_policy_violations_interactive as display_policy_violations_interactive,
 )
 from .policy_flow import policy_evaluation_menu as policy_evaluation_menu
-
-# ==============================================================================
-# Phase 1: Configuration Models
-# ==============================================================================
-from .config_models import TargetConfig as TargetConfig
-from .config_models import WizardConfig as WizardConfig
 
 # ==============================================================================
 # Phase 1: Profile Configuration
@@ -126,6 +110,56 @@ from .profile_config import WIZARD_TOTAL_STEPS as WIZARD_TOTAL_STEPS
 from .profile_config import calculate_time_estimate as calculate_time_estimate
 from .profile_config import format_time_range as format_time_range
 from .profile_config import get_profile_warning as get_profile_warning
+from .repo_flow import RepoFlow as RepoFlow
+from .stack_flow import EntireStackFlow as EntireStackFlow
+
+# ==============================================================================
+# Target Configurators (existing - newly exported)
+# ==============================================================================
+from .target_configurators import configure_gitlab_target as configure_gitlab_target
+from .target_configurators import configure_iac_target as configure_iac_target
+from .target_configurators import configure_image_target as configure_image_target
+from .target_configurators import configure_k8s_target as configure_k8s_target
+from .target_configurators import configure_repo_target as configure_repo_target
+from .target_configurators import configure_url_target as configure_url_target
+
+# Private exports for backward compatibility (underscore-prefixed)
+# These should be accessed via check_tools_for_profile() in new code
+from .tool_checker import _auto_fix_tools as _auto_fix_tools
+from .tool_checker import _check_policy_tools as _check_policy_tools
+from .tool_checker import (
+    _collect_missing_dependencies as _collect_missing_dependencies,
+)
+from .tool_checker import (
+    _install_missing_tools_interactive as _install_missing_tools_interactive,
+)
+from .tool_checker import _install_opa_tool as _install_opa_tool
+from .tool_checker import _show_all_fix_commands as _show_all_fix_commands
+
+# ==============================================================================
+# Phase 2: Tool Checker
+# ==============================================================================
+from .tool_checker import check_tools_for_profile as check_tools_for_profile
+
+# ==============================================================================
+# Phase 3: Trend Flow
+# ==============================================================================
+from .trend_flow import CompareArgs as CompareArgs
+from .trend_flow import TrendArgs as TrendArgs
+
+# Private exports for backward compatibility with tests
+from .trend_flow import _compare_scans_interactive as _compare_scans_interactive
+from .trend_flow import _explain_metrics_interactive as _explain_metrics_interactive
+from .trend_flow import _export_trends_interactive as _export_trends_interactive
+from .trend_flow import (
+    _run_trend_command_interactive as _run_trend_command_interactive,
+)
+from .trend_flow import (
+    explore_trends_interactive as explore_trends_interactive,
+)
+from .trend_flow import (
+    offer_trend_analysis_after_scan as offer_trend_analysis_after_scan,
+)
 
 # ==============================================================================
 # Phase 1: UI Helpers
@@ -137,48 +171,14 @@ from .ui_helpers import safe_print as safe_print
 from .ui_helpers import select_mode as select_mode
 
 # ==============================================================================
-# Phase 2: Tool Checker
+# Validators (existing - newly exported)
 # ==============================================================================
-from .tool_checker import check_tools_for_profile as check_tools_for_profile
-
-# Private exports for backward compatibility (underscore-prefixed)
-# These should be accessed via check_tools_for_profile() in new code
-from .tool_checker import _auto_fix_tools as _auto_fix_tools
-from .tool_checker import _check_policy_tools as _check_policy_tools
-from .tool_checker import (
-    _collect_missing_dependencies as _collect_missing_dependencies,
-)
-from .tool_checker import _install_opa_tool as _install_opa_tool
-from .tool_checker import (
-    _install_missing_tools_interactive as _install_missing_tools_interactive,
-)
-from .tool_checker import _show_all_fix_commands as _show_all_fix_commands
-
-# ==============================================================================
-# Phase 3: Trend Flow
-# ==============================================================================
-from .trend_flow import CompareArgs as CompareArgs
-from .trend_flow import TrendArgs as TrendArgs
-from .trend_flow import (
-    explore_trends_interactive as explore_trends_interactive,
-)
-from .trend_flow import (
-    offer_trend_analysis_after_scan as offer_trend_analysis_after_scan,
-)
-
-# Private exports for backward compatibility with tests
-from .trend_flow import _compare_scans_interactive as _compare_scans_interactive
-from .trend_flow import _explain_metrics_interactive as _explain_metrics_interactive
-from .trend_flow import _export_trends_interactive as _export_trends_interactive
-from .trend_flow import (
-    _run_trend_command_interactive as _run_trend_command_interactive,
-)
-
-# ==============================================================================
-# Phase 4: Diff Flow
-# ==============================================================================
-from .diff_flow import DiffArgs as DiffArgs
-from .diff_flow import run_diff_wizard_impl as run_diff_wizard_impl
+from .validators import check_docker_running as check_docker_running
+from .validators import detect_docker as detect_docker
+from .validators import detect_iac_type as detect_iac_type
+from .validators import validate_k8s_context as validate_k8s_context
+from .validators import validate_path as validate_path
+from .validators import validate_url as validate_url
 
 # ==============================================================================
 # __all__ - Public API

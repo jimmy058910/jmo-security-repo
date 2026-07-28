@@ -362,7 +362,7 @@ class TestConcurrentOperations:
                     json.dump(findings_data, f, indent=2)
 
                 # Verify file is valid JSON
-                with open(output_file, "r", encoding="utf-8") as f:
+                with open(output_file, encoding="utf-8") as f:
                     loaded = json.load(f)
                     assert loaded["meta"]["finding_count"] == 100
 
@@ -591,6 +591,6 @@ class TestReportGenerationStress:
         assert output_path.exists()
 
         # Verify file is valid JSON
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
             assert len(data["findings"]) == 50000

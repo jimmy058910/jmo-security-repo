@@ -15,7 +15,6 @@ Architecture Note:
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from scripts.cli.wizard_flows.base_flow import (
     BaseWizardFlow,
     PromptHelper,

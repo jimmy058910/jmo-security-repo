@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
+from typing import Any
 
 from scripts.core.policy_engine import PolicyEngine, PolicyResult
 
@@ -70,9 +70,9 @@ def _normalize_policy_name(name: str) -> str:
 def policy_evaluation_menu(
     results_dir: Path,
     profile: str,
-    findings: List[Dict[str, Any]],
+    findings: list[dict[str, Any]],
     non_interactive: bool = False,
-) -> Dict[str, PolicyResult]:
+) -> dict[str, PolicyResult]:
     """
     Present policy evaluation menu and evaluate selected policies.
 
@@ -107,7 +107,7 @@ def policy_evaluation_menu(
         return {}
 
     # Load policy metadata
-    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]] = []
+    policies_with_metadata: list[tuple[Path, dict[str, Any]]] = []
     for policy_path in builtin_policies:
         try:
             metadata = engine.get_metadata(policy_path)
@@ -115,7 +115,7 @@ def policy_evaluation_menu(
         except Exception as e:
             logger.debug(f"Failed to load metadata for {policy_path.name}: {e}")
             # Use fallback metadata
-            metadata_dict: Dict[str, Any] = {
+            metadata_dict: dict[str, Any] = {
                 "name": policy_path.stem,
                 "version": "1.0.0",
                 "description": f"Policy: {policy_path.stem}",
@@ -196,10 +196,10 @@ def policy_evaluation_menu(
 
 
 def _detect_recommended_policies(
-    findings: List[Dict[str, Any]],
+    findings: list[dict[str, Any]],
     profile: str,
-    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]],
-) -> List[Path]:
+    policies_with_metadata: list[tuple[Path, dict[str, Any]]],
+) -> list[Path]:
     """
     Auto-detect recommended policies based on scan findings and profile.
 
@@ -222,7 +222,7 @@ def _detect_recommended_policies(
 
     # Build normalized policy name → path mapping for fuzzy matching
     # Maps both metadata name and file stem (normalized) to path
-    policy_map: Dict[str, Path] = {}
+    policy_map: dict[str, Path] = {}
     for path, metadata in policies_with_metadata:
         # Add metadata name (normalized)
         meta_name = metadata.get("name", path.stem)
@@ -273,7 +273,7 @@ def _detect_recommended_policies(
     return recommended
 
 
-def _display_scan_summary(findings: List[Dict[str, Any]]) -> None:
+def _display_scan_summary(findings: list[dict[str, Any]]) -> None:
     """Display brief scan summary for policy context."""
     severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     verified_secrets = 0
@@ -305,9 +305,9 @@ def _display_scan_summary(findings: List[Dict[str, Any]]) -> None:
 
 def _parse_policy_choice(
     choice: str,
-    policies_with_metadata: List[Tuple[Path, Dict[str, Any]]],
-    recommended: List[Path],
-) -> List[Path]:
+    policies_with_metadata: list[tuple[Path, dict[str, Any]]],
+    recommended: list[Path],
+) -> list[Path]:
     """Parse user policy selection choice."""
     if choice == "s":
         return []
@@ -347,7 +347,7 @@ def _parse_policy_choice(
         return []
 
 
-def display_policy_violations_interactive(results: Dict[str, PolicyResult]) -> None:
+def display_policy_violations_interactive(results: dict[str, PolicyResult]) -> None:
     """
     Display interactive policy violation viewer.
 
@@ -524,7 +524,7 @@ def _extract_severity_tag(finding_text: str) -> str:
 
 
 def _display_violation(
-    index: int, violation: Dict[str, Any], policy_type: str = ""
+    index: int, violation: dict[str, Any], policy_type: str = ""
 ) -> None:
     """Display a single policy violation with formatting.
 
@@ -583,7 +583,7 @@ def _display_violation(
 
 
 def _show_all_violations_paginated(
-    violations: List[Dict[str, Any]], policy_type: str = "", page_size: int = 20
+    violations: list[dict[str, Any]], policy_type: str = "", page_size: int = 20
 ) -> None:
     """Show all violations with pagination (Fix 3.6 - Issue #16).
 

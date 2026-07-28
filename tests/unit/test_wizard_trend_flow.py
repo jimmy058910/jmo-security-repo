@@ -17,16 +17,15 @@ from dataclasses import fields
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from scripts.cli.wizard_flows.trend_flow import (
-    TrendArgs,
     CompareArgs,
-    offer_trend_analysis_after_scan,
-    explore_trends_interactive,
-    _run_trend_command_interactive,
+    TrendArgs,
     _compare_scans_interactive,
-    _export_trends_interactive,
     _explain_metrics_interactive,
+    _export_trends_interactive,
+    _run_trend_command_interactive,
+    explore_trends_interactive,
+    offer_trend_analysis_after_scan,
 )
 
 # ========== Helpers ==========

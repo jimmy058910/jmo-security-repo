@@ -14,7 +14,6 @@ Tests cover:
 import json
 from pathlib import Path
 
-
 from scripts.core.adapters.zap_adapter import ZapAdapter
 from scripts.core.common_finding import map_tool_severity
 

@@ -14,7 +14,6 @@ Tests cover:
 import json
 from pathlib import Path
 
-
 from scripts.core.adapters.trufflehog_adapter import TruffleHogAdapter
 
 

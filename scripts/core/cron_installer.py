@@ -15,32 +15,26 @@ import subprocess
 
 from scripts.core.schedule_manager import ScanSchedule
 from scripts.core.validation import (
-    validate_schedule_name,
-    validate_profile,
+    validate_container_image,
     validate_cron_expression,
     validate_path_safe,
-    validate_url,
-    validate_container_image,
     validate_positive_int,
+    validate_profile,
+    validate_schedule_name,
+    validate_url,
 )
 
 
 class UnsupportedPlatformError(Exception):
     """Platform does not support local cron."""
 
-    pass
-
 
 class CronNotAvailableError(Exception):
     """Cron is not available on this system."""
 
-    pass
-
 
 class CronInstallError(Exception):
     """Failed to install cron entry."""
-
-    pass
 
 
 class CronValidationError(Exception):
@@ -49,8 +43,6 @@ class CronValidationError(Exception):
     Security: This exception is raised when user inputs fail validation,
     preventing potential command injection attacks.
     """
-
-    pass
 
 
 class CronInstaller:

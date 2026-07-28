@@ -18,7 +18,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -45,7 +45,7 @@ auto_merge = _load_module()
 should_merge = auto_merge.should_merge
 
 
-NOW = datetime(2026, 4, 20, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 20, 12, 0, 0, tzinfo=UTC)
 
 
 def _pr(

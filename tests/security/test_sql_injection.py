@@ -8,7 +8,6 @@ and are resistant to SQL injection attacks.
 
 from __future__ import annotations
 
-
 import pytest
 
 from scripts.core.history_db import (

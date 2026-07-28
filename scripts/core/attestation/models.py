@@ -9,8 +9,8 @@ References:
 - in-toto Statement v0.1: https://github.com/in-toto/attestation/blob/main/spec/v1.0/statement.md
 """
 
-from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -21,10 +21,10 @@ class Digest:
     """
 
     sha256: str
-    sha384: Optional[str] = None
-    sha512: Optional[str] = None
+    sha384: str | None = None
+    sha512: str | None = None
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         """Convert to dictionary, excluding None values."""
         result = {"sha256": self.sha256}
         if self.sha384:
@@ -44,7 +44,7 @@ class Subject:
     name: str
     digest: Digest
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {"name": self.name, "digest": self.digest.to_dict()}
 
@@ -57,9 +57,9 @@ class Builder:
     """
 
     id: str  # URI identifying the builder (e.g., GitHub repo URL)
-    version: Dict[str, str]  # Version info (jmo, python, etc.)
+    version: dict[str, str]  # Version info (jmo, python, etc.)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
 
@@ -69,10 +69,10 @@ class Metadata:
     """Build/scan metadata (timing, invocation details)."""
 
     invocationId: str  # Unique ID for this scan invocation
-    startedOn: Optional[str] = None  # ISO 8601 timestamp
-    finishedOn: Optional[str] = None  # ISO 8601 timestamp
+    startedOn: str | None = None  # ISO 8601 timestamp
+    finishedOn: str | None = None  # ISO 8601 timestamp
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary, excluding None values."""
         result = {"invocationId": self.invocationId}
         if self.startedOn:
@@ -89,7 +89,7 @@ class RunDetails:
     builder: Builder
     metadata: Metadata
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {"builder": self.builder.to_dict(), "metadata": self.metadata.to_dict()}
 
@@ -102,15 +102,15 @@ class BuildDefinition:
     """
 
     buildType: str  # URI identifying the build type (JMo scan type)
-    externalParameters: Dict[
+    externalParameters: dict[
         str, Any
     ]  # User-provided parameters (profile, tools, targets)
-    internalParameters: Dict[str, Any]  # JMo internal parameters (threads, timeout)
-    resolvedDependencies: List[Dict[str, Any]] = field(
+    internalParameters: dict[str, Any]  # JMo internal parameters (threads, timeout)
+    resolvedDependencies: list[dict[str, Any]] = field(
         default_factory=list
     )  # Tool versions
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
 
@@ -126,7 +126,7 @@ class SLSAProvenance:
     buildDefinition: BuildDefinition
     runDetails: RunDetails
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "buildDefinition": self.buildDefinition.to_dict(),
@@ -150,11 +150,11 @@ class InTotoStatement:
     """
 
     _type: str  # in-toto statement type URI
-    subject: List[Subject]  # Artifacts being attested
+    subject: list[Subject]  # Artifacts being attested
     predicateType: str  # Type of predicate (SLSA provenance URI)
-    predicate: Dict[str, Any]  # SLSA provenance data
+    predicate: dict[str, Any]  # SLSA provenance data
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "_type": self._type,

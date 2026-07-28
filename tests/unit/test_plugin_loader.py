@@ -7,18 +7,17 @@ Tests cover:
 - Global functions: preload_profile, get_available_adapters
 """
 
-from pathlib import Path
 import time
-
+from pathlib import Path
 
 from scripts.core.plugin_api import AdapterPlugin, PluginMetadata, adapter_plugin
 from scripts.core.plugin_loader import (
-    PluginRegistry,
-    PluginLoader,
     LazyPluginRegistry,
-    get_plugin_registry,
-    get_plugin_loader,
+    PluginLoader,
+    PluginRegistry,
     get_available_adapters,
+    get_plugin_loader,
+    get_plugin_registry,
 )
 
 

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from scripts.core.history_db import get_connection, init_database
 from scripts.core.history_integrity import (
     recover_database,

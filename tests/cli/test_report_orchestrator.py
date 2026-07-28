@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.cli.report_orchestrator import fail_code, cmd_report
+from scripts.cli.report_orchestrator import cmd_report, fail_code
 
 # =============================================================================
 # fail_code() tests

@@ -1,5 +1,5 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 from scripts.core import normalize_and_report as nr
 from scripts.core.exceptions import AdapterParseException

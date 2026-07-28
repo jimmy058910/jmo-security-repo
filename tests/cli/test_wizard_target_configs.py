@@ -13,7 +13,6 @@ Test Categories:
 
 from unittest.mock import patch
 
-
 from scripts.cli.wizard import (
     TargetConfig,
     WizardConfig,

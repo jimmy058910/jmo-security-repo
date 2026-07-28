@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING
 from scripts.cli.wizard_flows.base_flow import PromptHelper
 from scripts.cli.wizard_flows.profile_config import DIFF_WIZARD_TOTAL_STEPS
 from scripts.cli.wizard_flows.ui_helpers import (
+    prompt_choice,
     safe_print,
     select_mode,
-    prompt_choice,
 )
 
 if TYPE_CHECKING:
@@ -94,7 +94,7 @@ def _get_db_path() -> Path:
 
 
 def run_diff_wizard_impl(
-    use_docker: bool = False,  # noqa: ARG001
+    use_docker: bool = False,
     yes: bool = False,
     baseline: str | None = None,
     current: str | None = None,
@@ -118,8 +118,8 @@ def run_diff_wizard_impl(
         Exit code (0 = success, 1 = error, 130 = cancelled)
     """
     # Lazy imports to avoid circular dependencies
-    from scripts.core.history_db import list_recent_scans
     from scripts.cli.diff_commands import cmd_diff
+    from scripts.core.history_db import list_recent_scans
 
     try:
         print(_colorize("\n=== JMo Security Diff Wizard ===\n", "bold"))

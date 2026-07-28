@@ -26,7 +26,7 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any
 
 from scripts.core.history_db import get_connection, init_database
 
@@ -34,7 +34,7 @@ from scripts.core.history_db import get_connection, init_database
 logger = logging.getLogger(__name__)
 
 
-def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
+def verify_database_integrity(db_path: Path) -> dict[str, Any]:
     """
     Verify database integrity using PRAGMA checks.
 
@@ -61,12 +61,12 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
         ...     print(f"Errors: {result['errors']}")
     """
     conn = get_connection(db_path)
-    errors: List[str] = []
+    errors: list[str] = []
 
     logger.info(f"Verifying database integrity: {db_path}")
 
     # 1. PRAGMA integrity_check (comprehensive corruption detection)
-    integrity_check: Union[str, List[str]]
+    integrity_check: str | list[str]
     try:
         integrity_result = conn.execute("PRAGMA integrity_check").fetchall()
         # Result is [('ok',)] if clean, otherwise list of error messages
@@ -84,7 +84,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
         logger.error(f"Integrity check error: {e}")
 
     # 2. PRAGMA foreign_key_check (orphaned references)
-    foreign_key_check: Union[str, List[str]]
+    foreign_key_check: str | list[str]
     try:
         # Enable foreign keys for check
         conn.execute("PRAGMA foreign_keys = ON")
@@ -107,7 +107,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
         logger.warning(f"Foreign key check error: {e}")
 
     # 3. PRAGMA quick_check (fast corruption check)
-    quick_check: Union[str, List[str]]
+    quick_check: str | list[str]
     try:
         quick_result = conn.execute("PRAGMA quick_check").fetchall()
         if len(quick_result) == 1 and quick_result[0][0] == "ok":
@@ -168,7 +168,7 @@ def verify_database_integrity(db_path: Path) -> Dict[str, Any]:
     return result
 
 
-def recover_database(db_path: Path) -> Dict[str, Any]:
+def recover_database(db_path: Path) -> dict[str, Any]:
     """
     Recover corrupted database by dump/reimport.
 
@@ -196,7 +196,7 @@ def recover_database(db_path: Path) -> Dict[str, Any]:
         ...     print(f"Recovered, backup at {result['backup_path']}")
     """
     start_time = time.time()
-    errors: List[str] = []
+    errors: list[str] = []
 
     logger.info(f"Starting database recovery: {db_path}")
 

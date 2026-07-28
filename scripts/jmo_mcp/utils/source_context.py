@@ -6,9 +6,9 @@ Provides surrounding code context for AI tools to analyze and suggest fixes.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
-import logging
 
 logger = logging.getLogger(__name__)
 

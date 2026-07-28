@@ -15,11 +15,11 @@ Used by AttestationVerifier to detect advanced supply chain attacks.
 
 import json
 import logging
-from pathlib import Path
-from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class TamperIndicator:
     severity: TamperSeverity
     indicator_type: TamperIndicatorType
     description: str
-    evidence: Dict[str, Any]
+    evidence: dict[str, Any]
 
 
 class TamperDetector:
@@ -106,8 +106,8 @@ class TamperDetector:
         self,
         subject_path: str,
         attestation_path: str,
-        historical_attestations: Optional[List[str]] = None,
-    ) -> List[TamperIndicator]:
+        historical_attestations: list[str] | None = None,
+    ) -> list[TamperIndicator]:
         """
         Run all tamper detection checks and aggregate indicators.
 
@@ -146,7 +146,7 @@ class TamperDetector:
 
         return indicators
 
-    def check_timestamp_anomalies(self, attestation_path: str) -> List[TamperIndicator]:
+    def check_timestamp_anomalies(self, attestation_path: str) -> list[TamperIndicator]:
         """
         Detect timestamp anomalies in attestation.
 
@@ -180,7 +180,7 @@ class TamperDetector:
         started_on = metadata.get("startedOn")
         finished_on = metadata.get("finishedOn")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check for future timestamps
         if started_on:
@@ -304,8 +304,8 @@ class TamperDetector:
         return indicators
 
     def check_builder_consistency(
-        self, attestation_path: str, historical_attestations: List[str]
-    ) -> List[TamperIndicator]:
+        self, attestation_path: str, historical_attestations: list[str]
+    ) -> list[TamperIndicator]:
         """
         Check builder consistency across attestations.
 
@@ -407,8 +407,8 @@ class TamperDetector:
         return indicators
 
     def check_tool_rollback(
-        self, attestation_path: str, historical_attestations: List[str]
-    ) -> List[TamperIndicator]:
+        self, attestation_path: str, historical_attestations: list[str]
+    ) -> list[TamperIndicator]:
         """
         Detect tool version rollback attacks.
 
@@ -445,7 +445,7 @@ class TamperDetector:
             return indicators  # No tools to check
 
         # Build current tool versions dict
-        current_versions: Dict[str, str] = {}
+        current_versions: dict[str, str] = {}
         for tool in current_tools:
             if isinstance(tool, dict):
                 tool_name = tool.get("name", "")
@@ -472,7 +472,7 @@ class TamperDetector:
                     )
 
                 # Build historical tool versions dict
-                historical_versions: Dict[str, str] = {}
+                historical_versions: dict[str, str] = {}
                 for tool in historical_tools:
                     if isinstance(tool, dict):
                         tool_name = tool.get("name", "")
@@ -522,7 +522,7 @@ class TamperDetector:
 
     def check_suspicious_patterns(
         self, subject_path: str, attestation_path: str
-    ) -> List[TamperIndicator]:
+    ) -> list[TamperIndicator]:
         """
         Detect suspicious patterns in attestation.
 

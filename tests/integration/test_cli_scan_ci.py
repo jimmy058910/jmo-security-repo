@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.cli.jmo import cmd_scan, cmd_ci
+from scripts.cli.jmo import cmd_ci, cmd_scan
 
 
 def test_scan_skips_missing_tools_and_runs_available(tmp_path: Path, monkeypatch):

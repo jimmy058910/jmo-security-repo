@@ -10,7 +10,7 @@ This module provides:
 
 import subprocess
 import sys
-from typing import List
+
 import pytest
 
 # ============================================================================
@@ -54,7 +54,7 @@ def get_python_executable() -> str:
     return sys.executable
 
 
-def run_jmo_command(args: List[str], **kwargs) -> subprocess.CompletedProcess:
+def run_jmo_command(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     """
     Run a JMo CLI command using the correct Python executable.
 
@@ -117,7 +117,7 @@ def jmo_runner():
     """
 
     def _run(
-        args: List[str], timeout: int = 120, **kwargs
+        args: list[str], timeout: int = 120, **kwargs
     ) -> subprocess.CompletedProcess:
         defaults = {"capture_output": True, "text": True, "timeout": timeout}
         defaults.update(kwargs)

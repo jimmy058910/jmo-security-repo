@@ -2481,8 +2481,8 @@ class TestDashboardFunctions:
     def test_get_dashboard_summary(self, tmp_path):
         """Test dashboard summary generation."""
         from scripts.core.history_db import (
-            get_dashboard_summary,
             get_connection,
+            get_dashboard_summary,
             init_database,
             store_scan,
         )
@@ -2572,8 +2572,8 @@ class TestDashboardFunctions:
     def test_get_dashboard_summary_invalid_scan(self, tmp_path):
         """Test dashboard summary with invalid scan ID."""
         from scripts.core.history_db import (
-            get_dashboard_summary,
             get_connection,
+            get_dashboard_summary,
             init_database,
         )
 
@@ -2722,9 +2722,10 @@ class TestAttestationFunctions:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         # Create unique database path for this test
         db_path = tmp_path / f"test_{id(self)}.db"
@@ -3151,9 +3152,10 @@ class TestSearchFindings:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         # Create unique database path for this test
         db_path = tmp_path / f"test_{id(self)}.db"
@@ -4081,9 +4083,10 @@ class TestRecurringFindings:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         # Create unique database path for this test
         db_path = tmp_path / f"test_{id(self)}.db"
@@ -4605,9 +4608,10 @@ class TestScanDiffForAI:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -5203,9 +5207,10 @@ class TestComplianceSummary:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -5240,8 +5245,8 @@ class TestComplianceSummary:
     ):
         """Test compliance summary with all 6 frameworks."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
             store_scan,
         )
@@ -5316,8 +5321,8 @@ class TestComplianceSummary:
     ):
         """Test compliance summary with single framework filter."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
             store_scan,
         )
@@ -5367,8 +5372,8 @@ class TestComplianceSummary:
     ):
         """Test aggregation of multiple findings in same category."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
             store_scan,
         )
@@ -5435,8 +5440,8 @@ class TestComplianceSummary:
     ):
         """Test coverage percentage calculation."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
             store_scan,
         )
@@ -5490,8 +5495,8 @@ class TestComplianceSummary:
     ):
         """Test compliance summary with no compliance data."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
             store_scan,
         )
@@ -5536,8 +5541,8 @@ class TestComplianceSummary:
     def test_get_compliance_summary_invalid_scan_id(self, tmp_path, isolate_database):
         """Test compliance summary with invalid scan ID."""
         from scripts.core.history_db import (
-            get_connection,
             get_compliance_summary,
+            get_connection,
             init_database,
         )
 
@@ -5559,9 +5564,10 @@ class TestFindingContext:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -5819,9 +5825,10 @@ class TestTimelineData:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -5853,13 +5860,14 @@ class TestTimelineData:
 
     def test_get_timeline_data_basic(self, tmp_path, isolate_database, monkeypatch):
         """Test basic timeline data retrieval."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_timeline_data,
-            get_connection,
-        )
-        import time
         import json
+        import time
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_timeline_data,
+            store_scan,
+        )
 
         # Mock time.time() to return consistent timestamp
         current_time = 1700000000  # Nov 14, 2023
@@ -5928,13 +5936,14 @@ class TestTimelineData:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test timeline with multiple scans across different days."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_timeline_data,
-            get_connection,
-        )
-        import time
         import json
+        import time
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_timeline_data,
+            store_scan,
+        )
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6017,13 +6026,14 @@ class TestTimelineData:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test timeline with multiple scans on same day - should keep latest."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_timeline_data,
-            get_connection,
-        )
-        import time
         import json
+        import time
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_timeline_data,
+            store_scan,
+        )
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6089,13 +6099,14 @@ class TestTimelineData:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test timeline filters by branch correctly."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_timeline_data,
-            get_connection,
-        )
-        import time
         import json
+        import time
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_timeline_data,
+            store_scan,
+        )
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6196,13 +6207,14 @@ class TestTimelineData:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test timeline respects days parameter."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_timeline_data,
-            get_connection,
-        )
-        import time
         import json
+        import time
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_timeline_data,
+            store_scan,
+        )
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6270,8 +6282,8 @@ class TestTimelineData:
     def test_get_timeline_data_empty(self, tmp_path, isolate_database):
         """Test timeline with no scans."""
         from scripts.core.history_db import (
-            get_timeline_data,
             get_connection,
+            get_timeline_data,
             init_database,
         )
 
@@ -6292,9 +6304,10 @@ class TestFindingDetailsBatch:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -6328,12 +6341,13 @@ class TestFindingDetailsBatch:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test basic batch finding retrieval."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_finding_details_batch,
-            get_connection,
-        )
         import json
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_details_batch,
+            store_scan,
+        )
 
         # Create scan with 3 findings
         results_dir = tmp_path / "results"
@@ -6382,7 +6396,7 @@ class TestFindingDetailsBatch:
 
     def test_get_finding_details_batch_empty(self, tmp_path, isolate_database):
         """Test batch retrieval with empty fingerprint list."""
-        from scripts.core.history_db import get_finding_details_batch, get_connection
+        from scripts.core.history_db import get_connection, get_finding_details_batch
 
         conn = get_connection()
         batch = get_finding_details_batch(conn, [])
@@ -6395,12 +6409,13 @@ class TestFindingDetailsBatch:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test batch retrieval with nonexistent fingerprints."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_finding_details_batch,
-            get_connection,
-        )
         import json
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_details_batch,
+            store_scan,
+        )
 
         # Create scan with 1 finding
         results_dir = tmp_path / "results"
@@ -6442,12 +6457,13 @@ class TestFindingDetailsBatch:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test batch retrieval with mix of existing and nonexistent fingerprints."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_finding_details_batch,
-            get_connection,
-        )
         import json
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_details_batch,
+            store_scan,
+        )
 
         # Create scan with 2 findings
         results_dir = tmp_path / "results"
@@ -6502,12 +6518,13 @@ class TestFindingDetailsBatch:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test batch retrieval sorting (severity DESC, then path)."""
-        from scripts.core.history_db import (
-            store_scan,
-            get_finding_details_batch,
-            get_connection,
-        )
         import json
+
+        from scripts.core.history_db import (
+            get_connection,
+            get_finding_details_batch,
+            store_scan,
+        )
 
         # Create scan with 5 findings with same severity, different paths
         results_dir = tmp_path / "results"
@@ -6554,9 +6571,10 @@ class TestComplianceTrend:
     @pytest.fixture(autouse=True)
     def isolate_database(self, tmp_path, monkeypatch):
         """Isolate database for each test to prevent cross-test pollution."""
-        import scripts.core.history_db as history_db_module
         import sqlite3
         from pathlib import Path as PathlibPath
+
+        import scripts.core.history_db as history_db_module
 
         db_path = tmp_path / f"test_{id(self)}.db"
         monkeypatch.setattr(history_db_module, "DEFAULT_DB_PATH", db_path)
@@ -6590,13 +6608,14 @@ class TestComplianceTrend:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test compliance trend showing improvement (reduction in findings)."""
+        import json
+        import time
+
         from scripts.core.history_db import (
-            store_scan,
             get_compliance_trend,
             get_connection,
+            store_scan,
         )
-        import time
-        import json
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6669,13 +6688,14 @@ class TestComplianceTrend:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test compliance trend showing degradation (increase in findings)."""
+        import json
+        import time
+
         from scripts.core.history_db import (
-            store_scan,
             get_compliance_trend,
             get_connection,
+            store_scan,
         )
-        import time
-        import json
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6743,13 +6763,14 @@ class TestComplianceTrend:
 
     def test_get_compliance_trend_stable(self, tmp_path, isolate_database, monkeypatch):
         """Test compliance trend showing stability (minimal change)."""
+        import json
+        import time
+
         from scripts.core.history_db import (
-            store_scan,
             get_compliance_trend,
             get_connection,
+            store_scan,
         )
-        import time
-        import json
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6822,13 +6843,14 @@ class TestComplianceTrend:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test compliance trend with insufficient data (< 2 scans)."""
+        import json
+        import time
+
         from scripts.core.history_db import (
-            store_scan,
             get_compliance_trend,
             get_connection,
+            store_scan,
         )
-        import time
-        import json
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)
@@ -6906,13 +6928,14 @@ class TestComplianceTrend:
         self, tmp_path, isolate_database, monkeypatch
     ):
         """Test compliance trend with zero findings in both scans (stable)."""
+        import json
+        import time
+
         from scripts.core.history_db import (
-            store_scan,
             get_compliance_trend,
             get_connection,
+            store_scan,
         )
-        import time
-        import json
 
         current_time = 1700000000
         monkeypatch.setattr(time, "time", lambda: current_time)

@@ -24,10 +24,10 @@ import pytest
 
 from scripts.core.adapters.common import safe_load_json_file, safe_load_ndjson_file
 from scripts.core.common_finding import (
+    FINGERPRINT_LENGTH,
+    Severity,
     fingerprint,
     normalize_severity,
-    Severity,
-    FINGERPRINT_LENGTH,
 )
 
 # ============================================================================

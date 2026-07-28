@@ -5,11 +5,11 @@ Tests the gitlab_scanner module with various scenarios.
 Updated to mock scan_repository() and subprocess.run() instead of ToolRunner.
 """
 
-import pytest
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import sys
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 

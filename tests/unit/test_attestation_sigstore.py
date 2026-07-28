@@ -17,9 +17,10 @@ Test Coverage:
 """
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestSigstoreClientInitialization:
@@ -36,11 +37,11 @@ class TestSigstoreClientInitialization:
 
     def test_sigstore_signer_production_config(self):
         """Test Sigstore signer uses production endpoints by default."""
-        from scripts.core.attestation.signer import SigstoreSigner
         from scripts.core.attestation.constants import (
             FULCIO_URL_PRODUCTION,
             REKOR_URL_PRODUCTION,
         )
+        from scripts.core.attestation.signer import SigstoreSigner
 
         signer = SigstoreSigner()
         assert signer.fulcio_url == FULCIO_URL_PRODUCTION
@@ -48,11 +49,11 @@ class TestSigstoreClientInitialization:
 
     def test_sigstore_signer_staging_config(self):
         """Test Sigstore signer can use staging endpoints."""
-        from scripts.core.attestation.signer import SigstoreSigner
         from scripts.core.attestation.constants import (
             FULCIO_URL_STAGING,
             REKOR_URL_STAGING,
         )
+        from scripts.core.attestation.signer import SigstoreSigner
 
         config = {"use_staging": True}
         signer = SigstoreSigner(config=config)
@@ -473,7 +474,8 @@ class TestCLISigningIntegration:
     def test_attest_command_with_sign_flag(self, mock_run, tmp_path, monkeypatch):
         """Test 'jmo attest --sign' triggers signing."""
         import sys
-        from scripts.cli.jmo import parse_args, cmd_attest
+
+        from scripts.cli.jmo import cmd_attest, parse_args
 
         # Create test files
         findings_path = tmp_path / "findings.json"
@@ -546,7 +548,8 @@ class TestCLISigningIntegration:
     def test_verify_command_checks_rekor(self, mock_verify, tmp_path, monkeypatch):
         """Test 'jmo verify --rekor-check' verifies Rekor entry."""
         import sys
-        from scripts.cli.jmo import parse_args, cmd_verify
+
+        from scripts.cli.jmo import cmd_verify, parse_args
         from scripts.core.attestation.verifier import VerificationResult
 
         # Create test files

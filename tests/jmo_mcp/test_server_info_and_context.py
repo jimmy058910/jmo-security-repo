@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from scripts.jmo_mcp.jmo_server import (
-    get_server_info,
     get_finding_context,
+    get_server_info,
     rate_limiter,
 )
 
@@ -52,6 +52,7 @@ def mock_env(mock_findings_file, monkeypatch):
 
     # Reload module to apply new environment
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)
@@ -87,6 +88,7 @@ def test_get_server_info_without_findings(tmp_path, monkeypatch):
     monkeypatch.setenv("JMO_MCP_RATE_LIMIT_ENABLED", "false")
 
     import importlib
+
     from scripts.jmo_mcp import jmo_server
 
     importlib.reload(jmo_server)

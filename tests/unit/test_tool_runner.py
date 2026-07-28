@@ -6,11 +6,12 @@ Tests the ToolRunner class extracted from cmd_scan() as part of PHASE 1 refactor
 
 import subprocess
 import sys
+import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pathlib import Path
-import time
+
 from scripts.core.tool_runner import (
     ToolDefinition,
     ToolResult,
@@ -528,9 +529,9 @@ class TestErrorHandling:
     def test_run_tool_permission_error_with_retry(self):
         """Test PermissionError handling with retry attempts"""
         # Create a file with no execute permissions
-        import tempfile
         import os
         import stat
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
             f.write("#!/bin/bash\necho test\n")
@@ -561,7 +562,7 @@ class TestErrorHandling:
             try:
                 os.chmod(script_path, stat.S_IRWXU)
                 os.unlink(script_path)
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
 
     @pytest.mark.skipif(

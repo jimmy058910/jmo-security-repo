@@ -198,7 +198,7 @@ class TestHistoryDatabaseErrors:
 
     def test_missing_history_database_directory(self, tmp_path: Path):
         """Test wizard handles missing .jmo directory."""
-        from scripts.cli.wizard import _get_db_path, WizardConfig
+        from scripts.cli.wizard import WizardConfig, _get_db_path
 
         # Mock Path.home to return a tmp directory without .jmo
         with patch.object(Path, "home", staticmethod(lambda: tmp_path)):
@@ -216,7 +216,7 @@ class TestHistoryDatabaseErrors:
 
     def test_custom_db_path_respected(self, tmp_path: Path):
         """Test that custom --db flag is respected."""
-        from scripts.cli.wizard import _get_db_path, WizardConfig
+        from scripts.cli.wizard import WizardConfig, _get_db_path
 
         custom_path = tmp_path / "custom_history.db"
 

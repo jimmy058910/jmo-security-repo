@@ -10,6 +10,7 @@ Also tests CI provider detection (GitHub Actions, GitLab CI, generic, local).
 """
 
 from unittest.mock import patch
+
 from scripts.core.attestation.ci_detector import CIDetector
 
 

@@ -18,11 +18,11 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
-from scripts.core.tool_utils import find_tool
 from scripts.core.exceptions import OPANotFoundException
 from scripts.core.secure_temp import secure_temp_file
-from typing import Any, Dict, List, Optional, cast
+from scripts.core.tool_utils import find_tool
 
 # Import packaging for version comparison
 try:
@@ -48,10 +48,10 @@ class PolicyResult:
 
     policy_name: str
     passed: bool
-    violations: List[Dict[str, Any]] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    violations: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     message: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def violation_count(self) -> int:
@@ -72,9 +72,9 @@ class PolicyMetadata:
     version: str
     description: str
     author: str = "JMo Security"
-    tags: List[str] = field(default_factory=list)
-    severity_levels: List[str] = field(default_factory=list)
-    frameworks: List[str] = field(default_factory=list)  # e.g., ["OWASP", "PCI DSS"]
+    tags: list[str] = field(default_factory=list)
+    severity_levels: list[str] = field(default_factory=list)
+    frameworks: list[str] = field(default_factory=list)  # e.g., ["OWASP", "PCI DSS"]
 
 
 class PolicyEngine:
@@ -132,9 +132,9 @@ class PolicyEngine:
 
     def evaluate(
         self,
-        findings: List[Dict[str, Any]],
+        findings: list[dict[str, Any]],
         policy_path: Path,
-        input_data: Optional[Dict[str, Any]] = None,
+        input_data: dict[str, Any] | None = None,
     ) -> PolicyResult:
         """Evaluate findings against a Rego policy.
 
@@ -198,7 +198,7 @@ class PolicyEngine:
         # Note: Temp file is automatically cleaned up by secure_temp_file context manager
 
     def _parse_opa_output(
-        self, output: Dict[str, Any], policy_name: str
+        self, output: dict[str, Any], policy_name: str
     ) -> PolicyResult:
         """Parse OPA JSON output into PolicyResult with schema validation.
 
@@ -309,7 +309,7 @@ class PolicyEngine:
 
         return self.evaluate(findings, policy_path, input_data)
 
-    def _extract_package_name(self, policy_path: Path) -> Optional[str]:
+    def _extract_package_name(self, policy_path: Path) -> str | None:
         """Extract package declaration from Rego policy file.
 
         Args:
@@ -335,7 +335,7 @@ class PolicyEngine:
             logger.warning(f"Failed to extract package name from {policy_path}: {e}")
             return None
 
-    def get_metadata(self, policy_path: Path) -> Dict[str, Any]:
+    def get_metadata(self, policy_path: Path) -> dict[str, Any]:
         """Extract metadata from Rego policy file.
 
         Reads the policy file and parses the metadata object using OPA eval.
@@ -377,7 +377,7 @@ class PolicyEngine:
                     if expressions and len(expressions) > 0:
                         metadata = expressions[0].get("value")
                         if metadata and isinstance(metadata, dict):
-                            return cast(Dict[str, Any], metadata)
+                            return cast(dict[str, Any], metadata)
 
             # Fallback: parse file manually for metadata
             content = policy_path.read_text()
@@ -404,7 +404,7 @@ class PolicyEngine:
                                 metadata[key] = value
                         else:
                             metadata[key] = value
-                return cast(Dict[str, Any], metadata)
+                return cast(dict[str, Any], metadata)
 
             return {}
 

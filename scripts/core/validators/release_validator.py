@@ -12,9 +12,10 @@ import re
 import subprocess
 import sys
 import tomllib
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
@@ -65,7 +66,7 @@ def _get_jmo_version() -> str:
 
 def _run_cmd(cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command safely (never shell=True)."""
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(
         cmd,
         capture_output=True,
         text=True,
@@ -119,10 +120,8 @@ def _check_changelog_date() -> CheckResult:
         )
     date_str = m.group(1)
     try:
-        entry_date = datetime.strptime(date_str, "%Y-%m-%d").replace(
-            tzinfo=timezone.utc
-        )
-        now = datetime.now(timezone.utc)
+        entry_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=UTC)
+        now = datetime.now(UTC)
         days_old = (now - entry_date).days
         if days_old > 90:
             return CheckResult(

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any
 import os
 import re
 import shutil
 import subprocess  # nosec B404
 import sys
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any
+
 import yaml
 
 
@@ -612,7 +613,6 @@ class BaseWizardFlow(ABC):
         Returns:
             Dictionary of target types to target lists
         """
-        pass
 
     @abstractmethod
     def prompt_user(self) -> dict[str, Any]:
@@ -621,7 +621,6 @@ class BaseWizardFlow(ABC):
         Returns:
             Dictionary of user selections
         """
-        pass
 
     @abstractmethod
     def build_command(self, targets: dict, options: dict) -> list[str]:
@@ -634,7 +633,6 @@ class BaseWizardFlow(ABC):
         Returns:
             Command as list of strings
         """
-        pass
 
     def execute(self) -> int:
         """Execute the workflow (template method) with progress tracking.

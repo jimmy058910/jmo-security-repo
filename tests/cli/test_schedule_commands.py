@@ -18,36 +18,36 @@ Architecture Note:
 """
 
 import json
-from unittest.mock import MagicMock, patch
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
 from scripts.cli.schedule_commands import (
-    cmd_schedule,
     _cmd_schedule_create,
-    _cmd_schedule_list,
-    _cmd_schedule_get,
-    _cmd_schedule_update,
-    _cmd_schedule_export,
-    _cmd_schedule_install,
-    _cmd_schedule_uninstall,
     _cmd_schedule_delete,
+    _cmd_schedule_export,
+    _cmd_schedule_get,
+    _cmd_schedule_install,
+    _cmd_schedule_list,
+    _cmd_schedule_uninstall,
+    _cmd_schedule_update,
     _cmd_schedule_validate,
+    cmd_schedule,
+)
+from scripts.core.cron_installer import (
+    CronInstallError,
+    CronNotAvailableError,
+    UnsupportedPlatformError,
 )
 from scripts.core.schedule_manager import (
+    BackendConfig,
+    JobTemplateSpec,
     ScanSchedule,
     ScheduleMetadata,
     ScheduleSpec,
     ScheduleStatus,
-    BackendConfig,
-    JobTemplateSpec,
-)
-from scripts.core.cron_installer import (
-    UnsupportedPlatformError,
-    CronNotAvailableError,
-    CronInstallError,
 )
 
 

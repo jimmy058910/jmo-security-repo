@@ -16,8 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 from scripts.cli.tool_installer import (
-    InstallResult,
     InstallProgress,
+    InstallResult,
     ParallelInstallProgress,
 )
 
@@ -392,6 +392,7 @@ class TestDownloadWithRequests:
     def test_timeout_handling(self, mock_get):
         """Test timeout error handling."""
         import requests
+
         from scripts.cli.tool_installer import ToolInstaller
 
         mock_get.side_effect = requests.exceptions.Timeout()
@@ -409,6 +410,7 @@ class TestDownloadWithRequests:
     def test_http_error_handling(self, mock_get):
         """Test HTTP error handling."""
         import requests
+
         from scripts.cli.tool_installer import ToolInstaller
 
         mock_get.side_effect = requests.exceptions.HTTPError("404 Not Found")

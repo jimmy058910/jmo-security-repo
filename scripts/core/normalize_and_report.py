@@ -19,21 +19,21 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any
 
+from scripts.core.compliance_mapper import enrich_findings_with_compliance
 from scripts.core.exceptions import AdapterParseException
 
 # Plugin system (v0.9.0)
-from scripts.core.plugin_loader import get_plugin_registry, get_plugin_loader
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from scripts.core.reporters.basic_reporter import write_json, write_markdown
-from scripts.core.compliance_mapper import enrich_findings_with_compliance
+from scripts.core.plugin_loader import get_plugin_loader, get_plugin_registry
 
 # Priority calculation (v0.9.0 Feature #5: EPSS/KEV)
 from scripts.core.priority_calculator import PriorityCalculator
+from scripts.core.reporters.basic_reporter import write_json, write_markdown
 
 # Configure logging
 logger = logging.getLogger(__name__)

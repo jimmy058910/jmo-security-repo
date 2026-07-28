@@ -16,7 +16,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Set
 
 
 def get_version_from_tag(tag: str) -> str:
@@ -67,7 +66,7 @@ def extract_changelog_section(
     return notes
 
 
-def get_contributors_since_last_release() -> List[str]:
+def get_contributors_since_last_release() -> list[str]:
     """Get list of unique contributors since last release tag."""
     try:
         # Get the previous release tag
@@ -99,7 +98,7 @@ def get_contributors_since_last_release() -> List[str]:
 
         # Parse contributors (name + email) and deduplicate
         contributors_raw = result.stdout.strip().split("\n")
-        contributors: Set[str] = set()
+        contributors: set[str] = set()
 
         for contributor in contributors_raw:
             if contributor.strip():

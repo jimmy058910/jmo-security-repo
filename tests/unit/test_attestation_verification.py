@@ -12,11 +12,12 @@ Comprehensive tests for advanced attestation verification including:
 Test Coverage: 40 tests for robust verification and tamper detection
 """
 
-import json
 import hashlib
+import json
+from datetime import UTC, datetime, timedelta, timezone
+from unittest.mock import Mock, patch
+
 import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, Mock
 
 from scripts.core.attestation.tamper_detector import TamperSeverity
 
@@ -212,7 +213,7 @@ class TestTimestampAnomalyDetection:
         from scripts.core.attestation.tamper_detector import TamperDetector
 
         # Create attestation with future timestamp
-        future_time = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+        future_time = (datetime.now(UTC) + timedelta(days=1)).isoformat()
 
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
@@ -237,7 +238,7 @@ class TestTimestampAnomalyDetection:
         """Test detecting impossibly long build duration."""
         from scripts.core.attestation.tamper_detector import TamperDetector
 
-        base_time = datetime.now(timezone.utc) - timedelta(hours=50)
+        base_time = datetime.now(UTC) - timedelta(hours=50)
         start_time = base_time.isoformat()
         # 48 hour build (default max: 24h)
         finish_time = (base_time + timedelta(hours=48)).isoformat()
@@ -265,7 +266,7 @@ class TestTimestampAnomalyDetection:
         """Test detecting finish time before start time."""
         from scripts.core.attestation.tamper_detector import TamperDetector
 
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         start_time = base_time.isoformat()
         finish_time = (base_time - timedelta(hours=1)).isoformat()
 
@@ -292,7 +293,7 @@ class TestTimestampAnomalyDetection:
         """Test detecting attestation created years ago (stale)."""
         from scripts.core.attestation.tamper_detector import TamperDetector
 
-        old_time = (datetime.now(timezone.utc) - timedelta(days=365 * 2)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(days=365 * 2)).isoformat()
 
         attestation_path = tmp_path / "test.att.json"
         attestation_data = {
@@ -320,7 +321,7 @@ class TestTimestampAnomalyDetection:
         """Test accepting valid recent timestamps."""
         from scripts.core.attestation.tamper_detector import TamperDetector
 
-        base_time = datetime.now(timezone.utc) - timedelta(minutes=5)
+        base_time = datetime.now(UTC) - timedelta(minutes=5)
         start_time = base_time.isoformat()
         finish_time = (base_time + timedelta(minutes=2)).isoformat()
 
@@ -365,7 +366,7 @@ class TestTimestampAnomalyDetection:
         from scripts.core.attestation.tamper_detector import TamperDetector
 
         # Create timestamp with suspicious timezone offset
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         # Manipulated timestamp (claims to be from far future timezone)
         manipulated_time = base_time.replace(
             tzinfo=timezone(timedelta(hours=20))
@@ -1085,7 +1086,7 @@ class TestAttackScenarioSimulation:
         from scripts.core.attestation.tamper_detector import TamperDetector
 
         # Old attestation from 2 years ago
-        old_time = (datetime.now(timezone.utc) - timedelta(days=730)).isoformat()
+        old_time = (datetime.now(UTC) - timedelta(days=730)).isoformat()
 
         attestation_path = tmp_path / "old.att.json"
         attestation_data = {
@@ -1184,7 +1185,7 @@ class TestAttackScenarioSimulation:
         """Test detecting timestamp manipulation attack."""
         from scripts.core.attestation.tamper_detector import TamperDetector
 
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         # Attacker claims scan finished before it started
         start_time = base_time.isoformat()
         finish_time = (base_time - timedelta(hours=1)).isoformat()
@@ -1226,7 +1227,7 @@ class TestAttackScenarioSimulation:
         historical_path.write_text(json.dumps(historical_data))
 
         # Coordinated attack: rollback + builder change + timestamp manipulation
-        base_time = datetime.now(timezone.utc)
+        base_time = datetime.now(UTC)
         future_time = (base_time + timedelta(days=1)).isoformat()
 
         current_path = tmp_path / "current.att.json"

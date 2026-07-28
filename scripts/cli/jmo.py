@@ -6,31 +6,32 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from scripts.cli.build_commands import add_build_args, cmd_build
+from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
+from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
+from scripts.cli.diff_commands import cmd_diff
+from scripts.cli.history_commands import cmd_history
+from scripts.cli.policy_commands import cmd_policy
+from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
+
+# PHASE 1 REFACTORING: Import refactored modules
+from scripts.cli.scan_orchestrator import ScanConfig, ScanOrchestrator
+from scripts.cli.schedule_commands import cmd_schedule
+from scripts.cli.trend_commands import cmd_trends
+from scripts.core.config import load_config
 from scripts.core.exceptions import (
     ConfigurationException,
 )
-from scripts.core.config import load_config
 from scripts.core.tool_registry import PROFILE_TOOLS
-from scripts.cli.report_orchestrator import cmd_report as _cmd_report_impl
-from scripts.cli.ci_orchestrator import cmd_ci as _cmd_ci_impl
-from scripts.cli.schedule_commands import cmd_schedule
-from scripts.cli.history_commands import cmd_history
-from scripts.cli.diff_commands import cmd_diff
-from scripts.cli.trend_commands import cmd_trends
-from scripts.cli.build_commands import cmd_build, add_build_args
-
-# PHASE 1 REFACTORING: Import refactored modules
-from scripts.cli.scan_orchestrator import ScanOrchestrator, ScanConfig
-from scripts.cli.cpu_utils import auto_detect_threads as _auto_detect_threads_shared
-from scripts.cli.policy_commands import cmd_policy
-
+from scripts.core.unicode_utils import (
+    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
+)
 from scripts.core.unicode_utils import (
     safe_print as _safe_print,
-    UNICODE_FALLBACKS as _UNICODE_FALLBACKS,
 )
 
 # Configure logging
@@ -2131,7 +2132,7 @@ def _install_and_retry(
         Tuple of (updated_available, still_missing)
     """
     try:
-        from scripts.cli.tool_installer import ToolInstaller, InstallProgress
+        from scripts.cli.tool_installer import InstallProgress, ToolInstaller
 
         print(f"\nInstalling {len(missing_statuses)} missing tool(s)...")
 
@@ -2670,12 +2671,12 @@ class ProgressTracker:
         self,
         tool_name: str,
         status: str,
-        findings_count: int = 0,  # noqa: ARG002
+        findings_count: int = 0,
         *,
         message: str = "",
         attempt: int = 1,
         max_attempts: int = 1,
-        **kwargs,  # noqa: ARG002 - Forward compatibility
+        **kwargs,
     ) -> None:
         """Update progress when a tool starts or completes.
 
@@ -2868,11 +2869,11 @@ def cmd_scan(args) -> int:
     from scripts.cli.scan_session import (
         ScanSession,
         compute_config_hash,
+        delete_session,
+        format_session_summary,
         load_session,
         save_session,
-        delete_session,
         validate_session_results,
-        format_session_summary,
     )
 
     session_path = Path(args.results_dir).parent / ".jmo" / "scan-session.json"
@@ -3095,7 +3096,7 @@ def cmd_scan(args) -> int:
     scan_metadata = {
         "profile": profile_name,
         "tools": tools,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "target_count": total_targets,
     }
     scan_metadata_path.write_text(json.dumps(scan_metadata), encoding="utf-8")
@@ -3140,7 +3141,7 @@ def cmd_ci(args) -> int:
 
 def cmd_adapters(args) -> int:
     """Handle 'jmo adapters' subcommand for plugin management."""
-    from scripts.core.plugin_loader import get_plugin_registry, get_available_adapters
+    from scripts.core.plugin_loader import get_available_adapters, get_plugin_registry
 
     if args.adapters_command == "list":
         # List all available adapters (lazy-loads each to get metadata)
@@ -3741,7 +3742,7 @@ def _log(args, level: str, message: str) -> None:
             "ERROR": "\x1b[31m",
         }.get(level, "")
         reset = "\x1b[0m"
-        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        ts = datetime.now(UTC).strftime("%H:%M:%S")
         # Windows-safe Unicode handling for stderr
         safe_message = message
         try:
@@ -3754,7 +3755,7 @@ def _log(args, level: str, message: str) -> None:
         sys.stderr.write(f"{color}{level:5}{reset} {ts} {safe_message}\n")
         return
     rec = {
-        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "level": level,
         "msg": message,
     }

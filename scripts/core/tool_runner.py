@@ -9,13 +9,13 @@ Created as part of PHASE 1 refactoring to extract tool execution logic from cmd_
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Protocol
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Protocol
 
 from scripts.core.config import RetryConfig
 from scripts.core.exceptions import ToolExecutionException
@@ -484,7 +484,7 @@ class ToolRunner:
             "average_duration": (total_duration / total) if total > 0 else 0,
             "results_by_status": {
                 status: sum(1 for r in results if r.status == status)
-                for status in set(r.status for r in results)
+                for status in {r.status for r in results}
             },
         }
 

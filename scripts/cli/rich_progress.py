@@ -218,7 +218,7 @@ class RichScanProgressTracker:
             border_style="blue",
         )
 
-    def __enter__(self) -> "RichScanProgressTracker":
+    def __enter__(self) -> RichScanProgressTracker:
         """Start the live display."""
         self._start_time = time.time()
         self._live = Live(
@@ -246,9 +246,7 @@ class RichScanProgressTracker:
         """Start progress tracking timer (compatibility method)."""
         self._start_time = time.time()
 
-    def update(
-        self, target_type: str, target_name: str, elapsed: float = 1.0  # noqa: ARG002
-    ) -> None:
+    def update(self, target_type: str, target_name: str, elapsed: float = 1.0) -> None:
         """Update progress after completing a target scan.
 
         This method is called when an entire target (repo, image, etc.) finishes.
@@ -290,12 +288,12 @@ class RichScanProgressTracker:
         self,
         tool_name: str,
         status: str,
-        findings_count: int = 0,  # noqa: ARG002
+        findings_count: int = 0,
         *,
         message: str = "",
         attempt: int = 1,
         max_attempts: int = 1,
-        **kwargs,  # noqa: ARG002 - Forward compatibility
+        **kwargs,
     ) -> None:
         """Update progress when a tool starts or completes.
 
@@ -390,7 +388,7 @@ def create_progress_tracker(
     total_targets: int,
     total_tools: int,
     args: Namespace | None = None,
-    use_rich: bool = True,  # noqa: ARG001 - Reserved for future fallback mode
+    use_rich: bool = True,
 ) -> RichScanProgressTracker:
     """Factory function to create a progress tracker.
 

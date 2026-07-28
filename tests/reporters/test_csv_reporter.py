@@ -16,11 +16,11 @@ from pathlib import Path
 import pytest
 
 from scripts.core.reporters.csv_reporter import (
-    write_csv,
-    DEFAULT_COLUMNS,
     COMPLIANCE_COLUMNS,
+    DEFAULT_COLUMNS,
     FULL_COLUMNS,
     _extract_row,
+    write_csv,
 )
 
 # ============================================================================
@@ -94,7 +94,7 @@ def test_write_csv_default_columns(tmp_path: Path, sample_findings):
     write_csv(sample_findings, out_path)
 
     # Read back and verify structure
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -131,7 +131,7 @@ def test_write_csv_custom_columns(tmp_path: Path, sample_findings):
     write_csv(sample_findings, out_path, columns=custom_columns)
 
     # Read back and verify
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -149,7 +149,7 @@ def test_write_csv_full_columns(tmp_path: Path, compliance_findings):
     write_csv(compliance_findings, out_path, columns=FULL_COLUMNS)
 
     # Read back and verify
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -173,7 +173,7 @@ def test_write_csv_compliance_only_columns(tmp_path: Path, compliance_findings):
     write_csv(compliance_findings, out_path, columns=COMPLIANCE_COLUMNS)
 
     # Read back and verify
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -229,7 +229,7 @@ def test_write_csv_escapes_newlines(tmp_path: Path):
     assert len(lines) == 2  # Header + 1 data row
 
     # Read with CSV parser to verify
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -256,7 +256,7 @@ def test_write_csv_escapes_quotes(tmp_path: Path):
     write_csv(findings, out_path)
 
     # Read with CSV parser to verify quotes preserved
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -282,7 +282,7 @@ def test_write_csv_handles_commas(tmp_path: Path):
     write_csv(findings, out_path)
 
     # Read with CSV parser to verify commas preserved
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -308,7 +308,7 @@ def test_write_csv_utf8_encoding(tmp_path: Path):
     write_csv(findings, out_path)
 
     # Read with CSV parser
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -581,7 +581,7 @@ def test_write_csv_large_dataset(tmp_path: Path):
     write_csv(findings, out_path)
 
     # Read back and verify
-    with open(out_path, "r", newline="", encoding="utf-8") as f:
+    with open(out_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 

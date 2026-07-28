@@ -17,9 +17,9 @@ from unittest.mock import patch
 import pytest
 
 from scripts.core.reporters.html_reporter import (
-    write_html,
-    _write_fallback_html,
     INLINE_THRESHOLD,
+    _write_fallback_html,
+    write_html,
 )
 
 

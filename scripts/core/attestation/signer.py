@@ -10,22 +10,23 @@ This module implements keyless signing using Sigstore infrastructure:
 Implementation uses the sigstore CLI tool for simplicity and reliability.
 """
 
-import os
 import json
-import subprocess
 import logging
+import os
+import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any
+
 import requests
 
 from .constants import (
+    ATTESTATION_TIMEOUT,
     FULCIO_URL_PRODUCTION,
     FULCIO_URL_STAGING,
+    OIDC_ISSUER_URL_PRODUCTION,
+    REKOR_TIMEOUT,
     REKOR_URL_PRODUCTION,
     REKOR_URL_STAGING,
-    OIDC_ISSUER_URL_PRODUCTION,
-    ATTESTATION_TIMEOUT,
-    REKOR_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class SigstoreSigner:
     Supports multiple OIDC providers (GitHub Actions, GitLab CI, local OAuth).
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """
         Initialize Sigstore signer.
 
@@ -181,7 +182,7 @@ class SigstoreSigner:
             )
             raise
 
-    def sign(self, attestation_path: str) -> Dict[str, Any]:
+    def sign(self, attestation_path: str) -> dict[str, Any]:
         """
         Sign attestation using Sigstore keyless signing.
 

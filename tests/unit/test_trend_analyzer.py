@@ -15,19 +15,20 @@ Target: ≥90% code coverage
 import json
 import sqlite3
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
+
 import pytest
 
-from scripts.core.trend_analyzer import (
-    TrendAnalyzer,
-    mann_kendall_test,
-    validate_trend_significance,
-    format_trend_summary,
-)
 from scripts.core.history_db import (
     init_database,
     store_scan,
+)
+from scripts.core.trend_analyzer import (
+    TrendAnalyzer,
+    format_trend_summary,
+    mann_kendall_test,
+    validate_trend_significance,
 )
 
 # ============================================================================
@@ -52,7 +53,7 @@ def sample_scans_data():
             "id": f"scan-{i}",
             "timestamp": 1704067200 + (i * 86400),  # One per day starting Jan 1, 2024
             "timestamp_iso": datetime.fromtimestamp(
-                1704067200 + (i * 86400), tz=timezone.utc
+                1704067200 + (i * 86400), tz=UTC
             ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
@@ -79,7 +80,7 @@ def degrading_scans_data():
             "id": f"scan-{i}",
             "timestamp": 1704067200 + (i * 86400),
             "timestamp_iso": datetime.fromtimestamp(
-                1704067200 + (i * 86400), tz=timezone.utc
+                1704067200 + (i * 86400), tz=UTC
             ).isoformat(),
             "branch": "main",
             "commit_hash": f"abc{i}",
@@ -810,15 +811,13 @@ def test_get_scans_with_scan_ids(trend_temp_db, tmp_path):
 def test_get_scans_with_days_filter(trend_temp_db, tmp_path):
     """Test _get_scans() with days parameter (lines 198-210)."""
     import time
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     # Store scan from 10 days ago
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
         # Mock time to make scan appear old
         old_timestamp = int(time.time()) - (10 * 86400)
-        old_timestamp_iso = datetime.fromtimestamp(
-            old_timestamp, tz=timezone.utc
-        ).isoformat()
+        old_timestamp_iso = datetime.fromtimestamp(old_timestamp, tz=UTC).isoformat()
 
         # Insert directly to control timestamp
         conn = analyzer.conn
@@ -897,7 +896,7 @@ def test_severity_trends_medium_confidence(trend_temp_db, tmp_path):
 
 def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
     """Test HIGH severity regression detection threshold (line 408)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     # Store 2 scans with HIGH increase >= 3
     # Need to manually insert with specific counts to test threshold
@@ -906,7 +905,7 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
         cursor = conn.cursor()
 
         # Baseline scan with 2 HIGH
-        baseline_iso = datetime.fromtimestamp(1000, tz=timezone.utc).isoformat()
+        baseline_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
@@ -933,7 +932,7 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
         )
 
         # Current scan with 5 HIGH (+3 increase)
-        current_iso = datetime.fromtimestamp(2000, tz=timezone.utc).isoformat()
+        current_iso = datetime.fromtimestamp(2000, tz=UTC).isoformat()
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
@@ -975,7 +974,7 @@ def test_detect_regressions_high_threshold(trend_temp_db, tmp_path):
 def test_generate_insights_low_scan_frequency(trend_temp_db):
     """Test low scan frequency insight generation (lines 497-498)."""
     import time
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     # Store 5 scans over 30 days (< 1 scan/week) - need 5+ scans for frequency insight
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
@@ -992,7 +991,7 @@ def test_generate_insights_low_scan_frequency(trend_temp_db):
         scans_data = []
         for i in range(5):
             ts = now - ((days_span - (i * days_span // 4)) * 86400)
-            ts_iso = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+            ts_iso = datetime.fromtimestamp(ts, tz=UTC).isoformat()
             scans_data.append(
                 (
                     f"scan{i+1}",
@@ -1039,7 +1038,7 @@ def test_generate_insights_low_scan_frequency(trend_temp_db):
 
 def test_calculate_security_score_all_grades(trend_temp_db):
     """Test all security score grade boundaries (lines 547, 551, 559)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     test_cases = [
         # (critical, high, medium) -> expected_grade
@@ -1062,7 +1061,7 @@ def test_calculate_security_score_all_grades(trend_temp_db):
         with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
             conn = analyzer.conn
             cursor = conn.cursor()
-            timestamp_iso = datetime.fromtimestamp(1000, tz=timezone.utc).isoformat()
+            timestamp_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
             cursor.execute(
                 """
                 INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
@@ -1206,7 +1205,7 @@ def test_format_trend_summary_with_security_score(
 
 def test_format_trend_summary_with_many_regressions(trend_temp_db):
     """Test format_trend_summary with > 5 regressions (line 800)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     # Store baseline scan + 7 scans with increasing CRITICAL counts
     with TrendAnalyzer(db_path=trend_temp_db) as analyzer:
@@ -1214,7 +1213,7 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db):
         cursor = conn.cursor()
 
         # Baseline
-        baseline_iso = datetime.fromtimestamp(1000, tz=timezone.utc).isoformat()
+        baseline_iso = datetime.fromtimestamp(1000, tz=UTC).isoformat()
         cursor.execute(
             """
             INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,
@@ -1243,9 +1242,7 @@ def test_format_trend_summary_with_many_regressions(trend_temp_db):
         # 7 regressions
         for i in range(1, 8):
             timestamp = 1000 + i * 100
-            timestamp_iso = datetime.fromtimestamp(
-                timestamp, tz=timezone.utc
-            ).isoformat()
+            timestamp_iso = datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
             cursor.execute(
                 """
                 INSERT INTO scans (id, timestamp, timestamp_iso, commit_hash, branch, profile, tools,

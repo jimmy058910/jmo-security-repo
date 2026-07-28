@@ -13,7 +13,6 @@ import pytest
 
 # Import modules before patching (required for patch decorators to work)
 import scripts.cli.tool_manager  # noqa: F401
-
 from scripts.cli.wizard import _apply_target_preset, run_wizard
 from scripts.cli.wizard_flows.config_models import TargetConfig
 
@@ -362,6 +361,7 @@ class TestWizardCLIArgs:
     def test_wizard_help_shows_preset_options(self) -> None:
         """Verify --help shows all preset options."""
         import argparse
+
         from scripts.cli.jmo import _add_wizard_args
 
         parser = argparse.ArgumentParser()
@@ -385,6 +385,7 @@ class TestWizardCLIArgs:
     def test_wizard_profile_choices(self) -> None:
         """Verify --profile accepts only valid choices."""
         import argparse
+
         from scripts.cli.jmo import _add_wizard_args
 
         parser = argparse.ArgumentParser()
@@ -399,6 +400,7 @@ class TestWizardCLIArgs:
     def test_wizard_target_type_choices(self) -> None:
         """Verify --target-type accepts only valid choices."""
         import argparse
+
         from scripts.cli.jmo import _add_wizard_args
 
         parser = argparse.ArgumentParser()
@@ -413,6 +415,7 @@ class TestWizardCLIArgs:
     def test_wizard_native_docker_mutually_exclusive(self) -> None:
         """Verify --native and --docker are mutually exclusive."""
         import argparse
+
         from scripts.cli.jmo import _add_wizard_args
 
         parser = argparse.ArgumentParser()
@@ -436,6 +439,7 @@ class TestWizardCLIArgs:
     def test_wizard_fail_on_choices(self) -> None:
         """Verify --fail-on accepts only valid severity levels."""
         import argparse
+
         from scripts.cli.jmo import _add_wizard_args
 
         parser = argparse.ArgumentParser()

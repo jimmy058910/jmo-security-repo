@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts.core.reporters.yaml_reporter import write_yaml
 from scripts.core.reporters.html_reporter import write_html
+from scripts.core.reporters.yaml_reporter import write_yaml
 
 
 @pytest.fixture(autouse=True)

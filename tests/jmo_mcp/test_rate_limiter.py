@@ -9,10 +9,10 @@ Tests:
 - RateLimiter reset functionality
 """
 
-import time
 import threading
+import time
 
-from scripts.jmo_mcp.utils.rate_limiter import TokenBucket, RateLimiter
+from scripts.jmo_mcp.utils.rate_limiter import RateLimiter, TokenBucket
 
 
 class TestTokenBucket:

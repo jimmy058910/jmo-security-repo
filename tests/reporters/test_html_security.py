@@ -13,8 +13,10 @@ Tests cover:
 """
 
 import os
-import pytest
 import re
+
+import pytest
+
 from scripts.core.reporters.html_reporter import write_html
 
 

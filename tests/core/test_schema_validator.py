@@ -52,7 +52,7 @@ class TestLoadSchema:
 
     def test_load_default_schema(self):
         """Test loading the default schema from docs/schemas/."""
-        from scripts.core.schema_validator import load_schema, SCHEMA_PATH
+        from scripts.core.schema_validator import SCHEMA_PATH, load_schema
 
         # Only run if schema file exists (it should in the repo)
         if not SCHEMA_PATH.exists():
@@ -109,7 +109,7 @@ class TestValidateFinding:
 
     def test_invalid_finding_returns_errors(self):
         """Test that an invalid finding returns error messages."""
-        from scripts.core.schema_validator import validate_finding, JSONSCHEMA_AVAILABLE
+        from scripts.core.schema_validator import JSONSCHEMA_AVAILABLE, validate_finding
 
         if not JSONSCHEMA_AVAILABLE:
             pytest.skip("jsonschema not installed")
@@ -128,7 +128,7 @@ class TestValidateFinding:
 
     def test_validate_finding_missing_required(self):
         """Test validation when required fields are missing."""
-        from scripts.core.schema_validator import validate_finding, JSONSCHEMA_AVAILABLE
+        from scripts.core.schema_validator import JSONSCHEMA_AVAILABLE, validate_finding
 
         if not JSONSCHEMA_AVAILABLE:
             pytest.skip("jsonschema not installed")
@@ -148,7 +148,7 @@ class TestValidateFinding:
 
     def test_validate_finding_no_schema_loads_default(self):
         """Test that passing no schema tries to load default."""
-        from scripts.core.schema_validator import validate_finding, SCHEMA_PATH
+        from scripts.core.schema_validator import SCHEMA_PATH, validate_finding
 
         if not SCHEMA_PATH.exists():
             # Should return schema load error
@@ -157,7 +157,7 @@ class TestValidateFinding:
 
     def test_validate_finding_schema_load_error(self):
         """Test error handling when schema can't be loaded."""
-        from scripts.core.schema_validator import validate_finding, JSONSCHEMA_AVAILABLE
+        from scripts.core.schema_validator import JSONSCHEMA_AVAILABLE, validate_finding
 
         if not JSONSCHEMA_AVAILABLE:
             pytest.skip("jsonschema not installed")
@@ -202,8 +202,8 @@ class TestValidateFindings:
     def test_mixed_valid_invalid(self):
         """Test batch validation with mix of valid/invalid findings."""
         from scripts.core.schema_validator import (
-            validate_findings,
             JSONSCHEMA_AVAILABLE,
+            validate_findings,
         )
 
         if not JSONSCHEMA_AVAILABLE:
@@ -227,8 +227,8 @@ class TestValidateFindings:
     def test_uses_finding_id_as_key(self):
         """Test that finding id is used as dict key when available."""
         from scripts.core.schema_validator import (
-            validate_findings,
             JSONSCHEMA_AVAILABLE,
+            validate_findings,
         )
 
         if not JSONSCHEMA_AVAILABLE:
@@ -247,8 +247,8 @@ class TestValidateFindings:
     def test_uses_index_when_no_id(self):
         """Test that index is used as key when finding has no id."""
         from scripts.core.schema_validator import (
-            validate_findings,
             JSONSCHEMA_AVAILABLE,
+            validate_findings,
         )
 
         if not JSONSCHEMA_AVAILABLE:
@@ -267,8 +267,8 @@ class TestValidateFindings:
     def test_schema_load_error(self):
         """Test error when schema can't be loaded in batch mode."""
         from scripts.core.schema_validator import (
-            validate_findings,
             JSONSCHEMA_AVAILABLE,
+            validate_findings,
         )
 
         if not JSONSCHEMA_AVAILABLE:

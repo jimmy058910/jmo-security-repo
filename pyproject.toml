@@ -218,6 +218,40 @@ omit = [
 # Exclude test fixtures that are intentionally vulnerable
 extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]
 
+[tool.ruff.lint]
+# Rule set is pinned EXPLICITLY. Without this, ruff runs its *default* rules,
+# which expand between releases and retroactively redden CI on unchanged code
+# (ruff 0.15.21 -> "All checks passed"; 0.16.0 -> 2409 errors, same commit).
+# Pinning makes every ruff upgrade an opt-in decision instead of an ambush.
+#
+# Security rules (S / flake8-bandit) are deliberately NOT selected: bandit
+# already owns that surface via [tool.bandit] above, with documented skips
+# (B603 subprocess-without-shell is SECURE with list args). Enabling S here
+# would duplicate bandit and flood CI (S101 alone = 14k hits across the suite,
+# where asserts are the entire point).
+select = [
+    "E4",     # pycodestyle - imports
+    "E7",     # pycodestyle - statements
+    "E9",     # pycodestyle - runtime errors
+    "F",      # pyflakes - correctness
+    "I",      # isort - import ordering
+    "UP",     # pyupgrade - py3.12+ modernization
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie - misc lints
+    "RUF100", # unused noqa directives
+]
+
+ignore = [
+    # `class X(str, Enum)` -> `StrEnum` is a real behavior change (str()/format
+    # semantics) on core types like CommonFinding's Severity. Revisit
+    # deliberately, not as a lint autofix.
+    "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Imports deliberately follow pytest.importorskip() / sys.path setup.
+"tests/adapters/test_adapter_fuzzing.py" = ["E402"]
+
 [tool.bandit]
 exclude_dirs = [
     ".venv",

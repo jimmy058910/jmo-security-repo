@@ -19,14 +19,13 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from scripts.cli.wizard_flows.validators import (
-    validate_path,
-    validate_url,
+    check_docker_running,
+    detect_docker,
     detect_iac_type,
     validate_k8s_context,
-    detect_docker,
-    check_docker_running,
+    validate_path,
+    validate_url,
 )
 
 # ========== Category 1: Path Validation ==========

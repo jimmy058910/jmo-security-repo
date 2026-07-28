@@ -150,6 +150,7 @@ def mock_db(tmp_path):
 def test_offer_trend_analysis_no_db(tmp_path, monkeypatch):
     """Test offer when no history database exists."""
     from pathlib import Path
+
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
@@ -162,6 +163,7 @@ def test_offer_trend_analysis_no_db(tmp_path, monkeypatch):
 def test_offer_trend_analysis_insufficient_scans(tmp_path, monkeypatch):
     """Test offer when < 2 scans in history."""
     from pathlib import Path
+
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Create DB with only 1 scan
@@ -185,6 +187,7 @@ def test_offer_trend_analysis_insufficient_scans(tmp_path, monkeypatch):
 def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
     """Test offer when ≥2 scans exist (user declines)."""
     from pathlib import Path
+
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Move mock DB to expected location
@@ -211,6 +214,7 @@ def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
 def test_offer_trend_analysis_exception_handling(tmp_path, monkeypatch):
     """Test offer handles exceptions gracefully."""
     from pathlib import Path
+
     from scripts.cli.wizard import offer_trend_analysis_after_scan
 
     # Create invalid DB (missing table)
@@ -778,6 +782,7 @@ def test_explain_metrics(capsys):
 def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     """Test --analyze-trends flag in non-interactive mode."""
     from pathlib import Path
+
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -828,6 +833,7 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
 def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-html flag."""
     from pathlib import Path
+
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -884,6 +890,7 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
 def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     """Test --export-trends-json flag."""
     from pathlib import Path
+
     from scripts.cli.wizard import run_wizard
 
     # Move mock DB to expected location
@@ -940,6 +947,7 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
 def test_wizard_no_db_with_trend_flags(tmp_path, monkeypatch, capsys):
     """Test trend flags when no history database exists."""
     from pathlib import Path
+
     from scripts.cli.wizard import run_wizard
 
     # Use Path.home mock for cross-platform compatibility (works on Windows + Unix)
@@ -965,6 +973,7 @@ def test_wizard_no_db_with_trend_flags(tmp_path, monkeypatch, capsys):
 def test_wizard_insufficient_scans_with_trend_flags(tmp_path, monkeypatch):
     """Test trend flags when < 2 scans in history."""
     from pathlib import Path
+
     from scripts.cli.wizard import run_wizard
 
     # Create DB with 1 scan

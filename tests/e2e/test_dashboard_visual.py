@@ -28,7 +28,7 @@ import pytest
 # Skip entire module if playwright not installed
 pytest.importorskip("playwright")
 
-from playwright.sync_api import Page  # noqa: E402
+from playwright.sync_api import Page
 
 # ---------------------------------------------------------------------------
 # Helper: build a minimal CommonFinding dict the React dashboard can consume

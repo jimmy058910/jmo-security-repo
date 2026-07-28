@@ -248,11 +248,12 @@ def cmd_tools_debug(args: argparse.Namespace) -> int:
     """
     import platform
     import subprocess
+
     from scripts.cli.tool_manager import (
-        ToolManager,
         VERSION_COMMANDS,
         VERSION_PATTERNS,
         VERSION_TIMEOUTS,
+        ToolManager,
     )
 
     tools = getattr(args, "tools", None) or []
@@ -592,8 +593,8 @@ def cmd_tools_update(args: argparse.Namespace) -> int:
 
     # Actually update (reinstall with force)
     from scripts.cli.tool_installer import (
-        ToolInstaller,
         InstallProgress,
+        ToolInstaller,
         print_install_progress,
     )
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-from pathlib import Path
 
 import types
+from pathlib import Path
 
 import pytest
 
@@ -106,7 +106,7 @@ def test_scan_per_tool_flags_injected(tmp_path: Path, monkeypatch):
             self.stdout = stdout
             self.stderr = stderr
 
-    def fake_run(cmd, *args, **kwargs):  # noqa: D401
+    def fake_run(cmd, *args, **kwargs):
         """Mock subprocess.run - accepts all args/kwargs to match real signature."""
         calls.append(cmd)
         # semgrep writes to --output path
@@ -183,7 +183,7 @@ def test_scan_retries_on_failure_then_success(tmp_path: Path, monkeypatch):
             self.stdout = stdout
             self.stderr = stderr
 
-    def fake_run(cmd, *args, **kwargs):  # noqa: D401
+    def fake_run(cmd, *args, **kwargs):
         """Mock subprocess.run - accepts all args/kwargs to match real signature."""
         # Fail first time, succeed second
         attempt["n"] += 1

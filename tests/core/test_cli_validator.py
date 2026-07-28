@@ -11,12 +11,6 @@ from unittest.mock import MagicMock, patch
 
 from scripts.core.validators import CategoryResult, CheckStatus
 from scripts.core.validators.cli_validator import (
-    FLAG_TYPE_CHECKS,
-    INVALID_FLAG_COMMANDS,
-    MAIN_SUBCOMMANDS,
-    MUTUALLY_EXCLUSIVE,
-    REQUIRED_ARG_COMMANDS,
-    SUB_SUBCOMMANDS,
     _EXIT_CODE_COUNT,
     _FULL_TIER_COUNT,
     _INVALID_FLAG_COUNT,
@@ -26,6 +20,12 @@ from scripts.core.validators.cli_validator import (
     _SUB_SUBCOMMAND_COUNT,
     _TYPE_CHECK_COUNT,
     _VERSION_CHECK_COUNT,
+    FLAG_TYPE_CHECKS,
+    INVALID_FLAG_COMMANDS,
+    MAIN_SUBCOMMANDS,
+    MUTUALLY_EXCLUSIVE,
+    REQUIRED_ARG_COMMANDS,
+    SUB_SUBCOMMANDS,
     _help_check,
     _invalid_flag_check,
     _mutex_check,
@@ -886,6 +886,7 @@ class TestVersionChecks:
     def test_version_matches_pyproject(self):
         import tomllib
         from pathlib import Path
+
         from scripts.core.validators.cli_validator import (
             _check_version_matches_pyproject,
         )

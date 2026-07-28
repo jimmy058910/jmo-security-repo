@@ -8,19 +8,19 @@ CRITICAL: All subprocess calls are mocked - tests never actually install anythin
 
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
 import subprocess
+from unittest.mock import MagicMock, patch
 
 from scripts.cli.tool_installer import (
     _is_package_manager_available,
-    install_dependency,
     get_manual_dependency_command,
+    install_dependency,
 )
 from scripts.core.install_config import (
-    DEPENDENCY_INSTALL_COMMANDS,
-    DEPENDENCY_VERIFY_COMMANDS,
     DEPENDENCY_DISPLAY_NAMES,
+    DEPENDENCY_INSTALL_COMMANDS,
     DEPENDENCY_MANUAL_COMMANDS,
+    DEPENDENCY_VERIFY_COMMANDS,
 )
 
 

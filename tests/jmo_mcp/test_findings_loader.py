@@ -7,6 +7,7 @@ Coverage target: ≥90%
 
 import json
 from pathlib import Path
+
 import pytest
 
 from scripts.jmo_mcp.utils.findings_loader import FindingsLoader

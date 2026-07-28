@@ -4,11 +4,11 @@ Tests for IaC Scanner
 Tests the iac_scanner module with various scenarios.
 """
 
-import pytest
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import sys
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 

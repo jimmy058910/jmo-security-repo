@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 import scripts.core.normalize_and_report as nr
 
 
@@ -369,7 +368,7 @@ class TestSafeLoadPluginExceptionPaths:
         """Test profiling timing append failure (lines 313-314)."""
         # Make PROFILE_TIMINGS["jobs"] non-appendable
         orig_jobs = nr.PROFILE_TIMINGS["jobs"]
-        nr.PROFILE_TIMINGS["jobs"] = tuple()
+        nr.PROFILE_TIMINGS["jobs"] = ()
 
         class MockPlugin:
             def __init__(self):

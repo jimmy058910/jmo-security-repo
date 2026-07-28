@@ -278,7 +278,7 @@ _ast_cache: list[tuple[Path, list[tuple[str, int, str]]]] | None = None
 
 def _get_ast_scan() -> list[tuple[Path, list[tuple[str, int, str]]]]:
     """Return cached AST scan results."""
-    global _ast_cache  # noqa: PLW0603
+    global _ast_cache
     if _ast_cache is None:
         _ast_cache = _ast_scan_scripts()
     return _ast_cache
@@ -994,7 +994,7 @@ def validate_platform(tier: str) -> CategoryResult:
         CategoryResult with all check results.
     """
     # Reset AST cache for fresh scan
-    global _ast_cache  # noqa: PLW0603
+    global _ast_cache
     _ast_cache = None
 
     checks: list[CheckResult] = []

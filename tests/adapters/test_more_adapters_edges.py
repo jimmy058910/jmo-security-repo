@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
+from scripts.core.adapters.checkov_adapter import CheckovAdapter
 from scripts.core.adapters.hadolint_adapter import HadolintAdapter
 from scripts.core.adapters.noseyparker_adapter import NoseyParkerAdapter
-from scripts.core.adapters.checkov_adapter import CheckovAdapter
 
 
 def _write(p: Path, obj):

@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from threading import Lock
-from typing import DefaultDict
 
 
 class TokenBucket:
@@ -92,7 +91,7 @@ class RateLimiter:
         """
         self.capacity = capacity
         self.refill_rate = refill_rate
-        self.buckets: DefaultDict[str, TokenBucket] = defaultdict(
+        self.buckets: defaultdict[str, TokenBucket] = defaultdict(
             lambda: TokenBucket(self.capacity, self.refill_rate)
         )
         self.lock = Lock()

@@ -20,20 +20,22 @@ import time
 from pathlib import Path
 
 from scripts.core.history_db import (
-    get_connection,
-    get_scan_by_id,
-    list_scans,
-    get_findings_for_scan,
-    get_database_stats,
-    prune_old_scans,
-    store_scan as db_store_scan,
-    compute_diff,
-    get_trend_summary,
-    optimize_database,
     DEFAULT_DB_PATH,
+    compute_diff,
+    get_connection,
+    get_database_stats,
+    get_findings_for_scan,
+    get_scan_by_id,
+    get_trend_summary,
+    list_scans,
+    optimize_database,
+    prune_old_scans,
 )
-from scripts.core.history_migrations import run_migrations, get_current_version
-from scripts.core.history_integrity import verify_database_integrity, recover_database
+from scripts.core.history_db import (
+    store_scan as db_store_scan,
+)
+from scripts.core.history_integrity import recover_database, verify_database_integrity
+from scripts.core.history_migrations import get_current_version, run_migrations
 from scripts.core.unicode_utils import UNICODE_FALLBACKS
 
 
@@ -120,7 +122,7 @@ def cmd_history_store(args) -> int:
             # Try to detect tools from results directory
             tools_json = results_dir / "summaries" / "findings.json"
             if tools_json.exists():
-                with open(tools_json, "r", encoding="utf-8") as f:
+                with open(tools_json, encoding="utf-8") as f:
                     data = json.load(f)
                     # Extract unique tools from findings
                     tool_set = set()

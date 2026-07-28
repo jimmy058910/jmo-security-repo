@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import platform
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ def _generate_metadata(
         "output_version": "1.0.0",
         "jmo_version": _get_jmo_version(),
         "schema_version": "1.2.0",
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "scan_id": scan_id or "",
         "profile": profile or "",
         "tools": tools or [],
