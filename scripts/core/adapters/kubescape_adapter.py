@@ -219,7 +219,7 @@ def _load_kubescape_internal(path: str | Path) -> list[dict[str, Any]]:
                 "ruleId": control_id,
                 "title": control_name,
                 "message": message,
-                "description": control_desc if control_desc else control_name,
+                "description": control_desc or control_name,
                 "severity": severity,
                 "tool": {
                     "name": "kubescape",
@@ -230,9 +230,7 @@ def _load_kubescape_internal(path: str | Path) -> list[dict[str, Any]]:
                     "startLine": 0,  # K8s resources don't have line numbers
                 },
                 "remediation": (
-                    remediation
-                    if remediation
-                    else "Review Kubernetes resource configuration"
+                    remediation or "Review Kubernetes resource configuration"
                 ),
                 "references": [],
                 "tags": ["k8s-security", "misconfiguration"],
@@ -240,12 +238,10 @@ def _load_kubescape_internal(path: str | Path) -> list[dict[str, Any]]:
                     "control_id": control_id,
                     "control_name": control_name,
                     "score_factor": score_factor,
-                    "framework": framework_name if framework_name else None,
+                    "framework": framework_name or None,
                     "resource_kind": resource_kind,
                     "resource_name": resource_name,
-                    "resource_namespace": (
-                        resource_namespace if resource_namespace else None
-                    ),
+                    "resource_namespace": (resource_namespace or None),
                 },
                 "raw": {
                     "control": control_data,

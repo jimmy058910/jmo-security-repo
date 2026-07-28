@@ -1129,16 +1129,15 @@ class TestUninstallTools:
         mock_registry = MagicMock()
         mock_registry.get_tool.return_value = mock_tool
 
-        with patch(
-            "scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry
+        with (
+            patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry),
+            patch("subprocess.run") as mock_run,
         ):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0)
-                # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
-                with patch("shutil.rmtree"):
-                    with patch("builtins.print"):
-                        errors = []
-                        _uninstall_tools([("semgrep", "pip")], errors)
+            mock_run.return_value = MagicMock(returncode=0)
+            # Mock shutil.rmtree to avoid Windows file locking on ~/.jmo/bin/
+            with patch("shutil.rmtree"), patch("builtins.print"):
+                errors = []
+                _uninstall_tools([("semgrep", "pip")], errors)
 
         assert len(errors) == 0
         mock_run.assert_called()
@@ -1154,14 +1153,14 @@ class TestUninstallTools:
         mock_registry = MagicMock()
         mock_registry.get_tool.return_value = mock_tool
 
-        with patch(
-            "scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry
+        with (
+            patch("scripts.cli.tool_commands.ToolRegistry", return_value=mock_registry),
+            patch("subprocess.run") as mock_run,
         ):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0)
-                with patch("builtins.print"):
-                    errors = []
-                    _uninstall_tools([("cdxgen", "npm")], errors)
+            mock_run.return_value = MagicMock(returncode=0)
+            with patch("builtins.print"):
+                errors = []
+                _uninstall_tools([("cdxgen", "npm")], errors)
 
         mock_run.assert_called()
 
@@ -2768,14 +2767,17 @@ class TestCmdToolsUninstallToolTypes:
                         "scripts.cli.tool_commands._get_installed_tools"
                     ) as mock_get_tools:
                         mock_get_tools.return_value = [("trivy", "binary")]
-                        with patch(
-                            "scripts.cli.tool_commands._get_dir_size", return_value=1024
-                        ):
-                            with patch(
+                        with (
+                            patch(
+                                "scripts.cli.tool_commands._get_dir_size",
+                                return_value=1024,
+                            ),
+                            patch(
                                 "scripts.cli.tool_commands._format_size",
                                 return_value="1.0 KB",
-                            ):
-                                result = cmd_tools_uninstall(args)
+                            ),
+                        ):
+                            result = cmd_tools_uninstall(args)
 
         assert result == 0
 
@@ -2813,15 +2815,18 @@ class TestCmdToolsUninstallToolTypes:
                         "scripts.cli.tool_commands._get_installed_tools"
                     ) as mock_get_tools:
                         mock_get_tools.return_value = []
-                        with patch(
-                            "scripts.cli.tool_commands._get_dir_size", return_value=512
-                        ):
-                            with patch(
+                        with (
+                            patch(
+                                "scripts.cli.tool_commands._get_dir_size",
+                                return_value=512,
+                            ),
+                            patch(
                                 "scripts.cli.tool_commands._format_size",
                                 return_value="512 B",
-                            ):
-                                with patch("shutil.rmtree"):
-                                    result = cmd_tools_uninstall(args)
+                            ),
+                            patch("shutil.rmtree"),
+                        ):
+                            result = cmd_tools_uninstall(args)
 
         # Result depends on whether rmtree succeeded
         assert result in [0, 1]

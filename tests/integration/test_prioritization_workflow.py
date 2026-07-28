@@ -132,7 +132,7 @@ class TestPrioritizationWorkflow:
         assert len(findings) >= 2  # At least trivy + semgrep findings
 
         # Verify priority enrichment
-        priority_findings = [f for f in findings if "priority" in f and f["priority"]]
+        priority_findings = [f for f in findings if f.get("priority")]
         assert len(priority_findings) >= 1  # At least one CVE finding enriched
 
         # Find KEV finding

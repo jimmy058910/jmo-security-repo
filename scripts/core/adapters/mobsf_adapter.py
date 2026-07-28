@@ -226,9 +226,9 @@ def _load_mobsf_internal(path: str | Path) -> list[dict[str, Any]]:
                     "tags": tags,
                     "context": {
                         "finding_key": finding_key,
-                        "cwe": cwe if cwe else None,
-                        "owasp_mobile": owasp if owasp else None,
-                        "masvs": masvs if masvs else None,
+                        "cwe": cwe or None,
+                        "owasp_mobile": owasp or None,
+                        "masvs": masvs or None,
                         "app_name": app_name,
                         "match_count": (
                             len(match_positions)

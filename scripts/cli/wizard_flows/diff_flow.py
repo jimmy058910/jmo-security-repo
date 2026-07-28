@@ -392,7 +392,7 @@ def run_diff_wizard_impl(
                 else None
             ),
             db=str(_get_db_path()),
-            severity=severity_filter if severity_filter else None,
+            severity=severity_filter or None,
             tool=None,
             only=category_filter,
             no_modifications=False,

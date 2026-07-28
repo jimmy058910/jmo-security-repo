@@ -91,11 +91,13 @@ class TestRunDiffWizardDirectoryMode:
             "y",  # Confirm execution
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         assert mock_cmd_diff.called
@@ -155,11 +157,13 @@ class TestRunDiffWizardDirectoryMode:
             "y",  # Confirm
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         # Verify JSON format was selected
@@ -183,11 +187,13 @@ class TestRunDiffWizardDirectoryMode:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -212,11 +218,13 @@ class TestRunDiffWizardDirectoryMode:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -538,11 +546,13 @@ class TestRunDiffWizardErrorHandling:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=1
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 1
         assert mock_cmd_diff.called
@@ -588,11 +598,13 @@ class TestRunDiffWizardOutputFormats:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -615,11 +627,13 @@ class TestRunDiffWizardOutputFormats:
             "y",
         ]
 
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff", return_value=0
-            ) as mock_cmd_diff:
-                result = run_diff_wizard()
+            ) as mock_cmd_diff,
+        ):
+            result = run_diff_wizard()
 
         assert result == 0
         args = mock_cmd_diff.call_args[0][0]
@@ -743,12 +757,14 @@ class TestRunDiffWizardExceptionHandling:
         ]
 
         # Make cmd_diff raise a generic exception (not KeyboardInterrupt)
-        with patch("builtins.input", side_effect=inputs):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch(
                 "scripts.cli.diff_commands.cmd_diff",
                 side_effect=RuntimeError("Database connection failed"),
-            ):
-                result = run_diff_wizard()
+            ),
+        ):
+            result = run_diff_wizard()
 
         # Generic exception should return error code 1 (not 130 for interrupt)
         assert result == 1

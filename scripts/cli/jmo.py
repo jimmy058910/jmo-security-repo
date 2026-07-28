@@ -2759,7 +2759,7 @@ class ProgressTracker:
                     # Print newline and stop refresh when all tools complete
                     if self.tools_completed >= self.total_tools:
                         self._stop_refresh = True
-                        print("", file=sys.stderr)
+                        print(file=sys.stderr)
 
 
 def cmd_scan(args) -> int:

@@ -897,7 +897,7 @@ def run_wizard(
                 )
 
             # Profile: use preset, or default to balanced
-            config.profile = profile if profile else "balanced"
+            config.profile = profile or "balanced"
 
             # Execution mode: preset > force_docker > auto-detect
             if use_docker is not None:
@@ -918,10 +918,10 @@ def run_wizard(
                 config.target.repo_path = str(Path.cwd())
 
             # Advanced settings: use presets or defaults
-            config.results_dir = results_dir if results_dir else "results"
+            config.results_dir = results_dir or "results"
             config.threads = threads
             config.timeout = timeout
-            config.fail_on = fail_on if fail_on else ""
+            config.fail_on = fail_on or ""
 
             # Tool check for non-interactive mode
             should_continue, _ = check_tools_for_profile(

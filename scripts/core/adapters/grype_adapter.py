@@ -99,12 +99,12 @@ def _build_grype_context(
         "vulnerability_id": vuln_id,
         "artifact_name": artifact_name,
         "artifact_version": artifact_version,
-        "artifact_type": artifact_type if artifact_type else None,
-        "artifact_purl": artifact_purl if artifact_purl else None,
-        "fixed_versions": fixed_versions if fixed_versions else None,
-        "data_source": data_source if data_source else None,
-        "matchers": match_info if match_info else None,
-        "cvss_scores": cvss_scores if cvss_scores else None,
+        "artifact_type": artifact_type or None,
+        "artifact_purl": artifact_purl or None,
+        "fixed_versions": fixed_versions or None,
+        "data_source": data_source or None,
+        "matchers": match_info or None,
+        "cvss_scores": cvss_scores or None,
     }
 
 
@@ -349,9 +349,7 @@ def _load_grype_internal(path: str | Path) -> list[dict[str, Any]]:
             "ruleId": vuln_id,
             "title": title,
             "message": message,
-            "description": (
-                description if description else f"Vulnerability {vuln_id} detected"
-            ),
+            "description": (description or f"Vulnerability {vuln_id} detected"),
             "severity": severity,
             "tool": {
                 "name": "grype",

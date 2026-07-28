@@ -307,14 +307,15 @@ class TestValidateFindingsFile:
         findings = [make_valid_finding()]
         f = write_json(tmp_path, "findings.json", findings)
 
-        with patch(
-            "scripts.core.schema_validator.load_schema", return_value={"type": "object"}
+        with (
+            patch(
+                "scripts.core.schema_validator.load_schema",
+                return_value={"type": "object"},
+            ),
+            patch("scripts.core.schema_validator.validate_findings", return_value={}),
         ):
-            with patch(
-                "scripts.core.schema_validator.validate_findings", return_value={}
-            ):
-                errors = validate_findings_file(f)
-                assert errors == []
+            errors = validate_findings_file(f)
+            assert errors == []
 
     def test_dict_with_findings_key(self, tmp_path: Path):
         """Test file containing {findings: [...]} format."""
@@ -323,14 +324,15 @@ class TestValidateFindingsFile:
         data = {"findings": [make_valid_finding()]}
         f = write_json(tmp_path, "findings.json", data)
 
-        with patch(
-            "scripts.core.schema_validator.load_schema", return_value={"type": "object"}
+        with (
+            patch(
+                "scripts.core.schema_validator.load_schema",
+                return_value={"type": "object"},
+            ),
+            patch("scripts.core.schema_validator.validate_findings", return_value={}),
         ):
-            with patch(
-                "scripts.core.schema_validator.validate_findings", return_value={}
-            ):
-                errors = validate_findings_file(f)
-                assert errors == []
+            errors = validate_findings_file(f)
+            assert errors == []
 
     def test_single_finding_dict(self, tmp_path: Path):
         """Test file containing a single finding object."""
@@ -338,14 +340,15 @@ class TestValidateFindingsFile:
 
         f = write_json(tmp_path, "finding.json", make_valid_finding())
 
-        with patch(
-            "scripts.core.schema_validator.load_schema", return_value={"type": "object"}
+        with (
+            patch(
+                "scripts.core.schema_validator.load_schema",
+                return_value={"type": "object"},
+            ),
+            patch("scripts.core.schema_validator.validate_findings", return_value={}),
         ):
-            with patch(
-                "scripts.core.schema_validator.validate_findings", return_value={}
-            ):
-                errors = validate_findings_file(f)
-                assert errors == []
+            errors = validate_findings_file(f)
+            assert errors == []
 
     def test_empty_array(self, tmp_path: Path):
         """Test file containing empty array."""
@@ -395,16 +398,19 @@ class TestValidateFindingsFile:
         f = write_json(tmp_path, "findings.json", findings)
 
         mock_errors = {"test-finding-001": ["root: invalid type"]}
-        with patch(
-            "scripts.core.schema_validator.load_schema", return_value={"type": "object"}
-        ):
-            with patch(
+        with (
+            patch(
+                "scripts.core.schema_validator.load_schema",
+                return_value={"type": "object"},
+            ),
+            patch(
                 "scripts.core.schema_validator.validate_findings",
                 return_value=mock_errors,
-            ):
-                errors = validate_findings_file(f)
-                assert len(errors) == 1
-                assert "test-finding-001" in errors[0]
+            ),
+        ):
+            errors = validate_findings_file(f)
+            assert len(errors) == 1
+            assert "test-finding-001" in errors[0]
 
     def test_schema_load_failure(self, tmp_path: Path):
         """Test error when schema can't be loaded during file validation."""

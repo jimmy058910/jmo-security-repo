@@ -186,7 +186,7 @@ def _load_gosec_internal(path: str | Path) -> list[dict[str, Any]]:
             "tags": ["sast", "golang"],
             "context": {
                 "confidence": confidence,
-                "code_snippet": code_snippet if code_snippet else None,
+                "code_snippet": code_snippet or None,
             },
             "raw": issue,
         }

@@ -281,7 +281,7 @@ class TestJmoValidateArgs:
 
         with patch("sys.argv", ["jmo", "validate", "--json"]):
             args = parse_args()
-            assert getattr(args, "json") is True
+            assert args.json is True
 
     def test_validate_invalid_tier_rejected(self):
         from scripts.cli.jmo import parse_args

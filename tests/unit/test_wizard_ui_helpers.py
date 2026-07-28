@@ -94,12 +94,14 @@ class TestSafePrint:
         mock_stdout = MagicMock()
         mock_stdout.encoding = "utf-8"
 
-        with patch("sys.stdout", mock_stdout):
-            with patch(
+        with (
+            patch("sys.stdout", mock_stdout),
+            patch(
                 "builtins.print",
                 side_effect=[UnicodeEncodeError("utf-8", "", 0, 1, "err"), None],
-            ):
-                safe_print("\u2713 test")
+            ),
+        ):
+            safe_print("\u2713 test")
 
     def test_none_encoding_defaults_to_utf8(self, capsys):
         """Test None encoding defaults to utf-8 (no replacement)."""
@@ -196,24 +198,28 @@ class TestPromptChoice:
         """Test recovery from invalid input."""
         choices = [("a", "Option A"), ("b", "Option B")]
         # First call returns invalid "99", second returns valid "1"
-        with patch("builtins.input", side_effect=["99", "1"]):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=["99", "1"]),
+            patch(
                 "scripts.cli.wizard_flows.ui_helpers._get_colorize",
                 return_value=lambda text, _: text,
-            ):
-                result = prompt_choice("Choose:", choices)
-                assert result == "a"
+            ),
+        ):
+            result = prompt_choice("Choose:", choices)
+            assert result == "a"
 
     def test_invalid_key_then_valid(self):
         """Test recovery from invalid key input."""
         choices = [("a", "Option A"), ("b", "Option B")]
-        with patch("builtins.input", side_effect=["invalid_key", "a"]):
-            with patch(
+        with (
+            patch("builtins.input", side_effect=["invalid_key", "a"]),
+            patch(
                 "scripts.cli.wizard_flows.ui_helpers._get_colorize",
                 return_value=lambda text, _: text,
-            ):
-                result = prompt_choice("Choose:", choices)
-                assert result == "a"
+            ),
+        ):
+            result = prompt_choice("Choose:", choices)
+            assert result == "a"
 
 
 # ========== Category 5: select_mode() ==========

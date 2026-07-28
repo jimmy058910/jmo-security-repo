@@ -297,7 +297,7 @@ def cmd_diff(args) -> int:
 
         if not detected:
             print("Error: Could not auto-detect scan directories", file=sys.stderr)
-            print("", file=sys.stderr)
+            print(file=sys.stderr)
             print("Auto-detection looks for:", file=sys.stderr)
             print(
                 "  Baseline: baseline-results/, results-baseline/, main-results/",
@@ -307,7 +307,7 @@ def cmd_diff(args) -> int:
                 "  Current:  current-results/, results-current/, results/",
                 file=sys.stderr,
             )
-            print("", file=sys.stderr)
+            print(file=sys.stderr)
             print("Run scans first or specify directories manually:", file=sys.stderr)
             print("  jmo diff baseline-results/ current-results/", file=sys.stderr)
             return 1
@@ -336,7 +336,7 @@ def cmd_diff(args) -> int:
                 f"   Context:  PR from {git_context['current_branch']} → {git_context['pr_target']}",
                 file=sys.stderr,
             )
-        print("", file=sys.stderr)
+        print(file=sys.stderr)
 
     # Validate arguments
     if args.directories:
@@ -470,7 +470,7 @@ def cmd_diff(args) -> int:
     if not output_path or format_type in ["html", "sarif"]:
         # Use Rich if available, fallback to plain text
         if RICH_AVAILABLE and sys.stderr.isatty():
-            print("", file=sys.stderr)  # Blank line before Rich output
+            print(file=sys.stderr)  # Blank line before Rich output
             print_diff_summary_rich(diff_result)
         else:
             stats = diff_result.statistics

@@ -256,26 +256,26 @@ def test_parse_args_multi_target_scanning(tmp_path: Path):
 
 def test_parse_args_invalid_command(capsys):
     """Test error on invalid command."""
-    with patch("sys.argv", ["jmo", "invalid-command"]):
-        with patch(
-            "os.getenv", return_value=None
-        ):  # Disable pytest detection in parse_args
-            with pytest.raises(SystemExit) as exc_info:
-                parse_args()
-            assert exc_info.value.code != 0
-            captured = capsys.readouterr()
-            assert "invalid choice" in captured.err
+    with (
+        patch("sys.argv", ["jmo", "invalid-command"]),
+        patch("os.getenv", return_value=None),
+    ):  # Disable pytest detection in parse_args
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args()
+        assert exc_info.value.code != 0
+        captured = capsys.readouterr()
+        assert "invalid choice" in captured.err
 
 
 def test_parse_args_missing_required_subcommand(capsys):
     """Test error when no subcommand provided."""
-    with patch("sys.argv", ["jmo"]):
-        with patch(
-            "os.getenv", return_value=None
-        ):  # Disable pytest detection in parse_args
-            with pytest.raises(SystemExit) as exc_info:
-                parse_args()
-            assert exc_info.value.code != 0
+    with (
+        patch("sys.argv", ["jmo"]),
+        patch("os.getenv", return_value=None),
+    ):  # Disable pytest detection in parse_args
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args()
+        assert exc_info.value.code != 0
 
 
 def test_parse_args_scan_missing_target():
@@ -288,15 +288,15 @@ def test_parse_args_scan_missing_target():
 
 def test_parse_args_help_flag(capsys):
     """Test --help flag (should exit with code 0)."""
-    with patch("sys.argv", ["jmo", "--help"]):
-        with patch(
-            "os.getenv", return_value=None
-        ):  # Disable pytest detection in parse_args
-            with pytest.raises(SystemExit) as exc_info:
-                parse_args()
-            assert exc_info.value.code == 0
-            captured = capsys.readouterr()
-            assert "usage:" in captured.out or "usage:" in captured.err
+    with (
+        patch("sys.argv", ["jmo", "--help"]),
+        patch("os.getenv", return_value=None),
+    ):  # Disable pytest detection in parse_args
+        with pytest.raises(SystemExit) as exc_info:
+            parse_args()
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "usage:" in captured.out or "usage:" in captured.err
 
 
 def test_parse_args_invalid_threads_value(capsys):
@@ -611,15 +611,15 @@ def test_main_dispatch_diff(mock_cmd_diff):
 
 def test_main_unknown_command(capsys):
     """Test main with unknown command."""
-    with patch("sys.argv", ["jmo", "unknown-cmd"]):
-        with patch(
-            "os.getenv", return_value=None
-        ):  # Disable pytest detection in parse_args
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code != 0
-            captured = capsys.readouterr()
-            assert "invalid choice" in captured.err
+    with (
+        patch("sys.argv", ["jmo", "unknown-cmd"]),
+        patch("os.getenv", return_value=None),
+    ):  # Disable pytest detection in parse_args
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code != 0
+        captured = capsys.readouterr()
+        assert "invalid choice" in captured.err
 
 
 def test_main_empty_namespace():

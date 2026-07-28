@@ -374,7 +374,7 @@ def test_prompter_colorize():
     try:
         prompter = PromptHelper()
         result = prompter.colorize("test", "green")
-        assert "\x1b[32mtest\x1b[0m" == result
+        assert result == "\x1b[32mtest\x1b[0m"
     finally:
         bf._ANSI_SUPPORTED = orig
 
@@ -388,7 +388,7 @@ def test_prompter_colorize_invalid_color():
     try:
         prompter = PromptHelper()
         result = prompter.colorize("test", "invalid")
-        assert "test\x1b[0m" == result
+        assert result == "test\x1b[0m"
     finally:
         bf._ANSI_SUPPORTED = orig
 

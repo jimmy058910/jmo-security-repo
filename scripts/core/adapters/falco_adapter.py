@@ -176,7 +176,7 @@ def _load_falco_internal(path: str | Path) -> list[dict[str, Any]]:
         severity_normalized = map_tool_severity("falco", priority)
 
         # Build message
-        message = output if output else rule
+        message = output or rule
 
         # Create location from container/file information
         location_path = fd_name or container_name or hostname or "runtime"

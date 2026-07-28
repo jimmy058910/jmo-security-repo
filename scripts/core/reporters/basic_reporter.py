@@ -373,7 +373,7 @@ def to_markdown_summary(findings: list[dict[str, Any]]) -> str:
     lines.append("")
 
     # Priority Analysis (EPSS/KEV) - Feature #5
-    priority_findings = [f for f in findings if "priority" in f and f["priority"]]
+    priority_findings = [f for f in findings if f.get("priority")]
     if priority_findings:
         lines.append("## Priority Analysis (EPSS/KEV)")
         lines.append("")

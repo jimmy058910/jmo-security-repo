@@ -169,7 +169,7 @@ def _load_trivy_rbac_internal(path: str | Path) -> list[dict[str, Any]]:
         severity = normalize_severity(severity_raw)
 
         # Build message
-        message = description if description else title
+        message = description or title
 
         # Build location path
         if resource_namespace and resource_kind and resource_name:
@@ -207,7 +207,7 @@ def _load_trivy_rbac_internal(path: str | Path) -> list[dict[str, Any]]:
         finding = {
             "schemaVersion": "1.2.0",
             "id": fid,
-            "ruleId": check_id if check_id else "trivy-rbac-check",
+            "ruleId": check_id or "trivy-rbac-check",
             "title": title,
             "message": message,
             "description": description,
@@ -224,13 +224,11 @@ def _load_trivy_rbac_internal(path: str | Path) -> list[dict[str, Any]]:
             "references": references,
             "tags": tags,
             "context": {
-                "check_id": check_id if check_id else None,
+                "check_id": check_id or None,
                 "category": category,
-                "resource_namespace": (
-                    resource_namespace if resource_namespace else None
-                ),
-                "resource_kind": resource_kind if resource_kind else None,
-                "resource_name": resource_name if resource_name else None,
+                "resource_namespace": (resource_namespace or None),
+                "resource_kind": resource_kind or None,
+                "resource_name": resource_name or None,
                 "success": success,
             },
             "raw": check,

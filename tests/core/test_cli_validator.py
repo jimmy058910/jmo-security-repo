@@ -219,19 +219,19 @@ class TestConstants:
         assert total == 47
 
     def test_required_arg_count(self):
-        assert _REQUIRED_ARG_COUNT == len(REQUIRED_ARG_COMMANDS)
+        assert len(REQUIRED_ARG_COMMANDS) == _REQUIRED_ARG_COUNT
         assert _REQUIRED_ARG_COUNT == 13
 
     def test_invalid_flag_count(self):
-        assert _INVALID_FLAG_COUNT == len(INVALID_FLAG_COMMANDS)
+        assert len(INVALID_FLAG_COMMANDS) == _INVALID_FLAG_COUNT
         assert _INVALID_FLAG_COUNT == 6
 
     def test_mutex_count(self):
-        assert _MUTEX_COUNT == len(MUTUALLY_EXCLUSIVE)
+        assert len(MUTUALLY_EXCLUSIVE) == _MUTEX_COUNT
         assert _MUTEX_COUNT == 2
 
     def test_type_check_count(self):
-        assert _TYPE_CHECK_COUNT == len(FLAG_TYPE_CHECKS)
+        assert len(FLAG_TYPE_CHECKS) == _TYPE_CHECK_COUNT
         assert _TYPE_CHECK_COUNT == 6
 
     def test_version_check_count(self):

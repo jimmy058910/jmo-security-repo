@@ -226,26 +226,28 @@ class TestBatchPipInstall:
         status.installed_version = "1.0.0"
         mock_manager.check_tool.return_value = status
 
-        with patch.object(
-            ToolInstaller,
-            "registry",
-            new_callable=lambda: property(lambda self: mock_registry),
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                ToolInstaller,
+                "registry",
+                new_callable=lambda: property(lambda self: mock_registry),
+            ),
+            patch.object(
                 ToolInstaller,
                 "manager",
                 new_callable=lambda: property(lambda self: mock_manager),
-            ):
-                installer = ToolInstaller.__new__(ToolInstaller)
-                installer._registry = mock_registry
-                installer._manager = mock_manager
+            ),
+        ):
+            installer = ToolInstaller.__new__(ToolInstaller)
+            installer._registry = mock_registry
+            installer._manager = mock_manager
 
-                progress = ParallelInstallProgress(total=2)
-                results = installer._batch_pip_install(["tool1", "tool2"], progress)
+            progress = ParallelInstallProgress(total=2)
+            results = installer._batch_pip_install(["tool1", "tool2"], progress)
 
-                assert len(results) == 2
-                assert all(r.success for r in results)
-                assert all(r.method == "pip_batch" for r in results)
+            assert len(results) == 2
+            assert all(r.success for r in results)
+            assert all(r.method == "pip_batch" for r in results)
 
     @patch("scripts.cli.tool_installer.subprocess.run")
     def test_batch_pip_install_fallback_on_failure(self, mock_run):

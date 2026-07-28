@@ -230,22 +230,82 @@ extend-exclude = ["tests/e2e/fixtures/python/vulnerable_app.py"]
 # would duplicate bandit and flood CI (S101 alone = 14k hits across the suite,
 # where asserts are the entire point).
 select = [
-    "E4",     # pycodestyle - imports
-    "E7",     # pycodestyle - statements
-    "E9",     # pycodestyle - runtime errors
-    "F",      # pyflakes - correctness
-    "I",      # isort - import ordering
-    "UP",     # pyupgrade - py3.12+ modernization
-    "C4",     # flake8-comprehensions
-    "PIE",    # flake8-pie - misc lints
-    "RUF100", # unused noqa directives
+    "E4",   # pycodestyle - imports
+    "E7",   # pycodestyle - statements
+    "E9",   # pycodestyle - runtime errors
+    "F",    # pyflakes - correctness
+    "I",    # isort - import ordering
+    "UP",   # pyupgrade - py3.12+ modernization
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie - misc lints
+    "SIM",  # flake8-simplify
+    "B",    # flake8-bugbear - real bug patterns
+    "BLE",  # flake8-blind-except
+    "DTZ",  # flake8-datetimez - naive datetime correctness
+    "LOG",  # flake8-logging
+    "RSE",  # flake8-raise
+    "FURB", # refurb - modernization
+    "RUF",  # ruff-specific rules
+    "G201", # logging .exception() over .error(exc_info=True)
+    "G202", # redundant exc_info
 ]
 
+# DEFERRED RULES — tracked debt, not permanent exemptions.
+#
+# Every rule below is selected above (so the OTHER ~170 rules in those families
+# are enforced on all new code) but ignored here because it still has existing
+# violations that need per-site judgment, not an autofix. Each is a one-line
+# removal once its findings are cleared. Counts are as of this commit.
+#
+# See the tracking issue for the ordered work plan.
 ignore = [
+    # --- larger cleanups (do these deliberately, likely one PR each) ---
+    "BLE001", # 288 - blind `except Exception`. Often CORRECT here: this is a
+    #                 tool orchestrator that must survive any scanner blowing up.
+    #                 Needs per-site review, not a blanket rewrite.
+    "SIM117", # 213 - merge nested `with`. Mechanical but touches many files.
+    "SIM102", #  52 - merge nested `if`.
+    "RUF012", #  48 - mutable class default needs ClassVar. Real bug class.
+    "SIM105", #  28 - contextlib.suppress over try/except/pass.
+    "G201",   #  25 - logger.exception() over logger.error(exc_info=True).
+    #                 (G202 stays enforced — it has no existing violations.)
+    # --- small, high-value: good first cleanups ---
+    "B904",   #  14 - `raise ... from err` in except (preserves context).
+    "B023",   #   8 - function definition uses loop variable (classic closure bug).
+    "B017",   #   7 - assertRaises(Exception) is too broad.
+    "B007",   #  17 - unused loop control variable.
+    "B905",   #   3 - zip() without explicit strict=.
+    "DTZ005", #   9 - datetime.now() without tz.
+    "DTZ011", #   2 - date.today() without tz.
+    "DTZ006", #   1 - datetime.fromtimestamp() without tz.
+    "RUF015", #  17 - prefer next(iter(x)) over list(x)[0].
+    "RUF005", #  16 - prefer unpacking over concatenation.
+    "SIM108", #  11 - ternary over if/else assignment.
+    "FURB162", # 11 - redundant fromisoformat handling.
+    "SIM116", #   3 - dict lookup over consecutive if.
+    "SIM103", #   3 - return condition directly.
+    "SIM118", #   2 - `key in dict` over `key in dict.keys()`.
+    "RSE102", #   2 - unnecessary parens on raised exception.
+    "FURB177", #  2 - Path.cwd() over Path().resolve().
+    "FURB171", #  4 - membership test on single-item container.
+    "SIM222", #   1 - expr-or-true simplification.
+    "SIM201", #   1 - `!=` over `not ==`.
+    "RUF059", # 159 - unused unpacked variable; needs `_` renaming per site.
+    "RUF043", #  12 - pytest.raises(match=) with unescaped `.`; mechanical but
+    #                 touches assertion strings — do as its own pass.
+    # --- deliberate, not debt ---
     # `class X(str, Enum)` -> `StrEnum` is a real behavior change (str()/format
     # semantics) on core types like CommonFinding's Severity. Revisit
     # deliberately, not as a lint autofix.
     "UP042",
+    # `__all__` in wizard_flows/__init__.py is deliberately grouped by category
+    # with section comments; isort-sorting it would destroy that structure.
+    "RUF022",
+    # RUF001/002/003 (ambiguous unicode) fire on legitimate box-drawing and
+    # typographic characters in CLI output strings.
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]

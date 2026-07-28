@@ -286,7 +286,7 @@ def get_latest_github_release(repo: str) -> str | None:
         tag = data.get("tag_name", "")
         # Strip 'v' prefix if present
         version: str = str(tag).lstrip("v") if tag else ""
-        return version if version else None
+        return version or None
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError):
         return None
 
@@ -1037,7 +1037,7 @@ def update_all_tools(
             warn(f"✗ {tool} update failed")
 
     # Print summary
-    print("")
+    print()
     if updated_tools:
         summary_verb = "Would update" if dry_run else "Successfully updated"
         ok(f"{summary_verb} {len(updated_tools)} tool(s):")
@@ -1054,7 +1054,7 @@ def update_all_tools(
         for tool, old, new, reason in skipped_tools:
             print(f"  • {tool}: {old} → {new} ({reason})")
 
-    print("")
+    print()
     if updated_tools:
         if dry_run:
             log(

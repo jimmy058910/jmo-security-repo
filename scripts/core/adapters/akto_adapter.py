@@ -179,11 +179,7 @@ def _load_akto_internal(path: str | Path) -> list[dict[str, Any]]:
         # Extract test results details
         test_results = test_run_result.get("testResults", "")
         if isinstance(test_results, str):
-            message = (
-                test_results
-                if test_results
-                else f"API vulnerability: {test_super_type}"
-            )
+            message = test_results or f"API vulnerability: {test_super_type}"
         else:
             message = f"API vulnerability: {test_super_type}"
 
@@ -193,7 +189,7 @@ def _load_akto_internal(path: str | Path) -> list[dict[str, Any]]:
         )
 
         # Build location path (use URL or fallback)
-        location_path = url if url else f"{method}:/api/endpoint"
+        location_path = url or f"{method}:/api/endpoint"
 
         # Generate stable fingerprint
         fid = fingerprint(
@@ -218,7 +214,7 @@ def _load_akto_internal(path: str | Path) -> list[dict[str, Any]]:
         finding = {
             "schemaVersion": "1.2.0",
             "id": fid,
-            "ruleId": test_sub_type if test_sub_type else test_super_type,
+            "ruleId": test_sub_type or test_super_type,
             "title": title,
             "message": message,
             "description": f"API security test {title} detected a vulnerability in {method} {url}",
@@ -235,10 +231,10 @@ def _load_akto_internal(path: str | Path) -> list[dict[str, Any]]:
             "references": references,
             "tags": tags,
             "context": {
-                "test_sub_type": test_sub_type if test_sub_type else None,
+                "test_sub_type": test_sub_type or None,
                 "test_super_type": test_super_type,
-                "api_method": method if method else None,
-                "api_url": url if url else None,
+                "api_method": method or None,
+                "api_url": url or None,
                 "confidence_percentage": confidence_pct,
             },
             "raw": test_run_result,

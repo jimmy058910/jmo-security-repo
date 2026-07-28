@@ -58,16 +58,18 @@ def test_get_user_policies_dir():
 def test_discover_policies_no_directories(tmp_path):
     """Test discover_policies when no policy directories exist."""
     # Mock directories to non-existent paths
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir",
-        return_value=tmp_path / "nonexistent-builtin",
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=tmp_path / "nonexistent-builtin",
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir",
             return_value=tmp_path / "nonexistent-user",
-        ):
-            policies = discover_policies()
-            assert policies == {}
+        ),
+    ):
+        policies = discover_policies()
+        assert policies == {}
 
 
 def test_discover_policies_builtin_only(tmp_path):
@@ -79,19 +81,22 @@ def test_discover_policies_builtin_only(tmp_path):
     (builtin_dir / "policy1.rego").write_text("package policy1")
     (builtin_dir / "policy2.rego").write_text("package policy2")
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir",
             return_value=tmp_path / "nonexistent-user",
-        ):
-            policies = discover_policies()
+        ),
+    ):
+        policies = discover_policies()
 
-            assert len(policies) == 2
-            assert "policy1" in policies
-            assert "policy2" in policies
-            assert policies["policy1"] == builtin_dir / "policy1.rego"
+        assert len(policies) == 2
+        assert "policy1" in policies
+        assert "policy2" in policies
+        assert policies["policy1"] == builtin_dir / "policy1.rego"
 
 
 def test_discover_policies_user_only(tmp_path):
@@ -103,19 +108,21 @@ def test_discover_policies_user_only(tmp_path):
     (user_dir / "custom1.rego").write_text("package custom1")
     (user_dir / "custom2.rego").write_text("package custom2")
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir",
-        return_value=tmp_path / "nonexistent-builtin",
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=tmp_path / "nonexistent-builtin",
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            policies = discover_policies()
+        ),
+    ):
+        policies = discover_policies()
 
-            assert len(policies) == 2
-            assert "custom1" in policies
-            assert "custom2" in policies
-            assert policies["custom1"] == user_dir / "custom1.rego"
+        assert len(policies) == 2
+        assert "custom1" in policies
+        assert "custom2" in policies
+        assert policies["custom1"] == user_dir / "custom1.rego"
 
 
 def test_discover_policies_user_overrides_builtin(tmp_path):
@@ -128,18 +135,21 @@ def test_discover_policies_user_overrides_builtin(tmp_path):
     user_dir.mkdir()
     (user_dir / "policy1.rego").write_text("package user_policy1")
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            policies = discover_policies()
+        ),
+    ):
+        policies = discover_policies()
 
-            assert len(policies) == 1
-            assert "policy1" in policies
-            # User policy should override builtin
-            assert policies["policy1"] == user_dir / "policy1.rego"
+        assert len(policies) == 1
+        assert "policy1" in policies
+        # User policy should override builtin
+        assert policies["policy1"] == user_dir / "policy1.rego"
 
 
 # =============================================================================
@@ -163,20 +173,23 @@ def test_cmd_policy_list_no_policies(tmp_path, capsys):
     builtin_dir = tmp_path / "builtin"
     user_dir = tmp_path / "user"
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            with patch("scripts.cli.policy_commands.PolicyEngine"):
-                rc = cmd_policy_list(argparse.Namespace())
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine"),
+    ):
+        rc = cmd_policy_list(argparse.Namespace())
 
-                captured = capsys.readouterr()
-                assert "No policies found" in captured.out
-                assert str(builtin_dir) in captured.out
-                assert str(user_dir) in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "No policies found" in captured.out
+        assert str(builtin_dir) in captured.out
+        assert str(user_dir) in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_list_builtin_only(tmp_path, capsys, mock_policy_engine):
@@ -187,23 +200,26 @@ def test_cmd_policy_list_builtin_only(tmp_path, capsys, mock_policy_engine):
 
     user_dir = tmp_path / "user"
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            with patch(
-                "scripts.cli.policy_commands.PolicyEngine",
-                return_value=mock_policy_engine,
-            ):
-                rc = cmd_policy_list(argparse.Namespace())
+        ),
+        patch(
+            "scripts.cli.policy_commands.PolicyEngine",
+            return_value=mock_policy_engine,
+        ),
+    ):
+        rc = cmd_policy_list(argparse.Namespace())
 
-                captured = capsys.readouterr()
-                assert "Built-in Policies (1)" in captured.out
-                assert "policy1" in captured.out
-                assert "Test policy" in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "Built-in Policies (1)" in captured.out
+        assert "policy1" in captured.out
+        assert "Test policy" in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_list_user_only(tmp_path, capsys, mock_policy_engine):
@@ -213,22 +229,25 @@ def test_cmd_policy_list_user_only(tmp_path, capsys, mock_policy_engine):
     user_dir.mkdir()
     (user_dir / "custom1.rego").write_text("package custom1")
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            with patch(
-                "scripts.cli.policy_commands.PolicyEngine",
-                return_value=mock_policy_engine,
-            ):
-                rc = cmd_policy_list(argparse.Namespace())
+        ),
+        patch(
+            "scripts.cli.policy_commands.PolicyEngine",
+            return_value=mock_policy_engine,
+        ),
+    ):
+        rc = cmd_policy_list(argparse.Namespace())
 
-                captured = capsys.readouterr()
-                assert "User Policies (1)" in captured.out
-                assert "custom1" in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "User Policies (1)" in captured.out
+        assert "custom1" in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_list_both_builtin_and_user(tmp_path, capsys, mock_policy_engine):
@@ -241,25 +260,28 @@ def test_cmd_policy_list_both_builtin_and_user(tmp_path, capsys, mock_policy_eng
     user_dir.mkdir()
     (user_dir / "custom1.rego").write_text("package custom1")
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            with patch(
-                "scripts.cli.policy_commands.PolicyEngine",
-                return_value=mock_policy_engine,
-            ):
-                rc = cmd_policy_list(argparse.Namespace())
+        ),
+        patch(
+            "scripts.cli.policy_commands.PolicyEngine",
+            return_value=mock_policy_engine,
+        ),
+    ):
+        rc = cmd_policy_list(argparse.Namespace())
 
-                captured = capsys.readouterr()
-                assert "Built-in Policies (1)" in captured.out
-                assert "User Policies (1)" in captured.out
-                assert "policy1" in captured.out
-                assert "custom1" in captured.out
-                assert "Total: 2 policies" in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "Built-in Policies (1)" in captured.out
+        assert "User Policies (1)" in captured.out
+        assert "policy1" in captured.out
+        assert "custom1" in captured.out
+        assert "Total: 2 policies" in captured.out
+        assert rc == 0
 
 
 # =============================================================================
@@ -287,18 +309,18 @@ def test_cmd_policy_validate_valid_policy(tmp_path, capsys):
     mock_engine = MagicMock()
     mock_engine.validate_policy.return_value = (True, None)
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"valid": policy_path},
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"valid": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
     ):
-        with patch(
-            "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-        ):
-            rc = cmd_policy_validate(args)
+        rc = cmd_policy_validate(args)
 
-            captured = capsys.readouterr()
-            assert "✅ Policy 'valid' is valid" in captured.out
-            assert rc == 0
+        captured = capsys.readouterr()
+        assert "✅ Policy 'valid' is valid" in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_validate_invalid_policy(tmp_path, capsys):
@@ -311,19 +333,19 @@ def test_cmd_policy_validate_invalid_policy(tmp_path, capsys):
     mock_engine = MagicMock()
     mock_engine.validate_policy.return_value = (False, "Syntax error on line 1")
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"invalid": policy_path},
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"invalid": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
     ):
-        with patch(
-            "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-        ):
-            rc = cmd_policy_validate(args)
+        rc = cmd_policy_validate(args)
 
-            captured = capsys.readouterr()
-            assert "❌ Policy 'invalid' is invalid" in captured.out
-            assert "Syntax error on line 1" in captured.out
-            assert rc == 1
+        captured = capsys.readouterr()
+        assert "❌ Policy 'invalid' is invalid" in captured.out
+        assert "Syntax error on line 1" in captured.out
+        assert rc == 1
 
 
 # =============================================================================
@@ -371,19 +393,19 @@ def test_cmd_policy_test_passed(tmp_path, capsys):
     mock_engine = MagicMock()
     mock_engine.test_policy.return_value = mock_result
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"test": policy_path},
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"test": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
     ):
-        with patch(
-            "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-        ):
-            rc = cmd_policy_test(args)
+        rc = cmd_policy_test(args)
 
-            captured = capsys.readouterr()
-            assert "✅ PASSED" in captured.out
-            assert "All checks passed" in captured.out
-            assert rc == 0
+        captured = capsys.readouterr()
+        assert "✅ PASSED" in captured.out
+        assert "All checks passed" in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_test_failed(tmp_path, capsys):
@@ -406,21 +428,21 @@ def test_cmd_policy_test_failed(tmp_path, capsys):
     mock_engine = MagicMock()
     mock_engine.test_policy.return_value = mock_result
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"test": policy_path},
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"test": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
     ):
-        with patch(
-            "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-        ):
-            rc = cmd_policy_test(args)
+        rc = cmd_policy_test(args)
 
-            captured = capsys.readouterr()
-            assert "❌ FAILED" in captured.out
-            assert "Found HIGH severity findings" in captured.out
-            assert "Violations:" in captured.out
-            assert "Warnings:" in captured.out
-            assert rc == 1
+        captured = capsys.readouterr()
+        assert "❌ FAILED" in captured.out
+        assert "Found HIGH severity findings" in captured.out
+        assert "Violations:" in captured.out
+        assert "Warnings:" in captured.out
+        assert rc == 1
 
 
 def test_cmd_policy_test_exception(tmp_path):
@@ -436,15 +458,15 @@ def test_cmd_policy_test_exception(tmp_path):
     mock_engine = MagicMock()
     mock_engine.test_policy.side_effect = RuntimeError("OPA evaluation failed")
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"test": policy_path},
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"test": policy_path},
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
     ):
-        with patch(
-            "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-        ):
-            rc = cmd_policy_test(args)
-            assert rc == 1
+        rc = cmd_policy_test(args)
+        assert rc == 1
 
 
 # =============================================================================
@@ -477,29 +499,29 @@ def test_cmd_policy_show_with_metadata(tmp_path, capsys):
         "frameworks": ["OWASP", "CWE"],
     }
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"test": policy_path},
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"test": policy_path},
+        ),
+        patch(
             "scripts.cli.policy_commands.get_builtin_policies_dir",
             return_value=tmp_path / "builtin",
-        ):
-            with patch(
-                "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-            ):
-                rc = cmd_policy_show(args)
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
+    ):
+        rc = cmd_policy_show(args)
 
-                captured = capsys.readouterr()
-                assert "Policy: test" in captured.out
-                assert "Path:" in captured.out
-                assert "Metadata:" in captured.out
-                assert "version: 1.0.0" in captured.out
-                assert "description: Test policy" in captured.out
-                assert "frameworks: OWASP, CWE" in captured.out
-                assert "Policy Content (first 20 lines):" in captured.out
-                assert "... (10 more lines)" in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "Policy: test" in captured.out
+        assert "Path:" in captured.out
+        assert "Metadata:" in captured.out
+        assert "version: 1.0.0" in captured.out
+        assert "description: Test policy" in captured.out
+        assert "frameworks: OWASP, CWE" in captured.out
+        assert "Policy Content (first 20 lines):" in captured.out
+        assert "... (10 more lines)" in captured.out
+        assert rc == 0
 
 
 def test_cmd_policy_show_no_metadata(tmp_path, capsys):
@@ -512,22 +534,22 @@ def test_cmd_policy_show_no_metadata(tmp_path, capsys):
     mock_engine = MagicMock()
     mock_engine.get_metadata.return_value = {}
 
-    with patch(
-        "scripts.cli.policy_commands.discover_policies",
-        return_value={"test": policy_path},
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.discover_policies",
+            return_value={"test": policy_path},
+        ),
+        patch(
             "scripts.cli.policy_commands.get_builtin_policies_dir",
             return_value=tmp_path / "builtin",
-        ):
-            with patch(
-                "scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine
-            ):
-                rc = cmd_policy_show(args)
+        ),
+        patch("scripts.cli.policy_commands.PolicyEngine", return_value=mock_engine),
+    ):
+        rc = cmd_policy_show(args)
 
-                captured = capsys.readouterr()
-                assert "No metadata found in policy" in captured.out
-                assert rc == 0
+        captured = capsys.readouterr()
+        assert "No metadata found in policy" in captured.out
+        assert rc == 0
 
 
 # =============================================================================
@@ -558,19 +580,22 @@ def test_cmd_policy_install_success(tmp_path, capsys):
 
     args = argparse.Namespace(policy="test", force=False)
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            rc = cmd_policy_install(args)
+        ),
+    ):
+        rc = cmd_policy_install(args)
 
-            captured = capsys.readouterr()
-            assert "✅ Installed policy 'test'" in captured.out
-            assert (user_dir / "test.rego").exists()
-            assert (user_dir / "test.rego").read_text() == "package test"
-            assert rc == 0
+        captured = capsys.readouterr()
+        assert "✅ Installed policy 'test'" in captured.out
+        assert (user_dir / "test.rego").exists()
+        assert (user_dir / "test.rego").read_text() == "package test"
+        assert rc == 0
 
 
 def test_cmd_policy_install_already_exists_no_force(tmp_path):
@@ -585,18 +610,21 @@ def test_cmd_policy_install_already_exists_no_force(tmp_path):
 
     args = argparse.Namespace(policy="test", force=False)
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            rc = cmd_policy_install(args)
+        ),
+    ):
+        rc = cmd_policy_install(args)
 
-            # Should fail without --force
-            assert rc == 1
-            # User policy should not be overwritten
-            assert (user_dir / "test.rego").read_text() == "package test_user"
+        # Should fail without --force
+        assert rc == 1
+        # User policy should not be overwritten
+        assert (user_dir / "test.rego").read_text() == "package test_user"
 
 
 def test_cmd_policy_install_already_exists_with_force(tmp_path, capsys):
@@ -611,19 +639,22 @@ def test_cmd_policy_install_already_exists_with_force(tmp_path, capsys):
 
     args = argparse.Namespace(policy="test", force=True)
 
-    with patch(
-        "scripts.cli.policy_commands.get_builtin_policies_dir", return_value=builtin_dir
-    ):
-        with patch(
+    with (
+        patch(
+            "scripts.cli.policy_commands.get_builtin_policies_dir",
+            return_value=builtin_dir,
+        ),
+        patch(
             "scripts.cli.policy_commands.get_user_policies_dir", return_value=user_dir
-        ):
-            rc = cmd_policy_install(args)
+        ),
+    ):
+        rc = cmd_policy_install(args)
 
-            captured = capsys.readouterr()
-            assert "✅ Installed policy 'test'" in captured.out
-            # User policy should be overwritten with builtin
-            assert (user_dir / "test.rego").read_text() == "package test_builtin"
-            assert rc == 0
+        captured = capsys.readouterr()
+        assert "✅ Installed policy 'test'" in captured.out
+        # User policy should be overwritten with builtin
+        assert (user_dir / "test.rego").read_text() == "package test_builtin"
+        assert rc == 0
 
 
 # =============================================================================

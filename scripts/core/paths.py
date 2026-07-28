@@ -110,8 +110,8 @@ def clean_isolated_venvs(dry_run: bool = True) -> list[str]:
 # Re-export ISOLATED_TOOLS for convenience (modules importing paths.py
 # often also need to check if a tool requires isolation)
 __all__ = [
-    "get_isolated_venv_path",
-    "get_isolated_tool_path",
-    "clean_isolated_venvs",
     "ISOLATED_TOOLS",
+    "clean_isolated_venvs",
+    "get_isolated_tool_path",
+    "get_isolated_venv_path",
 ]

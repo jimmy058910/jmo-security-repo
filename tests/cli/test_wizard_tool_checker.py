@@ -289,16 +289,18 @@ class TestCheckToolsForProfile:
         mock_print_step.return_value = lambda s, t, m: None
 
         # Patch ToolManager at its source module to raise ImportError
-        with patch(
-            "scripts.cli.tool_manager.ToolManager",
-            side_effect=ImportError("Module not available"),
+        with (
+            patch(
+                "scripts.cli.tool_manager.ToolManager",
+                side_effect=ImportError("Module not available"),
+            ),
+            patch("builtins.print"),
         ):
-            with patch("builtins.print"):
-                should_continue, available = check_tools_for_profile(
-                    profile="fast",
-                    yes=False,
-                    use_docker=False,
-                )
+            should_continue, available = check_tools_for_profile(
+                profile="fast",
+                yes=False,
+                use_docker=False,
+            )
 
         # Should continue with empty available list
         assert should_continue is True
@@ -660,12 +662,14 @@ class TestInstallOpaTool:
         mock_fallbacks.return_value = {}
 
         # Patch ToolInstaller at its source module to raise ImportError
-        with patch(
-            "scripts.cli.tool_installer.ToolInstaller",
-            side_effect=ImportError("Not available"),
+        with (
+            patch(
+                "scripts.cli.tool_installer.ToolInstaller",
+                side_effect=ImportError("Not available"),
+            ),
+            patch("builtins.print"),
         ):
-            with patch("builtins.print"):
-                should_continue, policies_enabled = _install_opa_tool()
+            should_continue, policies_enabled = _install_opa_tool()
 
         assert should_continue is True
         assert policies_enabled is False
@@ -1478,14 +1482,13 @@ class TestAutoFixToolsDependencies:
         ]
 
         # Choice 3: cancel
-        with patch("builtins.print"):
-            with patch("builtins.input", return_value="3"):
-                should_continue, available = _auto_fix_tools(
-                    fix_info=fix_info,
-                    platform="linux",
-                    profile="fast",
-                    available=["trivy"],
-                )
+        with patch("builtins.print"), patch("builtins.input", return_value="3"):
+            should_continue, available = _auto_fix_tools(
+                fix_info=fix_info,
+                platform="linux",
+                profile="fast",
+                available=["trivy"],
+            )
 
         assert should_continue is False
         # Original available should be returned

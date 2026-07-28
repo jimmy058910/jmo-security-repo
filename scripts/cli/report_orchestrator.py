@@ -96,8 +96,11 @@ def cmd_report(args, _log_fn) -> int:
     prev_threads = os.getenv("JMO_THREADS")
     if args.threads is not None:
         os.environ["JMO_THREADS"] = str(max(1, args.threads))
-    elif prev_threads is None and getattr(cfg, "threads", None) is not None:
-        os.environ["JMO_THREADS"] = str(max(1, int(getattr(cfg, "threads"))))
+    elif prev_threads is None and isinstance(cfg.threads, int):
+        # cfg.threads is `int | str | None` — the str case is the literal
+        # "auto", which means auto-detect. Leaving JMO_THREADS unset is
+        # exactly that, and avoids int("auto") raising ValueError.
+        os.environ["JMO_THREADS"] = str(max(1, cfg.threads))
 
     # Gather and process findings
     start = time.perf_counter()

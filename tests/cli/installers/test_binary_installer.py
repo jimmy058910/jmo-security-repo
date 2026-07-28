@@ -292,28 +292,30 @@ class TestInstall:
     def test_no_binary_url_defined(self):
         """Test install fails when tool has no BINARY_URLS entry."""
         installer = make_installer()
-        with patch(
-            "scripts.cli.installers.binary_installer.validate_version",
-            return_value=True,
+        with (
+            patch(
+                "scripts.cli.installers.binary_installer.validate_version",
+                return_value=True,
+            ),
+            patch("scripts.cli.installers.binary_installer.BINARY_URLS", {}),
         ):
-            with patch("scripts.cli.installers.binary_installer.BINARY_URLS", {}):
-                result = installer.install("unknown", make_tool_info("unknown"))
-                assert not result.success
-                assert "No binary download URL" in result.message
+            result = installer.install("unknown", make_tool_info("unknown"))
+            assert not result.success
+            assert "No binary download URL" in result.message
 
     def test_no_platform_url(self):
         """Test install fails when no URL for current platform."""
         installer = make_installer()
-        with patch(
-            "scripts.cli.installers.binary_installer.validate_version",
-            return_value=True,
+        with (
+            patch(
+                "scripts.cli.installers.binary_installer.validate_version",
+                return_value=True,
+            ),
+            patch("scripts.cli.installers.binary_installer.BINARY_URLS", {"tool": {}}),
         ):
-            with patch(
-                "scripts.cli.installers.binary_installer.BINARY_URLS", {"tool": {}}
-            ):
-                result = installer.install("tool", make_tool_info("tool"))
-                assert not result.success
-                assert "No " in result.message and "binary URL" in result.message
+            result = installer.install("tool", make_tool_info("tool"))
+            assert not result.success
+            assert "No " in result.message and "binary URL" in result.message
 
     def test_download_failure(self, tmp_path: Path):
         """Test install returns failure on download error."""
@@ -322,18 +324,18 @@ class TestInstall:
             subprocess_runner=runner,
             install_dir=tmp_path / "bin",
         )
-        with patch(
-            "scripts.cli.installers.binary_installer.validate_version",
-            return_value=True,
-        ):
-            with patch(
+        with (
+            patch(
+                "scripts.cli.installers.binary_installer.validate_version",
+                return_value=True,
+            ),
+            patch(
                 "scripts.cli.installers.binary_installer.BINARY_URLS",
                 {"tool": "https://example.com/{version}/tool"},
-            ):
-                result = installer.install(
-                    "tool", make_tool_info("tool", version="1.0.0")
-                )
-                assert not result.success
+            ),
+        ):
+            result = installer.install("tool", make_tool_info("tool", version="1.0.0"))
+            assert not result.success
 
     def test_timeout_expired(self, tmp_path: Path):
         """Test install handles TimeoutExpired."""
@@ -343,17 +345,19 @@ class TestInstall:
             subprocess_runner=runner,
             install_dir=tmp_path / "bin",
         )
-        with patch(
-            "scripts.cli.installers.binary_installer.validate_version",
-            return_value=True,
-        ):
-            with patch(
+        with (
+            patch(
+                "scripts.cli.installers.binary_installer.validate_version",
+                return_value=True,
+            ),
+            patch(
                 "scripts.cli.installers.binary_installer.BINARY_URLS",
                 {"tool": "https://example.com/{version}/tool"},
-            ):
-                result = installer.install("tool", make_tool_info("tool"))
-                assert not result.success
-                assert "timed out" in result.message.lower()
+            ),
+        ):
+            result = installer.install("tool", make_tool_info("tool"))
+            assert not result.success
+            assert "timed out" in result.message.lower()
 
     def test_generic_exception(self, tmp_path: Path):
         """Test install handles generic exceptions."""
@@ -363,17 +367,19 @@ class TestInstall:
             subprocess_runner=runner,
             install_dir=tmp_path / "bin",
         )
-        with patch(
-            "scripts.cli.installers.binary_installer.validate_version",
-            return_value=True,
-        ):
-            with patch(
+        with (
+            patch(
+                "scripts.cli.installers.binary_installer.validate_version",
+                return_value=True,
+            ),
+            patch(
                 "scripts.cli.installers.binary_installer.BINARY_URLS",
                 {"tool": "https://example.com/{version}/tool"},
-            ):
-                result = installer.install("tool", make_tool_info("tool"))
-                assert not result.success
-                assert "disk full" in result.message
+            ),
+        ):
+            result = installer.install("tool", make_tool_info("tool"))
+            assert not result.success
+            assert "disk full" in result.message
 
 
 # ========== Category 6: _download() ==========

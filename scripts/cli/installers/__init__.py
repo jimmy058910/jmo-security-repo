@@ -17,17 +17,17 @@ from scripts.cli.installers.npm_installer import NpmInstaller
 from scripts.cli.installers.pip_installer import IsolatedPipInstaller, PipInstaller
 
 __all__ = [
-    "InstallResult",
-    "InstallProgress",
-    "InstallMethod",
     "BaseInstaller",
-    "SubprocessRunner",
+    "BinaryInstaller",
     "DefaultSubprocessRunner",
     "Downloader",
-    "PipInstaller",
+    "InstallMethod",
+    "InstallProgress",
+    "InstallResult",
     "IsolatedPipInstaller",
     "NpmInstaller",
-    "BinaryInstaller",
+    "PipInstaller",
     "PlatformInfo",
+    "SubprocessRunner",
     "get_platform_info",
 ]

@@ -194,9 +194,7 @@ def _load_dependency_check_internal(path: str | Path) -> list[dict[str, Any]]:
 
             # Build message
             message = (
-                description
-                if description
-                else f"Known vulnerability {cve_name} detected in dependency"
+                description or f"Known vulnerability {cve_name} detected in dependency"
             )
 
             # Build title
@@ -260,7 +258,7 @@ def _load_dependency_check_internal(path: str | Path) -> list[dict[str, Any]]:
                 "context": {
                     "cve": cve_name,
                     "dependency_file": file_name,
-                    "package_id": package_id if package_id else None,
+                    "package_id": package_id or None,
                 },
                 "raw": vuln,
             }

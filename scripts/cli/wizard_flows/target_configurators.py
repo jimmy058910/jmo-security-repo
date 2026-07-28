@@ -34,7 +34,7 @@ def _prompt_text(question: str, default: str = "") -> str:
     value = input(prompt).strip()
     # Strip surrounding quotes from paths (Windows users often paste quoted paths)
     value = value.strip('"').strip("'")
-    return value if value else default
+    return value or default
 
 
 def configure_repo_target(

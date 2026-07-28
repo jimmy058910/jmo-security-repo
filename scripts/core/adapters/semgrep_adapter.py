@@ -224,7 +224,7 @@ class SemgrepAdapter(AdapterPlugin):
                 remediation=remediation,
                 tags=["sast"],
                 context=context,
-                risk=risk if risk else None,
+                risk=risk or None,
                 raw=r,
             )
 

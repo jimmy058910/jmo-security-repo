@@ -202,13 +202,13 @@ def test_offer_trend_analysis_with_scans(tmp_path, mock_db, monkeypatch):
     monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
 
     # Mock user declining prompt AND explore_trends_interactive
-    with mock.patch("builtins.input", return_value="n"):
-        with mock.patch(
-            "scripts.cli.wizard.explore_trends_interactive"
-        ) as mock_explore:
-            offer_trend_analysis_after_scan("results")
-            # Verify it didn't call explore (user declined)
-            assert not mock_explore.called
+    with (
+        mock.patch("builtins.input", return_value="n"),
+        mock.patch("scripts.cli.wizard.explore_trends_interactive") as mock_explore,
+    ):
+        offer_trend_analysis_after_scan("results")
+        # Verify it didn't call explore (user declined)
+        assert not mock_explore.called
 
 
 def test_offer_trend_analysis_exception_handling(tmp_path, monkeypatch):
@@ -270,14 +270,16 @@ def test_explore_trends_menu_option_2_regressions(tmp_path, mock_db):
     # Note: The mock replaces the command function, so no "Enter to continue" needed
     inputs_with_enter = ["2", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
-        ) as mock_run:
-            explore_trends_interactive(mock_db, "results")
-            # Verify it was called with "regressions" command (check first call)
-            assert mock_run.called
-            assert mock_run.call_args_list[0][0][1] == "regressions"
+        ) as mock_run,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify it was called with "regressions" command (check first call)
+        assert mock_run.called
+        assert mock_run.call_args_list[0][0][1] == "regressions"
 
 
 def test_explore_trends_menu_option_3_velocity(tmp_path, mock_db):
@@ -287,14 +289,16 @@ def test_explore_trends_menu_option_3_velocity(tmp_path, mock_db):
     # Mock user selecting "3" (velocity) then "9" (exit)
     inputs_with_enter = ["3", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
-        ) as mock_run:
-            explore_trends_interactive(mock_db, "results")
-            # Verify it was called with "velocity" command (check first call)
-            assert mock_run.called
-            assert mock_run.call_args_list[0][0][1] == "velocity"
+        ) as mock_run,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify it was called with "velocity" command (check first call)
+        assert mock_run.called
+        assert mock_run.call_args_list[0][0][1] == "velocity"
 
 
 def test_explore_trends_menu_option_4_developers(tmp_path, mock_db):
@@ -304,14 +308,16 @@ def test_explore_trends_menu_option_4_developers(tmp_path, mock_db):
     # Mock user selecting "4" (developers) then "9" (exit)
     inputs_with_enter = ["4", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
-        ) as mock_run:
-            explore_trends_interactive(mock_db, "results")
-            # Verify it was called with "developers" command (check first call)
-            assert mock_run.called
-            assert mock_run.call_args_list[0][0][1] == "developers"
+        ) as mock_run,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify it was called with "developers" command (check first call)
+        assert mock_run.called
+        assert mock_run.call_args_list[0][0][1] == "developers"
 
 
 def test_explore_trends_menu_option_5_score(tmp_path, mock_db):
@@ -321,14 +327,16 @@ def test_explore_trends_menu_option_5_score(tmp_path, mock_db):
     # Mock user selecting "5" (score) then "9" (exit)
     inputs_with_enter = ["5", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._run_trend_command_interactive"
-        ) as mock_run:
-            explore_trends_interactive(mock_db, "results")
-            # Verify it was called with "score" command (check first call)
-            assert mock_run.called
-            assert mock_run.call_args_list[0][0][1] == "score"
+        ) as mock_run,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify it was called with "score" command (check first call)
+        assert mock_run.called
+        assert mock_run.call_args_list[0][0][1] == "score"
 
 
 def test_explore_trends_menu_option_6_compare(tmp_path, mock_db):
@@ -338,13 +346,15 @@ def test_explore_trends_menu_option_6_compare(tmp_path, mock_db):
     # Mock user selecting "6" (compare) then "9" (exit)
     inputs_with_enter = ["6", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._compare_scans_interactive"
-        ) as mock_compare:
-            explore_trends_interactive(mock_db, "results")
-            # Verify compare was called
-            assert mock_compare.called
+        ) as mock_compare,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify compare was called
+        assert mock_compare.called
 
 
 def test_explore_trends_menu_option_7_export(tmp_path, mock_db):
@@ -354,13 +364,15 @@ def test_explore_trends_menu_option_7_export(tmp_path, mock_db):
     # Mock user selecting "7" (export) then "9" (exit)
     inputs_with_enter = ["7", "9"]
 
-    with mock.patch("builtins.input", side_effect=inputs_with_enter):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs_with_enter),
+        mock.patch(
             "scripts.cli.wizard_flows.trend_flow._export_trends_interactive"
-        ) as mock_export:
-            explore_trends_interactive(mock_db, "results")
-            # Verify export was called
-            assert mock_export.called
+        ) as mock_export,
+    ):
+        explore_trends_interactive(mock_db, "results")
+        # Verify export was called
+        assert mock_export.called
 
 
 def test_explore_trends_menu_option_8(tmp_path, mock_db, capsys):
@@ -392,12 +404,14 @@ def test_run_trend_command_analyze(tmp_path, mock_db):
     fake_trend_commands = mock.MagicMock()
     fake_trend_commands.cmd_trends_analyze = mock.MagicMock(return_value=0)
 
-    with mock.patch.dict(
-        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
-    ):
-        with mock.patch("builtins.input", return_value=""):  # Enter to continue
-            with mock.patch("builtins.print"):  # Suppress output
-                _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+    with (
+        mock.patch.dict(
+            "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+        ),
+        mock.patch("builtins.input", return_value=""),
+    ):  # Enter to continue
+        with mock.patch("builtins.print"):  # Suppress output
+            _run_trend_command_interactive(mock_db, "analyze", last_n=30)
 
     # Verify command was called
     assert fake_trend_commands.cmd_trends_analyze.called
@@ -432,11 +446,13 @@ def test_run_trend_command_nonzero_result(tmp_path, mock_db, capsys):
     fake_trend_commands = mock.MagicMock()
     fake_trend_commands.cmd_trends_analyze = mock.MagicMock(return_value=1)  # Non-zero
 
-    with mock.patch.dict(
-        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
-    ):
-        with mock.patch("builtins.input", return_value=""):  # Enter to continue
-            _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+    with (
+        mock.patch.dict(
+            "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+        ),
+        mock.patch("builtins.input", return_value=""),
+    ):  # Enter to continue
+        _run_trend_command_interactive(mock_db, "analyze", last_n=30)
 
     captured = capsys.readouterr()
     # Should show warning about non-zero exit code
@@ -455,11 +471,13 @@ def test_run_trend_command_exception(tmp_path, mock_db, capsys):
         side_effect=RuntimeError("Test error")
     )
 
-    with mock.patch.dict(
-        "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
-    ):
-        with mock.patch("builtins.input", return_value=""):  # Enter to continue
-            _run_trend_command_interactive(mock_db, "analyze", last_n=30)
+    with (
+        mock.patch.dict(
+            "sys.modules", {"scripts.cli.trend_commands": fake_trend_commands}
+        ),
+        mock.patch("builtins.input", return_value=""),
+    ):  # Enter to continue
+        _run_trend_command_interactive(mock_db, "analyze", last_n=30)
 
     captured = capsys.readouterr()
     # Should show error message
@@ -496,12 +514,12 @@ def test_compare_scans_success(tmp_path, mock_db):
     # Mock user selecting scans 1 and 2, then Enter to continue
     inputs = ["1", "2", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
-            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
-        ):
-            with mock.patch("builtins.print"):  # Suppress output
-                _compare_scans_interactive(mock_db)
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0),
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        _compare_scans_interactive(mock_db)
 
 
 def test_compare_scans_invalid_selection(tmp_path, mock_db):
@@ -511,12 +529,12 @@ def test_compare_scans_invalid_selection(tmp_path, mock_db):
     # Mock invalid input, then valid inputs
     inputs = ["999", "1", "abc", "2", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
-            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
-        ):
-            with mock.patch("builtins.print"):  # Suppress output
-                _compare_scans_interactive(mock_db)
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0),
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        _compare_scans_interactive(mock_db)
 
 
 def test_compare_scans_same_scan(tmp_path, mock_db):
@@ -526,12 +544,12 @@ def test_compare_scans_same_scan(tmp_path, mock_db):
     # Mock selecting same scan twice, then correct selection
     inputs = ["1", "1", "2", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
-            "scripts.cli.trend_commands.cmd_trends_compare", return_value=0
-        ):
-            with mock.patch("builtins.print"):  # Suppress output
-                _compare_scans_interactive(mock_db)
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=0),
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        _compare_scans_interactive(mock_db)
 
 
 # ============================================================================
@@ -549,18 +567,18 @@ def test_export_trends_html(tmp_path, mock_db, monkeypatch):
     # Mock user selecting HTML, 30 days, no browser open
     inputs = ["html", "2", "n", ""]  # Enter at end for continue
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
-        ) as mock_analyze:
-            with mock.patch(
-                "scripts.cli.trend_formatters.format_html_report"
-            ) as mock_format:
-                with mock.patch("builtins.print"):  # Suppress output
-                    mock_analyze.return_value = {}
-                    mock_format.return_value = "<html>Test Report</html>"
+        ) as mock_analyze,
+        mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format,
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        mock_analyze.return_value = {}
+        mock_format.return_value = "<html>Test Report</html>"
 
-                    _export_trends_interactive(mock_db, str(results_dir))
+        _export_trends_interactive(mock_db, str(results_dir))
 
     # Verify HTML file was created
     output_file = results_dir / "summaries" / "trend_report.html"
@@ -578,18 +596,18 @@ def test_export_trends_json(tmp_path, mock_db):
     # Mock user selecting JSON, all time
     inputs = ["json", "4", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
-        ) as mock_analyze:
-            with mock.patch(
-                "scripts.cli.trend_formatters.format_json_report"
-            ) as mock_format:
-                with mock.patch("builtins.print"):  # Suppress output
-                    mock_analyze.return_value = {}
-                    mock_format.return_value = '{"test": "report"}'
+        ) as mock_analyze,
+        mock.patch("scripts.cli.trend_formatters.format_json_report") as mock_format,
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        mock_analyze.return_value = {}
+        mock_format.return_value = '{"test": "report"}'
 
-                    _export_trends_interactive(mock_db, str(results_dir))
+        _export_trends_interactive(mock_db, str(results_dir))
 
     # Verify JSON file was created
     output_file = results_dir / "summaries" / "trend_report.json"
@@ -607,22 +625,22 @@ def test_export_trends_html_with_browser(tmp_path, mock_db):
     # Mock user selecting HTML, 7 days, yes to browser
     inputs = ["html", "1", "y", ""]  # Enter at end for continue
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
-        ) as mock_analyze:
-            with mock.patch(
-                "scripts.cli.trend_formatters.format_html_report"
-            ) as mock_format:
-                with mock.patch("webbrowser.open") as mock_browser:
-                    with mock.patch("builtins.print"):  # Suppress output
-                        mock_analyze.return_value = {}
-                        mock_format.return_value = "<html>Test</html>"
+        ) as mock_analyze,
+        mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format,
+        mock.patch("webbrowser.open") as mock_browser,
+    ):
+        with mock.patch("builtins.print"):  # Suppress output
+            mock_analyze.return_value = {}
+            mock_format.return_value = "<html>Test</html>"
 
-                        _export_trends_interactive(mock_db, str(results_dir))
+            _export_trends_interactive(mock_db, str(results_dir))
 
-                        # Verify browser was opened
-                        assert mock_browser.called
+            # Verify browser was opened
+            assert mock_browser.called
 
 
 def test_export_trends_import_error(tmp_path, mock_db, capsys):
@@ -665,12 +683,14 @@ def test_export_trends_exception(tmp_path, mock_db, capsys):
     # Mock user selecting format
     inputs = ["html", "2", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends",
             side_effect=RuntimeError("Test error"),
-        ):
-            _export_trends_interactive(mock_db, str(results_dir))
+        ),
+    ):
+        _export_trends_interactive(mock_db, str(results_dir))
 
     captured = capsys.readouterr()
     # Should show error message
@@ -702,14 +722,14 @@ def test_compare_scans_nonzero_result(tmp_path, mock_db, capsys):
         },
     ]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.core.history_db.list_recent_scans", return_value=mock_scans
-        ):
-            with mock.patch(
-                "scripts.cli.trend_commands.cmd_trends_compare", return_value=1
-            ):
-                _compare_scans_interactive(mock_db)
+        ),
+        mock.patch("scripts.cli.trend_commands.cmd_trends_compare", return_value=1),
+    ):
+        _compare_scans_interactive(mock_db)
 
     captured = capsys.readouterr()
     # Should show warning about non-zero exit code
@@ -741,12 +761,14 @@ def test_compare_scans_exception(tmp_path, mock_db, capsys):
     # Mock user inputs
     inputs = ["1", "2", ""]
 
-    with mock.patch("builtins.input", side_effect=inputs):
-        with mock.patch(
+    with (
+        mock.patch("builtins.input", side_effect=inputs),
+        mock.patch(
             "scripts.cli.trend_commands.cmd_trends_compare",
             side_effect=RuntimeError("Test error"),
-        ):
-            _compare_scans_interactive(mock_db)
+        ),
+    ):
+        _compare_scans_interactive(mock_db)
 
     captured = capsys.readouterr()
     # Should show error message
@@ -813,18 +835,16 @@ def test_wizard_analyze_trends_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans in history
     mock_conn.execute.return_value = mock_cursor
 
-    with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch(
-            "scripts.core.history_db.get_connection", return_value=mock_conn
-        ):
-            with mock.patch(
-                "scripts.cli.wizard._run_trend_command_interactive"
-            ) as mock_run:
-                with mock.patch("builtins.print"):  # Suppress output
-                    result = run_wizard(
-                        yes=True,
-                        analyze_trends=True,
-                    )
+    with (
+        mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
+        mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
+        mock.patch("scripts.cli.wizard._run_trend_command_interactive") as mock_run,
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        result = run_wizard(
+            yes=True,
+            analyze_trends=True,
+        )
 
     assert result == 0
     assert mock_run.called
@@ -863,24 +883,22 @@ def test_wizard_export_trends_html_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans
     mock_conn.execute.return_value = mock_cursor
 
-    with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch(
-            "scripts.core.history_db.get_connection", return_value=mock_conn
-        ):
-            with mock.patch(
-                "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
-            ) as mock_analyze:
-                with mock.patch(
-                    "scripts.cli.trend_formatters.format_html_report"
-                ) as mock_format:
-                    with mock.patch("builtins.print"):  # Suppress output
-                        mock_analyze.return_value = {}
-                        mock_format.return_value = "<html>Test</html>"
+    with (
+        mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
+        mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
+        mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+        ) as mock_analyze,
+        mock.patch("scripts.cli.trend_formatters.format_html_report") as mock_format,
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        mock_analyze.return_value = {}
+        mock_format.return_value = "<html>Test</html>"
 
-                        result = run_wizard(
-                            yes=True,
-                            export_trends_html=True,
-                        )
+        result = run_wizard(
+            yes=True,
+            export_trends_html=True,
+        )
 
     assert result == 0
     output_file = results_dir / "summaries" / "trend_report.html"
@@ -920,24 +938,22 @@ def test_wizard_export_trends_json_flag(tmp_path, mock_db, monkeypatch):
     mock_cursor.fetchone.return_value = (3,)  # 3 scans
     mock_conn.execute.return_value = mock_cursor
 
-    with mock.patch("scripts.cli.wizard.execute_scan", return_value=0):
-        with mock.patch(
-            "scripts.core.history_db.get_connection", return_value=mock_conn
-        ):
-            with mock.patch(
-                "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
-            ) as mock_analyze:
-                with mock.patch(
-                    "scripts.cli.trend_formatters.format_json_report"
-                ) as mock_format:
-                    with mock.patch("builtins.print"):  # Suppress output
-                        mock_analyze.return_value = {}
-                        mock_format.return_value = '{"test": "report"}'
+    with (
+        mock.patch("scripts.cli.wizard.execute_scan", return_value=0),
+        mock.patch("scripts.core.history_db.get_connection", return_value=mock_conn),
+        mock.patch(
+            "scripts.core.trend_analyzer.TrendAnalyzer.analyze_trends"
+        ) as mock_analyze,
+        mock.patch("scripts.cli.trend_formatters.format_json_report") as mock_format,
+        mock.patch("builtins.print"),
+    ):  # Suppress output
+        mock_analyze.return_value = {}
+        mock_format.return_value = '{"test": "report"}'
 
-                        result = run_wizard(
-                            yes=True,
-                            export_trends_json=True,
-                        )
+        result = run_wizard(
+            yes=True,
+            export_trends_json=True,
+        )
 
     assert result == 0
     output_file = results_dir / "summaries" / "trend_report.json"

@@ -73,7 +73,7 @@ def prompt_text(question: str, default: str = "") -> str:
     """
     prompt = f"{question} [{default}]: " if default else f"{question}: "
     value = input(prompt).strip()
-    return value if value else default
+    return value or default
 
 
 def prompt_choice(

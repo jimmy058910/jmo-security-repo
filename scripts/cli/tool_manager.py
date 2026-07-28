@@ -1377,7 +1377,7 @@ class ToolManager:
             # Fallback: Parse version from directory name (scancode-toolkit-vX.Y.Z)
             for parent in [scancode_dir, scancode_dir.parent]:
                 match = re.search(
-                    r"scancode-toolkit-v?(\d+\.\d+\.\d+)", parent.name, re.I
+                    r"scancode-toolkit-v?(\d+\.\d+\.\d+)", parent.name, re.IGNORECASE
                 )
                 if match:
                     return (match.group(1), None)
@@ -1816,7 +1816,7 @@ def print_tool_status_table(
         colorize = lambda text, _color: text  # noqa: E731
 
     # Calculate column widths
-    name_width = max(len(name) for name in statuses.keys())
+    name_width = max(len(name) for name in statuses)
     name_width = max(name_width, 15)
 
     # Header
